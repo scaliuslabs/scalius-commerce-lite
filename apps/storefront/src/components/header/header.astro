@@ -68,7 +68,14 @@ const headerData: HeaderData = {
     document.dispatchEvent(new CustomEvent("open-cart"));
   }, 50);
 
+  type HeaderRuntimeWindow = Window & {
+    __scaliusHeaderCleanup?: () => void;
+  };
+
   function initializeHeader() {
+    const runtimeWindow = window as HeaderRuntimeWindow;
+    runtimeWindow.__scaliusHeaderCleanup?.();
+
     function updateCartDisplay() {
       const { totalItems, totalAmount } = cartStore.get();
       const sym = window.__CURRENCY_SYMBOL__ || DEFAULT_CURRENCY.symbol;
@@ -105,7 +112,7 @@ const headerData: HeaderData = {
     }
 
     updateCartDisplay();
-    cartStore.subscribe(updateCartDisplay);
+    const unsubscribeCart = cartStore.subscribe(updateCartDisplay);
     document.addEventListener("cart-updated", updateCartDisplay);
 
     // Event Delegation for clicks
@@ -122,25 +129,23 @@ const headerData: HeaderData = {
     };
 
     addClick("cart-button", handleOpenCart);
-    addClick("mobile-cart-button", handleOpenCart);
-
-    addClick("mobile-search-toggle", (e) => {
-      e.preventDefault();
-      const container = document.getElementById("mobile-search-container");
-      if (!container) return;
-      if (container.classList.contains("hidden")) {
-        container.classList.remove("hidden");
-        const input = container.querySelector("input");
-        if (input) setTimeout(() => input.focus(), 100);
-      } else {
-        container.classList.add("hidden");
-      }
-    });
 
     const menuPanel = document.getElementById("mobile-menu-panel");
     const menuOverlay = document.getElementById("mobile-menu-overlay");
     const menuTrigger = document.getElementById("mobile-menu-toggle");
     const menuClose = document.getElementById("mobile-menu-close");
+    const menuHistoryKey = "__scaliusMobileMenu";
+    let menuIsOpen = false;
+    let bodyOverflowBeforeMenu = "";
+
+    const historyState = (): Record<string, unknown> =>
+      history.state && typeof history.state === "object" ? history.state : {};
+
+    const clearMenuHistoryMarker = () => {
+      const nextState = { ...historyState() };
+      delete nextState[menuHistoryKey];
+      history.replaceState(nextState, "", window.location.href);
+    };
 
     const focusableElements = () =>
       menuPanel
@@ -151,23 +156,48 @@ const headerData: HeaderData = {
           ).filter((element) => element.offsetParent !== null)
         : [];
 
-    const toggleMenu = (show: boolean) => {
+    const toggleMenu = (
+      show: boolean,
+      options: { syncHistory?: boolean; restoreFocus?: boolean } = {},
+    ) => {
       if (!menuPanel || !menuOverlay) return;
+      const syncHistory = options.syncHistory ?? true;
+      const restoreFocus = options.restoreFocus ?? true;
+      if (show === menuIsOpen) return;
+      menuIsOpen = show;
       menuPanel.inert = !show;
       menuPanel.setAttribute("aria-hidden", String(!show));
       menuTrigger?.setAttribute("aria-expanded", String(show));
       if (show) {
+        bodyOverflowBeforeMenu = document.body.style.overflow;
         menuPanel.classList.remove("-translate-x-full");
         menuOverlay.classList.remove("opacity-0", "pointer-events-none");
         document.body.style.overflow = "hidden";
+        if (syncHistory && historyState()[menuHistoryKey] !== true) {
+          history.pushState(
+            { ...historyState(), [menuHistoryKey]: true },
+            "",
+            window.location.href,
+          );
+        }
         requestAnimationFrame(() => menuClose?.focus());
       } else {
         menuPanel.classList.add("-translate-x-full");
         menuOverlay.classList.add("opacity-0", "pointer-events-none");
-        document.body.style.overflow = "";
-        menuTrigger?.focus();
+        document.body.style.overflow = bodyOverflowBeforeMenu;
+        if (restoreFocus) menuTrigger?.focus();
+        if (syncHistory && historyState()[menuHistoryKey] === true) {
+          history.back();
+        }
       }
     };
+
+    const handlePopState = () => {
+      if (menuIsOpen) {
+        toggleMenu(false, { syncHistory: false });
+      }
+    };
+    window.addEventListener("popstate", handlePopState);
 
     addClick("mobile-menu-toggle", () => toggleMenu(true));
     addClick("mobile-menu-close", () => toggleMenu(false));
@@ -211,13 +241,18 @@ const headerData: HeaderData = {
           const icon = btn.querySelector("svg");
           if (submenu) {
             const isHidden = submenu.classList.contains("hidden");
-            if (isHidden) {
-              submenu.classList.remove("hidden");
-              icon?.classList.add("rotate-180");
-            } else {
-              submenu.classList.add("hidden");
-              icon?.classList.remove("rotate-180");
-            }
+            submenu.classList.toggle("hidden", !isHidden);
+            submenu.setAttribute("aria-hidden", String(!isHidden));
+            btn.setAttribute("aria-expanded", String(isHidden));
+            icon?.classList.toggle("rotate-180", isHidden);
+            return;
+          }
+        }
+
+        if (target.closest("a[href]")) {
+          toggleMenu(false, { syncHistory: false, restoreFocus: false });
+          if (historyState()[menuHistoryKey] === true) {
+            clearMenuHistoryMarker();
           }
         }
       };
@@ -230,6 +265,21 @@ const headerData: HeaderData = {
         menuTrigger?.getAttribute("aria-expanded") === "true"
       ) {
         toggleMenu(false);
+      }
+    };
+
+    runtimeWindow.__scaliusHeaderCleanup = () => {
+      unsubscribeCart();
+      document.removeEventListener("cart-updated", updateCartDisplay);
+      window.removeEventListener("popstate", handlePopState);
+      desktopBreakpoint.onchange = null;
+      if (menuPanel) {
+        menuPanel.onkeydown = null;
+        menuPanel.onclick = null;
+      }
+      if (menuOverlay) menuOverlay.onclick = null;
+      if (menuIsOpen) {
+        toggleMenu(false, { syncHistory: false, restoreFocus: false });
       }
     };
   }
