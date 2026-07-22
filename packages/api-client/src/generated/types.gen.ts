@@ -33830,6 +33830,10 @@ export type GetApiV1AdminOrdersData = {
          */
         status?: string;
         /**
+         * Filter by order lifecycle view
+         */
+        statusGroup?: 'open' | 'in_transit' | 'delivered' | 'closed';
+        /**
          * Filter by payment status
          */
         paymentStatus?: 'unpaid' | 'partial' | 'paid' | 'refunded' | 'failed';

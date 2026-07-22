@@ -98,7 +98,9 @@ describe("order list interactions", () => {
     expect(toolbarSource).toContain("`Resolve refund (${selectedActiveRefundCount})`");
     expect(toolbarSource).toContain("`Resolve shipment (${selectedShipmentLockCount})`");
     expect(toolbarSource).toContain('searchPlaceholder="Search orders…"');
-    expect(toolbarSource).toContain("overflow-x-auto pb-2 scrollbar-hide");
+    expect(toolbarSource).toContain("grid w-full grid-cols-6 gap-1 rounded-md");
+    expect(toolbarSource).toContain('index >= 3 ? "col-span-3" : "col-span-2"');
+    expect(toolbarSource).toContain('aria-label="Order views"');
     expect(toolbarSource).toContain('aria-controls="order-advanced-filters"');
     expect(toolbarSource).toContain('id="order-advanced-filters"');
     expect(toolbarSource).toContain("activeAdvancedFilterCount");
@@ -191,6 +193,7 @@ describe("order list interactions", () => {
     expect(routeSource).toContain("const PAYMENT_METHOD_FILTERS");
     expect(routeSource).toContain("const FULFILLMENT_STATUS_FILTERS");
     expect(routeSource).toContain("const PAYMENT_RECOVERY_FILTERS");
+    expect(routeSource).toContain("const ORDER_STATUS_GROUP_FILTERS");
     expect(routeSource).toContain(
       "paymentStatus: normalizeOptionalEnumSearchParam",
     );
@@ -209,11 +212,13 @@ describe("order list interactions", () => {
       "fulfillmentStatus: deps.fulfillmentStatus",
     );
     expect(routeSource).toContain("paymentRecovery: deps.paymentRecovery");
+    expect(routeSource).toContain("statusGroup: deps.statusGroup");
     expect(routeSource).toContain("paymentStatus: normalizeOptionalEnumSearchParam(");
     expect(routeSource).toContain("paymentMethod: normalizeOptionalEnumSearchParam(");
     expect(routeSource).toContain("fulfillmentStatus: normalizeOptionalEnumSearchParam(");
     expect(routeSource).toContain("paymentRecovery: normalizeOptionalEnumSearchParam(");
     expect(routeSource).toContain("activePaymentStatus={activePaymentStatus}");
+    expect(routeSource).toContain("activeStatusGroup={activeStatusGroup}");
     expect(routeSource).toContain("activePaymentMethod={activePaymentMethod}");
     expect(routeSource).toContain(
       "activeFulfillmentStatus={activeFulfillmentStatus}",
@@ -224,6 +229,10 @@ describe("order list interactions", () => {
     expect(routeSource).toContain("selectedActiveRefundCount={selectedActiveRefundOrders.length}");
 
     expect(toolbarSource).toContain("OrderFilterSelect");
+    expect(toolbarSource).toContain('aria-label="Order views"');
+    expect(toolbarSource).toContain('placeholder="Any order status"');
+    expect(toolbarSource).toContain('ariaLabel="Filter by exact order status"');
+    expect(toolbarSource).not.toContain("Status filter pills");
     expect(toolbarSource).toContain('placeholder="Any payment"');
     expect(toolbarSource).toContain('placeholder="Any method"');
     expect(toolbarSource).toContain('placeholder="Payment recovery"');
@@ -235,6 +244,9 @@ describe("order list interactions", () => {
       'ariaLabel="Filter by fulfillment status"',
     );
 
+    expect(serverFunctionsSource).toContain(
+      "if (data.statusGroup) params.statusGroup = data.statusGroup",
+    );
     expect(serverFunctionsSource).toContain(
       "if (data.paymentStatus) params.paymentStatus = data.paymentStatus",
     );

@@ -117301,6 +117301,22 @@
             "schema": {
               "type": "string",
               "enum": [
+                "open",
+                "in_transit",
+                "delivered",
+                "closed"
+              ],
+              "description": "Filter by order lifecycle view"
+            },
+            "required": false,
+            "description": "Filter by order lifecycle view",
+            "name": "statusGroup",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
                 "unpaid",
                 "partial",
                 "paid",

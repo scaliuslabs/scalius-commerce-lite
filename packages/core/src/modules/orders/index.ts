@@ -16,4 +16,5 @@ export * from "./order-returns";
 export * from "./order-returns.validation";
 export * from "./admin-status-policy";
 export * from "./order-archive-policy";
+export * from "./order-list-views";
 export * from "./abandoned-checkout-snapshot";

@@ -436,6 +436,9 @@ const listOrdersRoute = createRoute({
             limit: z.coerce.number().optional().default(10).openapi({ description: "Items per page" }),
             search: z.string().optional().openapi({ description: "Search query" }),
             status: z.string().optional().openapi({ description: "Filter by status" }),
+            statusGroup: z.enum(["open", "in_transit", "delivered", "closed"])
+                .optional()
+                .openapi({ description: "Filter by order lifecycle view" }),
             paymentStatus: paymentStatusQuerySchema.optional().openapi({ description: "Filter by payment status" }),
             paymentMethod: paymentMethodQuerySchema.optional().openapi({ description: "Filter by payment method" }),
             fulfillmentStatus: fulfillmentStatusQuerySchema.optional().openapi({ description: "Filter by fulfillment status" }),
@@ -480,6 +483,7 @@ app.openapi(listOrdersRoute, async (c) => {
         limit: query.limit,
         search: query.search || "",
         status: query.status || undefined,
+        statusGroup: query.statusGroup,
         paymentStatus: query.paymentStatus,
         paymentMethod: query.paymentMethod,
         fulfillmentStatus: query.fulfillmentStatus,

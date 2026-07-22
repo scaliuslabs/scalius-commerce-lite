@@ -17,6 +17,7 @@ Full order lifecycle: storefront checkout, admin CRUD, state machine validation,
 | `orders.fulfillment.ts` | `bulkShipOrders()`, `processCodAction()`, `getOrderShipments()`, `createFulfillmentShipment()`, `updateOrderStatus()` | Shipment creation, COD actions, status transitions with notification dispatch |
 | `orders.validation.ts` | `createOrderSchema`, `updateOrderSchema`, `bulkDeleteOrderSchema`, `bulkShipOrderSchema`, `CreateOrderInput`, `UpdateOrderInput`, `BulkDeleteOrderInput`, `BulkShipOrderInput` | Zod validation schemas for API routes |
 | `order-state-machine.ts` | `canTransitionTo()`, `validateTransition()`, `getAvailableTransitions()`, `StatusDimension` | Enforces valid order/payment/fulfillment status transitions |
+| `order-list-views.ts` | `ORDER_STATUS_GROUPS`, `getOrderStatusGroupStatuses()` | Exhaustive merchant-facing lifecycle groups for the admin order list; exact status filtering remains available separately |
 
 ## Order State Machine
 
