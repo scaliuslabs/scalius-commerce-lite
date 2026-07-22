@@ -11,7 +11,7 @@ import { toast } from "sonner";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Switch } from "@/components/ui/switch";
@@ -43,7 +43,7 @@ const ACTION_SWITCHES: Array<{
   {
     key: "refundEnabled",
     label: "Refund requests",
-    description: "Let eligible buyers ask for money back. Approval and payment processing stay with the order.",
+    description: "Approval and payment processing stay with the order.",
   },
 ];
 
@@ -134,7 +134,7 @@ export default function CustomerRequestSettings() {
         isDirty={dirty}
         isSubmitting={saveMutation.isPending}
       />
-      <div className="grid items-start gap-5 pb-24 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.9fr)]">
+      <div className={`grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.9fr)] ${dirty ? "pb-24" : "pb-4"}`}>
         <div className="space-y-4">
           {!canManage && (
             <Alert>
@@ -146,9 +146,6 @@ export default function CustomerRequestSettings() {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Available request types</CardTitle>
-              <CardDescription>
-                These switches control buyer buttons and API eligibility. SEO return-policy settings remain separate.
-              </CardDescription>
             </CardHeader>
             <CardContent className="divide-y px-0 pb-0">
               {ACTION_SWITCHES.map((action) => (
@@ -159,16 +156,18 @@ export default function CustomerRequestSettings() {
                     </Label>
                     <p className="mt-0.5 text-xs text-muted-foreground">{action.description}</p>
                   </div>
-                  <Switch
-                    id={action.key}
-                    checked={policy[action.key]}
-                    disabled={!canEdit}
-                    onCheckedChange={(checked) => setPolicy((current) => ({
-                      ...current!,
-                      [action.key]: checked,
-                    }))}
-                    aria-label={action.label}
-                  />
+                  <label htmlFor={action.key} className="flex min-h-11 min-w-11 shrink-0 items-center justify-end">
+                    <Switch
+                      id={action.key}
+                      checked={policy[action.key]}
+                      disabled={!canEdit}
+                      onCheckedChange={(checked) => setPolicy((current) => ({
+                        ...current!,
+                        [action.key]: checked,
+                      }))}
+                      aria-label={action.label}
+                    />
+                  </label>
                 </div>
               ))}
             </CardContent>
@@ -177,7 +176,6 @@ export default function CustomerRequestSettings() {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Unavailable actions</CardTitle>
-              <CardDescription>Choose how much context buyers see as an order changes.</CardDescription>
             </CardHeader>
             <CardContent>
               <RadioGroup
@@ -193,14 +191,12 @@ export default function CustomerRequestSettings() {
                   <RadioGroupItem value="eligible_only" className="mt-0.5" />
                   <span>
                     <span className="block text-sm font-medium">Only available actions</span>
-                    <span className="mt-1 block text-xs font-normal text-muted-foreground">The shortest buyer view.</span>
                   </span>
                 </Label>
                 <Label className="flex cursor-pointer items-start gap-3 rounded-md border p-3 has-[[data-state=checked]]:border-primary has-[[data-state=checked]]:bg-primary/5">
                   <RadioGroupItem value="show_unavailable" className="mt-0.5" />
                   <span>
                     <span className="block text-sm font-medium">Show actions with reasons</span>
-                    <span className="mt-1 block text-xs font-normal text-muted-foreground">Explains why an action cannot be used.</span>
                   </span>
                 </Label>
               </RadioGroup>
@@ -210,7 +206,6 @@ export default function CustomerRequestSettings() {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Customer introduction</CardTitle>
-              <CardDescription>Optional. Leave blank to use the concise system message shown in preview.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2">
               <Textarea
@@ -236,7 +231,6 @@ export default function CustomerRequestSettings() {
         <Card className="lg:sticky lg:top-4">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Buyer preview</CardTitle>
-            <CardDescription>Exactly which request actions appear in common order states.</CardDescription>
           </CardHeader>
           <CardContent>
             <Tabs value={previewState} onValueChange={setPreviewState}>
@@ -287,10 +281,10 @@ export default function CustomerRequestSettings() {
         </Card>
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-20 border-t bg-background/95 px-3 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur supports-[backdrop-filter]:bg-background/85 lg:left-[var(--sidebar-width,0px)]">
+      {dirty ? <div className="fixed inset-x-0 bottom-0 z-20 border-t bg-background/95 px-3 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur supports-[backdrop-filter]:bg-background/85 lg:left-[var(--sidebar-width,0px)]">
         <div className="mx-auto flex max-w-6xl flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs text-muted-foreground">
-            {dirty ? "Unsaved customer request changes" : "Customer request policy is up to date"}
+            Unsaved customer request changes
           </p>
           <div className="grid grid-cols-2 gap-2 sm:flex">
             <Button
@@ -314,7 +308,7 @@ export default function CustomerRequestSettings() {
             </Button>
           </div>
         </div>
-      </div>
+      </div> : null}
     </>
   );
 }

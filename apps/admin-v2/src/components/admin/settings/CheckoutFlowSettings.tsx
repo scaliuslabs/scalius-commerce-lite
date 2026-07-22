@@ -462,7 +462,7 @@ export default function CheckoutFlowSettings() {
                 <CardHeader className="p-4 pb-3">
                     <CardTitle className="text-base">Customer access</CardTitle>
                     <CardDescription>
-                        Decide whether an account is required. Every order still collects a valid delivery phone number.
+                        Allow guest checkout or require an account.
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3 px-4 pb-4">
@@ -470,19 +470,20 @@ export default function CheckoutFlowSettings() {
                         <div className="min-w-0 space-y-0.5">
                             <Label htmlFor="guest-checkout">Allow checkout without an account</Label>
                             <p className="text-xs text-muted-foreground">
-                                Guest buyers provide their name, phone, and delivery details without creating a password.
+                                Customers enter contact and delivery details without a password.
                             </p>
                         </div>
-                        <Switch
-                            id="guest-checkout"
-                            className="shrink-0"
-                            checked={guestCheckoutEnabled}
-                            onCheckedChange={(value) => updateDraft("guestCheckoutEnabled", value)}
-                        />
+                        <label htmlFor="guest-checkout" className="flex min-h-11 min-w-11 shrink-0 items-center justify-end">
+                            <Switch
+                                id="guest-checkout"
+                                checked={guestCheckoutEnabled}
+                                onCheckedChange={(value) => updateDraft("guestCheckoutEnabled", value)}
+                            />
+                        </label>
                     </div>
                     <div className="flex items-start gap-2.5 rounded-md bg-muted/45 px-3 py-2.5 text-xs text-muted-foreground">
                         <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-foreground" aria-hidden="true" />
-                        <p><span className="font-medium text-foreground">Phone number is always required.</span> Phone collection for checkout identity and delivery cannot be disabled.</p>
+                        <p><span className="font-medium text-foreground">Phone number is always required.</span></p>
                     </div>
                 </CardContent>
             </Card>
@@ -499,7 +500,7 @@ export default function CheckoutFlowSettings() {
                         ) : (
                             <CheckCircle2 className="h-4 w-4 text-emerald-600" />
                         )}
-                        Customer flow preview
+                        Checkout readiness
                     </CardTitle>
                     <CardDescription>{flowSummary}</CardDescription>
                 </CardHeader>
@@ -592,9 +593,6 @@ export default function CheckoutFlowSettings() {
                     )}
                     {(previewIssues.length > 0 || previewLoading) && (
                         <>
-                            {previewLoading && (
-                                <p className="text-xs text-muted-foreground">Checking checkout readiness...</p>
-                            )}
                             {previewIssues.length > 0 && (
                                 <ul
                                     className={`space-y-1 text-sm ${
@@ -616,9 +614,6 @@ export default function CheckoutFlowSettings() {
             <Card className="lg:col-start-1 lg:row-start-2">
                 <CardHeader className="p-4 pb-3">
                     <CardTitle className="text-base">Payment flow</CardTitle>
-                    <CardDescription>
-                        Choose which configured payment methods buyers may use.
-                    </CardDescription>
                 </CardHeader>
                 <CardContent className="px-4 pb-4">
                     <div className="space-y-1.5">
@@ -674,12 +669,13 @@ export default function CheckoutFlowSettings() {
                                 Buyers choose an online gateway. COD is hidden as a checkout method, while the balance remains due on delivery.
                             </p>
                         </div>
-                        <Switch
-                            id="advance-payment"
-                            className="shrink-0"
-                            checked={partialPaymentEnabled}
-                            onCheckedChange={(value) => updateDraft("partialPaymentEnabled", value)}
-                        />
+                        <label htmlFor="advance-payment" className="flex min-h-11 min-w-11 shrink-0 items-center justify-end">
+                            <Switch
+                                id="advance-payment"
+                                checked={partialPaymentEnabled}
+                                onCheckedChange={(value) => updateDraft("partialPaymentEnabled", value)}
+                            />
+                        </label>
                     </div>
 
                     {partialPaymentEnabled && (

@@ -99,8 +99,8 @@ export function CheckoutLanguagesContainer() {
             </CardTitle>
             <CardDescription className="mt-0 text-xs text-muted-foreground">
               {showTrashed
-                ? "View and manage deleted checkout languages."
-                : `Manage checkout form languages and field customization. ${pagination.total} total languages.`}
+                ? `${pagination.total} deleted`
+                : `${pagination.total} ${pagination.total === 1 ? "language" : "languages"}`}
             </CardDescription>
           </div>
           <div className="grid w-full shrink-0 grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center sm:gap-1.5">
@@ -112,11 +112,11 @@ export function CheckoutLanguagesContainer() {
             >
               {showTrashed ? (
                 <>
-                  <Languages className="h-3.5 w-3.5 mr-1" /> View Active
+                  <Languages className="h-3.5 w-3.5 mr-1" /> Active
                 </>
               ) : (
                 <>
-                  <Trash2 className="h-3.5 w-3.5 mr-1" /> View Trash
+                  <Trash2 className="h-3.5 w-3.5 mr-1" /> Trash
                 </>
               )}
             </Button>
@@ -126,7 +126,7 @@ export function CheckoutLanguagesContainer() {
                 className="h-11 text-xs sm:h-7"
                 onClick={openFormForCreate}
               >
-                <Plus className="h-3.5 w-3.5 mr-1" /> Add Language
+                <Plus className="h-3.5 w-3.5 mr-1" /> Add language
               </Button>
             )}
           </div>
