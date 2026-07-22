@@ -5,6 +5,9 @@ import { fileURLToPath } from "node:url";
 const DATA_TABLE_SOURCE = fileURLToPath(
   new URL("./DataTable.tsx", import.meta.url),
 );
+const LOADING_OVERLAY_SOURCE = fileURLToPath(
+  new URL("./DataTableLoadingOverlay.tsx", import.meta.url),
+);
 const COLUMN_HEADER_SOURCE = fileURLToPath(
   new URL("./DataTableColumnHeader.tsx", import.meta.url),
 );
@@ -38,6 +41,14 @@ describe("DataTable boundaries", () => {
     expect(source).toContain("Retry");
     expect(source).toContain("!showError &&");
     expect(source).toContain("visible={isFetching && !isLoading && !showError}");
+  });
+
+  it("announces background result updates while stale rows are visually blocked", () => {
+    const source = readFileSync(LOADING_OVERLAY_SOURCE, "utf8");
+
+    expect(source).toContain('role="status"');
+    expect(source).toContain('aria-live="polite"');
+    expect(source).toContain("Updating results");
   });
 
   it("keeps shared sort, row-action, and pagination menus behind lazy interaction boundaries", () => {
