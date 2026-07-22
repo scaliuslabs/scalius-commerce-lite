@@ -300,20 +300,20 @@ function MenuRow({
         {childCount ? (
           <button
             type="button"
-            className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+            className="grid size-11 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground sm:size-8"
             onClick={onToggle}
             aria-label={expanded ? `Collapse ${item.label}` : `Expand ${item.label}`}
           >
             {expanded ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
           </button>
         ) : (
-          <div className="size-8 shrink-0" aria-hidden />
+          <div className="size-11 shrink-0 sm:size-8" aria-hidden />
         )}
         {dragEnabled ? (
           <button
             ref={draggable.setNodeRef}
             type="button"
-            className="grid size-9 shrink-0 touch-none place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+            className="grid size-11 shrink-0 touch-none place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground sm:size-9"
             aria-label={`Drag ${item.label}`}
             {...draggable.attributes}
             {...draggable.listeners}
@@ -321,7 +321,7 @@ function MenuRow({
             <GripVertical className="size-4" />
           </button>
         ) : (
-          <div className="grid size-9 shrink-0 place-items-center text-muted-foreground">
+          <div className="grid size-11 shrink-0 place-items-center text-muted-foreground sm:size-9">
             <Search className="size-3.5" />
           </div>
         )}
@@ -345,7 +345,7 @@ function MenuRow({
         </button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="size-9 shrink-0" aria-label={`Actions for ${item.label}`}>
+            <Button variant="ghost" size="icon" className="size-11 shrink-0 sm:size-9" aria-label={`Actions for ${item.label}`}>
               <Ellipsis className="size-4" />
             </Button>
           </DropdownMenuTrigger>
@@ -654,7 +654,7 @@ function MenuItemDialog({
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{editing ? "Edit menu item" : "Add menu item"}</DialogTitle>
-          <DialogDescription>Choose the label and where it should take customers.</DialogDescription>
+          <DialogDescription className="sr-only">Configure this menu item.</DialogDescription>
         </DialogHeader>
         {editing && itemQuery.isLoading ? (
           <div className="py-12 text-center text-sm text-muted-foreground">Loading item…</div>
@@ -894,7 +894,7 @@ function MenuMetadataDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{menu ? "Menu details" : "New menu"}</DialogTitle>
-          <DialogDescription>Use a clear internal name; customers see item labels.</DialogDescription>
+          <DialogDescription>Customers see item labels, not this name.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-1.5">
@@ -929,13 +929,13 @@ function MenuMetadataDialog({
                     disabled={trashMutation.isPending}
                     onClick={() => trashMutation.mutate()}
                   >
-                    {trashMutation.isPending ? "Moving…" : "Move to Trash"}
+                    {trashMutation.isPending ? "Moving…" : "Move to trash"}
                   </Button>
                 )}
               </div>
             ) : (
               <Button variant="ghost" className="text-destructive hover:text-destructive" onClick={() => setConfirmTrash(true)}>
-                <Trash2 className="mr-2 size-4" /> Move to Trash
+                <Trash2 className="mr-2 size-4" /> Move to trash
               </Button>
             )
           ) : <span />}
@@ -984,8 +984,8 @@ function MenuTrashDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Menu Trash</DialogTitle>
-          <DialogDescription>Restore a menu without automatically republishing it to the storefront.</DialogDescription>
+          <DialogTitle>Menu trash</DialogTitle>
+          <DialogDescription>Restored menus stay unpublished and unassigned.</DialogDescription>
         </DialogHeader>
         <div className="max-h-[55vh] divide-y overflow-y-auto rounded-lg border">
           {trashedMenus.map((menu) => (
@@ -999,6 +999,7 @@ function MenuTrashDialog({
               <Button
                 size="sm"
                 variant="outline"
+                className="h-11 sm:h-9"
                 disabled={mutation.isPending}
                 onClick={() => mutation.mutate(menu)}
               >
@@ -1006,7 +1007,7 @@ function MenuTrashDialog({
               </Button>
             </div>
           ))}
-          {query.isLoading && <div className="p-8 text-center text-sm text-muted-foreground">Loading Trash…</div>}
+          {query.isLoading && <div className="p-8 text-center text-sm text-muted-foreground">Loading trash…</div>}
           {query.isError && (
             <div className="flex items-center justify-between gap-3 p-3 text-sm text-destructive">
               <span>Trash could not be loaded.</span>
@@ -1080,7 +1081,6 @@ function PlacementPanel({
     <Card className="overflow-hidden">
       <div className="border-b px-4 py-3">
         <h2 className="text-sm font-semibold">Storefront locations</h2>
-        <p className="text-xs text-muted-foreground">Assign published menus without changing their content.</p>
       </div>
       <div className="divide-y">
         {slots.map((slot) => {
@@ -1109,7 +1109,7 @@ function PlacementPanel({
                   menuId: menuId === "off" ? null : menuId,
                 })}
               >
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger className="min-h-11 sm:min-h-9"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="off">Not used</SelectItem>
                   {publishedMenus.map((menu) => (
@@ -1152,7 +1152,6 @@ function PublicationHistory({
     <Card className="overflow-hidden">
       <div className="border-b px-4 py-3">
         <h2 className="text-sm font-semibold">Publication history</h2>
-        <p className="text-xs text-muted-foreground">Restoring keeps history linear and auditable.</p>
       </div>
       <div className="divide-y">
         {query.data?.items.map((publication) => {
@@ -1174,13 +1173,13 @@ function PublicationHistory({
                 <Badge variant="secondary">Live</Badge>
               ) : restoreRevision === publication.revision ? (
                 <div className="flex gap-2">
-                  <Button size="sm" variant="outline" onClick={() => setRestoreRevision(null)}>Cancel</Button>
-                  <Button size="sm" disabled={mutation.isPending} onClick={() => mutation.mutate(publication.revision)}>
+                  <Button size="sm" variant="outline" className="h-11 sm:h-9" onClick={() => setRestoreRevision(null)}>Cancel</Button>
+                  <Button size="sm" className="h-11 sm:h-9" disabled={mutation.isPending} onClick={() => mutation.mutate(publication.revision)}>
                     Restore
                   </Button>
                 </div>
               ) : (
-                <Button size="sm" variant="ghost" onClick={() => setRestoreRevision(publication.revision)}>
+                <Button size="sm" variant="ghost" className="h-11 sm:h-9" onClick={() => setRestoreRevision(publication.revision)}>
                   Restore this version
                 </Button>
               )}
@@ -1346,16 +1345,13 @@ export function NavigationWorkspace({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Navigation</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Build reusable menus, publish safely, and place them across the storefront.</p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setTrashOpen(true)}>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-xl font-semibold tracking-tight">Navigation</h1>
+        <div className="grid grid-cols-2 gap-2 sm:flex">
+          <Button variant="outline" className="h-11 sm:h-9" onClick={() => setTrashOpen(true)}>
             <Trash2 className="mr-2 size-4" /> Trash
           </Button>
-          <Button onClick={() => setNewMenuOpen(true)}><Plus className="mr-2 size-4" /> New menu</Button>
+          <Button className="h-11 sm:h-9" onClick={() => setNewMenuOpen(true)}><Plus className="mr-2 size-4" /> New menu</Button>
         </div>
       </div>
 
@@ -1372,7 +1368,7 @@ export function NavigationWorkspace({
                 type="button"
                 onClick={() => onMenuChange(candidate.id)}
                 className={cn(
-                  "flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left transition-colors",
+                  "flex min-h-11 w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left transition-colors",
                   candidate.id === selectedId ? "bg-primary text-primary-foreground" : "hover:bg-muted",
                 )}
               >
@@ -1414,11 +1410,12 @@ export function NavigationWorkspace({
                     <p className="mt-0.5 text-xs text-muted-foreground">{menu.handle} · revision {menu.revision}</p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" onClick={() => setEditMenuOpen(true)}>
+                    <Button variant="outline" size="sm" className="h-11 sm:h-9" onClick={() => setEditMenuOpen(true)}>
                       <Pencil className="mr-2 size-3.5" /> Details
                     </Button>
                     <Button
                       size="sm"
+                      className="h-11 sm:h-9"
                       disabled={menu.revision === menu.publishedRevision || publishMutation.isPending}
                       onClick={() => publishMutation.mutate()}
                     >
@@ -1427,15 +1424,15 @@ export function NavigationWorkspace({
                   </div>
                 </div>
                 <div className="flex flex-col gap-2 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
-                  <Tabs value={panel} onValueChange={(value) => onPanelChange(value as NavigationWorkspacePanel)}>
-                    <TabsList className="h-9">
-                      <TabsTrigger value="items" className="gap-1.5"><ListTree className="size-3.5" /> Items</TabsTrigger>
-                      <TabsTrigger value="placements" className="gap-1.5"><MapPin className="size-3.5" /> Locations</TabsTrigger>
-                      <TabsTrigger value="history" className="gap-1.5"><History className="size-3.5" /> History</TabsTrigger>
+                  <Tabs className="w-full sm:w-auto" value={panel} onValueChange={(value) => onPanelChange(value as NavigationWorkspacePanel)}>
+                    <TabsList className="h-11 w-full sm:h-9 sm:w-auto">
+                      <TabsTrigger value="items" className="flex-1 gap-1.5 sm:flex-none"><ListTree className="size-3.5" /> Items</TabsTrigger>
+                      <TabsTrigger value="placements" className="flex-1 gap-1.5 sm:flex-none"><MapPin className="size-3.5" /> Locations</TabsTrigger>
+                      <TabsTrigger value="history" className="flex-1 gap-1.5 sm:flex-none"><History className="size-3.5" /> History</TabsTrigger>
                     </TabsList>
                   </Tabs>
                   {panel === "items" && (
-                    <Button size="sm" variant="outline" onClick={() => onItemChange("new")}>
+                    <Button size="sm" variant="outline" className="h-11 w-full sm:h-9 sm:w-auto" onClick={() => onItemChange("new")}>
                       <Plus className="mr-2 size-3.5" /> Add item
                     </Button>
                   )}
@@ -1451,12 +1448,12 @@ export function NavigationWorkspace({
                         value={query}
                         onChange={(event) => onQueryChange(event.target.value)}
                         placeholder="Find any menu item"
-                        className="pl-9"
+                        className="min-h-11 pl-9 sm:min-h-9"
                       />
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      {query.trim().length >= 2 ? "Clear search to arrange items" : "Drag to an edge or inside another item"}
-                    </p>
+                    {query.trim().length >= 2 ? (
+                      <p className="text-xs text-muted-foreground">Clear search to arrange items</p>
+                    ) : null}
                   </div>
                   {query.trim().length >= 2 ? (
                     <div className="p-2">

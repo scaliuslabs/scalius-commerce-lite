@@ -18,4 +18,9 @@ describe("FormImageUploadField presentation boundary", () => {
     expect(source).toContain("height: 480");
     expect(source).toContain("aria-label={`Remove ${value.filename}`}");
   });
+
+  it("keeps the empty state compact instead of reserving a full preview ratio", () => {
+    expect(source).toContain("min-h-28");
+    expect(source).not.toContain("aspectRatio,\n            maxWidth");
+  });
 });

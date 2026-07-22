@@ -32,6 +32,16 @@ describe("page mobile workflow boundaries", () => {
     );
     expect(routeSource).toContain('"View trash"');
     expect(routeSource).toContain("New page");
+    expect(routeSource).not.toContain("Manage your website pages and content.");
+    expect(routeSource).toContain('searchPlaceholder="Search pages…"');
+  });
+
+  it("keeps the shared page and article editor labels compact and consistent", () => {
+    expect(formSource).toContain('newLabel={contentType === "article" ? "New article" : "New page"}');
+    expect(formSource).toContain('title="Search listing"');
+    expect(formSource).toContain("Defaults to the content title.");
+    expect(formSource).not.toContain("Search Engine Listing");
+    expect(formSource).not.toContain("Recommended: 150-160 characters");
   });
 
   it("shows a live link only for the committed page route", () => {

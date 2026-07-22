@@ -54,29 +54,35 @@ export function TiptapToolbarSkeleton({
     <div
       aria-hidden="true"
       className={cn(
-        "border border-input rounded-t-md bg-background flex flex-wrap items-center text-muted-foreground/70",
-        isFullscreen ? "justify-center" : "justify-between",
+        "flex items-center overflow-hidden rounded-t-md border border-input bg-background text-muted-foreground/70",
         padding,
         gapSize,
       )}
     >
-      <div className={cn("flex flex-wrap items-center", gapSize)}>
-        {TOOLBAR_GROUPS.map((group, groupIndex) => (
-          <div key={groupIndex} className={cn("flex items-center", gapSize)}>
-            {groupIndex > 0 ? <div className="w-px h-6 bg-border mx-1" /> : null}
-            {group.map((Icon, itemIndex) => (
-              <span
-                key={itemIndex}
-                className={cn(
-                  buttonSize,
-                  "inline-flex shrink-0 items-center justify-center rounded-md",
-                )}
-              >
-                <Icon className={iconSize} strokeWidth={2} />
-              </span>
-            ))}
-          </div>
-        ))}
+      <div
+        className={cn(
+          "min-w-0 overflow-x-auto overscroll-x-contain scrollbar-hide",
+          isFullscreen ? "mx-auto w-fit max-w-full" : "flex-1",
+        )}
+      >
+        <div className={cn("flex min-w-max items-center", gapSize)}>
+          {TOOLBAR_GROUPS.map((group, groupIndex) => (
+            <div key={groupIndex} className={cn("flex items-center", gapSize)}>
+              {groupIndex > 0 ? <div className="mx-1 h-6 w-px bg-border" /> : null}
+              {group.map((Icon, itemIndex) => (
+                <span
+                  key={itemIndex}
+                  className={cn(
+                    buttonSize,
+                    "inline-flex shrink-0 items-center justify-center rounded-md",
+                  )}
+                >
+                  <Icon className={iconSize} strokeWidth={2} />
+                </span>
+              ))}
+            </div>
+          ))}
+        </div>
       </div>
       {!isFullscreen ? (
         <span

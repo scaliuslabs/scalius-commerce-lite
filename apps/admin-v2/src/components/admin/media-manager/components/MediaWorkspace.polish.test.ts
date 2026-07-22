@@ -6,6 +6,8 @@ const folders = readFileSync(new URL("./FolderBrowser.tsx", import.meta.url), "u
 const preview = readFileSync(new URL("./MediaPreview.tsx", import.meta.url), "utf8");
 const card = readFileSync(new URL("./MediaCard.tsx", import.meta.url), "utf8");
 const workspace = readFileSync(new URL("../MediaWorkspace.tsx", import.meta.url), "utf8");
+const gallery = readFileSync(new URL("./MediaGallery.tsx", import.meta.url), "utf8");
+const uploadQueue = readFileSync(new URL("./MediaUploadQueue.tsx", import.meta.url), "utf8");
 const dialog = readFileSync(new URL("../../../ui/dialog.tsx", import.meta.url), "utf8");
 const videoPlayer = readFileSync(new URL("../../../ui/video-player.tsx", import.meta.url), "utf8");
 const globalStyles = readFileSync(new URL("../../../../styles/global.css", import.meta.url), "utf8");
@@ -31,6 +33,18 @@ describe("media workspace polish boundaries", () => {
     expect(filters).toContain('className="h-11 sm:h-8"');
     expect(folders).toContain('compact ? "h-11 max-w-40 border bg-background"');
     expect(card).toContain('className="h-11 w-11 bg-background/90 sm:h-7 sm:w-7"');
+    expect(uploadQueue).toContain('className="h-11 w-11 sm:h-7 sm:w-7"');
+    expect(uploadQueue).toContain('className="h-11 text-xs sm:h-7"');
+  });
+
+  it("keeps media copy user-facing and recovery-oriented", () => {
+    expect(workspace).toContain("Assets in use cannot be deleted.");
+    expect(workspace).not.toContain("R2 object");
+    expect(uploadQueue).toContain("Keep this tab open");
+    expect(uploadQueue).not.toContain("5 MiB parts");
+    expect(gallery).toContain("Try another search, folder, or file type.");
+    expect(preview).toContain("No poster selected");
+    expect(preview).toContain("Unsaved name, description, and poster changes will be lost.");
   });
 
   it("keeps library-management commands out of picker workspaces", () => {
@@ -41,6 +55,7 @@ describe("media workspace polish boundaries", () => {
     expect(workspace).toContain('if (capability === "image") return "Images up to 20 MiB"');
     expect(workspace).toContain('if (capability === "video") return "MP4 or WebM up to 100 MiB"');
     expect(workspace).toContain("mediaLimitHint(capability, picker)");
+    expect(workspace).toContain('<p className="sr-only">{limitHint}</p>');
   });
 
   it("protects unsaved preview metadata before close or navigation", () => {

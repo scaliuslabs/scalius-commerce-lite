@@ -61,6 +61,11 @@ describe("rich text editor mobile boundaries", () => {
     expect(menuSource).toContain("overflow-x-auto overscroll-x-contain scrollbar-hide");
     expect(menuSource).toContain("flex min-w-max items-center");
     expect(menuSource).not.toContain("flex flex-wrap items-center");
+    expect(skeletonSource).toContain(
+      "overflow-x-auto overscroll-x-contain scrollbar-hide",
+    );
+    expect(skeletonSource).toContain("flex min-w-max items-center");
+    expect(skeletonSource).not.toContain("flex flex-wrap items-center");
   });
 
   it("keeps image sizing usable without a precision pointer", () => {
