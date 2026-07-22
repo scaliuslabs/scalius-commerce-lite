@@ -3278,6 +3278,7 @@
           {
             "schema": {
               "type": "string",
+              "maxLength": 120,
               "default": "",
               "description": "Search query"
             },

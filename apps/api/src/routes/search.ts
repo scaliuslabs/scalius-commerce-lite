@@ -11,9 +11,48 @@ import {
 // Create an OpenAPIHono app for search routes
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
+type SearchResults = Awaited<ReturnType<typeof search>>;
+
+/**
+ * Keep predictive responses useful and bounded across resource groups. Each
+ * matching group gets one result first, then products fill the remaining
+ * space before secondary resources. Admin search keeps its existing per-group
+ * behavior because it calls the core service directly.
+ */
+function limitPublicSearchResults(
+  results: SearchResults,
+  limit: number,
+): SearchResults {
+  const products: SearchResults["products"] = [];
+  const categories: SearchResults["categories"] = [];
+  const pages: SearchResults["pages"] = [];
+  let remaining = limit;
+
+  const addFirst = <T>(source: readonly T[], target: T[]): void => {
+    if (remaining === 0 || source.length === 0) return;
+    target.push(source[0]!);
+    remaining -= 1;
+  };
+  const fill = <T>(source: readonly T[], target: T[]): void => {
+    if (remaining === 0 || source.length < 2) return;
+    const additional = source.slice(1, remaining + 1);
+    target.push(...additional);
+    remaining -= additional.length;
+  };
+
+  addFirst(results.products, products);
+  addFirst(results.categories, categories);
+  addFirst(results.pages, pages);
+  fill(results.products, products);
+  fill(results.categories, categories);
+  fill(results.pages, pages);
+
+  return { products, categories, pages };
+}
+
 // Schema for search query validation
 const searchQuerySchema = z.object({
-  q: z.string().optional().default("").openapi({ description: "Search query" }),
+  q: z.string().max(120).optional().default("").openapi({ description: "Search query" }),
   categoryId: z.string().optional().openapi({ description: "Category ID filter" }),
   minPrice: z.coerce.number().min(0).optional().openapi({ description: "Minimum effective buyer-SKU price" }),
   maxPrice: z.coerce.number().min(0).optional().openapi({ description: "Maximum effective buyer-SKU price" }),
@@ -140,11 +179,14 @@ app.openapi(searchRoute, async (c) => {
     if (timeoutId !== undefined) clearTimeout(timeoutId);
   }
 
-  // Return results
+  const limitedResults = limitPublicSearchResults(results, limit);
+
+  // The full search page uses the dedicated product-list endpoint; this route
+  // stays compact for predictive search clients.
   return ok(c, {
-    products: results.products || [],
-    pages: results.pages || [],
-    categories: results.categories || [],
+    products: limitedResults.products,
+    pages: limitedResults.pages,
+    categories: limitedResults.categories,
     query,
     timestamp: new Date().toISOString()
   });

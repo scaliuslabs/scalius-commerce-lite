@@ -46,6 +46,8 @@ interface ApiResponse {
 // lifetime of the page so revisiting or refining the same query is immediate.
 // Full navigations naturally clear this small, bounded cache.
 const SEARCH_RESULT_CACHE_LIMIT = 40;
+const PREDICTIVE_SEARCH_DEBOUNCE_MS = 200;
+const PREDICTIVE_SEARCH_RESULT_LIMIT = "7";
 const searchResultCache = new Map<string, SearchResponse>();
 
 function getSearchCacheKey(query: string): string {
@@ -179,7 +181,7 @@ export default function CommandPalette() {
       try {
         const params = new URLSearchParams({
           q: normalizedQuery,
-          limit: "8",
+          limit: PREDICTIVE_SEARCH_RESULT_LIMIT,
           searchCategories: "true",
           searchPages: "true",
         });
@@ -213,7 +215,7 @@ export default function CommandPalette() {
           setIsLoading(false);
         }
       }
-    }, 300);
+    }, PREDICTIVE_SEARCH_DEBOUNCE_MS);
 
     return () => {
       clearTimeout(timer);
@@ -320,7 +322,7 @@ export default function CommandPalette() {
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center px-4 py-3 sm:py-5 border-b border-gray-100 shrink-0 gap-3 bg-white relative z-10">
+        <div className="flex items-center px-4 py-3 sm:py-4 border-b border-gray-100 shrink-0 gap-3 bg-white relative z-10">
           <div className="relative flex-1 flex items-center">
             <Search
               className={cn(
@@ -332,7 +334,7 @@ export default function CommandPalette() {
             <input
               ref={inputRef}
               type="text"
-              className="w-full bg-transparent border-none outline-none text-lg sm:text-xl text-gray-900 placeholder:text-gray-400 font-medium h-10 tracking-tight pl-8 pr-8"
+              className="w-full bg-transparent border-none outline-none text-lg sm:text-xl text-gray-900 placeholder:text-gray-400 font-medium h-11 tracking-tight pl-8 pr-8"
               placeholder="Search products..."
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -340,6 +342,7 @@ export default function CommandPalette() {
               autoFocus
               autoComplete="off"
               autoCapitalize="none"
+              maxLength={120}
               inputMode="search"
               enterKeyHint="search"
               role="combobox"
@@ -364,7 +367,7 @@ export default function CommandPalette() {
             type="button"
             aria-label="Close search"
             onClick={() => setIsOpen(false)}
-            className="shrink-0 text-sm font-medium text-gray-500 hover:text-black px-3 py-2 bg-gray-100 rounded-lg transition-colors active:scale-95"
+            className="min-h-11 min-w-11 shrink-0 text-sm font-medium text-gray-500 hover:text-black px-3 py-2 bg-gray-100 rounded-lg transition-colors active:scale-95"
           >
             <span className="sm:hidden">Cancel</span>
             <span className="hidden sm:inline">
@@ -605,10 +608,17 @@ function ProductThumbnail({
   active: boolean;
 }) {
   const [failed, setFailed] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const hasImage = hasProductImage(product.imageUrl) && !failed;
 
   return (
-    <div className="h-10 w-10 rounded bg-white p-0.5 border border-gray-100 mr-3 overflow-hidden shrink-0 flex items-center justify-center">
+    <div className="relative h-10 w-10 rounded bg-white p-0.5 border border-gray-100 mr-3 overflow-hidden shrink-0 flex items-center justify-center">
+      {hasImage && !loaded ? (
+        <span
+          className="h-5 w-5 rounded bg-gray-100 animate-pulse motion-reduce:animate-none"
+          aria-hidden="true"
+        />
+      ) : null}
       {hasImage ? (
         <img
           src={getProductImageUrl(product.imageUrl, {
@@ -617,14 +627,22 @@ function ProductThumbnail({
             quality: 75,
             format: "auto",
             fit: "contain",
+            trim: "border",
           })}
           alt={product.imageAlt || product.name || ""}
           width={40}
           height={40}
           decoding="async"
           fetchPriority={active ? "high" : "auto"}
-          className="h-full w-full object-contain"
-          onError={() => setFailed(true)}
+          className={cn(
+            "h-full w-full object-contain transition-opacity duration-150 motion-reduce:transition-none",
+            loaded ? "opacity-100" : "absolute inset-0 opacity-0",
+          )}
+          onLoad={() => setLoaded(true)}
+          onError={() => {
+            setLoaded(false);
+            setFailed(true);
+          }}
         />
       ) : (
         <Package className="h-4 w-4 text-gray-300" aria-hidden="true" />

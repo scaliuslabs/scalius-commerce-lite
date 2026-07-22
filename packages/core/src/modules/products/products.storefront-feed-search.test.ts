@@ -1,4 +1,4 @@
-import { DatabaseSync } from "node:sqlite";
+import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 
 import type { Database } from "@scalius/database/client";
 import { drizzle } from "drizzle-orm/sqlite-proxy";
@@ -11,13 +11,17 @@ import {
     searchStorefrontProducts,
 } from "./products.storefront";
 import { resolvePublicAttributeFilters } from "../attributes/attributes.public";
+import { search as searchCatalog } from "../../search";
 
 let sqlite: DatabaseSync;
 let db: Database;
 let maxBoundParameters: number;
 
+type ProxyMethod = "run" | "all" | "values" | "get";
+type ProxyQuery = { sql: string; params: unknown[]; method: ProxyMethod };
+
 function createDatabase(): Database {
-    const proxy = drizzle(async (query, params, method) => {
+    const execute = async (query: string, params: unknown[], method: ProxyMethod) => {
         maxBoundParameters = Math.max(maxBoundParameters, params.length);
         if (params.length > 100) {
             throw new Error(`D1 bound-parameter limit exceeded: ${params.length}`);
@@ -26,18 +30,26 @@ function createDatabase(): Database {
         statement.setReturnArrays(true);
 
         if (method === "run") {
-            statement.run(...params);
+            statement.run(...(params as SQLInputValue[]));
             return { rows: [] };
         }
         if (method === "get") {
             return {
-                rows: statement.get(...params) as unknown as unknown[],
+                rows: statement.get(...(params as SQLInputValue[])) as unknown as unknown[],
             };
         }
         return {
-            rows: statement.all(...params) as unknown as unknown[],
+            rows: statement.all(...(params as SQLInputValue[])) as unknown as unknown[],
         };
-    });
+    };
+    const batch = async (queries: ProxyQuery[]) => {
+        const results: Array<{ rows: unknown[] }> = [];
+        for (const query of queries) {
+            results.push(await execute(query.sql, query.params, query.method));
+        }
+        return results;
+    };
+    const proxy = drizzle(execute, batch);
 
     return proxy as unknown as Database;
 }
@@ -88,6 +100,16 @@ function createCatalogSchema(): void {
         );
         CREATE INDEX products_category_id_idx ON products(category_id);
         CREATE VIRTUAL TABLE products_fts USING fts5(name, description);
+
+        CREATE TABLE pages (
+            id TEXT PRIMARY KEY,
+            title TEXT NOT NULL,
+            slug TEXT NOT NULL UNIQUE,
+            content TEXT NOT NULL DEFAULT '',
+            is_published INTEGER NOT NULL DEFAULT 0,
+            deleted_at INTEGER
+        );
+        CREATE VIRTUAL TABLE pages_fts USING fts5(title, content_col);
 
         CREATE TABLE product_variants (
             id TEXT PRIMARY KEY,
@@ -413,6 +435,36 @@ describe("storefront feed category search", () => {
                 (product) => product.id === "prod_mixed",
             ),
         ).toBe(false);
+    });
+
+    it("returns ranked sitewide results without projecting full page content", async () => {
+        sqlite.prepare(
+            `INSERT INTO pages (id, title, slug, content, is_published)
+             VALUES ('page_classic', 'Classic care guide', 'classic-care', ?, 1)`,
+        ).run("A long rich-text body that predictive search must not return.");
+        const pageRow = sqlite
+            .prepare("SELECT rowid FROM pages WHERE id = 'page_classic'")
+            .get() as { rowid: number };
+        sqlite.prepare(
+            `INSERT INTO pages_fts (rowid, title, content_col)
+             VALUES (?, 'Classic care guide', 'A long rich-text body')`,
+        ).run(pageRow.rowid);
+
+        const result = await searchCatalog(db, "classic", { limit: 10 });
+
+        expect(result.products.find((product) => product.id === "prod_runner")).toMatchObject({
+            id: "prod_runner",
+            imageAlt: "Classic Runner",
+        });
+        expect(result.pages).toEqual([
+            {
+                id: "page_classic",
+                title: "Classic care guide",
+                slug: "classic-care",
+                type: "page",
+            },
+        ]);
+        expect(result.pages[0]).not.toHaveProperty("content");
     });
 
     it("uses a stable created-at/id keyset and rejects retired page scans", async () => {

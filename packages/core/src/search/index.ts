@@ -18,7 +18,6 @@ export { ftsMatch, sanitizeFtsQuery } from "./fts5";
 export type ProductSearchResult = {
   id: string;
   name: string;
-  description: string | null;
   price: number;
   discountedPrice: number;
   priceVaries: boolean;
@@ -37,7 +36,6 @@ export type PageSearchResult = {
   id: string;
   title: string;
   slug: string;
-  content: string;
   type: "page";
 };
 
@@ -45,7 +43,6 @@ export type CategorySearchResult = {
   id: string;
   name: string;
   slug: string;
-  description: string | null;
   type: "category";
 };
 
@@ -74,7 +71,8 @@ export async function search(
   const searchPages = options?.searchPages !== false;
   const searchCategories = options?.searchCategories !== false;
   const hasValidQuery = query && query.trim() !== "";
-  if (hasValidQuery && !sanitizeFtsQuery(query)) {
+  const sanitizedQuery = hasValidQuery ? sanitizeFtsQuery(query) : "";
+  if (hasValidQuery && !sanitizedQuery) {
     return { products: [], pages: [], categories: [] };
   }
 
@@ -113,7 +111,6 @@ export async function search(
         // looks up category IDs instead of products.
         id: sql<string>`${products.id}`.as("search_product_id"),
         name: sql<string>`${products.name}`.as("search_product_name"),
-        description: products.description,
         price: buyerPricing.basePrice,
         discountedPrice: buyerPricing.effectivePrice,
         maxBuyerPrice: buyerPricing.maxBuyerPrice,
@@ -130,6 +127,11 @@ export async function search(
         ...publicCategoryConditions(),
       ))
       .where(and(...productConditions))
+      .orderBy(
+        hasValidQuery
+          ? sql`COALESCE((SELECT rank FROM products_fts WHERE rowid = products.rowid AND products_fts MATCH ${sanitizedQuery}), 0) ASC`
+          : products.name,
+      )
       .limit(limit);
 
     // Build Pages Query
@@ -144,10 +146,14 @@ export async function search(
           id: pages.id,
           title: pages.title,
           slug: pages.slug,
-          content: pages.content,
         })
         .from(pages)
         .where(and(...pageConditions))
+        .orderBy(
+          hasValidQuery
+            ? sql`COALESCE((SELECT rank FROM pages_fts WHERE rowid = pages.rowid AND pages_fts MATCH ${sanitizedQuery}), 0) ASC`
+            : pages.title,
+        )
         .limit(limit)
       : db.select({ id: sql`NULL` }).from(pages).where(sql`1 = 0`); // Dummy query
 
@@ -163,10 +169,14 @@ export async function search(
           id: categories.id,
           name: categories.name,
           slug: categories.slug,
-          description: categories.description,
         })
         .from(categories)
         .where(and(...categoryConditions))
+        .orderBy(
+          hasValidQuery
+            ? sql`COALESCE((SELECT rank FROM categories_fts WHERE rowid = categories.rowid AND categories_fts MATCH ${sanitizedQuery}), 0) ASC`
+            : categories.name,
+        )
         .limit(limit)
       : db.select({ id: sql`NULL` }).from(categories).where(sql`1 = 0`); // Dummy query
 

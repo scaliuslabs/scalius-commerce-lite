@@ -16,10 +16,15 @@ describe("CommandPalette search request boundaries", () => {
     expect(source).toContain("signal: controller.signal");
     expect(source).toContain("searchRunRef.current !== runId");
     expect(source).toContain("q: normalizedQuery");
+    expect(source).toContain("maxLength={120}");
     expect(source).not.toContain("q: query,");
     expect(source).not.toContain("`/search?q=${encodeURIComponent(query)}`");
     expect(source).toContain("const searchResultCache = new Map<string, SearchResponse>();");
     expect(source).toContain("cacheSearchResults(normalizedQuery, json.data);");
+    expect(source).toContain("const PREDICTIVE_SEARCH_DEBOUNCE_MS = 200;");
+    expect(source).toContain("}, PREDICTIVE_SEARCH_DEBOUNCE_MS);");
+    expect(source).toContain('const PREDICTIVE_SEARCH_RESULT_LIMIT = "7";');
+    expect(source).toContain("limit: PREDICTIVE_SEARCH_RESULT_LIMIT");
   });
 
   it("exposes dialog/listbox semantics and keeps failures distinct from empty results", async () => {
@@ -37,9 +42,14 @@ describe("CommandPalette search request boundaries", () => {
     expect(source).toContain("Search unavailable");
     expect(source).toContain("setSearchRetry((value) => value + 1)");
     expect(source).toContain('aria-label="Close search"');
+    expect(source).toContain("min-h-11 min-w-11");
+    expect(source).toContain("font-medium h-11 tracking-tight");
     expect(source).toContain('aria-busy={isLoading}');
     expect(source).toContain("<ProductThumbnail product={p}");
     expect(source).toContain("Pages");
     expect(source).toContain('type: "page"');
+    expect(source).toContain('trim: "border"');
+    expect(source).toContain("onLoad={() => setLoaded(true)}");
+    expect(source).toContain("motion-reduce:animate-none");
   });
 });

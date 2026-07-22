@@ -22,4 +22,16 @@ describe("predictive search product projection", () => {
     expect(source).toContain("imageMediaId: image?.mediaId ?? null");
     expect(source).toContain("imageAlt: image?.altText ?? null");
   });
+
+  it("ranks FTS matches and omits rich page bodies from predictive projections", async () => {
+    const source = await readFile(new URL("./index.ts", import.meta.url), "utf8");
+
+    expect(source).toContain("SELECT rank FROM products_fts");
+    expect(source).toContain("SELECT rank FROM pages_fts");
+    expect(source).toContain("SELECT rank FROM categories_fts");
+    expect(source).not.toContain("content: pages.content");
+    expect(source).not.toContain("content: string;");
+    expect(source).not.toContain("description: products.description");
+    expect(source).not.toContain("description: categories.description");
+  });
 });
