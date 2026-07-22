@@ -10,11 +10,25 @@ import {
   Trash2,
   ImageOff,
   PencilLine,
+  Check,
+  X,
 } from "lucide-react";
 import { Button } from "../button";
 import { Input } from "../input";
 import { Label } from "../label";
 import { Popover, PopoverContent, PopoverTrigger } from "../popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../select";
+import {
+  clampRichTextImageWidth,
+  normalizeRichTextImageWidthPercent,
+  richTextImageWidthPercent,
+} from "./resizable-image-sizing";
 
 export function ResizableImageView({
   node,
@@ -30,6 +44,8 @@ export function ResizableImageView({
   const [imageError, setImageError] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [altDraft, setAltDraft] = useState<string>(alt || "");
+  const [editingCustomSize, setEditingCustomSize] = useState(false);
+  const [customSizeDraft, setCustomSizeDraft] = useState("50");
   const widthRef = useRef<number | null>(null);
   const fieldId = useId();
   const altInputId = `${fieldId}-image-alt`;
@@ -80,7 +96,7 @@ export function ResizableImageView({
 
       const handlePointerMove = (moveEvent: PointerEvent) => {
         const diff = moveEvent.clientX - startX;
-        const newWidth = Math.min(editorWidth, Math.max(80, startWidth + diff));
+        const newWidth = clampRichTextImageWidth(startWidth + diff, editorWidth);
         widthRef.current = newWidth;
         setDisplayWidth(newWidth);
       };
@@ -88,9 +104,9 @@ export function ResizableImageView({
       const handlePointerUp = () => {
         setResizing(false);
         if (widthRef.current) {
-          const widthPercent = Math.max(
-            20,
-            Math.min(100, Math.round((widthRef.current / editorWidth) * 100)),
+          const widthPercent = richTextImageWidthPercent(
+            widthRef.current,
+            editorWidth,
           );
           updateAttributes({ width: `${widthPercent}%` });
         }
@@ -119,13 +135,28 @@ export function ResizableImageView({
         ? "ml-auto"
         : "mr-auto";
 
+  const presetWidths = ["25%", "50%", "75%", "100%"];
+  const sizeValue = presetWidths.includes(width)
+    ? width
+    : width
+      ? "custom-current"
+      : "auto";
+
+  const applyCustomSize = () => {
+    const nextWidth = normalizeRichTextImageWidthPercent(customSizeDraft);
+    if (nextWidth == null) return;
+    updateAttributes({ width: `${nextWidth}%` });
+    setCustomSizeDraft(String(nextWidth));
+    setEditingCustomSize(false);
+  };
+
   return (
     <NodeViewWrapper
       className={cn("resizable-image-wrapper", `align-${textAlign || "center"}`)}
-      data-drag-handle
     >
       <div
         ref={containerRef}
+        data-drag-handle
         className={cn("relative inline-block group", alignmentClass)}
         style={{ width: widthStyle, maxWidth: "100%" }}
       >
@@ -181,7 +212,10 @@ export function ResizableImageView({
 
       <div className="leading-normal">
         {selected && !resizing && (
-          <div className="mt-2 flex max-w-full flex-wrap items-center gap-1 rounded-md border bg-background p-1 shadow-sm">
+          <div
+            className="mt-2 inline-flex w-fit max-w-full flex-wrap items-center gap-1 rounded-md border bg-background p-1 shadow-sm"
+            data-image-controls
+          >
             <div className="flex items-center" role="group" aria-label="Image alignment">
             <button
               type="button"
@@ -220,29 +254,94 @@ export function ResizableImageView({
               <AlignRight className="h-3.5 w-3.5" />
             </button>
             </div>
-            <select
-              aria-label="Image size"
-              value={
-                ["25%", "50%", "75%", "100%"].includes(width)
-                  ? width
-                  : width
-                    ? "custom"
-                    : "auto"
-              }
-              onChange={(event) =>
-                updateAttributes({
-                  width: event.target.value === "auto" ? null : event.target.value,
-                })
-              }
-              className="h-11 rounded-md border border-input bg-background px-2 text-xs sm:h-8"
-            >
-              <option value="auto">Natural</option>
-              <option value="25%">25%</option>
-              <option value="50%">50%</option>
-              <option value="75%">75%</option>
-              <option value="100%">Full width</option>
-              <option value="custom" disabled>Custom</option>
-            </select>
+            {editingCustomSize ? (
+              <div
+                className="flex items-center gap-1"
+                role="group"
+                aria-label="Custom image width"
+              >
+                <div className="relative">
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    min={20}
+                    max={100}
+                    value={customSizeDraft}
+                    onChange={(event) => setCustomSizeDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        applyCustomSize();
+                      }
+                      if (event.key === "Escape") {
+                        event.preventDefault();
+                        setEditingCustomSize(false);
+                      }
+                    }}
+                    aria-label="Custom image width percentage"
+                    className="h-11 w-20 pr-7 text-xs sm:h-8"
+                    autoFocus
+                  />
+                  <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                    %
+                  </span>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-11 w-11 sm:h-8 sm:w-8"
+                  aria-label="Apply custom image width"
+                  onClick={applyCustomSize}
+                >
+                  <Check className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-11 w-11 sm:h-8 sm:w-8"
+                  aria-label="Cancel custom image width"
+                  onClick={() => setEditingCustomSize(false)}
+                >
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ) : (
+              <Select
+                value={sizeValue}
+                onValueChange={(value) => {
+                  if (value === "custom") {
+                    setCustomSizeDraft(
+                      width ? String(parseInt(width, 10) || 50) : "50",
+                    );
+                    setEditingCustomSize(true);
+                    return;
+                  }
+                  updateAttributes({ width: value === "auto" ? null : value });
+                }}
+              >
+                <SelectTrigger
+                  aria-label="Image size"
+                  className="h-11 w-auto min-w-28 gap-2 px-2 text-xs sm:h-8"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="z-[10002]">
+                  <SelectItem value="auto">Natural</SelectItem>
+                  <SelectItem value="25%">25%</SelectItem>
+                  <SelectItem value="50%">50%</SelectItem>
+                  <SelectItem value="75%">75%</SelectItem>
+                  <SelectItem value="100%">Full width</SelectItem>
+                  {sizeValue === "custom-current" ? (
+                    <SelectItem value="custom-current" disabled>
+                      Custom · {width}
+                    </SelectItem>
+                  ) : null}
+                  <SelectItem value="custom">Custom…</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
             <Popover
               open={detailsOpen}
               onOpenChange={(open) => {

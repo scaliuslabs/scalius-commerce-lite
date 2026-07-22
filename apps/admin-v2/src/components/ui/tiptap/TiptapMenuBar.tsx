@@ -1,5 +1,6 @@
 import { useId, useState } from "react";
 import type { Editor } from "@tiptap/react";
+import { useEditorState } from "@tiptap/react";
 import { cn } from "@scalius/shared/utils";
 import {
   Bold,
@@ -41,6 +42,13 @@ import {
   normalizeRichTextImageUrl,
   normalizeRichTextLinkUrl,
 } from "./tiptap-url";
+import {
+  canToggleRichTextBlockquote,
+  canToggleRichTextList,
+  toggleRichTextBlockquote,
+  toggleRichTextBulletList,
+  toggleRichTextOrderedList,
+} from "./tiptap-formatting";
 
 interface MenuBarProps {
   editor: Editor | null;
@@ -78,7 +86,34 @@ export const TiptapMenuBar = ({
   const [tableCols, setTableCols] = useState<string>("3");
   const [tableWithHeader, setTableWithHeader] = useState<boolean>(true);
 
-  if (!editor) {
+  const toolbarState = useEditorState({
+    editor,
+    selector: ({ editor: currentEditor }) => ({
+      bold: currentEditor?.isActive("bold") ?? false,
+      italic: currentEditor?.isActive("italic") ?? false,
+      underline: currentEditor?.isActive("underline") ?? false,
+      link: currentEditor?.isActive("link") ?? false,
+      hasSelection: currentEditor ? !currentEditor.state.selection.empty : false,
+      alignLeft: currentEditor?.isActive({ textAlign: "left" }) ?? false,
+      alignCenter: currentEditor?.isActive({ textAlign: "center" }) ?? false,
+      alignRight: currentEditor?.isActive({ textAlign: "right" }) ?? false,
+      justify: currentEditor?.isActive({ textAlign: "justify" }) ?? false,
+      heading1: currentEditor?.isActive("heading", { level: 1 }) ?? false,
+      heading2: currentEditor?.isActive("heading", { level: 2 }) ?? false,
+      heading3: currentEditor?.isActive("heading", { level: 3 }) ?? false,
+      bulletList: currentEditor?.isActive("bulletList") ?? false,
+      orderedList: currentEditor?.isActive("orderedList") ?? false,
+      blockquote: currentEditor?.isActive("blockquote") ?? false,
+      canToggleList: currentEditor ? canToggleRichTextList(currentEditor) : false,
+      canToggleBlockquote: currentEditor
+        ? canToggleRichTextBlockquote(currentEditor)
+        : false,
+      canUndo: currentEditor?.can().undo() ?? false,
+      canRedo: currentEditor?.can().redo() ?? false,
+    }),
+  });
+
+  if (!editor || !toolbarState) {
     return null;
   }
 
@@ -152,8 +187,8 @@ export const TiptapMenuBar = ({
     });
   };
 
-  const hasLinkSelection = editor.isActive("link");
-  const canOpenLink = !editor.state.selection.empty || hasLinkSelection;
+  const hasLinkSelection = toolbarState.link;
+  const canOpenLink = toolbarState.hasSelection || hasLinkSelection;
 
   const buttonSize = compact
     ? "h-11 w-11 sm:h-7 sm:w-7"
@@ -167,17 +202,22 @@ export const TiptapMenuBar = ({
       role="toolbar"
       aria-label={ariaLabel}
       className={cn(
-      "flex items-center overflow-hidden rounded-t-md border border-input bg-background",
-      padding,
-      gapSize,
+        "flex items-center overflow-hidden rounded-t-md border border-input bg-background",
+        padding,
+        gapSize,
       )}
     >
-      <div className="min-w-0 flex-1 overflow-x-auto overscroll-x-contain scrollbar-hide">
-      <div className={cn("flex min-w-max items-center", gapSize)}>
+      <div
+        className={cn(
+          "min-w-0 overflow-x-auto overscroll-x-contain scrollbar-hide",
+          isFullscreen ? "mx-auto w-fit max-w-full" : "flex-1",
+        )}
+      >
+        <div className={cn("flex min-w-max items-center", gapSize)}>
         {/* Text formatting */}
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleBold().run()}
-          isActive={editor.isActive("bold")}
+          isActive={toolbarState.bold}
           tooltip="Bold (Ctrl+B)"
           buttonSize={buttonSize}
         >
@@ -185,7 +225,7 @@ export const TiptapMenuBar = ({
         </ToolbarButton>
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleItalic().run()}
-          isActive={editor.isActive("italic")}
+          isActive={toolbarState.italic}
           tooltip="Italic (Ctrl+I)"
           buttonSize={buttonSize}
         >
@@ -193,7 +233,7 @@ export const TiptapMenuBar = ({
         </ToolbarButton>
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleUnderline().run()}
-          isActive={editor.isActive("underline")}
+          isActive={toolbarState.underline}
           tooltip="Underline (Ctrl+U)"
           buttonSize={buttonSize}
         >
@@ -228,7 +268,7 @@ export const TiptapMenuBar = ({
                       : "Select text to add a link"
                   }
                   disabled={!canOpenLink}
-                  className={cn(buttonSize, editor.isActive("link") && "bg-accent")}
+                  className={cn(buttonSize, toolbarState.link && "bg-accent")}
                 >
                   <LinkIcon className={iconSize} />
                 </Button>
@@ -442,7 +482,7 @@ export const TiptapMenuBar = ({
         {/* Alignment */}
         <ToolbarButton
           onClick={() => editor.chain().focus().setTextAlign("left").run()}
-          isActive={editor.isActive({ textAlign: "left" })}
+          isActive={toolbarState.alignLeft}
           tooltip="Align left"
           buttonSize={buttonSize}
         >
@@ -450,7 +490,7 @@ export const TiptapMenuBar = ({
         </ToolbarButton>
         <ToolbarButton
           onClick={() => editor.chain().focus().setTextAlign("center").run()}
-          isActive={editor.isActive({ textAlign: "center" })}
+          isActive={toolbarState.alignCenter}
           tooltip="Align center"
           buttonSize={buttonSize}
         >
@@ -458,7 +498,7 @@ export const TiptapMenuBar = ({
         </ToolbarButton>
         <ToolbarButton
           onClick={() => editor.chain().focus().setTextAlign("right").run()}
-          isActive={editor.isActive({ textAlign: "right" })}
+          isActive={toolbarState.alignRight}
           tooltip="Align right"
           buttonSize={buttonSize}
         >
@@ -466,7 +506,7 @@ export const TiptapMenuBar = ({
         </ToolbarButton>
         <ToolbarButton
           onClick={() => editor.chain().focus().setTextAlign("justify").run()}
-          isActive={editor.isActive({ textAlign: "justify" })}
+          isActive={toolbarState.justify}
           tooltip="Justify"
           buttonSize={buttonSize}
         >
@@ -478,7 +518,7 @@ export const TiptapMenuBar = ({
         {/* Headings */}
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-          isActive={editor.isActive("heading", { level: 1 })}
+          isActive={toolbarState.heading1}
           tooltip="Heading 1"
           buttonSize={buttonSize}
         >
@@ -486,7 +526,7 @@ export const TiptapMenuBar = ({
         </ToolbarButton>
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-          isActive={editor.isActive("heading", { level: 2 })}
+          isActive={toolbarState.heading2}
           tooltip="Heading 2"
           buttonSize={buttonSize}
         >
@@ -494,7 +534,7 @@ export const TiptapMenuBar = ({
         </ToolbarButton>
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
-          isActive={editor.isActive("heading", { level: 3 })}
+          isActive={toolbarState.heading3}
           tooltip="Heading 3"
           buttonSize={buttonSize}
         >
@@ -505,24 +545,27 @@ export const TiptapMenuBar = ({
 
         {/* Lists & blockquote */}
         <ToolbarButton
-          onClick={() => editor.chain().focus().toggleBulletList().run()}
-          isActive={editor.isActive("bulletList")}
+          onClick={() => toggleRichTextBulletList(editor)}
+          isActive={toolbarState.bulletList}
+          disabled={!toolbarState.canToggleList}
           tooltip="Bullet list"
           buttonSize={buttonSize}
         >
           <List className={iconSize} />
         </ToolbarButton>
         <ToolbarButton
-          onClick={() => editor.chain().focus().toggleOrderedList().run()}
-          isActive={editor.isActive("orderedList")}
+          onClick={() => toggleRichTextOrderedList(editor)}
+          isActive={toolbarState.orderedList}
+          disabled={!toolbarState.canToggleList}
           tooltip="Numbered list"
           buttonSize={buttonSize}
         >
           <ListOrdered className={iconSize} />
         </ToolbarButton>
         <ToolbarButton
-          onClick={() => editor.chain().focus().toggleBlockquote().run()}
-          isActive={editor.isActive("blockquote")}
+          onClick={() => toggleRichTextBlockquote(editor)}
+          isActive={toolbarState.blockquote}
+          disabled={!toolbarState.canToggleBlockquote}
           tooltip="Blockquote"
           buttonSize={buttonSize}
         >
@@ -550,7 +593,7 @@ export const TiptapMenuBar = ({
         {/* History */}
         <ToolbarButton
           onClick={() => editor.chain().focus().undo().run()}
-          disabled={!editor.can().undo()}
+          disabled={!toolbarState.canUndo}
           tooltip="Undo (Ctrl+Z)"
           buttonSize={buttonSize}
         >
@@ -558,13 +601,13 @@ export const TiptapMenuBar = ({
         </ToolbarButton>
         <ToolbarButton
           onClick={() => editor.chain().focus().redo().run()}
-          disabled={!editor.can().redo()}
+          disabled={!toolbarState.canRedo}
           tooltip="Redo (Ctrl+Shift+Z)"
           buttonSize={buttonSize}
         >
           <Redo className={iconSize} />
         </ToolbarButton>
-      </div>
+        </div>
       </div>
 
       {/* Fullscreen toggle */}

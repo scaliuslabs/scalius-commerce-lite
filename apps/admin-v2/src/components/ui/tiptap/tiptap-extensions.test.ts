@@ -2,7 +2,7 @@
 
 import { Editor } from "@tiptap/core";
 import { sanitizeHtml } from "@scalius/shared/html-sanitize";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createTiptapExtensions } from "./tiptap-extensions";
 import {
   insertRichTextImage,
@@ -24,6 +24,7 @@ describe("rich-text editing document contract", () => {
   afterEach(() => {
     editor?.destroy();
     editor = null;
+    vi.restoreAllMocks();
   });
 
   it("creates paragraphs and hard line breaks without losing adjacent text", () => {
@@ -178,5 +179,34 @@ describe("rich-text editing document contract", () => {
     ).toBe(true);
     expect(imageEditor.getText()).toContain("Keep this table text");
     expect(imageEditor.getHTML()).toContain("<table");
+  });
+
+  it("keeps consecutive block insertions on a valid text selection", () => {
+    const instance = createEditor("<p>Before blocks</p>");
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    expect(
+      insertRichTextVideo(instance, {
+        src: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        provider: "youtube",
+      }),
+    ).toBe(true);
+    let videoPosition = -1;
+    instance.state.doc.descendants((node, position) => {
+      if (node.type.name === "videoEmbed") videoPosition = position;
+    });
+    expect(videoPosition).toBeGreaterThanOrEqual(0);
+    expect(instance.commands.setNodeSelection(videoPosition)).toBe(true);
+    expect(
+      insertRichTextTable(instance, {
+        rows: 2,
+        cols: 2,
+        withHeaderRow: true,
+      }),
+    ).toBe(true);
+
+    expect(warning).not.toHaveBeenCalledWith(
+      expect.stringContaining("TextSelection endpoint not pointing into a node with inline content"),
+    );
   });
 });

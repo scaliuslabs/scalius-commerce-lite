@@ -124,7 +124,11 @@ export const ResizableImage = Node.create<ResizableImageOptions>({
   },
 
   addNodeView() {
-    return ReactNodeViewRenderer(ResizableImageView);
+    return ReactNodeViewRenderer(ResizableImageView, {
+      stopEvent: ({ event }) =>
+        event.target instanceof Element &&
+        Boolean(event.target.closest("[data-image-controls]")),
+    });
   },
 
   addCommands() {

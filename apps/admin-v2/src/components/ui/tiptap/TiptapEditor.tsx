@@ -10,7 +10,7 @@ import { Button } from "../button";
 import { TiptapMenuBar } from "./TiptapMenuBar";
 import { TiptapToolbarSkeleton } from "./TiptapToolbarSkeleton";
 import { createTiptapExtensions } from "./tiptap-extensions";
-import { shouldApplyExternalTiptapContent } from "./tiptap-content-sync";
+import { reconcileExternalTiptapContent } from "./tiptap-content-sync";
 import { shouldExitRichTextFullscreen } from "./tiptap-fullscreen";
 
 interface TiptapEditorProps {
@@ -37,6 +37,7 @@ export function TiptapEditor({
   const editorAreaRef = useRef<HTMLDivElement>(null);
   const contentWrapperRef = useRef<HTMLDivElement>(null);
   const lastExternalContentRef = useRef(content);
+  const pendingLocalContentsRef = useRef<string[]>([]);
   const editorViewportHeight = compact ? "200px" : "300px";
   const hasInitialContent = hasRenderableHtmlContent(content);
   const sanitizedInitialContent = useMemo(() => sanitizeHtml(content), [content]);
@@ -136,7 +137,13 @@ export function TiptapEditor({
     extensions,
     content,
     onUpdate: ({ editor }) => {
-      onChange(editor.getHTML());
+      const nextContent = editor.getHTML();
+      const pendingLocalContents = pendingLocalContentsRef.current;
+      if (pendingLocalContents.at(-1) !== nextContent) {
+        pendingLocalContents.push(nextContent);
+        if (pendingLocalContents.length > 50) pendingLocalContents.shift();
+      }
+      onChange(nextContent);
     },
     editorProps: {
       attributes: {
@@ -148,18 +155,19 @@ export function TiptapEditor({
       },
     },
     immediatelyRender: false,
-    shouldRerenderOnTransaction: true,
+    shouldRerenderOnTransaction: false,
   });
 
   useEffect(() => {
     if (!editorInstance) return;
-    if (
-      shouldApplyExternalTiptapContent({
-        incomingContent: content,
-        lastExternalContent: lastExternalContentRef.current,
-        editorContent: editorInstance.getHTML(),
-      })
-    ) {
+    const reconciliation = reconcileExternalTiptapContent({
+      incomingContent: content,
+      lastExternalContent: lastExternalContentRef.current,
+      editorContent: editorInstance.getHTML(),
+      pendingLocalContents: pendingLocalContentsRef.current,
+    });
+    pendingLocalContentsRef.current = reconciliation.pendingLocalContents;
+    if (reconciliation.shouldApply) {
       editorInstance.commands.setContent(content, { emitUpdate: false });
     }
     lastExternalContentRef.current = content;
