@@ -34,7 +34,7 @@ export function SortableSlide({
     <div
       {...attributes}
       {...listeners}
-      className="flex w-7 shrink-0 cursor-grab items-center justify-center self-stretch rounded text-muted-foreground/60 transition-colors hover:bg-muted/50 hover:text-foreground active:cursor-grabbing"
+      className="flex w-11 shrink-0 cursor-grab items-center justify-center self-stretch rounded text-muted-foreground/60 transition-colors hover:bg-muted/50 hover:text-foreground active:cursor-grabbing md:w-7"
       aria-label={`Reorder slide ${index + 1}`}
     >
       <GripVertical className="h-4 w-4" />

@@ -18,6 +18,10 @@ const focalPointEditorSource = readFileSync(
   resolve(import.meta.dirname, "HeroFocalPointEditor.tsx"),
   "utf8",
 );
+const sortableSlideSource = readFileSync(
+  resolve(import.meta.dirname, "SortableSlide.tsx"),
+  "utf8",
+);
 const carouselSource = readFileSync(
   resolve(
     import.meta.dirname,
@@ -42,6 +46,35 @@ describe("hero slider workflow boundaries", () => {
     expect(tabSource).toContain("Save changes");
     expect(tabSource).toContain("Discard");
     expect(tabSource).toContain("Load latest");
+  });
+
+  it("keeps the mobile save bar compact without hiding its state or actions", () => {
+    expect(tabSource).toContain(
+      'className="sticky bottom-3 z-20 flex min-w-0 items-center justify-between gap-2',
+    );
+    expect(tabSource).toContain('className="flex shrink-0 items-center gap-1 sm:gap-2"');
+    expect(tabSource).toContain('<span className="sm:hidden">Save</span>');
+    expect(tabSource).toContain('<span className="sm:hidden">{dirty ? "Unsaved" : "Saved"}</span>');
+    expect(containerSource).toContain(
+      "Manage separate desktop and mobile homepage banners.",
+    );
+    expect(containerSource).not.toContain("All changes saved");
+  });
+
+  it("keeps hero editing controls touchable without loosening desktop density", () => {
+    expect(containerSource).toContain(
+      'className="h-11 gap-2 px-3 sm:h-7"',
+    );
+    expect(tabSource).toContain('className="min-h-11 sm:min-h-9"');
+    expect(tabSource).toContain(
+      'className="min-h-11 px-2 sm:min-h-9 sm:px-3"',
+    );
+    expect(rowSource).toContain('className="h-11 text-sm md:h-8"');
+    expect(rowSource).toContain("md:h-8 md:w-8");
+    expect(focalPointEditorSource).toContain(
+      "h-11 gap-1 rounded-md",
+    );
+    expect(sortableSlideSource).toContain("w-11 shrink-0");
   });
 
   it("renders intentionally unlinked slides without fake hash navigation", () => {

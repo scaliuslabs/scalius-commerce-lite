@@ -102,7 +102,7 @@ export function SlideRow({
             onChange={(e) => onUpdate(image.id, { title: e.target.value })}
             placeholder="New season collection"
             aria-invalid={titleMissing}
-            className="h-8 text-sm"
+            className="h-11 text-sm md:h-8"
           />
           {titleMissing ? <p className="text-xs text-destructive">Describe this image for customers.</p> : null}
         </div>
@@ -120,7 +120,7 @@ export function SlideRow({
             onChange={(e) => onUpdate(image.id, { link: e.target.value })}
             placeholder="/collections/new or https://example.com"
             aria-invalid={!linkResult.ok}
-            className="h-8 bg-muted/15 text-sm focus:bg-background"
+            className="h-11 bg-muted/15 text-sm focus:bg-background md:h-8"
           />
           {!linkResult.ok ? <p className="text-xs text-destructive">{linkResult.reason}</p> : null}
         </div>
@@ -130,7 +130,7 @@ export function SlideRow({
         <Button
           variant="ghost"
           size="icon"
-          className="h-8 w-8 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+          className="h-11 w-11 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive md:h-8 md:w-8"
           onClick={() => onRemove(image.id)}
           title={`Remove slide ${index + 1}`}
           aria-label={`Remove slide ${index + 1}`}

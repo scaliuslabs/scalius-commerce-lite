@@ -31,6 +31,10 @@ const {
   interval = 3000,
 } = Astro.props;
 const presentation = HERO_SLIDE_PRESENTATION[type];
+const viewportMedia =
+  type === "desktop" ? "(min-width: 768px)" : "(max-width: 767px)";
+const transparentPixel =
+  "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
 
 // Ensure we have at least one image
 if (images.length === 0) return;
@@ -51,6 +55,11 @@ if (images.length === 0) return;
           const SlideFrame = image.link ? "a" : "div";
           const isExternal = image.link?.startsWith("https://");
           const focalPoint = image.focalPoint ?? HERO_SLIDE_DEFAULT_FOCAL_POINT;
+          const source = getOptimizedImageUrl(image.url, {
+            ...getHeroSlideImageTransform(type, focalPoint, {
+              quality: index === 0 ? 90 : 80,
+            }),
+          });
           return (
             <div
               class={`slide absolute inset-0 transition-opacity duration-500 ${index === 0 ? "opacity-100" : "opacity-0 pointer-events-none"}`}
@@ -63,21 +72,24 @@ if (images.length === 0) return;
                 target={isExternal ? "_blank" : undefined}
                 rel={isExternal ? "noopener noreferrer" : undefined}
               >
-              <img
-                src={getOptimizedImageUrl(image.url, {
-                  ...getHeroSlideImageTransform(type, focalPoint, {
-                    quality: index === 0 ? 90 : 80,
-                  }),
-                })}
-                alt={image.title || `Slide ${index + 1}`}
-                width={presentation.width}
-                height={height}
-                class="w-full h-full object-cover"
-                style={`object-position: ${getHeroSlideObjectPosition(focalPoint)};`}
-                loading={index === 0 ? "eager" : "lazy"}
-                fetchpriority={index === 0 ? "high" : "auto"}
-                decoding={index === 0 ? "sync" : "async"}
-              />
+                <picture class="block h-full w-full">
+                  <source
+                    media={viewportMedia}
+                    srcset={index === 0 ? source : undefined}
+                    data-srcset={index === 0 ? undefined : source}
+                  />
+                  <img
+                    src={transparentPixel}
+                    alt={image.title || `Slide ${index + 1}`}
+                    width={presentation.width}
+                    height={height}
+                    class="h-full w-full object-cover"
+                    style={`object-position: ${getHeroSlideObjectPosition(focalPoint)};`}
+                    loading={index === 0 ? "eager" : "lazy"}
+                    fetchpriority={index === 0 ? "high" : "auto"}
+                    decoding={index === 0 ? "sync" : "async"}
+                  />
+                </picture>
 
                 {image.link && (
                   <div class="absolute inset-0 bg-black/0 transition-colors duration-300 group-hover:bg-black/20" />
@@ -172,6 +184,10 @@ if (images.length === 0) return;
       autoRotate: boolean;
       interval: number;
       timer: ReturnType<typeof setInterval> | null = null;
+      warmTimer: ReturnType<typeof setTimeout> | null = null;
+      resizeObserver: ResizeObserver | null = null;
+      slideLoads = new Map<number, Promise<void>>();
+      disposed: boolean = false;
       isHovering: boolean = false;
       touchStartX: number = 0;
       touchEndX: number = 0;
@@ -195,10 +211,13 @@ if (images.length === 0) return;
 
         this.initEventListeners();
 
-        // Start auto-rotation immediately
-        if (this.autoRotate) {
-          this.startAutoRotation();
+        if (this.autoRotate && "ResizeObserver" in window) {
+          this.resizeObserver = new ResizeObserver(() => {
+            this.syncAutoRotation();
+          });
+          this.resizeObserver.observe(this.carousel);
         }
+        this.syncAutoRotation();
       }
 
       initEventListeners() {
@@ -207,7 +226,7 @@ if (images.length === 0) return;
           dot.addEventListener("click", (e) => {
             e.preventDefault();
             if (!this.isTransitioning) {
-              this.goToSlide(index);
+              void this.goToSlide(index);
             }
           });
         });
@@ -220,7 +239,7 @@ if (images.length === 0) return;
           prevButton.addEventListener("click", (e) => {
             e.preventDefault();
             if (!this.isTransitioning) {
-              this.goToPrevSlide();
+              void this.goToPrevSlide();
             }
           });
         }
@@ -229,7 +248,7 @@ if (images.length === 0) return;
           nextButton.addEventListener("click", (e) => {
             e.preventDefault();
             if (!this.isTransitioning) {
-              this.goToNextSlide();
+              void this.goToNextSlide();
             }
           });
         }
@@ -237,17 +256,12 @@ if (images.length === 0) return;
         // Pause auto-rotation on hover
         this.carousel.addEventListener("mouseenter", () => {
           this.isHovering = true;
-          if (this.timer) {
-            clearInterval(this.timer);
-            this.timer = null;
-          }
+          this.stopAutoRotation();
         });
 
         this.carousel.addEventListener("mouseleave", () => {
           this.isHovering = false;
-          if (this.autoRotate && !this.timer) {
-            this.startAutoRotation();
-          }
+          this.syncAutoRotation();
         });
 
         // Touch events for swipe functionality
@@ -260,10 +274,7 @@ if (images.length === 0) return;
             this.isSwiping = true;
 
             // Pause auto-rotation during swipe
-            if (this.timer) {
-              clearInterval(this.timer);
-              this.timer = null;
-            }
+            this.stopAutoRotation();
           },
           { passive: true }
         );
@@ -287,18 +298,16 @@ if (images.length === 0) return;
 
             if (swipeDistance > threshold) {
               // Swipe right - go to previous slide
-              this.goToPrevSlide();
+              void this.goToPrevSlide();
             } else if (swipeDistance < -threshold) {
               // Swipe left - go to next slide
-              this.goToNextSlide();
+              void this.goToNextSlide();
             }
 
             this.isSwiping = false;
 
             // Resume auto-rotation after swipe
-            if (this.autoRotate && !this.timer && !this.isHovering) {
-              this.startAutoRotation();
-            }
+            this.syncAutoRotation();
           },
           { passive: true }
         );
@@ -314,23 +323,109 @@ if (images.length === 0) return;
       }
 
       startAutoRotation() {
-        if (this.timer) {
-          clearInterval(this.timer);
-        }
+        this.stopAutoRotation();
+        if (
+          this.disposed ||
+          !this.autoRotate ||
+          this.isHovering ||
+          this.isSwiping ||
+          !this.isVisible()
+        )
+          return;
+
+        this.scheduleNextWarm();
 
         this.timer = setInterval(() => {
           if (!this.isHovering && !this.isSwiping && !this.isTransitioning) {
-            this.goToNextSlide();
+            void this.goToNextSlide();
           }
         }, this.interval);
       }
 
-      goToSlide(index: number) {
+      stopAutoRotation() {
+        if (this.timer) clearInterval(this.timer);
+        if (this.warmTimer) clearTimeout(this.warmTimer);
+        this.timer = null;
+        this.warmTimer = null;
+      }
+
+      syncAutoRotation() {
+        if (
+          this.autoRotate &&
+          this.isVisible() &&
+          !this.isHovering &&
+          !this.isSwiping
+        ) {
+          if (!this.timer) this.startAutoRotation();
+        } else {
+          this.stopAutoRotation();
+        }
+      }
+
+      isVisible() {
+        return (
+          this.carousel.getClientRects().length > 0 &&
+          this.carousel.clientWidth > 0
+        );
+      }
+
+      scheduleNextWarm() {
+        if (this.warmTimer) clearTimeout(this.warmTimer);
+        if (this.disposed || !this.isVisible()) return;
+        const delay = Math.max(250, this.interval - 1000);
+        this.warmTimer = setTimeout(() => {
+          this.warmTimer = null;
+          const nextIndex = (this.currentIndex + 1) % this.slides.length;
+          void this.prepareSlide(nextIndex);
+        }, delay);
+      }
+
+      async prepareSlide(index: number) {
+        const existingLoad = this.slideLoads.get(index);
+        if (existingLoad) return existingLoad;
+        const slide = this.slides[index];
+        const source = slide?.querySelector<HTMLSourceElement>(
+          "source[data-srcset]"
+        );
+        const nextSource = source?.dataset.srcset;
+        if (!source || !nextSource) return;
+        const image = slide.querySelector<HTMLImageElement>("img");
+        if (!image) return;
+
+        const pendingLoad = new Promise<void>((resolve) => {
+          let settled = false;
+          let timeout: ReturnType<typeof setTimeout> | null = null;
+          const finish = () => {
+            if (settled) return;
+            settled = true;
+            if (timeout) clearTimeout(timeout);
+            image.removeEventListener("load", finish);
+            image.removeEventListener("error", finish);
+            resolve();
+          };
+          image.addEventListener("load", finish, { once: true });
+          image.addEventListener("error", finish, { once: true });
+          source.srcset = nextSource;
+          delete source.dataset.srcset;
+          image.loading = "eager";
+          if (image.complete && image.naturalWidth > 1) finish();
+          if (!settled) timeout = setTimeout(finish, 5000);
+        });
+        this.slideLoads.set(index, pendingLoad);
+        await pendingLoad;
+      }
+
+      async goToSlide(index: number) {
         // Don't do anything if we're trying to go to the current slide
-        if (index === this.currentIndex) return;
+        if (index === this.currentIndex || this.isTransitioning) return;
 
         // Set transitioning flag
         this.isTransitioning = true;
+        await this.prepareSlide(index);
+        if (this.disposed || !this.isVisible()) {
+          this.isTransitioning = false;
+          return;
+        }
 
         // Hide current slide
         this.slides[this.currentIndex].classList.remove("opacity-100");
@@ -369,13 +464,7 @@ if (images.length === 0) return;
           );
         }
 
-        // Preload next image for smoother transitions
-        const nextIndex = (this.currentIndex + 1) % this.slides.length;
-        const nextSlide = this.slides[nextIndex];
-        const nextImage = nextSlide.querySelector("img");
-        if (nextImage && nextImage.loading === "lazy") {
-          nextImage.loading = "eager";
-        }
+        this.scheduleNextWarm();
 
         // Set a fallback timeout to reset the transition flag in case the transitionend event doesn't fire
         setTimeout(() => {
@@ -383,20 +472,30 @@ if (images.length === 0) return;
         }, this.transitionDuration + 50);
       }
 
-      goToNextSlide() {
+      async goToNextSlide() {
         const nextIndex = (this.currentIndex + 1) % this.slides.length;
-        this.goToSlide(nextIndex);
+        await this.goToSlide(nextIndex);
       }
 
-      goToPrevSlide() {
+      async goToPrevSlide() {
         const prevIndex =
           (this.currentIndex - 1 + this.slides.length) % this.slides.length;
-        this.goToSlide(prevIndex);
+        await this.goToSlide(prevIndex);
+      }
+
+      dispose() {
+        this.disposed = true;
+        this.stopAutoRotation();
+        this.resizeObserver?.disconnect();
+        this.resizeObserver = null;
       }
     }
 
     type CarouselElement = HTMLElement & {
       __carouselController?: CarouselController;
+    };
+    type CarouselDocument = Document & {
+      __scaliusCarouselLifecycleBound?: boolean;
     };
 
     // Initialize carousels immediately
@@ -407,21 +506,36 @@ if (images.length === 0) return;
           const carouselElement = carousel as CarouselElement;
           // Prevent re-initialization
           if (!carouselElement.__carouselController) {
-            carouselElement.__carouselController = new CarouselController(carousel);
+            carouselElement.__carouselController = new CarouselController(
+              carousel
+            );
           }
         }
       });
     };
 
-    // Initialize immediately if DOM is ready, otherwise wait for DOMContentLoaded
-    if (document.readyState !== "loading") {
-      initCarousels();
+    const carouselDocument = document as CarouselDocument;
+    if (!carouselDocument.__scaliusCarouselLifecycleBound) {
+      carouselDocument.__scaliusCarouselLifecycleBound = true;
+      if (document.readyState !== "loading") {
+        initCarousels();
+      } else {
+        document.addEventListener("DOMContentLoaded", initCarousels, {
+          once: true,
+        });
+      }
+      document.addEventListener("astro:page-load", initCarousels);
+      document.addEventListener("astro:before-swap", () => {
+        document
+          .querySelectorAll<CarouselElement>("[data-carousel-type]")
+          .forEach((carousel) => {
+            carousel.__carouselController?.dispose();
+            delete carousel.__carouselController;
+          });
+      });
     } else {
-      document.addEventListener("DOMContentLoaded", initCarousels);
+      initCarousels();
     }
-
-    // Also initialize after Astro page transitions
-    document.addEventListener("astro:page-load", initCarousels);
   })();
 </script>
 

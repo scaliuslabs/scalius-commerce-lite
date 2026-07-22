@@ -55,7 +55,7 @@ export function HeroFocalPointEditor({
           type="button"
           variant="secondary"
           size="sm"
-          className="absolute bottom-1.5 right-1.5 z-10 h-7 gap-1 rounded-md bg-black/75 px-2 text-[11px] text-white shadow-sm backdrop-blur-sm hover:bg-black/90 hover:text-white"
+          className="absolute bottom-1.5 right-1.5 z-10 h-11 gap-1 rounded-md bg-black/75 px-3 text-xs text-white shadow-sm backdrop-blur-sm hover:bg-black/90 hover:text-white sm:h-7 sm:px-2 sm:text-[11px]"
           aria-label={`Set crop focus for ${imageText || "this slide"}`}
         >
           <Crosshair className="h-3.5 w-3.5" />
@@ -128,7 +128,7 @@ export function HeroFocalPointEditor({
             type="button"
             variant="ghost"
             size="sm"
-            className="h-7 px-2 text-xs"
+            className="min-h-11 px-2 text-xs sm:h-7 sm:min-h-7"
             onClick={() => onChange({ ...HERO_SLIDE_DEFAULT_FOCAL_POINT })}
           >
             <RotateCcw className="mr-1.5 h-3.5 w-3.5" />

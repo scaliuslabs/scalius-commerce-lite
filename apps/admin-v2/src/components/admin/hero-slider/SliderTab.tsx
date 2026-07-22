@@ -145,7 +145,7 @@ export function SliderTab({
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/15 px-3 py-2.5">
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2">
+          <div className="flex min-h-11 items-center gap-2 sm:min-h-0">
             <Switch
               id={`${type}-active`}
               checked={slider.isActive}
@@ -166,7 +166,11 @@ export function SliderTab({
           onSelect={(file) => addImages([file])}
           onSelectMultiple={addImages}
           trigger={
-            <Button size="sm" disabled={slider.images.length >= HERO_SLIDE_LIMIT}>
+            <Button
+              size="sm"
+              className="min-h-11 sm:min-h-9"
+              disabled={slider.images.length >= HERO_SLIDE_LIMIT}
+            >
               <Plus className="mr-2 h-4 w-4" />
               Add slides
             </Button>
@@ -201,25 +205,44 @@ export function SliderTab({
         </Suspense>
       )}
 
-      <div className="sticky bottom-3 z-20 flex items-center justify-between gap-3 rounded-lg border bg-background/95 px-3 py-2 shadow-lg backdrop-blur">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+      <div className="sticky bottom-3 z-20 flex min-w-0 items-center justify-between gap-2 rounded-lg border bg-background/95 px-3 py-2 shadow-lg backdrop-blur">
+        <div className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
           <span className={`h-2 w-2 rounded-full ${dirty ? "bg-amber-500" : "bg-emerald-500"}`} />
-          {dirty ? "Unsaved changes" : "All changes saved"}
-          <span>· {slider.images.length}/{HERO_SLIDE_LIMIT} slides</span>
+          <span className="sm:hidden">{dirty ? "Unsaved" : "Saved"}</span>
+          <span className="hidden sm:inline">
+            {dirty ? "Unsaved changes" : "All changes saved"}
+          </span>
+          <span className="whitespace-nowrap">
+            · {slider.images.length}/{HERO_SLIDE_LIMIT}
+            <span className="hidden sm:inline"> slides</span>
+          </span>
         </div>
-        <div className="flex items-center gap-2">
-          <Button type="button" size="sm" variant="ghost" onClick={onDiscard} disabled={!dirty || saving}>
-            <RotateCcw className="mr-2 h-4 w-4" />
+        <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="min-h-11 px-2 sm:min-h-9 sm:px-3"
+            onClick={onDiscard}
+            disabled={!dirty || saving}
+          >
+            <RotateCcw className="mr-1 h-4 w-4 sm:mr-2" />
             Discard
           </Button>
           <Button
             type="button"
             size="sm"
+            className="min-h-11 px-2 sm:min-h-9 sm:px-3"
             onClick={onSave}
             disabled={!dirty || saving || conflict || issues.length > 0}
           >
-            {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-            Save changes
+            {saving ? (
+              <Loader2 className="mr-1 h-4 w-4 animate-spin sm:mr-2" />
+            ) : (
+              <Save className="mr-1 h-4 w-4 sm:mr-2" />
+            )}
+            <span className="sm:hidden">Save</span>
+            <span className="hidden sm:inline">Save changes</span>
           </Button>
         </div>
       </div>
