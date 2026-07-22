@@ -43,7 +43,11 @@ export function TitleDescriptionSection({
                 Title <span className="text-destructive">*</span>
               </FormLabel>
               <FormControl>
-                <Input placeholder="Product title" {...field} />
+                <Input
+                  placeholder="Product title"
+                  className="min-h-11 md:min-h-9"
+                  {...field}
+                />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -57,16 +61,16 @@ export function TitleDescriptionSection({
           onValueChange={setActiveTab}
           className="w-full"
         >
-          <TabsList className="w-full justify-start rounded-none border-b h-9 p-0 bg-transparent">
+          <TabsList className="h-11 w-full justify-start rounded-none border-b bg-transparent p-0 md:h-9">
             <TabsTrigger
               value="description"
-              className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent text-xs px-3 h-9"
+              className="h-11 rounded-none border-b-2 border-transparent px-3 text-xs data-[state=active]:border-primary data-[state=active]:bg-transparent md:h-9"
             >
               Description
             </TabsTrigger>
             <TabsTrigger
               value="additional"
-              className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent text-xs px-3 h-9"
+              className="h-11 rounded-none border-b-2 border-transparent px-3 text-xs data-[state=active]:border-primary data-[state=active]:bg-transparent md:h-9"
             >
               Additional Sections
             </TabsTrigger>

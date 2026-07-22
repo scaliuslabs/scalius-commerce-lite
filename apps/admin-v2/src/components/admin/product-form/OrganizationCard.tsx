@@ -104,7 +104,7 @@ export const OrganizationCard = memo(function OrganizationCard({
                 <FormControl>
                   <Input
                     placeholder="product-url-slug"
-                    className="h-9"
+                    className="min-h-11 md:min-h-9"
                     {...field}
                     onChange={(e) => {
                       field.onChange(e);
@@ -115,8 +115,8 @@ export const OrganizationCard = memo(function OrganizationCard({
               </div>
               <FormDescription className="text-[11px] leading-4">
                 {!isEdit
-                  ? "Auto-generated from product name. You can edit it if needed."
-                  : "The URL-friendly identifier for this product"}
+                  ? "Generated from the product title."
+                  : "Used in the storefront URL."}
               </FormDescription>
               <FormMessage />
             </FormItem>
@@ -211,7 +211,7 @@ function CategoryCombobox({
           variant="outline"
           role="combobox"
           className={cn(
-            "h-9 w-full justify-between font-normal",
+            "min-h-11 w-full justify-between font-normal md:min-h-9",
             !selectedCategoryId && "text-muted-foreground"
           )}
         >
@@ -225,7 +225,7 @@ function CategoryCombobox({
             placeholder="Search categories..."
             value={search}
             onValueChange={setSearch}
-            className="h-10"
+            className="min-h-11 md:min-h-10"
           />
           <CommandList>
             {filteredCategories.length > 0 && (
@@ -239,7 +239,7 @@ function CategoryCombobox({
                       setOpen(false);
                       setSearch("");
                     }}
-                    className="px-2 py-2 cursor-pointer"
+                    className="min-h-11 cursor-pointer px-2 py-2 md:min-h-9"
                   >
                     <Check
                       className={cn(

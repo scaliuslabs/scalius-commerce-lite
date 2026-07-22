@@ -89,7 +89,7 @@ export function PricingCard({ form }: PricingCardProps) {
                       min="0"
                       step="0.01"
                       placeholder="0.00"
-                      className="pl-8"
+                      className="min-h-11 pl-8 md:min-h-9"
                       {...field}
                       value={field.value || ""}
                       onChange={(event) => {
@@ -104,24 +104,22 @@ export function PricingCard({ form }: PricingCardProps) {
             )}
           />
 
-          <div className="pb-0.5 text-xs text-muted-foreground">
-            {discountSummary.hasDiscount ? (
+          {discountSummary.hasDiscount ? (
+            <div className="pb-0.5 text-xs text-muted-foreground">
               <>
                 Customer price
                 <span className="ml-2 font-medium text-foreground">
                   {formatMoney(symbol, discountSummary.effectivePrice)}
                 </span>
               </>
-            ) : (
-              "Set the regular selling price."
-            )}
-          </div>
+            </div>
+          ) : null}
         </div>
       </CardContent>
 
       <button
         type="button"
-        className="flex min-h-10 w-full items-center justify-between gap-3 border-t px-4 py-2 text-left text-xs hover:bg-muted/35"
+        className="flex min-h-11 w-full items-center justify-between gap-3 border-t px-4 py-2 text-left text-xs hover:bg-muted/35 md:min-h-10"
         onClick={() => setShowDiscount((open) => !open)}
         aria-expanded={discountOpen}
         aria-controls="product-discount-fields"
@@ -169,7 +167,7 @@ export function PricingCard({ form }: PricingCardProps) {
                   value={field.value}
                 >
                   <FormControl>
-                    <SelectTrigger className="h-9">
+                    <SelectTrigger className="min-h-11 md:min-h-9">
                       <SelectValue placeholder="Select type" />
                     </SelectTrigger>
                   </FormControl>
@@ -199,7 +197,7 @@ export function PricingCard({ form }: PricingCardProps) {
                         min="0"
                         max="100"
                         step="0.01"
-                        className="pr-8"
+                        className="min-h-11 pr-8 md:min-h-9"
                         {...field}
                         value={field.value || ""}
                         onChange={(event) => {
@@ -230,7 +228,7 @@ export function PricingCard({ form }: PricingCardProps) {
                         placeholder="0.00"
                         min="0"
                         step="0.01"
-                        className="pl-8"
+                        className="min-h-11 pl-8 md:min-h-9"
                         {...field}
                         value={field.value || ""}
                         onChange={(event) => {

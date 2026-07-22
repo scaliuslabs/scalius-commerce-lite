@@ -55,7 +55,7 @@ describe("AdditionalInfoManager", () => {
     await act(async () => root.render(<Harness />));
 
     const addButton = [...host.querySelectorAll("button")]
-      .find((button) => button.textContent?.includes("Add Section"));
+      .find((button) => button.textContent?.includes("Add section"));
     expect(addButton).toBeTruthy();
     await act(async () => addButton?.click());
 

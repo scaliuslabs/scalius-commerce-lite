@@ -88,17 +88,19 @@ function SortableRichContentItem({
       <div className="border rounded-md bg-card">
         <Form {...form}>
           <div className="flex items-center gap-2 px-2 py-2 border-b">
-            <div
+            <button
+              type="button"
               {...attributes}
               {...listeners}
-              className="cursor-grab p-1 text-muted-foreground hover:bg-muted rounded"
+              className="flex h-11 w-11 cursor-grab items-center justify-center rounded text-muted-foreground hover:bg-muted md:h-7 md:w-7"
+              aria-label={`Reorder ${item.title || "untitled section"}`}
             >
               <GripVertical className="h-4 w-4" />
-            </div>
+            </button>
             <button
               type="button"
               onClick={() => onExpandedChange(!isExpanded)}
-              className="p-1 hover:bg-muted rounded"
+              className="flex h-11 w-11 items-center justify-center rounded hover:bg-muted md:h-7 md:w-7"
               aria-expanded={isExpanded}
               aria-label={`${isExpanded ? "Collapse" : "Expand"} ${item.title || "untitled section"}`}
             >
@@ -114,7 +116,7 @@ function SortableRichContentItem({
                       <Input
                         placeholder="Section title (e.g., Specifications)"
                         {...field}
-                        className="h-7 text-xs border-0 shadow-none px-2 focus-visible:ring-0"
+                        className="min-h-11 border-0 px-2 text-xs shadow-none focus-visible:ring-0 md:h-7 md:min-h-7"
                       />
                     </FormControl>
                     <FormMessage />
@@ -126,8 +128,9 @@ function SortableRichContentItem({
               type="button"
               variant="ghost"
               size="icon"
-              className="h-7 w-7 text-destructive hover:text-destructive"
+              className="h-11 w-11 text-destructive hover:text-destructive md:h-7 md:w-7"
               onClick={() => onRemove(item.id)}
+              aria-label={`Remove ${item.title || "untitled section"}`}
             >
               <Trash2 className="h-3.5 w-3.5" />
             </Button>
@@ -259,7 +262,7 @@ export function AdditionalInfoManager({
       {items.length === 0 && (
         <div className="text-center py-6 px-4 border border-dashed rounded-md">
           <p className="text-xs text-muted-foreground">
-            No sections yet. Click below to add.
+            No additional sections.
           </p>
         </div>
       )}
@@ -269,10 +272,10 @@ export function AdditionalInfoManager({
         variant="outline"
         size="sm"
         onClick={handleAddItem}
-        className="w-full h-8 text-xs"
+        className="min-h-11 w-full text-xs md:h-8 md:min-h-8"
       >
         <Plus className="mr-1.5 h-3.5 w-3.5" />
-        Add Section
+        Add section
       </Button>
     </div>
   );
