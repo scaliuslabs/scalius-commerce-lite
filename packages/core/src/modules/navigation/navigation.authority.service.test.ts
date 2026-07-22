@@ -29,6 +29,7 @@ import {
   trashNavigationMenu,
   updateNavigationMenuItem,
 } from "./navigation.authority.service";
+import { listNavigationResources } from "./navigation.resources.service";
 import {
   NavigationPlacementRevisionConflictError,
   NavigationRevisionConflictError,
@@ -100,6 +101,7 @@ const legacySchema = `
   );
   CREATE TABLE pages (
     id TEXT PRIMARY KEY NOT NULL,
+    content_type TEXT NOT NULL DEFAULT 'page',
     title TEXT NOT NULL,
     slug TEXT NOT NULL,
     canonical_path TEXT,
@@ -161,6 +163,95 @@ describe("navigation authority D1 commands", () => {
     };
     return drizzle(client as unknown as D1Database, { schema }) as unknown as Database;
   }
+
+  it("pages beyond the old 100-resource cap and hydrates unavailable selections", async () => {
+    const db = createDatabase();
+    const insertProduct = sqlite!.prepare(
+      "INSERT INTO products (id, name, slug, canonical_path, is_active, deleted_at) VALUES (?, ?, ?, NULL, ?, ?)",
+    );
+    for (let index = 1; index <= 125; index += 1) {
+      const suffix = String(index).padStart(3, "0");
+      insertProduct.run(
+        `prod_${suffix}`,
+        `Product ${suffix}`,
+        `product-${suffix}`,
+        1,
+        null,
+      );
+    }
+    insertProduct.run(
+      "prod_unavailable",
+      "Unavailable product",
+      "unavailable-product",
+      0,
+      1,
+    );
+
+    const first = await listNavigationResources(db, {
+      type: "product",
+      limit: 100,
+      selectedId: "prod_unavailable",
+    });
+    expect(first.items).toHaveLength(100);
+    expect(first.nextCursor).toEqual({
+      name: "Product 100",
+      id: "prod_100",
+    });
+    expect(first.selected).toMatchObject({
+      id: "prod_unavailable",
+      name: "Unavailable product",
+      available: false,
+    });
+
+    const second = await listNavigationResources(db, {
+      type: "product",
+      limit: 100,
+      cursor: first.nextCursor!,
+    });
+    expect(second.items.map((item) => item.id)).toEqual(
+      Array.from({ length: 25 }, (_, index) => `prod_${String(index + 101).padStart(3, "0")}`),
+    );
+    expect(second.nextCursor).toBeNull();
+  });
+
+  it("uses the real article route in navigation resource results", async () => {
+    const db = createDatabase();
+    sqlite!.prepare(
+      "INSERT INTO pages (id, content_type, title, slug, canonical_path, is_published, deleted_at) VALUES (?, 'article', ?, ?, NULL, 1, NULL)",
+    ).run("page_article", "Buying guide", "buying-guide");
+
+    const result = await listNavigationResources(db, {
+      type: "page",
+      limit: 20,
+    });
+
+    expect(result.items).toEqual([
+      expect.objectContaining({
+        id: "page_article",
+        url: "/blog/buying-guide",
+      }),
+    ]);
+
+    const menu = await createNavigationMenu(db, { name: "Guides" });
+    const item = await createNavigationMenuItem(db, menu.id, {
+      expectedRevision: menu.revision,
+      label: "Buying guide",
+      labelMode: "resource",
+      target: {
+        type: "resource",
+        resourceType: "page",
+        resourceId: "page_article",
+      },
+    });
+    const publication = await publishNavigationMenu(db, menu.id, {
+      expectedRevision: item.revision,
+    });
+    expect(publication.publishedRevision).toBeGreaterThan(0);
+    const tree = await getPublishedNavigationMenuTree(db, menu.id);
+    expect(tree.items).toEqual([
+      expect.objectContaining({ href: "/blog/buying-guide" }),
+    ]);
+  });
 
   it("creates, edits, moves, publishes, and manifests one menu with monotonic CAS", async () => {
     const db = createDatabase();

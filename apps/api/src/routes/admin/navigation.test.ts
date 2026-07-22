@@ -7,6 +7,7 @@ import { NotFoundError } from "../../utils/api-error";
 const mocks = vi.hoisted(() => ({
     getNavigationItems: vi.fn(),
     getNavigationPreviewProductCount: vi.fn(),
+    listNavigationResources: vi.fn(),
     createNavigationMenu: vi.fn(),
     createNavigationMenuItem: vi.fn(),
     deleteNavigationMenuItem: vi.fn(),
@@ -36,6 +37,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@scalius/core/modules/navigation", () => ({
     getNavigationItems: mocks.getNavigationItems,
     getNavigationPreviewProductCount: mocks.getNavigationPreviewProductCount,
+    listNavigationResources: mocks.listNavigationResources,
     createNavigationMenu: mocks.createNavigationMenu,
     createNavigationMenuItem: mocks.createNavigationMenuItem,
     deleteNavigationMenuItem: mocks.deleteNavigationMenuItem,
@@ -99,6 +101,52 @@ function createTestApp() {
 describe("admin navigation routes", () => {
     afterEach(() => {
         vi.clearAllMocks();
+    });
+
+    it("pages and hydrates typed navigation resources without a whole-catalog read", async () => {
+        mocks.listNavigationResources.mockResolvedValue({
+            items: [{
+                id: "prod_101",
+                name: "Product 101",
+                type: "product",
+                url: "/products/product-101",
+                available: true,
+            }],
+            selected: {
+                id: "prod_005",
+                name: "Product 005",
+                type: "product",
+                url: "/products/product-005",
+                available: false,
+            },
+            nextCursor: { name: "Product 101", id: "prod_101" },
+        });
+        const { app, db } = createTestApp();
+        const cursor = btoa(JSON.stringify({ name: "Product 100", id: "prod_100" }))
+            .replaceAll("+", "-")
+            .replaceAll("/", "_")
+            .replace(/=+$/g, "");
+
+        const response = await app.request(
+            `/api/v1/admin/navigation/resources?type=product&q=Product&limit=20&selectedId=prod_005&cursor=${cursor}`,
+        );
+        const body = await response.json() as {
+            success: boolean;
+            data?: { items?: unknown[]; selected?: { available?: boolean }; nextCursor?: string | null };
+        };
+
+        expect(response.status).toBe(200);
+        expect(body.success).toBe(true);
+        expect(body.data?.items).toHaveLength(1);
+        expect(body.data?.selected?.available).toBe(false);
+        expect(body.data?.nextCursor).toEqual(expect.any(String));
+        expect(mocks.listNavigationResources).toHaveBeenCalledWith(db, {
+            type: "product",
+            query: "Product",
+            cursor: { name: "Product 100", id: "prod_100" },
+            limit: 20,
+            selectedId: "prod_005",
+        });
     });
 
     it("previews dynamic navigation products with category and attribute filters", async () => {

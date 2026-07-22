@@ -16577,6 +16577,118 @@ export type GetApiV1AdminNavigationItemsResponses = {
 
 export type GetApiV1AdminNavigationItemsResponse = GetApiV1AdminNavigationItemsResponses[keyof GetApiV1AdminNavigationItemsResponses];
 
+export type GetApiV1AdminNavigationResourcesData = {
+    body?: never;
+    path?: never;
+    query: {
+        type: 'page' | 'category' | 'collection' | 'product';
+        q?: string;
+        cursor?: string;
+        limit?: number;
+        selectedId?: string;
+    };
+    url: '/api/v1/admin/navigation/resources';
+};
+
+export type GetApiV1AdminNavigationResourcesErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminNavigationResourcesError = GetApiV1AdminNavigationResourcesErrors[keyof GetApiV1AdminNavigationResourcesErrors];
+
+export type GetApiV1AdminNavigationResourcesResponses = {
+    /**
+     * Keyset-paginated navigation resource options
+     */
+    200: {
+        success: true;
+        data: {
+            items: Array<{
+                id: string;
+                name: string;
+                type: 'page' | 'category' | 'collection' | 'product';
+                url: string;
+                available: boolean;
+            }>;
+            selected: {
+                id: string;
+                name: string;
+                type: 'page' | 'category' | 'collection' | 'product';
+                url: string;
+                available: boolean;
+            } | null;
+            nextCursor: string | null;
+        };
+    };
+};
+
+export type GetApiV1AdminNavigationResourcesResponse = GetApiV1AdminNavigationResourcesResponses[keyof GetApiV1AdminNavigationResourcesResponses];
+
 export type GetApiV1AdminNavigationPreviewProductsData = {
     body?: never;
     path?: never;

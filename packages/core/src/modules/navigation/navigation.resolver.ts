@@ -12,6 +12,7 @@ import {
 } from "@scalius/shared/navigation-target";
 import { parseNavigationHref } from "@scalius/shared/navigation-href";
 import { normalizeResourceCanonicalPath } from "@scalius/shared/seo-canonical";
+import { contentEntryPath } from "../pages/pages.validation";
 
 export const NAVIGATION_RESOURCE_READ_CHUNK_SIZE = 90;
 
@@ -97,6 +98,8 @@ export async function loadNavigationResourceSnapshots(
             id: pages.id,
             title: pages.title,
             slug: pages.slug,
+            contentType: pages.contentType,
+            canonicalPath: pages.canonicalPath,
             isPublished: pages.isPublished,
             deletedAt: pages.deletedAt,
         }).from(pages).where(inArray(pages.id, ids));
@@ -105,8 +108,10 @@ export async function loadNavigationResourceSnapshots(
                 id: row.id,
                 resourceType: "page",
                 title: row.title,
-                // Page canonical aliases are not routed yet. Resolve only the live route.
-                route: `/${row.slug}`,
+                route: normalizeResourceCanonicalPath(
+                    row.contentType,
+                    row.canonicalPath,
+                ) ?? contentEntryPath(row.contentType, row.slug),
                 readiness: row.deletedAt
                     ? "resource_trashed"
                     : row.isPublished
