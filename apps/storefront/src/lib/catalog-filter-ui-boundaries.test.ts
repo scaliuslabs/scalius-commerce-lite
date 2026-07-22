@@ -41,8 +41,11 @@ describe("catalog filter UI boundaries", () => {
       expect(source).toContain("lg:z-0");
       expect(source).not.toContain("lg:z-auto");
     }
-    for (const source of [category, search]) {
+    for (const source of [category, search, collection]) {
       expect(source).toContain("data-catalog-sort");
+      expect(source).toContain('value="name-asc"');
+      expect(source).toContain('value="name-desc"');
+      expect(source).toContain('value="discount"');
     }
   });
 

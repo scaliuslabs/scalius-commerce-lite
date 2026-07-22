@@ -30,6 +30,19 @@ describe("collection storefront workflow boundaries", () => {
     expect(collectionPage).not.toContain('aria-modal="true"');
   });
 
+  it("keeps collection filters and shopper sorting in one responsive workflow", () => {
+    expect(collectionPage).toContain("const sortBy = queryState.sortBy");
+    expect(collectionPage).toContain("data-catalog-sort");
+    expect(collectionPage).toContain(
+      '<input type="hidden" name="sortBy" value={sortBy} />',
+    );
+    expect(collectionPage).toContain("setupCatalogSorts");
+    expect(collectionPage).toContain("grid grid-cols-2 gap-2 lg:hidden");
+    expect(collectionPage).toContain("shadow-sm lg:flex");
+    expect(collectionPage).not.toContain("shadow-sm sm:flex");
+    expect(collectionPage).toContain('value="discount"');
+  });
+
   it("separates collection identity, search metadata, and canonical-only editorial content", () => {
     expect(collectionPage).toContain("const title = collection.metaTitle || collection.name");
     expect(collectionPage).toContain("const plainDescription = htmlToPlainText(collection.description)");

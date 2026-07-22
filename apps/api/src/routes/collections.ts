@@ -109,6 +109,14 @@ const collectionFacetSchema = z.object({
 const collectionCatalogQuerySchema = z.object({
   page: z.coerce.number().int().min(1).max(1000).optional().default(1),
   limit: z.coerce.number().int().min(1).max(100).optional().default(20),
+  sort: z.enum([
+    "newest",
+    "price-asc",
+    "price-desc",
+    "name-asc",
+    "name-desc",
+    "discount",
+  ]).optional(),
   search: z.string().optional(),
   minPrice: z.coerce.number().min(0).optional(),
   maxPrice: z.coerce.number().min(0).optional(),

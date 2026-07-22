@@ -727,6 +727,7 @@ export type GetApiV1CollectionsByIdData = {
     query?: {
         page?: number;
         limit?: number;
+        sort?: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount';
         search?: string;
         minPrice?: number | null;
         maxPrice?: number | null;
