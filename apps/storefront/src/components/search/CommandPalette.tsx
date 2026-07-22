@@ -46,7 +46,7 @@ interface ApiResponse {
 // lifetime of the page so revisiting or refining the same query is immediate.
 // Full navigations naturally clear this small, bounded cache.
 const SEARCH_RESULT_CACHE_LIMIT = 40;
-const PREDICTIVE_SEARCH_DEBOUNCE_MS = 200;
+const PREDICTIVE_SEARCH_DEBOUNCE_MS = 150;
 const PREDICTIVE_SEARCH_RESULT_LIMIT = "7";
 const searchResultCache = new Map<string, SearchResponse>();
 
@@ -174,6 +174,11 @@ export default function CommandPalette() {
     searchAbortRef.current = controller;
     const runId = searchRunRef.current + 1;
     searchRunRef.current = runId;
+    // Never leave results from the previous query selectable while the next
+    // request is pending. Cached queries still replace the list immediately.
+    setResults(null);
+    setHasSearched(false);
+    setSelectedIndex(0);
     setIsLoading(true);
     setSearchError(null);
 
@@ -231,7 +236,7 @@ export default function CommandPalette() {
         modalRef.current.querySelectorAll<HTMLElement>(
           'button:not([disabled]), a[href], input:not([disabled]), [tabindex]:not([tabindex="-1"])',
         ),
-      );
+      ).filter((element) => element.offsetParent !== null);
       if (focusable.length === 0) return;
       const first = focusable[0]!;
       const last = focusable.at(-1)!;
@@ -299,20 +304,27 @@ export default function CommandPalette() {
 
   if (!mounted || !isOpen) return null;
 
+  const searchStatus = isLoading
+    ? "Searching…"
+    : searchError
+      ? "Search unavailable"
+      : hasSearched
+        ? `${flatResults.length} ${flatResults.length === 1 ? "result" : "results"}`
+        : "";
+
   return createPortal(
     <div className="fixed inset-0 z-100 flex items-start justify-center sm:pt-[10vh]">
-      {/* Desktop Backdrop */}
+      <div
+        aria-hidden="true"
+        className="fixed inset-0 bg-white/80 sm:bg-black/40 backdrop-blur-md transition-opacity animate-in fade-in duration-200"
+        onClick={() => setIsOpen(false)}
+      />
+
       <div
         ref={modalRef}
         role="dialog"
         aria-modal="true"
         aria-label="Search catalog"
-        className="fixed inset-0 bg-white/80 sm:bg-black/40 backdrop-blur-md transition-opacity animate-in fade-in duration-200"
-        onClick={() => setIsOpen(false)}
-      />
-
-      {/* Modal Container */}
-      <div
         className={cn(
           "relative w-full bg-white overflow-hidden flex flex-col shadow-2xl transition-all",
           "h-dvh rounded-none",
@@ -336,6 +348,7 @@ export default function CommandPalette() {
               type="text"
               className="w-full bg-transparent border-none outline-none text-lg sm:text-xl text-gray-900 placeholder:text-gray-400 font-medium h-11 tracking-tight pl-8 pr-8"
               placeholder="Search products..."
+              aria-label="Search products"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={handleNavigation}
@@ -362,6 +375,10 @@ export default function CommandPalette() {
             )}
           </div>
 
+          <span className="sr-only" role="status" aria-live="polite">
+            {searchStatus}
+          </span>
+
           {/* Stable Close Button */}
           <button
             type="button"
@@ -384,6 +401,29 @@ export default function CommandPalette() {
           className="overflow-y-auto p-0 sm:p-2 scrollbar-hide flex-1 min-h-0 bg-gray-50/50 sm:bg-white"
           onClick={handleEmptyClick}
         >
+          {isLoading && normalizedQuery && (
+            <div
+              className="space-y-2 px-4 py-5 sm:px-3"
+              aria-hidden="true"
+            >
+              <p className="pb-1 text-xs font-semibold uppercase tracking-wider text-gray-400">
+                Searching…
+              </p>
+              {[0, 1, 2].map((index) => (
+                <div
+                  key={index}
+                  className="flex min-h-16 items-center gap-3 rounded-lg bg-white px-3 py-2 sm:bg-gray-50"
+                >
+                  <span className="h-10 w-10 shrink-0 rounded bg-gray-100 animate-pulse motion-reduce:animate-none" />
+                  <span className="flex-1 space-y-2">
+                    <span className="block h-3 w-2/3 rounded bg-gray-100 animate-pulse motion-reduce:animate-none" />
+                    <span className="block h-2.5 w-1/3 rounded bg-gray-100 animate-pulse motion-reduce:animate-none" />
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* State: Empty/Start */}
           {!normalizedQuery && (
             <div className="flex flex-col items-center justify-center h-full text-gray-400 py-24 sm:py-20 pointer-events-none">
@@ -391,7 +431,7 @@ export default function CommandPalette() {
                 <Search className="w-6 h-6 opacity-20" />
               </div>
               <p className="text-sm font-medium text-gray-500">
-                Type to search...
+                Search products, categories, and pages
               </p>
             </div>
           )}
@@ -404,7 +444,6 @@ export default function CommandPalette() {
             >
               <AlertCircle className="w-8 h-8 opacity-40 mb-3 text-red-500" />
               <p className="text-gray-900 font-medium">Search unavailable</p>
-              <p className="text-sm mt-1">Your query was not lost.</p>
               <button
                 type="button"
                 className="mt-4 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-900 hover:bg-gray-50"

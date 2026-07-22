@@ -20,14 +20,14 @@ function generateMenuId(item: NavigationItem, prefix: string = ""): string {
 
 <div
   id="mobile-menu-overlay"
-  class="pointer-events-none fixed inset-0 z-60 bg-black/60 opacity-0 backdrop-blur-sm transition-opacity duration-300 lg:hidden"
+  class="pointer-events-none invisible fixed inset-0 z-60 bg-black/60 opacity-0 backdrop-blur-sm transition-opacity duration-300 lg:hidden"
   aria-hidden="true"
 >
 </div>
 
 <div
   id="mobile-menu-panel"
-  class="fixed left-0 top-0 z-70 flex h-dvh w-[90vw] max-w-[380px] -translate-x-full transform flex-col border-r border-border bg-card text-foreground shadow-2xl transition-transform duration-300 ease-[cubic-bezier(0.19,1,0.22,1)] lg:hidden"
+  class="invisible fixed left-0 top-0 z-70 flex h-dvh w-[90vw] max-w-[380px] -translate-x-full transform flex-col border-r border-border bg-card text-foreground shadow-2xl transition-transform duration-300 ease-[cubic-bezier(0.19,1,0.22,1)] lg:hidden"
   role="dialog"
   aria-modal="true"
   aria-label="Mobile menu"
@@ -37,7 +37,7 @@ function generateMenuId(item: NavigationItem, prefix: string = ""): string {
   <div
     class="flex items-center justify-between px-5 py-3 border-b border-border shrink-0 bg-card shadow-[0_1px_2px_rgba(0,0,0,0.03)] z-10"
   >
-    <h2 class="text-base font-bold tracking-tight text-foreground uppercase">
+    <h2 class="text-base font-bold tracking-tight text-foreground">
       Menu
     </h2>
     <button
@@ -53,6 +53,7 @@ function generateMenuId(item: NavigationItem, prefix: string = ""): string {
   <nav
     class="flex-1 overflow-y-auto overscroll-contain px-5 py-3 scrollbar-hide relative group"
     id="mobile-nav-container"
+    aria-label="Mobile navigation"
   >
     <ul class="space-y-1">
       {
@@ -197,8 +198,8 @@ function generateMenuId(item: NavigationItem, prefix: string = ""): string {
             <Phone className="h-4.5 w-4.5 fill-current" />
           </div>
           <div class="flex-1 min-w-0">
-            <p class="text-[10px] text-muted-foreground font-bold uppercase tracking-wider leading-none mb-0.5">
-              Call Support
+            <p class="text-[11px] text-muted-foreground font-semibold leading-none mb-0.5">
+              Call support
             </p>
             <p class="text-sm font-bold text-foreground tracking-tight truncate">
               {contact.phone}

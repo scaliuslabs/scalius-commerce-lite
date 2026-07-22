@@ -15,6 +15,9 @@ describe("mobile menu accessibility boundaries", () => {
     expect(layout).toContain('aria-expanded="false"');
     expect(menu).toContain('aria-hidden="true"');
     expect(menu).toMatch(/id="mobile-menu-panel"[\s\S]*?\binert\b/);
+    expect(menu).toMatch(/id="mobile-menu-panel"[\s\S]*?\binvisible\b/);
+    expect(controller).toContain('classList.remove("invisible")');
+    expect(controller).toContain('classList.add("invisible")');
   });
 
   it("synchronizes dialog state, restores focus, and supports Escape", () => {
@@ -54,6 +57,7 @@ describe("mobile menu accessibility boundaries", () => {
     expect(menu).toMatch(/id="mobile-menu-close"[\s\S]*?h-11 w-11/);
     expect(menu).toContain("pb-[max(1rem,env(safe-area-inset-bottom))]");
     expect(menu).toContain("h-11 w-11 shrink-0");
+    expect(menu).toContain('aria-label="Mobile navigation"');
   });
 
   it("exposes nested disclosure relationships", () => {

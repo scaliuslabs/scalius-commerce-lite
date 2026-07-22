@@ -24,7 +24,6 @@ import {
 } from "@/lib/seo-base-url";
 import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 import {
-  PRODUCT_LIST_NAVIGATION_PARAMS,
   buildProductListPaginationHref,
   resolveProductListQueryState,
 } from "@/lib/product-list-query";
@@ -114,9 +113,7 @@ function getPaginationUrl(pageNum: number) {
 const activeFilterCount = Object.keys(currentFilters)
   .filter(
     (key) =>
-      !PRODUCT_LIST_NAVIGATION_PARAMS.includes(
-        key as (typeof PRODUCT_LIST_NAVIGATION_PARAMS)[number],
-      ) && currentFilters[key],
+      key !== "page" && key !== "sortBy" && currentFilters[key],
   )
   .reduce(
     (count, key) =>
@@ -290,7 +287,7 @@ const collectionJsonLd =
     </div>
 
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
-      <div class="mb-4 grid grid-cols-2 gap-2 lg:hidden">
+      <div class="sticky top-[calc(var(--header-height,3.5rem)+0.5rem)] z-30 -mx-1 mb-4 grid grid-cols-2 gap-2 rounded-xl bg-gray-50/95 p-1 backdrop-blur lg:hidden">
         <button
           type="button"
           id="mobile-filter-toggle"
@@ -347,7 +344,7 @@ const collectionJsonLd =
           class="fixed inset-0 z-60 hidden bg-black/50 lg:static lg:z-0 lg:block lg:w-80 lg:shrink-0 lg:bg-transparent"
         >
           <div
-            class="flex h-full w-full flex-col bg-white lg:w-full lg:rounded-lg lg:border lg:border-gray-100 lg:shadow-sm"
+            class="flex h-full w-full flex-col bg-white lg:sticky lg:top-[calc(var(--header-height,4rem)+1rem)] lg:max-h-[calc(100dvh-var(--header-height,4rem)-2rem)] lg:w-full lg:overflow-hidden lg:rounded-lg lg:border lg:border-gray-100 lg:shadow-sm"
           >
             <div
               class="flex justify-between items-center lg:hidden p-4 border-b bg-white"
@@ -371,6 +368,22 @@ const collectionJsonLd =
               <input type="hidden" name="sortBy" value={sortBy} />
 
               <div class="p-4 lg:p-6">
+                <div class="relative mb-6">
+                  <Search
+                    className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
+                  />
+                  <label for="category-filter-search" class="sr-only">
+                    Search this category
+                  </label>
+                  <input
+                    id="category-filter-search"
+                    type="search"
+                    name="q"
+                    placeholder="Search this category…"
+                    value={queryState.query}
+                    class="w-full rounded-lg border-gray-300 py-2.5 pl-9 pr-4 text-sm focus:border-primary focus:ring-2 focus:ring-primary"
+                  />
+                </div>
                 <CategoryFilters
                   client:load
                   facets={facets}

@@ -281,7 +281,7 @@ const mobileLogoWidth = getMobileHeaderLogoWidth(logoWidth);
     visibility: visible;
     opacity: 1;
     transform: translateY(0) scale(1);
-    transition-delay: 160ms, 160ms, 160ms;
+    transition-delay: 0ms, 0ms, 0ms;
   }
 
   .header-compact-center {
@@ -289,7 +289,7 @@ const mobileLogoWidth = getMobileHeaderLogoWidth(logoWidth);
     visibility: hidden;
     opacity: 0;
     transform: translateY(0.5rem) scale(0.98);
-    transition-delay: 0ms, 0ms, 120ms;
+    transition-delay: 0ms, 0ms, 180ms;
   }
 
   #main-header.is-scrolled .header-expanded-center {
@@ -297,7 +297,7 @@ const mobileLogoWidth = getMobileHeaderLogoWidth(logoWidth);
     visibility: hidden;
     opacity: 0;
     transform: translateY(-0.5rem) scale(0.96);
-    transition-delay: 0ms, 0ms, 120ms;
+    transition-delay: 0ms, 0ms, 180ms;
   }
 
   #main-header.is-scrolled .header-compact-center {
@@ -305,7 +305,7 @@ const mobileLogoWidth = getMobileHeaderLogoWidth(logoWidth);
     visibility: visible;
     opacity: 1;
     transform: translateY(0) scale(1);
-    transition-delay: 160ms, 160ms, 160ms;
+    transition-delay: 0ms, 0ms, 0ms;
   }
 
   .storefront-header-logo {
@@ -332,6 +332,7 @@ const mobileLogoWidth = getMobileHeaderLogoWidth(logoWidth);
 
   let isCompact = false;
   let scrollFrame: number | null = null;
+  let headerResizeObserver: ResizeObserver | null = null;
 
   function updateHeaderHeight() {
     const header = document.getElementById("main-header");
@@ -343,6 +344,18 @@ const mobileLogoWidth = getMobileHeaderLogoWidth(logoWidth);
     );
   }
 
+  function observeHeaderHeight() {
+    headerResizeObserver?.disconnect();
+    const header = document.getElementById("main-header");
+    if (!header || typeof ResizeObserver === "undefined") {
+      updateHeaderHeight();
+      return;
+    }
+    headerResizeObserver = new ResizeObserver(updateHeaderHeight);
+    headerResizeObserver.observe(header);
+    updateHeaderHeight();
+  }
+
   function applyScrollState() {
     scrollFrame = null;
     const header = document.getElementById("main-header");
@@ -352,7 +365,6 @@ const mobileLogoWidth = getMobileHeaderLogoWidth(logoWidth);
     isCompact = nextCompact;
     header.classList.toggle("is-scrolled", isCompact);
     header.classList.toggle("shadow-md", isCompact);
-    window.setTimeout(updateHeaderHeight, 350);
   }
 
   function scheduleScrollState() {
@@ -392,12 +404,12 @@ const mobileLogoWidth = getMobileHeaderLogoWidth(logoWidth);
   window.addEventListener("resize", updateHeaderHeight);
   window.addEventListener("scroll", scheduleScrollState, { passive: true });
   applyScrollState();
-  updateHeaderHeight();
+  observeHeaderHeight();
 
   document.addEventListener("astro:page-load", () => {
     isCompact = false;
     applyScrollState();
-    updateHeaderHeight();
+    observeHeaderHeight();
   });
 
   // Handle account icon click (check for cs_auth cookie)

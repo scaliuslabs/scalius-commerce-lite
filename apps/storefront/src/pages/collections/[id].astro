@@ -18,7 +18,6 @@ import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import { normalizeSeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 import { htmlToPlainText } from "@scalius/shared/html-sanitize";
 import {
-  PRODUCT_LIST_NAVIGATION_PARAMS,
   buildProductListPaginationHref,
   resolveProductListQueryState,
 } from "@/lib/product-list-query";
@@ -95,9 +94,7 @@ const firstProductImage =
 const activeFilterCount = Object.keys(currentFilters)
   .filter(
     (key) =>
-      !PRODUCT_LIST_NAVIGATION_PARAMS.includes(
-        key as (typeof PRODUCT_LIST_NAVIGATION_PARAMS)[number],
-      ) && currentFilters[key],
+      key !== "page" && key !== "sortBy" && currentFilters[key],
   )
   .reduce(
     (count, key) =>
@@ -271,7 +268,7 @@ const collectionJsonLd =
     </section>
 
     <section class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-      <div class="mb-4 grid grid-cols-2 gap-2 lg:hidden">
+      <div class="sticky top-[calc(var(--header-height,3.5rem)+0.5rem)] z-30 -mx-1 mb-4 grid grid-cols-2 gap-2 rounded-xl bg-gray-50/95 p-1 backdrop-blur lg:hidden">
         <button
           id="collection-filter-toggle"
           type="button"
@@ -329,7 +326,7 @@ const collectionJsonLd =
           aria-labelledby="collection-filter-title"
         >
           <div
-            class="flex h-full w-full flex-col bg-white lg:w-full lg:rounded-lg lg:border lg:border-gray-100 lg:shadow-sm"
+            class="flex h-full w-full flex-col bg-white lg:sticky lg:top-[calc(var(--header-height,4rem)+1rem)] lg:max-h-[calc(100dvh-var(--header-height,4rem)-2rem)] lg:w-full lg:overflow-hidden lg:rounded-lg lg:border lg:border-gray-100 lg:shadow-sm"
           >
             <div
               class="flex items-center justify-between border-b p-4 lg:hidden"
@@ -357,7 +354,7 @@ const collectionJsonLd =
                   <input
                     type="search"
                     name="q"
-                    placeholder="Search this collection..."
+                    placeholder="Search this collection…"
                     value={queryState.query}
                     class="w-full rounded-lg border-gray-300 py-2.5 pl-9 pr-4 text-sm focus:border-primary focus:ring-2 focus:ring-primary"
                   />

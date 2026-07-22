@@ -17,7 +17,7 @@ interface Props {
 const { facets, currentFilters, pathname, resetPath, currencySymbol } =
   Astro.props;
 
-const navigationKeys = new Set(["q", "page", "sortBy"]);
+const navigationKeys = new Set(["page", "sortBy"]);
 const priceKeys = new Set(["minPrice", "maxPrice"]);
 const booleanLabels: Record<string, string> = {
   hasDiscount: "On sale",
@@ -61,8 +61,14 @@ for (const [key, rawValue] of Object.entries(currentFilters)) {
     if (!value) continue;
     appliedFilters.push({
       key: `${key}:${value}`,
-      label: booleanLabels[key] ?? `${groupLabel}: ${value}`,
-      href: withoutFilterValue(key, booleanLabels[key] ? undefined : value),
+      label:
+        key === "q"
+          ? `Search: “${value}”`
+          : booleanLabels[key] ?? `${groupLabel}: ${value}`,
+      href: withoutFilterValue(
+        key,
+        key === "q" || booleanLabels[key] ? undefined : value,
+      ),
     });
   }
 }
@@ -93,7 +99,7 @@ if (minPrice || maxPrice) {
 }
 
 const clearState: ProductListFilterState = {};
-for (const key of ["q", "sortBy"] as const) {
+for (const key of ["sortBy"] as const) {
   const value = currentFilters[key];
   if (value) clearState[key] = value;
 }
