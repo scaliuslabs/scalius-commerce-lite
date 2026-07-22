@@ -67,6 +67,7 @@ import type {
     OrderShipmentRecoverySummary,
     OrderShipmentSummary,
 } from "./orders.types";
+import { getOrderStatusGroupStatuses, type OrderStatusGroup } from "./order-list-views";
 import { buildPhoneSearchTerms, isLikelyPhoneSearch } from "./orders.search";
 import { assertNoActiveShipmentClaim, hasActiveShipmentClaim } from "./shipment-claim";
 import { computeOrderPaymentState } from "../payments/payment-state";
@@ -1094,6 +1095,7 @@ function buildPhoneSearchCondition(searchTerms: string[]): SQL | undefined {
 export async function listOrders(db: Database, options: {
     search?: string;
     status?: string;
+    statusGroup?: OrderStatusGroup;
     paymentStatus?: string;
     paymentMethod?: string;
     fulfillmentStatus?: string;
@@ -1109,6 +1111,7 @@ export async function listOrders(db: Database, options: {
     const {
         search,
         status,
+        statusGroup,
         paymentStatus,
         paymentMethod,
         fulfillmentStatus,
@@ -1165,6 +1168,8 @@ export async function listOrders(db: Database, options: {
 
     if (status) {
         whereConditions.push(sql`${orders.status} = ${status}`);
+    } else if (statusGroup) {
+        whereConditions.push(inArray(orders.status, [...getOrderStatusGroupStatuses(statusGroup)]));
     }
 
     if (paymentStatus) {

@@ -44,6 +44,16 @@ const statusFilters = [
   { value: "incomplete", label: "Incomplete" },
 ];
 
+const orderViews = [
+  { value: null, label: "All" },
+  { value: "open", label: "Open" },
+  { value: "in_transit", label: "In transit" },
+  { value: "delivered", label: "Delivered" },
+  { value: "closed", label: "Closed" },
+] as const;
+
+type OrderStatusGroup = Exclude<(typeof orderViews)[number]["value"], null>;
+
 const ALL_FILTER_VALUE = "all";
 
 const paymentStatusFilters = [
@@ -82,6 +92,8 @@ interface OrderToolbarProps {
   // Status filter
   activeStatus: string | null;
   onStatusFilterChange: (status: string | null) => void;
+  activeStatusGroup: OrderStatusGroup | null;
+  onStatusGroupChange: (status: OrderStatusGroup | null) => void;
   activePaymentStatus: string | null;
   onPaymentStatusFilterChange: (status: string | null) => void;
   activePaymentMethod: string | null;
@@ -233,6 +245,8 @@ export function OrderToolbar({
   showTrashed,
   activeStatus,
   onStatusFilterChange,
+  activeStatusGroup,
+  onStatusGroupChange,
   activePaymentStatus,
   onPaymentStatusFilterChange,
   activePaymentMethod,
@@ -514,30 +528,44 @@ export function OrderToolbar({
         </div>
       ) : null}
 
-      {/* Status filter pills */}
+      {/* Workflow views keep the lifecycle scannable; exact status remains one click away. */}
       {!showTrashed && (
-        <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto pb-2 scrollbar-hide">
-          <Button
-            variant={activeStatus === null ? "secondary" : "ghost"}
-            size="sm"
-            onClick={() => onStatusFilterChange(null)}
-            className="h-11 shrink-0 px-3 text-xs font-medium sm:h-7 sm:px-2.5"
+        <div className="flex flex-col gap-2 rounded-lg border bg-card p-2 sm:flex-row sm:items-center sm:justify-between">
+          <div
+            className="grid w-full grid-cols-6 gap-1 rounded-md bg-muted/60 p-1 sm:w-auto sm:grid-cols-5 sm:gap-0"
+            role="group"
+            aria-label="Order views"
           >
-            All
-          </Button>
-          {statusFilters.map((filter) => (
-            <Button
-              key={filter.value}
-              variant={
-                activeStatus === filter.value ? "secondary" : "ghost"
-              }
-              size="sm"
-              onClick={() => onStatusFilterChange(filter.value)}
-              className="h-11 shrink-0 px-3 text-xs font-medium sm:h-7 sm:px-2.5"
-            >
-              {filter.label}
-            </Button>
-          ))}
+            {orderViews.map((view, index) => {
+              const selected = activeStatus === null && activeStatusGroup === view.value;
+              return (
+                <Button
+                  key={view.label}
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  aria-pressed={selected}
+                  onClick={() => onStatusGroupChange(view.value)}
+                  className={`h-11 min-w-0 rounded-sm px-1.5 text-xs font-medium sm:col-span-1 sm:h-8 sm:px-3 ${
+                    index >= 3 ? "col-span-3" : "col-span-2"
+                  } ${
+                    selected ? "bg-background text-foreground shadow-sm hover:bg-background" : "text-muted-foreground"
+                  }`}
+                >
+                  <span className="truncate">{view.label}</span>
+                </Button>
+              );
+            })}
+          </div>
+          <div className="w-full sm:w-48">
+            <OrderFilterSelect
+              value={activeStatus}
+              placeholder="Any order status"
+              options={statusFilters}
+              ariaLabel="Filter by exact order status"
+              onChange={onStatusFilterChange}
+            />
+          </div>
         </div>
       )}
     </div>

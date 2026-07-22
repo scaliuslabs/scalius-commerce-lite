@@ -113,9 +113,17 @@ const PAYMENT_RECOVERY_FILTERS = [
   "needs_attention",
 ] as const;
 
+const ORDER_STATUS_GROUP_FILTERS = [
+  "open",
+  "in_transit",
+  "delivered",
+  "closed",
+] as const;
+
 type SearchParams = Omit<ListSearchParams<OrderSort>, "trashed"> & {
   archived: boolean;
   status?: string;
+  statusGroup?: (typeof ORDER_STATUS_GROUP_FILTERS)[number];
   paymentStatus?: (typeof PAYMENT_STATUS_FILTERS)[number];
   paymentMethod?: (typeof PAYMENT_METHOD_FILTERS)[number];
   fulfillmentStatus?: (typeof FULFILLMENT_STATUS_FILTERS)[number];
@@ -130,6 +138,10 @@ function validateOrderSearch(search: SearchValidatorInput<SearchParams>): Search
     ...baseSearch,
     archived: normalizeBooleanSearchParam(search.archived),
     status: normalizeOptionalSearchString(search.status),
+    statusGroup: normalizeOptionalEnumSearchParam(
+      search.statusGroup,
+      ORDER_STATUS_GROUP_FILTERS,
+    ),
     paymentStatus: normalizeOptionalEnumSearchParam(
       search.paymentStatus,
       PAYMENT_STATUS_FILTERS,
@@ -159,6 +171,7 @@ function mapParams(deps: SearchParams) {
     limit: deps.limit,
     search: deps.search || undefined,
     status: deps.status,
+    statusGroup: deps.statusGroup,
     paymentStatus: deps.paymentStatus,
     paymentMethod: deps.paymentMethod,
     fulfillmentStatus: deps.fulfillmentStatus,
@@ -298,6 +311,7 @@ function OrdersPage() {
     useState<BulkShipResultSummary | null>(null);
   // Derive filter values directly from URL search params (reactive to back/forward)
   const activeStatus = search.status ?? null;
+  const activeStatusGroup = search.statusGroup ?? null;
   const activePaymentStatus = search.paymentStatus ?? null;
   const activePaymentMethod = search.paymentMethod ?? null;
   const activeFulfillmentStatus = search.fulfillmentStatus ?? null;
@@ -305,6 +319,7 @@ function OrdersPage() {
   const hasActiveFilters = Boolean(
     search.search.trim()
       || activeStatus
+      || activeStatusGroup
       || activePaymentStatus
       || activePaymentMethod
       || activeFulfillmentStatus
@@ -403,7 +418,22 @@ function OrdersPage() {
 
   const onStatusFilterChange = useCallback(
     (status: string | null) => {
-      handleNavigate({ status: status ?? undefined, page: 1 });
+      handleNavigate({
+        status: status ?? undefined,
+        statusGroup: undefined,
+        page: 1,
+      });
+    },
+    [handleNavigate],
+  );
+
+  const onStatusGroupChange = useCallback(
+    (statusGroup: SearchParams["statusGroup"] | null) => {
+      handleNavigate({
+        status: undefined,
+        statusGroup: statusGroup ?? undefined,
+        page: 1,
+      });
     },
     [handleNavigate],
   );
@@ -1151,6 +1181,8 @@ function OrdersPage() {
       showTrashed={showTrashed}
       activeStatus={activeStatus}
       onStatusFilterChange={onStatusFilterChange}
+      activeStatusGroup={activeStatusGroup}
+      onStatusGroupChange={onStatusGroupChange}
       activePaymentStatus={activePaymentStatus}
       onPaymentStatusFilterChange={onPaymentStatusFilterChange}
       activePaymentMethod={activePaymentMethod}
