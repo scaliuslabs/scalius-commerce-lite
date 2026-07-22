@@ -105,15 +105,21 @@ beforeEach(() => {
   mocks.verifyPendingTotpCode.mockResolvedValue(true);
 });
 
-function createDbMock(options: { matchingSession?: boolean } = {}) {
+function createDbMock(options: {
+  matchingSession?: boolean;
+  sessionToken?: string;
+} = {}) {
   const updateWhere = vi.fn(() => ({ kind: "update" }));
   const updateSet = vi.fn(() => ({ where: updateWhere }));
   const insertValues = vi.fn(() => ({ kind: "insert" }));
   const batch = vi.fn(async () => []);
   const deleteWhere = vi.fn(async () => undefined);
-  const get = vi.fn(async () =>
-    options.matchingSession === false ? null : { id: "session_1" },
-  );
+  const get = vi.fn(async () => options.matchingSession === false
+    ? null
+    : {
+        id: "session_1",
+        token: options.sessionToken ?? "verified_session_token",
+      });
 
   return {
     __deleteWhere: deleteWhere,
@@ -125,7 +131,10 @@ function createDbMock(options: { matchingSession?: boolean } = {}) {
     delete: vi.fn(() => ({ where: deleteWhere })),
     select: vi.fn(() => ({
       from: vi.fn(() => ({
-        where: vi.fn(() => ({ get })),
+        where: vi.fn(() => ({
+          get,
+          limit: vi.fn(async () => [{ id: "two_factor_1" }]),
+        })),
       })),
     })),
     update: vi.fn(() => ({ set: updateSet })),
@@ -166,6 +175,12 @@ function createTwoFactorMethodChallengeDbMock(options: {
         where: vi.fn(() => ({
           get: vi.fn(async () => {
             if ("value" in selection) return challengeRows.shift() ?? null;
+            if ("token" in selection) {
+              return {
+                id: "session_1",
+                token: "verified_session_token",
+              };
+            }
             return options.existingTwoFactor === undefined
               ? { id: "two_factor_1" }
               : options.existingTwoFactor;
@@ -197,6 +212,7 @@ function createTestApp(
     twoFactorEnabled?: boolean;
     session?: { id: string; twoFactorVerified?: boolean } | null;
     user?: Record<string, unknown>;
+    adminPermissions?: Set<string>;
   } = {},
 ) {
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1/admin");
@@ -217,6 +233,10 @@ function createTestApp(
     if (options.session !== null) {
       c.set("session", options.session ?? { id: "session_1" });
     }
+    c.set(
+      "adminPermissions",
+      options.adminPermissions ?? new Set(["team.manage", "team.manage_roles"]),
+    );
     await next();
   });
   app.route("/auth", adminAuthManagementRoutes);
@@ -425,30 +445,46 @@ function createAdminSuspensionDbMock(options: {
   };
 }
 
-function createAdminInviteDbMock() {
-  const getQueue = [
-    vi.fn(async () => ({ id: "role_1" })),
-    vi.fn(async () => null),
-  ];
+function createAdminInviteDbMock(options: {
+  role?: { id: string; name: string } | null;
+  rolePermissions?: string[];
+} = {}) {
+  const role = Object.prototype.hasOwnProperty.call(options, "role")
+    ? options.role
+    : { id: "role_1", name: "manager" };
+  const selectedRolePermissions = options.rolePermissions ?? ["team.manage"];
   const updateWhere = vi.fn(() => ({ kind: "update" }));
   const updateSet = vi.fn(() => ({ where: updateWhere }));
   const insertValues = vi.fn(() => ({ kind: "insert" }));
   const batch = vi.fn(async () => []);
 
   return {
-    __getQueue: getQueue,
     __batch: batch,
     __insertValues: insertValues,
     __updateSet: updateSet,
     __updateWhere: updateWhere,
     batch,
     insert: vi.fn(() => ({ values: insertValues })),
-    select: vi.fn(() => ({
-      from: vi.fn(() => ({
-        where: vi.fn(() => ({
-          get: (getQueue.shift() ?? vi.fn(async () => null)),
-        })),
-      })),
+    select: vi.fn((selection: Record<string, unknown>) => ({
+      from: vi.fn(() => {
+        if ("name" in selection && "id" in selection) {
+          return {
+            where: vi.fn(() => ({ get: vi.fn(async () => role) })),
+          };
+        }
+        if ("name" in selection) {
+          return {
+            innerJoin: vi.fn(() => ({
+              where: vi.fn(async () =>
+                selectedRolePermissions.map((name) => ({ name })),
+              ),
+            })),
+          };
+        }
+        return {
+          where: vi.fn(() => ({ get: vi.fn(async () => null) })),
+        };
+      }),
     })),
     update: vi.fn(() => ({ set: updateSet })),
   };
@@ -1102,6 +1138,96 @@ describe("admin auth management team invites", () => {
     expect(bodyText).not.toContain(String(generatedPassword));
   });
 
+  it("rejects assigning the Super Admin role unless the caller is the store owner", async () => {
+    const db = createAdminInviteDbMock({
+      role: { id: "role_super_admin", name: "super_admin" },
+    });
+    const signUpEmail = vi.fn();
+    mocks.createAuth.mockReturnValue({
+      api: { signUpEmail, requestPasswordReset: vi.fn() },
+    });
+    const app = createTestApp(db, {
+      adminPermissions: new Set(["team.manage", "team.manage_roles"]),
+      user: { isSuperAdmin: false },
+    });
+
+    const response = await app.request("/api/v1/admin/auth/users", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Escalated Admin",
+        email: "escalated@example.com",
+        roleId: "role_super_admin",
+      }),
+    }, { BETTER_AUTH_URL: "https://admin.scalius.test" } as never);
+
+    expect(response.status).toBe(403);
+    expect(signUpEmail).not.toHaveBeenCalled();
+    expect(mocks.assignRoleToUser).not.toHaveBeenCalled();
+  });
+
+  it("lets team managers assign a role contained within their own authority", async () => {
+    const db = createAdminInviteDbMock({
+      rolePermissions: ["products.view"],
+    });
+    const signUpEmail = vi.fn().mockResolvedValue({ user: { id: "new_admin" } });
+    mocks.createAuth.mockReturnValue({
+      api: {
+        signUpEmail,
+        requestPasswordReset: vi.fn().mockResolvedValue({ status: true }),
+      },
+    });
+    const app = createTestApp(db, {
+      adminPermissions: new Set(["team.manage", "products.view"]),
+    });
+
+    const response = await app.request("/api/v1/admin/auth/users", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Catalog Viewer",
+        email: "catalog-viewer@example.com",
+        roleId: "role_1",
+      }),
+    }, { BETTER_AUTH_URL: "https://admin.scalius.test" } as never);
+
+    expect(response.status, await response.clone().text()).toBe(201);
+    expect(mocks.assignRoleToUser).toHaveBeenCalledWith(
+      db,
+      "new_admin",
+      "role_1",
+      "user_1",
+      undefined,
+    );
+  });
+
+  it("rejects a role containing permissions the inviting manager does not have", async () => {
+    const db = createAdminInviteDbMock({
+      rolePermissions: ["products.view", "team.manage_roles"],
+    });
+    const signUpEmail = vi.fn();
+    mocks.createAuth.mockReturnValue({
+      api: { signUpEmail, requestPasswordReset: vi.fn() },
+    });
+    const app = createTestApp(db, {
+      adminPermissions: new Set(["team.manage", "products.view"]),
+    });
+
+    const response = await app.request("/api/v1/admin/auth/users", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Over-privileged Admin",
+        email: "over-privileged@example.com",
+        roleId: "role_1",
+      }),
+    }, { BETTER_AUTH_URL: "https://admin.scalius.test" } as never);
+
+    expect(response.status).toBe(403);
+    expect(signUpEmail).not.toHaveBeenCalled();
+    expect(mocks.assignRoleToUser).not.toHaveBeenCalled();
+  });
+
   it("keeps team invites off raw credential emails", () => {
     const source = readFileSync(
       resolve(dirname(fileURLToPath(import.meta.url)), "auth-management.ts"),
@@ -1183,55 +1309,6 @@ describe("admin auth management team invites", () => {
       deliveryStatus: "failed",
       expiresAt: null,
     }));
-  });
-});
-
-describe("admin auth management 2FA completion", () => {
-  it("marks the current session verified when the Better Auth session-token proof matches", async () => {
-    const db = createDbMock();
-    const app = createTestApp(db);
-
-    const response = await app.request("/api/v1/admin/auth/2fa/complete-verification", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sessionToken: "session_token_from_successful_2fa_verify" }),
-    });
-
-    expect(response.status).toBe(200);
-    expect(db.__updateSet).toHaveBeenCalledWith({ twoFactorVerified: true });
-    expect(db.__updateWhere).toHaveBeenCalledTimes(1);
-  });
-
-  it("rejects completion when the session-token proof does not match the current session", async () => {
-    const db = createDbMock({ matchingSession: false });
-    const app = createTestApp(db);
-
-    const response = await app.request("/api/v1/admin/auth/2fa/complete-verification", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sessionToken: "session_token_from_another_session_or_guess" }),
-    });
-    const body = await response.json() as { error?: { code?: string } };
-
-    expect(response.status).toBe(401);
-    expect(body.error?.code).toBe("UNAUTHORIZED");
-    expect(db.__updateSet).not.toHaveBeenCalled();
-  });
-
-  it("rejects completion when 2FA is not enabled for the current account", async () => {
-    const db = createDbMock();
-    const app = createTestApp(db, { twoFactorEnabled: false });
-
-    const response = await app.request("/api/v1/admin/auth/2fa/complete-verification", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sessionToken: "session_token_from_successful_2fa_verify" }),
-    });
-    const body = await response.json() as { error?: { code?: string } };
-
-    expect(response.status).toBe(403);
-    expect(body.error?.code).toBe("FORBIDDEN");
-    expect(db.__updateSet).not.toHaveBeenCalled();
   });
 });
 
@@ -1368,6 +1445,11 @@ describe("admin auth management 2FA method changes", () => {
       method: "email",
       expiresAt: Date.now() + 600_000,
     });
+    const verifyTwoFactorOTP = vi.fn().mockResolvedValue({
+      response: { token: "verified_session_token" },
+      headers: new Headers(),
+    });
+    mocks.createAuth.mockReturnValue({ api: { verifyTwoFactorOTP } });
     const app = createTestApp(db, {
       twoFactorEnabled: true,
       session: { id: "session_1", twoFactorVerified: true },
@@ -1382,13 +1464,14 @@ describe("admin auth management 2FA method changes", () => {
         body: JSON.stringify({
           method: "email",
           challengeId: "tfmc_0123456789abcdef0123456789abcdef",
-          sessionToken: "same_origin_verified_session_token_123456789",
+          code: "123456",
         }),
       },
       TEST_ACCOUNT_SESSION_ENV,
     );
 
     expect(response.status, await response.clone().text()).toBe(200);
+    expect(verifyTwoFactorOTP).toHaveBeenCalledTimes(1);
     expect(db.__updateSets).toEqual([
       expect.objectContaining({
         twoFactorEnabled: true,
@@ -1531,11 +1614,12 @@ describe("admin auth management 2FA method changes", () => {
     expect(response.status).toBe(409);
   });
 
-  it("accepts a same-origin session-token proof before updating the preferred 2FA method", async () => {
+  it("rejects session-token possession as an enrollment proof", async () => {
     const db = createDbMock();
     const app = createTestApp(db, {
-      twoFactorEnabled: true,
-      session: { id: "session_1", twoFactorVerified: true },
+      twoFactorEnabled: false,
+      session: { id: "session_1", twoFactorVerified: false },
+      user: { mustEnrollTwoFactor: true },
     });
 
     const response = await app.request("/api/v1/admin/auth/2fa/method", {
@@ -1547,60 +1631,13 @@ describe("admin auth management 2FA method changes", () => {
       }),
     });
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(400);
     expect(mocks.createAuth).not.toHaveBeenCalled();
-    expect(db.__updateSet).toHaveBeenCalledWith({ twoFactorVerified: true });
-    expect(db.__updateSet).toHaveBeenCalledWith(expect.objectContaining({
-      twoFactorMethod: "email",
-      mustEnrollTwoFactor: false,
-    }));
-  });
-
-  it("rejects an unchallenged method switch after enrollment is established", async () => {
-    const db = createDbMock();
-    const app = createTestApp(db, {
-      twoFactorEnabled: true,
-      session: { id: "session_1", twoFactorVerified: true },
-      user: { twoFactorMethod: "totp", mustEnrollTwoFactor: false },
-    });
-
-    const response = await app.request("/api/v1/admin/auth/2fa/method", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        method: "email",
-        sessionToken: "same_origin_verified_session_token_123456789",
-      }),
-    });
-
-    expect(response.status).toBe(409);
-    expect(db.__updateSet).not.toHaveBeenCalled();
-  });
-
-  it("rejects a preferred method update when the same-origin proof does not match the current session", async () => {
-    const db = createDbMock({ matchingSession: false });
-    const app = createTestApp(db, {
-      twoFactorEnabled: true,
-      session: { id: "session_1", twoFactorVerified: true },
-    });
-
-    const response = await app.request("/api/v1/admin/auth/2fa/method", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        method: "email",
-        sessionToken: "another_session_token_123456789012345",
-      }),
-    });
-    const body = await response.json() as { error?: { code?: string } };
-
-    expect(response.status).toBe(401);
-    expect(body.error?.code).toBe("UNAUTHORIZED");
     expect(db.__updateSet).not.toHaveBeenCalled();
   });
 
   it("verifies the target method code before updating the preferred 2FA method", async () => {
-    const db = createDbMock();
+    const db = createDbMock({ sessionToken: "verified_session_token" });
     const verifyTwoFactorOTP = vi.fn().mockResolvedValue({
       response: { token: "verified_session_token" },
       headers: new Headers(),
@@ -1627,15 +1664,18 @@ describe("admin auth management 2FA method changes", () => {
       body: { code: "123456", trustDevice: false },
       returnHeaders: true,
     });
-    expect(db.__updateSet).toHaveBeenCalledWith({ twoFactorVerified: true });
     expect(db.__updateSet).toHaveBeenCalledWith(expect.objectContaining({
+      twoFactorVerified: true,
+    }));
+    expect(db.__updateSet).toHaveBeenCalledWith(expect.objectContaining({
+      twoFactorEnabled: true,
       twoFactorMethod: "email",
       mustEnrollTwoFactor: false,
     }));
   });
 
   it("uses the rotated session cookie when first-time TOTP verification returns a stale token", async () => {
-    const db = createDbMock();
+    const db = createDbMock({ sessionToken: "new_session_token" });
     const verifyTOTP = vi.fn().mockResolvedValue({
       response: { token: "old_session_token" },
       headers: new Headers({
@@ -1661,8 +1701,11 @@ describe("admin auth management 2FA method changes", () => {
 
     expect(response.status, await response.clone().text()).toBe(200);
     expect(response.headers.get("set-cookie")).toContain("better-auth.session_token=new_session_token.signature");
-    expect(db.__updateSet).toHaveBeenCalledWith({ twoFactorVerified: true });
     expect(db.__updateSet).toHaveBeenCalledWith(expect.objectContaining({
+      twoFactorVerified: true,
+    }));
+    expect(db.__updateSet).toHaveBeenCalledWith(expect.objectContaining({
+      twoFactorEnabled: true,
       twoFactorMethod: "totp",
       mustEnrollTwoFactor: false,
     }));

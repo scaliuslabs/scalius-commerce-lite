@@ -637,7 +637,6 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
     for (const [pathname, method] of [
       ["/api/v1/admin/auth/2fa/info", "GET"],
       ["/api/v1/admin/auth/2fa/verify", "POST"],
-      ["/api/v1/admin/auth/2fa/complete-verification", "POST"],
       ["/api/v1/admin/auth/2fa/method", "POST"],
     ] as const) {
       const next = vi.fn().mockResolvedValue(undefined);

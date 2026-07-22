@@ -1,13 +1,23 @@
 // apps/api/src/worker.ts
 import { WorkerEntrypoint } from "cloudflare:workers";
+import {
+  applyBaselineSecurityHeaders,
+  redirectPlaintextRequest,
+} from "@scalius/shared/http-security";
 
 export type { AppType } from "./app";
 
 export default class ApiWorker extends WorkerEntrypoint<Env> {
   // HTTP: Hono handles all requests
   async fetch(request: Request) {
+    const redirect = redirectPlaintextRequest(request);
+    if (redirect) return redirect;
+
     const { default: app } = await import("./app");
-    return app.fetch(request, this.env, this.ctx);
+    const response = await app.fetch(request, this.env, this.ctx);
+    return applyBaselineSecurityHeaders(request, response, {
+      frameProtection: "deny",
+    });
   }
 
   // Queues: payment events, OTP, notifications, storefront cache purge

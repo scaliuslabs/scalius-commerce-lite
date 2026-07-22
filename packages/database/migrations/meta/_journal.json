@@ -309,6 +309,20 @@
       "when": 1784674757707,
       "tag": "0043_grey_the_spike",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "6",
+      "when": 1784756706895,
+      "tag": "0044_rainy_rawhide_kid",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "6",
+      "when": 1784757791966,
+      "tag": "0045_sad_shadow_king",
+      "breakpoints": true
     }
   ]
 }

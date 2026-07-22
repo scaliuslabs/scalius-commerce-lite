@@ -212,8 +212,6 @@ function isTwoFactorCompletionRequest(
     return (
         (method === "GET" && pathname === "/api/v1/admin/auth/2fa/info") ||
         (method === "POST" && pathname === "/api/v1/admin/auth/2fa/verify") ||
-        (method === "POST" &&
-            pathname === "/api/v1/admin/auth/2fa/complete-verification") ||
         (method === "POST" && pathname === "/api/v1/admin/auth/2fa/method")
     );
 }

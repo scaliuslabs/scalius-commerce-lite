@@ -1,9 +1,8 @@
 // Reconciles code-owned permissions and system roles without changing user authority.
 
-import { eq, count, asc, inArray } from "drizzle-orm";
+import { eq, count, inArray } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import {
-  user,
   permissions,
   roles,
   rolePermissions,
@@ -14,7 +13,7 @@ import { PERMISSIONS, getAllPermissions } from "./permissions";
 // isolates and must expire or be purged after an intentional manual DB reset.
 let seedingChecked = false;
 let seedingPromise: Promise<void> | null = null;
-const RBAC_SEED_CACHE_PREFIX = "rbac:seed-current:v3";
+const RBAC_SEED_CACHE_PREFIX = "rbac:seed-current:v4";
 const RBAC_SEED_CACHE_TTL_SECONDS = 6 * 60 * 60;
 
 type SystemRoleSeed = {
@@ -264,13 +263,34 @@ async function seedRoles(db: Database): Promise<void> {
   const roleIds = dbRoles.map((role) => role.id);
   const existingGrantRows = roleIds.length > 0
     ? await db
-        .select({ roleId: rolePermissions.roleId, permissionId: rolePermissions.permissionId })
+        .select({
+          id: rolePermissions.id,
+          roleId: rolePermissions.roleId,
+          permissionId: rolePermissions.permissionId,
+        })
         .from(rolePermissions)
         .where(inArray(rolePermissions.roleId, roleIds))
     : [];
   const existingGrants = new Set(
     existingGrantRows.map((grant) => `${grant.roleId}:${grant.permissionId}`),
   );
+  const desiredGrants = new Set(systemRoles.flatMap((role) => {
+    const roleId = roleIdByName.get(role.name);
+    if (!roleId) return [];
+    return role.permissions.flatMap((permissionName) => {
+      const permissionId = permNameToId.get(permissionName);
+      return permissionId ? [`${roleId}:${permissionId}`] : [];
+    });
+  }));
+  const staleGrantIds = existingGrantRows
+    .filter((grant) => !desiredGrants.has(`${grant.roleId}:${grant.permissionId}`))
+    .map((grant) => grant.id);
+  for (let offset = 0; offset < staleGrantIds.length; offset += 90) {
+    const chunk = staleGrantIds.slice(offset, offset + 90);
+    if (chunk.length > 0) {
+      await db.delete(rolePermissions).where(inArray(rolePermissions.id, chunk));
+    }
+  }
   const missingGrantInserts = systemRoles.flatMap((role) => {
     const roleId = roleIdByName.get(role.name);
     if (!roleId) return [];
@@ -293,32 +313,12 @@ async function seedRoles(db: Database): Promise<void> {
   }
 }
 
-/**
- * Set the first admin user as super admin
- */
-async function setFirstAdminAsSuperAdmin(db: Database): Promise<void> {
-  // Get the first admin user by createdAt
-  const firstAdmin = await db
-    .select()
-    .from(user)
-    .where(eq(user.role, "admin"))
-    .orderBy(asc(user.createdAt))
-    .limit(1);
-
-  if (firstAdmin.length > 0 && firstAdmin[0] && !firstAdmin[0].isSuperAdmin) {
-    await db
-      .update(user)
-      .set({ isSuperAdmin: true })
-      .where(eq(user.id, firstAdmin[0].id));
-  }
-}
-
 async function isRbacSeedCurrent(db: Database): Promise<boolean> {
   const allPermissions = getAllPermissions();
   const systemRoles = getSystemRoleSeeds();
   const systemRoleNames = systemRoles.map((role) => role.name);
 
-  const [permissionRows, roleRows, grantRows, firstAdminRows] = await db.batch([
+  const [permissionRows, roleRows, grantRows] = await db.batch([
     db.select({ name: permissions.name }).from(permissions),
     db.select({ name: roles.name })
       .from(roles)
@@ -328,17 +328,11 @@ async function isRbacSeedCurrent(db: Database): Promise<boolean> {
       .innerJoin(rolePermissions, eq(roles.id, rolePermissions.roleId))
       .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id))
       .where(inArray(roles.name, systemRoleNames)),
-    db.select({ isSuperAdmin: user.isSuperAdmin })
-      .from(user)
-      .where(eq(user.role, "admin"))
-      .orderBy(asc(user.createdAt))
-      .limit(1),
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
   ] as any) as [
     { name: string }[],
     { name: string }[],
     { roleName: string; permissionName: string }[],
-    { isSuperAdmin: boolean | null }[],
   ];
 
   const permissionNames = new Set(permissionRows.map((permission) => permission.name));
@@ -354,16 +348,11 @@ async function isRbacSeedCurrent(db: Database): Promise<boolean> {
   const grants = new Set(
     grantRows.map((grant) => `${grant.roleName}:${grant.permissionName}`),
   );
-  if (
-    !systemRoles.every((role) =>
-      role.permissions.every((permission) => grants.has(`${role.name}:${permission}`)),
-    )
-  ) {
-    return false;
-  }
-
-  const firstAdmin = firstAdminRows[0];
-  return !firstAdmin || firstAdmin.isSuperAdmin === true;
+  const expectedGrants = new Set(systemRoles.flatMap((role) =>
+    role.permissions.map((permission) => `${role.name}:${permission}`),
+  ));
+  return grants.size === expectedGrants.size &&
+    [...expectedGrants].every((grant) => grants.has(grant));
 }
 
 /**
@@ -396,7 +385,6 @@ async function runRbacSeedReconciliation(
 
     await seedPermissions(db);
     await seedRoles(db);
-    await setFirstAdminAsSuperAdmin(db);
 
     if (!seeded) {
       console.log("RBAC: Auto-seeding complete.");
