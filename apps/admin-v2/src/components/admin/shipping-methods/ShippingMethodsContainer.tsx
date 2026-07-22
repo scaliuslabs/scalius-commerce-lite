@@ -127,8 +127,8 @@ export function ShippingMethodsContainer() {
             </CardTitle>
             <CardDescription className="mt-0 text-xs text-muted-foreground">
               {showTrashed
-                ? "View and manage deleted shipping methods."
-                : `Manage your store's shipping options. ${pagination.total} total methods.`}
+                ? `${pagination.total} deleted`
+                : `${pagination.total} ${pagination.total === 1 ? "method" : "methods"}`}
             </CardDescription>
           </div>
           <div className="grid w-full shrink-0 grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center sm:gap-1.5">
@@ -140,17 +140,17 @@ export function ShippingMethodsContainer() {
             >
               {showTrashed ? (
                 <>
-                  <Truck className="h-3.5 w-3.5 mr-1" /> View Active
+                  <Truck className="h-3.5 w-3.5 mr-1" /> Active
                 </>
               ) : (
                 <>
-                  <Trash2 className="h-3.5 w-3.5 mr-1" /> View Trash
+                  <Trash2 className="h-3.5 w-3.5 mr-1" /> Trash
                 </>
               )}
             </Button>
             {!showTrashed && (
               <Button size="sm" className="h-11 text-xs sm:h-7" onClick={openFormForCreate}>
-                <Plus className="h-3.5 w-3.5 mr-1" /> Add Method
+                <Plus className="h-3.5 w-3.5 mr-1" /> Add method
               </Button>
             )}
           </div>

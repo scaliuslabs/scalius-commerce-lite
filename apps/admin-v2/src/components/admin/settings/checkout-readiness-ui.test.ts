@@ -42,6 +42,7 @@ describe("checkout settings status presentation", () => {
     expect(flowSource).toContain("lg:grid-cols-[minmax(0,1fr)_20rem]");
     expect(flowSource).toContain("grid grid-cols-2 gap-2 sm:flex");
     expect(flowSource).toContain("min-h-11 w-full sm:min-h-9 sm:w-auto sm:min-w-[164px]");
+    expect(flowSource.match(/flex min-h-11 min-w-11 shrink-0 items-center justify-end/g)).toHaveLength(2);
     expect(flowSource).toContain("Phone number is always required.");
     expect(flowSource).toContain("The remaining balance is due on delivery.");
     expect(flowSource).toContain("Unsaved checkout changes");
@@ -65,14 +66,10 @@ describe("checkout settings status presentation", () => {
     for (const label of ["Checking", "Ready", "Unavailable", "Needs setup"]) {
       expect(flowSource).toContain(`label: "${label}"`);
     }
-    expect(gatewaysSource).toContain("<dt className=\"text-muted-foreground\">Setup</dt>");
-    expect(gatewaysSource).toContain("<dt className=\"text-muted-foreground\">Provider</dt>");
-    expect(gatewaysSource).toContain("<dt className=\"text-muted-foreground\">Checkout</dt>");
-    expect(gatewaysSource).toContain("<dt className=\"text-muted-foreground\">Environment</dt>");
-    expect(gatewaysSource).toContain("<dt className=\"text-muted-foreground\">Connection</dt>");
-    expect(gatewaysSource).toContain("Card results preview this draft until you save.");
-    expect(gatewaysSource).toContain("setup-complete, provider-enabled methods");
-    expect(gatewaysSource).toContain("No provider connection health check is available.");
+    expect(gatewaysSource).toContain("outcome.environmentLabel");
+    expect(gatewaysSource).toContain("Choose which eligible methods appear at checkout.");
+    expect(gatewaysSource).toContain("At checkout");
+    expect(gatewaysSource).not.toContain("<dt className=\"text-muted-foreground\">Setup</dt>");
     expect(gatewaysSource).toContain("Key environment");
     expect(gatewaysSource).toContain("Key mismatch");
     expect(gatewaysSource).toContain("@scalius/shared/payment-gateway-environment");
@@ -115,7 +112,7 @@ describe("checkout settings status presentation", () => {
       "Approval and payment processing stay with the order.",
     );
     expect(requestsSource).toContain("Unsaved customer request changes");
-    expect(requestsSource).toContain("Customer request policy is up to date");
+    expect(requestsSource).toContain("{dirty ? <div className=\"fixed");
     expect(requestsSource).toContain("<UnsavedChangesGuard");
     expect(requestsSource).toContain("isDirty={dirty}");
     expect(requestsSource).toContain("isSubmitting={saveMutation.isPending}");

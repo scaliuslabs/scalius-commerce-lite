@@ -37,12 +37,12 @@ function TabSpinner() {
 }
 
 const tabs = [
-    { value: "checkout-flow", label: "Checkout Flow" },
-    { value: "payment", label: "Payment Gateways" },
+    { value: "checkout-flow", label: "Checkout flow" },
+    { value: "payment", label: "Payment gateways" },
     { value: "languages", label: "Languages" },
-    { value: "shipping", label: "Shipping Methods" },
-    { value: "delivery", label: "Delivery Locations" },
-    { value: "customer-requests", label: "Customer Requests" },
+    { value: "shipping", label: "Shipping methods" },
+    { value: "delivery", label: "Delivery locations" },
+    { value: "customer-requests", label: "Customer requests" },
 ] as const;
 
 interface CheckoutSettingsPageProps {
@@ -93,11 +93,8 @@ export default function CheckoutSettingsPage({
         <div className="mx-auto max-w-6xl">
             <div className="mb-4">
                 <h1 className="text-xl font-semibold tracking-tight">
-                    Checkout Settings
+                    Checkout
                 </h1>
-                <p className="mt-0.5 text-sm text-muted-foreground">
-                    Buyer access, payment, localization, shipping, delivery, and post-purchase requests.
-                </p>
             </div>
 
             <Tabs

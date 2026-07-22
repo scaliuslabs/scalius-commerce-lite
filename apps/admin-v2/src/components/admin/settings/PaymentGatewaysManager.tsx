@@ -452,13 +452,12 @@ export default function PaymentGatewaysManager() {
                         </Badge>
                     </div>
                     <CardDescription>
-                        Choose which setup-complete, provider-enabled methods buyers can use. Card results preview this draft until you save.
+                        Choose which eligible methods appear at checkout.
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="grid gap-2 px-4 pb-4 sm:grid-cols-[minmax(0,1fr)_15rem] sm:items-center">
                     <div>
                         <Label htmlFor="default-payment-method">Default buyer selection</Label>
-                        <p className="mt-0.5 text-xs text-muted-foreground">Only setup-complete, provider-enabled methods allowed by the saved checkout flow appear here.</p>
                     </div>
                     <Select
                         value={defaultMethodAvailable ? defaultMethod : undefined}
@@ -517,37 +516,11 @@ export default function PaymentGatewaysManager() {
                                                     <OutcomeBadge outcome={outcome} />
                                                 </div>
                                                 <p className="mt-0.5 text-xs leading-4 text-muted-foreground">{meta.desc}</p>
-                                                <dl className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] leading-4">
-                                                    <div className="flex items-center gap-1">
-                                                        <dt className="text-muted-foreground">Setup</dt>
-                                                        <dd className={outcome.setupLabel === "Required" ? "font-medium text-destructive" : "font-medium text-foreground"}>
-                                                            {outcome.setupLabel}
-                                                        </dd>
-                                                    </div>
-                                                    <div className="flex items-center gap-1">
-                                                        <dt className="text-muted-foreground">Provider</dt>
-                                                        <dd className={outcome.providerLabel === "Off" ? "font-medium text-muted-foreground" : "font-medium text-foreground"}>
-                                                            {outcome.providerLabel}
-                                                        </dd>
-                                                    </div>
-                                                    <div className="flex items-center gap-1">
-                                                        <dt className="text-muted-foreground">Checkout</dt>
-                                                        <dd className={outcome.effective ? "font-medium text-emerald-700 dark:text-emerald-300" : "font-medium text-muted-foreground"}>
-                                                            {outcome.checkoutLabel}
-                                                        </dd>
-                                                    </div>
-                                                    <div className="flex items-center gap-1">
-                                                        <dt className="text-muted-foreground">Environment</dt>
-                                                        <dd className="font-medium text-foreground">{outcome.environmentLabel}</dd>
-                                                    </div>
-                                                    <div className="flex items-center gap-1">
-                                                        <dt className="text-muted-foreground">Connection</dt>
-                                                        <dd className="font-medium text-muted-foreground">{outcome.healthLabel}</dd>
-                                                    </div>
-                                                </dl>
-                                                {method !== "cod" && outcome.healthLabel === "Not checked" && (
-                                                    <span className="sr-only">No provider connection health check is available.</span>
-                                                )}
+                                                {method !== "cod" ? (
+                                                    <p className="mt-2 text-[11px] font-medium text-muted-foreground">
+                                                        {outcome.environmentLabel}
+                                                    </p>
+                                                ) : null}
                                             </div>
                                         </div>
                                         <label htmlFor={`toggle-${method}`} className="flex min-h-11 shrink-0 cursor-pointer flex-col items-end justify-center gap-1">
@@ -558,7 +531,7 @@ export default function PaymentGatewaysManager() {
                                                 disabled={toggleDisabled || Boolean(methodsLoadError) || !checkoutFlowSettings}
                                                 onCheckedChange={(v) => toggleMethod(method, v)}
                                             />
-                                            <span className="max-w-20 text-right text-[11px] font-normal leading-3 text-muted-foreground">Offer to buyers</span>
+                                            <span className="max-w-20 text-right text-[11px] font-normal leading-3 text-muted-foreground">At checkout</span>
                                         </label>
                                     </div>
                                     {gatewayNotice && (
