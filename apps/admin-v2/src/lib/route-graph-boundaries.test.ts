@@ -1826,7 +1826,8 @@ describe("admin route graph boundaries", () => {
     expect(source).toContain("The original order record remains in Orders.");
     expect(source).not.toContain("const parseCheckoutData =");
 
-    expect(routeSource).toContain("archived hosted payments");
+    expect(routeSource).toContain("<AbandonedCheckoutsManager");
+    expect(routeSource).not.toContain("archived hosted payments");
   });
 
   it("keeps order detail SSR formatting deterministic", () => {
