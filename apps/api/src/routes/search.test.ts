@@ -79,6 +79,45 @@ describe("public search route", () => {
     );
   });
 
+  it("treats limit as a total while preserving every matching result group", async () => {
+    mocks.search.mockResolvedValueOnce({
+      products: Array.from({ length: 6 }, (_, index) => ({
+        id: `prod_${index + 1}`,
+        name: `Product ${index + 1}`,
+        slug: `product-${index + 1}`,
+        price: 1200,
+      })),
+      categories: [
+        { id: "cat_1", name: "Category 1", slug: "category-1" },
+        { id: "cat_2", name: "Category 2", slug: "category-2" },
+      ],
+      pages: [
+        { id: "page_1", title: "Page 1", slug: "page-1" },
+        { id: "page_2", title: "Page 2", slug: "page-2" },
+      ],
+    });
+
+    const { app } = createTestApp();
+    const response = await app.request(
+      "/api/v1/search?q=shop&limit=5",
+      {},
+      createSearchEnv(),
+    );
+    const body = await response.json() as {
+      data?: { products?: unknown[]; categories?: unknown[]; pages?: unknown[] };
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.data?.products).toHaveLength(3);
+    expect(body.data?.categories).toHaveLength(1);
+    expect(body.data?.pages).toHaveLength(1);
+    expect([
+      ...(body.data?.products ?? []),
+      ...(body.data?.categories ?? []),
+      ...(body.data?.pages ?? []),
+    ]).toHaveLength(5);
+  });
+
   it("treats punctuation-only search as empty before rate limiting or database work", async () => {
     const { app } = createTestApp();
     const response = await app.request("/api/v1/search?q=!!!!", {}, createSearchEnv());
@@ -95,6 +134,19 @@ describe("public search route", () => {
     const { app } = createTestApp();
     const response = await app.request(
       "/api/v1/search?q=fish&limit=5000",
+      {},
+      createSearchEnv(),
+    );
+
+    expect(response.status).toBe(400);
+    expect(mocks.nativeRateLimit).not.toHaveBeenCalled();
+    expect(mocks.search).not.toHaveBeenCalled();
+  });
+
+  it("rejects excessive query text before rate limiting or FTS work", async () => {
+    const { app } = createTestApp();
+    const response = await app.request(
+      `/api/v1/search?q=${"x".repeat(121)}`,
       {},
       createSearchEnv(),
     );
