@@ -30,5 +30,9 @@ describe("notification settings ownership", () => {
     expect(notificationRouteSource).toContain(
       'search.section === "push"',
     );
+    expect(notificationRouteSource).toContain("Push setup");
+    expect(notificationRouteSource).not.toContain(
+      "Choose which events send and review delivery-provider readiness.",
+    );
   });
 });

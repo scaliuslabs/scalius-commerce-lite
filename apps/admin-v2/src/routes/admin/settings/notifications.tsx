@@ -18,7 +18,7 @@ export function validateNotificationSettingsSearch(
 
 export const Route = createFileRoute("/admin/settings/notifications")({
   validateSearch: validateNotificationSettingsSearch,
-  head: () => ({ meta: [{ title: "Notification Settings | Scalius Admin" }] }),
+  head: () => ({ meta: [{ title: "Notifications | Scalius Admin" }] }),
   errorComponent: RouteErrorComponent,
   component: NotificationSettingsPage,
 });
@@ -40,20 +40,17 @@ function NotificationSettingsPage() {
     <div className="mx-auto max-w-6xl space-y-4">
       <div>
         <h1 className="text-xl font-semibold tracking-tight">Notifications</h1>
-        <p className="mt-0.5 max-w-2xl text-sm text-muted-foreground">
-          Choose which events send and review delivery-provider readiness.
-        </p>
       </div>
 
       <Tabs value={search.section} onValueChange={handleSectionChange}>
         <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto rounded-md border bg-card p-1 sm:w-fit">
           <TabsTrigger value="rules" className="min-h-11 gap-2 px-3 sm:min-h-9">
             <BellRing className="h-4 w-4" aria-hidden="true" />
-            Delivery rules
+            Rules
           </TabsTrigger>
           <TabsTrigger value="push" className="min-h-11 gap-2 px-3 sm:min-h-9">
             <RadioTower className="h-4 w-4" aria-hidden="true" />
-            Admin push
+            Push setup
           </TabsTrigger>
         </TabsList>
 
@@ -73,7 +70,7 @@ function NotificationSettingsPage() {
                   Firebase Cloud Messaging
                 </h2>
                 <p className="mt-0.5 text-sm text-muted-foreground">
-                  Credentials and browser configuration for admin push.
+                  Configure admin push delivery.
                 </p>
               </div>
               <FirebaseSettingsForm />
