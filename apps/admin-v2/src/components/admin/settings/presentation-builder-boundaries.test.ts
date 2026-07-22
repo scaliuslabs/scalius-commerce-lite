@@ -40,6 +40,34 @@ describe("header and footer builder workflow boundaries", () => {
     expect(footerBuilder).toContain("const { menus: _menus, ...storedConfig }");
   });
 
+  it("keeps presentation copy concise and mobile controls touch-sized", () => {
+    const settingsPage = source("./GeneralSettingsPage.tsx");
+    const headerBuilder = source("../header-builder/HeaderBuilder.tsx");
+    const footerBuilder = source("../footer-builder/FooterBuilder.tsx");
+    const headerBranding = source("../header-builder/BrandingSection.tsx");
+    const footerBranding = source("../footer-builder/BrandingSection.tsx");
+    const footerContent = source("../footer-builder/ContentSection.tsx");
+
+    expect(settingsPage).not.toContain(
+      "Store identity, presentation, discovery, communication, and access.",
+    );
+    expect(headerBuilder).not.toContain(
+      "Brand, announce, and guide customers from one compact workspace.",
+    );
+    expect(footerBuilder).not.toContain(
+      "Keep brand context, help links, and social destinations easy to scan.",
+    );
+    expect(headerBuilder).toContain("Manage menus and choose where they appear.");
+    expect(footerBuilder).toContain("Manage menus and assign them to footer columns.");
+    expect(footerBuilder.match(/h-11 shrink-0/g)).toHaveLength(3);
+    expect(footerBuilder.match(/min-h-11 sm:min-h-9/g)).toHaveLength(2);
+    expect(headerBranding.match(/opacity-100/g)?.length).toBeGreaterThanOrEqual(2);
+    expect(footerBranding).toContain('aria-label="Remove footer logo"');
+    expect(footerBranding).toContain('"Change logo" : "Choose logo"');
+    expect(footerContent).toContain("Footer content");
+    expect(footerContent).not.toContain("Enter footer description...");
+  });
+
   it("keeps nested presentation workspaces addressable", () => {
     const route = source("../../../routes/admin/settings/index.tsx");
     const settingsPage = source("./GeneralSettingsPage.tsx");

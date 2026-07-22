@@ -48,7 +48,7 @@ export function TopBarSection({ topBar, onChange }: TopBarSectionProps) {
           value={topBar.text}
           onChange={(e) => onChange({ ...topBar, text: e.target.value })}
           placeholder="Free delivery in Dhaka on orders over ৳2,000"
-          className="max-w-2xl h-9"
+          className="h-11 max-w-2xl sm:h-9"
           disabled={!topBar.isEnabled}
         />
         {!topBar.isEnabled && topBar.text && (

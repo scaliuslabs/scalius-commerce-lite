@@ -29,7 +29,7 @@ export function ContentSection({
   return (
     <Card>
       <CardHeader className="px-4 py-3">
-        <CardTitle>Footer Content</CardTitle>
+        <CardTitle>Footer content</CardTitle>
         <CardDescription>
           Keep this short so help links remain easy to scan.
         </CardDescription>
@@ -41,6 +41,7 @@ export function ContentSection({
             value={tagline}
             onChange={(e) => onTaglineChange(e.target.value)}
             placeholder="A short tagline for your brand"
+            className="h-11 sm:h-9"
           />
         </div>
 
@@ -49,7 +50,7 @@ export function ContentSection({
           <DeferredTiptapEditor
             content={description}
             onChange={onDescriptionChange}
-            placeholder="Enter footer description..."
+            placeholder="Add a footer description"
             ariaLabel="Footer description"
             className="min-h-[150px]"
             compact={true}
@@ -62,6 +63,7 @@ export function ContentSection({
             value={copyrightText}
             onChange={(e) => onCopyrightChange(e.target.value)}
             placeholder="Your business or store name"
+            className="h-11 sm:h-9"
           />
           <p className="text-xs text-muted-foreground">
             The storefront adds the current year and “All rights reserved.”

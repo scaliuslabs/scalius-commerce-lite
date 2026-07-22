@@ -88,9 +88,10 @@ export function BrandingSection({
                   <Button
                     variant="destructive"
                     size="icon"
-                    className="absolute -top-2 -right-2 h-7 w-7 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity shadow-md rounded-full z-10"
+                    className="absolute -right-2 -top-2 z-10 h-11 w-11 rounded-full opacity-100 shadow-md transition-opacity sm:h-8 sm:w-8 sm:opacity-0 sm:group-hover:opacity-100 sm:focus:opacity-100"
                     onClick={removeLogo}
                     title="Remove logo"
+                    aria-label="Remove logo"
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -209,9 +210,10 @@ export function BrandingSection({
                   <Button
                     variant="destructive"
                     size="icon"
-                    className="absolute -top-2 -right-2 h-7 w-7 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity shadow-md rounded-full z-10"
+                    className="absolute -right-2 -top-2 z-10 h-11 w-11 rounded-full opacity-100 shadow-md transition-opacity sm:h-8 sm:w-8 sm:opacity-0 sm:group-hover:opacity-100 sm:focus:opacity-100"
                     onClick={removeFavicon}
                     title="Remove favicon"
+                    aria-label="Remove browser icon"
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>

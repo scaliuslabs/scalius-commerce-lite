@@ -174,12 +174,7 @@ export function FooterBuilder({
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-start justify-between gap-3 border-b pb-4">
-        <div>
-          <h2 className="text-lg font-semibold tracking-tight">Storefront footer</h2>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            Keep brand context, help links, and social destinations easy to scan.
-          </p>
-        </div>
+        <h2 className="text-lg font-semibold tracking-tight">Storefront footer</h2>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <span
             className={cn(
@@ -221,24 +216,24 @@ export function FooterBuilder({
         <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto rounded-lg border bg-muted/20 p-1 lg:sticky lg:top-20 lg:flex-col lg:self-start">
           <TabsTrigger
             value="branding"
-            className="h-9 shrink-0 justify-start gap-2 px-3 lg:w-full"
+            className="h-11 shrink-0 justify-start gap-2 px-3 sm:h-9 lg:w-full"
           >
             <ImageIcon className="h-4 w-4" />
-            Branding & Text
+            Branding & text
           </TabsTrigger>
           <TabsTrigger
             value="navigation"
-            className="h-9 shrink-0 justify-start gap-2 px-3 lg:w-full"
+            className="h-11 shrink-0 justify-start gap-2 px-3 sm:h-9 lg:w-full"
           >
             <LayoutList className="h-4 w-4" />
-            Navigation Menus
+            Navigation menus
           </TabsTrigger>
           <TabsTrigger
             value="social"
-            className="h-9 shrink-0 justify-start gap-2 px-3 lg:w-full"
+            className="h-11 shrink-0 justify-start gap-2 px-3 sm:h-9 lg:w-full"
           >
             <Share2 className="h-4 w-4" />
-            Social Media
+            Social media
           </TabsTrigger>
         </TabsList>
 
@@ -269,14 +264,14 @@ export function FooterBuilder({
               <LayoutList className="size-5" />
             </div>
             <div>
-              <h3 className="text-sm font-semibold">Footer menus are assigned by location</h3>
+              <h3 className="text-sm font-semibold">Footer menus</h3>
               <p className="mt-1 max-w-lg text-sm text-muted-foreground">
-                Reuse published menus across footer columns without coupling links to footer branding or social content.
+                Manage menus and assign them to footer columns.
               </p>
             </div>
             <Button asChild size="sm">
               <Link to="/admin/navigation" search={{ panel: "placements", q: "" }}>
-                Open Navigation
+                Manage menus
               </Link>
             </Button>
           </Card>
@@ -297,7 +292,14 @@ export function FooterBuilder({
       </Tabs>
 
       <div className="sticky bottom-3 z-20 flex items-center justify-between gap-3 rounded-lg border bg-background/95 px-3 py-2 shadow-lg backdrop-blur">
-        <Button type="button" variant="ghost" size="sm" onClick={handleDiscard} disabled={!isDirty || isLoading}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="min-h-11 sm:min-h-9"
+          onClick={handleDiscard}
+          disabled={!isDirty || isLoading}
+        >
           <RotateCcw className="mr-2 h-4 w-4" />
           Discard
         </Button>
@@ -309,6 +311,7 @@ export function FooterBuilder({
             !hasPendingSave
           }
           size="sm"
+          className="min-h-11 sm:min-h-9"
         >
           {isLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
           {requiresNormalizationSave && !isDirty
