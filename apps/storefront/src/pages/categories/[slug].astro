@@ -16,6 +16,7 @@ import RichContent from "@/components/RichContent.astro";
 import ProductCard from "@/components/cards/ProductCard.astro";
 import CatalogPagination from "@/components/catalog/CatalogPagination.astro";
 import AppliedCatalogFilters from "@/components/catalog/AppliedCatalogFilters.astro";
+import CatalogEmptyState from "@/components/catalog/CatalogEmptyState.astro";
 import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime-env";
 import {
   buildResourceCanonicalSeoUrl,
@@ -35,7 +36,7 @@ import {
   hasRenderableHtmlContent,
   htmlToPlainText,
 } from "@scalius/shared/html-sanitize";
-import { SlidersHorizontal, X, Tags, ArrowLeft, Search } from "lucide-react";
+import { SlidersHorizontal, X, Tags, Search } from "lucide-react";
 
 const { slug } = Astro.params;
 if (!slug) return new Response(null, { status: 404 });
@@ -476,32 +477,16 @@ const collectionJsonLd =
 
           {
             products.length === 0 && (
-              <div class="flex flex-col items-center justify-center py-16 px-4 bg-white rounded-lg shadow-sm border border-gray-100 text-center">
-                <Search className="w-16 h-16 text-gray-400 mb-4" />
-                <h3 class="text-xl font-bold text-gray-900 mb-2">
-                  {activeFilterCount > 0
-                    ? "No products match these filters"
-                    : "No products in this category yet"}
-                </h3>
-                <p class="text-gray-500 mb-6 max-w-md">
-                  {activeFilterCount > 0
-                    ? "Remove a filter or broaden the price range to see more products."
-                    : "Browse the rest of the store while this category is being prepared."}
-                </p>
-                <a
-                  href={
-                    activeFilterCount > 0
-                      ? `/categories/${category?.slug}`
-                      : "/search"
-                  }
-                  class="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary/80 transition-colors"
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                  {activeFilterCount > 0
-                    ? "Reset all filters"
-                    : "Browse all products"}
-                </a>
-              </div>
+              <CatalogEmptyState
+                title={activeFilterCount > 0 ? "No matching products" : "No products yet"}
+                description={activeFilterCount > 0
+                  ? "Try fewer filters or a broader price range."
+                  : "Explore the rest of the catalog."}
+                actionHref={activeFilterCount > 0
+                  ? `/categories/${category?.slug}`
+                  : "/search"}
+                actionLabel={activeFilterCount > 0 ? "Clear filters" : "Browse products"}
+              />
             )
           }
 
