@@ -13,13 +13,15 @@ const catalogSortSource = readFileSync(
 
 describe("category listing page boundaries", () => {
   it("does not attach base-category CollectionPage schema to filtered URLs", () => {
-    expect(source).toContain("const hasListingQuery = Astro.url.searchParams.size > 0");
+    expect(source).toContain(
+      "const hasListingQuery = Astro.url.searchParams.size > 0",
+    );
     expect(source).toContain("!hasListingQuery &&");
   });
 
   it("renders optional buying content only on the canonical listing", () => {
-    expect(source).toContain("category?.content && !hasListingQuery");
-    expect(source).toContain("content={category.content}");
+    expect(source).toContain("hasRenderableHtmlContent(categoryContent) &&");
+    expect(source).toContain("content={categoryContent}");
     expect(source).toContain("processShortcodes={false}");
   });
 

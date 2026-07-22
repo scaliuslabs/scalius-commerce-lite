@@ -44,11 +44,17 @@ describe("collection storefront workflow boundaries", () => {
   });
 
   it("separates collection identity, search metadata, and canonical-only editorial content", () => {
-    expect(collectionPage).toContain("const title = collection.metaTitle || collection.name");
-    expect(collectionPage).toContain("const plainDescription = htmlToPlainText(collection.description)");
+    expect(collectionPage).toContain(
+      "const title = collection.metaTitle || collection.name",
+    );
+    expect(collectionPage).toContain(
+      "const plainDescription = htmlToPlainText(collection.description)",
+    );
     expect(collectionPage).toContain("{collection.name}");
-    expect(collectionPage).toContain("collection.content && !hasListingQuery");
-    expect(collectionPage).toContain("content={collection.content}");
+    expect(collectionPage).toContain(
+      "hasRenderableHtmlContent(collectionContent) &&",
+    );
+    expect(collectionPage).toContain("content={collectionContent}");
     expect(collectionPage).toContain("processShortcodes={false}");
     expect(collectionPage).toContain("!hasListingQuery &&");
     expect(collectionPage).not.toContain("config.title || collection.name");

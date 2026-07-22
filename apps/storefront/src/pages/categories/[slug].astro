@@ -27,10 +27,14 @@ import {
   buildProductListPaginationHref,
   resolveProductListQueryState,
 } from "@/lib/product-list-query";
+import { shouldShowCatalogControls } from "@/lib/catalog-control-visibility";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-response";
 import { normalizeSeoDiscoverySettings } from "@scalius/shared/seo-discovery";
-import { htmlToPlainText } from "@scalius/shared/html-sanitize";
+import {
+  hasRenderableHtmlContent,
+  htmlToPlainText,
+} from "@scalius/shared/html-sanitize";
 import { SlidersHorizontal, X, Tags, ArrowLeft, Search } from "lucide-react";
 
 const { slug } = Astro.params;
@@ -96,6 +100,8 @@ const pageDescription =
 const productListPathname = Astro.url.pathname;
 const canonicalFilterState = JSON.stringify(currentFilters);
 const hasListingQuery = Astro.url.searchParams.size > 0;
+const categoryDescription = category?.description ?? null;
+const categoryContent = category?.content ?? null;
 
 function plainText(value: string | null | undefined): string | null {
   const text = htmlToPlainText(value);
@@ -111,16 +117,18 @@ function getPaginationUrl(pageNum: number) {
 }
 
 const activeFilterCount = Object.keys(currentFilters)
-  .filter(
-    (key) =>
-      key !== "page" && key !== "sortBy" && currentFilters[key],
-  )
+  .filter((key) => key !== "page" && key !== "sortBy" && currentFilters[key])
   .reduce(
     (count, key) =>
       count +
       (Array.isArray(currentFilters[key]) ? currentFilters[key].length : 1),
     0,
   );
+const showCatalogControls = shouldShowCatalogControls({
+  resultCount: pagination.total,
+  activeFilterCount,
+});
+const shouldNoindexCategoryView = category?.noIndex === true || hasListingQuery;
 
 // Include product name for richer analytics data
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
@@ -219,7 +227,7 @@ const collectionJsonLd =
   canonicalUrl={canonicalUrl ?? undefined}
   ogImage={ogImageUrl ?? undefined}
   ogType="website"
-  noindex={category?.noIndex === true}
+  noindex={shouldNoindexCategoryView}
 >
   <Fragment slot="head">
     {
@@ -265,13 +273,14 @@ const collectionJsonLd =
               {category?.name}
             </h1>
             {
-              category?.description && (
-                <RichContent
-                  content={category.description}
-                  className="text-base leading-relaxed text-gray-500 sm:text-lg"
-                  processShortcodes={false}
-                />
-              )
+              categoryDescription &&
+                hasRenderableHtmlContent(categoryDescription) && (
+                  <RichContent
+                    content={categoryDescription}
+                    className="text-base leading-relaxed text-gray-500 sm:text-lg"
+                    processShortcodes={false}
+                  />
+                )
             }
           </div>
           <div
@@ -287,140 +296,34 @@ const collectionJsonLd =
     </div>
 
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
-      <div class="sticky top-[calc(var(--header-height,3.5rem)+0.5rem)] z-30 -mx-1 mb-4 grid grid-cols-2 gap-2 rounded-xl bg-gray-50/95 p-1 backdrop-blur lg:hidden">
-        <button
-          type="button"
-          id="mobile-filter-toggle"
-          aria-controls="filter-section"
-          aria-expanded="false"
-          class="relative flex min-h-11 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm font-semibold text-gray-800 shadow-sm"
-        >
-          <SlidersHorizontal className="w-4 h-4" />
-          <span>Filters</span>
-          {
-            activeFilterCount > 0 && (
-              <span class="absolute -top-1 -right-1 bg-destructive text-destructive-foreground text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                {activeFilterCount}
-              </span>
-            )
-          }
-        </button>
+      {
+        showCatalogControls && (
+          <div class="sticky top-[calc(var(--header-height,3.5rem)+0.5rem)] z-30 -mx-1 mb-4 grid grid-cols-2 gap-2 rounded-xl bg-gray-50/95 p-1 backdrop-blur lg:hidden">
+            <button
+              type="button"
+              id="mobile-filter-toggle"
+              aria-controls="filter-section"
+              aria-expanded="false"
+              class="relative flex min-h-11 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm font-semibold text-gray-800 shadow-sm"
+            >
+              <SlidersHorizontal className="w-4 h-4" />
+              <span>Filters</span>
+              {activeFilterCount > 0 && (
+                <span class="absolute -top-1 -right-1 bg-destructive text-destructive-foreground text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                  {activeFilterCount}
+                </span>
+              )}
+            </button>
 
-        <label class="relative block">
-          <span class="sr-only">Sort products</span>
-          <select
-            id="sortByMobile"
-            name="sortBy"
-            data-catalog-sort
-            data-list-pathname={productListPathname}
-            data-current-filters={canonicalFilterState}
-            class="min-h-11 w-full rounded-lg border-gray-200 bg-white py-2.5 pl-3 pr-8 text-sm font-semibold text-gray-800 shadow-sm focus:border-primary focus:ring-2 focus:ring-primary"
-          >
-            <option value="newest" selected={sortBy === "newest"}>Latest</option
-            >
-            <option value="price-asc" selected={sortBy === "price-asc"}
-              >Price: Low to High</option
-            >
-            <option value="price-desc" selected={sortBy === "price-desc"}
-              >Price: High to Low</option
-            >
-            <option value="name-asc" selected={sortBy === "name-asc"}
-              >Name: A to Z</option
-            >
-            <option value="name-desc" selected={sortBy === "name-desc"}
-              >Name: Z to A</option
-            >
-            <option value="discount" selected={sortBy === "discount"}
-              >Biggest discount</option
-            >
-          </select>
-        </label>
-      </div>
-
-      <div class="flex flex-col lg:flex-row gap-6">
-        <aside
-          id="filter-section"
-          aria-labelledby="mobile-filter-title"
-          class="fixed inset-0 z-60 hidden bg-black/50 lg:static lg:z-0 lg:block lg:w-80 lg:shrink-0 lg:bg-transparent"
-        >
-          <div
-            class="flex h-full w-full flex-col bg-white lg:sticky lg:top-[calc(var(--header-height,4rem)+1rem)] lg:max-h-[calc(100dvh-var(--header-height,4rem)-2rem)] lg:w-full lg:overflow-hidden lg:rounded-lg lg:border lg:border-gray-100 lg:shadow-sm"
-          >
-            <div
-              class="flex justify-between items-center lg:hidden p-4 border-b bg-white"
-            >
-              <h3 id="mobile-filter-title" class="font-semibold text-lg">
-                Filters
-              </h3>
-              <button
-                type="button"
-                id="mobile-filter-close"
-                aria-label="Close filters"
-                class="inline-flex h-11 w-11 items-center justify-center rounded-lg hover:bg-gray-100"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form id="filterForm" method="get" class="grow overflow-y-auto">
-              <input type="hidden" name="page" value="1" />
-              <!-- Hidden sortBy field to maintain sort state -->
-              <input type="hidden" name="sortBy" value={sortBy} />
-
-              <div class="p-4 lg:p-6">
-                <div class="relative mb-6">
-                  <Search
-                    className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
-                  />
-                  <label for="category-filter-search" class="sr-only">
-                    Search this category
-                  </label>
-                  <input
-                    id="category-filter-search"
-                    type="search"
-                    name="q"
-                    placeholder="Search this category…"
-                    value={queryState.query}
-                    class="w-full rounded-lg border-gray-300 py-2.5 pl-9 pr-4 text-sm focus:border-primary focus:ring-2 focus:ring-primary"
-                  />
-                </div>
-                <CategoryFilters
-                  client:load
-                  facets={facets}
-                  currentFilters={currentFilters}
-                  categorySlug={slug}
-                  priceRange={productsResponse.priceRange}
-                />
-              </div>
-            </form>
-          </div>
-        </aside>
-
-        <div class="flex-1 min-w-0">
-          <div
-            class="mb-6 hidden items-center justify-between gap-4 rounded-lg border border-gray-100 bg-white p-4 shadow-sm lg:flex"
-          >
-            <p class="text-sm font-medium text-gray-700">
-              Showing <span class="font-bold text-primary"
-                >{products.length}</span
-              > of{" "}
-              <span class="font-bold text-primary">{pagination.total}</span> products
-            </p>
-
-            <div class="flex items-center gap-3">
-              <label
-                for="sortByDesktop"
-                class="text-sm font-medium text-gray-700 whitespace-nowrap"
-              >
-                Sort by:
-              </label>
+            <label class="relative block">
+              <span class="sr-only">Sort products</span>
               <select
-                id="sortByDesktop"
+                id="sortByMobile"
                 name="sortBy"
                 data-catalog-sort
                 data-list-pathname={productListPathname}
                 data-current-filters={canonicalFilterState}
-                class="rounded-lg border-gray-300 text-sm focus:ring-2 focus:ring-primary focus:border-primary min-w-[140px]"
+                class="min-h-11 w-full rounded-lg border-gray-200 bg-white py-2.5 pl-3 pr-8 text-sm font-semibold text-gray-800 shadow-sm focus:border-primary focus:ring-2 focus:ring-primary"
               >
                 <option value="newest" selected={sortBy === "newest"}>
                   Latest
@@ -441,8 +344,120 @@ const collectionJsonLd =
                   Biggest discount
                 </option>
               </select>
-            </div>
+            </label>
           </div>
+        )
+      }
+
+      <div class="flex flex-col lg:flex-row gap-6">
+        {
+          showCatalogControls && (
+            <aside
+              id="filter-section"
+              aria-labelledby="mobile-filter-title"
+              class="fixed inset-0 z-60 hidden bg-black/50 lg:static lg:z-0 lg:block lg:w-80 lg:shrink-0 lg:bg-transparent"
+            >
+              <div class="flex h-full w-full flex-col bg-white lg:sticky lg:top-[calc(var(--header-height,4rem)+1rem)] lg:max-h-[calc(100dvh-var(--header-height,4rem)-2rem)] lg:w-full lg:overflow-hidden lg:rounded-lg lg:border lg:border-gray-100 lg:shadow-sm">
+                <div class="flex justify-between items-center lg:hidden p-4 border-b bg-white">
+                  <h3 id="mobile-filter-title" class="font-semibold text-lg">
+                    Filters
+                  </h3>
+                  <button
+                    type="button"
+                    id="mobile-filter-close"
+                    aria-label="Close filters"
+                    class="inline-flex h-11 w-11 items-center justify-center rounded-lg hover:bg-gray-100"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <form id="filterForm" method="get" class="grow overflow-y-auto">
+                  <input type="hidden" name="page" value="1" />
+                  <input type="hidden" name="sortBy" value={sortBy} />
+
+                  <div class="p-4 lg:p-6">
+                    <div class="relative mb-6">
+                      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                      <label for="category-filter-search" class="sr-only">
+                        Search this category
+                      </label>
+                      <input
+                        id="category-filter-search"
+                        type="search"
+                        name="q"
+                        placeholder="Search this category…"
+                        value={queryState.query}
+                        class="w-full rounded-lg border-gray-300 py-2.5 pl-9 pr-4 text-sm focus:border-primary focus:ring-2 focus:ring-primary"
+                      />
+                    </div>
+                    <CategoryFilters
+                      client:load
+                      facets={facets}
+                      currentFilters={currentFilters}
+                      categorySlug={slug}
+                      priceRange={productsResponse.priceRange}
+                    />
+                  </div>
+                </form>
+              </div>
+            </aside>
+          )
+        }
+
+        <div class="flex-1 min-w-0">
+          {
+            showCatalogControls && (
+              <div class="mb-6 hidden items-center justify-between gap-4 rounded-lg border border-gray-100 bg-white p-4 shadow-sm lg:flex">
+                <p class="text-sm font-medium text-gray-700">
+                  Showing{" "}
+                  <span class="font-bold text-primary">{products.length}</span>{" "}
+                  of{" "}
+                  <span class="font-bold text-primary">{pagination.total}</span>{" "}
+                  products
+                </p>
+
+                <div class="flex items-center gap-3">
+                  <label
+                    for="sortByDesktop"
+                    class="text-sm font-medium text-gray-700 whitespace-nowrap"
+                  >
+                    Sort by:
+                  </label>
+                  <select
+                    id="sortByDesktop"
+                    name="sortBy"
+                    data-catalog-sort
+                    data-list-pathname={productListPathname}
+                    data-current-filters={canonicalFilterState}
+                    class="rounded-lg border-gray-300 text-sm focus:ring-2 focus:ring-primary focus:border-primary min-w-[140px]"
+                  >
+                    <option value="newest" selected={sortBy === "newest"}>
+                      Latest
+                    </option>
+                    <option value="price-asc" selected={sortBy === "price-asc"}>
+                      Price: Low to High
+                    </option>
+                    <option
+                      value="price-desc"
+                      selected={sortBy === "price-desc"}
+                    >
+                      Price: High to Low
+                    </option>
+                    <option value="name-asc" selected={sortBy === "name-asc"}>
+                      Name: A to Z
+                    </option>
+                    <option value="name-desc" selected={sortBy === "name-desc"}>
+                      Name: Z to A
+                    </option>
+                    <option value="discount" selected={sortBy === "discount"}>
+                      Biggest discount
+                    </option>
+                  </select>
+                </div>
+              </div>
+            )
+          }
 
           <p class="mb-3 text-sm text-gray-600 lg:hidden">
             <span class="font-semibold text-gray-900">{pagination.total}</span>{
@@ -515,18 +530,20 @@ const collectionJsonLd =
       </div>
 
       {
-        category?.content && !hasListingQuery && (
-          <section
-            class="mx-auto mt-10 max-w-4xl border-t border-gray-200 pt-8 sm:mt-12 sm:pt-10"
-            aria-label={`${category.name} guide`}
-          >
-            <RichContent
-              content={category.content}
-              className="prose-sm sm:prose-base prose-headings:scroll-mt-24"
-              processShortcodes={false}
-            />
-          </section>
-        )
+        categoryContent &&
+          hasRenderableHtmlContent(categoryContent) &&
+          !hasListingQuery && (
+            <section
+              class="mx-auto mt-10 max-w-4xl border-t border-gray-200 pt-8 sm:mt-12 sm:pt-10"
+              aria-label={`${category.name} guide`}
+            >
+              <RichContent
+                content={categoryContent}
+                className="prose-sm sm:prose-base prose-headings:scroll-mt-24"
+                processShortcodes={false}
+              />
+            </section>
+          )
       }
     </div>
   </div>
