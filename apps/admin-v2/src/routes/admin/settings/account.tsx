@@ -51,9 +51,6 @@ function AccountSettingsPage() {
     <div className="mx-auto max-w-6xl">
       <div className="mb-4">
         <h1 className="text-xl font-semibold tracking-tight">Account</h1>
-        <p className="mt-0.5 text-sm text-muted-foreground">
-          Manage your identity, sign-in security, and store access.
-        </p>
       </div>
 
       <AccountSettings

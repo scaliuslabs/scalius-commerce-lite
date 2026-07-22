@@ -119,7 +119,7 @@ export function AccountSettings({
         >
           <div className="overflow-x-auto pb-1 lg:overflow-visible lg:pb-0">
             <div className="flex min-w-max gap-1 lg:min-w-0 lg:flex-col">
-              <p className="flex items-center px-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground lg:block lg:px-3 lg:pb-1 lg:pt-2 lg:text-[11px]">
+              <p className="hidden px-3 pb-1 pt-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground lg:block">
                 Personal
               </p>
               {personalSections.map(renderNavigationItem)}
@@ -130,7 +130,7 @@ export function AccountSettings({
                 />
               )}
               {storeSections.length > 0 && (
-                <p className="flex items-center px-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground lg:block lg:px-3 lg:pb-1 lg:pt-1 lg:text-[11px]">
+                <p className="hidden px-3 pb-1 pt-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground lg:block">
                   Store access
                 </p>
               )}
