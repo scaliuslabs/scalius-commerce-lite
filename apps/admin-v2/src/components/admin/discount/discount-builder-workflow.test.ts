@@ -95,9 +95,20 @@ describe("unified discount builder workflow", () => {
 
     expect(buttons.length).toBeGreaterThan(0);
     expect(buttons.every((button) => button.includes('type="button"'))).toBe(true);
-    expect(selector).toContain("loadRequestRef");
     expect(selector).toContain('role="alert"');
     expect(selector).toContain("could not be loaded.");
     expect(selector).toContain("collisionPadding={16}");
+    expect(selector).toContain('className="h-11 w-full justify-between sm:h-9"');
+    expect(selector).toMatch(/aria-label="Search (?:products|collections)"/);
+    expect(selector).toContain("min-h-11 cursor-pointer sm:min-h-8");
+    expect(selector).toContain("h-11 w-11");
+  });
+
+  it("uses the shared infinite-query collection picker instead of coupled page effects", () => {
+    expect(collectionSelector).toContain("useInfiniteQuery");
+    expect(collectionSelector).toContain("collectionPickerOptionsQueryOptions");
+    expect(collectionSelector).toContain("fetchNextPage");
+    expect(collectionSelector).not.toContain("currentPage");
+    expect(collectionSelector).not.toContain("searchTimeoutRef");
   });
 });
