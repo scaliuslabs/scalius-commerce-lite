@@ -270,15 +270,12 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
             <h3 className="text-sm font-semibold">Options and SKUs</h3>
             {dirty ? <Badge variant="outline" className="h-5 text-xs">Unsaved</Badge> : null}
           </div>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            Options are customer choices. Keep only the combinations you actually sell.
-          </p>
         </div>
         {productId ? (
           <Button
             type="button"
             size="sm"
-            className="h-8 text-xs"
+            className="h-11 text-xs md:h-8"
             disabled={!dirty || Boolean(matrixIssue) || mutation.isPending || productSaving}
             onClick={onSaveRequest}
           >
@@ -317,7 +314,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
               type="button"
               variant="ghost"
               size="sm"
-              className="h-7 px-1.5 text-sm text-muted-foreground"
+              className="h-11 px-2 text-sm text-muted-foreground md:h-7 md:px-1.5"
               onClick={() => stageOptions([...options, {
                 id: draftId("option"),
                 name: "",
@@ -337,7 +334,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
                 {option.name.trim() || `Option ${index + 1}`}
               </span>
             </React.Fragment>
-          )) : <span className="text-muted-foreground">Try Size, Color, Format, Shape, or Pack.</span>}
+          )) : <span className="text-muted-foreground">Size, Color, or another choice.</span>}
           {options.length ? (
             <>
               <span className="text-muted-foreground">=</span>
@@ -352,7 +349,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
             </>
           ) : null}
           {combinationsPending && validShape && combinationCount <= MAX_COMBINATIONS ? (
-            <Button type="button" size="sm" className="ml-auto h-7 px-2.5 text-xs" onClick={applyOptions}>
+            <Button type="button" size="sm" className="ml-auto h-11 px-2.5 text-xs md:h-7" onClick={applyOptions}>
               Update combinations
             </Button>
           ) : null}
@@ -379,7 +376,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
           committedByVariantId={committedByVariantId}
           printingDisabled={!productId || dirty}
         />
-      ) : !combinationsPending ? (
+      ) : options.length > 0 && !combinationsPending ? (
         <div className="rounded-md border border-dashed px-3 py-5 text-center text-xs text-muted-foreground">
           Add a value to every option to generate the SKU matrix.
         </div>
@@ -422,13 +419,13 @@ function OptionRow({ option, index, canMoveUp, canMoveDown, onMove, onChange, on
           onChange={(event) => onChange({ ...option, name: event.target.value })}
           placeholder={`Option ${index + 1} name`}
           aria-label={`Option ${index + 1} name`}
-          className="h-8 text-sm"
+          className="h-11 text-sm md:h-8"
         />
         <Select
           value={option.standardMapping}
           onValueChange={(value) => onChange({ ...option, standardMapping: value as ProductOptionStandardMapping })}
         >
-          <SelectTrigger aria-label={`Catalog mapping for ${option.name || `option ${index + 1}`}`} className="h-8 px-2 text-xs text-muted-foreground">
+          <SelectTrigger aria-label={`Catalog mapping for ${option.name || `option ${index + 1}`}`} className="h-11 px-2 text-xs text-muted-foreground md:h-8">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -440,14 +437,15 @@ function OptionRow({ option, index, canMoveUp, canMoveDown, onMove, onChange, on
           </SelectContent>
         </Select>
       </div>
-      <div className="flex min-h-8 min-w-0 flex-wrap content-center gap-1 rounded-md border px-1.5 py-0.5">
+      <div className="flex min-h-11 min-w-0 flex-wrap content-center gap-1 rounded-md border px-1.5 py-0.5 md:min-h-8">
         {option.values.map((value) => (
-          <span key={value.id} className="inline-flex h-6 items-center gap-1 rounded bg-muted px-1.5 text-xs">
+          <span key={value.id} className="inline-flex h-11 items-center gap-1 rounded bg-muted pl-2 text-xs md:h-6 md:px-1.5">
             {value.value}
             <button
               type="button"
               aria-label={`Remove ${value.value}`}
               onClick={() => onChange({ ...option, values: option.values.filter((item) => item.id !== value.id) })}
+              className="flex h-11 w-11 items-center justify-center rounded hover:bg-muted-foreground/10 md:h-auto md:w-auto"
             >
               <X className="h-3 w-3" />
             </button>
@@ -465,18 +463,18 @@ function OptionRow({ option, index, canMoveUp, canMoveDown, onMove, onChange, on
             }
           }}
           placeholder={option.values.length ? "Add value" : "Type values, press Enter"}
-          className="h-6 min-w-[130px] flex-1 bg-transparent px-1 text-sm outline-none"
+          className="h-11 min-w-[130px] flex-1 bg-transparent px-1 text-sm outline-none md:h-6"
           aria-label={`Add ${option.name || `option ${index + 1}`} value`}
         />
       </div>
       <div className="flex items-center justify-end gap-0.5">
-        <Button type="button" variant="ghost" size="icon" className="h-8 w-6 text-muted-foreground" disabled={!canMoveUp} onClick={() => onMove(-1)}>
+        <Button type="button" variant="ghost" size="icon" className="h-11 w-11 text-muted-foreground md:h-8 md:w-6" disabled={!canMoveUp} onClick={() => onMove(-1)}>
           <ArrowUp className="h-3.5 w-3.5" /><span className="sr-only">Move option up</span>
         </Button>
-        <Button type="button" variant="ghost" size="icon" className="h-8 w-6 text-muted-foreground" disabled={!canMoveDown} onClick={() => onMove(1)}>
+        <Button type="button" variant="ghost" size="icon" className="h-11 w-11 text-muted-foreground md:h-8 md:w-6" disabled={!canMoveDown} onClick={() => onMove(1)}>
           <ArrowDown className="h-3.5 w-3.5" /><span className="sr-only">Move option down</span>
         </Button>
-        <Button type="button" variant="ghost" size="icon" className="h-8 w-7 text-muted-foreground hover:text-destructive" onClick={onRemove}>
+        <Button type="button" variant="ghost" size="icon" className="h-11 w-11 text-muted-foreground hover:text-destructive md:h-8 md:w-7" onClick={onRemove}>
           <Trash2 className="h-3.5 w-3.5" /><span className="sr-only">Remove option</span>
         </Button>
       </div>
@@ -547,13 +545,13 @@ function VariantMatrix({ options, variants, images, expandedId, onExpandedChange
       <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-muted/25 px-3 py-2">
         <div>
           <span className="text-xs font-medium">SKU matrix</span>
-          <span className="ml-2 text-xs text-muted-foreground">{variants.length} active · changes save together</span>
+          <span className="ml-2 text-xs text-muted-foreground">{variants.length} active</span>
         </div>
         <div className="flex items-center gap-1.5">
           {missingCombinations.length > 0 ? (
             <Popover>
               <PopoverTrigger asChild>
-                <Button type="button" variant="outline" size="sm" className="h-8 px-2 text-xs">
+                <Button type="button" variant="outline" size="sm" className="h-11 px-2 text-xs md:h-8">
                   {missingCombinations.length} omitted
                 </Button>
               </PopoverTrigger>
@@ -563,7 +561,7 @@ function VariantMatrix({ options, variants, images, expandedId, onExpandedChange
                     <p className="text-xs font-medium">Omitted combinations</p>
                     <p className="text-xs text-muted-foreground">Not offered for sale. Saved omissions reactivate prior SKU inventory; edit it after restore.</p>
                   </div>
-                  <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={onRestoreAll}>Restore all</Button>
+                  <Button type="button" variant="ghost" size="sm" className="h-11 px-2 text-xs md:h-7" onClick={onRestoreAll}>Restore all</Button>
                 </div>
                 <div className="max-h-56 overflow-y-auto pt-1">
                   {missingCombinations.map((valueIds) => {
@@ -573,7 +571,7 @@ function VariantMatrix({ options, variants, images, expandedId, onExpandedChange
                         key={combinationKey(valueIds)}
                         type="button"
                         onClick={() => onRestoreCombination(valueIds)}
-                        className="flex w-full items-center justify-between gap-3 rounded px-2 py-1.5 text-left text-xs hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        className="flex min-h-11 w-full items-center justify-between gap-3 rounded px-2 py-1.5 text-left text-xs hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-0"
                       >
                         <span className="truncate">{label}</span>
                         <span className="shrink-0 text-muted-foreground">Restore</span>
@@ -585,16 +583,16 @@ function VariantMatrix({ options, variants, images, expandedId, onExpandedChange
             </Popover>
           ) : null}
           <label className="relative">
-            <Search className="pointer-events-none absolute left-2 top-2 h-3.5 w-3.5 text-muted-foreground" />
-            <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Find option or SKU" aria-label="Find option or SKU" className="h-8 w-44 pl-7 text-xs" />
+            <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Find option or SKU" aria-label="Find option or SKU" className="h-11 w-44 pl-7 text-xs md:h-8" />
           </label>
         </div>
       </div>
       {selected.size > 0 ? (
         <div className="flex flex-wrap items-center gap-1.5 border-b bg-primary/5 px-3 py-1.5 text-xs">
           <strong>{selected.size} selected</strong>
-          <Input type="number" min={0} value={bulkPrice} onChange={(event) => setBulkPrice(event.target.value)} placeholder="Price" aria-label="Bulk price" className="h-7 w-24 bg-background text-xs" />
-          <Input type="number" min={0} step={1} value={bulkStock} onChange={(event) => setBulkStock(event.target.value)} placeholder="Stock" aria-label="Bulk stock" className="h-7 w-24 bg-background text-xs" />
+          <Input type="number" min={0} value={bulkPrice} onChange={(event) => setBulkPrice(event.target.value)} placeholder="Price" aria-label="Bulk price" className="h-11 w-24 bg-background text-xs md:h-7" />
+          <Input type="number" min={0} step={1} value={bulkStock} onChange={(event) => setBulkStock(event.target.value)} placeholder="Stock" aria-label="Bulk stock" className="h-11 w-24 bg-background text-xs md:h-7" />
           <VariantImagePicker
             value={bulkImageId}
             images={images}
@@ -605,7 +603,7 @@ function VariantMatrix({ options, variants, images, expandedId, onExpandedChange
           <Button
             type="button"
             size="sm"
-            className="h-7 px-2 text-xs"
+            className="h-11 px-2 text-xs md:h-7"
             disabled={bulkPrice === "" && bulkStock === "" && bulkImageId === undefined}
             onClick={applyBulk}
           >
@@ -615,7 +613,7 @@ function VariantMatrix({ options, variants, images, expandedId, onExpandedChange
             type="button"
             variant="outline"
             size="sm"
-            className="h-7 px-2 text-xs text-destructive"
+            className="h-11 px-2 text-xs text-destructive md:h-7"
             disabled={selected.size >= variants.length}
             title={selected.size >= variants.length ? "At least one sellable combination is required" : "Omit selected combinations from this product"}
             onClick={() => {
@@ -627,18 +625,18 @@ function VariantMatrix({ options, variants, images, expandedId, onExpandedChange
           </Button>
           {selectedPersistedIds.length > 0 ? (
             printingDisabled ? (
-              <Button type="button" variant="outline" size="sm" className="h-7 px-2 text-xs" disabled title="Save product changes before printing labels">
+              <Button type="button" variant="outline" size="sm" className="h-11 px-2 text-xs md:h-7" disabled title="Save product changes before printing labels">
                 <Printer className="mr-1 h-3.5 w-3.5" /> Save before printing
               </Button>
             ) : (
-              <Button asChild variant="outline" size="sm" className="h-7 px-2 text-xs">
+              <Button asChild variant="outline" size="sm" className="h-11 px-2 text-xs md:h-7">
                 <Link to="/admin/inventory/labels" search={{ variants: selectedPersistedIds.join(",") }}>
                   <Printer className="mr-1 h-3.5 w-3.5" /> Print labels
                 </Link>
               </Button>
             )
           ) : null}
-          <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => setSelected(new Set())}>Clear selection</Button>
+          <Button type="button" variant="ghost" size="sm" className="h-11 px-2 text-xs md:h-7" onClick={() => setSelected(new Set())}>Clear selection</Button>
         </div>
       ) : null}
       <div className="hidden overflow-x-auto md:block">
@@ -730,8 +728,10 @@ function VariantMatrix({ options, variants, images, expandedId, onExpandedChange
       <div className="divide-y md:hidden">
         {visibleVariants.map((variant) => (
           <div key={variant.id} className="space-y-2 p-3">
-            <div className="flex items-center gap-2">
-              <input type="checkbox" checked={selected.has(variant.id)} onChange={(event) => toggleSelected(variant.id, event.target.checked)} aria-label={`Select ${variant.sku}`} className="h-3.5 w-3.5" />
+            <div className="grid grid-cols-[44px_44px_minmax(0,1fr)_44px] items-center gap-2 min-[360px]:grid-cols-[44px_44px_minmax(0,1fr)_44px_96px]">
+              <label className="flex h-11 w-11 shrink-0 items-center justify-center">
+                <input type="checkbox" checked={selected.has(variant.id)} onChange={(event) => toggleSelected(variant.id, event.target.checked)} aria-label={`Select ${variant.sku}`} className="h-4 w-4" />
+              </label>
               <VariantImagePicker value={variant.imageId} images={images} onChange={(imageId) => onChange(variant.id, { imageId: imageId ?? null })} />
               <strong className="min-w-0 flex-1 truncate text-xs">{variant.selectedOptionValueIds.map((id) => valueLabel.get(id)).join(" / ")}</strong>
               <button
@@ -739,28 +739,31 @@ function VariantMatrix({ options, variants, images, expandedId, onExpandedChange
                 aria-label={`${expandedId === variant.id ? "Hide" : "Show"} additional fields for ${variant.sku}`}
                 aria-expanded={expandedId === variant.id}
                 onClick={() => onExpandedChange(expandedId === variant.id ? null : variant.id)}
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded hover:bg-muted"
               >
                 <ChevronDown className={cn("h-4 w-4 transition-transform", expandedId !== variant.id && "-rotate-90")} />
               </button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                disabled={variants.length === 1}
-                title={variants.length === 1 ? "At least one sellable combination is required" : "Omit this combination"}
-                aria-label={`Omit ${variant.selectedOptionValueIds.map((id) => valueLabel.get(id)).join(" / ")}`}
-                onClick={() => onRemove(new Set([variant.id]))}
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
-              {variant.id.startsWith("var_") && !printingDisabled ? (
-                <Button asChild variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground" title="Print barcode label">
-                  <Link to="/admin/inventory/labels" search={{ variants: variant.id }} aria-label={`Print barcode label for ${variant.sku}`}>
-                    <Printer className="h-3.5 w-3.5" />
-                  </Link>
+              <div className="col-span-4 flex justify-end gap-2 min-[360px]:col-span-1">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-11 w-11 text-muted-foreground hover:text-destructive md:h-8 md:w-8"
+                  disabled={variants.length === 1}
+                  title={variants.length === 1 ? "At least one sellable combination is required" : "Omit this combination"}
+                  aria-label={`Omit ${variant.selectedOptionValueIds.map((id) => valueLabel.get(id)).join(" / ")}`}
+                  onClick={() => onRemove(new Set([variant.id]))}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
                 </Button>
-              ) : null}
+                {variant.id.startsWith("var_") && !printingDisabled ? (
+                  <Button asChild variant="ghost" size="icon" className="h-11 w-11 text-muted-foreground md:h-8 md:w-8" title="Print barcode label">
+                    <Link to="/admin/inventory/labels" search={{ variants: variant.id }} aria-label={`Print barcode label for ${variant.sku}`}>
+                      <Printer className="h-3.5 w-3.5" />
+                    </Link>
+                  </Button>
+                ) : null}
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-1.5">
               <label className="space-y-1 text-xs text-muted-foreground">SKU<CompactInput value={variant.sku} onChange={(sku) => onChange(variant.id, { sku })} ariaLabel="SKU" /></label>
@@ -784,9 +787,9 @@ function VariantMatrix({ options, variants, images, expandedId, onExpandedChange
           <span className="hidden sm:inline">Zero stock is valid and appears sold out</span>
           {pageCount > 1 ? (
             <>
-              <Button type="button" variant="outline" size="sm" className="h-7 px-2 text-xs" disabled={safePage === 0} onClick={() => setPage((value) => Math.max(0, value - 1))}>Previous</Button>
+              <Button type="button" variant="outline" size="sm" className="h-11 px-2 text-xs md:h-7" disabled={safePage === 0} onClick={() => setPage((value) => Math.max(0, value - 1))}>Previous</Button>
               <span>{safePage + 1}/{pageCount}</span>
-              <Button type="button" variant="outline" size="sm" className="h-7 px-2 text-xs" disabled={safePage >= pageCount - 1} onClick={() => setPage((value) => Math.min(pageCount - 1, value + 1))}>Next</Button>
+              <Button type="button" variant="outline" size="sm" className="h-11 px-2 text-xs md:h-7" disabled={safePage >= pageCount - 1} onClick={() => setPage((value) => Math.min(pageCount - 1, value + 1))}>Next</Button>
             </>
           ) : null}
         </div>
@@ -796,7 +799,7 @@ function VariantMatrix({ options, variants, images, expandedId, onExpandedChange
 }
 
 function CompactInput({ value, onChange, ariaLabel }: { value: string; onChange: (value: string) => void; ariaLabel: string }) {
-  return <Input value={value} onChange={(event) => onChange(event.target.value)} aria-label={ariaLabel} className="h-8 px-2 text-sm" />;
+  return <Input value={value} onChange={(event) => onChange(event.target.value)} aria-label={ariaLabel} className="h-11 px-2 text-sm md:h-8" />;
 }
 
 function NumberInput({ value, onChange, ariaLabel, integer = false, className }: { value: number; onChange: (value: number) => void; ariaLabel: string; integer?: boolean; className?: string }) {
@@ -812,7 +815,7 @@ function NumberInput({ value, onChange, ariaLabel, integer = false, className }:
     setDraft(String(next));
     onChange(next);
   };
-  return <Input type="number" min={0} step={integer ? 1 : "any"} value={draft} onChange={(event) => setDraft(event.target.value)} onBlur={commit} aria-label={ariaLabel} className={cn("h-8 px-2 text-sm", className)} />;
+  return <Input type="number" min={0} step={integer ? 1 : "any"} value={draft} onChange={(event) => setDraft(event.target.value)} onBlur={commit} aria-label={ariaLabel} className={cn("h-11 px-2 text-sm md:h-8", className)} />;
 }
 
 function InventoryQuantityInput({ value, committed, onChange }: {
@@ -828,14 +831,14 @@ function InventoryQuantityInput({ value, committed, onChange }: {
         integer
         onChange={onChange}
         ariaLabel="On-hand stock"
-        className={committed > 0 ? "pr-8" : undefined}
+        className={committed > 0 ? "pr-12 md:pr-8" : undefined}
       />
       {committed > 0 ? (
         <Tooltip>
           <TooltipTrigger asChild>
             <button
               type="button"
-              className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="absolute right-0 top-0 flex h-11 w-11 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:right-1 md:top-1 md:h-6 md:w-6"
               aria-label={`${available} available to sell; ${committed} committed from ${value} on hand`}
             >
               <Info className="h-3.5 w-3.5" />
@@ -868,7 +871,7 @@ function VariantImagePicker({ value, images, onChange, label = "Choose SKU image
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button type="button" className="relative flex h-8 w-10 items-center justify-center overflow-hidden rounded border bg-background" aria-label={triggerLabel}>
+        <button type="button" className="relative flex h-11 w-11 items-center justify-center overflow-hidden rounded border bg-background md:h-8 md:w-10" aria-label={triggerLabel}>
           {selected
             ? <img
                 src={getOptimizedImageUrl(selected.url, { width: 80, height: 80, quality: 75, fit: "contain" })}
@@ -892,7 +895,7 @@ function VariantImagePicker({ value, images, onChange, label = "Choose SKU image
           <button
             type="button"
             onClick={() => onChange(undefined)}
-            className={cn("mb-1 flex w-full items-center gap-2 rounded p-1.5 text-left text-xs hover:bg-muted", value === undefined && "bg-muted")}
+            className={cn("mb-1 flex min-h-11 w-full items-center gap-2 rounded p-1.5 text-left text-xs hover:bg-muted", value === undefined && "bg-muted")}
           >
             <span className="flex h-9 w-9 items-center justify-center rounded border"><ImageIcon className="h-4 w-4" /></span>
             No image change
@@ -902,7 +905,7 @@ function VariantImagePicker({ value, images, onChange, label = "Choose SKU image
           type="button"
           onClick={() => onChange(null)}
           aria-label="Use the automatic product image"
-          className={cn("mb-1 flex w-full items-center gap-2 rounded p-1.5 text-left text-xs hover:bg-muted", value === null && "bg-muted")}
+          className={cn("mb-1 flex min-h-11 w-full items-center gap-2 rounded p-1.5 text-left text-xs hover:bg-muted", value === null && "bg-muted")}
         >
           <span className="relative flex h-9 w-9 items-center justify-center overflow-hidden rounded border">
             <ImageIcon className="h-4 w-4" />
@@ -970,7 +973,7 @@ function DiscountInput({ variant, onChange }: { variant: DraftVariant; onChange:
           }
         }}
       >
-        <SelectTrigger aria-label={`Discount type for ${variant.sku}`} className="h-8 min-w-[104px] flex-1 px-2 text-xs">
+        <SelectTrigger aria-label={`Discount type for ${variant.sku}`} className="h-11 min-w-[104px] flex-1 px-2 text-xs md:h-8">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -989,7 +992,7 @@ function DiscountInput({ variant, onChange }: { variant: DraftVariant; onChange:
           onChange={(event) => onChange(mode === "flat"
             ? { discountAmount: Math.max(0, event.target.valueAsNumber || 0) }
             : { discountPercentage: Math.min(100, Math.max(0, event.target.valueAsNumber || 0)) })}
-          className="h-8 w-20 px-2 text-sm"
+          className="h-11 w-20 px-2 text-sm md:h-8"
         />
       ) : null}
     </div>
@@ -1003,7 +1006,7 @@ function AdvancedSkuFields({ variant, onChange }: { variant: DraftVariant; onCha
       <label className="space-y-1 text-xs text-muted-foreground">
         Barcode type
         <Select value={variant.barcodeType ?? "none"} onValueChange={(value) => onChange({ barcodeType: value === "none" ? null : value as DraftVariant["barcodeType"], barcode: value === "none" ? null : variant.barcode })}>
-          <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="h-11 text-xs md:h-8"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="none">{isUnsavedSku ? "Automatic" : "No barcode"}</SelectItem>
             <SelectItem value="ean13">EAN-13</SelectItem>
@@ -1025,7 +1028,7 @@ function AdvancedSkuFields({ variant, onChange }: { variant: DraftVariant; onCha
             : "Enter barcode"}
           aria-label={`Barcode for ${variant.sku}`}
           onChange={(event) => onChange({ barcode: event.target.value || null })}
-          className="h-8 text-sm disabled:opacity-100"
+          className="h-11 text-sm disabled:opacity-100 md:h-8"
         />
         {!variant.barcodeType && isUnsavedSku ? (
           <span className="block text-xs text-muted-foreground">A unique internal Code 128 barcode will be generated automatically on save.</span>
@@ -1041,11 +1044,11 @@ function AdvancedSkuFields({ variant, onChange }: { variant: DraftVariant; onCha
           aria-label={`Weight in grams for ${variant.sku}`}
           placeholder="e.g. 500"
           onChange={(event) => onChange({ weight: event.target.value === "" ? null : Math.max(0, event.target.valueAsNumber || 0) })}
-          className="h-8 text-sm"
+          className="h-11 text-sm md:h-8"
         />
       </label>
-      <label className="flex h-8 items-center gap-2 text-xs">
-        <Switch checked={variant.trackInventory} onCheckedChange={(trackInventory) => onChange({ trackInventory })} />
+      <label className="flex min-h-11 items-center gap-2 text-xs md:min-h-8">
+        <Switch checked={variant.trackInventory} onCheckedChange={(trackInventory) => onChange({ trackInventory })} className="relative before:absolute before:-inset-x-1 before:-inset-y-3 before:content-['']" />
         Track stock
       </label>
     </div>

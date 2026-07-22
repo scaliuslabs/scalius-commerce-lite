@@ -60,7 +60,11 @@ export const StatusCard = memo(function StatusCard({ form, isEdit, storefrontUrl
                   </FormDescription>
                 </div>
                 <FormControl>
-                  <Switch checked={field.value} onCheckedChange={field.onChange} />
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                    className="relative before:absolute before:-inset-x-1 before:-inset-y-3 before:content-['']"
+                  />
                 </FormControl>
               </FormItem>
             )}
@@ -78,7 +82,11 @@ export const StatusCard = memo(function StatusCard({ form, isEdit, storefrontUrl
                   </FormDescription>
                 </div>
                 <FormControl>
-                  <Switch checked={field.value} onCheckedChange={field.onChange} />
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                    className="relative before:absolute before:-inset-x-1 before:-inset-y-3 before:content-['']"
+                  />
                 </FormControl>
               </FormItem>
             )}
@@ -93,7 +101,7 @@ export const StatusCard = memo(function StatusCard({ form, isEdit, storefrontUrl
               <FormLabel className="text-xs font-medium">Condition</FormLabel>
               <Select value={field.value} onValueChange={field.onChange}>
                 <FormControl>
-                  <SelectTrigger className="h-9">
+                  <SelectTrigger className="min-h-11 md:min-h-9">
                     <SelectValue placeholder="Select condition" />
                   </SelectTrigger>
                 </FormControl>
@@ -117,7 +125,7 @@ export const StatusCard = memo(function StatusCard({ form, isEdit, storefrontUrl
             type="button"
             variant="outline"
             size="sm"
-            className="h-8 w-full text-xs"
+            className="min-h-11 w-full text-xs md:h-8 md:min-h-8"
             onClick={() => window.open(storefrontUrl, "_blank")}
           >
             <ExternalLink className="h-3 w-3 mr-1.5" />

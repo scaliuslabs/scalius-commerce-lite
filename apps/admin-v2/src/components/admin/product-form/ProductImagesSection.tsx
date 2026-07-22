@@ -101,11 +101,11 @@ export const ProductImagesSection = memo(function ProductImagesSection({
 
   return (
     <Card>
-      <CardHeader className="px-4 py-3">
+      <CardHeader className="px-4 py-0 md:py-3">
         <button
           type="button"
           onClick={() => setIsOpen((open) => !open)}
-          className="flex w-full items-center gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex min-h-11 w-full items-center gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-0"
           aria-expanded={isOpen}
           aria-controls="product-media-content"
         >
@@ -122,7 +122,7 @@ export const ProductImagesSection = memo(function ProductImagesSection({
               <FormItem>
                 <div className="space-y-2.5">
                   {field.value.length > 0 ? (
-                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6">
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6">
                       {(showAll ? field.value : field.value.slice(0, 12)).map((item, index) => (
                         <ProductMediaTile
                           key={item.id}
@@ -155,7 +155,7 @@ export const ProductImagesSection = memo(function ProductImagesSection({
                     </div>
                   ) : null}
                   {field.value.length > 12 ? (
-                    <Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={() => setShowAll((current) => !current)}>
+                    <Button type="button" variant="ghost" size="sm" className="min-h-11 px-2 text-xs md:h-8 md:min-h-8" onClick={() => setShowAll((current) => !current)}>
                       {showAll ? "Show first 12" : `Manage all ${field.value.length} media items`}
                     </Button>
                   ) : null}
@@ -173,7 +173,7 @@ export const ProductImagesSection = memo(function ProductImagesSection({
                       capability="both"
                       unavailableFileIds={attachedMediaIds}
                       trigger={(
-                        <Button type="button" variant="outline" size="sm" className="h-8 px-3 text-xs">
+                        <Button type="button" variant="outline" size="sm" className="min-h-11 px-3 text-xs md:h-8 md:min-h-8">
                           {field.value.length ? <Plus className="mr-1.5 h-3.5 w-3.5" /> : <ImagePlus className="mr-1.5 h-3.5 w-3.5" />}
                           {field.value.length ? "Add media" : "Choose media"}
                         </Button>
@@ -182,14 +182,9 @@ export const ProductImagesSection = memo(function ProductImagesSection({
                       onSelectMultiple={(files) => field.onChange(addMedia(field.value, files))}
                     />
                     <span className="text-xs text-muted-foreground">
-                      Images may be assigned to SKUs. Videos remain gallery-only.
+                      Images can be assigned to SKUs; videos stay in the gallery.
                     </span>
                   </div>
-                  {field.value.length === 0 ? (
-                    <div className="rounded-md border border-dashed px-3 py-2.5 text-xs text-muted-foreground">
-                      Add images or videos from Media. Image-only surfaces use the featured image, a featured video poster, or the next usable image.
-                    </div>
-                  ) : null}
                 </div>
                 <FormMessage />
               </FormItem>
@@ -221,7 +216,7 @@ function ProductMediaTile({
   const previewUrl = item.kind === "image" ? item.url : item.posterUrl;
   const duration = durationLabel(item.durationMs);
   return (
-    <article className={cn("group overflow-hidden rounded-md border bg-background", item.status === "trashed" && "border-amber-300")}>
+    <article className={cn("group grid grid-cols-[88px_minmax(0,1fr)] overflow-hidden rounded-md border bg-background sm:block", item.status === "trashed" && "border-amber-300")}>
       <div className="relative aspect-square overflow-hidden bg-muted/30">
         {previewUrl ? (
           <img
@@ -256,7 +251,7 @@ function ProductMediaTile({
         ) : null}
         {duration ? <span className="absolute bottom-1.5 right-1.5 rounded bg-black/70 px-1.5 py-0.5 text-xs text-white">{duration}</span> : null}
       </div>
-      <div className="space-y-1 p-1.5">
+      <div className="min-w-0 space-y-1 p-1.5">
         <span className={cn("block truncate text-xs", item.kind === "video" && !item.posterUrl ? "text-amber-700 dark:text-amber-400" : "text-muted-foreground")}>
             {item.status === "trashed"
               ? "In trash · still attached"
@@ -264,23 +259,23 @@ function ProductMediaTile({
                 ? item.posterUrl ? "Poster ready" : "No poster · image surfaces fall back"
                 : `${item.width ?? "?"} × ${item.height ?? "?"}`}
         </span>
-        <div className="flex items-center justify-between gap-0.5">
+        <div className="flex flex-wrap items-center justify-between gap-0.5">
           <div className="flex items-center">
-            <Button type="button" variant="ghost" size="icon" className="h-8 w-8" disabled={index === 0} onClick={() => onMove(-1)} aria-label={`Move ${item.kind} earlier`}>
+            <Button type="button" variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" disabled={index === 0} onClick={() => onMove(-1)} aria-label={`Move ${item.kind} earlier`}>
               <ArrowLeft className="h-3.5 w-3.5" />
             </Button>
-            <Button type="button" variant="ghost" size="icon" className="h-8 w-8" disabled={index === count - 1} onClick={() => onMove(1)} aria-label={`Move ${item.kind} later`}>
+            <Button type="button" variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" disabled={index === count - 1} onClick={() => onMove(1)} aria-label={`Move ${item.kind} later`}>
               <ArrowRight className="h-3.5 w-3.5" />
             </Button>
           </div>
           <div className="flex items-center">
-            <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={onEdit} aria-label={`Edit ${item.kind} details`}>
+            <Button type="button" variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" onClick={onEdit} aria-label={`Edit ${item.kind} details`}>
               <Settings2 className="h-3.5 w-3.5" />
             </Button>
-            <Button type="button" variant="ghost" size="icon" className="h-8 w-8" disabled={item.isPrimary} onClick={onSetFeatured} aria-label={item.isPrimary ? "Featured media" : `Set ${item.kind} as featured`}>
+            <Button type="button" variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" disabled={item.isPrimary} onClick={onSetFeatured} aria-label={item.isPrimary ? "Featured media" : `Set ${item.kind} as featured`}>
               <Star className={cn("h-3.5 w-3.5", item.isPrimary && "fill-current")} />
             </Button>
-            <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={onRemove} aria-label={`Remove ${item.kind} from product`}>
+            <Button type="button" variant="ghost" size="icon" className="h-11 w-11 text-muted-foreground hover:text-destructive sm:h-8 sm:w-8" onClick={onRemove} aria-label={`Remove ${item.kind} from product`}>
               <Trash2 className="h-3.5 w-3.5" />
             </Button>
           </div>
@@ -305,7 +300,7 @@ function MediaDetailsEditor({ item, onAltTextChange, onClose }: {
             Leave blank to use the Media description: {item.effectiveAltText || "No description saved"}
           </p>
         </div>
-        <Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={onClose}>Done</Button>
+        <Button type="button" variant="ghost" size="sm" className="min-h-11 px-2 text-xs md:h-8 md:min-h-8" onClick={onClose}>Done</Button>
       </div>
       <Input
         value={item.altText}
@@ -313,7 +308,7 @@ function MediaDetailsEditor({ item, onAltTextChange, onClose }: {
         maxLength={500}
         aria-label={`Product-specific description for ${item.kind}`}
         placeholder="Use Media description"
-        className="mt-2 h-8 px-2 text-xs"
+        className="mt-2 min-h-11 px-2 text-xs md:h-8 md:min-h-8"
       />
     </div>
   );

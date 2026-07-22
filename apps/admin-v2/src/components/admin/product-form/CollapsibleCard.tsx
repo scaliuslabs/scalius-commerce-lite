@@ -25,10 +25,10 @@ export function CollapsibleCard({
 
   return (
     <Card className={className}>
-      <CardHeader className="px-4 py-3">
+      <CardHeader className="px-4 py-0 md:py-3">
         <button
           type="button"
-          className="group flex w-full items-center justify-between text-left"
+          className="group flex min-h-11 w-full items-center justify-between text-left md:min-h-0"
           aria-expanded={isOpen}
           onClick={() => setIsOpen(!isOpen)}
         >
