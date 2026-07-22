@@ -22,11 +22,20 @@ const tableSource = readFileSync(
   resolve(import.meta.dirname, "TiptapTablePopover.tsx"),
   "utf8",
 );
+const imageViewSource = readFileSync(
+  resolve(import.meta.dirname, "../tiptap-extensions/resizable-image-view.tsx"),
+  "utf8",
+);
+const imageExtensionSource = readFileSync(
+  resolve(import.meta.dirname, "../tiptap-extensions/resizable-image.tsx"),
+  "utf8",
+);
 
 describe("rich text editor mobile boundaries", () => {
   it("names the editable canvas before and after the deferred editor mounts", () => {
     expect(deferredSource).toContain('ariaLabel = "Rich text content"');
-    expect(deferredSource).toContain("aria-label={ariaLabel}");
+    expect(deferredSource).toContain('aria-label={`Loading ${ariaLabel}`}');
+    expect(deferredSource).not.toContain('role="textbox"');
     expect(editorSource).toContain('role: "textbox"');
     expect(editorSource).toContain('"aria-label": ariaLabel');
     expect(editorSource).toContain('"aria-multiline": "true"');
@@ -44,9 +53,6 @@ describe("rich text editor mobile boundaries", () => {
       '<div className="w-full min-w-0">',
     );
     expect(deferredSource).toContain(
-      '"w-full min-w-0 overflow-hidden rounded-md border bg-background"',
-    );
-    expect(deferredSource).toContain(
       '"w-full min-w-0 overflow-hidden rounded-md border bg-background transition-colors',
     );
     expect(editorSource).toContain(
@@ -58,13 +64,17 @@ describe("rich text editor mobile boundaries", () => {
   });
 
   it("keeps image sizing usable without a precision pointer", () => {
-    const imageViewSource = readFileSync(
-      resolve(import.meta.dirname, "../tiptap-extensions/resizable-image-view.tsx"),
-      "utf8",
-    );
     expect(imageViewSource).toContain('aria-label="Image size"');
-    expect(imageViewSource).toContain('<option value="25%">25%</option>');
-    expect(imageViewSource).toContain('<option value="100%">Full width</option>');
+    expect(imageViewSource).toContain('<SelectItem value="25%">25%</SelectItem>');
+    expect(imageViewSource).toContain(
+      '<SelectItem value="100%">Full width</SelectItem>',
+    );
+    expect(imageViewSource).toContain(
+      '<SelectItem value="custom">Custom…</SelectItem>',
+    );
+    expect(imageViewSource).toContain(
+      'aria-label="Custom image width percentage"',
+    );
     expect(imageViewSource).toContain("onPointerDown={handleResizeStart}");
     expect(imageViewSource).toContain('aria-label="Remove image"');
     expect(imageViewSource).toContain(
@@ -76,8 +86,16 @@ describe("rich text editor mobile boundaries", () => {
     expect(imageViewSource).toContain(
       '"flex h-11 w-11 items-center justify-center rounded transition-colors hover:bg-accent sm:h-8 sm:w-8"',
     );
-    expect(imageViewSource).toContain(
-      'className="h-11 rounded-md border border-input bg-background px-2 text-xs sm:h-8"',
+    expect(imageViewSource).toContain('className="z-[10002]"');
+    expect(imageViewSource).toContain("inline-flex w-fit max-w-full");
+    expect(imageExtensionSource).toContain(
+      'event.target.closest("[data-image-controls]")',
+    );
+  });
+
+  it("centers fullscreen formatting tools while retaining mobile scrolling", () => {
+    expect(menuSource).toContain(
+      'isFullscreen ? "mx-auto w-fit max-w-full" : "flex-1"',
     );
   });
 
@@ -97,5 +115,16 @@ describe("rich text editor mobile boundaries", () => {
     expect(editorSource).toContain('className="min-h-11 gap-1.5 sm:min-h-9"');
     expect(editorSource).toContain('ariaLabel={`${ariaLabel} formatting`}');
     expect(menuSource).not.toContain("Minimize2");
+  });
+
+  it("keeps typing isolated from transaction-wide React rerenders", () => {
+    expect(editorSource).toContain("shouldRerenderOnTransaction: false");
+    expect(menuSource).toContain("useEditorState");
+    expect(tableSource).toContain("useEditorState");
+  });
+
+  it("recovers the deferred editor from StrictMode replay and chunk-load failure", () => {
+    expect(deferredSource).toContain("isAliveRef.current = true");
+    expect(deferredSource).toContain("tiptapEditorModulePromise = null");
   });
 });

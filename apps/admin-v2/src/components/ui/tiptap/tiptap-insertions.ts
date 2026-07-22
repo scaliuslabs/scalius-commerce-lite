@@ -1,4 +1,5 @@
 import type { Editor } from "@tiptap/core";
+import { TextSelection } from "@tiptap/pm/state";
 
 interface RichTextImageAttributes {
   src: string;
@@ -15,7 +16,10 @@ interface RichTextVideoAttributes {
 }
 
 function blockInsertionChain(editor: Editor) {
-  const insertionPosition = editor.state.selection.to;
+  const insertionPosition = TextSelection.near(
+    editor.state.doc.resolve(editor.state.selection.to),
+    1,
+  ).from;
   return editor.chain().focus().setTextSelection(insertionPosition);
 }
 

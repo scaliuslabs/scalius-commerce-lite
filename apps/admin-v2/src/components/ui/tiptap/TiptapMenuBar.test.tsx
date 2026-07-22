@@ -7,6 +7,31 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { TiptapMenuBar } from "./TiptapMenuBar";
 
+vi.mock("@tiptap/react", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@tiptap/react")>();
+  return {
+    ...actual,
+    useEditorState: ({
+      editor,
+      selector,
+    }: {
+      editor: Editor;
+      selector: (snapshot: { editor: Editor; transactionNumber: number }) => unknown;
+    }) => selector({ editor, transactionNumber: 0 }),
+  };
+});
+
+vi.mock("@tiptap/pm/state", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@tiptap/pm/state")>();
+  return {
+    ...actual,
+    TextSelection: {
+      ...actual.TextSelection,
+      near: (position: { pos: number }) => ({ from: position.pos }),
+    },
+  };
+});
+
 vi.mock("~/components/admin/media-manager", async () => {
   const React = await import("react");
 
@@ -75,10 +100,17 @@ const makeEditor = () => {
   return {
     editor: {
       chain: vi.fn(() => chain),
-      can: vi.fn(() => ({ undo: () => true, redo: () => true })),
+      can: vi.fn(() => ({
+        undo: () => true,
+        redo: () => true,
+        toggleBlockquote: () => true,
+      })),
       isActive: vi.fn(() => false),
       getAttributes: vi.fn(() => ({})),
-      state: { selection: { empty: false, to: 1 } },
+      state: {
+        doc: { resolve: (position: number) => ({ pos: position }) },
+        selection: { empty: false, to: 1 },
+      },
     } as unknown as Editor,
     setImage,
     setVideoEmbed,

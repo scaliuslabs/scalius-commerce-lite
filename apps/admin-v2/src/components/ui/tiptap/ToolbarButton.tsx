@@ -28,6 +28,7 @@ export function ToolbarButton({
           variant="ghost"
           size="icon"
           onClick={onClick}
+          onPointerDown={(event) => event.preventDefault()}
           onMouseDown={(event) => event.preventDefault()}
           disabled={disabled}
           aria-label={tooltip}

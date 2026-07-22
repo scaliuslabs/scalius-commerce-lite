@@ -1,5 +1,6 @@
 import { useId, useState } from "react";
 import type { Editor } from "@tiptap/react";
+import { useEditorState } from "@tiptap/react";
 import { cn } from "@scalius/shared/utils";
 import {
   Table as TableIcon,
@@ -60,7 +61,25 @@ export function TiptapTablePopover({
     Number.isInteger(cols) &&
     cols >= 1 &&
     cols <= 10;
-  const isInTable = editor.isActive("table");
+  const tableState = useEditorState({
+    editor,
+    selector: ({ editor: currentEditor }) => ({
+      isInTable: currentEditor.isActive("table"),
+      canAddColumnBefore: currentEditor.can().addColumnBefore(),
+      canAddColumnAfter: currentEditor.can().addColumnAfter(),
+      canDeleteColumn: currentEditor.can().deleteColumn(),
+      canAddRowBefore: currentEditor.can().addRowBefore(),
+      canAddRowAfter: currentEditor.can().addRowAfter(),
+      canDeleteRow: currentEditor.can().deleteRow(),
+      canDeleteTable: currentEditor.can().deleteTable(),
+      canMergeCells: currentEditor.can().mergeCells(),
+      canSplitCell: currentEditor.can().splitCell(),
+      canToggleHeaderColumn: currentEditor.can().toggleHeaderColumn(),
+      canToggleHeaderRow: currentEditor.can().toggleHeaderRow(),
+      canToggleHeaderCell: currentEditor.can().toggleHeaderCell(),
+    }),
+  });
+  const isInTable = tableState.isInTable;
 
   const addTable = () => {
     if (!canInsert) return;
@@ -173,7 +192,7 @@ export function TiptapTablePopover({
                 variant="ghost"
                 size="sm"
                 onClick={() => editor.chain().focus().addColumnBefore().run()}
-                disabled={!editor.can().addColumnBefore()}
+                disabled={!tableState.canAddColumnBefore}
                 className={MOBILE_ACTION_CLASS}
               >
                 <ChevronsLeftRight className="h-3.5 w-3.5 rotate-90" /> Add column before
@@ -183,7 +202,7 @@ export function TiptapTablePopover({
                 variant="ghost"
                 size="sm"
                 onClick={() => editor.chain().focus().addColumnAfter().run()}
-                disabled={!editor.can().addColumnAfter()}
+                disabled={!tableState.canAddColumnAfter}
                 className={MOBILE_ACTION_CLASS}
               >
                 <ChevronsLeftRight className="h-3.5 w-3.5 rotate-90" /> Add column after
@@ -193,7 +212,7 @@ export function TiptapTablePopover({
                 variant="ghost"
                 size="sm"
                 onClick={() => editor.chain().focus().deleteColumn().run()}
-                disabled={!editor.can().deleteColumn()}
+                disabled={!tableState.canDeleteColumn}
                 className={MOBILE_ACTION_CLASS}
               >
                 <Columns className="h-3.5 w-3.5" /> Delete column
@@ -203,7 +222,7 @@ export function TiptapTablePopover({
                 variant="ghost"
                 size="sm"
                 onClick={() => editor.chain().focus().addRowBefore().run()}
-                disabled={!editor.can().addRowBefore()}
+                disabled={!tableState.canAddRowBefore}
                 className={MOBILE_ACTION_CLASS}
               >
                 <Rows className="h-3.5 w-3.5" /> Add row before
@@ -213,7 +232,7 @@ export function TiptapTablePopover({
                 variant="ghost"
                 size="sm"
                 onClick={() => editor.chain().focus().addRowAfter().run()}
-                disabled={!editor.can().addRowAfter()}
+                disabled={!tableState.canAddRowAfter}
                 className={MOBILE_ACTION_CLASS}
               >
                 <Rows className="h-3.5 w-3.5" /> Add row after
@@ -223,7 +242,7 @@ export function TiptapTablePopover({
                 variant="ghost"
                 size="sm"
                 onClick={() => editor.chain().focus().deleteRow().run()}
-                disabled={!editor.can().deleteRow()}
+                disabled={!tableState.canDeleteRow}
                 className={MOBILE_ACTION_CLASS}
               >
                 <Rows className="h-3.5 w-3.5" /> Delete row
@@ -233,7 +252,7 @@ export function TiptapTablePopover({
                 variant="ghost"
                 size="sm"
                 onClick={() => editor.chain().focus().deleteTable().run()}
-                disabled={!editor.can().deleteTable()}
+                disabled={!tableState.canDeleteTable}
                 className={MOBILE_ACTION_CLASS}
               >
                 <Eraser className="h-3.5 w-3.5" /> Delete table
@@ -243,7 +262,7 @@ export function TiptapTablePopover({
                 variant="ghost"
                 size="sm"
                 onClick={() => editor.chain().focus().mergeCells().run()}
-                disabled={!editor.can().mergeCells()}
+                disabled={!tableState.canMergeCells}
                 className={MOBILE_ACTION_CLASS}
               >
                 <Merge className="h-3.5 w-3.5" /> Merge cells
@@ -253,7 +272,7 @@ export function TiptapTablePopover({
                 variant="ghost"
                 size="sm"
                 onClick={() => editor.chain().focus().splitCell().run()}
-                disabled={!editor.can().splitCell()}
+                disabled={!tableState.canSplitCell}
                 className={MOBILE_ACTION_CLASS}
               >
                 <Split className="h-3.5 w-3.5" /> Split cell
@@ -263,7 +282,7 @@ export function TiptapTablePopover({
                 variant="ghost"
                 size="sm"
                 onClick={() => editor.chain().focus().toggleHeaderColumn().run()}
-                disabled={!editor.can().toggleHeaderColumn()}
+                disabled={!tableState.canToggleHeaderColumn}
                 className={MOBILE_ACTION_CLASS}
               >
                 <Columns className="h-3.5 w-3.5" /> Header column
@@ -273,7 +292,7 @@ export function TiptapTablePopover({
                 variant="ghost"
                 size="sm"
                 onClick={() => editor.chain().focus().toggleHeaderRow().run()}
-                disabled={!editor.can().toggleHeaderRow()}
+                disabled={!tableState.canToggleHeaderRow}
                 className={MOBILE_ACTION_CLASS}
               >
                 <Rows className="h-3.5 w-3.5" /> Header row
@@ -283,7 +302,7 @@ export function TiptapTablePopover({
                 variant="ghost"
                 size="sm"
                 onClick={() => editor.chain().focus().toggleHeaderCell().run()}
-                disabled={!editor.can().toggleHeaderCell()}
+                disabled={!tableState.canToggleHeaderCell}
                 className={MOBILE_ACTION_CLASS}
               >
                 <TableIcon className="h-3.5 w-3.5" /> Header cell
