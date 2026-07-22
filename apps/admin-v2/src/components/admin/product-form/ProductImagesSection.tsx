@@ -23,6 +23,8 @@ import { cn } from "@scalius/shared/utils";
 import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
 import type { ProductFormValues, ProductMediaItem } from "./types";
 
+const EMPTY_PRODUCT_MEDIA: ProductMediaItem[] = [];
+
 function associationId(): string {
   return `pmed_${crypto.randomUUID().replaceAll("-", "")}`;
 }
@@ -66,17 +68,6 @@ function normalizeOrder(items: ProductMediaItem[]): ProductMediaItem[] {
   return items.map((item, sortOrder) => ({ ...item, sortOrder }));
 }
 
-function selectedLibraryFiles(items: ProductMediaItem[]): MediaFile[] {
-  return items.map((item) => ({
-    id: item.mediaId,
-    url: item.url,
-    filename: item.effectiveAltText || item.mediaId,
-    size: 0,
-    createdAt: new Date(0),
-    mimeType: item.kind === "video" ? "video/mp4" : "image/webp",
-  }));
-}
-
 export const ProductImagesSection = memo(function ProductImagesSection({
   form,
 }: {
@@ -85,7 +76,12 @@ export const ProductImagesSection = memo(function ProductImagesSection({
   const [isOpen, setIsOpen] = React.useState(true);
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [showAll, setShowAll] = React.useState(false);
-  const mediaCount = form.watch("media")?.length ?? 0;
+  const mediaItems = form.watch("media") ?? EMPTY_PRODUCT_MEDIA;
+  const mediaCount = mediaItems.length;
+  const attachedMediaIds = React.useMemo(
+    () => mediaItems.map((item) => item.mediaId),
+    [mediaItems],
+  );
 
   const addMedia = React.useCallback((
     current: ProductMediaItem[],
@@ -175,7 +171,7 @@ export const ProductImagesSection = memo(function ProductImagesSection({
                   <div className="flex flex-wrap items-center gap-2">
                     <MediaManager
                       capability="both"
-                      selectedFiles={selectedLibraryFiles(field.value)}
+                      unavailableFileIds={attachedMediaIds}
                       trigger={(
                         <Button type="button" variant="outline" size="sm" className="h-8 px-3 text-xs">
                           {field.value.length ? <Plus className="mr-1.5 h-3.5 w-3.5" /> : <ImagePlus className="mr-1.5 h-3.5 w-3.5" />}

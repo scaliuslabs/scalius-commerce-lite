@@ -20,8 +20,8 @@ describe("media gallery presentation boundaries", () => {
   });
 
   it("exposes truthful keyboard selection state and forwards Shift range intent", () => {
-    expect(card).toContain('aria-pressed={selectionMode ? selected : undefined}');
-    expect(card).toContain('aria-keyshortcuts={selectionMode ? "Shift+Enter" : undefined}');
+    expect(card).toContain('aria-pressed={selectionMode && !unavailable ? selected : undefined}');
+    expect(card).toContain('aria-keyshortcuts={selectionMode && !unavailable ? "Shift+Enter" : undefined}');
     expect(gallery).toContain("props.onToggleSelection(file.id, event.shiftKey)");
     expect(gallery).toContain("props.onFileSelect(file, event.shiftKey)");
   });

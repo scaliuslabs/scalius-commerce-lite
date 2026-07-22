@@ -17,6 +17,7 @@ interface UseMediaManagerOptions {
   autoLoad: boolean;
   capability: MediaCapability;
   initialSelectedFiles?: MediaFile[];
+  unavailableFileIds?: string[];
   onSelect?: (file: MediaFile) => void;
   onSelectMultiple?: (files: MediaFile[]) => void;
   workspaceState?: MediaWorkspaceRouteState;
@@ -25,6 +26,8 @@ interface UseMediaManagerOptions {
     options?: MediaWorkspaceRouteUpdateOptions,
   ) => void;
 }
+
+const EMPTY_FILE_IDS: string[] = [];
 
 function folderFilter(folderId: string | null | "all"): string | null | undefined {
   return folderId === "all" ? undefined : folderId;
@@ -45,6 +48,7 @@ export function useMediaManager({
   autoLoad,
   capability,
   initialSelectedFiles = [],
+  unavailableFileIds = EMPTY_FILE_IDS,
   onSelect,
   onSelectMultiple,
   workspaceState,
@@ -61,6 +65,14 @@ export function useMediaManager({
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const uploadRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const selectionAnchorId = useRef<string | null>(null);
+  const unavailableFileIdSet = useMemo(
+    () => new Set(unavailableFileIds.map((id) => id.replace(/^temp_/, ""))),
+    [unavailableFileIds],
+  );
+  const isFileUnavailable = useCallback(
+    (id: string) => unavailableFileIdSet.has(id.replace(/^temp_/, "")),
+    [unavailableFileIdSet],
+  );
   const routeControlled = workspaceState !== undefined && onWorkspaceStateChange !== undefined;
   const view = routeControlled ? workspaceState.view : viewState;
   const currentFolderId = routeControlled ? workspaceState.folderId : folders.currentFolderId;
@@ -200,8 +212,8 @@ export function useMediaManager({
 
   const replaceSelection = useCallback((ids: string[]) => {
     selectionAnchorId.current = null;
-    setSelectedFileIds([...new Set(ids)]);
-  }, []);
+    setSelectedFileIds([...new Set(ids.filter((id) => !isFileUnavailable(id)))]);
+  }, [isFileUnavailable]);
 
   const beginSelection = useCallback(() => {
     selectionAnchorId.current = null;
@@ -210,10 +222,12 @@ export function useMediaManager({
   }, []);
 
   const selectAllVisible = useCallback(() => {
-    const visibleIds = media.files.map((file) => file.id);
+    const visibleIds = media.files
+      .map((file) => file.id)
+      .filter((id) => !isFileUnavailable(id));
     selectionAnchorId.current = visibleIds[0] ?? null;
     setSelectedFileIds(selectAllVisibleMedia(visibleIds));
-  }, [media.files]);
+  }, [media.files, isFileUnavailable]);
 
   const clearSelection = useCallback((preserveMode: boolean) => {
     selectionAnchorId.current = null;
@@ -228,6 +242,7 @@ export function useMediaManager({
   }, []);
 
   const toggleSelection = useCallback((id: string, extendRange = false) => {
+    if (isFileUnavailable(id)) return;
     setSelectedFileIds((current) => {
       const update = updateMediaSelection({
         selectedIds: current,
@@ -239,9 +254,10 @@ export function useMediaManager({
       selectionAnchorId.current = update.anchorId;
       return update.selectedIds;
     });
-  }, [media.files]);
+  }, [media.files, isFileUnavailable]);
 
   const handleFileSelect = useCallback((file: LibraryMediaFile, extendRange = false) => {
+    if (isFileUnavailable(file.id)) return;
     if (selectionMode || onSelectMultiple) {
       setSelectionMode(true);
       toggleSelection(file.id, extendRange);
@@ -252,7 +268,12 @@ export function useMediaManager({
       setPreviewFile(file);
       setShowPreview(true);
     }
-  }, [onSelect, onSelectMultiple, selectionMode, toggleSelection]);
+  }, [onSelect, onSelectMultiple, selectionMode, toggleSelection, isFileUnavailable]);
+
+  const selectableFileCount = useMemo(
+    () => media.files.filter((file) => !isFileUnavailable(file.id)).length,
+    [isFileUnavailable, media.files],
+  );
 
   const completedUploads = upload.queue.flatMap((item) => item.result ? [item.result] : []);
   const initialSelectionSource = initialSelectedFiles.map((file) => ({
@@ -358,6 +379,8 @@ export function useMediaManager({
     moveToFolder,
     deleteFolder,
     selectedFileIds,
+    selectableFileCount,
+    isFileUnavailable,
     replaceSelection,
     selectionMode,
     setSelectionMode,

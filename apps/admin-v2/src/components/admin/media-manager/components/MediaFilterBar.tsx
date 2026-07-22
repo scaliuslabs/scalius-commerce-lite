@@ -12,6 +12,7 @@ interface MediaFilterBarProps {
   view: MediaLibraryView;
   selectedCount: number;
   visibleCount: number;
+  selectableCount: number;
   selectionMode: boolean;
   folders: MediaFolder[];
   isMutating: boolean;
@@ -88,7 +89,7 @@ export function MediaFilterBar(props: MediaFilterBarProps) {
             <span className="hidden text-muted-foreground sm:inline">Shift-click for a range{props.onCancelSelection ? " · Esc to cancel" : ""}</span>
           </div>
 
-          {props.visibleCount > 0 && props.selectedCount < props.visibleCount && <Button type="button" variant="ghost" size="sm" className="h-11 px-2 text-xs sm:h-7" onClick={props.onSelectAll}>Select all shown</Button>}
+          {props.selectableCount > 0 && props.selectedCount < props.selectableCount && <Button type="button" variant="ghost" size="sm" className="h-11 px-2 text-xs sm:h-7" onClick={props.onSelectAll}>Select all shown</Button>}
           {props.selectedCount > 0 && <Button type="button" variant="ghost" size="sm" className="h-11 px-2 text-xs sm:h-7" onClick={props.onClearSelection}><X className="mr-1 h-3.5 w-3.5" />Clear</Button>}
           {props.onCancelSelection && <Button type="button" variant="ghost" size="sm" className="h-11 px-2 text-xs sm:h-7" onClick={props.onCancelSelection}>Cancel</Button>}
 

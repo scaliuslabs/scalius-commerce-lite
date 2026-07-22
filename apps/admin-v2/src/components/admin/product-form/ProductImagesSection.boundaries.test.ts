@@ -6,6 +6,8 @@ const source = readFileSync(new URL("./ProductImagesSection.tsx", import.meta.ur
 describe("product media editor boundaries", () => {
   it("keeps mixed media product-scoped and SKU assignment image-only", () => {
     expect(source).toContain('capability="both"');
+    expect(source).toContain("unavailableFileIds={attachedMediaIds}");
+    expect(source).not.toContain("selectedFiles={selectedLibraryFiles(field.value)}");
     expect(source).toContain('item.kind === "image"');
     expect(source).toContain("Videos remain gallery-only");
   });

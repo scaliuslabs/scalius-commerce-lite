@@ -107,6 +107,7 @@ export interface MediaManagerProps {
   onSelect?: (file: MediaFile) => void;
   onSelectMultiple?: (files: MediaFile[]) => void;
   selectedFiles?: MediaFile[];
+  unavailableFileIds?: string[];
   triggerLabel?: string;
   capability?: MediaCapability;
   dialogClassName?: string;

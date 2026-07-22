@@ -8,6 +8,7 @@ import { resolveSavedPoster } from "../utils/poster";
 interface MediaGalleryProps {
   files: LibraryMediaFile[];
   selectedFileIds: string[];
+  isFileUnavailable: (id: string) => boolean;
   selectionMode: boolean;
   allowManagement: boolean;
   view: MediaLibraryView;
@@ -62,6 +63,7 @@ export function MediaGallery(props: MediaGalleryProps) {
             file={file}
             posterUrl={resolveSavedPoster(file, props.files).posterUrl}
             selected={props.selectedFileIds.includes(file.id)}
+            unavailable={props.isFileUnavailable(file.id)}
             selectionMode={props.selectionMode}
             allowManagement={props.allowManagement}
             view={props.view}

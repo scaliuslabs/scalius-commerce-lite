@@ -13,6 +13,7 @@ export function MediaManager({
   onSelect,
   onSelectMultiple,
   selectedFiles = [],
+  unavailableFileIds,
   capability = "image",
   dialogClassName,
   open,
@@ -22,6 +23,7 @@ export function MediaManager({
     autoLoad: false,
     capability,
     initialSelectedFiles: selectedFiles,
+    unavailableFileIds,
     onSelect: onSelect ? (file) => { onOpenChange(false); onSelect(file); } : undefined,
     onSelectMultiple: onSelectMultiple ? (files) => { onOpenChange(false); onSelectMultiple(files); } : undefined,
   });

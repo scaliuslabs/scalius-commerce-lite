@@ -28,9 +28,11 @@ describe("MediaFilterBar selection controls", () => {
   function Harness({
     persistentSelection = false,
     allowManagement = true,
+    selectableCount = 5,
   }: {
     persistentSelection?: boolean;
     allowManagement?: boolean;
+    selectableCount?: number;
   }) {
     const [selectionMode, setSelectionMode] = useState(false);
     const [selectedCount, setSelectedCount] = useState(0);
@@ -43,6 +45,7 @@ describe("MediaFilterBar selection controls", () => {
         selectionMode={selectionMode}
         selectedCount={selectedCount}
         visibleCount={5}
+        selectableCount={selectableCount}
         folders={[]}
         isMutating={false}
         allowManagement={allowManagement}
@@ -130,6 +133,15 @@ describe("MediaFilterBar selection controls", () => {
 
     expect(host.textContent).toContain("0 selected");
     expect(buttonByName(host, "Select all shown")).toBeTruthy();
+    expect(buttonByName(host, "Add 0").disabled).toBe(true);
+  });
+
+  it("hides select-all when every visible picker asset is already attached", () => {
+    act(() => root.render(<Harness persistentSelection selectableCount={0} />));
+    act(() => buttonByName(host, "Select").click());
+
+    expect(host.textContent).toContain("0 selected");
+    expect(host.textContent).not.toContain("Select all shown");
     expect(buttonByName(host, "Add 0").disabled).toBe(true);
   });
 
