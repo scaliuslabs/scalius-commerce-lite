@@ -83,7 +83,7 @@ function AnalyticsPagePending() {
   return (
     <div className="space-y-4" role="status" aria-label="Loading analytics integrations">
       <div className="flex items-start justify-between gap-3 border-b pb-4">
-        <div className="space-y-2"><Skeleton className="h-7 w-36" /><Skeleton className="h-4 w-72 max-w-[70vw]" /></div>
+        <Skeleton className="h-7 w-36" />
         <Skeleton className="h-9 w-28" />
       </div>
       <Skeleton className="h-16 w-full" />
@@ -108,9 +108,9 @@ function AnalyticsPageError({ reset }: { error: Error; reset: () => void }) {
       </span>
       <h1 className="mt-3 text-base font-semibold">Analytics integrations could not be loaded</h1>
       <p className="mt-1 max-w-md text-sm text-muted-foreground">
-        The integration list or provider readiness check failed. No saved status has been assumed.
+        Try again to load the integration list and current provider status.
       </p>
-      <Button type="button" variant="outline" size="sm" className="mt-4" onClick={reset}>
+      <Button type="button" variant="outline" size="sm" className="mt-4 h-11 sm:h-9" onClick={reset}>
         <RefreshCw className="mr-2 h-4 w-4" />Retry
       </Button>
     </div>
@@ -138,18 +138,11 @@ function AnalyticsPage() {
   return (
     <div className="space-y-4">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <div className="flex items-center gap-2">
-            <Activity className="h-5 w-5" />
-            <h1 className="text-2xl font-bold tracking-tight">
-              {search.trashed ? "Analytics trash" : "Analytics"}
-            </h1>
-          </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {search.trashed
-              ? "Restore saved integrations or remove their source permanently."
-              : "Control what measures buyer activity and verify each provider before activation."}
-          </p>
+        <div className="flex items-center gap-2">
+          <Activity className="h-5 w-5" />
+          <h1 className="text-2xl font-bold tracking-tight">
+            {search.trashed ? "Analytics trash" : "Analytics"}
+          </h1>
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -182,7 +175,7 @@ function AnalyticsPage() {
         <DataTableToolbar
           searchValue={search.search}
           onSearchChange={(value) => updateSearch({ search: value, page: 1 })}
-          searchPlaceholder="Find integration or identifier…"
+          searchPlaceholder="Search integrations…"
           filters={
             <>
               <Select

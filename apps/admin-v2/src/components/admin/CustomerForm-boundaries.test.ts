@@ -30,6 +30,10 @@ describe("customer form workflow boundaries", () => {
     expect(customerFormSource).not.toContain("Email (Optional)");
     expect(customerFormSource).not.toContain("Address (Optional)");
     expect(customerFormSource).toContain('className="h-11 sm:h-9"');
+    expect(customerFormSource).toContain('newLabel="New customer"');
+    expect(customerFormSource).toContain(
+      'saveLabel={isEdit ? "Save customer" : "Create customer"}',
+    );
 
     for (const label of ["City", "Zone", "Area"]) {
       expect(locationSelectorSource).toContain(`<FormLabel>${label}</FormLabel>`);

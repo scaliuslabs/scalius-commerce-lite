@@ -38,7 +38,6 @@ import {
   Trash2,
   Loader2,
   ShoppingCart,
-  Info,
   Phone,
   User,
   ArrowUpDown,
@@ -329,7 +328,7 @@ const DetailsModal = ({
           <div className="border-b px-5 py-4">
             <DialogTitle>Incomplete checkout</DialogTitle>
             <DialogDescription>
-              Saved recovery context for{" "}
+              Checkout{" "}
               <span
                 className="font-mono text-xs"
                 title={displayId}
@@ -635,14 +634,14 @@ export function AbandonedCheckoutsManager({
         <DataTableToolbar
           searchValue={routeState.search}
           onSearchChange={handleSearchChange}
-          searchPlaceholder="Search customer, phone, ID, or item…"
+          searchPlaceholder="Search checkouts…"
           selectedCount={selectedIds.size}
           filters={
             <Button
               type="button"
               variant="outline"
               size="sm"
-              className="h-8 px-2 text-xs md:hidden"
+              className="h-11 px-3 text-xs md:hidden"
               onClick={() => handleSort("updatedAt")}
               aria-label={`Sort by last updated, currently ${routeState.order === "desc" ? "newest first" : "oldest first"}`}
             >
@@ -670,13 +669,15 @@ export function AbandonedCheckoutsManager({
               disabled={isFetching}
               variant="outline"
               size="sm"
+              className="h-11 w-11 px-0 sm:h-9 sm:w-auto sm:px-3"
+              aria-label="Refresh checkouts"
             >
               {isFetching ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Loader2 className="h-4 w-4 animate-spin sm:mr-2" />
               ) : (
-                <RefreshCw className="mr-2 h-4 w-4" />
+                <RefreshCw className="h-4 w-4 sm:mr-2" />
               )}
-              Refresh
+              <span className="sr-only sm:not-sr-only">Refresh</span>
             </Button>
           }
         />
@@ -695,13 +696,9 @@ export function AbandonedCheckoutsManager({
           </div>
         ) : null}
 
-        <div className="flex items-center gap-2 rounded-md border bg-muted/30 px-3 py-2">
-          <Info className="h-4 w-4 shrink-0 text-muted-foreground" />
-          <p className="text-xs text-muted-foreground">
-            Recovery context for active checkouts and archived hosted payments.
-            <span className="hidden sm:inline"> Empty sessions clear after 1 hour; all sessions clear after 30 days.</span>
-          </p>
-        </div>
+        <p className="text-xs text-muted-foreground">
+          Empty checkouts are removed after 1 hour; all others after 30 days.
+        </p>
 
         <Card className="overflow-hidden">
           <CardContent className="p-0">
@@ -723,8 +720,8 @@ export function AbandonedCheckoutsManager({
                 ) : checkouts.length === 0 ? (
                   <div className="flex h-52 flex-col items-center justify-center gap-2 px-5 text-center text-muted-foreground">
                     <ShoppingCart className="h-9 w-9" />
-                    <p className="font-medium">No incomplete orders found.</p>
-                    <p className="text-xs">Change the search or check back after more checkout activity.</p>
+                    <p className="font-medium">No checkouts found</p>
+                    <p className="text-xs">Try a different search or check again later.</p>
                   </div>
                 ) : (
                   <>
@@ -831,10 +828,10 @@ export function AbandonedCheckoutsManager({
                         <div className="flex flex-col items-center justify-center gap-2">
                           <ShoppingCart className="h-10 w-10" />
                           <p className="font-medium">
-                            No incomplete orders found.
+                            No checkouts found
                           </p>
                           <p className="text-xs">
-                            Change the search or check back after more checkout activity.
+                            Try a different search or check again later.
                           </p>
                         </div>
                       </TableCell>

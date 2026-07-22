@@ -25,6 +25,7 @@ import { queryKeys } from "@/lib/query-keys";
 import { ManualFulfillmentDialog } from "./ManualFulfillmentDialog";
 import { formatOrderDate } from "./formatters";
 import { useOrderActionPermissions } from "@/hooks/use-order-action-permissions";
+import { canTransitionTo } from "@scalius/shared/order-state";
 import {
   getProviderReadinessLabel,
   getProviderReadinessMessage,
@@ -102,7 +103,7 @@ const CreateShipmentForm = ({
       <CardHeader className="border-b border-border bg-muted/5 px-4 py-3">
         <CardTitle className="flex items-center gap-2 text-base">
           <Truck className="h-4 w-4" />
-          Create Shipment
+          Create shipment
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4 p-4">
@@ -149,7 +150,7 @@ const CreateShipmentForm = ({
                 <>
               <div className="space-y-2">
                 <label className="text-sm font-medium leading-none text-foreground peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                  Select Delivery Provider
+                  Delivery provider
                 </label>
                 <Select
                   value={selectedProviderId}
@@ -207,7 +208,7 @@ const CreateShipmentForm = ({
                 {shipmentMutation.isPending && (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 )}
-                {shipmentMutation.isPending ? "Creating..." : "Create Shipment"}
+                {shipmentMutation.isPending ? "Creating..." : "Create shipment"}
               </Button>
                 </>
               ) : (
@@ -424,7 +425,9 @@ export function ShipmentCard({ order }: ShipmentCardProps) {
   };
 
   const hasCreateShipmentActions =
-    orderActions.canManageOrderShipments && order.items.length > 0;
+    orderActions.canManageOrderShipments
+    && order.items.length > 0
+    && canTransitionTo("order", order.status, "shipped");
   const hasShipments = order.shipments && order.shipments.length > 0;
   const shipmentsRead = order.operationalReads?.shipments ?? {
     status: "ready" as const,
@@ -457,7 +460,7 @@ export function ShipmentCard({ order }: ShipmentCardProps) {
         <CardHeader className="border-b border-border bg-muted/5 px-4 py-3">
           <CardTitle className="flex items-center gap-2 text-base">
             <Truck className="h-4 w-4" />
-            Shipment History
+            Shipment history
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
@@ -504,7 +507,9 @@ export function ShipmentCard({ order }: ShipmentCardProps) {
               ) : (
                 <div className="p-4 text-sm text-muted-foreground">
                   <p className="font-medium text-foreground">No shipments yet</p>
-                  <p className="mt-1">Create a provider shipment above or record an own-courier fulfillment.</p>
+                  {hasCreateShipmentActions ? (
+                    <p className="mt-1">Create a provider shipment above or record an own-courier fulfillment.</p>
+                  ) : null}
                 </div>
               )}
             </>

@@ -173,7 +173,7 @@ function PromotionCard({
           <CalendarClock className="size-3.5 shrink-0" />
           {formatSchedule(promotion)}
         </span>
-        <Button asChild variant="ghost" size="sm" className="h-8 shrink-0 px-2">
+        <Button asChild variant="ghost" size="sm" className="h-11 shrink-0 px-2 sm:h-8">
           <Link to="/admin/promotions/$promotionId/edit" params={{ promotionId: promotion.id }}>
             Edit <ArrowRight className="ml-1 size-3.5" />
           </Link>
@@ -202,8 +202,8 @@ export function PromotionList({
           <Input
             value={search}
             onChange={(event) => onSearchChange(event.target.value)}
-            placeholder="Find name or code…"
-            className="h-9 pl-9"
+            placeholder="Search promotions…"
+            className="h-11 pl-9 sm:h-9"
           />
         </label>
         <Select
@@ -212,7 +212,7 @@ export function PromotionList({
             value === "all" ? undefined : value as PromotionStatusFilter,
           )}
         >
-          <SelectTrigger className="h-9 w-full sm:w-40" aria-label="Filter promotions by status">
+          <SelectTrigger className="h-11 w-full sm:h-9 sm:w-40" aria-label="Filter promotions by status">
             <SelectValue placeholder="All statuses" />
           </SelectTrigger>
           <SelectContent>
@@ -239,11 +239,11 @@ export function PromotionList({
           </h2>
           <p className="mt-1 max-w-sm text-sm text-muted-foreground">
             {promotions.length === 0
-              ? "Start with a checkout code, then review the exact cart outcome before activation."
+              ? "Create a code and preview the savings before activating it."
               : "Change the search or status filter to see other rules."}
           </p>
           {promotions.length === 0 && canCreate ? (
-            <Button asChild size="sm" className="mt-4">
+            <Button asChild size="sm" className="mt-4 h-11 sm:h-9">
               <Link to="/admin/promotions/new">Create promotion</Link>
             </Button>
           ) : null}

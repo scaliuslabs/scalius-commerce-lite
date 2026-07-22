@@ -69,17 +69,12 @@ function PromotionsPage() {
   return (
     <div className="space-y-4">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <div className="flex items-center gap-2">
-            <TicketPercent className="size-5" />
-            <h1 className="text-2xl font-bold tracking-tight">Promotions</h1>
-          </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Build checkout codes, test exact cart savings, and activate with revision safety.
-          </p>
+        <div className="flex items-center gap-2">
+          <TicketPercent className="size-5" />
+          <h1 className="text-2xl font-bold tracking-tight">Promotions</h1>
         </div>
         {canCreate ? (
-          <Button asChild size="sm" className="w-full sm:w-auto">
+          <Button asChild size="sm" className="h-11 w-full sm:h-9 sm:w-auto">
             <Link to="/admin/promotions/new"><Plus className="mr-2 size-4" />Create promotion</Link>
           </Button>
         ) : null}

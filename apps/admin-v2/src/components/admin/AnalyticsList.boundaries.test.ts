@@ -32,7 +32,9 @@ describe("analytics list presentation boundaries", () => {
   it("keeps loading and read failure truthful", () => {
     expect(routeSource).toContain("pendingComponent: AnalyticsPagePending");
     expect(routeSource).toContain("errorComponent: AnalyticsPageError");
-    expect(routeSource).toContain("No saved status has been assumed");
+    expect(routeSource).toContain(
+      "Try again to load the integration list and current provider status.",
+    );
     expect(routeSource).toContain("Loading analytics integrations");
   });
 
@@ -48,6 +50,8 @@ describe("analytics list presentation boundaries", () => {
     expect(routeSource).toContain('className="h-11 sm:h-9"');
     expect(routeSource).toContain('aria-label="Filter by analytics provider"');
     expect(routeSource).toContain('aria-label="Filter by analytics status"');
+    expect(routeSource).toContain('searchPlaceholder="Search integrations…"');
+    expect(routeSource).not.toContain("Control what measures buyer activity");
     expect(healthSource).toContain("Browser ready:");
     expect(healthSource).toContain("Server ready:");
     expect(healthSource).not.toContain("browser and ${summary.serverReadyProviders} server integrations");

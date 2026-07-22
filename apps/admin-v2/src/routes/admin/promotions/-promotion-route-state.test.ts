@@ -16,6 +16,15 @@ const listRouteSource = readFileSync(
   fileURLToPath(new URL("./index.tsx", import.meta.url)),
   "utf8",
 );
+const listSource = readFileSync(
+  fileURLToPath(
+    new URL(
+      "../../../components/admin/promotion/PromotionList.tsx",
+      import.meta.url,
+    ),
+  ),
+  "utf8",
+);
 
 describe("promotion workspace routes", () => {
   it("keeps bounded list search and status in canonical URL state", () => {
@@ -44,5 +53,13 @@ describe("promotion workspace routes", () => {
     expect(editorSource).toContain("DISCOUNTS_EDIT");
     expect(editorSource).toContain("DISCOUNTS_TOGGLE_STATUS");
     expect(editorSource).toContain("DISCOUNTS_DELETE");
+  });
+
+  it("keeps the promotion list concise and touch-sized on mobile", () => {
+    expect(listRouteSource).not.toContain("revision safety");
+    expect(listRouteSource).toContain("h-11 w-full sm:h-9 sm:w-auto");
+    expect(listSource).toContain('placeholder="Search promotions…"');
+    expect(listSource).toContain('className="h-11 pl-9 sm:h-9"');
+    expect(listSource).toContain('className="h-11 w-full sm:h-9 sm:w-40"');
   });
 });

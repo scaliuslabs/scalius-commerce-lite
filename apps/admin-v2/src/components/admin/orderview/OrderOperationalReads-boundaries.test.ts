@@ -41,6 +41,9 @@ describe("order operational reads", () => {
     expect(shipmentSource).toContain("No shipments yet");
     expect(shipmentSource).toContain("Showing the last loaded shipment data");
     expect(shipmentSource).toContain("Retry");
+    expect(shipmentSource).toContain(
+      'canTransitionTo("order", order.status, "shipped")',
+    );
   });
 
   it("fails COD actions closed while tracking state is unknown", () => {
@@ -74,6 +77,12 @@ describe("order operational reads", () => {
     expect(paymentSource).toContain('className="min-h-11 flex-1');
     expect(shipmentSource).toContain('className="min-h-11 w-full');
     expect(notificationsSource).toContain('className="h-11 gap-1.5 sm:h-8"');
+  });
+
+  it("keeps provider identifiers behind an optional technical disclosure", () => {
+    expect(paymentSource.match(/Technical details/g)).toHaveLength(2);
+    expect(paymentSource).toContain("attempt.providerSessionId");
+    expect(paymentSource).toContain("attempt.providerRefundId");
   });
 
   it("describes COD collection and failure dialogs for assistive technology", () => {

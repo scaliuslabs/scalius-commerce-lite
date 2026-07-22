@@ -143,7 +143,7 @@ function copyForStatus(
         severity: "success",
         label: "Refund completed",
         message: audience === "admin"
-          ? "The refund is reconciled locally and no longer blocks order actions."
+          ? "The refund is complete and no longer blocks order actions."
           : "The refund is complete.",
       };
     case "failed":

@@ -26,7 +26,13 @@ describe("incomplete checkout presentation", () => {
 
     expect(manager).toContain("formatAbandonedCheckoutId(displayId)");
     expect(manager).toContain("customerInfo.location");
-    expect(manager).toContain("Search customer, phone, ID, or item…");
+    expect(manager).toContain("Search checkouts…");
+    expect(manager).toContain(
+      "Empty checkouts are removed after 1 hour; all others after 30 days.",
+    );
+    expect(manager).not.toContain(
+      "Recovery context for active checkouts and archived hosted payments.",
+    );
     expect(manager).toContain("Delete checkout records?");
   });
 });

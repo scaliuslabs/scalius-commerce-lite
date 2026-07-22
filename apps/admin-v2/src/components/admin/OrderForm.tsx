@@ -425,7 +425,7 @@ export function OrderForm({
         isDirty={form.formState.isDirty}
         cancelUrl="/admin/orders"
         newUrl="/admin/orders/new"
-        newLabel="New Order"
+        newLabel="New order"
         canCreateNew={orderActions.canCreateOrders}
         canSave={canSubmit}
         saveLabel={isEdit ? undefined : "Create confirmed order"}

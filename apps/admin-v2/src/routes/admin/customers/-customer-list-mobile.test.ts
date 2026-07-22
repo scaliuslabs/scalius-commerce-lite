@@ -24,6 +24,8 @@ describe("customer directory responsive workflow", () => {
     expect(source).toContain("setBulkDeleteRequested(true)");
     expect(source).toContain("customerCount={bulkDeleteRequested");
     expect(source).toContain('className="h-11 w-full sm:h-9 sm:w-auto"');
+    expect(source).toContain('searchPlaceholder="Search customers…"');
+    expect(source).not.toContain("Find every guest and account buyer");
   });
 
   it("bounds long customer names on the mobile history header", () => {

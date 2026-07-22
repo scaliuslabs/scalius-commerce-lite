@@ -11,6 +11,10 @@ describe("discount list workflow", () => {
   it("uses a mobile-specific card instead of squeezing the desktop table", () => {
     expect(source).toContain("<DiscountMobileCard");
     expect(source).toContain("mobileCardRenderer={mobileCardRenderer}");
+    expect(source).not.toContain(
+      "Create codes, control eligibility, and monitor redemption.",
+    );
+    expect(source).toContain("View trash");
   });
 
   it("surfaces query failure with a retry instead of rendering a misleading empty list", () => {
