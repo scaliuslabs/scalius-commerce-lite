@@ -1,5 +1,5 @@
 import React from "react";
-import type { UseFormReturn } from "react-hook-form";
+import { useWatch, type UseFormReturn } from "react-hook-form";
 import {
   FormControl,
   FormDescription,
@@ -31,6 +31,7 @@ import type { CollectionFormValues, Product } from "./types";
 import { collectionPresentations } from "./types";
 import { ProductPickerPopover } from "./ProductPickerPopover";
 import { CharacterCounter } from "../../ui/character-counter";
+import { CollapsibleCard } from "~/components/admin/product-form/CollapsibleCard";
 
 const PENDING_PRODUCT_LABEL = "Loading product label...";
 
@@ -54,386 +55,411 @@ export const LayoutSettingsSection = React.memo(
       () => new Map(knownProducts.map((product) => [product.id, product])),
       [knownProducts],
     );
-    const showOnHomepage = form.watch("config.showOnHomepage");
-    const isActive = form.watch("isActive");
+    const collectionId = useWatch({ control: form.control, name: "id" });
+    const collectionName = useWatch({ control: form.control, name: "name" });
+    const metaTitle = useWatch({ control: form.control, name: "metaTitle" });
+    const metaDescription = useWatch({
+      control: form.control,
+      name: "metaDescription",
+    });
+    const canonicalPath = useWatch({
+      control: form.control,
+      name: "canonicalPath",
+    });
+    const noIndex = useWatch({ control: form.control, name: "noIndex" });
+    const excludeFromSitemap = useWatch({
+      control: form.control,
+      name: "excludeFromSitemap",
+    });
+    const showOnHomepage = useWatch({
+      control: form.control,
+      name: "config.showOnHomepage",
+    });
+    const isActive = useWatch({ control: form.control, name: "isActive" });
 
     return (
       <div className="space-y-3">
-        {/* Status Card */}
         <Card>
-          <CardHeader className="pb-3 pt-4 px-4">
-            <CardTitle className="text-base">Status</CardTitle>
+          <CardHeader className="px-4 py-3">
+            <CardTitle className="text-sm">Status</CardTitle>
           </CardHeader>
-          <CardContent className="px-4 pb-4 space-y-3">
+          <CardContent className="px-4 pb-4 pt-0">
             <FormField
               control={form.control}
               name="isActive"
               render={({ field }) => (
-                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
-                  <div className="space-y-0.5">
-                    <FormLabel className="text-sm font-medium">
-                      Published
-                    </FormLabel>
-                    <FormDescription className="text-xs">
-                      Customers can open this collection page.
-                    </FormDescription>
-                  </div>
+                <FormItem className="flex min-h-11 flex-row items-center justify-between rounded-md border px-3 py-2">
+                  <FormLabel className="text-sm font-medium">Published</FormLabel>
                   <FormControl>
                     <Switch
                       checked={field.value}
                       onCheckedChange={field.onChange}
+                      className="relative before:absolute before:-inset-x-1 before:-inset-y-3 before:content-['']"
                     />
                   </FormControl>
-                </FormItem>
-                )}
-            />
-            <FormField
-              control={form.control}
-              name="canonicalPath"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-sm font-medium">
-                    Canonical Path
-                  </FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder={
-                        form.watch("id")
-                          ? `/collections/${form.watch("id")}`
-                          : "Leave blank until saved"
-                      }
-                      {...field}
-                      value={field.value || ""}
-                      onChange={(event) => {
-                        field.onChange(event.target.value || null);
-                      }}
-                    />
-                  </FormControl>
-                  <FormDescription className="text-xs">
-                    Collections are served by ID. Leave blank unless you need the exact saved collection route.
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="noIndex"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
-                  <div className="space-y-0.5">
-                    <FormLabel className="text-sm font-medium">
-                      Prevent search indexing
-                    </FormLabel>
-                    <FormDescription className="text-xs">
-                      Keep the collection page public, but ask search engines not to index it.
-                    </FormDescription>
-                  </div>
-                  <FormControl>
-                    <Switch
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                    />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="excludeFromSitemap"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
-                  <div className="space-y-0.5">
-                    <FormLabel className="text-sm font-medium">
-                      Hide from sitemap
-                    </FormLabel>
-                    <FormDescription className="text-xs">
-                      Keep it public, but remove it from collections sitemap XML.
-                    </FormDescription>
-                  </div>
-                  <FormControl>
-                    <Switch
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                    />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
-            <ResourceDiscoveryReadiness
-              kind="collection"
-              id={form.watch("id")}
-              canonicalPath={form.watch("canonicalPath")}
-              noIndex={form.watch("noIndex")}
-              excludeFromSitemap={form.watch("excludeFromSitemap")}
-              isActive={form.watch("isActive")}
-            />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="px-4 pb-3 pt-4">
-            <CardTitle className="text-base">Search listing</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 px-4 pb-4">
-            <FormField
-              control={form.control}
-              name="metaTitle"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-sm font-medium">Meta title</FormLabel>
-                  <FormControl>
-                    <Input
-                      maxLength={70}
-                      placeholder={form.watch("name") || "Collection title"}
-                      {...field}
-                      value={field.value || ""}
-                      onChange={(event) => field.onChange(event.target.value || null)}
-                    />
-                  </FormControl>
-                  {field.value ? (
-                    <CharacterCounter
-                      current={field.value.length}
-                      recommended={60}
-                      max={70}
-                    />
-                  ) : null}
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="metaDescription"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-sm font-medium">Meta description</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      rows={3}
-                      maxLength={200}
-                      className="resize-none"
-                      placeholder="Describe this collection for search results"
-                      {...field}
-                      value={field.value || ""}
-                      onChange={(event) => field.onChange(event.target.value || null)}
-                    />
-                  </FormControl>
-                  {field.value ? (
-                    <CharacterCounter
-                      current={field.value.length}
-                      recommended={160}
-                      max={200}
-                    />
-                  ) : null}
-                  <FormMessage />
                 </FormItem>
               )}
             />
           </CardContent>
         </Card>
 
-        {/* Homepage placement is independent from collection publication. */}
-        <Card>
-          <CardHeader className="pb-3 pt-4 px-4">
-            <CardTitle className="text-base">Homepage section</CardTitle>
-          </CardHeader>
-          <CardContent className="px-4 pb-4 space-y-3">
-            <FormField
-              control={form.control}
-              name="config.showOnHomepage"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
-                  <div className="space-y-0.5 pr-4">
-                    <FormLabel className="text-sm font-medium">
-                      Show on homepage
-                    </FormLabel>
-                    <FormDescription className="text-xs">
-                      {field.value && !isActive
-                        ? "Ready to appear after this collection is published."
-                        : "Add this collection as a homepage product section."}
-                    </FormDescription>
-                  </div>
-                  <FormControl>
-                    <Switch
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                    />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
-
-            {showOnHomepage ? (
-              <div className="space-y-3 border-t pt-3">
-            {/* Display Style */}
-            <FormField
-              control={form.control}
-              name="presentation"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-sm font-medium">
-                    Display Style
-                  </FormLabel>
-                  <Select
-                    onValueChange={(value) => {
-                      field.onChange(value);
+        <CollapsibleCard
+          title="Search and discovery"
+          summary={
+            <div className="rounded-md border bg-muted/15 p-2.5">
+              <p className="truncate text-xs font-medium text-foreground">
+                {metaTitle?.trim() || collectionName?.trim() || "Search preview"}
+              </p>
+              <p className="mt-0.5 truncate text-[10px] text-emerald-700 dark:text-emerald-400">
+                /collections/{collectionId || "collection-id"}
+              </p>
+              {metaDescription?.trim() ? (
+                <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-muted-foreground">
+                  {metaDescription.trim()}
+                </p>
+              ) : null}
+            </div>
+          }
+        >
+          <FormField
+            control={form.control}
+            name="metaTitle"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-sm font-medium">Page title</FormLabel>
+                <FormControl>
+                  <Input
+                    maxLength={70}
+                    placeholder={collectionName || "Collection title"}
+                    className="min-h-11 md:h-9 md:min-h-9"
+                    {...field}
+                    value={field.value || ""}
+                    onChange={(event) => field.onChange(event.target.value || null)}
+                  />
+                </FormControl>
+                {field.value ? (
+                  <CharacterCounter
+                    current={field.value.length}
+                    recommended={60}
+                    max={70}
+                  />
+                ) : null}
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="metaDescription"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-sm font-medium">
+                  Meta description
+                </FormLabel>
+                <FormControl>
+                  <Textarea
+                    rows={3}
+                    maxLength={200}
+                    className="min-h-24 resize-none"
+                    placeholder="Collection description"
+                    {...field}
+                    value={field.value || ""}
+                    onChange={(event) => field.onChange(event.target.value || null)}
+                  />
+                </FormControl>
+                {field.value ? (
+                  <CharacterCounter
+                    current={field.value.length}
+                    recommended={160}
+                    max={200}
+                  />
+                ) : null}
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="canonicalPath"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-sm font-medium">
+                  Canonical path
+                </FormLabel>
+                <FormControl>
+                  <Input
+                    placeholder={
+                      collectionId
+                        ? `/collections/${collectionId}`
+                        : "Leave blank until saved"
+                    }
+                    className="min-h-11 md:h-9 md:min-h-9"
+                    {...field}
+                    value={field.value || ""}
+                    onChange={(event) => {
+                      field.onChange(event.target.value || null);
                     }}
-                    value={field.value}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a display style" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent className="rounded-xl bg-background">
-                      {collectionPresentations.map((presentation) => (
-                        <SelectItem
-                          key={presentation.value}
-                          value={presentation.value}
-                          className="flex flex-col items-start py-2"
-                        >
-                          <div className="font-medium">{presentation.label}</div>
-                          <div className="text-xs text-gray-500">
-                            {presentation.description}
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  />
+                </FormControl>
+                <FormDescription className="text-xs leading-5">
+                  Optional same-store path for a duplicate or campaign page.
+                  Leave blank to use this collection page.
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="noIndex"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                <div className="space-y-0.5">
+                  <FormLabel className="text-sm font-medium">
+                    Prevent search indexing
+                  </FormLabel>
                   <FormDescription className="text-xs">
-                    Choose how products are arranged on the homepage.
+                    Keep the collection page public, but ask search engines not
+                    to index it.
                   </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            {/* Display Title */}
-            <FormField
-              control={form.control}
-              name="config.title"
-              render={({ field }) => (
-                <FormItem>
+                </div>
+                <FormControl>
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                    className="relative before:absolute before:-inset-x-1 before:-inset-y-3 before:content-['']"
+                  />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="excludeFromSitemap"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                <div className="space-y-0.5">
                   <FormLabel className="text-sm font-medium">
-                    Display Title
+                    Hide from sitemap
                   </FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="Enter display title"
-                      maxLength={120}
-                      {...field}
-                      value={field.value || ""}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                  <FormDescription className="text-xs">
+                    Keep it public, but remove it from collections sitemap XML.
+                  </FormDescription>
+                </div>
+                <FormControl>
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                    className="relative before:absolute before:-inset-x-1 before:-inset-y-3 before:content-['']"
+                  />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+          <ResourceDiscoveryReadiness
+            kind="collection"
+            id={collectionId}
+            canonicalPath={canonicalPath}
+            noIndex={noIndex}
+            excludeFromSitemap={excludeFromSitemap}
+            isActive={isActive}
+          />
+        </CollapsibleCard>
 
-            {/* Display Subtitle */}
-            <FormField
-              control={form.control}
-              name="config.subtitle"
-              render={({ field }) => (
-                <FormItem>
+        <CollapsibleCard title="Homepage" defaultOpen={showOnHomepage}>
+          <FormField
+            control={form.control}
+            name="config.showOnHomepage"
+            render={({ field }) => (
+              <FormItem className="flex min-h-11 flex-row items-center justify-between rounded-md border p-3">
+                <div className="space-y-0.5 pr-4">
                   <FormLabel className="text-sm font-medium">
-                    Display Subtitle
+                    Show on homepage
                   </FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="Enter display subtitle"
-                      maxLength={240}
-                      {...field}
-                      value={field.value || ""}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                  {field.value && !isActive ? (
+                    <FormDescription className="text-xs">
+                      Appears after the collection is published.
+                    </FormDescription>
+                  ) : null}
+                </div>
+                <FormControl>
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                    className="relative before:absolute before:-inset-x-1 before:-inset-y-3 before:content-['']"
+                  />
+                </FormControl>
+              </FormItem>
+            )}
+          />
 
-            {/* Featured product is available only in the grid presentation. */}
-            {selectedPresentation === "grid" && (
+          {showOnHomepage ? (
+            <div className="space-y-3 border-t pt-3">
               <FormField
                 control={form.control}
-                name="config.featuredProductId"
+                name="presentation"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel className="text-sm font-medium">
-                      Lead product
+                      Display style
+                    </FormLabel>
+                    <Select
+                      onValueChange={(value) => {
+                        field.onChange(value);
+                      }}
+                      value={field.value}
+                    >
+                      <FormControl>
+                        <SelectTrigger className="min-h-11 md:h-9 md:min-h-9">
+                          <SelectValue placeholder="Select a display style" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent className="rounded-xl bg-background">
+                        {collectionPresentations.map((presentation) => (
+                          <SelectItem
+                            key={presentation.value}
+                            value={presentation.value}
+                            className="flex flex-col items-start py-2"
+                          >
+                            <div className="font-medium">
+                              {presentation.label}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {presentation.description}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="config.title"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium">
+                      Display title
                     </FormLabel>
                     <FormControl>
-                      <div className="flex gap-2">
-                        <ProductPickerPopover
-                          triggerLabel={
-                            field.value
-                              ? productsById.get(field.value)?.name ||
-                                PENDING_PRODUCT_LABEL
-                              : "Select a lead product"
-                          }
-                          selectedCategoryIds={selectedCategoryIds}
-                          onSelectProduct={(product) => {
-                            onProductDiscovered(product);
-                            field.onChange(product.id);
-                          }}
-                          buttonClassName="min-w-0 flex-1 justify-between font-normal"
-                        />
-                        {field.value ? (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="icon"
-                            onClick={() => field.onChange(undefined)}
-                          >
-                            <X className="h-4 w-4" />
-                            <span className="sr-only">
-                              Clear lead product
-                            </span>
-                          </Button>
-                        ) : null}
-                      </div>
+                      <Input
+                        placeholder="Homepage title"
+                        maxLength={120}
+                        className="min-h-11 md:h-9 md:min-h-9"
+                        {...field}
+                        value={field.value || ""}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="config.subtitle"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium">
+                      Display subtitle
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="Optional subtitle"
+                        maxLength={240}
+                        className="min-h-11 md:h-9 md:min-h-9"
+                        {...field}
+                        value={field.value || ""}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {selectedPresentation === "grid" ? (
+                <FormField
+                  control={form.control}
+                  name="config.featuredProductId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-sm font-medium">
+                        Lead product
+                      </FormLabel>
+                      <FormControl>
+                        <div className="flex gap-2">
+                          <ProductPickerPopover
+                            triggerLabel={
+                              field.value
+                                ? productsById.get(field.value)?.name ||
+                                  PENDING_PRODUCT_LABEL
+                                : "Select a lead product"
+                            }
+                            selectedCategoryIds={selectedCategoryIds}
+                            onSelectProduct={(product) => {
+                              onProductDiscovered(product);
+                              field.onChange(product.id);
+                            }}
+                            buttonClassName="min-h-11 min-w-0 flex-1 justify-between font-normal md:h-9 md:min-h-9"
+                          />
+                          {field.value ? (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              className="h-11 w-11 md:h-9 md:w-9"
+                              onClick={() => field.onChange(undefined)}
+                            >
+                              <X className="h-4 w-4" />
+                              <span className="sr-only">
+                                Clear lead product
+                              </span>
+                            </Button>
+                          ) : null}
+                        </div>
+                      </FormControl>
+                      <FormDescription className="text-xs">
+                        Pinned first in the homepage grid.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              ) : null}
+
+              <FormField
+                control={form.control}
+                name="config.maxProducts"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium">
+                      Homepage product limit
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={24}
+                        className="min-h-11 md:h-9 md:min-h-9"
+                        {...field}
+                        onChange={(event) =>
+                          field.onChange(parseInt(event.target.value) || 1)
+                        }
+                      />
                     </FormControl>
                     <FormDescription className="text-xs">
-                      Placed first in this homepage grid, even when it is outside the collection membership.
+                      1–24 products. The collection page stays paginated.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-            )}
-
-            {/* Max Products */}
-            <FormField
-              control={form.control}
-              name="config.maxProducts"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-sm font-medium">
-                    Homepage product limit
-                  </FormLabel>
-                  <FormControl>
-                    <Input
-                      type="number"
-                      min={1}
-                      max={24}
-                      {...field}
-                      onChange={(e) =>
-                        field.onChange(parseInt(e.target.value) || 1)
-                      }
-                    />
-                  </FormControl>
-                  <FormDescription className="text-xs">
-                    Products shown in this homepage section (1-24). The collection page remains paginated.
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-              </div>
-            ) : null}
-          </CardContent>
-        </Card>
+            </div>
+          ) : null}
+        </CollapsibleCard>
       </div>
     );
   },

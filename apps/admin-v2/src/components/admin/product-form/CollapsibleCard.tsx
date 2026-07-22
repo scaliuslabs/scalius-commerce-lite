@@ -1,7 +1,7 @@
 // src/components/admin/product-form/CollapsibleCard.tsx
 import * as React from "react";
 import { ChevronDown } from "lucide-react";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "../../ui/card";
 import { cn } from "@scalius/shared/utils";
 
 interface CollapsibleCardProps {
