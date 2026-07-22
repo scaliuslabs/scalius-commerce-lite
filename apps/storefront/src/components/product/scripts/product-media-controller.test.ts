@@ -97,6 +97,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
@@ -273,6 +274,91 @@ describe("mixed product media gallery", () => {
     expect(main.src).toContain("/latest-full.jpg");
   });
 
+  it("warms exact variant display images after idle but respects data saver", () => {
+    const requests: Array<{ src: string; fetchPriority: string }> = [];
+    const idle: { callback?: () => void } = {};
+    class DeferredImage {
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      fetchPriority = "auto";
+      private value = "";
+      set src(value: string) {
+        this.value = value;
+        requests.push(this);
+      }
+      get src() {
+        return this.value;
+      }
+    }
+    vi.stubGlobal("Image", DeferredImage);
+    vi.stubGlobal("requestIdleCallback", (callback: () => void) => {
+      idle.callback = callback;
+      return 1;
+    });
+    vi.mocked(window.matchMedia).mockReturnValue({
+      matches: true,
+    } as MediaQueryList);
+    Object.defineProperty(navigator, "connection", {
+      configurable: true,
+      value: { effectiveType: "4g", saveData: false },
+    });
+
+    const root = renderGallery("pmed_image");
+    const variantImage = root.querySelector<HTMLButtonElement>(
+      '[data-thumbnail-rail="desktop"] [data-product-media-id="pmed_video"]',
+    )!;
+    variantImage.dataset.mediaKind = "image";
+    variantImage.dataset.mediaUrl = "/variant-main.jpg";
+    variantImage.dataset.variantImage = "true";
+    initProductMediaGallery(root);
+
+    expect(requests).toHaveLength(0);
+    idle.callback?.();
+    expect(requests).toHaveLength(1);
+    expect(requests[0]).toMatchObject({
+      src: "/variant-main.jpg",
+      fetchPriority: "low",
+    });
+
+    Object.defineProperty(navigator, "connection", {
+      configurable: true,
+      value: { effectiveType: "4g", saveData: true },
+    });
+    requests.length = 0;
+    const dataSaverRoot = renderGallery("pmed_image");
+    const dataSaverVariant = dataSaverRoot.querySelector<HTMLButtonElement>(
+      '[data-thumbnail-rail="desktop"] [data-product-media-id="pmed_video"]',
+    )!;
+    dataSaverVariant.dataset.mediaKind = "image";
+    dataSaverVariant.dataset.variantImage = "true";
+    dataSaverVariant.dataset.mediaUrl = "/data-saver-variant.jpg";
+    delete idle.callback;
+    initProductMediaGallery(dataSaverRoot);
+    expect(idle.callback).toBeUndefined();
+    expect(requests).toHaveLength(0);
+
+    Object.defineProperty(navigator, "connection", {
+      configurable: true,
+      value: { effectiveType: "4g", saveData: false },
+    });
+    vi.mocked(window.matchMedia).mockReturnValue({
+      matches: false,
+    } as MediaQueryList);
+    const mobileRoot = renderGallery("pmed_image");
+    const mobileVariant = mobileRoot.querySelector<HTMLButtonElement>(
+      '[data-thumbnail-rail="desktop"] [data-product-media-id="pmed_video"]',
+    )!;
+    mobileVariant.dataset.mediaKind = "image";
+    mobileVariant.dataset.variantImage = "true";
+    mobileVariant.dataset.mediaUrl = "/mobile-variant.jpg";
+    delete idle.callback;
+    initProductMediaGallery(mobileRoot);
+    expect(idle.callback).toBeUndefined();
+    expect(requests).toHaveLength(0);
+
+    Reflect.deleteProperty(navigator, "connection");
+  });
+
   it("uses exact SKU images and an image representation for unmapped SKUs", () => {
     const root = renderGallery();
     initProductMediaGallery(root);
@@ -415,7 +501,7 @@ describe("storefront mixed-media source boundaries", () => {
     expect(controller).not.toContain("controller-image-update");
   });
 
-  it("uses one reusable preview transform and defers full and zoom work until intent", () => {
+  it("uses one reusable preview transform and bounds variant display warming", () => {
     const gallery = readFileSync(GALLERY_SOURCE, "utf8");
     const controller = readFileSync(
       storefrontSourcePath(
@@ -431,6 +517,10 @@ describe("storefront mixed-media source boundaries", () => {
     expect(controller).toContain('preloadImage(item.url, "high")');
     expect(controller).toContain("activeMediaDisplayUrl");
     expect(controller).toContain("imagePreloads");
+    expect(controller).toContain("scheduleVariantImagePreload");
+    expect(controller).toContain("[data-variant-image='true']");
+    expect(controller).toContain(".slice(0, 4)");
+    expect(controller).toContain('preloadImage(url, "low")');
     expect(controller).not.toContain("scheduleInitialImagePreload");
     expect(zoom).not.toContain("scheduleZoomImagePreload");
     expect(zoom).toContain("requestZoomImage");
