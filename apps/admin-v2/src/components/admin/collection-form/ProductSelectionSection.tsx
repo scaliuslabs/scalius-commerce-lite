@@ -2,7 +2,6 @@ import React from "react";
 import type { UseFormReturn } from "react-hook-form";
 import {
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -57,34 +56,16 @@ export const ProductSelectionSection = React.memo(
     removeProduct,
     moveProduct,
   }: ProductSelectionSectionProps) {
-    const membershipCount = selectedSource === "manual"
-      ? selectedProductIds.length
-      : selectedCategoryIds.length;
     const unpublishedSelectedCategories = selectedSource === "dynamic"
       ? selectedCategories.filter((category) => category.status !== "published")
       : [];
-    const publishReady = membershipCount > 0 && unpublishedSelectedCategories.length === 0;
 
     return (
       <Card>
         <CardHeader className="px-4 pb-3 pt-4">
           <CardTitle className="text-base">Products</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4 px-4 pb-4">
-          <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-muted/30 px-3 py-2 text-xs">
-            <span className="font-medium">
-              {selectedSource === "manual" ? "Manual order" : "Automatic membership"}
-            </span>
-            <span className={publishReady ? "text-muted-foreground" : "font-medium text-amber-700 dark:text-amber-400"}>
-              {publishReady
-                ? `${membershipCount} ${selectedSource === "manual"
-                  ? membershipCount === 1 ? "product" : "products"
-                  : membershipCount === 1 ? "category" : "categories"}`
-                : unpublishedSelectedCategories.length > 0
-                  ? "Publish selected categories first"
-                  : `Add a ${selectedSource === "manual" ? "product" : "category"} before publishing`}
-            </span>
-          </div>
+        <CardContent className="space-y-3 px-4 pb-4">
           <FormField
             control={form.control}
             name="config.source"
@@ -92,17 +73,16 @@ export const ProductSelectionSection = React.memo(
               <FormItem>
                 <FormLabel>Product selection</FormLabel>
                 <Select value={field.value} onValueChange={field.onChange}>
-                  <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                  <FormControl>
+                    <SelectTrigger className="min-h-11 md:h-9 md:min-h-9">
+                      <SelectValue />
+                    </SelectTrigger>
+                  </FormControl>
                   <SelectContent>
-                    <SelectItem value="manual">Manual selection</SelectItem>
-                    <SelectItem value="dynamic">Dynamic by category</SelectItem>
+                    <SelectItem value="manual">Choose products</SelectItem>
+                    <SelectItem value="dynamic">Use categories</SelectItem>
                   </SelectContent>
                 </Select>
-                <FormDescription className="text-xs">
-                  {selectedSource === "manual"
-                    ? "Choose products and arrange their storefront order."
-                    : "New eligible products from the selected categories appear automatically."}
-                </FormDescription>
               </FormItem>
             )}
           />
@@ -150,7 +130,7 @@ export const ProductSelectionSection = React.memo(
                       ))}
                     </div>
                   ) : (
-                    <p className="rounded-md border border-dashed px-3 py-4 text-center text-xs text-muted-foreground">Select a category to define this collection.</p>
+                    <p className="rounded-md border border-dashed px-3 py-4 text-center text-xs text-muted-foreground">No categories selected.</p>
                   )}
                   {unpublishedSelectedCategories.length > 0 ? (
                     <p className="text-xs text-amber-700 dark:text-amber-400">
@@ -205,7 +185,7 @@ export const ProductSelectionSection = React.memo(
                       ))}
                     </ol>
                   ) : (
-                    <p className="rounded-md border border-dashed px-3 py-4 text-center text-xs text-muted-foreground">Add products to define this collection. Their order is saved.</p>
+                    <p className="rounded-md border border-dashed px-3 py-4 text-center text-xs text-muted-foreground">No products selected.</p>
                   )}
                   <FormMessage />
                 </FormItem>

@@ -256,7 +256,7 @@ export function CollectionForm({
         >
           <div className="mb-4">
             <h1 className="text-xl font-semibold tracking-tight">
-              {isEdit ? "Edit Collection" : "Create Collection"}
+              {isEdit ? "Edit collection" : "Create collection"}
             </h1>
             {!canSave ? (
               <p className="mt-2 text-xs font-medium text-amber-700 dark:text-amber-400">
@@ -264,9 +264,9 @@ export function CollectionForm({
               </p>
             ) : null}
           </div>
-          <fieldset disabled={!canSave} className="grid grid-cols-1 gap-4 disabled:opacity-70 lg:grid-cols-3 lg:gap-5">
+          <fieldset disabled={!canSave} className="grid grid-cols-1 gap-3 disabled:opacity-70 lg:grid-cols-3 lg:gap-4">
             {/* Left Column (2/3) - Main content */}
-            <div className="lg:col-span-2 space-y-4">
+            <div className="space-y-3 lg:col-span-2">
               {/* Name field */}
               <FormField
                 control={form.control}
@@ -281,7 +281,7 @@ export function CollectionForm({
                         placeholder="Collection name"
                         maxLength={100}
                         {...field}
-                        className="text-base"
+                        className="min-h-11 text-base md:h-9 md:min-h-9"
                       />
                     </FormControl>
                     <FormMessage />
@@ -325,7 +325,7 @@ export function CollectionForm({
         isDirty={form.formState.isDirty}
         cancelUrl="/admin/collections"
         newUrl="/admin/collections/new"
-        newLabel="New Collection"
+        newLabel="New collection"
         canCreateNew={collectionActions.canCreate}
         canSave={canSave}
         saveDisabledReason={isEdit

@@ -319,6 +319,46 @@ describe("CollectionForm edit product labels", () => {
     expect(host.querySelector("fieldset")?.hasAttribute("disabled")).toBe(true);
   });
 
+  it("reveals homepage settings immediately when placement is enabled", async () => {
+    await act(async () => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <CollectionForm
+            categories={categories}
+            products={productLabels}
+            defaultValues={{
+              ...collectionDefaults,
+              config: {
+                ...collectionDefaults.config!,
+                showOnHomepage: false,
+              },
+            }}
+            isEdit
+          />
+        </QueryClientProvider>,
+      );
+    });
+
+    await act(async () => getButton(host, "Homepage").click());
+    expect(host.textContent).toContain("Show on homepage");
+    expect(host.querySelector('input[placeholder="Homepage title"]')).toBeNull();
+
+    const homepageSwitch = Array.from(
+      host.querySelectorAll<HTMLButtonElement>('button[role="switch"]'),
+    ).find((button) =>
+      normalizeText(button.parentElement?.parentElement?.textContent ?? "").includes(
+        "Show on homepage",
+      ),
+    );
+    if (!homepageSwitch) throw new Error("Expected show-on-homepage switch");
+
+    await act(async () => homepageSwitch.click());
+    await waitFor(() => {
+      expect(host.querySelector('input[placeholder="Homepage title"]')).not.toBeNull();
+      expect(host.textContent).toContain("Display style");
+    });
+  });
+
   it("appends one staged product batch and preserves its selection order", async () => {
     collectionApi.getCollectionProductOptions.mockResolvedValue({
       products: [
