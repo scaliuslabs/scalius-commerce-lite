@@ -18,7 +18,6 @@ import { getProducts, getProductsByIds } from "~/lib/api-functions/products";
 import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
 import { ADMIN_IMAGE_PRESETS } from "~/lib/admin-image-presentation";
 
-// Product interface based on what's used in OrderForm
 export interface DiscountProductOption {
   id: string;
   name: string;
@@ -45,7 +44,7 @@ interface ProductSelectorProps {
 export function ProductSelector({
   selectedProducts = [] as DiscountProductOption[],
   onChange,
-  buttonLabel = "Select Products",
+  buttonLabel = "Select products",
   className,
   isLoading = false,
   maxItems,
@@ -65,7 +64,6 @@ export function ProductSelector({
   const skipNextSearchLoadRef = useRef(false);
   const loadRequestRef = useRef(0);
 
-  // Main function to load products
   const loadProducts = useCallback(async (page = 1, search = "") => {
     const requestId = ++loadRequestRef.current;
     try {
@@ -88,10 +86,8 @@ export function ProductSelector({
 
       if (data.products) {
         if (page === 1) {
-          // Replace products on first page
           setDisplayedProducts(data.products);
         } else {
-          // Append products for pagination
           setDisplayedProducts((prev) => [...prev, ...(data.products || [])]);
         }
 
@@ -112,7 +108,6 @@ export function ProductSelector({
     }
   }, []);
 
-  // Load initial products when dropdown opens
   useEffect(() => {
     if (open) {
       skipNextSearchLoadRef.current = true;
@@ -120,7 +115,6 @@ export function ProductSelector({
     }
   }, [open, loadProducts]);
 
-  // Handle search input changes
   useEffect(() => {
     if (!open) return;
 
@@ -133,7 +127,6 @@ export function ProductSelector({
       clearTimeout(searchTimeoutRef.current);
     }
 
-    // Reset to first page when search term changes
     setCurrentPage(1);
 
     searchTimeoutRef.current = setTimeout(() => {
@@ -183,23 +176,18 @@ export function ProductSelector({
     };
   }, [onChange, selectedProducts]);
 
-  // Load more products for pagination
   const loadMoreProducts = () => {
     if (currentPage < totalPages && !isLoadingMore) {
       loadProducts(currentPage + 1, searchTerm);
     }
   };
 
-  // Handle product selection
   const handleSelectProduct = (product: DiscountProductOption) => {
-    // Check if product is already selected
     const isSelected = selectedProducts.some((p) => p.id === product.id);
 
     if (isSelected) {
-      // Remove product if already selected
       onChange(selectedProducts.filter((p) => p.id !== product.id));
     } else {
-      // Check max items limit
       if (maxItems && selectedProducts.length >= maxItems) {
         return;
       }
@@ -209,7 +197,6 @@ export function ProductSelector({
     }
   };
 
-  // Memoize selected product lookup for better performance
   const selectedProductsMap = useMemo(() => {
     const map = new Map<string, boolean>();
     selectedProducts.forEach((product) => {
@@ -225,7 +212,6 @@ export function ProductSelector({
         onOpenChange={(newOpen) => {
           setOpen(newOpen);
           if (!newOpen) {
-            // Reset search when closing
             setSearchTerm("");
           }
         }}
@@ -236,7 +222,7 @@ export function ProductSelector({
             variant="outline"
             role="combobox"
             aria-expanded={open}
-            className="w-full justify-between"
+            className="h-11 w-full justify-between sm:h-9"
             disabled={isLoading}
           >
             <div className="flex items-center gap-2">
@@ -257,11 +243,13 @@ export function ProductSelector({
         >
           <Command shouldFilter={false}>
             <CommandInput
+              aria-label="Search products"
               placeholder="Search products..."
               value={searchTerm}
               onValueChange={setSearchTerm}
+              className="h-11 border-none focus:ring-0 sm:h-10"
             />
-            <CommandList>
+            <CommandList className="max-h-[min(50vh,20rem)] overflow-auto">
               {loadError ? (
                 <div role="alert" className="m-2 rounded-md border border-destructive/30 p-3 text-sm">
                   <p className="text-destructive">{loadError}</p>
@@ -269,7 +257,7 @@ export function ProductSelector({
                     type="button"
                     variant="outline"
                     size="sm"
-                    className="mt-2 h-8"
+                    className="mt-2 h-11 sm:h-8"
                     onClick={() => void loadProducts(1, searchTerm)}
                   >
                     Retry
@@ -277,7 +265,7 @@ export function ProductSelector({
                 </div>
               ) : null}
               <CommandEmpty>
-                {isSearching ? (
+                {loadError ? null : isSearching ? (
                   <div className="flex items-center justify-center py-6">
                     <Loader2 className="h-5 w-5 animate-spin mr-2" />
                     <span>Searching products...</span>
@@ -289,11 +277,16 @@ export function ProductSelector({
               <CommandGroup>
                 {displayedProducts.map((product) => {
                   const isSelected = selectedProductsMap.has(product.id);
+                  const atLimit = Boolean(
+                    maxItems && selectedProducts.length >= maxItems && !isSelected,
+                  );
                   return (
                     <CommandItem
                       key={product.id}
                       value={product.id}
                       onSelect={() => handleSelectProduct(product)}
+                      disabled={atLimit}
+                      className="min-h-11 cursor-pointer sm:min-h-8"
                     >
                       <div className="flex items-center justify-between w-full">
                         <div className="flex items-center gap-2 truncate">
@@ -335,7 +328,7 @@ export function ProductSelector({
                   <Button
                     type="button"
                     variant="outline"
-                    className="w-full"
+                    className="h-11 w-full sm:h-8"
                     size="sm"
                     onClick={loadMoreProducts}
                     disabled={isLoadingMore}
@@ -347,7 +340,7 @@ export function ProductSelector({
                       </>
                     ) : (
                       <>
-                        Load More ({displayedProducts.length} of {totalProducts}
+                        Load more ({displayedProducts.length} of {totalProducts}
                         )
                       </>
                     )}
@@ -359,7 +352,6 @@ export function ProductSelector({
         </PopoverContent>
       </Popover>
 
-      {/* Show selected products as badges */}
       {selectedProducts.length > 0 && (
         <div className="flex flex-wrap gap-2 mt-3">
           {selectedProducts.map((product) => (
@@ -373,7 +365,7 @@ export function ProductSelector({
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="h-4 w-4 p-0 ml-1"
+                className="-my-2 ml-1 h-11 w-11 p-0 sm:my-0 sm:h-5 sm:w-5"
                 aria-label={`Remove ${product.name}`}
                 onClick={() =>
                   onChange(selectedProducts.filter((p) => p.id !== product.id))

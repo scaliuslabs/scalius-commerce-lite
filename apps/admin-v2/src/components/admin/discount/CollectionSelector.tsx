@@ -1,8 +1,8 @@
 //src/components/admin/discount/CollectionSelector.tsx
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import {
   Command,
-  CommandEmpty,
   CommandGroup,
   CommandInput,
   CommandItem,
@@ -13,7 +13,9 @@ import { Button } from "../../ui/button";
 import { Check, ChevronsUpDown, Folder, Loader2, X } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { Badge } from "../../ui/badge";
-import { getCollections, getCollectionsByIds } from "~/lib/api-functions/collections";
+import { getCollectionsByIds } from "~/lib/api-functions/collections";
+import { useDebounce } from "~/hooks/use-debounce";
+import { collectionPickerOptionsQueryOptions } from "~/lib/api-query-options/collections";
 
 // Collection interface
 export interface DiscountCollectionOption {
@@ -34,88 +36,48 @@ interface CollectionSelectorProps {
 }
 
 const PAGE_SIZE = 10;
+const SEARCH_DEBOUNCE_MS = 300;
 
 export function CollectionSelector({
   selectedCollections = [] as DiscountCollectionOption[],
   onChange,
-  buttonLabel = "Select Collections",
+  buttonLabel = "Select collections",
   className,
   isLoading = false,
   maxItems,
 }: CollectionSelectorProps) {
   const [open, setOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [displayedCollections, setDisplayedCollections] = useState<
-    DiscountCollectionOption[]
-  >([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [totalCollections, setTotalCollections] = useState(0);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const latestSearchTermRef = useRef(searchTerm);
   const lastResolutionSignatureRef = useRef("");
-  const skipNextSearchLoadRef = useRef(false);
-  const loadRequestRef = useRef(0);
-
-  useEffect(() => {
-    latestSearchTermRef.current = searchTerm;
-  }, [searchTerm]);
-
-  const loadCollections = useCallback(async (page = 1, search = "") => {
-    const requestId = ++loadRequestRef.current;
-    try {
-      setLoadError(null);
-      if (page === 1) {
-        setIsSearching(true);
-      } else {
-        setIsLoadingMore(true);
-      }
-
-      const data = await getCollections({
-        data: {
-          limit: PAGE_SIZE,
-          page,
-          search: search.trim() || undefined,
-        },
-      });
-
-      if (requestId !== loadRequestRef.current) return;
-
-      const collectionsArray = data.collections;
-      const mapped: DiscountCollectionOption[] = collectionsArray.map((c) => ({
-        id: c.id,
-        name: c.name,
-        description: null,
-        slug: "",
-        presentation: c.presentation,
-      }));
-
-      if (page === 1) {
-        setDisplayedCollections(mapped);
-      } else {
-        setDisplayedCollections((prev) => [...prev, ...mapped]);
-      }
-
-      setTotalPages(data.pagination?.totalPages || 1);
-      setTotalCollections(data.pagination?.total || 0);
-      setCurrentPage(page);
-    } catch (error: unknown) {
-      if (import.meta.env.DEV) console.error("Error loading collections:", error);
-      if (requestId === loadRequestRef.current) {
-        setLoadError("Collections could not be loaded.");
-      }
-    } finally {
-      if (requestId === loadRequestRef.current) {
-        setIsSearching(false);
-        setIsLoadingMore(false);
+  const debouncedSearch = useDebounce(searchTerm.trim(), SEARCH_DEBOUNCE_MS);
+  const collectionQuery = useInfiniteQuery({
+    ...collectionPickerOptionsQueryOptions({
+      search: debouncedSearch,
+      limit: PAGE_SIZE,
+    }),
+    enabled: open,
+  });
+  const displayedCollections = useMemo(() => {
+    const byId = new Map<string, DiscountCollectionOption>();
+    for (const page of collectionQuery.data?.pages ?? []) {
+      for (const collection of page.collections) {
+        byId.set(collection.id, {
+          id: collection.id,
+          name: collection.name,
+          description: null,
+          slug: "",
+          presentation: collection.presentation,
+        });
       }
     }
-  }, []);
+    return [...byId.values()];
+  }, [collectionQuery.data?.pages]);
+  const totalCollections = collectionQuery.data?.pages[0]?.pagination.total ?? 0;
+  const isDebouncing = searchTerm.trim() !== debouncedSearch;
+  const isInitialLoading = isDebouncing || collectionQuery.isPending ||
+    (collectionQuery.isFetching && displayedCollections.length === 0);
+  const isInitialError = collectionQuery.isError && displayedCollections.length === 0;
 
-  // Resolve selected collections that only have IDs (name === id)
   useEffect(() => {
     const unresolvedIds = selectedCollections
       .filter((collection) => collection.name === collection.id || !collection.name)
@@ -146,7 +108,6 @@ export function CollectionSelector({
           return sc;
         });
 
-        // Only update if names actually changed
         if (!cancelled &&
           resolved.some(
             (r, i) =>
@@ -168,57 +129,11 @@ export function CollectionSelector({
     };
   }, [selectedCollections, onChange]);
 
-  // Load collections when dropdown opens
-  useEffect(() => {
-    if (open) {
-      skipNextSearchLoadRef.current = true;
-      loadCollections(1, latestSearchTermRef.current);
-    }
-  }, [loadCollections, open]);
-
-  // Handle search input changes
-  useEffect(() => {
-    if (!open) return;
-
-    if (skipNextSearchLoadRef.current && searchTerm === "") {
-      skipNextSearchLoadRef.current = false;
-      return;
-    }
-
-    if (searchTimeoutRef.current) {
-      clearTimeout(searchTimeoutRef.current);
-    }
-
-    // Reset to first page when search term changes
-    if (currentPage !== 1) {
-      setCurrentPage(1);
-    }
-
-    searchTimeoutRef.current = setTimeout(() => {
-      loadCollections(1, searchTerm);
-    }, 300);
-
-    return () => {
-      if (searchTimeoutRef.current) {
-        clearTimeout(searchTimeoutRef.current);
-      }
-    };
-  }, [currentPage, loadCollections, open, searchTerm]);
-
-  // Load more collections for pagination
-  const loadMoreCollections = () => {
-    if (currentPage < totalPages && !isLoadingMore) {
-      loadCollections(currentPage + 1, searchTerm);
-    }
-  };
-
   const handleSelectCollection = (collection: DiscountCollectionOption) => {
-    // Check if collection is already selected
     const isSelected = selectedCollections.some((c) => c.id === collection.id);
 
-    // Check if max items limit reached
     if (maxItems && selectedCollections.length >= maxItems && !isSelected) {
-      return; // Don't add more if limit reached
+      return;
     }
 
     let newSelectedCollections;
@@ -242,7 +157,6 @@ export function CollectionSelector({
     onChange(newSelectedCollections);
   };
 
-  // Memoize selected collection lookup for better performance
   const selectedCollectionsMap = useMemo(() => {
     const map = new Map<string, boolean>();
     selectedCollections.forEach((collection) => {
@@ -268,7 +182,7 @@ export function CollectionSelector({
             variant="outline"
             role="combobox"
             aria-expanded={open}
-            className="w-full justify-between"
+            className="h-11 w-full justify-between sm:h-9"
             disabled={isLoading}
           >
             <div className="flex items-center gap-2">
@@ -289,88 +203,102 @@ export function CollectionSelector({
         >
           <Command shouldFilter={false}>
             <CommandInput
+              aria-label="Search collections"
               placeholder="Search collections..."
               value={searchTerm}
               onValueChange={setSearchTerm}
+              className="h-11 border-none focus:ring-0 sm:h-10"
             />
-            <CommandList>
-              {loadError ? (
-                <div role="alert" className="m-2 rounded-md border border-destructive/30 p-3 text-sm">
-                  <p className="text-destructive">{loadError}</p>
+            <CommandList className="max-h-[min(50vh,20rem)] overflow-auto">
+              {isInitialLoading ? (
+                <div className="flex items-center justify-center py-7" role="status">
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <span className="text-sm text-muted-foreground">
+                    Searching collections...
+                  </span>
+                </div>
+              ) : isInitialError ? (
+                <div role="alert" className="space-y-2 px-3 py-6 text-center">
+                  <p className="text-sm text-muted-foreground">
+                    Collections could not be loaded.
+                  </p>
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
-                    className="mt-2 h-8"
-                    onClick={() => void loadCollections(1, searchTerm)}
+                    className="h-11 sm:h-8"
+                    onClick={() => void collectionQuery.refetch()}
                   >
                     Retry
                   </Button>
                 </div>
-              ) : null}
-              <CommandEmpty>
-                {isSearching ? (
-                  <div className="flex items-center justify-center py-6">
-                    <Loader2 className="h-5 w-5 animate-spin mr-2" />
-                    <span>Searching collections...</span>
-                  </div>
-                ) : (
-                  "No collections found."
-                )}
-              </CommandEmpty>
-              <CommandGroup>
-                {displayedCollections.map((collection) => {
-                  const isSelected = selectedCollectionsMap.has(collection.id);
-                  return (
-                    <CommandItem
-                      key={collection.id}
-                      value={collection.id}
-                      onSelect={() => handleSelectCollection(collection)}
-                    >
-                      <div className="flex items-center justify-between w-full">
-                        <div className="flex items-center gap-2 truncate">
-                          <Check
-                            className={cn(
-                              "mr-2 h-4 w-4 shrink-0",
-                              isSelected ? "opacity-100" : "opacity-0",
-                            )}
-                          />
-                          <span className="truncate">{collection.name}</span>
+              ) : displayedCollections.length === 0 ? (
+                <div className="px-3 py-7 text-center text-sm text-muted-foreground">
+                  No collections found.
+                </div>
+              ) : (
+                <CommandGroup>
+                  {displayedCollections.map((collection) => {
+                    const isSelected = selectedCollectionsMap.has(collection.id);
+                    const atLimit = Boolean(
+                      maxItems && selectedCollections.length >= maxItems && !isSelected,
+                    );
+                    return (
+                      <CommandItem
+                        key={collection.id}
+                        value={collection.id}
+                        onSelect={() => handleSelectCollection(collection)}
+                        disabled={atLimit}
+                        className="min-h-11 cursor-pointer sm:min-h-8"
+                      >
+                        <div className="flex w-full items-center justify-between">
+                          <div className="flex items-center gap-2 truncate">
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4 shrink-0",
+                                isSelected ? "opacity-100" : "opacity-0",
+                              )}
+                            />
+                            <span className="truncate">{collection.name}</span>
+                          </div>
+                          {collection.presentation && (
+                            <Badge
+                              variant="outline"
+                              className="ml-2 shrink-0 px-1.5 py-0 text-[10px]"
+                            >
+                              {collection.presentation === "grid" ? "Grid" : "Carousel"}
+                            </Badge>
+                          )}
                         </div>
-                        {collection.presentation && (
-                          <Badge
-                            variant="outline"
-                            className="ml-2 shrink-0 text-[10px] px-1.5 py-0"
-                          >
-                            {collection.presentation === "grid"
-                              ? "Manual"
-                              : "Dynamic"}
-                          </Badge>
-                        )}
-                      </div>
-                    </CommandItem>
-                  );
-                })}
-              </CommandGroup>
+                      </CommandItem>
+                    );
+                  })}
+                </CommandGroup>
+              )}
 
-              {currentPage < totalPages && (
+              {!isInitialLoading && !isInitialError && collectionQuery.hasNextPage && (
                 <div className="py-2 px-2 border-t">
                   <Button
                     type="button"
                     variant="outline"
-                    className="w-full"
+                    className="h-11 w-full sm:h-8"
                     size="sm"
-                    onClick={loadMoreCollections}
-                    disabled={isLoadingMore}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      void collectionQuery.fetchNextPage();
+                    }}
+                    disabled={collectionQuery.isFetchingNextPage}
                   >
-                    {isLoadingMore ? (
+                    {collectionQuery.isFetchingNextPage ? (
                       <>
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                         Loading...
                       </>
+                    ) : collectionQuery.isFetchNextPageError ? (
+                      "Retry loading more"
                     ) : (
                       <>
-                        Load More ({displayedCollections.length} of{" "}
+                        Load more ({displayedCollections.length} of{" "}
                         {totalCollections})
                       </>
                     )}
@@ -382,7 +310,6 @@ export function CollectionSelector({
         </PopoverContent>
       </Popover>
 
-      {/* Show selected collections as badges */}
       {selectedCollections.length > 0 && (
         <div className="flex flex-wrap gap-2 mt-3">
           {selectedCollections.map((collection) => (
@@ -406,7 +333,7 @@ export function CollectionSelector({
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="h-4 w-4 p-0 ml-1"
+                className="-my-2 ml-1 h-11 w-11 p-0 sm:my-0 sm:h-5 sm:w-5"
                 aria-label={`Remove ${collection.name}`}
                 onClick={() => handleRemoveCollection(collection.id)}
               >

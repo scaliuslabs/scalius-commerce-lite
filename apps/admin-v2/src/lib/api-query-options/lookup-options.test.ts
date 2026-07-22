@@ -37,6 +37,7 @@ import { productsByIdsQueryOptions } from "./products";
 import {
   collectionCategoryOptionsQueryOptions,
   collectionFormOptionsQueryOptions,
+  collectionPickerOptionsQueryOptions,
   collectionProductOptionsQueryOptions,
   collectionsByIdsQueryOptions,
 } from "./collections";
@@ -121,6 +122,46 @@ describe("lookup query options", () => {
     await expect(requireQueryFn(options)({} as never)).resolves.toEqual({
       collections: [],
     });
+  });
+
+  it("keys and advances the discount collection picker by server pagination", async () => {
+    const payload = {
+      collections: [{
+        id: "col_11",
+        name: "Spring",
+        presentation: "grid" as const,
+        config: "{}",
+        sortOrder: 0,
+        isActive: true,
+        version: 1,
+        canonicalPath: null,
+        noIndex: false,
+        excludeFromSitemap: false,
+        createdAt: null,
+        updatedAt: null,
+        deletedAt: null,
+      }],
+      pagination: { page: 2, limit: 10, total: 11, totalPages: 2 },
+    };
+    mocks.getCollections.mockResolvedValue(payload);
+
+    const options = collectionPickerOptionsQueryOptions({
+      search: " spring ",
+      limit: 10,
+    });
+
+    expect(options.queryKey).toEqual([
+      "collections",
+      "list",
+      { scope: "discount-picker", search: "spring", limit: 10 },
+    ]);
+    await expect(
+      requireQueryFn(options)({ pageParam: 2 } as never),
+    ).resolves.toEqual(payload);
+    expect(mocks.getCollections).toHaveBeenCalledWith({
+      data: { page: 2, limit: 10, search: "spring" },
+    });
+    expect(options.getNextPageParam?.(payload, [payload], 2, [1, 2])).toBeUndefined();
   });
 
   it("keeps collection form option payloads shaped", async () => {

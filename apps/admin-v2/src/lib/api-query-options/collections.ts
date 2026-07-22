@@ -62,6 +62,39 @@ export const collectionsQueryOptions = (params: CollectionsQueryInput) =>
     staleTime: MODERATE_STALE_TIME_MS,
   });
 
+export const collectionPickerOptionsQueryOptions = ({
+  search: rawSearch = "",
+  limit: rawLimit = 10,
+}: {
+  search?: string;
+  limit?: number;
+}) => {
+  const search = rawSearch.trim();
+  const limit = Math.max(1, Math.min(100, Math.floor(rawLimit)));
+
+  return infiniteQueryOptions({
+    queryKey: queryKeys.collections.list({
+      scope: "discount-picker",
+      search,
+      limit,
+    }),
+    queryFn: ({ pageParam }) =>
+      getCollections({
+        data: {
+          page: pageParam,
+          limit,
+          search: search || undefined,
+        },
+      }),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) =>
+      lastPage.pagination.page < lastPage.pagination.totalPages
+        ? lastPage.pagination.page + 1
+        : undefined,
+    staleTime: MODERATE_STALE_TIME_MS,
+  });
+};
+
 export const collectionsByIdsQueryOptions = (ids: readonly string[]) => {
   const normalizedIds = normalizeLookupIds(ids);
   return queryOptions({
