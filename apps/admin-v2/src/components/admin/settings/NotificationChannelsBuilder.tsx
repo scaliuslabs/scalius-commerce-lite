@@ -7,6 +7,7 @@ import {
   RotateCcw,
   Save,
   ShieldCheck,
+  Users,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { OrderNotificationType } from "@scalius/core/modules/notifications/notification-types";
@@ -382,6 +383,9 @@ export function NotificationChannelsBuilder() {
   const [isAdminLoading, setIsAdminLoading] = useState(true);
   const [adminLoadError, setAdminLoadError] = useState<string | null>(null);
   const [isAdminSaving, setIsAdminSaving] = useState(false);
+  const [audience, setAudience] = useState<"customers" | "admins">(
+    "customers",
+  );
 
   const customerIssues = useMemo(
     () => [
@@ -631,7 +635,42 @@ export function NotificationChannelsBuilder() {
         </Alert>
       )}
 
-      <Card>
+      <div
+        role="tablist"
+        aria-label="Notification audience"
+        className="inline-flex w-full rounded-lg border bg-muted/30 p-1 sm:w-auto"
+      >
+        <Button
+          type="button"
+          role="tab"
+          aria-selected={audience === "customers"}
+          variant={audience === "customers" ? "secondary" : "ghost"}
+          className="h-11 flex-1 gap-2 px-4 sm:h-9 sm:flex-none"
+          onClick={() => setAudience("customers")}
+        >
+          <Users className="h-4 w-4" />
+          Customers
+          {customerDirty ? (
+            <span className="h-1.5 w-1.5 rounded-full bg-amber-500" aria-label="Unsaved customer changes" />
+          ) : null}
+        </Button>
+        <Button
+          type="button"
+          role="tab"
+          aria-selected={audience === "admins"}
+          variant={audience === "admins" ? "secondary" : "ghost"}
+          className="h-11 flex-1 gap-2 px-4 sm:h-9 sm:flex-none"
+          onClick={() => setAudience("admins")}
+        >
+          <ShieldCheck className="h-4 w-4" />
+          Administrators
+          {adminDirty ? (
+            <span className="h-1.5 w-1.5 rounded-full bg-amber-500" aria-label="Unsaved administrator changes" />
+          ) : null}
+        </Button>
+      </div>
+
+      {audience === "customers" ? <Card role="tabpanel">
         <CardHeader className="space-y-3 p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="flex min-w-0 items-start gap-2.5">
@@ -729,8 +768,8 @@ export function NotificationChannelsBuilder() {
           ) : (
             <>
               {customerIssues.length > 0 ? (
-                <details className="group rounded-md border bg-muted/20 px-3 py-2 text-sm">
-                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 font-medium">
+                <details className="group rounded-md border bg-muted/20 text-sm">
+                  <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-3 font-medium sm:min-h-9">
                     <span>
                       {customerIssues.length} delivery {customerIssues.length === 1 ? "issue" : "issues"}
                       <span className="ml-1.5 font-normal text-muted-foreground">
@@ -739,7 +778,7 @@ export function NotificationChannelsBuilder() {
                     </span>
                     <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
                   </summary>
-                  <ul className="mt-2 space-y-1.5 border-t pt-2 text-xs text-muted-foreground">
+                  <ul className="space-y-1.5 border-t px-3 py-2 text-xs text-muted-foreground">
                     {customerIssues.map((issue) => (
                       <li key={issue} className="flex gap-2">
                         <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
@@ -750,15 +789,15 @@ export function NotificationChannelsBuilder() {
                 </details>
               ) : null}
 
-              <details className="group rounded-md border px-3 py-2 text-sm">
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
+              <details className="group rounded-md border text-sm">
+                <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-3 sm:min-h-9">
                   <span className="font-medium">WhatsApp template</span>
                   <span className="ml-auto truncate text-xs text-muted-foreground">
                     {whatsAppTemplate.templateName} · {whatsAppTemplate.languageCode}
                   </span>
                   <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
                 </summary>
-                <div className="mt-3 grid gap-3 border-t pt-3 md:grid-cols-[minmax(0,1fr)_12rem]">
+                <div className="grid gap-3 border-t p-3 md:grid-cols-[minmax(0,1fr)_12rem]">
                   <div className="space-y-1.5">
                     <Label htmlFor="order-whatsapp-template">Template name</Label>
                     <Input
@@ -804,9 +843,9 @@ export function NotificationChannelsBuilder() {
             </>
           )}
         </CardContent>
-      </Card>
+      </Card> : null}
 
-      <Card>
+      {audience === "admins" ? <Card role="tabpanel">
         <CardHeader className="space-y-3 p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="flex min-w-0 items-start gap-2.5">
@@ -910,7 +949,7 @@ export function NotificationChannelsBuilder() {
             </div>
           )}
         </CardContent>
-      </Card>
+      </Card> : null}
     </div>
   );
 }

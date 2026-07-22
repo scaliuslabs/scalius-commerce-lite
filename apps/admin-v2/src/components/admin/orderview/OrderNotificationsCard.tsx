@@ -122,7 +122,7 @@ function ReceiptRow({ group }: { group: OrderNotificationReceiptDisplayGroup }) 
   const timestamp = formatTimestamp(group.latestTimestamp);
 
   return (
-    <div className="grid gap-2 rounded-md border border-border bg-background/50 p-2 text-xs sm:grid-cols-[minmax(0,1fr)_auto]">
+    <div className="grid gap-2 rounded-md border border-border bg-background/50 p-3 text-xs sm:grid-cols-[minmax(0,1fr)_auto]">
       <div className="min-w-0 space-y-1">
         <div className="flex flex-wrap items-center gap-2">
           <Icon className="h-3.5 w-3.5 text-muted-foreground" />
@@ -166,6 +166,7 @@ function NotificationRow({
   const timestamp = outboxTimestamp(notification);
   const lastError = describeNotificationIssue(notification.lastError);
   const showOutboxError = Boolean(lastError && notification.receipts.length === 0);
+  const receiptGroups = buildReceiptDisplayGroups(notification.receipts);
   const retrying =
     retryMutation.isPending &&
     retryMutation.variables?.outboxId === notification.id;
@@ -174,7 +175,7 @@ function NotificationRow({
     resendMutation.variables?.outboxId === notification.id;
 
   return (
-    <div className="space-y-3 p-4">
+    <div className="space-y-3 p-3 sm:p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -185,10 +186,9 @@ function NotificationRow({
               {humanize(notification.status)}
             </Badge>
           </div>
-          <div className="text-xs text-muted-foreground">
-            {notification.source}
-            {timestamp ? <span> • {timestamp}</span> : null}
-          </div>
+          {timestamp ? (
+            <div className="text-xs text-muted-foreground">{timestamp}</div>
+          ) : null}
         </div>
         <div className="flex items-center gap-2">
           <div className="text-right text-xs text-muted-foreground">
@@ -240,13 +240,36 @@ function NotificationRow({
         </div>
       )}
 
-      {notification.receipts.length > 0 && (
+      {receiptGroups.length > 0 ? (
         <div className="space-y-2">
-          {buildReceiptDisplayGroups(notification.receipts).map((group) => (
-            <ReceiptRow key={group.key} group={group} />
-          ))}
+          <div className="flex flex-wrap gap-2">
+            {receiptGroups.map((group) => {
+              const Icon = CHANNEL_ICONS[group.channel] ?? Send;
+              return (
+                <span
+                  key={group.key}
+                  className="inline-flex min-h-8 items-center gap-1.5 rounded-md border bg-muted/20 px-2 text-xs"
+                >
+                  <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="font-medium">{humanize(group.channel)}</span>
+                  <span className="text-muted-foreground">{humanize(group.status)}</span>
+                </span>
+              );
+            })}
+          </div>
+          <details className="group rounded-md border bg-muted/10">
+            <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-3 text-xs font-medium text-muted-foreground sm:min-h-9">
+              Delivery details
+              <span className="ml-auto">{notification.source}</span>
+            </summary>
+            <div className="space-y-2 border-t p-2 sm:p-3">
+              {receiptGroups.map((group) => (
+                <ReceiptRow key={group.key} group={group} />
+              ))}
+            </div>
+          </details>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
@@ -282,13 +305,13 @@ export function OrderNotificationsCard({ order }: { order: Order }) {
             {failedCount > 0 && (
               <Badge variant="outline" className={statusClass("failed")}>
                 <AlertTriangle className="mr-1 h-3 w-3" />
-                {failedCount}
+                {failedCount} failed
               </Badge>
             )}
             {pendingCount > 0 && (
               <Badge variant="outline" className={statusClass("pending")}>
                 <Clock className="mr-1 h-3 w-3" />
-                {pendingCount}
+                {pendingCount} pending
               </Badge>
             )}
           </span>

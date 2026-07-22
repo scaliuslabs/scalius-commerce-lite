@@ -19,7 +19,6 @@ import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -293,7 +292,7 @@ export default function FirebaseSettingsForm() {
   return (
     <>
       <UnsavedChangesGuard isDirty={dirty} isSubmitting={saveMutation.isPending} />
-      <div className="max-w-3xl space-y-5 pb-24">
+      <div className="max-w-5xl space-y-4 pb-24">
         {!canManage && (
           <Alert>
             <AlertDescription>
@@ -302,37 +301,38 @@ export default function FirebaseSettingsForm() {
           </Alert>
         )}
 
-        <Card>
-          <CardContent className="space-y-3 py-5">
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-sm font-semibold">Admin browser push</h3>
-              <Badge variant={setupComplete ? "default" : "secondary"}>
-                {setupComplete ? "Setup complete" : "Setup incomplete"}
-              </Badge>
-              {dirty && <Badge variant="outline">Unsaved changes</Badge>}
-            </div>
-            <div className="flex flex-wrap gap-2 text-xs">
-              <Badge variant="outline">
-                {providerReady
-                  ? "Provider ready"
-                  : readinessQuery.isError
-                    ? "Provider status unavailable"
-                    : "Provider needs attention"}
-              </Badge>
-              <Badge variant="outline">
-                {savedBrowserConfigComplete ? "Browser config complete" : "Browser config incomplete"}
-              </Badge>
-            </div>
-            <p className="text-xs text-muted-foreground">
+        <div className="flex flex-col gap-2 rounded-lg border bg-card px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center">
+          <div className="flex min-w-0 items-center gap-2">
+            <span
+              className={`h-2 w-2 shrink-0 rounded-full ${setupComplete ? "bg-emerald-500" : "bg-amber-500"}`}
+              aria-hidden="true"
+            />
+            <span className="text-sm font-semibold">
+              {setupComplete ? "Push delivery ready" : "Push setup incomplete"}
+            </span>
+            {dirty ? <Badge variant="outline">Unsaved</Badge> : null}
+          </div>
+          <div className="flex flex-wrap gap-2 sm:ml-auto">
+            <Badge variant="outline">
               {providerReady
-                ? "Firebase can send from the server. Configuration does not confirm a successful browser notification."
-                : readinessQuery.data?.pushError
-                  ?? (readinessQuery.isError
-                    ? "Provider readiness could not be checked. Saved settings remain unchanged."
-                    : "Checking provider readiness…")}
+                ? "Server ready"
+                : readinessQuery.isError
+                  ? "Server unavailable"
+                  : "Server needs setup"}
+            </Badge>
+            <Badge variant="outline">
+              {savedBrowserConfigComplete ? "Browser ready" : "Browser needs setup"}
+            </Badge>
+          </div>
+          {!providerReady ? (
+            <p className="text-xs text-muted-foreground sm:basis-full">
+              {readinessQuery.data?.pushError
+                ?? (readinessQuery.isError
+                  ? "Provider status could not be checked."
+                  : "Checking provider status…")}
             </p>
-          </CardContent>
-        </Card>
+          ) : null}
+        </div>
 
         <Card>
           <CardHeader className="pb-3">
@@ -343,9 +343,6 @@ export default function FirebaseSettingsForm() {
                 <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
               )}
             </CardTitle>
-            <CardDescription>
-              A Firebase service account lets the API send admin notifications.
-            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="space-y-1.5">
@@ -389,9 +386,6 @@ export default function FirebaseSettingsForm() {
               <Smartphone className="h-4 w-4" />
               Browser configuration
             </CardTitle>
-            <CardDescription>
-              Public Firebase web-app values used by signed-in admin browsers.
-            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex flex-col gap-2 sm:flex-row sm:justify-between">

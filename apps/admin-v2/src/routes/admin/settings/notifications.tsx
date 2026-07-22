@@ -69,9 +69,6 @@ function NotificationSettingsPage() {
                   <OfficialProviderMark provider="firebase" />
                   Firebase Cloud Messaging
                 </h2>
-                <p className="mt-0.5 text-sm text-muted-foreground">
-                  Configure admin push delivery.
-                </p>
               </div>
               <FirebaseSettingsForm />
             </section>

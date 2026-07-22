@@ -99,7 +99,7 @@ const CreateShipmentForm = ({
   };
 
   return (
-    <Card className="mt-6 overflow-hidden">
+    <Card className="overflow-hidden">
       <CardHeader className="border-b border-border bg-muted/5 px-4 py-3">
         <CardTitle className="flex items-center gap-2 text-base">
           <Truck className="h-4 w-4" />
@@ -456,7 +456,7 @@ export function ShipmentCard({ order }: ShipmentCardProps) {
         <CreateShipmentForm order={order} />
       )}
 
-      <Card className="mt-6 overflow-hidden">
+      <Card className="overflow-hidden">
         <CardHeader className="border-b border-border bg-muted/5 px-4 py-3">
           <CardTitle className="flex items-center gap-2 text-base">
             <Truck className="h-4 w-4" />

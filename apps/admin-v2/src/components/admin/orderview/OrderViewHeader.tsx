@@ -2,16 +2,9 @@ import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  Phone,
-  Mail,
-  MapPin,
   Receipt,
-  DollarSign,
-  CalendarClock,
   Pencil,
   History,
-  CreditCard,
-  Package,
   AlertTriangle,
 } from "lucide-react";
 import type { Order } from "./types";
@@ -29,32 +22,6 @@ import { formatLocationParts } from "@/lib/location-presentation";
 interface OrderViewHeaderProps {
   order: Order;
 }
-
-const InfoItem = ({
-  icon: Icon,
-  label,
-  children,
-  isAddress = false,
-}: {
-  icon: React.ElementType;
-  label: string;
-  children: React.ReactNode;
-  isAddress?: boolean;
-}) => (
-  <div
-    className={`flex items-${isAddress ? "start" : "center"} gap-3 text-foreground`}
-  >
-    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10">
-      <Icon className="h-4 w-4 text-primary" />
-    </div>
-    <div>
-      <div className="text-sm font-medium text-muted-foreground">{label}</div>
-      <div className={`text-base ${isAddress ? "leading-relaxed" : ""}`}>
-        {children}
-      </div>
-    </div>
-  </div>
-);
 
 export function OrderViewHeader({ order }: OrderViewHeaderProps) {
   const { symbol } = useCurrency();
@@ -107,114 +74,21 @@ export function OrderViewHeader({ order }: OrderViewHeaderProps) {
   };
 
   return (
-    <div className="relative rounded-xl border border-border bg-card p-4 shadow-sm sm:p-6">
-      <div className="grid gap-6 lg:grid-cols-12 lg:gap-8">
-        {/* Customer Info */}
-        <div className="lg:col-span-5">
-          <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2">
-            <h1 className="text-xl font-semibold text-foreground">
-              <span className="sr-only">Order #{order.id} for </span>
-              {order.customerName}
+    <div className="rounded-xl border border-border bg-card p-4 shadow-sm sm:p-5">
+      <div className="flex flex-col gap-3 border-b pb-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-xl font-semibold tracking-tight text-foreground">
+              Order #{order.id}
             </h1>
             {getStatusBadge(order.status)}
-            {order.customerId && (
-              <Link
-                to={`/admin/customers/${order.customerId}/history` as string}
-                className="inline-flex h-11 w-11 items-center justify-center rounded-full transition-colors hover:bg-muted sm:h-7 sm:w-7"
-                title="View Customer History"
-              >
-                <History className="h-4 w-4 text-muted-foreground" />
-              </Link>
-            )}
           </div>
-          <div className="grid gap-4">
-            <InfoItem icon={Phone} label="Phone">
-              <a
-                href={`tel:${order.customerPhone}`}
-                className="inline-flex min-h-11 items-center hover:text-primary sm:min-h-0"
-              >
-                {formatPhoneForDisplay(order.customerPhone)}
-              </a>
-            </InfoItem>
-
-            {order.customerEmail && (
-              <InfoItem icon={Mail} label="Email">
-                <a
-                  href={`mailto:${order.customerEmail}`}
-                  className="inline-flex min-h-11 items-center break-all hover:text-primary sm:min-h-0"
-                >
-                  {order.customerEmail}
-                </a>
-              </InfoItem>
-            )}
-
-            {order.shippingAddress && (
-              <InfoItem icon={MapPin} label="Shipping Address" isAddress>
-                <div>{shippingLocation}</div>
-              </InfoItem>
-            )}
-          </div>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {formatOrderTimestamp(order.createdAt) ?? "Date unavailable"}
+          </p>
         </div>
 
-        {/* Vertical Divider */}
-        <div className="hidden lg:col-span-1 lg:flex lg:justify-center">
-          <div className="w-px bg-border"></div>
-        </div>
-
-        {/* Order Summary */}
-        <div className="lg:col-span-3">
-          <div className="space-y-4">
-            <InfoItem icon={Receipt} label="Order ID">
-              <span className="font-mono text-sm">#{order.id}</span>
-            </InfoItem>
-            <InfoItem icon={CalendarClock} label="Order Date">
-              <span>{formatOrderTimestamp(order.createdAt) ?? "N/A"}</span>
-            </InfoItem>
-            <InfoItem icon={DollarSign} label="Grand Total">
-              <span className="font-semibold">
-                {savedSummary
-                  ? formatSavedMinorAmount(savedSummary.totalMinor, savedSummary)
-                  : `${symbol}${formatOrderAmount(grandTotal)}`}
-              </span>
-            </InfoItem>
-            {order.paymentStatus && (
-              <InfoItem icon={CreditCard} label="Payment">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge
-                    variant="secondary"
-                    className={`text-xs ${PAYMENT_STATUS_COLORS[order.paymentStatus] ?? ""}`}
-                  >
-                    {order.paymentStatus.charAt(0).toUpperCase() + order.paymentStatus.slice(1)}
-                  </Badge>
-                  {order.paymentMethod && (
-                    <span className="text-xs text-muted-foreground">
-                      {PAYMENT_METHOD_LABELS[order.paymentMethod] ?? order.paymentMethod}
-                    </span>
-                  )}
-                  {activeRefundOperation && (
-                    <Badge variant="secondary" className="gap-1 border-amber-200 bg-amber-50 text-xs text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
-                      <AlertTriangle className="h-3 w-3" />
-                      Refund recovery
-                    </Badge>
-                  )}
-                </div>
-              </InfoItem>
-            )}
-            {order.fulfillmentStatus && (
-              <InfoItem icon={Package} label="Fulfillment">
-                <Badge
-                  variant="secondary"
-                  className={`text-xs font-medium ${FULFILLMENT_STATUS_COLORS[order.fulfillmentStatus] ?? ""}`}
-                >
-                  {order.fulfillmentStatus.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}
-                </Badge>
-              </InfoItem>
-            )}
-          </div>
-        </div>
-
-        {/* Actions */}
-        <div className="lg:col-span-3 flex items-start justify-start lg:justify-end gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button
             variant="outline"
             size="sm"
@@ -252,12 +126,88 @@ export function OrderViewHeader({ order }: OrderViewHeaderProps) {
                   params={{ orderId: order.id }}
                 >
                   <Pencil className="h-4 w-4" />
-                  Edit Order
+                  Edit order
                 </Link>
               )}
             </Button>
           )}
         </div>
+      </div>
+
+      <div className="grid gap-5 pt-4 md:grid-cols-[1.05fr_1.35fr_1fr] md:divide-x">
+        <section className="min-w-0 md:pr-5">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className="text-xs font-medium text-muted-foreground">Customer</h2>
+              <p className="mt-1 truncate text-sm font-semibold">{order.customerName}</p>
+            </div>
+            {order.customerId ? (
+              <Button asChild variant="ghost" size="sm" className="h-9 shrink-0 gap-1.5 px-2 text-xs">
+                <Link to={`/admin/customers/${order.customerId}/history` as string}>
+                  <History className="h-3.5 w-3.5" />
+                  View
+                </Link>
+              </Button>
+            ) : null}
+          </div>
+          <a
+            href={`tel:${order.customerPhone}`}
+            className="mt-1 inline-flex min-h-11 items-center text-sm text-muted-foreground hover:text-primary sm:min-h-0"
+          >
+            {formatPhoneForDisplay(order.customerPhone)}
+          </a>
+          {order.customerEmail ? (
+            <a
+              href={`mailto:${order.customerEmail}`}
+              className="block min-h-11 break-all py-2 text-sm text-muted-foreground hover:text-primary sm:min-h-0 sm:py-0.5"
+            >
+              {order.customerEmail}
+            </a>
+          ) : null}
+        </section>
+
+        <section className="min-w-0 md:px-5">
+          <h2 className="text-xs font-medium text-muted-foreground">Delivery address</h2>
+          <p className="mt-1 text-sm leading-6">{shippingLocation || "No address"}</p>
+        </section>
+
+        <section className="min-w-0 md:pl-5">
+          <h2 className="text-xs font-medium text-muted-foreground">Total</h2>
+          <p className="mt-1 text-lg font-semibold">
+            {savedSummary
+              ? formatSavedMinorAmount(savedSummary.totalMinor, savedSummary)
+              : `${symbol}${formatOrderAmount(grandTotal)}`}
+          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            {order.paymentStatus ? (
+              <Badge
+                variant="secondary"
+                className={`text-xs ${PAYMENT_STATUS_COLORS[order.paymentStatus] ?? ""}`}
+              >
+                {order.paymentStatus.charAt(0).toUpperCase() + order.paymentStatus.slice(1)}
+              </Badge>
+            ) : null}
+            {order.paymentMethod ? (
+              <span className="text-xs text-muted-foreground">
+                {PAYMENT_METHOD_LABELS[order.paymentMethod] ?? order.paymentMethod}
+              </span>
+            ) : null}
+            {order.fulfillmentStatus ? (
+              <Badge
+                variant="secondary"
+                className={`text-xs font-medium ${FULFILLMENT_STATUS_COLORS[order.fulfillmentStatus] ?? ""}`}
+              >
+                {order.fulfillmentStatus.replace(/_/g, " ").replace(/\b\w/g, (character) => character.toUpperCase())}
+              </Badge>
+            ) : null}
+            {activeRefundOperation ? (
+              <Badge variant="secondary" className="gap-1 border-amber-200 bg-amber-50 text-xs text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
+                <AlertTriangle className="h-3 w-3" />
+                Refund recovery
+              </Badge>
+            ) : null}
+          </div>
+        </section>
       </div>
     </div>
   );
