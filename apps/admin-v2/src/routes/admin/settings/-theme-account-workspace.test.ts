@@ -81,6 +81,7 @@ describe("theme and account settings workspace", () => {
     expect(source).toContain('aria-label="Account settings"');
     expect(source).toContain('aria-current={active ? "page" : undefined}');
     expect(source).toContain("overflow-x-auto");
+    expect(source.match(/hidden px-3/g)).toHaveLength(2);
     expect(source).toContain("min-h-11");
     expect(source).toContain("renderSection");
     expect(source).not.toContain("TabsList");
@@ -91,6 +92,17 @@ describe("theme and account settings workspace", () => {
     const routeSource = readSource("routes/admin/settings/account.tsx");
     expect(routeSource).toContain("validateAccountSearch");
     expect(routeSource).toContain("onSectionChange={handleSectionChange}");
+    expect(routeSource).not.toContain(
+      "Manage your identity, sign-in security, and store access.",
+    );
+
+    const profileSource = readSource(
+      "components/admin/account-settings/ProfileHeader.tsx",
+    );
+    expect(profileSource).not.toContain(
+      "Your name and photo appear in administrator activity and shared work.",
+    );
+    expect(profileSource).toContain("h-11 w-11 rounded-full sm:h-8 sm:w-8");
 
     const usersSource = readSource(
       "components/admin/account-settings/AdminUsersManager.tsx",

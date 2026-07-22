@@ -4,7 +4,6 @@ import { Input } from "~/components/ui/input";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "~/components/ui/card";
@@ -127,9 +126,6 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
           <UserRound className="h-4 w-4" aria-hidden="true" />
           Profile
         </CardTitle>
-        <CardDescription className="text-xs sm:text-sm">
-          Your name and photo appear in administrator activity and shared work.
-        </CardDescription>
       </CardHeader>
       <CardContent className="p-4">
         <div className="grid gap-3 sm:grid-cols-[52px_minmax(0,1fr)] sm:items-center">
@@ -156,7 +152,7 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
                 type="button"
                 variant="destructive"
                 size="icon"
-                className="absolute -bottom-1 -right-1 h-8 w-8 rounded-full"
+                className="absolute -bottom-1 -right-1 h-11 w-11 rounded-full sm:h-8 sm:w-8"
                 onClick={removeImage}
                 title="Remove photo"
                 aria-label="Remove profile photo"
@@ -248,7 +244,6 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
               <MediaManager
                 capability="image"
                 onSelect={handleImageSelect}
-                triggerLabel={image ? "Change Photo" : "Add Photo"}
                 trigger={
                   <Button
                     type="button"
