@@ -3,6 +3,10 @@
 import { defineMiddleware, sequence } from "astro:middleware";
 import { env as cfEnv } from "cloudflare:workers";
 import { hasStorefrontProductVariantSelectionParams } from "@scalius/shared/storefront-cache-path";
+import {
+  applyBaselineSecurityHeaders,
+  redirectPlaintextRequest,
+} from "@scalius/shared/http-security";
 import { apiContext } from "@/lib/api/context";
 import { setPageCspHeader } from "@/lib/middleware-helper/csp-handler";
 import { setEdgeCacheContext, cacheContextAls } from "@/lib/edge-cache";
@@ -381,4 +385,18 @@ const apiContextMiddleware = defineMiddleware((_context, next) => {
   }, next);
 });
 
-export const onRequest = sequence(apiContextMiddleware, cachingMiddleware);
+const transportSecurityMiddleware = defineMiddleware(async ({ request }, next) => {
+  const redirect = redirectPlaintextRequest(request);
+  if (redirect) return redirect;
+
+  const response = await next();
+  return applyBaselineSecurityHeaders(request, response, {
+    frameProtection: "same-origin",
+  });
+});
+
+export const onRequest = sequence(
+  transportSecurityMiddleware,
+  apiContextMiddleware,
+  cachingMiddleware,
+);

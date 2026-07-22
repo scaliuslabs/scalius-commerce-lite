@@ -16,10 +16,7 @@ import {
 } from "@/components/ui/card";
 import { Loader2, AlertCircle, KeyRound, Mail, Smartphone, Shield, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
-import {
-  complete2faVerification,
-  get2faInfo,
-} from "@/lib/api-functions/auth-management";
+import { get2faInfo } from "@/lib/api-functions/auth-management";
 import {
   chooseInitialTwoFactorMethod,
   clearPendingTwoFactorMethods,
@@ -136,14 +133,6 @@ export function TwoFactorForm({ defaultMethod }: TwoFactorFormProps) {
         return;
       }
 
-      const sessionToken = verifyResult.data?.token;
-      if (!sessionToken) {
-        setError("Verification succeeded, but no session proof was returned.");
-        setIsLoading(false);
-        return;
-      }
-
-      await complete2faVerification({ data: { sessionToken } });
       clearPendingTwoFactorMethods();
 
       await navigate({ to: "/admin" });

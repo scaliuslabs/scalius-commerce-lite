@@ -30,6 +30,21 @@ function getPermissionKv(c: { env: Env }): KVNamespace | undefined {
     return c.env.CACHE as KVNamespace | undefined;
 }
 
+export function assertPermissionSubset(
+    sessionUser: { isSuperAdmin?: boolean },
+    callerPermissions: Set<string>,
+    requestedPermissions: Iterable<string>,
+): void {
+    if (sessionUser.isSuperAdmin === true) return;
+    for (const permission of requestedPermissions) {
+        if (!callerPermissions.has(permission)) {
+            throw new ForbiddenError(
+                "You cannot grant or restore permissions you do not have",
+            );
+        }
+    }
+}
+
 // -- Validation Schemas --
 
 const createRoleSchema = z.object({
@@ -139,6 +154,11 @@ app.openapi(createRoleRoute, (async (c: AdminRouteContext<typeof createRoleRoute
         }
 
         const data = c.req.valid("json");
+        assertPermissionSubset(
+            sessionUser,
+            c.get("adminPermissions"),
+            data.permissions,
+        );
 
         const existingRole = await db.select().from(roles).where(eq(roles.name, data.name)).limit(1);
         if (existingRole.length > 0) {
@@ -298,6 +318,11 @@ app.openapi(updateRoleRoute, async (c) => {
         }
 
         if (data.permissions !== undefined) {
+            assertPermissionSubset(
+                sessionUser,
+                c.get("adminPermissions"),
+                data.permissions,
+            );
             if (role.isSystem) {
                 throw new ValidationError("Cannot modify permissions of system roles");
             }
@@ -460,6 +485,14 @@ app.openapi(assignRoleRoute, async (c) => {
         if (role.length === 0) {
             throw new NotFoundError("Role not found");
         }
+        if (role[0]?.name === "super_admin" && sessionUser.isSuperAdmin !== true) {
+            throw new ForbiddenError("Only the store owner can assign the Super Admin role");
+        }
+        assertPermissionSubset(
+            sessionUser,
+            c.get("adminPermissions"),
+            await getRolePermissions(db, data.roleId),
+        );
 
         const existingAssignment = await db
             .select()
@@ -577,6 +610,12 @@ app.openapi(setOverrideRoute, async (c) => {
             throw new ValidationError("Cannot modify super admin's permissions");
         }
 
+        assertPermissionSubset(
+            sessionUser,
+            c.get("adminPermissions"),
+            [data.permission],
+        );
+
         try {
             await setUserPermissionOverride(db, data.userId, data.permission, data.granted, sessionUser.id, kv);
         } catch (error: unknown) {
@@ -636,6 +675,12 @@ app.openapi(removeOverrideRoute, async (c) => {
         if (targetUser[0]?.isSuperAdmin) {
             throw new ValidationError("Cannot modify super admin's permissions");
         }
+
+        assertPermissionSubset(
+            sessionUser,
+            c.get("adminPermissions"),
+            [data.permission],
+        );
 
         await removeUserPermissionOverride(db, data.userId, data.permission, kv);
 

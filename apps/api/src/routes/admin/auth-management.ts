@@ -12,6 +12,7 @@ import {
 import {
     adminInvitations,
     permissions,
+    rolePermissions,
     roles,
     session as sessionTable,
     twoFactor as twoFactorTable,
@@ -314,8 +315,36 @@ app.openapi(createUserRoute, async (c) => {
         }
 
         if (roleId) {
-            const roleExists = await db.select({ id: roles.id }).from(roles).where(eq(roles.id, roleId)).get();
-            if (!roleExists) throw new ValidationError("Selected role does not exist");
+            const selectedRole = await db
+                .select({ id: roles.id, name: roles.name })
+                .from(roles)
+                .where(eq(roles.id, roleId))
+                .get();
+            if (!selectedRole) throw new ValidationError("Selected role does not exist");
+
+            if (selectedRole.name === "super_admin" && sessionUser.isSuperAdmin !== true) {
+                throw new ForbiddenError("Only the store owner can assign the Super Admin role");
+            }
+
+            const callerPermissions = c.get("adminPermissions");
+            if (sessionUser.isSuperAdmin !== true) {
+                const selectedRolePermissions = await db
+                    .select({ name: permissions.name })
+                    .from(rolePermissions)
+                    .innerJoin(
+                        permissions,
+                        eq(rolePermissions.permissionId, permissions.id),
+                    )
+                    .where(eq(rolePermissions.roleId, roleId));
+                const exceedsCallerAuthority = selectedRolePermissions.some(
+                    ({ name: permissionName }) => !callerPermissions.has(permissionName),
+                );
+                if (exceedsCallerAuthority) {
+                    throw new ForbiddenError(
+                        "You cannot assign a role with permissions you do not have",
+                    );
+                }
+            }
         }
 
         const existingUser = await db.select({ id: user.id }).from(user).where(eq(user.email, email)).get();
@@ -881,62 +910,6 @@ app.openapi(get2faInfoRoute, async (c) => {
     });
 });
 
-const complete2faVerificationRoute = createRoute({
-    method: "post",
-    path: "/2fa/complete-verification",
-    tags: ["Admin - Auth Management"],
-    summary: "Complete 2FA verification for a proven session",
-    request: {
-        body: {
-            content: {
-                "application/json": {
-                    schema: z.object({ sessionToken: z.string().min(32) })
-                }
-            }
-        }
-    },
-    responses: {
-        200: { description: "2FA verification completed", content: { "application/json": { schema: messageResponse } } },
-        ...errorResponses,
-    }
-});
-
-app.openapi(complete2faVerificationRoute, async (c) => {
-    const db = c.get("db");
-    const sessionUser = c.get("user");
-    const session = c.get("session");
-    const { sessionToken } = c.req.valid("json");
-
-    if (!session) {
-        throw new UnauthorizedError("No active session found");
-    }
-
-    if (!sessionUser.twoFactorEnabled) {
-        throw new ForbiddenError("Two-factor authentication is not enabled for this account");
-    }
-
-    const matchingSession = await db
-        .select({ id: sessionTable.id })
-        .from(sessionTable)
-        .where(and(
-            eq(sessionTable.id, session.id),
-            eq(sessionTable.userId, sessionUser.id),
-            eq(sessionTable.token, sessionToken),
-        ))
-        .get();
-
-    if (!matchingSession) {
-        throw new UnauthorizedError("Two-factor verification proof is invalid");
-    }
-
-    await db
-        .update(sessionTable)
-        .set({ twoFactorVerified: true })
-        .where(eq(sessionTable.id, matchingSession.id));
-
-    return ok(c, { message: "Two-factor authentication verified" });
-});
-
 const start2faMethodChallengeRoute = createRoute({
     method: "post",
     path: "/2fa/method-challenge",
@@ -1050,15 +1023,11 @@ const update2faMethodSchema = z.union([
     z.object({
         method: z.literal("email"),
         challengeId: z.string().regex(/^tfmc_[a-f0-9]{32}$/),
-        sessionToken: z.string().min(32),
+        code: z.string().regex(/^\d{6}$/),
     }),
     z.object({
         method: z.enum(["totp", "email"]),
-        code: z.string().min(1),
-    }),
-    z.object({
-        method: z.enum(["totp", "email"]),
-        sessionToken: z.string().min(32),
+        code: z.string().regex(/^\d{6}$/),
     }),
 ]);
 
@@ -1101,6 +1070,66 @@ app.openapi(update2faMethodRoute, async (c) => {
     if (!session) {
         throw new UnauthorizedError("No active session found");
     }
+
+    const verifySubmittedCode = async (
+        verificationMethod: "totp" | "email",
+        code: string,
+    ): Promise<{ sessionId: string; sessionToken: string }> => {
+        const auth = createAuth(c.env);
+        const verifiedProof = await (async () => {
+            try {
+                const betterAuthResult = verificationMethod === "email"
+                    ? await auth.api.verifyTwoFactorOTP({
+                        headers: c.req.raw.headers,
+                        body: { code, trustDevice: false },
+                        returnHeaders: true,
+                    }) as BetterAuthHeadersResult<{ token?: string }>
+                    : await auth.api.verifyTOTP({
+                        headers: c.req.raw.headers,
+                        body: { code, trustDevice: false },
+                        returnHeaders: true,
+                    }) as BetterAuthHeadersResult<{ token?: string }>;
+                appendBetterAuthSetCookies(c, betterAuthResult.headers);
+                const cookieSessionToken = getSessionTokenFromSetCookie(
+                    betterAuthResult.headers,
+                    auth,
+                );
+                return {
+                    token: cookieSessionToken ?? betterAuthResult.response?.token,
+                    allowRotatedCookieSession: Boolean(cookieSessionToken),
+                };
+            } catch {
+                throw new ValidationError("The verification code is invalid or expired");
+            }
+        })();
+
+        if (!verifiedProof.token) {
+            throw new UnauthorizedError("Two-factor verification did not return a session proof");
+        }
+        const verifiedSession = await db
+            .select({ id: sessionTable.id, token: sessionTable.token })
+            .from(sessionTable)
+            .where(
+                verifiedProof.allowRotatedCookieSession
+                    ? and(
+                        eq(sessionTable.token, verifiedProof.token),
+                        eq(sessionTable.userId, sessionUser.id),
+                    )
+                    : and(
+                        eq(sessionTable.id, session.id),
+                        eq(sessionTable.token, verifiedProof.token),
+                        eq(sessionTable.userId, sessionUser.id),
+                    ),
+            )
+            .get();
+        if (!verifiedSession) {
+            throw new UnauthorizedError("Two-factor method proof is invalid");
+        }
+        return {
+            sessionId: verifiedSession.id,
+            sessionToken: verifiedSession.token,
+        };
+    };
 
     if ("challengeId" in methodInput) {
         if (!sessionUser.twoFactorEnabled) {
@@ -1153,21 +1182,7 @@ app.openapi(update2faMethodRoute, async (c) => {
         const existingTwoFactor = existingTwoFactorRows[0]!;
 
         if (pending.method === "email") {
-            if (!("sessionToken" in methodInput)) {
-                throw new ValidationError("A verified email-session proof is required");
-            }
-            const proofSession = await db
-                .select({ id: sessionTable.id })
-                .from(sessionTable)
-                .where(and(
-                    eq(sessionTable.id, session.id),
-                    eq(sessionTable.userId, sessionUser.id),
-                    eq(sessionTable.token, methodInput.sessionToken),
-                ))
-                .get();
-            if (!proofSession) {
-                throw new UnauthorizedError("Two-factor method proof is invalid");
-            }
+            const proofSession = await verifySubmittedCode("email", methodInput.code);
 
             const claimedAt = new Date();
             const emailGuard = buildBatchGuard(db, sql`CASE WHEN EXISTS (
@@ -1181,9 +1196,9 @@ app.openapi(update2faMethodRoute, async (c) => {
                   AND ${user.twoFactorEnabled} = ${true}
             ) AND EXISTS (
                 SELECT 1 FROM ${sessionTable}
-                WHERE ${sessionTable.id} = ${session.id}
+                WHERE ${sessionTable.id} = ${proofSession.sessionId}
                   AND ${sessionTable.userId} = ${sessionUser.id}
-                  AND ${sessionTable.token} = ${methodInput.sessionToken}
+                  AND ${sessionTable.token} = ${proofSession.sessionToken}
             ) AND EXISTS (
                 SELECT 1 FROM ${twoFactorTable}
                 WHERE ${twoFactorTable.id} = ${existingTwoFactor.id}
@@ -1203,9 +1218,9 @@ app.openapi(update2faMethodRoute, async (c) => {
                     db.update(sessionTable)
                         .set({ twoFactorVerified: true, updatedAt: claimedAt })
                         .where(and(
-                            eq(sessionTable.id, session.id),
+                            eq(sessionTable.id, proofSession.sessionId),
                             eq(sessionTable.userId, sessionUser.id),
-                            eq(sessionTable.token, methodInput.sessionToken),
+                            eq(sessionTable.token, proofSession.sessionToken),
                         )),
                     db.delete(verification).where(and(
                         eq(verification.id, methodInput.challengeId),
@@ -1306,82 +1321,64 @@ app.openapi(update2faMethodRoute, async (c) => {
         );
     }
 
-    let verifiedSessionId = session.id;
-    const sessionToken = "sessionToken" in methodInput
-        ? methodInput.sessionToken
-        : undefined;
-    const code = "code" in methodInput ? methodInput.code : undefined;
-    if (sessionToken) {
-        const sessionByToken = await db
-            .select({ id: sessionTable.id })
-            .from(sessionTable)
-            .where(and(
-                eq(sessionTable.id, session.id),
-                eq(sessionTable.token, sessionToken),
-                eq(sessionTable.userId, sessionUser.id),
-            ))
-            .get();
-        if (!sessionByToken) {
-            throw new UnauthorizedError("Two-factor method proof is invalid");
-        }
-        verifiedSessionId = sessionByToken.id;
-    } else if (code) {
-        const auth = createAuth(c.env);
-        const verifiedProof = await (async () => {
-            try {
-                const betterAuthResult = method === "email"
-                    ? await auth.api.verifyTwoFactorOTP({
-                        headers: c.req.raw.headers,
-                        body: { code, trustDevice: false },
-                        returnHeaders: true,
-                    }) as BetterAuthHeadersResult<{ token?: string }>
-                    : await auth.api.verifyTOTP({
-                        headers: c.req.raw.headers,
-                        body: { code, trustDevice: false },
-                        returnHeaders: true,
-                    }) as BetterAuthHeadersResult<{ token?: string }>;
-                appendBetterAuthSetCookies(c, betterAuthResult.headers);
-                const cookieSessionToken = getSessionTokenFromSetCookie(betterAuthResult.headers, auth);
-                return {
-                    token: cookieSessionToken ?? betterAuthResult.response?.token,
-                    allowRotatedCookieSession: Boolean(cookieSessionToken),
-                };
-            } catch {
-                throw new ValidationError("The verification code is invalid or expired");
-            }
-        })();
-
-        const verifiedToken = verifiedProof.token;
-        if (verifiedToken) {
-            const sessionByToken = await db
-                .select({ id: sessionTable.id })
-                .from(sessionTable)
-                .where(
-                    verifiedProof.allowRotatedCookieSession
-                        ? and(
-                            eq(sessionTable.token, verifiedToken),
-                            eq(sessionTable.userId, sessionUser.id),
-                        )
-                        : and(
-                            eq(sessionTable.id, session.id),
-                            eq(sessionTable.token, verifiedToken),
-                            eq(sessionTable.userId, sessionUser.id),
-                        )
-                )
-                .get();
-            if (!sessionByToken) {
-                throw new UnauthorizedError("Two-factor method proof is invalid");
-            }
-            verifiedSessionId = sessionByToken.id;
-        }
+    const proofSession = await verifySubmittedCode(method, methodInput.code);
+    const twoFactorRows = await db
+        .select({ id: twoFactorTable.id })
+        .from(twoFactorTable)
+        .where(eq(twoFactorTable.userId, sessionUser.id))
+        .limit(2);
+    if (twoFactorRows.length !== 1) {
+        throw new ConflictError("Two-factor setup authority is unavailable");
     }
 
-    await db.update(sessionTable).set({ twoFactorVerified: true }).where(eq(sessionTable.id, verifiedSessionId));
-    await db.update(user).set({
-        twoFactorMethod: method,
-        mustEnrollTwoFactor: false,
-        updatedAt: new Date(),
-    }).where(eq(user.id, sessionUser.id));
+    const authority = twoFactorRows[0]!;
+    const committedAt = new Date();
+    const enrollmentGuard = buildBatchGuard(db, sql`CASE WHEN EXISTS (
+        SELECT 1 FROM ${sessionTable}
+        WHERE ${sessionTable.id} = ${proofSession.sessionId}
+          AND ${sessionTable.userId} = ${sessionUser.id}
+          AND ${sessionTable.token} = ${proofSession.sessionToken}
+    ) AND EXISTS (
+        SELECT 1 FROM ${twoFactorTable}
+        WHERE ${twoFactorTable.id} = ${authority.id}
+          AND ${twoFactorTable.userId} = ${sessionUser.id}
+    ) AND EXISTS (
+        SELECT 1 FROM ${user}
+        WHERE ${user.id} = ${sessionUser.id}
+          AND ${user.twoFactorEnabled} = ${true}
+    ) THEN 1 ELSE json_extract('TWO_FACTOR_ENROLLMENT_CONFLICT', '$') END`);
+    try {
+        await safeBatch(db, [
+            enrollmentGuard,
+            db.update(twoFactorTable)
+                .set({ verified: true, updatedAt: committedAt })
+                .where(and(
+                    eq(twoFactorTable.id, authority.id),
+                    eq(twoFactorTable.userId, sessionUser.id),
+                )),
+            db.update(user)
+                .set({
+                    twoFactorEnabled: true,
+                    twoFactorMethod: method,
+                    mustEnrollTwoFactor: false,
+                    updatedAt: committedAt,
+                })
+                .where(eq(user.id, sessionUser.id)),
+            db.update(sessionTable)
+                .set({ twoFactorVerified: true, updatedAt: committedAt })
+                .where(and(
+                    eq(sessionTable.id, proofSession.sessionId),
+                    eq(sessionTable.userId, sessionUser.id),
+                    eq(sessionTable.token, proofSession.sessionToken),
+                )),
+        ]);
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (/TWO_FACTOR_ENROLLMENT_CONFLICT|malformed json/iu.test(message)) {
+            throw new ConflictError("Two-factor enrollment changed before it could be committed");
+        }
+        throw error;
+    }
 
     return ok(c, {});
 });
@@ -1440,28 +1437,24 @@ app.openapi(verify2faRoute, async (c) => {
     })() as { token?: string; user?: { id: string } } | null;
 
     const sessionToken = verifyResult?.token;
-    if (sessionToken) {
-        const sessionByToken = await db
-            .select({ id: sessionTable.id })
-            .from(sessionTable)
-            .where(and(
-                eq(sessionTable.id, session.id),
-                eq(sessionTable.userId, sessionUser.id),
-                eq(sessionTable.token, sessionToken),
-            ))
-            .get();
-        if (!sessionByToken) {
-            throw new UnauthorizedError("Two-factor verification proof is invalid");
-        }
-
-        await db.update(sessionTable).set({ twoFactorVerified: true }).where(eq(sessionTable.id, sessionByToken.id));
-        return ok(c, { message: "Two-factor authentication verified" });
+    if (!sessionToken) {
+        throw new UnauthorizedError("Two-factor verification did not return a session proof");
     }
 
-    await db.update(sessionTable).set({ twoFactorVerified: true }).where(and(
-        eq(sessionTable.id, session.id),
-        eq(sessionTable.userId, sessionUser.id),
-    ));
+    const sessionByToken = await db
+        .select({ id: sessionTable.id })
+        .from(sessionTable)
+        .where(and(
+            eq(sessionTable.id, session.id),
+            eq(sessionTable.userId, sessionUser.id),
+            eq(sessionTable.token, sessionToken),
+        ))
+        .get();
+    if (!sessionByToken) {
+        throw new UnauthorizedError("Two-factor verification proof is invalid");
+    }
+
+    await db.update(sessionTable).set({ twoFactorVerified: true }).where(eq(sessionTable.id, sessionByToken.id));
     return ok(c, { message: "Two-factor authentication verified" });
 });
 

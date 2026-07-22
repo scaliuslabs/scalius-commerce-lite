@@ -12,17 +12,6 @@ import {
   CardTitle,
 } from "~/components/ui/card";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "~/components/ui/alert-dialog";
-import {
   Loader2,
   Shield,
   ShieldCheck,
@@ -43,7 +32,7 @@ import type { User } from "./AccountSettingsContainer";
 
 type TwoFactorStep = "method" | "password" | "qr" | "verify" | "backup";
 type TwoFactorMethod = "totp" | "email";
-type SetupMode = "enable" | "disable" | "change";
+type SetupMode = "enable" | "change";
 
 interface TwoFactorSetupProps {
   user: User;
@@ -72,29 +61,10 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
     code: string,
     challengeId?: string,
   ) => {
-    if (method === "totp") {
-      await set2faMethod({ data: { method, code } });
-      return;
-    }
-
-    const result = await authClient.twoFactor.verifyOtp({
-      code,
-      trustDevice: false,
-    });
-
-    if (result.error) {
-      throw new Error(result.error.message || "Invalid verification code");
-    }
-
-    const sessionToken = result.data?.token;
-    if (!sessionToken) {
-      throw new Error("Verification succeeded, but no session proof was returned.");
-    }
-
     await set2faMethod({
       data: challengeId
-        ? { method: "email", challengeId, sessionToken }
-        : { method, sessionToken },
+        ? { method, challengeId, code }
+        : { method, code },
     });
   };
 
@@ -258,30 +228,6 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
     }
   };
 
-  const handleDisable2FA = async () => {
-    setError(null);
-    setIsLoading(true);
-
-    try {
-      const result = await authClient.twoFactor.disable({ password });
-
-      if (result.error) {
-        setError(result.error.message || "Failed to disable 2FA");
-        return;
-      }
-
-      setIsEnabled(false);
-      setShowSetup(false);
-      resetState();
-      refreshAdminContext();
-      toast.success("Two-factor authentication disabled");
-    } catch {
-      setError("Failed to disable 2FA");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const handleResendOtp = async () => {
     setIsLoading(true);
     try {
@@ -347,9 +293,7 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
   const startSetup = (mode: SetupMode) => {
     setSetupMode(mode);
     setShowSetup(true);
-    if (mode === "disable") {
-      setStep("password");
-    } else if (mode === "change") {
+    if (mode === "change") {
       setStep("method");
       setSelectedMethod(currentMethod === "totp" ? "email" : "totp");
     } else {
@@ -363,16 +307,12 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
         <CardHeader className="p-4 pb-3">
           <CardTitle className="flex items-center gap-2 text-base">
             <Shield className="h-4 w-4" />
-            {setupMode === "disable"
-              ? "Disable two-factor authentication"
-              : setupMode === "change"
+            {setupMode === "change"
                 ? "Change verification method"
                 : "Enable two-factor authentication"}
           </CardTitle>
           <CardDescription>
-            {setupMode === "disable"
-              ? "Confirm your password before changing this security requirement."
-              : setupMode === "change"
+            {setupMode === "change"
                 ? "Verify a replacement method before the current method changes."
                 : "Choose and verify the method used when you sign in."}
           </CardDescription>
@@ -463,59 +403,26 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
                 />
               </div>
               <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-                {setupMode === "disable" ? (
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button
-                        type="button"
-                        disabled={isLoading || !password}
-                        variant="destructive"
-                        className="min-h-11 sm:order-2 sm:min-h-9 sm:flex-none"
-                      >
-                        Turn off two-factor
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent className="max-w-sm">
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Turn off two-factor authentication?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          This account will return to setup required. Admin access may be restricted until a method is verified again.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel className="min-h-11 sm:min-h-9">Keep enabled</AlertDialogCancel>
-                        <AlertDialogAction
-                          className="min-h-11 bg-destructive text-destructive-foreground hover:bg-destructive/90 sm:min-h-9"
-                          onClick={() => void handleDisable2FA()}
-                        >
-                          Turn off two-factor
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                ) : (
-                  <Button
-                    onClick={() => {
-                      if (setupMode === "change" && selectedMethod === "totp") {
-                        handleSetupTotpForChange();
-                      } else if (setupMode === "change") {
-                        handleSetupEmailForChange();
-                      } else {
-                        handleEnable2FA();
-                      }
-                    }}
-                    disabled={isLoading || !password}
-                    className="min-h-11 sm:order-2 sm:min-h-9 sm:flex-none"
-                  >
-                    {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                    Continue
-                  </Button>
-                )}
+                <Button
+                  onClick={() => {
+                    if (setupMode === "change" && selectedMethod === "totp") {
+                      handleSetupTotpForChange();
+                    } else if (setupMode === "change") {
+                      handleSetupEmailForChange();
+                    } else {
+                      handleEnable2FA();
+                    }
+                  }}
+                  disabled={isLoading || !password}
+                  className="min-h-11 sm:order-2 sm:min-h-9 sm:flex-none"
+                >
+                  {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Continue
+                </Button>
                 <Button
                   variant="outline"
                   onClick={() => {
-                    if (setupMode === "enable" || setupMode === "change") setStep("method");
-                    else { setShowSetup(false); resetState(); }
+                    setStep("method");
                   }}
                   disabled={isLoading}
                   className="min-h-11 sm:min-h-9"
@@ -690,13 +597,6 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
             <div className="flex flex-col gap-2 sm:flex-row">
               <Button variant="outline" onClick={() => startSetup("change")} className="min-h-11 flex-1 sm:min-h-9">
                 Change method
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => startSetup("disable")}
-                className="min-h-11 text-destructive hover:bg-destructive/10 hover:text-destructive sm:min-h-9"
-              >
-                Turn off
               </Button>
             </div>
           </div>

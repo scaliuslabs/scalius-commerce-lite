@@ -107,6 +107,10 @@ describe("createAuth", () => {
       throw new Error("Expected Drizzle adapter options");
     }
     expect(adapterOptions.schema?.twoFactor).toHaveProperty("verified");
+    expect(adapterOptions.schema?.twoFactor).toHaveProperty(
+      "failedVerificationCount",
+    );
+    expect(adapterOptions.schema?.twoFactor).toHaveProperty("lockedUntil");
   });
 
   it("encrypts new recovery-code rows while retaining legacy plaintext reads", async () => {
@@ -153,6 +157,36 @@ describe("createAuth", () => {
     };
 
     expect(options.emailAndPassword?.revokeSessionsOnPasswordReset).toBe(true);
+  });
+
+  it("keeps auth abuse limits in the database and targets the current reset route", () => {
+    createAuth({
+      BETTER_AUTH_SECRET: "test-secret",
+      PUBLIC_API_BASE_URL: "http://localhost:8787",
+    } as never);
+
+    const options = mocks.betterAuth.mock.calls[0]?.[0] as {
+      rateLimit?: {
+        storage?: string;
+        customRules?: Record<string, unknown>;
+      };
+    };
+    const adapterCalls = mocks.drizzleAdapter.mock.calls as unknown as Array<
+      [unknown, { schema?: { rateLimit?: Record<string, unknown> } }]
+    >;
+
+    expect(options.rateLimit?.storage).toBe("database");
+    expect(options.rateLimit?.customRules).toHaveProperty(
+      "/request-password-reset",
+    );
+    expect(options.rateLimit?.customRules).not.toHaveProperty(
+      "/forget-password",
+    );
+    expect(adapterCalls[0]?.[1].schema?.rateLimit).toHaveProperty(
+      "lastRequest",
+    );
+    expect(adapterCalls[0]?.[1].schema?.rateLimit).toHaveProperty("id");
+    expect(adapterCalls[0]?.[1].schema?.rateLimit).toHaveProperty("key");
   });
 
   it("does not use JWT_SECRET to decrypt Resend settings for Better Auth email callbacks", async () => {
@@ -257,6 +291,38 @@ describe("createAuth", () => {
     );
   });
 
+  it("does not let invitation bookkeeping block password-reset session revocation", async () => {
+    const where = vi.fn(() => ({ kind: "update" }));
+    const set = vi.fn(() => ({ where }));
+    mocks.getDb.mockReturnValueOnce({
+      id: "db",
+      update: vi.fn(() => ({ set })),
+    } as never);
+    mocks.safeBatch.mockRejectedValueOnce(new Error("D1 unavailable"));
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    try {
+      createAuth({
+        BETTER_AUTH_SECRET: "test-secret",
+        PUBLIC_API_BASE_URL: "http://localhost:8787",
+      } as never);
+      const options = mocks.betterAuth.mock.calls[0]?.[0] as {
+        emailAndPassword?: {
+          onPasswordReset?: (input: { user: { id: string } }) => Promise<void>;
+        };
+      };
+
+      await expect(options.emailAndPassword?.onPasswordReset?.({
+        user: { id: "user_1" },
+      })).resolves.toBeUndefined();
+      expect(errorSpy).toHaveBeenCalledWith(
+        "Password-reset onboarding reconciliation failed",
+      );
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
   it("records a delivered administrator setup link with its real one-hour lifetime", async () => {
     const inviteGet = vi.fn(async () => ({
       role: "admin",
@@ -287,7 +353,7 @@ describe("createAuth", () => {
         resetPasswordTokenExpiresIn?: number;
         sendResetPassword?: (input: {
           user: { id: string; email: string; name: string };
-          url: string;
+          token: string;
         }) => Promise<void>;
       };
     };
@@ -296,7 +362,7 @@ describe("createAuth", () => {
     expect(options.emailAndPassword?.resetPasswordTokenExpiresIn).toBe(60 * 60);
     await options.emailAndPassword?.sendResetPassword?.({
       user: { id: "user_1", email: "invite@example.com", name: "Invitee" },
-      url: "https://dashboard.example.com/auth/reset-password?token=secret",
+      token: "one_time_reset_secret",
     });
     const sentState = updateSet.mock.calls.at(-1)?.[0] as {
       deliveryStatus?: string;
@@ -312,6 +378,9 @@ describe("createAuth", () => {
     expect(mocks.sendEmail).toHaveBeenCalledWith(
       expect.objectContaining({
         subject: "Set up your Scalius Commerce admin account",
+        html: expect.stringContaining(
+          "http://localhost:8787/auth/reset-password#token=one_time_reset_secret",
+        ),
       }),
       expect.anything(),
     );
@@ -347,14 +416,14 @@ describe("createAuth", () => {
       emailAndPassword?: {
         sendResetPassword?: (input: {
           user: { id: string; email: string; name: string };
-          url: string;
+          token: string;
         }) => Promise<void>;
       };
     };
 
     await expect(options.emailAndPassword?.sendResetPassword?.({
       user: { id: "user_1", email: "invite@example.com", name: "Invitee" },
-      url: "https://dashboard.example.com/auth/reset-password?token=secret",
+      token: "one_time_reset_secret",
     })).rejects.toThrow("Password reset email delivery failed");
     expect(updateSet).toHaveBeenCalledWith(expect.objectContaining({
       deliveryStatus: "failed",

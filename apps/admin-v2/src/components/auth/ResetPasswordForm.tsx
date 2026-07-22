@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { AlertCircle, CheckCircle2, Loader2, Lock } from "lucide-react";
-import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -28,7 +27,7 @@ function getResetError(error: unknown) {
 }
 
 export function ResetPasswordForm() {
-  const [token, setToken] = useState<string | null>(null);
+  const [resetSessionReady, setResetSessionReady] = useState(false);
   const [tokenReady, setTokenReady] = useState(false);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -38,16 +37,42 @@ export function ResetPasswordForm() {
   const isHydrated = useHydrated();
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    setToken(params.get("token"));
-    setTokenReady(true);
+    let active = true;
+    const exchangeResetToken = async () => {
+      const query = new URLSearchParams(window.location.search);
+      const fragment = new URLSearchParams(window.location.hash.slice(1));
+      const token = fragment.get("token") ?? query.get("token");
+
+      // Remove both current fragment links and legacy query links before any
+      // form, image, analytics, or navigation request can reuse the token.
+      window.history.replaceState(null, "", window.location.pathname);
+      if (!token) {
+        if (active) setTokenReady(true);
+        return;
+      }
+
+      try {
+        const response = await fetch("/api/auth/reset-session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token }),
+        });
+        if (active) setResetSessionReady(response.ok);
+      } finally {
+        if (active) setTokenReady(true);
+      }
+    };
+    void exchangeResetToken();
+    return () => {
+      active = false;
+    };
   }, []);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
 
-    if (!token || token === "INVALID_TOKEN") {
+    if (!resetSessionReady) {
       setError("This reset link is invalid or has expired.");
       return;
     }
@@ -64,11 +89,15 @@ export function ResetPasswordForm() {
 
     setIsLoading(true);
     try {
-      await authClient.resetPassword({
-        newPassword: password,
-        token,
-        fetchOptions: { throw: true },
+      const response = await fetch("/api/auth/reset-password-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ newPassword: password }),
       });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null) as { message?: string } | null;
+        throw new Error(body?.message || "This reset link is invalid or expired.");
+      }
       setPassword("");
       setConfirmPassword("");
       setIsComplete(true);
@@ -116,7 +145,7 @@ export function ResetPasswordForm() {
     );
   }
 
-  const invalidToken = !token || token === "INVALID_TOKEN";
+  const invalidToken = !resetSessionReady;
 
   return (
     <Card className="w-full border-0 bg-transparent shadow-none">

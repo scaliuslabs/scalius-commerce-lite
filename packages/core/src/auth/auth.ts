@@ -7,6 +7,7 @@ import { getDb, safeBatch } from "@scalius/database/client";
 import * as schema from "@scalius/database/schema";
 import { escapeHtml } from "@scalius/shared/html-escape";
 import { createTwoFactorRecoveryCodeStorage } from "./two-factor-method-challenge";
+import { retryTransientD1 } from "../utils/transient-d1";
 
 function getEmailRuntimeContext(env?: Env | NodeJS.ProcessEnv) {
   const source = (env ?? process.env) as Record<string, unknown>;
@@ -51,6 +52,7 @@ export function createAuth(env?: Env | NodeJS.ProcessEnv) {
         account: schema.account,
         verification: schema.verification,
         twoFactor: schema.twoFactor,
+        rateLimit: schema.rateLimit,
       },
     }),
     secret,
@@ -91,7 +93,10 @@ export function createAuth(env?: Env | NodeJS.ProcessEnv) {
         }, emailRuntimeContext);
       },
       // Password reset callback
-      sendResetPassword: async ({ user, url }: { user: { id: string; email: string; name: string }; url: string }) => {
+      sendResetPassword: async ({ user, token }: {
+        user: { id: string; email: string; name: string };
+        token: string;
+      }) => {
         const { sendEmail } = await import("../integrations/email");
         const inviteState = await db
           .select({
@@ -119,6 +124,13 @@ export function createAuth(env?: Env | NodeJS.ProcessEnv) {
           ? "You have been invited to Scalius Commerce admin. Click the button below to choose your password."
           : "We received a request to reset your password. Click the button below to create a new password.";
         const buttonLabel = isAdminInviteSetup ? "Set Password" : "Reset Password";
+        if (!baseURL) {
+          throw new Error("BETTER_AUTH_URL is required for password reset links");
+        }
+        const resetLink = new URL("/auth/reset-password", baseURL);
+        // Fragments are not sent to Cloudflare or included in Referer. The
+        // dashboard exchanges and removes this one-time value immediately.
+        resetLink.hash = `token=${encodeURIComponent(token)}`;
         const delivery = await sendEmail({
           to: user.email,
           subject,
@@ -128,12 +140,12 @@ export function createAuth(env?: Env | NodeJS.ProcessEnv) {
               <p>Hi ${escapeHtml(user.name)},</p>
               <p>${intro}</p>
               <p style="margin: 30px 0;">
-                <a href="${url}" style="background-color: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
+                <a href="${resetLink.href}" style="background-color: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
                   ${buttonLabel}
                 </a>
               </p>
               <p>Or copy and paste this link in your browser:</p>
-              <p style="color: #666; word-break: break-all;">${url}</p>
+              <p style="color: #666; word-break: break-all;">${resetLink.href}</p>
               ${isAdminInviteSetup ? "<p>After choosing a password, you will need to enable two-factor authentication before admin access is allowed.</p>" : ""}
               <p>This link expires in 1 hour. If you didn't request a password reset, you can safely ignore this email.</p>
               <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
@@ -173,18 +185,27 @@ export function createAuth(env?: Env | NodeJS.ProcessEnv) {
       },
       onPasswordReset: async ({ user }: { user: { id: string } }) => {
         const acceptedAt = new Date();
-        await safeBatch(db, [
-          db.update(schema.user)
-            .set({ mustChangePassword: false, updatedAt: acceptedAt })
-            .where(eq(schema.user.id, user.id)),
-          db.update(schema.adminInvitations)
-            .set({
-              status: "accepted",
-              acceptedAt,
-              updatedAt: acceptedAt,
-            })
-            .where(eq(schema.adminInvitations.userId, user.id)),
-        ]);
+        try {
+          await retryTransientD1(
+            () => safeBatch(db, [
+              db.update(schema.user)
+                .set({ mustChangePassword: false, updatedAt: acceptedAt })
+                .where(eq(schema.user.id, user.id)),
+              db.update(schema.adminInvitations)
+                .set({
+                  status: "accepted",
+                  acceptedAt,
+                  updatedAt: acceptedAt,
+                })
+                .where(eq(schema.adminInvitations.userId, user.id)),
+            ]),
+            { delaysMs: [100, 250] },
+          );
+        } catch {
+          // Better Auth revokes existing sessions after this callback returns.
+          // Never let ancillary invitation bookkeeping prevent that revocation.
+          console.error("Password-reset onboarding reconciliation failed");
+        }
       },
     },
     session: {
@@ -208,6 +229,9 @@ export function createAuth(env?: Env | NodeJS.ProcessEnv) {
     // Rate limiting configuration for security
     rateLimit: {
       enabled: true,
+      // Workers isolates do not share memory. Keep abuse counters in D1 so
+      // limits survive isolate churn and apply consistently across the edge.
+      storage: "database",
       window: 60, // 60 seconds window
       max: 100, // 100 requests per window for general endpoints
       customRules: {
@@ -217,7 +241,7 @@ export function createAuth(env?: Env | NodeJS.ProcessEnv) {
           max: 5, // Only 5 attempts per minute
         },
         // Strict rate limiting for password reset
-        "/forget-password": {
+        "/request-password-reset": {
           window: 300, // 5 minutes
           max: 3, // Only 3 requests per 5 minutes
         },

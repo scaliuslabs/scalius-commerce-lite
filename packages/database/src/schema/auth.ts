@@ -104,6 +104,8 @@ export const twoFactor = sqliteTable("two_factor", {
     secret: text("secret").notNull(),
     backupCodes: text("backup_codes").notNull(),
     verified: integer("verified", { mode: "boolean" }).notNull().default(true),
+    failedVerificationCount: integer("failed_verification_count").notNull().default(0),
+    lockedUntil: integer("locked_until", { mode: "timestamp" }),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
         .default(UNIX_NOW),
@@ -112,6 +114,18 @@ export const twoFactor = sqliteTable("two_factor", {
         .default(UNIX_NOW),
 }, (table) => [
     index("two_factor_user_id_idx").on(table.userId),
+]);
+
+// Better Auth's distributed rate-limit authority. Milliseconds are required by
+// Better Auth, so lastRequest deliberately does not use timestamp mode.
+export const rateLimit = sqliteTable("rate_limit", {
+    id: text("id").primaryKey(),
+    key: text("key").notNull(),
+    count: integer("count").notNull(),
+    lastRequest: integer("last_request").notNull(),
+}, (table) => [
+    uniqueIndex("rate_limit_key_uidx").on(table.key),
+    index("rate_limit_last_request_idx").on(table.lastRequest),
 ]);
 
 export const adminSetupClaims = sqliteTable("admin_setup_claims", {
@@ -189,6 +203,7 @@ export type Session = InferSelectModel<typeof session>;
 export type Account = InferSelectModel<typeof account>;
 export type Verification = InferSelectModel<typeof verification>;
 export type TwoFactor = InferSelectModel<typeof twoFactor>;
+export type RateLimit = InferSelectModel<typeof rateLimit>;
 export type AdminSetupClaim = InferSelectModel<typeof adminSetupClaims>;
 export type AdminSetupRateLimit = InferSelectModel<typeof adminSetupRateLimits>;
 export type AdminInvitation = InferSelectModel<typeof adminInvitations>;

@@ -38712,100 +38712,6 @@ export type GetApiV1AdminAuth2FaInfoResponses = {
 
 export type GetApiV1AdminAuth2FaInfoResponse = GetApiV1AdminAuth2FaInfoResponses[keyof GetApiV1AdminAuth2FaInfoResponses];
 
-export type PostApiV1AdminAuth2FaCompleteVerificationData = {
-    body?: {
-        sessionToken: string;
-    };
-    path?: never;
-    query?: never;
-    url: '/api/v1/admin/auth/2fa/complete-verification';
-};
-
-export type PostApiV1AdminAuth2FaCompleteVerificationErrors = {
-    /**
-     * Validation error
-     */
-    400: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Unauthorized
-     */
-    401: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Forbidden
-     */
-    403: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Not found
-     */
-    404: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Rate limit exceeded
-     */
-    429: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Server error
-     */
-    500: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-};
-
-export type PostApiV1AdminAuth2FaCompleteVerificationError = PostApiV1AdminAuth2FaCompleteVerificationErrors[keyof PostApiV1AdminAuth2FaCompleteVerificationErrors];
-
-export type PostApiV1AdminAuth2FaCompleteVerificationResponses = {
-    /**
-     * 2FA verification completed
-     */
-    200: {
-        success: true;
-        data: {
-            message: string;
-        };
-    };
-};
-
-export type PostApiV1AdminAuth2FaCompleteVerificationResponse = PostApiV1AdminAuth2FaCompleteVerificationResponses[keyof PostApiV1AdminAuth2FaCompleteVerificationResponses];
-
 export type PostApiV1AdminAuth2FaMethodChallengeData = {
     body?: {
         method: 'totp' | 'email';
@@ -38911,13 +38817,10 @@ export type PostApiV1AdminAuth2FaMethodData = {
     } | {
         method: 'email';
         challengeId: string;
-        sessionToken: string;
-    } | {
-        method: 'totp' | 'email';
         code: string;
     } | {
         method: 'totp' | 'email';
-        sessionToken: string;
+        code: string;
     };
     path?: never;
     query?: never;

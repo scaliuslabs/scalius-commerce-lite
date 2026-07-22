@@ -30,17 +30,17 @@ function ForgotPasswordPage() {
 
     setIsLoading(true);
     try {
-      await fetch("/api/auth/forget-password", {
+      const response = await fetch("/api/auth/request-password-reset", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, redirectTo: "/auth/reset-password" }),
       });
+      if (!response.ok) {
+        throw new Error("Password recovery is unavailable");
+      }
       setSubmitted(true);
     } catch {
-      // Always show success to prevent email enumeration.
-      // The server won't send an email if the account doesn't exist,
-      // but we don't reveal that to the user.
-      setSubmitted(true);
+      setError("We couldn't send a reset link. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -114,7 +114,7 @@ function ForgotPasswordPage() {
           />
         </div>
         {error && (
-          <p className="text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-lg p-3">
+          <p role="alert" className="text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-lg p-3">
             {error}
           </p>
         )}

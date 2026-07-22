@@ -118,9 +118,8 @@ export interface RevokeOtherAccountSessionsResponse extends MessageResponse {
 
 export type SetTwoFactorMethodInput =
   | { method: "totp"; challengeId: string; code: string; sessionToken?: never }
-  | { method: "email"; challengeId: string; sessionToken: string; code?: never }
-  | { method: TwoFactorMethod; code: string; sessionToken?: never }
-  | { method: TwoFactorMethod; sessionToken: string; code?: never };
+  | { method: "email"; challengeId: string; code: string; sessionToken?: never }
+  | { method: TwoFactorMethod; code: string; sessionToken?: never };
 
 export interface SetTwoFactorMethodResponse {
   backupCodes?: string[];
@@ -141,10 +140,6 @@ export interface VerifyTwoFactorInput {
   code: string;
   trustDevice?: false;
   type?: TwoFactorMethod | "backup";
-}
-
-export interface CompleteTwoFactorVerificationInput {
-  sessionToken: string;
 }
 
 export interface TwoFactorInfoResponse {
@@ -261,12 +256,6 @@ export const verify2fa = createServerFn({ method: "POST" })
   .validator((data: VerifyTwoFactorInput) => data)
   .handler(async ({ data }) => {
     return apiPost<MessageResponse>("/auth/2fa/verify", data);
-  });
-
-export const complete2faVerification = createServerFn({ method: "POST" })
-  .validator((data: CompleteTwoFactorVerificationInput) => data)
-  .handler(async ({ data }) => {
-    return apiPost<MessageResponse>("/auth/2fa/complete-verification", data);
   });
 
 export const get2faInfo = createServerFn({ method: "GET" }).handler(
