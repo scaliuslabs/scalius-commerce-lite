@@ -231,7 +231,6 @@ export function ProductForm({
               <OrganizationCard
                 form={form}
                 categories={categories}
-                isEdit={isEdit}
               />
 
               <SeoSection

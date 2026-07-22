@@ -5,7 +5,6 @@ import { ExternalLink } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -21,7 +20,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  PRODUCT_CONDITION_DESCRIPTIONS,
   PRODUCT_CONDITION_LABELS,
   PRODUCT_CONDITION_VALUES,
 } from "@scalius/shared/product-condition";
@@ -53,12 +51,7 @@ export const StatusCard = memo(function StatusCard({ form, isEdit, storefrontUrl
             name="isActive"
             render={({ field }) => (
               <FormItem className="flex flex-row items-center justify-between gap-3 p-2.5">
-                <div className="min-w-0">
-                  <FormLabel className="text-xs font-medium">Published</FormLabel>
-                  <FormDescription className="mt-0.5 truncate text-[11px]">
-                    Visible on the storefront
-                  </FormDescription>
-                </div>
+                <FormLabel className="text-xs font-medium">Published</FormLabel>
                 <FormControl>
                   <Switch
                     checked={field.value}
@@ -75,12 +68,7 @@ export const StatusCard = memo(function StatusCard({ form, isEdit, storefrontUrl
             name="freeDelivery"
             render={({ field }) => (
               <FormItem className="flex flex-row items-center justify-between gap-3 p-2.5">
-                <div className="min-w-0">
-                  <FormLabel className="text-xs font-medium">Free delivery</FormLabel>
-                  <FormDescription className="mt-0.5 truncate text-[11px]">
-                    Waive product delivery fees
-                  </FormDescription>
-                </div>
+                <FormLabel className="text-xs font-medium">Free delivery</FormLabel>
                 <FormControl>
                   <Switch
                     checked={field.value}
@@ -113,9 +101,6 @@ export const StatusCard = memo(function StatusCard({ form, isEdit, storefrontUrl
                   ))}
                 </SelectContent>
               </Select>
-              <FormDescription className="text-[11px] leading-4">
-                {PRODUCT_CONDITION_DESCRIPTIONS[field.value]}
-              </FormDescription>
             </FormItem>
           )}
         />
@@ -129,7 +114,7 @@ export const StatusCard = memo(function StatusCard({ form, isEdit, storefrontUrl
             onClick={() => window.open(storefrontUrl, "_blank")}
           >
             <ExternalLink className="h-3 w-3 mr-1.5" />
-            View on Storefront
+            View on storefront
           </Button>
         )}
       </CardContent>

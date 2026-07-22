@@ -281,9 +281,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
           >
             {mutation.isPending || productSaving ? "Saving…" : "Save options"}
           </Button>
-        ) : (
-          <span className="rounded bg-muted px-2 py-1 text-xs text-muted-foreground">Saved with product</span>
-        )}
+        ) : null}
       </div>
 
       <div className="rounded-lg border bg-muted/10 p-1.5">

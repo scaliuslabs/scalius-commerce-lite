@@ -4,8 +4,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import type { UseFormReturn } from "react-hook-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -25,7 +23,6 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { ChevronsUpDown, Check, Plus, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@scalius/shared/utils";
@@ -43,13 +40,11 @@ export interface Category {
 interface OrganizationCardProps {
   form: UseFormReturn<ProductFormValues>;
   categories: Category[];
-  isEdit?: boolean;
 }
 
 export const OrganizationCard = memo(function OrganizationCard({
   form,
   categories,
-  isEdit,
 }: OrganizationCardProps) {
   const [availableCategories, setAvailableCategories] = useState<Category[]>(categories);
 
@@ -88,40 +83,6 @@ export const OrganizationCard = memo(function OrganizationCard({
           )}
         />
 
-        <FormField
-          control={form.control}
-          name="slug"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel className="text-xs">
-                URL slug <span className="text-destructive">*</span>
-                {!isEdit && <span className="text-xs text-muted-foreground ml-1">(Auto-generated)</span>}
-              </FormLabel>
-              <div className="flex items-center gap-1.5">
-                <span className="whitespace-nowrap text-[11px] text-muted-foreground">
-                  /products/
-                </span>
-                <FormControl>
-                  <Input
-                    placeholder="product-url-slug"
-                    className="min-h-11 md:min-h-9"
-                    {...field}
-                    onChange={(e) => {
-                      field.onChange(e);
-                      form.setValue("slugEdited", true);
-                    }}
-                  />
-                </FormControl>
-              </div>
-              <FormDescription className="text-[11px] leading-4">
-                {!isEdit
-                  ? "Generated from the product title."
-                  : "Used in the storefront URL."}
-              </FormDescription>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
       </CardContent>
     </Card>
   );

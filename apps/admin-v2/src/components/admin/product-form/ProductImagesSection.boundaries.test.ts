@@ -9,7 +9,7 @@ describe("product media editor boundaries", () => {
     expect(source).toContain("unavailableFileIds={attachedMediaIds}");
     expect(source).not.toContain("selectedFiles={selectedLibraryFiles(field.value)}");
     expect(source).toContain('item.kind === "image"');
-    expect(source).toContain("videos stay in the gallery");
+    expect(source).not.toContain("videos stay in the gallery");
   });
 
   it("bounds large galleries and preserves room for accessible tile controls", () => {
