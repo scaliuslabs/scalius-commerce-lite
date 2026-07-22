@@ -3,6 +3,10 @@ import { readFileSync } from "node:fs";
 import { storefrontSourcePath } from "./test-source-paths";
 
 const STOREFRONT_SRC_ROOT = storefrontSourcePath();
+const catalogSortSource = readFileSync(
+  `${STOREFRONT_SRC_ROOT}/lib/catalog-sort.ts`,
+  "utf8",
+);
 
 describe("storefront page data boundaries", () => {
   it("uses the cart title as the page's primary heading", () => {
@@ -71,7 +75,8 @@ describe("storefront page data boundaries", () => {
     expect(paginationUrlSource).toContain("currentFilters");
     expect(paginationUrlSource).toContain("productListPathname");
     expect(paginationUrlSource).not.toContain("new URL(");
-    expect(source).toContain("buildProductListHref({");
+    expect(source).toContain("setupCatalogSorts");
+    expect(catalogSortSource).toContain("buildProductListHref({");
     expect(optionsIndex).toBeGreaterThan(-1);
     expect(categoryFetchIndex).toBe(-1);
     expect(promiseAllIndex).toBeGreaterThan(optionsIndex);
@@ -108,7 +113,8 @@ describe("storefront page data boundaries", () => {
     expect(paginationUrlSource).toContain("currentFilters");
     expect(paginationUrlSource).toContain("productListPathname");
     expect(paginationUrlSource).not.toContain("new URL(");
-    expect(source).toContain("buildProductListHref({");
+    expect(source).toContain("setupCatalogSorts");
+    expect(catalogSortSource).toContain("buildProductListHref({");
     expect(optionsIndex).toBeGreaterThan(-1);
     expect(promiseAllIndex).toBeGreaterThan(optionsIndex);
     expect(source.slice(promiseAllIndex)).toContain("getLayoutData()");
