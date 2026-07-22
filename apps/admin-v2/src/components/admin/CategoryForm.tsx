@@ -280,6 +280,7 @@ export function CategoryForm({
                         content={field.value || ""}
                         onChange={field.onChange}
                         placeholder="Introduce this category above the product list"
+                        ariaLabel="Category introduction"
                         compact={true}
                       />
                     </FormControl>
@@ -305,6 +306,7 @@ export function CategoryForm({
                         content={field.value || ""}
                         onChange={field.onChange}
                         placeholder="Add a buying guide, specifications, comparisons, or FAQs"
+                        ariaLabel="Category content below products"
                         compact={true}
                       />
                     </FormControl>

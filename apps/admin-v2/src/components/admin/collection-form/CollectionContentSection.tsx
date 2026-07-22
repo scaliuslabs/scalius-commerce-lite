@@ -31,6 +31,7 @@ export function CollectionContentSection({ form }: CollectionContentSectionProps
                     content={field.value || ""}
                     onChange={field.onChange}
                     placeholder="Introduce this collection above the product list"
+                    ariaLabel="Collection introduction"
                     compact
                   />
                 </FormControl>
@@ -56,6 +57,7 @@ export function CollectionContentSection({ form }: CollectionContentSectionProps
                     content={field.value || ""}
                     onChange={field.onChange}
                     placeholder="Add a buying guide, specifications, comparisons, or FAQs"
+                    ariaLabel="Collection content below products"
                     compact
                   />
                 </FormControl>

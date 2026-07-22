@@ -1751,7 +1751,9 @@ describe("admin route graph boundaries", () => {
       "utf8",
     );
     expect(toolbarButtonSource).toContain("aria-label={tooltip}");
-    expect(menuBarSource).toContain('aria-label="Insert link"');
+    expect(menuBarSource).toContain('aria-label={');
+    expect(menuBarSource).toContain('"Select text to add a link"');
+    expect(menuBarSource).toContain('"Edit link"');
     expect(menuBarSource).toContain('aria-label="Insert image URL"');
     expect(menuBarSource).toContain('aria-label="Embed video"');
     expect(menuBarSource).toContain('triggerLabel="Media Library"');

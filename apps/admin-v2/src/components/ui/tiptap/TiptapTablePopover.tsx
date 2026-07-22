@@ -1,4 +1,6 @@
+import { useId, useState } from "react";
 import type { Editor } from "@tiptap/react";
+import { cn } from "@scalius/shared/utils";
 import {
   Table as TableIcon,
   Eraser,
@@ -10,9 +12,11 @@ import {
 } from "lucide-react";
 import { Button } from "../button";
 import { Input } from "../input";
+import { Label } from "../label";
 import { Popover, PopoverContent, PopoverTrigger } from "../popover";
 import { Switch } from "../switch";
-import { ToolbarButton } from "./ToolbarButton";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../tooltip";
+import { insertRichTextTable } from "./tiptap-insertions";
 
 interface TiptapTablePopoverProps {
   editor: Editor;
@@ -24,7 +28,11 @@ interface TiptapTablePopoverProps {
   onTableRowsChange: (value: string) => void;
   onTableColsChange: (value: string) => void;
   onTableWithHeaderChange: (value: boolean) => void;
+  isFullscreen?: boolean;
 }
+
+const MOBILE_ACTION_CLASS =
+  "min-h-11 justify-start gap-1.5 px-2 text-[11px] sm:min-h-9";
 
 export function TiptapTablePopover({
   editor,
@@ -36,207 +44,253 @@ export function TiptapTablePopover({
   onTableRowsChange,
   onTableColsChange,
   onTableWithHeaderChange,
+  isFullscreen = false,
 }: TiptapTablePopoverProps) {
+  const fieldId = useId();
+  const rowsId = `${fieldId}-table-rows`;
+  const columnsId = `${fieldId}-table-columns`;
+  const headerId = `${fieldId}-table-header`;
+  const [open, setOpen] = useState(false);
+  const rows = Number(tableRows);
+  const cols = Number(tableCols);
+  const canInsert =
+    Number.isInteger(rows) &&
+    rows >= 1 &&
+    rows <= 20 &&
+    Number.isInteger(cols) &&
+    cols >= 1 &&
+    cols <= 10;
+  const isInTable = editor.isActive("table");
+
   const addTable = () => {
-    const rows = parseInt(tableRows, 10);
-    const cols = parseInt(tableCols, 10);
-    if (rows > 0 && cols > 0) {
-      editor
-        .chain()
-        .focus()
-        .insertTable({ rows, cols, withHeaderRow: tableWithHeader })
-        .run();
-    }
+    if (!canInsert) return;
+    insertRichTextTable(editor, {
+      rows,
+      cols,
+      withHeaderRow: tableWithHeader,
+    });
   };
 
   return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <span>
-          <ToolbarButton
-            onClick={() => {}}
-            tooltip="Insert table"
-            buttonSize={buttonSize}
-          >
-            <TableIcon className={iconSize} />
-          </ToolbarButton>
-        </span>
-      </PopoverTrigger>
-      <PopoverContent className="w-auto p-2 space-y-2">
-        <div className="grid grid-cols-2 gap-2 items-center">
-          <Input
-            type="number"
-            value={tableRows}
-            onChange={(e) => onTableRowsChange(e.target.value)}
-            placeholder="Rows"
-            className="h-11 text-xs sm:h-8"
-            min="1"
-          />
-          <Input
-            type="number"
-            value={tableCols}
-            onChange={(e) => onTableColsChange(e.target.value)}
-            placeholder="Cols"
-            className="h-11 text-xs sm:h-8"
-            min="1"
-          />
-        </div>
-        <div className="flex items-center space-x-2">
-          <Switch
-            id="table-header"
-            checked={tableWithHeader}
-            onCheckedChange={onTableWithHeaderChange}
-          />
-          <label
-            htmlFor="table-header"
-            className="text-xs text-muted-foreground"
-          >
-            Include header row
-          </label>
-        </div>
-        <Button
-          type="button"
-          variant="default"
-          size="sm"
-          onClick={addTable}
-          className="min-h-11 w-full text-xs sm:min-h-9"
-        >
-          <TableIcon className="h-3 w-3 mr-1" /> Insert Table
-        </Button>
+    <Popover open={open} onOpenChange={setOpen}>
+      <Tooltip open={open ? false : undefined}>
+        <TooltipTrigger asChild>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label={isInTable ? "Edit table" : "Insert table"}
+              className={cn(buttonSize, isInTable && "bg-accent")}
+              onMouseDown={(event) => event.preventDefault()}
+            >
+              <TableIcon className={iconSize} />
+            </Button>
+          </PopoverTrigger>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" sideOffset={5}>
+          <p className="text-xs">{isInTable ? "Edit table" : "Insert table"}</p>
+        </TooltipContent>
+      </Tooltip>
 
-        <hr className="my-2" />
-        <p className="text-xs font-medium text-muted-foreground mb-1">
-          Quick Actions:
-        </p>
-        <div className="grid grid-cols-3 gap-1">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => editor.chain().focus().addColumnBefore().run()}
-            disabled={!editor.can().addColumnBefore()}
-            className="min-h-11 items-center gap-1 text-xs sm:min-h-9"
-          >
-            <ChevronsLeftRight className="h-3 w-3 transform rotate-90" />{" "}
-            Col Before
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => editor.chain().focus().addColumnAfter().run()}
-            disabled={!editor.can().addColumnAfter()}
-            className="min-h-11 items-center gap-1 text-xs sm:min-h-9"
-          >
-            <ChevronsLeftRight className="h-3 w-3 transform rotate-90" />{" "}
-            Col After
-          </Button>
-
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => editor.chain().focus().deleteColumn().run()}
-            disabled={!editor.can().deleteColumn()}
-            className="min-h-11 items-center gap-1 text-xs sm:min-h-9"
-          >
-            <Columns className="h-3 w-3" /> Del Col
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => editor.chain().focus().addRowBefore().run()}
-            disabled={!editor.can().addRowBefore()}
-            className="min-h-11 items-center gap-1 text-xs sm:min-h-9"
-          >
-            <Rows className="h-3 w-3" /> Row Before
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => editor.chain().focus().addRowAfter().run()}
-            disabled={!editor.can().addRowAfter()}
-            className="min-h-11 items-center gap-1 text-xs sm:min-h-9"
-          >
-            <Rows className="h-3 w-3" /> Row After
-          </Button>
-
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => editor.chain().focus().deleteRow().run()}
-            disabled={!editor.can().deleteRow()}
-            className="min-h-11 items-center gap-1 text-xs sm:min-h-9"
-          >
-            <Rows className="h-3 w-3" /> Del Row
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => editor.chain().focus().deleteTable().run()}
-            disabled={!editor.can().deleteTable()}
-            className="min-h-11 items-center gap-1 text-xs sm:min-h-9"
-          >
-            <Eraser className="h-3 w-3" /> Del Table
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => editor.chain().focus().mergeCells().run()}
-            disabled={!editor.can().mergeCells()}
-            className="min-h-11 items-center gap-1 text-xs sm:min-h-9"
-          >
-            <Merge className="h-3 w-3" /> Merge
-          </Button>
-
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => editor.chain().focus().splitCell().run()}
-            disabled={!editor.can().splitCell()}
-            className="min-h-11 items-center gap-1 text-xs sm:min-h-9"
-          >
-            <Split className="h-3 w-3" /> Split
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() =>
-              editor.chain().focus().toggleHeaderColumn().run()
-            }
-            disabled={!editor.can().toggleHeaderColumn()}
-            className="min-h-11 items-center gap-1 text-xs sm:min-h-9"
-          >
-            <ChevronsLeftRight className="h-3 w-3" /> H Col
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => editor.chain().focus().toggleHeaderRow().run()}
-            disabled={!editor.can().toggleHeaderRow()}
-            className="min-h-11 items-center gap-1 text-xs sm:min-h-9"
-          >
-            <Rows className="h-3 w-3" /> H Row
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => editor.chain().focus().toggleHeaderCell().run()}
-            disabled={!editor.can().toggleHeaderCell()}
-            className="min-h-11 items-center gap-1 text-xs sm:min-h-9"
-          >
-            <TableIcon className="h-3 w-3" /> H Cell
-          </Button>
-        </div>
+      <PopoverContent
+        className={cn(
+          "w-[calc(100vw-2rem)] max-w-sm space-y-3 p-3",
+          isFullscreen && "z-[10001]",
+        )}
+      >
+        {!isInTable ? (
+          <>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor={rowsId} className="text-xs">
+                  Rows
+                </Label>
+                <Input
+                  id={rowsId}
+                  type="number"
+                  value={tableRows}
+                  onChange={(event) => onTableRowsChange(event.target.value)}
+                  aria-label="Table rows"
+                  className="h-11 text-sm sm:h-9"
+                  min="1"
+                  max="20"
+                  inputMode="numeric"
+                  aria-invalid={Boolean(tableRows) && !(Number.isInteger(rows) && rows >= 1 && rows <= 20)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor={columnsId} className="text-xs">
+                  Columns
+                </Label>
+                <Input
+                  id={columnsId}
+                  type="number"
+                  value={tableCols}
+                  onChange={(event) => onTableColsChange(event.target.value)}
+                  aria-label="Table columns"
+                  className="h-11 text-sm sm:h-9"
+                  min="1"
+                  max="10"
+                  inputMode="numeric"
+                  aria-invalid={Boolean(tableCols) && !(Number.isInteger(cols) && cols >= 1 && cols <= 10)}
+                />
+              </div>
+            </div>
+            <label
+              htmlFor={headerId}
+              className="flex min-h-11 cursor-pointer items-center gap-2 rounded-md px-1 text-sm"
+            >
+              <Switch
+                id={headerId}
+                checked={tableWithHeader}
+                onCheckedChange={onTableWithHeaderChange}
+              />
+              Include a header row
+            </label>
+            <Button
+              type="button"
+              variant="default"
+              size="sm"
+              onClick={addTable}
+              disabled={!canInsert}
+              className="min-h-11 w-full text-sm sm:min-h-9"
+            >
+              <TableIcon className="mr-1 h-3.5 w-3.5" /> Insert table
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              Up to 20 rows and 10 columns.
+            </p>
+          </>
+        ) : (
+          <>
+            <p className="text-xs font-medium text-muted-foreground">
+              Table actions
+            </p>
+            <div className="grid grid-cols-2 gap-1 sm:grid-cols-3">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => editor.chain().focus().addColumnBefore().run()}
+                disabled={!editor.can().addColumnBefore()}
+                className={MOBILE_ACTION_CLASS}
+              >
+                <ChevronsLeftRight className="h-3.5 w-3.5 rotate-90" /> Add column before
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => editor.chain().focus().addColumnAfter().run()}
+                disabled={!editor.can().addColumnAfter()}
+                className={MOBILE_ACTION_CLASS}
+              >
+                <ChevronsLeftRight className="h-3.5 w-3.5 rotate-90" /> Add column after
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => editor.chain().focus().deleteColumn().run()}
+                disabled={!editor.can().deleteColumn()}
+                className={MOBILE_ACTION_CLASS}
+              >
+                <Columns className="h-3.5 w-3.5" /> Delete column
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => editor.chain().focus().addRowBefore().run()}
+                disabled={!editor.can().addRowBefore()}
+                className={MOBILE_ACTION_CLASS}
+              >
+                <Rows className="h-3.5 w-3.5" /> Add row before
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => editor.chain().focus().addRowAfter().run()}
+                disabled={!editor.can().addRowAfter()}
+                className={MOBILE_ACTION_CLASS}
+              >
+                <Rows className="h-3.5 w-3.5" /> Add row after
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => editor.chain().focus().deleteRow().run()}
+                disabled={!editor.can().deleteRow()}
+                className={MOBILE_ACTION_CLASS}
+              >
+                <Rows className="h-3.5 w-3.5" /> Delete row
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => editor.chain().focus().deleteTable().run()}
+                disabled={!editor.can().deleteTable()}
+                className={MOBILE_ACTION_CLASS}
+              >
+                <Eraser className="h-3.5 w-3.5" /> Delete table
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => editor.chain().focus().mergeCells().run()}
+                disabled={!editor.can().mergeCells()}
+                className={MOBILE_ACTION_CLASS}
+              >
+                <Merge className="h-3.5 w-3.5" /> Merge cells
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => editor.chain().focus().splitCell().run()}
+                disabled={!editor.can().splitCell()}
+                className={MOBILE_ACTION_CLASS}
+              >
+                <Split className="h-3.5 w-3.5" /> Split cell
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => editor.chain().focus().toggleHeaderColumn().run()}
+                disabled={!editor.can().toggleHeaderColumn()}
+                className={MOBILE_ACTION_CLASS}
+              >
+                <Columns className="h-3.5 w-3.5" /> Header column
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => editor.chain().focus().toggleHeaderRow().run()}
+                disabled={!editor.can().toggleHeaderRow()}
+                className={MOBILE_ACTION_CLASS}
+              >
+                <Rows className="h-3.5 w-3.5" /> Header row
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => editor.chain().focus().toggleHeaderCell().run()}
+                disabled={!editor.can().toggleHeaderCell()}
+                className={MOBILE_ACTION_CLASS}
+              >
+                <TableIcon className="h-3.5 w-3.5" /> Header cell
+              </Button>
+            </div>
+          </>
+        )}
       </PopoverContent>
     </Popover>
   );

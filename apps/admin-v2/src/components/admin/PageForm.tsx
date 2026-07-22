@@ -39,8 +39,6 @@ import { CollapsibleCard } from "@/components/admin/product-form/CollapsibleCard
 import {
   createPage,
   updatePage,
-  type CreatePageInput,
-  type PageFeaturedImageDto,
   type PageIdPayload,
   type PageMutationPayload,
 } from "@/lib/api-functions/pages";
@@ -51,10 +49,13 @@ import { usePermissions } from "@/contexts/PermissionContext";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import {
   defaultPageScheduleDate,
-  publicationFieldsForInput,
   toDateTimeLocalValue,
   type PagePublicationMode,
 } from "@/lib/page-publication";
+import {
+  toCreatePageInput,
+  toUpdatePageInput,
+} from "@/lib/page-form-input";
 
 interface PageFormProps {
   defaultValues?: Partial<PageFormValues>;
@@ -94,49 +95,6 @@ function ArticleTagsInput({
       className="min-h-11 sm:min-h-9"
     />
   );
-}
-
-function serializeDate(
-  value: Date | string | number | undefined,
-): string | number | undefined {
-  return value instanceof Date ? value.toISOString() : value;
-}
-
-function serializeFeaturedImage(
-  image: PageFormValues["featuredImage"],
-): PageFeaturedImageDto | null {
-  if (!image) return null;
-  return {
-    ...image,
-    createdAt: serializeDate(image.createdAt),
-    updatedAt: serializeDate(image.updatedAt),
-  };
-}
-
-function toPageInput(values: PageFormValues): CreatePageInput {
-  const publication = publicationFieldsForInput({
-    mode: values.publicationMode,
-    publishedAt: values.publishedAt,
-  });
-  return {
-    contentType: values.contentType,
-    title: values.title,
-    slug: values.slug,
-    content: values.content,
-    excerpt: values.contentType === "article" ? values.excerpt : null,
-    author: values.contentType === "article" ? values.author : null,
-    tags: values.contentType === "article" ? values.tags : [],
-    metaTitle: values.metaTitle,
-    metaDescription: values.metaDescription,
-    canonicalPath: values.canonicalPath,
-    noIndex: values.noIndex,
-    excludeFromSitemap: values.excludeFromSitemap,
-    ...publication,
-    hideHeader: values.hideHeader,
-    hideFooter: values.hideFooter,
-    hideTitle: values.hideTitle,
-    featuredImage: serializeFeaturedImage(values.featuredImage),
-  };
 }
 
 export function PageForm({
@@ -186,7 +144,7 @@ export function PageForm({
       entityName: contentType === "article" ? "Article" : "Page",
       isEdit,
       entityId: defaultValues?.id,
-      createFn: (data) => createPage({ data: toPageInput(data) }),
+      createFn: (data) => createPage({ data: toCreatePageInput(data) }),
       updateFn: (data) => {
         if (
           !data.revision ||
@@ -201,7 +159,7 @@ export function PageForm({
           data: {
             id: data.id,
             expectedRevision: data.revision,
-            ...toPageInput(data),
+            ...toUpdatePageInput(data),
           },
         });
       },

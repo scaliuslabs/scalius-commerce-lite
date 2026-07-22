@@ -4,6 +4,11 @@ import { Editor } from "@tiptap/core";
 import { sanitizeHtml } from "@scalius/shared/html-sanitize";
 import { afterEach, describe, expect, it } from "vitest";
 import { createTiptapExtensions } from "./tiptap-extensions";
+import {
+  insertRichTextImage,
+  insertRichTextTable,
+  insertRichTextVideo,
+} from "./tiptap-insertions";
 
 describe("rich-text editing document contract", () => {
   let editor: Editor | null = null;
@@ -137,5 +142,41 @@ describe("rich-text editing document contract", () => {
     expect(instance.getText()).toBe("First");
     expect(instance.commands.redo()).toBe(true);
     expect(instance.getText()).toBe("First changed");
+  });
+
+  it("preserves selected text when inserting block media or a table", () => {
+    const imageEditor = createEditor("<p>Keep this selected text</p>");
+    imageEditor.commands.selectAll();
+    expect(
+      insertRichTextImage(imageEditor, {
+        src: "https://cloud.scalius.com/media/example.webp",
+        alt: "Example",
+      }),
+    ).toBe(true);
+    expect(imageEditor.getText()).toContain("Keep this selected text");
+    expect(imageEditor.getHTML()).toContain("<img");
+
+    imageEditor.commands.setContent("<p>Keep this video text</p>");
+    imageEditor.commands.selectAll();
+    expect(
+      insertRichTextVideo(imageEditor, {
+        src: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        provider: "youtube",
+      }),
+    ).toBe(true);
+    expect(imageEditor.getText()).toContain("Keep this video text");
+    expect(imageEditor.getHTML()).toContain("youtube-nocookie.com/embed/dQw4w9WgXcQ");
+
+    imageEditor.commands.setContent("<p>Keep this table text</p>");
+    imageEditor.commands.selectAll();
+    expect(
+      insertRichTextTable(imageEditor, {
+        rows: 2,
+        cols: 2,
+        withHeaderRow: true,
+      }),
+    ).toBe(true);
+    expect(imageEditor.getText()).toContain("Keep this table text");
+    expect(imageEditor.getHTML()).toContain("<table");
   });
 });

@@ -47,6 +47,7 @@ const makeEditor = () => {
   const run = vi.fn(() => true);
   const chain = {
     focus: vi.fn(() => chain),
+    setTextSelection: vi.fn(() => chain),
     extendMarkRange: vi.fn(() => chain),
     setLink: vi.fn(() => chain),
     unsetLink: vi.fn(() => chain),
@@ -76,6 +77,8 @@ const makeEditor = () => {
       chain: vi.fn(() => chain),
       can: vi.fn(() => ({ undo: () => true, redo: () => true })),
       isActive: vi.fn(() => false),
+      getAttributes: vi.fn(() => ({})),
+      state: { selection: { empty: false, to: 1 } },
     } as unknown as Editor,
     setImage,
     setVideoEmbed,
@@ -133,9 +136,10 @@ describe("TiptapMenuBar", () => {
 
     expect(first.setImage).not.toHaveBeenCalled();
     expect(second.setImage).toHaveBeenCalledWith({
-      src: "optimized:https://example.com/section-image.jpg",
+      src: "https://example.com/section-image.jpg",
       alt: "section-image.jpg",
     });
+    expect(second.chain.setTextSelection).toHaveBeenCalledWith(1);
   });
 
   it("keeps compact editor actions touch-sized on mobile", () => {

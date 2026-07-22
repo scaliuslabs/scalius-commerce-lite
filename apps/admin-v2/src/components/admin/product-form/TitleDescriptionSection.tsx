@@ -83,6 +83,7 @@ export function TitleDescriptionSection({
                       content={field.value || ""}
                       onChange={field.onChange}
                       placeholder="Describe your product..."
+                      ariaLabel="Product description"
                       compact={true}
                     />
                   </FormControl>
