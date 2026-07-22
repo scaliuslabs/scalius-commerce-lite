@@ -158,8 +158,8 @@ export function CustomerHistoryView({
             {/* <AvatarImage src={customer.avatarUrl} alt={customer.name} /> // Add if you have avatar URLs */}
             <AvatarFallback>{getInitials(customer.name)}</AvatarFallback>
           </Avatar>
-          <div>
-            <h1 className="truncate text-xl font-bold tracking-tight text-foreground sm:text-2xl">
+          <div className="min-w-0">
+            <h1 className="line-clamp-2 break-words text-xl font-bold tracking-tight text-foreground sm:text-2xl">
               {customer.name}
             </h1>
             <p className="text-sm text-muted-foreground">
@@ -169,13 +169,13 @@ export function CustomerHistoryView({
           </div>
         </div>
         <div className="flex gap-2 shrink-0">
-          <Button variant="outline" asChild size="sm">
+          <Button variant="outline" asChild size="sm" className="h-11 sm:h-9">
             <Link to="/admin/customers">
               <ArrowLeft className="mr-1.5 h-4 w-4" />
               Back
             </Link>
           </Button>
-          <Button asChild size="sm">
+          <Button asChild size="sm" className="h-11 sm:h-9">
             <Link to={`/admin/customers/${customer.id}/edit` as string}>
               <Edit className="mr-1.5 h-4 w-4" />
               Edit
@@ -190,7 +190,7 @@ export function CustomerHistoryView({
           <CardHeader className="px-4 py-3 sm:px-6 sm:py-4">
             <CardTitle className="text-lg font-semibold flex items-center gap-2">
               <User className="h-5 w-5" />
-              Customer Profile
+              Customer profile
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 px-4 pb-4 pt-0 sm:px-6 sm:pb-6">
@@ -253,14 +253,14 @@ export function CustomerHistoryView({
               <div className="space-y-1 rounded-md border bg-muted/30 p-3">
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <ShoppingBag className="h-3.5 w-3.5" />
-                  <span>Total Orders</span>
+                  <span>Total orders</span>
                 </div>
                 <p className="text-xl font-semibold">{customer.totalOrders}</p>
               </div>
               <div className="space-y-1 rounded-md border bg-muted/30 p-3">
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <DollarSign className="h-3.5 w-3.5" />
-                  <span>Paid Spend</span>
+                  <span>Paid spend</span>
                 </div>
                 <p className="text-xl font-semibold">
                   {symbol}
@@ -298,7 +298,7 @@ export function CustomerHistoryView({
             <div className="flex items-center justify-between">
               <CardTitle className="text-lg font-semibold flex items-center gap-2">
                 <ClipboardList className="h-5 w-5" />
-                Recent Orders
+                Recent orders
               </CardTitle>
               <Badge variant="outline">{ordersPage.total} total</Badge>
             </div>
@@ -342,7 +342,7 @@ export function CustomerHistoryView({
               ) : (
                 <div className="flex h-32 flex-col items-center justify-center gap-2 text-muted-foreground">
                   <Archive className="h-8 w-8" />
-                  <p className="font-medium">No Orders Yet</p>
+                  <p className="font-medium">No orders yet</p>
                   <p className="text-xs">This customer hasn't placed any orders.</p>
                 </div>
               )}
@@ -398,7 +398,7 @@ export function CustomerHistoryView({
                       <TableCell colSpan={4} className="h-36 text-center">
                         <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground">
                           <Archive className="h-10 w-10" />
-                          <p className="font-medium">No Orders Yet</p>
+                          <p className="font-medium">No orders yet</p>
                           <p className="text-xs">
                             This customer hasn't placed any orders.
                           </p>
@@ -414,6 +414,7 @@ export function CustomerHistoryView({
                 <Button
                   variant="outline"
                   size="sm"
+                  className="h-11 sm:h-9"
                   onClick={() => moreOrders.mutate()}
                   disabled={moreOrders.isPending}
                 >
@@ -438,7 +439,7 @@ export function CustomerHistoryView({
           <div className="flex items-center justify-between">
             <CardTitle className="text-lg font-semibold flex items-center gap-2">
               <History className="h-5 w-5" />
-              Change History
+              Change history
             </CardTitle>
             <Badge variant="outline">{historyPage.total} changes</Badge>
           </div>
@@ -535,6 +536,7 @@ export function CustomerHistoryView({
                   <Button
                     variant="outline"
                     size="sm"
+                    className="h-11 sm:h-9"
                     onClick={() => moreHistory.mutate()}
                     disabled={moreHistory.isPending}
                   >
@@ -555,7 +557,7 @@ export function CustomerHistoryView({
           ) : (
             <div className="h-48 flex flex-col items-center justify-center gap-2 text-muted-foreground border rounded-md">
               <Archive className="h-10 w-10" />
-              <p className="font-medium">No Change History</p>
+              <p className="font-medium">No change history</p>
               <p className="text-xs">
                 Changes to this customer will appear here.
               </p>

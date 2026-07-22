@@ -26,21 +26,28 @@ export function createSelectColumn<T>(
   const getLabel = opts?.getLabel ?? (() => "row");
   return {
     id: "select",
-    header: ({ table }) => (
-      <Checkbox
-        checked={
-          table.getIsAllPageRowsSelected() ||
-          (table.getIsSomePageRowsSelected() && "indeterminate")
-        }
-        onCheckedChange={(v) => table.toggleAllPageRowsSelected(!!v)}
-        aria-label="Select all"
-      />
-    ),
+    header: ({ table }) => {
+      const hasSelectableRows = table
+        .getRowModel()
+        .rows.some((row) => row.getCanSelect());
+      return (
+        <Checkbox
+          checked={
+            table.getIsAllPageRowsSelected() ||
+            (table.getIsSomePageRowsSelected() && "indeterminate")
+          }
+          onCheckedChange={(v) => table.toggleAllPageRowsSelected(!!v)}
+          aria-label="Select all"
+          disabled={!hasSelectableRows}
+        />
+      );
+    },
     cell: ({ row }) => (
       <Checkbox
         checked={row.getIsSelected()}
         onCheckedChange={(v) => row.toggleSelected(!!v)}
         aria-label={`Select ${getLabel(row.original)}`}
+        disabled={!row.getCanSelect()}
       />
     ),
     enableSorting: false,
@@ -89,6 +96,7 @@ interface ActionsColumnCallbacks<T> {
   onDelete?: (row: T) => void;
   onRestore?: (row: T) => void;
   onPermanentDelete?: (row: T) => void;
+  canPermanentDelete?: (row: T) => boolean;
   /** Dynamic extra actions per row. */
   getExtraActions?: (row: T) => ExtraAction[] | undefined;
   /** Column width (default 70). */
@@ -114,7 +122,8 @@ export function createActionsColumn<T>(
           onDelete={callbacks.onDelete ? () => callbacks.onDelete!(entity) : undefined}
           onRestore={callbacks.onRestore ? () => callbacks.onRestore!(entity) : undefined}
           onPermanentDelete={
-            callbacks.onPermanentDelete
+            callbacks.onPermanentDelete &&
+            (callbacks.canPermanentDelete?.(entity) ?? true)
               ? () => callbacks.onPermanentDelete!(entity)
               : undefined
           }

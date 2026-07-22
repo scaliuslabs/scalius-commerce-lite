@@ -107,12 +107,16 @@ describe("CustomerMobileCard", () => {
     expect(host.textContent).toContain("Jul 21, 2026");
     expect(host.textContent).toContain("View order history");
     expect(host.querySelector('[aria-label="Select Samira Rahman"]')).toBeTruthy();
+    const historyLink = Array.from(host.querySelectorAll("a")).find(
+      (link) => link.textContent === "View order history",
+    );
+    expect(historyLink?.className).toContain("h-11");
   });
 
   it("labels a guest and exposes only trash actions in trash", async () => {
     await act(async () => root.render(
       <CustomerMobileCard
-        customer={{ ...buyer, accountClaimedAt: null }}
+        customer={{ ...buyer, accountClaimedAt: null, totalOrders: 0 }}
         selected={false}
         showTrashed
         symbol="৳"
@@ -135,5 +139,35 @@ describe("CustomerMobileCard", () => {
     expect(actions?.getAttribute("data-archive")).toBe("false");
     expect(actions?.getAttribute("data-restore")).toBe("true");
     expect(actions?.getAttribute("data-permanent")).toBe("true");
+  });
+
+  it("keeps order-linked trash records restorable without offering permanent deletion", async () => {
+    await act(async () => root.render(
+      <CustomerMobileCard
+        customer={buyer}
+        selected={false}
+        showTrashed
+        symbol="৳"
+        canSelect={false}
+        canViewHistory
+        canEdit
+        canDelete
+        onSelectedChange={vi.fn()}
+        onEdit={vi.fn()}
+        onArchive={vi.fn()}
+        onRestore={vi.fn()}
+        onPermanentDelete={vi.fn()}
+      />,
+    ));
+
+    expect(
+      host.querySelector(
+        '[aria-label="Order-linked customer; permanent deletion is unavailable"]',
+      )?.textContent,
+    ).toBe("Order-linked");
+    expect(host.querySelector('[aria-label="Select Samira Rahman"]')).toBeNull();
+    const actions = host.querySelector('[aria-label="Open actions for Samira Rahman"]');
+    expect(actions?.getAttribute("data-restore")).toBe("true");
+    expect(actions?.getAttribute("data-permanent")).toBe("false");
   });
 });

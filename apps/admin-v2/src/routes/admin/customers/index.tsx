@@ -82,9 +82,12 @@ function CustomersPage() {
 
   // Delete confirmation state
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [bulkDeleteRequested, setBulkDeleteRequested] = useState(false);
 
   const isActionLoading =
-    deleteMutation.isPending || permanentDeleteMutation.isPending;
+    deleteMutation.isPending ||
+    permanentDeleteMutation.isPending ||
+    bulkDeleteMutation.isPending;
 
   const handleConfirmDelete = useCallback(() => {
     if (!deleteId || !canDelete) return;
@@ -97,7 +100,7 @@ function CustomersPage() {
     }
   }, [deleteId, canDelete, showTrashed, deleteMutation, permanentDeleteMutation]);
 
-  const isCustomerDeleteDialogOpen = !!deleteId;
+  const isCustomerDeleteDialogOpen = !!deleteId || bulkDeleteRequested;
 
   // Column definitions
   const columns = useMemo(
@@ -161,7 +164,25 @@ function CustomersPage() {
       currentOrder: search.order,
       onPaginationChange,
       onSortingChange,
+      enableRowSelection: (row) =>
+        canDelete && (!showTrashed || row.original.totalOrders === 0),
     });
+
+  const handleConfirmBulkDelete = useCallback(() => {
+    if (!canDelete || selectedIds.length === 0) return;
+    const customerIds = [...selectedIds];
+    setBulkDeleteRequested(false);
+    bulkDeleteMutation.mutate(
+      { customerIds, permanent: showTrashed },
+      { onSuccess: clearSelection },
+    );
+  }, [
+    bulkDeleteMutation,
+    canDelete,
+    clearSelection,
+    selectedIds,
+    showTrashed,
+  ]);
 
   const mobileCardRenderer = useCallback(
     (row: Row<CustomerListBuyer>) => {
@@ -172,7 +193,7 @@ function CustomersPage() {
           selected={row.getIsSelected()}
           showTrashed={showTrashed}
           symbol={symbol}
-          canSelect={canDelete}
+          canSelect={canDelete && (!showTrashed || customer.totalOrders === 0)}
           canViewHistory={canViewHistory}
           canEdit={canEdit}
           canDelete={canDelete}
@@ -216,7 +237,11 @@ function CustomersPage() {
             search={((prev: Record<string, unknown>) => ({ ...prev, trashed: !showTrashed })) as never}
             className="flex-1 sm:flex-none"
           >
-            <Button variant="outline" size="sm" className="w-full sm:w-auto">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-11 w-full sm:h-9 sm:w-auto"
+            >
               {showTrashed ? (
                 <Users className="mr-2 h-4 w-4" />
               ) : (
@@ -227,7 +252,7 @@ function CustomersPage() {
           </Link>
           {!showTrashed && canCreate && (
             <Link to="/admin/customers/new" className="flex-1 sm:flex-none">
-              <Button size="sm" className="w-full sm:w-auto">
+              <Button size="sm" className="h-11 w-full sm:h-9 sm:w-auto">
                 <UserPlus className="mr-2 h-4 w-4" />
                 Add Customer
               </Button>
@@ -263,19 +288,11 @@ function CustomersPage() {
               <Button
                 variant="outline"
                 size="sm"
-                className="text-destructive border-destructive hover:bg-destructive/10"
-                onClick={() => {
-                  bulkDeleteMutation.mutate(
-                    {
-                      customerIds: selectedIds,
-                      permanent: showTrashed,
-                    },
-                    { onSuccess: clearSelection },
-                  );
-                }}
+                className="h-11 border-destructive text-destructive hover:bg-destructive/10 sm:h-9"
+                onClick={() => setBulkDeleteRequested(true)}
               >
                 <Trash2 className="mr-2 h-4 w-4" />
-                {showTrashed ? "Delete" : "Trash"} ({selectedIds.length})
+                {showTrashed ? "Delete permanently" : "Move to trash"} ({selectedIds.length})
               </Button>
             ) : undefined}
           />
@@ -286,10 +303,16 @@ function CustomersPage() {
         <Suspense fallback={null}>
           <CustomerDeleteDialog
             showTrashed={showTrashed}
+            customerCount={bulkDeleteRequested ? selectedIds.length : 1}
             isOpen={isCustomerDeleteDialogOpen}
             isActionLoading={isActionLoading}
-            onOpenChange={(open) => !open && setDeleteId(null)}
-            onConfirm={handleConfirmDelete}
+            onOpenChange={(open) => {
+              if (!open) {
+                setDeleteId(null);
+                setBulkDeleteRequested(false);
+              }
+            }}
+            onConfirm={bulkDeleteRequested ? handleConfirmBulkDelete : handleConfirmDelete}
           />
         </Suspense>
       )}

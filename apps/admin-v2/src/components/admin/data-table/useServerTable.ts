@@ -8,6 +8,7 @@ import {
   type SortingState,
   type VisibilityState,
   type RowSelectionState,
+  type Row,
 } from "@tanstack/react-table";
 import {
   hashKey,
@@ -48,7 +49,7 @@ export interface UseServerTableOptions<TData> {
   onPaginationChange: (page: number, limit: number) => void;
   onSortingChange: (sort: string, order: "asc" | "desc") => void;
   // Options
-  enableRowSelection?: boolean;
+  enableRowSelection?: boolean | ((row: Row<TData>) => boolean);
   enableSorting?: boolean;
   defaultPageSize?: number;
   initialColumnVisibility?: Record<string, boolean>;
