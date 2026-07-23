@@ -1,5 +1,5 @@
-import { useEffect, useRef } from "react";
-import { useRouter } from "@tanstack/react-router";
+import { useEffect, useLayoutEffect, useRef } from "react";
+import { useLocation, useRouter } from "@tanstack/react-router";
 
 const ADMIN_SCROLL_STORAGE_PREFIX = "scalius-admin-scroll-v2:";
 const DEFAULT_ADMIN_SCROLL_ELEMENT_ID = "admin-main-scroll";
@@ -16,6 +16,11 @@ type NavigationEventTarget = EventTarget & {
     type: "navigate",
     listener: (event: NavigationTraverseEvent) => void,
   ): void;
+};
+
+type LockedScrollContent = {
+  element: HTMLElement;
+  previousMinHeight: string;
 };
 
 function storageKey(href: string) {
@@ -46,6 +51,12 @@ function getAdminScrollElement(elementId: string) {
   return document.getElementById(elementId);
 }
 
+function getAdminScrollContent(scrollElement: HTMLElement) {
+  return scrollElement.querySelector<HTMLElement>(
+    ":scope > [data-admin-scroll-content]",
+  );
+}
+
 function getNavigationEventTarget() {
   const maybeWindow = window as Window & {
     navigation?: NavigationEventTarget;
@@ -73,8 +84,22 @@ export function useAdminNestedScrollRestoration(
   elementId = DEFAULT_ADMIN_SCROLL_ELEMENT_ID,
 ) {
   const router = useRouter();
+  const currentHref = useLocation({ select: (location) => location.href });
   const nextNavigationIsPopRef = useRef(false);
+  const pendingRestoreHrefRef = useRef<string | null>(null);
   const restoreFrameRef = useRef<number | null>(null);
+  const lockedContentRef = useRef<LockedScrollContent | null>(null);
+  const restoreStoredScrollRef = useRef<(href: string) => void>(() => undefined);
+
+  useLayoutEffect(() => {
+    if (pendingRestoreHrefRef.current !== currentHref) return;
+
+    // The admin layout observes the committed location in the same React
+    // render as the destination panel. Restore in a layout effect so no frame
+    // of that panel can paint at the nested scroller's clamped position.
+    restoreStoredScrollRef.current(currentHref);
+    pendingRestoreHrefRef.current = null;
+  }, [currentHref]);
 
   useEffect(() => {
     const cancelRestore = () => {
@@ -82,6 +107,33 @@ export function useAdminNestedScrollRestoration(
         window.cancelAnimationFrame(restoreFrameRef.current);
         restoreFrameRef.current = null;
       }
+    };
+
+    const unlockScrollRange = () => {
+      const lock = lockedContentRef.current;
+      if (!lock) return;
+
+      lock.element.style.minHeight = lock.previousMinHeight;
+      lockedContentRef.current = null;
+    };
+
+    const lockScrollRange = (
+      scrollElement: HTMLElement,
+      minimumScrollHeight = scrollElement.scrollHeight,
+    ) => {
+      unlockScrollRange();
+
+      const contentElement = getAdminScrollContent(scrollElement);
+      if (!contentElement) return;
+
+      lockedContentRef.current = {
+        element: contentElement,
+        previousMinHeight: contentElement.style.minHeight,
+      };
+      contentElement.style.minHeight = `${Math.max(
+        contentElement.scrollHeight,
+        minimumScrollHeight,
+      )}px`;
     };
 
     const handlePopState = () => {
@@ -106,6 +158,7 @@ export function useAdminNestedScrollRestoration(
         }
 
         const targetTop = readScrollTop(href);
+        unlockScrollRange();
         const maxTop = Math.max(0, scrollElement.scrollHeight - scrollElement.clientHeight);
 
         if (targetTop <= maxTop || frame >= MAX_RESTORE_FRAMES) {
@@ -114,6 +167,14 @@ export function useAdminNestedScrollRestoration(
           return;
         }
 
+        // Keep the nested scroll range tall enough to retain the destination
+        // position while a lazy panel finishes mounting. The lock is removed
+        // and remeasured at the start of every frame, before paint.
+        lockScrollRange(
+          scrollElement,
+          targetTop + scrollElement.clientHeight,
+        );
+        scrollElement.scrollTop = targetTop;
         scheduleStoredRestore(href, frame + 1);
       });
     };
@@ -128,6 +189,7 @@ export function useAdminNestedScrollRestoration(
       }
 
       const targetTop = readScrollTop(href);
+      unlockScrollRange();
       const maxTop = Math.max(
         0,
         scrollElement.scrollHeight - scrollElement.clientHeight,
@@ -135,12 +197,19 @@ export function useAdminNestedScrollRestoration(
       scrollElement.scrollTop = Math.min(targetTop, maxTop);
 
       if (targetTop > maxTop) {
+        lockScrollRange(
+          scrollElement,
+          targetTop + scrollElement.clientHeight,
+        );
+        scrollElement.scrollTop = targetTop;
         scheduleStoredRestore(href);
         return;
       }
 
       nextNavigationIsPopRef.current = false;
     };
+
+    restoreStoredScrollRef.current = restoreStoredScroll;
 
     window.addEventListener("popstate", handlePopState);
     const navigationTarget = getNavigationEventTarget();
@@ -153,23 +222,40 @@ export function useAdminNestedScrollRestoration(
       if (!scrollElement) return;
 
       writeScrollTop(event.fromLocation.href, scrollElement.scrollTop);
+
+      const switchedWorkspaceView = workspaceViewChanged(
+        event.fromLocation.href,
+        event.toLocation.href,
+      );
+      if (nextNavigationIsPopRef.current || switchedWorkspaceView) {
+        // A newly selected panel may be shorter for a render. Preserve the
+        // outgoing range until the destination position is restored so the
+        // browser cannot visibly clamp the nested scroller to zero.
+        const targetTop = readScrollTop(event.toLocation.href);
+        pendingRestoreHrefRef.current = event.toLocation.href;
+        lockScrollRange(
+          scrollElement,
+          Math.max(
+            scrollElement.scrollHeight,
+            targetTop + scrollElement.clientHeight,
+          ),
+        );
+      }
     });
 
     const unsubscribeRendered = router.subscribe("onRendered", (event) => {
-      const switchedWorkspaceView = event.fromLocation
-        ? workspaceViewChanged(
-            event.fromLocation.href,
-            event.toLocation.href,
-          )
-        : false;
-      if (!nextNavigationIsPopRef.current && !switchedWorkspaceView) return;
+      if (
+        !nextNavigationIsPopRef.current &&
+        pendingRestoreHrefRef.current !== event.toLocation.href
+      ) return;
 
-      // `onRendered` is emitted from a layout effect after the next workspace
-      // has committed and before the browser paints it. Restore here so the
-      // outgoing panel does not visibly jump while route data is loading.
-      // A previously visited tab returns to its own position; a first visit
-      // reads as zero. Delayed panels keep retrying until their height exists.
+      // Fallback for a traversal that does not produce an observing layout
+      // render in the admin shell. Normal workspace changes restore from the
+      // location-keyed layout effect above. A previously visited tab returns
+      // to its own position; a first visit reads as zero. Delayed panels keep
+      // retrying until their height exists.
       restoreStoredScroll(event.toLocation.href);
+      pendingRestoreHrefRef.current = null;
     });
 
     return () => {
@@ -178,6 +264,9 @@ export function useAdminNestedScrollRestoration(
       unsubscribeBeforeLoad();
       unsubscribeRendered();
       cancelRestore();
+      unlockScrollRange();
+      pendingRestoreHrefRef.current = null;
+      restoreStoredScrollRef.current = () => undefined;
     };
   }, [elementId, router]);
 }

@@ -20,6 +20,7 @@ const routerMock = vi.hoisted(() => {
   const subscribers = new Map<RouterEventName, Set<(event: RouterEvent) => void>>();
 
   return {
+    currentHref: "/admin/products",
     subscribers,
     router: {
       subscribe: vi.fn(
@@ -38,6 +39,7 @@ const routerMock = vi.hoisted(() => {
 });
 
 vi.mock("@tanstack/react-router", () => ({
+  useLocation: () => routerMock.currentHref,
   useRouter: () => routerMock.router,
 }));
 
@@ -69,9 +71,18 @@ function defineScrollMetrics(
 function createAdminScrollElement(metrics: { clientHeight: number; scrollHeight: number }) {
   const element = document.createElement("main");
   element.id = "admin-main-scroll";
+  const content = document.createElement("div");
+  content.dataset.adminScrollContent = "";
+  element.append(content);
   defineScrollMetrics(element, metrics);
   document.body.append(element);
   return element;
+}
+
+function getScrollContent(scrollElement: HTMLElement) {
+  return scrollElement.querySelector<HTMLElement>(
+    "[data-admin-scroll-content]",
+  )!;
 }
 
 describe("useAdminNestedScrollRestoration", () => {
@@ -82,6 +93,7 @@ describe("useAdminNestedScrollRestoration", () => {
   beforeEach(() => {
     routerMock.subscribers.clear();
     routerMock.router.subscribe.mockClear();
+    routerMock.currentHref = "/admin/products";
     window.sessionStorage.clear();
     document.body.innerHTML = "";
     animationFrameCallbacks = [];
@@ -121,7 +133,7 @@ describe("useAdminNestedScrollRestoration", () => {
     }
   }
 
-  it("resets forward navigation to TanStack Router while restoring back navigation after delayed content height", () => {
+  it("lets TanStack reset forward navigation and holds back navigation while delayed content returns", () => {
     const scrollElement = createAdminScrollElement({
       clientHeight: 400,
       scrollHeight: 1_600,
@@ -162,9 +174,9 @@ describe("useAdminNestedScrollRestoration", () => {
       });
     });
 
-    expect(scrollElement.scrollTop).toBe(0);
+    expect(scrollElement.scrollTop).toBe(720);
     flushAnimationFrames(10);
-    expect(scrollElement.scrollTop).toBe(0);
+    expect(scrollElement.scrollTop).toBe(720);
 
     defineScrollMetrics(scrollElement, {
       clientHeight: 400,
@@ -215,6 +227,48 @@ describe("useAdminNestedScrollRestoration", () => {
       });
     });
     expect(scrollElement.scrollTop).toBe(720);
+  });
+
+  it("restores a workspace in the destination layout commit before onRendered", () => {
+    const scrollElement = createAdminScrollElement({
+      clientHeight: 400,
+      scrollHeight: 1_600,
+    });
+    scrollElement.scrollTop = 720;
+    routerMock.currentHref = "/admin/settings?section=seo";
+
+    act(() => {
+      root.render(<AdminScrollRestorationHarness />);
+      emitRouterEvent("onBeforeLoad", {
+        fromLocation: { href: "/admin/settings?section=seo" },
+        toLocation: { href: "/admin/settings?section=email" },
+      });
+    });
+
+    scrollElement.scrollTop = 0;
+    routerMock.currentHref = "/admin/settings?section=email";
+
+    act(() => {
+      root.render(<AdminScrollRestorationHarness />);
+    });
+
+    expect(scrollElement.scrollTop).toBe(0);
+    scrollElement.scrollTop = 180;
+
+    act(() => {
+      emitRouterEvent("onBeforeLoad", {
+        fromLocation: { href: "/admin/settings?section=email" },
+        toLocation: { href: "/admin/settings?section=seo" },
+      });
+    });
+    routerMock.currentHref = "/admin/settings?section=seo";
+
+    act(() => {
+      root.render(<AdminScrollRestorationHarness />);
+    });
+
+    expect(scrollElement.scrollTop).toBe(720);
+    expect(getScrollContent(scrollElement).style.minHeight).toBe("");
   });
 
   it("restores the durable Products and SKUs tax sub-workspaces independently", () => {
@@ -321,6 +375,64 @@ describe("useAdminNestedScrollRestoration", () => {
       });
     });
     expect(scrollElement.scrollTop).toBe(0);
+  });
+
+  it("holds the outgoing scroll range until a delayed workspace can restore", () => {
+    const scrollElement = createAdminScrollElement({
+      clientHeight: 400,
+      scrollHeight: 1_600,
+    });
+    const contentElement = getScrollContent(scrollElement);
+    scrollElement.scrollTop = 720;
+
+    act(() => {
+      emitRouterEvent("onBeforeLoad", {
+        fromLocation: { href: "/admin/settings?section=seo" },
+        toLocation: { href: "/admin/settings?section=email" },
+      });
+    });
+
+    expect(scrollElement.scrollTop).toBe(720);
+    expect(contentElement.style.minHeight).toBe("1600px");
+
+    defineScrollMetrics(scrollElement, {
+      clientHeight: 400,
+      scrollHeight: 400,
+    });
+
+    act(() => {
+      emitRouterEvent("onRendered", {
+        fromLocation: { href: "/admin/settings?section=seo" },
+        toLocation: { href: "/admin/settings?section=email" },
+      });
+    });
+
+    expect(scrollElement.scrollTop).toBe(0);
+    expect(contentElement.style.minHeight).toBe("");
+
+    scrollElement.scrollTop = 280;
+    act(() => {
+      emitRouterEvent("onBeforeLoad", {
+        fromLocation: { href: "/admin/settings?section=email" },
+        toLocation: { href: "/admin/settings?section=seo" },
+      });
+      emitRouterEvent("onRendered", {
+        fromLocation: { href: "/admin/settings?section=email" },
+        toLocation: { href: "/admin/settings?section=seo" },
+      });
+    });
+
+    expect(scrollElement.scrollTop).toBe(720);
+    expect(contentElement.style.minHeight).toBe("1120px");
+
+    defineScrollMetrics(scrollElement, {
+      clientHeight: 400,
+      scrollHeight: 1_600,
+    });
+    flushAnimationFrames();
+
+    expect(scrollElement.scrollTop).toBe(720);
+    expect(contentElement.style.minHeight).toBe("");
   });
 
   it("does not reset scroll for filters within the active workspace tab", () => {

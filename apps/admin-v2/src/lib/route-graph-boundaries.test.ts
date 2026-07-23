@@ -1227,6 +1227,8 @@ describe("admin route graph boundaries", () => {
     expect(adminRouteSource).toContain(
       'data-scroll-restoration-id="admin-main-scroll"',
     );
+    expect(adminRouteSource).toContain("[overflow-anchor:none]");
+    expect(adminRouteSource).toContain("data-admin-scroll-content");
     expect(adminRouteSource).toContain("useAdminNestedScrollRestoration()");
     expect(adminScrollSource).toContain('window.addEventListener("popstate"');
     expect(adminScrollSource).toContain(
