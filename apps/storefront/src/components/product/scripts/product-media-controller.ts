@@ -38,7 +38,7 @@ interface NavigatorWithConnection extends Navigator {
 }
 
 const imageCache = new Map<string, HTMLImageElement>();
-const imagePreloads = new Map<string, Promise<void>>();
+const imagePreloads = new Map<string, Promise<boolean>>();
 const mobileZoomBackgroundInertStates = new Map<HTMLElement, boolean>();
 let activeController: AbortController | null = null;
 let videoThemePromise: Promise<void> | null = null;
@@ -79,11 +79,12 @@ function scrollBehavior(): ScrollBehavior {
 function preloadImage(
   url: string,
   fetchPriority: "high" | "low" | "auto" = "auto",
-): Promise<void> {
-  if (!url || imageCache.has(url)) return Promise.resolve();
+): Promise<boolean> {
+  if (!url) return Promise.resolve(false);
+  if (imageCache.has(url)) return Promise.resolve(true);
   const existing = imagePreloads.get(url);
   if (existing) return existing;
-  const request = new Promise<void>((resolve) => {
+  const request = new Promise<boolean>((resolve) => {
     const image = new Image();
     image.fetchPriority = fetchPriority;
     image.onload = async () => {
@@ -94,11 +95,11 @@ function preloadImage(
       }
       imageCache.set(url, image);
       imagePreloads.delete(url);
-      resolve();
+      resolve(true);
     };
     image.onerror = () => {
       imagePreloads.delete(url);
-      resolve();
+      resolve(false);
     };
     image.src = url;
   });
@@ -290,10 +291,14 @@ function setSelectedItem(
     mobileTrigger?.removeAttribute("aria-disabled");
     placeholder?.classList.add("hidden");
 
-    const displayUrl = item.url;
+    const shouldUsePreview =
+      source !== "initial" &&
+      Boolean(item.previewUrl) &&
+      !imageCache.has(item.url);
+    const displayUrl = shouldUsePreview ? item.previewUrl! : item.url;
     const presentedItem = {
       ...item,
-      previewUrl: null,
+      previewUrl: shouldUsePreview ? item.previewUrl : null,
     };
     root.dataset.activeMediaDisplayUrl = displayUrl;
 
@@ -309,6 +314,15 @@ function setSelectedItem(
     }
 
     dispatchChange({ ...presentedItem, source });
+
+    if (shouldUsePreview) {
+      void preloadImage(item.url, "high").then((loaded) => {
+        if (!loaded || root.dataset.activeMediaKey !== currentKey) return;
+        root.dataset.activeMediaDisplayUrl = item.url;
+        if (mobileImage) mobileImage.src = item.url;
+        if (desktopImage) desktopImage.src = item.url;
+      });
+    }
     return;
   }
 
