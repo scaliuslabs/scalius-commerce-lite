@@ -238,9 +238,9 @@ export default function GeneralSettingsPage({
           </TabsList>
 
           <div className="min-w-0">
-            <TabsContent value="header" className="mt-0">
+            <TabsContent forceMount value="header" className="mt-0 data-[state=inactive]:hidden">
               <SettingsEditorBoundary label="Header">
-                {mountedTabs.has("header") && (
+                {(mountedTabs.has("header") || section === "header") && (
                   <Suspense fallback={<TabSpinner />}>
                     <HeaderBuilder
                       activePanel={headerPanel}
@@ -254,9 +254,9 @@ export default function GeneralSettingsPage({
               </SettingsEditorBoundary>
             </TabsContent>
 
-            <TabsContent value="footer" className="mt-0">
+            <TabsContent forceMount value="footer" className="mt-0 data-[state=inactive]:hidden">
               <SettingsEditorBoundary label="Footer">
-                {mountedTabs.has("footer") && (
+                {(mountedTabs.has("footer") || section === "footer") && (
                   <Suspense fallback={<TabSpinner />}>
                     <FooterBuilder
                       activePanel={footerPanel}
@@ -270,9 +270,9 @@ export default function GeneralSettingsPage({
               </SettingsEditorBoundary>
             </TabsContent>
 
-            <TabsContent value="seo" className="mt-0">
+            <TabsContent forceMount value="seo" className="mt-0 data-[state=inactive]:hidden">
               <SettingsEditorBoundary label="SEO">
-                {mountedTabs.has("seo") && (
+                {(mountedTabs.has("seo") || section === "seo") && (
                   <Suspense fallback={<TabSpinner />}>
                     <SeoSettingsBuilder />
                   </Suspense>
@@ -280,9 +280,9 @@ export default function GeneralSettingsPage({
               </SettingsEditorBoundary>
             </TabsContent>
 
-            <TabsContent value="storefront" className="mt-0">
+            <TabsContent forceMount value="storefront" className="mt-0 data-[state=inactive]:hidden">
               <SettingsEditorBoundary label="Storefront">
-                {mountedTabs.has("storefront") && (
+                {(mountedTabs.has("storefront") || section === "storefront") && (
                   <Suspense fallback={<TabSpinner />}>
                     <StorefrontUrlBuilder />
                   </Suspense>
@@ -290,9 +290,9 @@ export default function GeneralSettingsPage({
               </SettingsEditorBoundary>
             </TabsContent>
 
-            <TabsContent value="email" className="mt-0">
+            <TabsContent forceMount value="email" className="mt-0 data-[state=inactive]:hidden">
               <SettingsEditorBoundary label="Email">
-                {mountedTabs.has("email") && (
+                {(mountedTabs.has("email") || section === "email") && (
                   <Suspense fallback={<TabSpinner />}>
                     <EmailSettingsForm />
                   </Suspense>
@@ -300,9 +300,9 @@ export default function GeneralSettingsPage({
               </SettingsEditorBoundary>
             </TabsContent>
 
-            <TabsContent value="currency" className="mt-0">
+            <TabsContent forceMount value="currency" className="mt-0 data-[state=inactive]:hidden">
               <SettingsEditorBoundary label="Currency">
-                {mountedTabs.has("currency") && (
+                {(mountedTabs.has("currency") || section === "currency") && (
                   <Suspense fallback={<TabSpinner />}>
                     <CurrencySettingsBuilder />
                   </Suspense>
@@ -310,9 +310,9 @@ export default function GeneralSettingsPage({
               </SettingsEditorBoundary>
             </TabsContent>
 
-            <TabsContent value="media" className="mt-0">
+            <TabsContent forceMount value="media" className="mt-0 data-[state=inactive]:hidden">
               <SettingsEditorBoundary label="Media">
-                {mountedTabs.has("media") && (
+                {(mountedTabs.has("media") || section === "media") && (
                   <Suspense fallback={<TabSpinner />}>
                     <MediaSettingsBuilder />
                   </Suspense>
@@ -320,9 +320,9 @@ export default function GeneralSettingsPage({
               </SettingsEditorBoundary>
             </TabsContent>
 
-            <TabsContent value="business" className="mt-0">
+            <TabsContent forceMount value="business" className="mt-0 data-[state=inactive]:hidden">
               <SettingsEditorBoundary label="Business">
-                {mountedTabs.has("business") && (
+                {(mountedTabs.has("business") || section === "business") && (
                   <Suspense fallback={<TabSpinner />}>
                     <BusinessSettingsBuilder />
                   </Suspense>
@@ -330,9 +330,9 @@ export default function GeneralSettingsPage({
               </SettingsEditorBoundary>
             </TabsContent>
 
-            <TabsContent value="countries" className="mt-0">
+            <TabsContent forceMount value="countries" className="mt-0 data-[state=inactive]:hidden">
               <SettingsEditorBoundary label="Countries">
-                {mountedTabs.has("countries") && (
+                {(mountedTabs.has("countries") || section === "countries") && (
                   <Suspense fallback={<TabSpinner />}>
                     <AllowedCountriesBuilder />
                   </Suspense>
@@ -340,9 +340,9 @@ export default function GeneralSettingsPage({
               </SettingsEditorBoundary>
             </TabsContent>
 
-            <TabsContent value="auth" className="mt-0">
+            <TabsContent forceMount value="auth" className="mt-0 data-[state=inactive]:hidden">
               <SettingsEditorBoundary label="Auth & Access">
-                {mountedTabs.has("auth") && (
+                {(mountedTabs.has("auth") || section === "auth") && (
                   <Suspense fallback={<TabSpinner />}>
                     <AuthSettingsBuilder />
                   </Suspense>
@@ -350,9 +350,9 @@ export default function GeneralSettingsPage({
               </SettingsEditorBoundary>
             </TabsContent>
 
-            <TabsContent value="security" className="mt-0">
+            <TabsContent forceMount value="security" className="mt-0 data-[state=inactive]:hidden">
               <SettingsEditorBoundary label="Security">
-                {mountedTabs.has("security") && (
+                {(mountedTabs.has("security") || section === "security") && (
                   <Suspense fallback={<TabSpinner />}>
                     <SecuritySettingsBuilder />
                   </Suspense>
@@ -360,9 +360,9 @@ export default function GeneralSettingsPage({
               </SettingsEditorBoundary>
             </TabsContent>
 
-            <TabsContent value="scanner" className="mt-0">
+            <TabsContent forceMount value="scanner" className="mt-0 data-[state=inactive]:hidden">
               <SettingsEditorBoundary label="Scanner">
-                {mountedTabs.has("scanner") && (
+                {(mountedTabs.has("scanner") || section === "scanner") && (
                   <Suspense fallback={<TabSpinner />}>
                     <ScannerTokenGenerator />
                   </Suspense>

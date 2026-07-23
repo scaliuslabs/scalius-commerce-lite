@@ -8,6 +8,16 @@ function source(path: string): string {
 }
 
 describe("checkout settings mobile workspace", () => {
+  it("keeps visited sections mounted without displaying inactive panels", () => {
+    const workspace = source("./CheckoutSettingsPage.tsx");
+
+    expect(workspace.match(/<TabsContent forceMount/g)).toHaveLength(6);
+    expect(workspace.match(/data-\[state=inactive\]:hidden/g)).toHaveLength(6);
+    expect(workspace).toContain(
+      '(mountedTabs.has("payment") || section === "payment")',
+    );
+  });
+
   it("uses purpose-built language and shipping cards below the desktop table breakpoint", () => {
     const languages = source("../checkout-languages/LanguagesTable.tsx");
     const methods = source("../shipping-methods/MethodsTable.tsx");

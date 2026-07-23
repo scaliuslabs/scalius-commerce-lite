@@ -61,6 +61,20 @@ function getNavigationEventTarget() {
   return maybeWindow.navigation;
 }
 
+function workspaceViewChanged(fromHref: string, toHref: string) {
+  try {
+    const from = new URL(fromHref, window.location.origin);
+    const to = new URL(toHref, window.location.origin);
+
+    if (from.pathname !== to.pathname) return false;
+
+    return from.searchParams.get("section") !== to.searchParams.get("section") ||
+      from.searchParams.get("panel") !== to.searchParams.get("panel");
+  } catch {
+    return false;
+  }
+}
+
 export function useAdminNestedScrollRestoration(
   elementId = DEFAULT_ADMIN_SCROLL_ELEMENT_ID,
 ) {
@@ -121,14 +135,39 @@ export function useAdminNestedScrollRestoration(
       if (!scrollElement) return;
 
       writeScrollTop(event.fromLocation.href, scrollElement.scrollTop);
+
+      // A tab/panel is its own workspace view. Position the nested scroller
+      // before React swaps panels so a short lazy fallback cannot clamp the
+      // previous view's scroll position and produce a visible jump.
+      if (workspaceViewChanged(
+        event.fromLocation.href,
+        event.toLocation.href,
+      )) {
+        const targetTop = readScrollTop(event.toLocation.href);
+        const maxTop = Math.max(
+          0,
+          scrollElement.scrollHeight - scrollElement.clientHeight,
+        );
+        scrollElement.scrollTop = Math.min(targetTop, maxTop);
+      }
     });
 
     const unsubscribeRendered = router.subscribe("onRendered", (event) => {
-      const revisitingWorkspaceView =
+      const switchedWorkspaceView = event.fromLocation
+        ? workspaceViewChanged(
+            event.fromLocation.href,
+            event.toLocation.href,
+          )
+        : false;
+      const revisitingQueryState =
         event.pathChanged === false &&
         event.hrefChanged &&
         hasStoredScrollTop(event.toLocation.href);
-      if (!nextNavigationIsPopRef.current && !revisitingWorkspaceView) return;
+      if (
+        !nextNavigationIsPopRef.current &&
+        !switchedWorkspaceView &&
+        !revisitingQueryState
+      ) return;
 
       scheduleStoredRestore(event.toLocation.href);
     });
