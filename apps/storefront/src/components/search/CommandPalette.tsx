@@ -601,7 +601,17 @@ export default function CommandPalette() {
           )}
         </div>
 
-        {/* Footer (Restored) */}
+        {normalizedQuery && (
+          <a
+            href={`/search?q=${encodeURIComponent(normalizedQuery)}`}
+            className="flex min-h-14 shrink-0 items-center justify-between gap-3 border-t border-gray-100 bg-white px-4 text-sm font-medium text-gray-900 sm:hidden"
+          >
+            <span className="truncate">View all results for “{normalizedQuery}”</span>
+            <ArrowRight className="h-4 w-4 shrink-0 text-gray-500" />
+          </a>
+        )}
+
+        {/* Desktop keyboard help and full-results link */}
         <div className="hidden sm:flex px-5 py-3 bg-gray-50 border-t border-gray-100 items-center justify-between text-xs text-gray-400 shrink-0">
           <div className="flex items-center gap-4">
             <span className="flex items-center gap-1.5">
