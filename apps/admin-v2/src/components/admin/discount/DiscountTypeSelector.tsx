@@ -1,11 +1,5 @@
 import React, { type SVGProps } from "react";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "../../ui/card";
+import { Card, CardContent } from "../../ui/card";
 import { Button } from "../../ui/button";
 import { ChevronRight, Tag, Percent, Truck } from "lucide-react";
 import type { DiscountEditorType } from "./discount-editor-model";
@@ -50,23 +44,18 @@ export function DiscountTypeSelector({ onSelect }: DiscountTypeSelectorProps) {
   };
 
   return (
-    <Card id="discount-type-selector" className="w-full max-w-3xl border bg-card shadow-none">
-      <CardHeader className="px-4 pb-3 pt-4 sm:px-5">
-        <CardTitle className="text-lg font-semibold tracking-tight">
-          What should this code reduce?
-        </CardTitle>
-        <CardDescription className="text-sm text-muted-foreground pt-1">
-          One code can apply to products, the order subtotal, or delivery.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="px-4 pb-4 sm:px-5">
-        <div className="divide-y rounded-md border">
+    <Card
+      id="discount-type-selector"
+      className="w-full max-w-3xl overflow-hidden border bg-card shadow-none"
+    >
+      <CardContent className="p-0">
+        <div role="group" aria-label="Discount type" className="divide-y">
           {discountTypes.map((type) => (
             <Button
               key={type.id}
               type="button"
               variant="outline"
-              className="group grid h-auto min-h-20 w-full grid-cols-[2.5rem_minmax(0,1fr)_auto] items-center gap-3 whitespace-normal rounded-none border-0 bg-card px-3 py-3 text-left shadow-none first:rounded-t-md last:rounded-b-md hover:bg-muted/50 sm:px-4"
+              className="group grid h-auto min-h-20 w-full grid-cols-[2.5rem_minmax(0,1fr)_auto] items-center gap-3 whitespace-normal rounded-none border-0 bg-card px-3 py-3 text-left shadow-none hover:bg-muted/50 sm:px-4"
               onClick={() => handleSelect(type.id)}
             >
               <div className="flex h-10 w-10 items-center justify-center rounded-md border bg-muted/30">

@@ -25,6 +25,10 @@ const collectionSelector = readFileSync(
   fileURLToPath(new URL("./CollectionSelector.tsx", import.meta.url)),
   "utf8",
 );
+const typeSelector = readFileSync(
+  fileURLToPath(new URL("./DiscountTypeSelector.tsx", import.meta.url)),
+  "utf8",
+);
 
 function openingButtonTags(source: string): string[] {
   return source.match(/<Button\b[\s\S]*?>/g) ?? [];
@@ -50,6 +54,16 @@ describe("unified discount builder workflow", () => {
     expect(createRoute).toContain("discountEditorTypes.includes");
     expect(createRoute).toContain("search: (previous) => ({ ...previous, type })");
     expect(createRoute).not.toContain("useState<DiscountEditorType");
+  });
+
+  it("presents the three discount outcomes without repeating the same prompt", () => {
+    expect(typeSelector).toContain('aria-label="Discount type"');
+    expect(typeSelector).toContain("Amount off products");
+    expect(typeSelector).toContain("Amount off order");
+    expect(typeSelector).toContain("Free shipping");
+    expect(createRoute).not.toContain("Choose what the customer code will reduce.");
+    expect(typeSelector).not.toContain("What should this code reduce?");
+    expect(typeSelector).not.toContain("One code can apply to products");
   });
 
   it("preserves dirty input, save failure, keyboard semantics, and mobile actions", () => {
