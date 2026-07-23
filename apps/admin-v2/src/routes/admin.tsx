@@ -58,9 +58,9 @@ function AdminLayout() {
             <div
               id="admin-main-scroll"
               data-scroll-restoration-id="admin-main-scroll"
-              className="flex-1 overflow-y-auto px-3 sm:px-4 md:px-6 pt-4 pb-4 bg-gray-50 dark:bg-[#0a0a0a]"
+              className="flex-1 overflow-y-auto [overflow-anchor:none] px-3 sm:px-4 md:px-6 pt-4 pb-4 bg-gray-50 dark:bg-[#0a0a0a]"
             >
-              <div className="max-w-7xl mx-auto">
+              <div data-admin-scroll-content className="max-w-7xl mx-auto">
                 <Outlet />
               </div>
             </div>
