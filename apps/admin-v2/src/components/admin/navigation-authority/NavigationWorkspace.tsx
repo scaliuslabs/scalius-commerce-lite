@@ -171,7 +171,8 @@ function destinationSummary(item: NavigationMenuItemRow) {
   if (item.targetType === "internal_path" || item.targetType === "external_url") {
     return item.targetValue ?? TARGET_LABELS[item.targetType];
   }
-  return `${TARGET_LABELS[item.targetType]} · ${item.targetId ?? "Unavailable"}`;
+  const label = TARGET_LABELS[item.targetType];
+  return item.targetId ? label : `${label} unavailable`;
 }
 
 const treeCollisionDetection: CollisionDetection = (args) => {
@@ -1407,7 +1408,6 @@ export function NavigationWorkspace({
                         <Badge className="gap-1"><CircleDot className="size-3" /> Draft changes</Badge>
                       )}
                     </div>
-                    <p className="mt-0.5 text-xs text-muted-foreground">{menu.handle} · revision {menu.revision}</p>
                   </div>
                   <div className="flex items-center gap-2">
                     <Button variant="outline" size="sm" className="h-11 sm:h-9" onClick={() => setEditMenuOpen(true)}>

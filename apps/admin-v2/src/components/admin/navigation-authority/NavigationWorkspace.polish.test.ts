@@ -12,6 +12,9 @@ describe("navigation workspace polish boundaries", () => {
     expect(workspace).not.toContain("Build reusable menus, publish safely");
     expect(workspace).not.toContain("Drag to an edge or inside another item");
     expect(workspace).not.toContain("Restoring keeps history linear and auditable");
+    expect(workspace).not.toContain("{menu.handle} · revision {menu.revision}");
+    expect(workspace).not.toContain('`${TARGET_LABELS[item.targetType]} · ${item.targetId');
+    expect(workspace).toContain('return item.targetId ? label : `${label} unavailable`;');
     expect(workspace).toContain("Move to trash");
     expect(workspace).toContain("Menu trash");
   });
