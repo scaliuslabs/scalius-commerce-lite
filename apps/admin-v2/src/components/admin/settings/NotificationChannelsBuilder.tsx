@@ -129,8 +129,8 @@ function CustomerChannelControl({
         aria-hidden="true"
       />
       <span className="min-w-0">
-        <span className="block truncate font-medium">{label}</span>
-        <span className="block truncate text-muted-foreground">{state}</span>
+        <span className="block font-medium sm:truncate">{label}</span>
+        <span className="block text-muted-foreground sm:truncate">{state}</span>
       </span>
     </label>
   );
@@ -683,7 +683,7 @@ export function NotificationChannelsBuilder() {
                 <CardTitle className="text-base">Customer updates</CardTitle>
               </div>
             </div>
-            <div className="flex w-full flex-col-reverse gap-2 sm:w-auto sm:flex-row">
+            <div className="grid w-full grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] gap-2 sm:flex sm:w-auto sm:flex-row">
               <Button
                 type="button"
                 size="sm"
@@ -693,7 +693,7 @@ export function NotificationChannelsBuilder() {
                   setWhatsAppTemplate(savedWhatsAppTemplate);
                 }}
                 disabled={!canManage || !customerDirty || isSaving || isLoading || Boolean(customerLoadError)}
-                className="min-h-11 shrink-0 sm:min-h-9"
+                className="min-h-11 min-w-0 sm:min-h-9"
               >
                 <RotateCcw className="mr-2 h-4 w-4" />
                 Reset
@@ -703,7 +703,7 @@ export function NotificationChannelsBuilder() {
                 size="sm"
                 onClick={handleSave}
                 disabled={!canManage || !customerDirty || isSaving || isLoading || Boolean(customerLoadError)}
-                className="min-h-11 shrink-0 sm:min-h-9"
+                className="min-h-11 min-w-0 sm:min-h-9"
               >
                 {isSaving ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -716,7 +716,7 @@ export function NotificationChannelsBuilder() {
           </div>
 
           {!isLoading && !customerLoadError ? (
-            <div className="grid grid-cols-3 gap-2" aria-label="Customer channel rules and readiness">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3" aria-label="Customer channel rules and readiness">
               <CustomerChannelControl
                 label="Email"
                 ready={isEmailConfigured}
@@ -878,14 +878,14 @@ export function NotificationChannelsBuilder() {
                 </div>
               </div>
             </div>
-            <div className="flex w-full flex-col-reverse gap-2 sm:w-auto sm:flex-row">
+            <div className="grid w-full grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] gap-2 sm:flex sm:w-auto sm:flex-row">
               <Button
                 type="button"
                 size="sm"
                 variant="outline"
                 onClick={() => setAdminChannels(savedAdminChannels)}
                 disabled={!canManage || !adminDirty || isAdminSaving || isAdminLoading || Boolean(adminLoadError)}
-                className="min-h-11 shrink-0 sm:min-h-9"
+                className="min-h-11 min-w-0 sm:min-h-9"
               >
                 <RotateCcw className="mr-2 h-4 w-4" />
                 Reset
@@ -895,7 +895,7 @@ export function NotificationChannelsBuilder() {
                 size="sm"
                 onClick={handleAdminSave}
                 disabled={!canManage || !adminDirty || isAdminSaving || isAdminLoading || Boolean(adminLoadError)}
-                className="min-h-11 shrink-0 sm:min-h-9"
+                className="min-h-11 min-w-0 sm:min-h-9"
               >
                 {isAdminSaving ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
