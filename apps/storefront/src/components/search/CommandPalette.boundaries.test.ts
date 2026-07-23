@@ -63,6 +63,9 @@ describe("CommandPalette search request boundaries", () => {
     expect(source).not.toContain('trim: "border"');
     expect(source).toContain("onLoad={() => setLoaded(true)}");
     expect(source).toContain("motion-reduce:animate-none");
+    expect(source).toContain("View all results for “{normalizedQuery}”");
+    expect(source).toContain("min-h-14 shrink-0");
+    expect(source).toContain("sm:hidden");
   });
 
   it("does not leave results from the previous query actionable while refreshing", async () => {
