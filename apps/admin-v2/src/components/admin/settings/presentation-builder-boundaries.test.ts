@@ -92,5 +92,6 @@ describe("header and footer builder workflow boundaries", () => {
     expect(homepage).toContain("min-h-11");
     expect(homepage).toContain("md:size-8");
     expect(homepage).toContain("Reset");
+    expect(homepage).not.toContain('r{saved?.revision ?? "—"}');
   });
 });

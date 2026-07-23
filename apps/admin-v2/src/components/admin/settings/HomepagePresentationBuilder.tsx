@@ -144,16 +144,11 @@ export function HomepagePresentationBuilder({
 
   return (
     <div className="max-w-3xl space-y-4">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h2 className="text-base font-semibold">Homepage</h2>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            Choose what buyers see after featured content.
-          </p>
-        </div>
-        <Badge variant="outline" className="shrink-0 font-mono text-[11px]">
-          r{saved?.revision ?? "—"}
-        </Badge>
+      <div>
+        <h2 className="text-base font-semibold">Homepage</h2>
+        <p className="mt-0.5 text-sm text-muted-foreground">
+          Choose what buyers see after featured content.
+        </p>
       </div>
 
       <section className="rounded-xl border bg-card">
