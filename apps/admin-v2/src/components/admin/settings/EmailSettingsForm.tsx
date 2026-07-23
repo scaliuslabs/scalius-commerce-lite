@@ -172,10 +172,10 @@ export default function EmailSettingsForm() {
                 <Badge
                   variant={runtimeConfigured ? "default" : "secondary"}
                   title={runtimeConfigured
-                    ? "Configuration is ready; successful delivery has not been tested."
+                    ? "Credentials and sender are configured; delivery has not been tested."
                     : undefined}
                 >
-                  {runtimeConfigured ? "Ready" : "Setup incomplete"}
+                  {runtimeConfigured ? "Configured" : "Setup incomplete"}
                 </Badge>
                 {dirty && <Badge variant="outline">Unsaved changes</Badge>}
               </div>
