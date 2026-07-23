@@ -247,7 +247,7 @@ export default function OrderSuccessButtons({
               d="M10 19l-7-7m0 0l7-7m-7 7h18"
             />
           </svg>
-          Continue Shopping
+          Continue shopping
         </Button>
         {isCustomerAuthenticated && (
           <Button
@@ -268,7 +268,7 @@ export default function OrderSuccessButtons({
                 d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
               />
             </svg>
-            Track In Account
+            Track in account
           </Button>
         )}
         <Button
@@ -289,16 +289,16 @@ export default function OrderSuccessButtons({
               d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"
             />
           </svg>
-          Print Receipt
+          Print receipt
         </Button>
       </div>
 
       <div className="w-full max-w-xl rounded-xl border border-border bg-muted/30 p-4 text-left">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-foreground">Keep this browser receipt</p>
+            <p className="text-sm font-semibold text-foreground">Save your receipt</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Guest receipts stay available in this browser for a limited time. Account history only includes orders placed while signed in.
+              This guest receipt is private to this browser and available for a limited time.
             </p>
           </div>
           <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
@@ -308,7 +308,7 @@ export default function OrderSuccessButtons({
               className="border-border font-medium"
               onClick={handleCopyReceiptLink}
             >
-              Copy Link
+              Copy receipt link
             </Button>
             {authChecked && !isCustomerAuthenticated && (
               <Button
@@ -317,29 +317,20 @@ export default function OrderSuccessButtons({
                 className="border-border font-medium"
                 onClick={handleOpenAuth}
               >
-                Sign In For Future Orders
+                Sign in for future orders
               </Button>
             )}
           </div>
         </div>
-        <p
-          className={`mt-2 min-h-5 text-sm ${
-            receiptCopyState === "failed"
-              ? "text-destructive"
-              : receiptCopyState === "copied"
-                ? "text-primary"
-                : "text-muted-foreground"
-          }`}
-          aria-live="polite"
-        >
-          {receiptCopyState === "copied"
-            ? "Receipt link copied."
-            : receiptCopyState === "failed"
-              ? "Copy failed. Use your browser address bar to save this clean receipt URL."
-              : isCustomerAuthenticated
-                ? "If this order belongs to your account, the account button opens its private timeline."
-                : "This link opens only while this browser keeps its private receipt cookie."}
-        </p>
+        <div aria-live="polite">
+          {receiptCopyState !== "idle" ? (
+            <p className={`mt-2 text-sm ${receiptCopyState === "failed" ? "text-destructive" : "text-primary"}`}>
+              {receiptCopyState === "copied"
+                ? "Receipt link copied."
+                : "Copy failed. Save this page from your browser instead."}
+            </p>
+          ) : null}
+        </div>
       </div>
 
       <div className="w-full max-w-xl rounded-xl border border-border bg-background p-4 text-left shadow-sm">
@@ -451,7 +442,7 @@ export default function OrderSuccessButtons({
                       disabled={supportSubmitState.status === "submitting"}
                     >
                       {supportSubmitState.status === "submitting" && <Loader2 className="h-4 w-4 animate-spin" />}
-                      Send Request
+                       Send request
                     </Button>
                   </div>
                 </div>

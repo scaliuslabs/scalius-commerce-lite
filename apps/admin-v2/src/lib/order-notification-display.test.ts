@@ -149,7 +149,7 @@ describe("order notification display", () => {
 
   it("does not surface alarming historical parent retry counts as the primary label", () => {
     expect(outboxAttemptLabel({ status: "dead_lettered", attempts: 275 })).toBe("Retry stopped");
-    expect(outboxAttemptLabel({ status: "sent", attempts: 275 })).toBe("Delivery settled");
+    expect(outboxAttemptLabel({ status: "sent", attempts: 275 })).toBeNull();
     expect(outboxAttemptLabel({ status: "failed", attempts: 8 })).toBe("Needs attention");
     expect(outboxAttemptLabel({ status: "failed", attempts: 2 })).toBe("2 attempts");
   });
