@@ -666,7 +666,6 @@ function ProductThumbnail({
             quality: 75,
             format: "auto",
             fit: "contain",
-            trim: "border",
           })}
           alt={product.imageAlt || product.name || ""}
           width={40}

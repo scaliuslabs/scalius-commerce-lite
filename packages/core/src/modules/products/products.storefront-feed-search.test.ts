@@ -467,6 +467,30 @@ describe("storefront feed category search", () => {
         expect(result.pages[0]).not.toHaveProperty("content");
     });
 
+    it("uses a featured video poster as the predictive-search thumbnail", async () => {
+        sqlite.prepare("DELETE FROM product_media WHERE product_id = ?").run("prod_runner");
+        sqlite.prepare(
+            `INSERT INTO media (id, kind, object_key, alt_text, status)
+             VALUES ('media_runner_poster', 'image', 'products/runner-poster.jpg', 'Runner video poster', 'ready'),
+                    ('media_runner_video', 'video', 'products/runner.mp4', 'Runner product video', 'ready')`,
+        ).run();
+        sqlite.prepare(
+            "UPDATE media SET poster_media_id = 'media_runner_poster' WHERE id = 'media_runner_video'",
+        ).run();
+        sqlite.prepare(
+            `INSERT INTO product_media (id, product_id, media_id, alt_text, is_primary, sort_order)
+             VALUES ('pmed_runner_video', 'prod_runner', 'media_runner_video', NULL, 1, 0)`,
+        ).run();
+
+        const result = await searchCatalog(db, "classic", { limit: 10 });
+
+        expect(result.products.find((product) => product.id === "prod_runner")).toMatchObject({
+            imageMediaId: "media_runner_poster",
+            imageUrl: "products/runner-poster.jpg",
+            imageAlt: "Runner product video",
+        });
+    });
+
     it("uses a stable created-at/id keyset and rejects retired page scans", async () => {
         insertProduct({
             id: "prod_tie_a",

@@ -8,10 +8,7 @@ import {
   buyerCatalogHasSkuInPriceRange,
 } from "../modules/products/products.buyer-projection";
 import { publicCategoryConditions } from "../modules/categories/categories.publication";
-import {
-  loadProductMediaProjections,
-  resolveProductImageRepresentation,
-} from "../modules/products/products.media";
+import { getCurrentPublicMediaUrl } from "../integrations/storage";
 export { ftsMatch, sanitizeFtsQuery } from "./fts5";
 
 // Types for search results
@@ -50,6 +47,74 @@ export type SearchResult =
   | ProductSearchResult
   | PageSearchResult
   | CategorySearchResult;
+
+type SearchImageProjection = {
+  mediaId: string;
+  objectKey: string;
+  altText: string;
+};
+
+function buildSearchImageProjection(): SQL<string | null> {
+  return sql<string | null>`(
+    SELECT json_object(
+      'mediaId', CASE
+        WHEN search_media.kind = 'image' THEN search_media.id
+        ELSE search_poster.id
+      END,
+      'objectKey', CASE
+        WHEN search_media.kind = 'image' THEN search_media.object_key
+        ELSE search_poster.object_key
+      END,
+      'altText', COALESCE(
+        search_product_media.alt_text,
+        search_media.alt_text,
+        ${products.name}
+      )
+    )
+    FROM product_media AS search_product_media
+    INNER JOIN media AS search_media
+      ON search_media.id = search_product_media.media_id
+    LEFT JOIN media AS search_poster
+      ON search_poster.id = search_media.poster_media_id
+    WHERE search_product_media.product_id = ${products.id}
+      AND search_media.status IN ('ready', 'trashed')
+      AND (
+        (search_media.kind = 'image' AND search_media.object_key <> '')
+        OR (
+          search_media.kind = 'video'
+          AND search_poster.kind = 'image'
+          AND search_poster.status IN ('ready', 'trashed')
+          AND search_poster.object_key <> ''
+        )
+      )
+    ORDER BY
+      search_product_media.is_primary DESC,
+      search_product_media.sort_order ASC,
+      search_product_media.id ASC
+    LIMIT 1
+  )`;
+}
+
+function parseSearchImageProjection(
+  value: string | null,
+): SearchImageProjection | null {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(value) as Partial<SearchImageProjection>;
+    if (
+      typeof parsed.mediaId !== "string" ||
+      typeof parsed.objectKey !== "string" ||
+      typeof parsed.altText !== "string" ||
+      !parsed.mediaId ||
+      !parsed.objectKey
+    ) {
+      return null;
+    }
+    return parsed as SearchImageProjection;
+  } catch {
+    return null;
+  }
+}
 
 export async function search(
   db: Database,
@@ -119,6 +184,7 @@ export async function search(
         slug: sql<string>`${products.slug}`.as("search_product_slug"),
         categoryId: sql<string | null>`${categories.id}`.as("search_category_id"),
         categoryName: sql<string | null>`${categories.name}`.as("search_category_name"),
+        imageProjection: buildSearchImageProjection(),
       })
       .from(products)
       .innerJoin(buyerPricing, eq(products.id, buyerPricing.productId))
@@ -187,31 +253,27 @@ export async function search(
       categoryQuery,
     ]);
 
-    // Resolve one image representation in a bounded media join after the page query.
-    let formattedProducts: ProductSearchResult[] = [];
-    if (productsResult.length > 0) {
-      const productIds = productsResult.map(p => p.id);
-      const mediaMap = await loadProductMediaProjections(db, productIds);
-
-      formattedProducts = productsResult.map(({
-        maxBuyerPrice,
-        availableForSale,
-        hasVariants,
-        ...product
-      }) => {
-        const image = resolveProductImageRepresentation(mediaMap.get(product.id) ?? []);
-        return {
-          ...product,
-          availableForSale: Boolean(availableForSale),
-          hasVariants: Boolean(hasVariants),
-          priceVaries: maxBuyerPrice > product.discountedPrice,
-          imageUrl: image?.url ?? null,
-          imageMediaId: image?.mediaId ?? null,
-          imageAlt: image?.altText ?? null,
-          type: "product" as const,
-        };
-      });
-    }
+    // The image/poster projection is part of the indexed product query, so
+    // predictive search does not wait on a second D1 round trip.
+    const formattedProducts: ProductSearchResult[] = productsResult.map(({
+      maxBuyerPrice,
+      availableForSale,
+      hasVariants,
+      imageProjection,
+      ...product
+    }) => {
+      const image = parseSearchImageProjection(imageProjection);
+      return {
+        ...product,
+        availableForSale: Boolean(availableForSale),
+        hasVariants: Boolean(hasVariants),
+        priceVaries: maxBuyerPrice > product.discountedPrice,
+        imageUrl: image ? getCurrentPublicMediaUrl(image.objectKey) : null,
+        imageMediaId: image?.mediaId ?? null,
+        imageAlt: image?.altText ?? null,
+        type: "product" as const,
+      };
+    });
 
     // Format pages
     const formattedPages = (searchPages ? pagesResult : []).filter(
