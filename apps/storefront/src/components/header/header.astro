@@ -138,6 +138,42 @@ const headerData: HeaderData = {
     let menuIsOpen = false;
     let bodyOverflowBeforeMenu = "";
     let menuVisibilityTimer: number | undefined;
+    const backgroundInertStates = new Map<HTMLElement, boolean>();
+
+    const menuBackgroundElements = () => {
+      const siteHeader = document.getElementById("site-header");
+      const siteWrapper = siteHeader?.parentElement;
+      const elements = new Set<HTMLElement>();
+
+      siteHeader?.querySelectorAll<HTMLElement>(":scope > *").forEach((element) => {
+        if (element !== menuPanel && element !== menuOverlay) elements.add(element);
+      });
+      siteWrapper?.querySelectorAll<HTMLElement>(":scope > *").forEach((element) => {
+        if (element !== siteHeader) elements.add(element);
+      });
+      document.body.querySelectorAll<HTMLElement>(":scope > *").forEach((element) => {
+        if (element !== siteWrapper && !["SCRIPT", "STYLE", "NOSCRIPT"].includes(element.tagName)) {
+          elements.add(element);
+        }
+      });
+
+      return elements;
+    };
+
+    const setMenuBackgroundInert = (inert: boolean) => {
+      if (inert) {
+        menuBackgroundElements().forEach((element) => {
+          backgroundInertStates.set(element, element.inert);
+          element.inert = true;
+        });
+        return;
+      }
+
+      backgroundInertStates.forEach((wasInert, element) => {
+        element.inert = wasInert;
+      });
+      backgroundInertStates.clear();
+    };
 
     const historyState = (): Record<string, unknown> =>
       history.state && typeof history.state === "object" ? history.state : {};
@@ -174,6 +210,7 @@ const headerData: HeaderData = {
       menuPanel.setAttribute("aria-hidden", String(!show));
       menuTrigger?.setAttribute("aria-expanded", String(show));
       if (show) {
+        setMenuBackgroundInert(true);
         bodyOverflowBeforeMenu = document.body.style.overflow;
         menuPanel.classList.remove("invisible");
         menuOverlay.classList.remove("invisible");
@@ -192,6 +229,7 @@ const headerData: HeaderData = {
         }
         requestAnimationFrame(() => menuClose?.focus());
       } else {
+        setMenuBackgroundInert(false);
         menuPanel.classList.add("-translate-x-full");
         menuOverlay.classList.add("opacity-0", "pointer-events-none");
         menuVisibilityTimer = window.setTimeout(() => {

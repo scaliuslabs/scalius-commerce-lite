@@ -48,6 +48,14 @@ describe("mobile menu accessibility boundaries", () => {
     expect(controller).toContain("event.shiftKey");
   });
 
+  it("removes the page behind the open drawer from interaction and the accessibility tree", () => {
+    expect(controller).toContain("menuBackgroundElements");
+    expect(controller).toContain("setMenuBackgroundInert(true)");
+    expect(controller).toContain("setMenuBackgroundInert(false)");
+    expect(controller).toContain("backgroundInertStates");
+    expect(controller).toContain("element.inert = true");
+  });
+
   it("keeps mobile controls touch-sized and home-indicator safe", () => {
     expect(layout).toContain('id="mobile-menu-toggle"');
     expect(layout).toMatch(/id="mobile-menu-toggle"[\s\S]*?h-11 w-11/);
@@ -58,6 +66,8 @@ describe("mobile menu accessibility boundaries", () => {
     expect(menu).toContain("pb-[max(1rem,env(safe-area-inset-bottom))]");
     expect(menu).toContain("h-11 w-11 shrink-0");
     expect(menu).toContain('aria-label="Mobile navigation"');
+    expect(menu).toContain("min-[375px]:flex");
+    expect(menu).not.toContain("min-[360px]:flex");
   });
 
   it("exposes nested disclosure relationships", () => {
