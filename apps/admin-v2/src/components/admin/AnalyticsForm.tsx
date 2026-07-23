@@ -4,7 +4,6 @@ import { useForm } from "react-hook-form";
 import {
   Check,
   Code2,
-  ShieldCheck,
 } from "lucide-react";
 import {
   FormControl,
@@ -44,7 +43,10 @@ import {
   OfficialProviderMark,
   type ProviderMarkId,
 } from "@/components/admin/settings/provider-marks";
-import { selectAnalyticsCreateType } from "@/components/admin/analytics-create-route-state";
+import {
+  getAnalyticsProviderDeliveryDefaults,
+  selectAnalyticsCreateType,
+} from "@/components/admin/analytics-create-route-state";
 
 interface AnalyticsFormProps {
   defaultValues?: Partial<AnalyticsFormValues>;
@@ -160,16 +162,17 @@ export function AnalyticsForm({
     : hasPermission(PERMISSIONS.ANALYTICS_CREATE);
   const canToggle = hasPermission(PERMISSIONS.ANALYTICS_TOGGLE);
   const defaultType = routeSelectedType ?? defaultValues?.type ?? "cloudflare_web_analytics";
+  const providerDeliveryDefaults = getAnalyticsProviderDeliveryDefaults(defaultType);
   const form = useForm<AnalyticsFormValues>({
     resolver: zodResolver(analyticsFormSchema),
     defaultValues: {
       name: "",
       type: defaultType,
       isActive: false,
-      usePartytown: defaultType !== "cloudflare_web_analytics",
+      usePartytown: providerDeliveryDefaults.usePartytown,
       allowDuplicateProvider: false,
       config: CONFIG_EXAMPLES[defaultType],
-      location: defaultType === "cloudflare_web_analytics" ? "body_end" : "head",
+      location: providerDeliveryDefaults.location,
       ...defaultValues,
       ...(defaultType === "cloudflare_web_analytics" ? { usePartytown: false } : {}),
     },
@@ -202,6 +205,13 @@ export function AnalyticsForm({
       shouldDirty: true,
       shouldValidate: true,
     });
+    const deliveryDefaults = getAnalyticsProviderDeliveryDefaults(routeSelectedType);
+    form.setValue("usePartytown", deliveryDefaults.usePartytown, {
+      shouldDirty: true,
+    });
+    form.setValue("location", deliveryDefaults.location, {
+      shouldDirty: true,
+    });
   }, [form, routeSelectedType]);
 
   useEffect(() => {
@@ -217,10 +227,13 @@ export function AnalyticsForm({
       if (!form.getValues("name") || PROVIDERS.some((provider) => provider.label === form.getValues("name"))) {
         form.setValue("name", providerLabel(type), { shouldDirty: true });
       }
-      if (type === "cloudflare_web_analytics") {
-        form.setValue("usePartytown", false, { shouldDirty: true });
-        form.setValue("location", "body_end", { shouldDirty: true });
-      }
+      const deliveryDefaults = getAnalyticsProviderDeliveryDefaults(type);
+      form.setValue("usePartytown", deliveryDefaults.usePartytown, {
+        shouldDirty: true,
+      });
+      form.setValue("location", deliveryDefaults.location, {
+        shouldDirty: true,
+      });
     });
     return () => subscription.unsubscribe();
   }, [form]);
@@ -253,12 +266,7 @@ export function AnalyticsForm({
       <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
         <div className="space-y-4">
           <section className="rounded-lg border bg-background p-4">
-            <div className="mb-3">
-              <h2 className="text-sm font-semibold">Provider</h2>
-              <p className="text-xs text-muted-foreground">
-                Choose what this integration measures. It remains a draft until explicitly activated.
-              </p>
-            </div>
+            <h2 className="mb-3 text-sm font-semibold">Provider</h2>
             <FormField
               control={form.control}
               name="type"
@@ -312,28 +320,18 @@ export function AnalyticsForm({
           </section>
 
           <section className="rounded-lg border bg-background p-4">
-            <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_220px]">
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Integration name</FormLabel>
-                    <FormControl><Input placeholder={providerLabel(selectedType)} {...field} /></FormControl>
-                    <FormDescription>Shown only to dashboard operators.</FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <div className="rounded-md border bg-muted/20 p-3">
-                <p className="flex items-center gap-1.5 text-xs font-medium">
-                  <ShieldCheck className="h-3.5 w-3.5" /> Draft-safe setup
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Saving does not publish tracking unless Active is enabled by an authorized operator.
-                </p>
-              </div>
-            </div>
+            <FormField
+              control={form.control}
+              name="name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Integration name</FormLabel>
+                  <FormControl><Input placeholder={providerLabel(selectedType)} {...field} /></FormControl>
+                  <FormDescription>Shown only to dashboard operators.</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             <FormField
               control={form.control}
@@ -378,11 +376,13 @@ export function AnalyticsForm({
           <section className="rounded-lg border bg-background p-4">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h2 className="text-sm font-semibold">Storefront status</h2>
+                <h2 className="text-sm font-semibold">Storefront</h2>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {canToggle
-                    ? "Activation starts loading this integration on buyer pages."
-                    : "Only operators with analytics toggle permission can change this."}
+                  {!canToggle
+                    ? "Your role cannot change activation."
+                    : isActive
+                      ? "Loads on buyer pages after save."
+                      : "Not loaded on buyer pages."}
                 </p>
               </div>
               <FormField
@@ -401,12 +401,6 @@ export function AnalyticsForm({
                   </FormItem>
                 )}
               />
-            </div>
-            <div className={cn(
-              "mt-3 rounded-md px-2.5 py-2 text-xs font-medium",
-              isActive ? "bg-emerald-50 text-emerald-800" : "bg-muted text-muted-foreground",
-            )}>
-              {isActive ? "Active after save" : "Inactive draft"}
             </div>
             {isActive ? (
               <FormField

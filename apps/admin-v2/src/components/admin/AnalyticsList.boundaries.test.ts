@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 const listSource = readFileSync(resolve(import.meta.dirname, "AnalyticsList.tsx"), "utf8");
 const mobileSource = readFileSync(resolve(import.meta.dirname, "AnalyticsMobileCard.tsx"), "utf8");
 const healthSource = readFileSync(resolve(import.meta.dirname, "AnalyticsProviderHealth.tsx"), "utf8");
+const formSource = readFileSync(resolve(import.meta.dirname, "AnalyticsForm.tsx"), "utf8");
 const routeSource = readFileSync(
   resolve(import.meta.dirname, "../../routes/admin/analytics/index.tsx"),
   "utf8",
@@ -55,5 +56,14 @@ describe("analytics list presentation boundaries", () => {
     expect(healthSource).toContain("Browser ready:");
     expect(healthSource).toContain("Server ready:");
     expect(healthSource).not.toContain("browser and ${summary.serverReadyProviders} server integrations");
+  });
+
+  it("states storefront activation once without draft-safety filler", () => {
+    expect(formSource).toContain("Not loaded on buyer pages.");
+    expect(formSource).toContain("Loads on buyer pages after save.");
+    expect(formSource.match(/getAnalyticsProviderDeliveryDefaults\(/g)).toHaveLength(3);
+    expect(formSource).not.toContain("Draft-safe setup");
+    expect(formSource).not.toContain("Inactive draft");
+    expect(formSource).not.toContain("remains a draft until explicitly activated");
   });
 });

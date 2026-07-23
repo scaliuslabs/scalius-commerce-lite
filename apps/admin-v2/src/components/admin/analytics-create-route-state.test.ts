@@ -7,6 +7,7 @@ import {
   normalizeAnalyticsCreateType,
   selectAnalyticsCreateType,
   getAnalyticsCreateTypeFromHref,
+  getAnalyticsProviderDeliveryDefaults,
 } from "./analytics-create-route-state";
 
 describe("analytics creation route state", () => {
@@ -30,6 +31,20 @@ describe("analytics creation route state", () => {
     ] as const) {
       expect(normalizeAnalyticsCreateType(type)).toBe(type);
     }
+  });
+
+  it("restores provider-appropriate delivery defaults when the type changes", () => {
+    expect(
+      getAnalyticsProviderDeliveryDefaults("cloudflare_web_analytics"),
+    ).toEqual({ location: "body_end", usePartytown: false });
+    expect(getAnalyticsProviderDeliveryDefaults("facebook_pixel")).toEqual({
+      location: "head",
+      usePartytown: true,
+    });
+    expect(getAnalyticsProviderDeliveryDefaults("custom")).toEqual({
+      location: "head",
+      usePartytown: true,
+    });
   });
 
   it("omits the canonical default and serializes only non-default provider state", () => {
