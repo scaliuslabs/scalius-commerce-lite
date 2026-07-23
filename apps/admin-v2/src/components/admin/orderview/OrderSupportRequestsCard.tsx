@@ -108,7 +108,8 @@ function getResolutionStatuses(status: string): ResolutionStatus[] {
 }
 
 function statusLabel(status: string): string {
-  return status.replace(/[_-]+/g, " ");
+  const label = status.replace(/[_-]+/g, " ");
+  return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
 function RequestRow({
@@ -159,7 +160,7 @@ function RequestRow({
               className="min-h-11 sm:min-h-9"
               onClick={() => onResolve(request)}
             >
-              Resolve
+              Review
             </Button>
           ) : null}
         </div>
@@ -272,10 +273,10 @@ function ResolveSupportRequestDialog({
           <DialogTitle>Review customer request</DialogTitle>
           <DialogDescription>
             {canAcceptReturn
-              ? "Accepting opens a requested return case. Authorize and receive it from Returns; refunds remain separate."
+              ? "Accepting creates a return case. Receiving items and refunds happen separately."
               : request.type === "return"
-                ? "Complete this request after the linked return work is finished. Refunds remain separate."
-              : "Choose the request outcome. Payment, shipment, inventory, and order status changes remain separate."}
+                ? "Close this after the return is finished. Refunds are handled separately."
+                : "Review this request. The order changes only when you update it separately."}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
@@ -377,13 +378,17 @@ function ResolveSupportRequestDialog({
             </div>
           ) : null}
 
-          <Textarea
-            value={note}
-            onChange={(event) => setNote(event.target.value)}
-            placeholder="Optional internal note"
-            maxLength={1000}
-            className="min-h-24"
-          />
+          <div className="space-y-1.5">
+            <Label htmlFor="support-request-note">Internal note <span className="font-normal text-muted-foreground">(optional)</span></Label>
+            <Textarea
+              id="support-request-note"
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+              placeholder="Add a note for your team"
+              maxLength={1000}
+              className="min-h-24"
+            />
+          </div>
         </div>
         <DialogFooter>
           <Button
@@ -433,9 +438,6 @@ export function OrderSupportRequestsCard({ order }: { order: Order }) {
         </CardTitle>
       </CardHeader>
       <CardContent className="p-0">
-        <div className="bg-amber-50/70 px-4 py-3 text-xs text-amber-950 dark:bg-amber-950/20 dark:text-amber-100">
-          Review this before changing payment, shipment, or order status.
-        </div>
         {requests.map((request) => (
           <RequestRow
             key={request.id}
