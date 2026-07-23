@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
-import { Loader2, RotateCcw, Save, X, Search } from "lucide-react";
+import { ChevronDown, Loader2, RotateCcw, Save, X, Search } from "lucide-react";
 import { getServerFnError } from "@/lib/api-helpers";
 import { getAllowedCountries, updateAllowedCountries } from "@/lib/api-functions/settings";
 import { getCountries, getCountryCallingCode } from "react-phone-number-input";
@@ -45,6 +45,7 @@ export default function AllowedCountriesBuilder() {
   const [savedSelected, setSavedSelected] = useState<Country[]>([]);
   const [savedMode, setSavedMode] = useState<CountryMode>("include");
   const [search, setSearch] = useState("");
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   useEffect(() => {
     fetchSettings();
@@ -156,7 +157,7 @@ export default function AllowedCountriesBuilder() {
       <UnsavedChangesGuard isDirty={isDirty} isSubmitting={saving} />
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Customer Countries</CardTitle>
+          <CardTitle className="text-base">Customer countries</CardTitle>
           <CardDescription>
             Limit calling codes accepted for customer and checkout phone numbers.
           </CardDescription>
@@ -215,55 +216,69 @@ export default function AllowedCountriesBuilder() {
             </div>
           )}
 
-          <div className="space-y-1.5">
-            <Label htmlFor="country-search">Search countries</Label>
-            <div className="relative">
-              <Search className="absolute left-2.5 top-3.5 h-4 w-4 text-muted-foreground md:top-2.5" />
-              <Input
-                id="country-search"
-                placeholder="Search by name, code, or calling code..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="min-h-11 pl-9 md:min-h-9"
-              />
-            </div>
-          </div>
+          <Button
+            type="button"
+            variant="outline"
+            className="min-h-11 w-full justify-between md:min-h-9"
+            aria-expanded={pickerOpen}
+            aria-controls="country-picker"
+            onClick={() => setPickerOpen((open) => !open)}
+          >
+            {selected.length > 0 ? "Edit countries" : "Choose countries"}
+            <ChevronDown className={`h-4 w-4 transition-transform ${pickerOpen ? "rotate-180" : ""}`} />
+          </Button>
 
-          <div className="border rounded-md max-h-64 overflow-y-auto">
-            {filteredCountries.length === 0 ? (
-              <div className="py-6 text-center text-sm text-muted-foreground">
-                No countries match your search.
+          {pickerOpen ? (
+            <div id="country-picker" className="space-y-2 rounded-md border bg-muted/10 p-2">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-3.5 h-4 w-4 text-muted-foreground md:top-2.5" />
+                <Input
+                  id="country-search"
+                  aria-label="Search countries"
+                  placeholder="Search name, code, or calling code"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="min-h-11 pl-9 md:min-h-9"
+                />
               </div>
-            ) : (
-              <div className="divide-y">
-                {filteredCountries.map((country) => {
-                  const isSelected = selected.includes(country.value);
-                  return (
-                    <button
-                      key={country.value}
-                      type="button"
-                      onClick={() => toggleCountry(country.value)}
-                      className={`flex min-h-11 w-full items-center justify-between px-3 py-2 text-left text-sm transition-colors hover:bg-muted/50 ${
-                        isSelected ? "bg-muted/30" : ""
-                      }`}
-                    >
-                      <span>
-                        {country.label}{" "}
-                        <span className="text-muted-foreground">
-                          (+{country.callingCode})
-                        </span>
-                      </span>
-                      {isSelected && (
-                        <Badge variant="default" className="text-xs">
-                          {mode === "include" ? "Allowed" : "Excluded"}
-                        </Badge>
-                      )}
-                    </button>
-                  );
-                })}
+
+              <div className="max-h-64 overflow-y-auto rounded-md border bg-background">
+                {filteredCountries.length === 0 ? (
+                  <div className="py-6 text-center text-sm text-muted-foreground">
+                    No countries match your search.
+                  </div>
+                ) : (
+                  <div className="divide-y">
+                    {filteredCountries.map((country) => {
+                      const isSelected = selected.includes(country.value);
+                      return (
+                        <button
+                          key={country.value}
+                          type="button"
+                          onClick={() => toggleCountry(country.value)}
+                          className={`flex min-h-11 w-full items-center justify-between px-3 py-2 text-left text-sm transition-colors hover:bg-muted/50 ${
+                            isSelected ? "bg-muted/30" : ""
+                          }`}
+                        >
+                          <span>
+                            {country.label}{" "}
+                            <span className="text-muted-foreground">
+                              (+{country.callingCode})
+                            </span>
+                          </span>
+                          {isSelected && (
+                            <Badge variant="default" className="text-xs">
+                              {mode === "include" ? "Allowed" : "Excluded"}
+                            </Badge>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            </div>
+          ) : null}
 
           <p className="text-xs text-muted-foreground">
             {modeDescription}
@@ -271,33 +286,35 @@ export default function AllowedCountriesBuilder() {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-2 gap-2 border-t border-border pt-4 sm:flex sm:justify-end">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => {
-            setSelected(savedSelected);
-            setMode(savedMode);
-          }}
-          disabled={saving || !isDirty}
-          className="min-h-11 md:min-h-10"
-        >
-          <RotateCcw className="h-4 w-4" />
-          Reset
-        </Button>
-        <Button
-          onClick={handleSave}
-          disabled={saving || !hasLoaded || !isDirty}
-          className="min-h-11 min-w-[140px] md:min-h-10"
-        >
-          {saving ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Save className="h-4 w-4" />
-          )}
-          Save country policy
-        </Button>
-      </div>
+      {isDirty ? (
+        <div className="grid grid-cols-2 gap-2 border-t border-border pt-4 sm:flex sm:justify-end">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              setSelected(savedSelected);
+              setMode(savedMode);
+            }}
+            disabled={saving || !isDirty}
+            className="min-h-11 md:min-h-10"
+          >
+            <RotateCcw className="h-4 w-4" />
+            Reset
+          </Button>
+          <Button
+            onClick={handleSave}
+            disabled={saving || !hasLoaded || !isDirty}
+            className="min-h-11 min-w-[140px] md:min-h-10"
+          >
+            {saving ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Save className="h-4 w-4" />
+            )}
+            Save country policy
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }

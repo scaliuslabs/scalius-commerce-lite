@@ -9,6 +9,7 @@ describe("general settings draft boundaries", () => {
     "BusinessSettingsBuilder.tsx",
     "CurrencySettingsBuilder.tsx",
     "AllowedCountriesBuilder.tsx",
+    "AuthSettingsBuilder.tsx",
   ])("guards dirty %s drafts from route changes", (name) => {
     const source = readSource(name);
 
@@ -21,13 +22,23 @@ describe("general settings draft boundaries", () => {
     ["BusinessSettingsBuilder.tsx", "Save business"],
     ["CurrencySettingsBuilder.tsx", "Save currency"],
     ["AllowedCountriesBuilder.tsx", "Save country policy"],
+    ["AuthSettingsBuilder.tsx", "Save changes"],
   ])("keeps %s saves deliberate and phone-friendly", (name, saveLabel) => {
     const source = readSource(name);
 
-    expect(source).toContain("!isDirty");
+    expect(source).toMatch(/!isDirty|\{isDirty \? \(/);
     expect(source).toContain("Reset");
     expect(source).toContain(saveLabel);
     expect(source).toContain("min-h-11");
+  });
+
+  it("keeps the full country list behind an explicit bounded picker", () => {
+    const source = readSource("AllowedCountriesBuilder.tsx");
+
+    expect(source).toContain('aria-controls="country-picker"');
+    expect(source).toContain("{pickerOpen ? (");
+    expect(source).toContain("max-h-64 overflow-y-auto");
+    expect(source).toContain("Edit countries");
   });
 
   it("previews the invoice logo through the no-crop admin preset", () => {

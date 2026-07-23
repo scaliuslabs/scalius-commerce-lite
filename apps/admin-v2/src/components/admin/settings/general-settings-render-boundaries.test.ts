@@ -25,4 +25,14 @@ describe("General settings render boundaries", () => {
     expect(source).toContain("readiness={headerReadiness}");
     expect(source).toContain("readiness={footerReadiness}");
   });
+
+  it("uses grouped desktop navigation and a single mobile section picker", () => {
+    expect(source).toContain('const tabGroups = ["Storefront", "Operations", "Access & security"]');
+    expect(source).toContain('aria-label="Settings section"');
+    expect(source).toContain("<SelectGroup");
+    expect(source).toContain('className="min-h-11"');
+    expect(source).toContain("lg:hidden");
+    expect(source).toContain("hidden h-auto");
+    expect(source).not.toContain("overflow-x-auto");
+  });
 });
