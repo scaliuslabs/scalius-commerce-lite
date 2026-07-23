@@ -160,12 +160,15 @@ describe("product detail page SKU boundaries", () => {
   it("preloads the same primary-image transformation rendered by the gallery", () => {
     const source = readFileSync(PRODUCT_PAGE_SOURCE, "utf8");
     const preload = source.slice(
-      source.indexOf("primaryImageUrl &&"),
+      source.indexOf("initialGalleryPreloadUrl &&"),
       source.indexOf("productJsonLd &&"),
     );
 
-    expect(preload).toContain('fit: "contain"');
-    expect(preload).toContain('trim: "border"');
+    expect(source).toContain("const featuredGalleryMedia =");
+    expect(source).toContain("queryVariantSelection?.variant.imageUrl");
+    expect(source).toContain("const initialGalleryPreloadUrl =");
+    expect(preload).toContain("href={initialGalleryPreloadUrl}");
+    expect(preload).not.toContain("getProductImageUrl(primaryImageUrl");
   });
 
   it("loads the product controller before visible option controls can be used", () => {

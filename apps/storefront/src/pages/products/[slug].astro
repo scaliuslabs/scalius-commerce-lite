@@ -182,6 +182,42 @@ const productImageCandidates = [
   ...media.map((item) => (item.kind === "image" ? item.url : item.posterUrl)),
 ].filter((url): url is string => hasProductImage(url));
 const primaryImageUrl = productImageCandidates[0] ?? null;
+const orderedGalleryMedia = media
+  .filter((item) =>
+    item.kind === "video" ? Boolean(item.url) : hasProductImage(item.url),
+  )
+  .sort(
+    (left, right) =>
+      left.sortOrder - right.sortOrder || left.id.localeCompare(right.id),
+  );
+const featuredGalleryMedia =
+  orderedGalleryMedia.find((item) => item.isPrimary) ??
+  orderedGalleryMedia[0] ??
+  null;
+const requestedVariantImageCandidate =
+  queryVariantSelection?.variant.imageUrl ?? null;
+const requestedVariantImageUrl = hasProductImage(requestedVariantImageCandidate)
+  ? requestedVariantImageCandidate
+  : null;
+const initialGalleryImageSource = requestedVariantImageUrl
+  ? { url: requestedVariantImageUrl, trimBorder: true }
+  : featuredGalleryMedia?.kind === "image"
+    ? { url: featuredGalleryMedia.url, trimBorder: true }
+    : featuredGalleryMedia?.posterUrl
+      ? { url: featuredGalleryMedia.posterUrl, trimBorder: false }
+      : !featuredGalleryMedia && primaryImageUrl
+        ? { url: primaryImageUrl, trimBorder: true }
+        : null;
+const initialGalleryPreloadUrl = initialGalleryImageSource
+  ? getProductImageUrl(initialGalleryImageSource.url, {
+      width: 600,
+      height: 600,
+      quality: 85,
+      format: "auto",
+      fit: "contain",
+      ...(initialGalleryImageSource.trimBorder ? { trim: "border" } : {}),
+    })
+  : null;
 const serializedProductImageUrl = getProductImageUrl(primaryImageUrl, {
   width: 600,
   height: 600,
@@ -539,18 +575,11 @@ const productCategoryAnalytics = productCategory
 >
   <Fragment slot="head">
     {
-      primaryImageUrl && (
+      initialGalleryPreloadUrl && (
         <link
           rel="preload"
           as="image"
-          href={getProductImageUrl(primaryImageUrl, {
-            width: 600,
-            height: 600,
-            quality: 85,
-            format: "auto",
-            fit: "contain",
-            trim: "border",
-          })}
+          href={initialGalleryPreloadUrl}
           fetchpriority="high"
         />
       )

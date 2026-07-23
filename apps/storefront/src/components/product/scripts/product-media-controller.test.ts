@@ -147,6 +147,14 @@ describe("mixed product media gallery", () => {
   });
 
   it("switches between video and image while keeping zoom image-only", () => {
+    class DeferredImage {
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      fetchPriority = "auto";
+      decode = vi.fn().mockResolvedValue(undefined);
+      set src(_value: string) {}
+    }
+    vi.stubGlobal("Image", DeferredImage);
     const root = renderGallery();
     initProductMediaGallery(root);
     const changes: ProductMediaChangeDetail[] = [];
@@ -173,20 +181,20 @@ describe("mixed product media gallery", () => {
         .querySelector<HTMLElement>("[data-video-stage]")
         ?.classList.contains("hidden"),
     ).toBe(true);
-    expect(mobileImage.src).toContain("/image-main.jpg");
-    expect(desktopMainImage.src).toContain("/image-main.jpg");
+    expect(mobileImage.src).toContain("/image-preview.jpg");
+    expect(desktopMainImage.src).toContain("/image-preview.jpg");
     expect(root.dataset.activeMediaUrl).toBe("/image-main.jpg");
     expect(changes.at(-1)).toMatchObject({
       kind: "image",
       productMediaId: "pmed_image",
       mediaId: "med_image",
-      previewUrl: null,
+      previewUrl: "/image-preview.jpg",
       zoomUrl: "/image-zoom.jpg",
       source: "gallery",
     });
   });
 
-  it("uses the display transform immediately instead of enlarging a thumbnail", () => {
+  it("uses the loaded preview immediately and promotes the decoded display transform", async () => {
     const requests: Array<{
       src: string;
       fetchPriority: string;
@@ -220,12 +228,22 @@ describe("mixed product media gallery", () => {
     const main = root.querySelector<HTMLImageElement>(
       "[data-desktop-main-image]",
     )!;
+    expect(main.src).toContain("/promotion-preview.jpg");
+    expect(root.dataset.activeMediaDisplayUrl).toBe("/promotion-preview.jpg");
+    expect(requests).toHaveLength(1);
+    expect(requests[0]).toMatchObject({
+      src: "/promotion-full.jpg",
+      fetchPriority: "high",
+    });
+
+    requests[0]!.onload?.();
+    await Promise.resolve();
+    await Promise.resolve();
     expect(main.src).toContain("/promotion-full.jpg");
     expect(root.dataset.activeMediaDisplayUrl).toBe("/promotion-full.jpg");
-    expect(requests).toHaveLength(0);
   });
 
-  it("keeps the shopper's latest image selection authoritative", () => {
+  it("keeps the shopper's latest image selection authoritative", async () => {
     const requests: Array<{
       src: string;
       onload: (() => void) | null;
@@ -264,8 +282,18 @@ describe("mixed product media gallery", () => {
     imageButton.dataset.mediaUrl = "/latest-full.jpg";
     imageButton.dataset.previewUrl = "/latest-preview.jpg";
     imageButton.click();
+    expect(main.src).toContain("/latest-preview.jpg");
+    expect(requests).toHaveLength(2);
+
+    requests[0]!.onload?.();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(main.src).toContain("/latest-preview.jpg");
+
+    requests[1]!.onload?.();
+    await Promise.resolve();
+    await Promise.resolve();
     expect(main.src).toContain("/latest-full.jpg");
-    expect(requests).toHaveLength(0);
   });
 
   it("warms exact variant display images after idle but respects data saver", () => {
@@ -553,8 +581,9 @@ describe("storefront mixed-media source boundaries", () => {
     expect(gallery).toContain("variantImageIds.has(itemData.item.id)");
     expect(gallery).toContain("data-preview-url");
     expect(gallery).toContain("imageTransforms.preview");
-    expect(controller).toContain("const displayUrl = item.url");
-    expect(controller).toContain("previewUrl: null");
+    expect(controller).toContain("const shouldUsePreview =");
+    expect(controller).toContain("source !== \"initial\"");
+    expect(controller).toContain("root.dataset.activeMediaKey !== currentKey");
     expect(controller).toContain("activeMediaDisplayUrl");
     expect(controller).toContain("imagePreloads");
     expect(controller).toContain("scheduleVariantImagePreload");
