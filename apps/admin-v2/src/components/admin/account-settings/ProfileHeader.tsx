@@ -25,6 +25,7 @@ import { updateProfile } from "~/lib/api-functions/auth-management";
 import { refreshAdminRouteContext } from "~/lib/admin-route-context";
 import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
 import { ADMIN_IMAGE_PRESETS } from "~/lib/admin-image-presentation";
+import { UnsavedChangesGuard } from "~/components/admin/shared/UnsavedChangesGuard";
 
 function getInitials(nameStr: string): string {
   return nameStr
@@ -120,6 +121,11 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
   };
 
   return (
+    <>
+      <UnsavedChangesGuard
+        isDirty={isEditing && hasChanges}
+        isSubmitting={isLoading}
+      />
     <Card className="max-w-4xl rounded-xl shadow-none">
       <CardHeader className="border-b p-4">
         <CardTitle className="flex items-center gap-2 text-base">
@@ -274,5 +280,6 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
         </div>
       </CardContent>
     </Card>
+    </>
   );
 }
