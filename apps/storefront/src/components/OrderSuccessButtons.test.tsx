@@ -102,4 +102,45 @@ describe("OrderSuccessButtons customer request policy rendering", () => {
       "The store team will review this request before making any order changes.",
     );
   });
+
+  it("keeps newly eligible actions available after an earlier request is settled", () => {
+    act(() => {
+      root.render(
+        <OrderSuccessButtons
+          orderId="ord_1"
+          supportRequests={[{
+            id: "request_1",
+            orderId: "ord_1",
+            customerId: null,
+            type: "cancel_pre_shipment",
+            status: "rejected",
+            active: false,
+            severity: "danger",
+            label: "Cancellation request rejected",
+            actionLabel: "Request cancellation",
+            reason: "Changed my mind.",
+            message: null,
+            submittedAt: "2026-07-21T00:00:00.000Z",
+            resolvedAt: "2026-07-21T00:05:00.000Z",
+            createdAt: "2026-07-21T00:00:00.000Z",
+            updatedAt: "2026-07-21T00:05:00.000Z",
+          }]}
+          supportRequestActions={[{
+            type: "cancel_pre_shipment",
+            label: "Request cancellation",
+            description: "Ask the store to review this order before it ships.",
+            eligible: true,
+            disabledReason: null,
+          }]}
+        />,
+      );
+    });
+
+    expect(host.textContent).toContain("Cancellation request rejected");
+    expect(host.textContent).toContain("Request cancellation");
+    expect(host.querySelector('button:not([disabled])')?.textContent).toContain("Continue shopping");
+    expect([...host.querySelectorAll("button")].some((button) =>
+      button.textContent?.includes("Request cancellation") && !button.disabled
+    )).toBe(true);
+  });
 });
