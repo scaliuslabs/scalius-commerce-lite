@@ -8,6 +8,7 @@ export interface BreadcrumbItem {
 const breadcrumbTitleOverrides: Record<string, string> = {
   "abandoned-checkouts": "Incomplete Checkouts",
   "fraud-checker": "Fraud checks",
+  "meta-conversion": "Meta conversions",
 };
 
 /**

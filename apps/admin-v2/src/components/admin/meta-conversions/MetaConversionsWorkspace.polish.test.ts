@@ -11,9 +11,10 @@ describe("Meta CAPI workspace presentation", () => {
 
     expect(settings).toContain("Credentials saved");
     expect(settings).toContain("Server events");
-    expect(settings).toContain("Browser Pixel");
-    expect(settings).toContain("Delivery is verified separately");
-    expect(settings).toContain("Saving does not test Meta delivery");
+    expect(settings).toContain('text-muted-foreground">Mode</dt>');
+    expect(settings).toContain('testMode ? "Test events" : "Live events"');
+    expect(settings).toContain("Browser Pixel matches");
+    expect(settings).toContain("Saving does not test delivery");
     expect(settings).not.toContain("for improved tracking and attribution");
   });
 
@@ -63,10 +64,21 @@ describe("Meta CAPI workspace presentation", () => {
     const route = readSource("../../../routes/admin/settings/meta-conversion.tsx");
     const container = readSource("./MetaConversionsContainer.tsx");
 
-    expect(route).toContain(">Meta CAPI</h1>");
+    expect(route).toContain(">Meta conversions</h1>");
     expect(route).toContain("text-xl font-semibold tracking-tight");
     expect(route).not.toContain("text-3xl");
     expect(container).toContain("min-h-11");
-    expect(container).toContain("Delivery activity");
+    expect(container).toContain("Setup");
+    expect(container).toContain("Delivery");
+  });
+
+  it("keeps healthy parity and clean actions quiet", () => {
+    const settings = readSource("./MetaConversionsSettingsForm.tsx");
+
+    expect(settings).toContain('pixelParity.status === "ok"');
+    expect(settings).toContain("<details");
+    expect(settings).toContain("canEdit && hasUnsavedChanges");
+    expect(settings).not.toContain("Settings are up to date");
+    expect(settings).not.toContain("Delivery is verified separately");
   });
 });

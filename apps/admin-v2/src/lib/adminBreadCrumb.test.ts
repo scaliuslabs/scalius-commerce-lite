@@ -16,6 +16,13 @@ describe("admin breadcrumbs", () => {
     ]);
   });
 
+  it("uses the merchant-facing Meta conversions name", () => {
+    expect(generateAdminBreadcrumbs("/admin/settings/meta-conversion")).toEqual([
+      { title: "Settings", href: "/admin/settings" },
+      { title: "Meta conversions", href: undefined },
+    ]);
+  });
+
   it("keeps internal article IDs out of edit breadcrumbs", () => {
     expect(
       generateAdminBreadcrumbs("/admin/articles/article_internal-id/edit"),
