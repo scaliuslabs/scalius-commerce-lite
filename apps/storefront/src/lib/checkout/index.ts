@@ -95,10 +95,90 @@ function applySelectedMethodStyles(methodId: string | null): void {
     const el = card as HTMLElement;
     const isSelected = el.dataset.method === methodId;
     el.setAttribute("aria-checked", String(isSelected));
+    if (methodId !== null) el.tabIndex = isSelected ? 0 : -1;
     el.classList.toggle("border-primary", isSelected);
     el.classList.toggle("border-input", !isSelected);
     el.querySelector(".check-dot")?.classList.toggle("hidden", !isSelected);
   });
+}
+
+function handlePaymentMethodKeyDown(event: KeyboardEvent): void {
+  const keys = ["ArrowDown", "ArrowRight", "ArrowUp", "ArrowLeft", "Home", "End"];
+  if (!keys.includes(event.key)) return;
+
+  const cards = Array.from(
+    document.querySelectorAll<HTMLButtonElement>(".payment-method-card"),
+  );
+  const current = event.currentTarget as HTMLButtonElement;
+  const currentIndex = cards.indexOf(current);
+  if (currentIndex === -1 || cards.length === 0) return;
+
+  event.preventDefault();
+  let nextIndex: number;
+  if (event.key === "Home") nextIndex = 0;
+  else if (event.key === "End") nextIndex = cards.length - 1;
+  else if (event.key === "ArrowDown" || event.key === "ArrowRight") {
+    nextIndex = (currentIndex + 1) % cards.length;
+  } else {
+    nextIndex = (currentIndex - 1 + cards.length) % cards.length;
+  }
+
+  const next = cards[nextIndex];
+  next?.focus();
+  next?.click();
+}
+
+function appendPaymentMethodContent(
+  card: HTMLButtonElement,
+  meta: { label: string; icon: string; desc: string },
+  label: string,
+  testMode: boolean,
+  trustedIcon: boolean,
+): void {
+  const icon = document.createElement("div");
+  icon.className =
+    "flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border bg-muted";
+  if (trustedIcon) icon.innerHTML = meta.icon;
+  else icon.textContent = meta.icon;
+  icon.setAttribute("aria-hidden", "true");
+  card.appendChild(icon);
+
+  const copy = document.createElement("div");
+  copy.className = "min-w-0 flex-1";
+  appendTextElement(copy, "p", "text-sm font-semibold text-foreground", label);
+  if (meta.desc) {
+    appendTextElement(
+      copy,
+      "p",
+      "mt-0.5 text-[11px] leading-tight text-muted-foreground",
+      meta.desc,
+    );
+  }
+  if (testMode) {
+    appendTextElement(
+      copy,
+      "span",
+      "mt-1 inline-flex rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-xs font-medium text-amber-900 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-200",
+      "Test mode · no real charge",
+    );
+  }
+  card.appendChild(copy);
+
+  const check = document.createElement("div");
+  check.className =
+    "method-check flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 border-input";
+  check.setAttribute("aria-hidden", "true");
+  const dot = document.createElement("div");
+  dot.className = "check-dot hidden h-2.5 w-2.5 rounded-full bg-primary";
+  check.appendChild(dot);
+  card.appendChild(check);
+
+  card.setAttribute(
+    "aria-label",
+    [label, meta.desc, testMode ? "Test mode, no real charge" : ""]
+      .filter(Boolean)
+      .join(". "),
+  );
 }
 
 function currencyFmt(amount: number | string, quote: CheckoutTaxQuote): string {
@@ -461,7 +541,11 @@ function renderGateways(): void {
     if (checkoutConfig.partialPaymentEnabled && gw.id === "cod") continue;
 
     const handler = getGateway(gw.id);
-    const meta = handler?.meta || { label: (gw as { name?: string }).name || gw.id, icon: "\uD83D\uDCB3", desc: "" };
+    const meta = handler?.meta || {
+      label: (gw as { name?: string }).name || gw.id,
+      icon: "\uD83D\uDCB3",
+      desc: "",
+    };
 
     // Adjust label if partial payment is required
     let label = meta.label;
@@ -473,23 +557,19 @@ function renderGateways(): void {
     card.type = "button";
     card.setAttribute("role", "radio");
     card.setAttribute("aria-checked", "false");
+    card.tabIndex = renderedCount === 0 ? 0 : -1;
     card.className =
       "payment-method-card w-full appearance-none cursor-pointer rounded-xl border-2 border-input bg-card p-4 text-left transition-all hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background flex items-center gap-4";
     card.dataset.method = gw.id;
-    card.innerHTML = `
-      <div class="flex items-center justify-center w-10 h-10 rounded-full bg-muted border border-border shrink-0">
-        ${meta.icon}
-      </div>
-      <div class="flex-1">
-        <p class="font-semibold text-sm text-foreground">${label}</p>
-        <p class="text-[11px] text-muted-foreground leading-tight mt-0.5">${meta.desc}</p>
-        ${isGatewayTestMode(gw) ? '<span class="mt-1 inline-flex rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-xs font-medium text-amber-900 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-200">Test mode · no real charge</span>' : ""}
-      </div>
-      <div class="method-check w-5 h-5 rounded-full border-2 border-input flex items-center justify-center shrink-0" aria-hidden="true">
-        <div class="check-dot w-2.5 h-2.5 rounded-full bg-primary hidden"></div>
-      </div>
-    `;
+    appendPaymentMethodContent(
+      card,
+      meta,
+      label,
+      isGatewayTestMode(gw),
+      Boolean(handler),
+    );
     card.addEventListener("click", () => selectMethod(gw.id, gw));
+    card.addEventListener("keydown", handlePaymentMethodKeyDown);
     container.appendChild(card);
     renderedMethodIds.add(gw.id);
     renderedGateways.push(gw);

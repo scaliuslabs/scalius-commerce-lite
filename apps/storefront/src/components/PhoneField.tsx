@@ -34,6 +34,7 @@ export default function PhoneField({
   const [value, setValue] = useState(defaultValue || "");
   const [error, setError] = useState("");
   const errorId = useId();
+  const inputId = `${name}-input`;
   const countryPolicy = useMemo(
     () => ({ countries: allowedCountries, mode: allowedCountriesMode }),
     [allowedCountries, allowedCountriesMode],
@@ -98,7 +99,7 @@ export default function PhoneField({
     <div id={`${name}-field`}>
       {label && (
         <label
-          htmlFor={name}
+          htmlFor={inputId}
           className="mb-1 block text-xs font-semibold text-foreground uppercase tracking-wide"
         >
           {label}
@@ -107,6 +108,7 @@ export default function PhoneField({
       )}
       <input type="hidden" id={name} name={name} value={value} />
       <PhoneInput
+        id={inputId}
         international
         addInternationalOption={!hasActiveCountryPolicy}
         countryCallingCodeEditable={!hasActiveCountryPolicy}

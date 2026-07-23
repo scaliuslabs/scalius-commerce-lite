@@ -26,6 +26,7 @@ interface CustomDropdownProps {
   onChange: (value: string) => void;
   name: string;
   id?: string;
+  labelId?: string;
   disabled?: boolean;
   required?: boolean;
   className?: string;
@@ -39,6 +40,7 @@ export default function CustomDropdown({
   onChange,
   name,
   id,
+  labelId,
   disabled = false,
   required = false,
   className = "",
@@ -53,7 +55,9 @@ export default function CustomDropdown({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const listboxRef = useRef<HTMLUListElement>(null);
-  const listboxId = `${useId().replace(/:/g, "")}-listbox`;
+  const componentId = useId().replace(/:/g, "");
+  const listboxId = `${componentId}-listbox`;
+  const valueId = `${componentId}-value`;
   const selectedOption = options.find((option) => option.value === value);
 
   const filteredOptions = useMemo(() => {
@@ -217,8 +221,10 @@ export default function CustomDropdown({
         aria-haspopup="listbox"
         aria-expanded={isOpen}
         aria-controls={isOpen ? listboxId : undefined}
+        aria-labelledby={labelId ? `${labelId} ${valueId}` : undefined}
       >
         <span
+          id={valueId}
           className={`block truncate ${!selectedOption ? "text-muted-foreground" : ""}`}
         >
           {selectedOption ? selectedOption.label : placeholder}
