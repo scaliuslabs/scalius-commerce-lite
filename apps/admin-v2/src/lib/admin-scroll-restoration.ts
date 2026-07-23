@@ -116,6 +116,30 @@ export function useAdminNestedScrollRestoration(
       });
     };
 
+    const restoreStoredScroll = (href: string) => {
+      cancelRestore();
+
+      const scrollElement = getAdminScrollElement(elementId);
+      if (!scrollElement) {
+        nextNavigationIsPopRef.current = false;
+        return;
+      }
+
+      const targetTop = readScrollTop(href);
+      const maxTop = Math.max(
+        0,
+        scrollElement.scrollHeight - scrollElement.clientHeight,
+      );
+      scrollElement.scrollTop = Math.min(targetTop, maxTop);
+
+      if (targetTop > maxTop) {
+        scheduleStoredRestore(href);
+        return;
+      }
+
+      nextNavigationIsPopRef.current = false;
+    };
+
     window.addEventListener("popstate", handlePopState);
     const navigationTarget = getNavigationEventTarget();
     navigationTarget?.addEventListener("navigate", handleNavigate);
@@ -127,31 +151,23 @@ export function useAdminNestedScrollRestoration(
       if (!scrollElement) return;
 
       writeScrollTop(event.fromLocation.href, scrollElement.scrollTop);
-
-      // A tab/panel is its own workspace view. Position the nested scroller
-      // before React swaps panels so a short lazy fallback cannot clamp the
-      // previous view's scroll position and produce a visible jump. A direct
-      // tab choice starts at the top; browser history restores that view's
-      // saved position.
-      if (workspaceViewChanged(
-        event.fromLocation.href,
-        event.toLocation.href,
-      )) {
-        const targetTop = nextNavigationIsPopRef.current
-          ? readScrollTop(event.toLocation.href)
-          : 0;
-        const maxTop = Math.max(
-          0,
-          scrollElement.scrollHeight - scrollElement.clientHeight,
-        );
-        scrollElement.scrollTop = Math.min(targetTop, maxTop);
-      }
     });
 
     const unsubscribeRendered = router.subscribe("onRendered", (event) => {
-      if (!nextNavigationIsPopRef.current) return;
+      const switchedWorkspaceView = event.fromLocation
+        ? workspaceViewChanged(
+            event.fromLocation.href,
+            event.toLocation.href,
+          )
+        : false;
+      if (!nextNavigationIsPopRef.current && !switchedWorkspaceView) return;
 
-      scheduleStoredRestore(event.toLocation.href);
+      // `onRendered` is emitted from a layout effect after the next workspace
+      // has committed and before the browser paints it. Restore here so the
+      // outgoing panel does not visibly jump while route data is loading.
+      // A previously visited tab returns to its own position; a first visit
+      // reads as zero. Delayed panels keep retrying until their height exists.
+      restoreStoredScroll(event.toLocation.href);
     });
 
     return () => {

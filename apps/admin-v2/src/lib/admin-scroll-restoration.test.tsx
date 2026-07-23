@@ -148,16 +148,21 @@ describe("useAdminNestedScrollRestoration", () => {
         fromLocation: { href: "/admin/categories" },
         toLocation: { href: "/admin/products" },
       });
-      emitRouterEvent("onRendered", {
-        fromLocation: { href: "/admin/categories" },
-        toLocation: { href: "/admin/products" },
-      });
     });
 
     defineScrollMetrics(scrollElement, {
       clientHeight: 400,
       scrollHeight: 400,
     });
+
+    act(() => {
+      emitRouterEvent("onRendered", {
+        fromLocation: { href: "/admin/categories" },
+        toLocation: { href: "/admin/products" },
+      });
+    });
+
+    expect(scrollElement.scrollTop).toBe(0);
     flushAnimationFrames(10);
     expect(scrollElement.scrollTop).toBe(0);
 
@@ -170,7 +175,7 @@ describe("useAdminNestedScrollRestoration", () => {
     expect(scrollElement.scrollTop).toBe(720);
   });
 
-  it("opens a directly selected workspace tab at the top even when it was visited before", () => {
+  it("restores a directly selected workspace tab to its own position", () => {
     const scrollElement = createAdminScrollElement({
       clientHeight: 400,
       scrollHeight: 1_600,
@@ -192,9 +197,8 @@ describe("useAdminNestedScrollRestoration", () => {
       });
     });
 
-    flushAnimationFrames();
     expect(scrollElement.scrollTop).toBe(0);
-    scrollElement.scrollTop = 0;
+    scrollElement.scrollTop = 160;
 
     act(() => {
       emitRouterEvent("onBeforeLoad", {
@@ -210,9 +214,7 @@ describe("useAdminNestedScrollRestoration", () => {
         hrefChanged: true,
       });
     });
-    flushAnimationFrames();
-
-    expect(scrollElement.scrollTop).toBe(0);
+    expect(scrollElement.scrollTop).toBe(720);
   });
 
   it("restores each workspace tab when browser history traverses to it", () => {
@@ -254,12 +256,10 @@ describe("useAdminNestedScrollRestoration", () => {
         hrefChanged: true,
       });
     });
-    flushAnimationFrames();
-
     expect(scrollElement.scrollTop).toBe(720);
   });
 
-  it("starts a first-time workspace tab at the top before its content swaps", () => {
+  it("keeps the outgoing workspace stable until a first-time tab has rendered", () => {
     const scrollElement = createAdminScrollElement({
       clientHeight: 400,
       scrollHeight: 1_600,
@@ -275,7 +275,7 @@ describe("useAdminNestedScrollRestoration", () => {
       });
     });
 
-    expect(scrollElement.scrollTop).toBe(0);
+    expect(scrollElement.scrollTop).toBe(720);
 
     act(() => {
       emitRouterEvent("onRendered", {
@@ -285,8 +285,6 @@ describe("useAdminNestedScrollRestoration", () => {
         hrefChanged: true,
       });
     });
-    flushAnimationFrames();
-
     expect(scrollElement.scrollTop).toBe(0);
   });
 
