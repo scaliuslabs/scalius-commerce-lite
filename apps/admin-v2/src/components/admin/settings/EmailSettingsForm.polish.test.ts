@@ -8,9 +8,10 @@ describe("email settings workspace", () => {
   const source = readFileSync(SOURCE, "utf8");
 
   it("reports runtime readiness without claiming delivery verification", () => {
-    expect(source).toContain('runtimeConfigured ? "Ready"');
-    expect(source).toContain("successful delivery has not been tested.");
+    expect(source).toContain('runtimeConfigured ? "Configured"');
+    expect(source).toContain("delivery has not been tested.");
     expect(source).toContain("title={runtimeConfigured");
+    expect(source).not.toContain('runtimeConfigured ? "Ready"');
     expect(source).not.toContain("This does not confirm a successful delivery.");
     expect(source).not.toContain("Transactional email delivery for verification");
   });
