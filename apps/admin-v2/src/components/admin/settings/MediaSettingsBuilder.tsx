@@ -1,13 +1,22 @@
 import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2 } from "lucide-react";
+import { ChevronDown, Loader2, RotateCcw } from "lucide-react";
+import { useEffect, useState } from "react";
 import { getMediaSettings, updateMediaSettings } from "@/lib/api-functions/settings";
 import { useSettingsForm } from "@/hooks/use-settings-form";
 import { queryKeys } from "@/lib/query-keys";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
+import { UnsavedChangesGuard } from "../shared/UnsavedChangesGuard";
 
 interface MediaSettingsValues {
   enabled: boolean;
@@ -60,6 +69,7 @@ const saveMedia = async (values: MediaSettingsValues) => {
 };
 
 export default function MediaSettingsBuilder() {
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const {
     values,
     setValue,
@@ -68,6 +78,8 @@ export default function MediaSettingsBuilder() {
     isLoadError,
     loadError,
     isSaving,
+    isDirty,
+    reset,
     handleSubmit,
     refetch,
   } =
@@ -84,6 +96,12 @@ export default function MediaSettingsBuilder() {
       successMessage: "Media settings saved successfully.",
       errorMessage: "Failed to save media settings.",
     });
+
+  useEffect(() => {
+    if (values.allowedImageHostsText || values.canonicalHostAliasesText) {
+      setAdvancedOpen(true);
+    }
+  }, [values.allowedImageHostsText, values.canonicalHostAliasesText]);
 
   if (isLoading) {
     return (
@@ -105,86 +123,119 @@ export default function MediaSettingsBuilder() {
   }
 
   return (
-    <div className="space-y-6 max-w-2xl">
-      <div className="flex items-center justify-between gap-4 rounded-md border border-border p-4">
-        <div className="space-y-1">
-          <Label htmlFor="image-optimization-enabled">Image optimization</Label>
-          <p className="text-xs text-muted-foreground">
-            Rewrite eligible media through Cloudflare Image Resizing.
-          </p>
+    <div className="max-w-2xl space-y-5">
+      <UnsavedChangesGuard isDirty={isDirty} isSubmitting={isSaving} />
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Image delivery</CardTitle>
+          <CardDescription>
+            Serve correctly sized images through Cloudflare.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex min-h-11 items-center justify-between gap-4 rounded-md border border-border px-3 py-2">
+            <Label htmlFor="image-optimization-enabled">Image optimization</Label>
+            <Switch
+              id="image-optimization-enabled"
+              checked={values.enabled}
+              onCheckedChange={(checked) => setValue("enabled", checked)}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="canonical-cdn-url">Delivery host</Label>
+            <Input
+              id="canonical-cdn-url"
+              value={values.canonicalCdnUrl}
+              onChange={(event) => setValue("canonicalCdnUrl", event.target.value)}
+              placeholder="cdn.example.com"
+              className="min-h-11 sm:min-h-9"
+            />
+            <p className="text-xs text-muted-foreground">
+              Leave blank to use the deployed CDN host.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <details
+        className="group rounded-lg border bg-card"
+        open={advancedOpen}
+        onToggle={(event) => setAdvancedOpen(event.currentTarget.open)}
+      >
+        <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-medium [&::-webkit-details-marker]:hidden">
+          <span>
+            Advanced host rules
+            <span className="ml-2 text-xs font-normal text-muted-foreground">
+              Migrated or external media
+            </span>
+          </span>
+          <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
+        </summary>
+        <div className="space-y-4 border-t px-4 py-4">
+          <div className="space-y-2">
+            <Label htmlFor="allowed-image-hosts">Resizable hosts</Label>
+            <Textarea
+              id="allowed-image-hosts"
+              value={values.allowedImageHostsText}
+              onChange={(event) =>
+                setValue("allowedImageHostsText", event.target.value)
+              }
+              placeholder={"media.example.com\ncdn.example.com"}
+              rows={4}
+            />
+            <p className="text-xs text-muted-foreground">
+              Hosts that support Cloudflare image transformations, one per line.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="canonical-host-aliases">Previous host aliases</Label>
+            <Textarea
+              id="canonical-host-aliases"
+              value={values.canonicalHostAliasesText}
+              onChange={(event) =>
+                setValue("canonicalHostAliasesText", event.target.value)
+              }
+              placeholder={"old-media.example.com\nr2-public.example.com"}
+              rows={4}
+            />
+            <p className="text-xs text-muted-foreground">
+              Existing URLs from these hosts keep their path and use the delivery host.
+            </p>
+          </div>
         </div>
-        <Switch
-          id="image-optimization-enabled"
-          checked={values.enabled}
-          onCheckedChange={(checked) => setValue("enabled", checked)}
-        />
-      </div>
+      </details>
 
-      <div className="space-y-2">
-        <Label htmlFor="canonical-cdn-url">Canonical CDN host</Label>
-        <Input
-          id="canonical-cdn-url"
-          value={values.canonicalCdnUrl}
-          onChange={(event) => setValue("canonicalCdnUrl", event.target.value)}
-          placeholder="cdn.example.com"
-        />
-        <p className="text-xs text-muted-foreground">
-          Leave empty to use the Worker CDN_DOMAIN_URL binding. This host is
-          used for bare media keys and canonical optimized image URLs.
-        </p>
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="allowed-image-hosts">Additional resizable hosts</Label>
-        <Textarea
-          id="allowed-image-hosts"
-          value={values.allowedImageHostsText}
-          onChange={(event) =>
-            setValue("allowedImageHostsText", event.target.value)
-          }
-          placeholder={"media.example.com\ncdn.example.com"}
-          rows={4}
-        />
-        <p className="text-xs text-muted-foreground">
-          One host per line. These hosts are allowed to serve their own
-          /cdn-cgi/image URLs when they support Cloudflare Image Resizing.
-        </p>
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="canonical-host-aliases">Canonical host aliases</Label>
-        <Textarea
-          id="canonical-host-aliases"
-          value={values.canonicalHostAliasesText}
-          onChange={(event) =>
-            setValue("canonicalHostAliasesText", event.target.value)
-          }
-          placeholder={"old-media.example.com\nr2-public.example.com"}
-          rows={4}
-        />
-        <p className="text-xs text-muted-foreground">
-          One host per line. If a stored media URL uses one of these hosts, the
-          storefront keeps the object path but emits it from the canonical CDN
-          host.
-        </p>
-      </div>
-
-      <div className="flex justify-end pt-4 border-t border-border">
-        <Button
-          onClick={handleSubmit}
-          disabled={isSaving || !isLoaded}
-          className="min-w-[140px]"
-        >
-          {isSaving ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Saving...
-            </>
-          ) : (
-            "Save Media Settings"
-          )}
-        </Button>
-      </div>
+      {isDirty ? (
+        <div className="grid grid-cols-2 gap-2 border-t border-border pt-4 sm:flex sm:justify-end">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={reset}
+            disabled={isSaving}
+            className="min-h-11 sm:min-h-9"
+          >
+            <RotateCcw className="mr-2 h-4 w-4" />
+            Reset
+          </Button>
+          <Button
+            onClick={handleSubmit}
+            disabled={isSaving || !isLoaded}
+            className="min-h-11 min-w-[140px] sm:min-h-9"
+          >
+            {isSaving ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              "Save changes"
+            )}
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -118,7 +118,7 @@ export function StorefrontUrlBuilder({
       />
       <div className="max-w-3xl space-y-4">
         <div className="space-y-2">
-          <Label htmlFor="storefront-url">Store URL</Label>
+          <Label htmlFor="storefront-url">Storefront URL</Label>
           <div className="flex gap-2">
             <Input
               id="storefront-url"
@@ -153,37 +153,39 @@ export function StorefrontUrlBuilder({
             </p>
           ) : null}
           <p id="storefront-url-help" className="text-xs text-muted-foreground">
-            Used for storefront links, previews, discovery files, and cache refreshes.
+            Used for links, previews, discovery, and cache refreshes.
           </p>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 border-t pt-4 sm:flex sm:justify-end">
-          <Button
-            type="button"
-            variant="outline"
-            className="min-h-11 md:min-h-10"
-            onClick={reset}
-            disabled={!isDirty || isSaving || !isLoaded}
-          >
-            <RotateCcw className="h-4 w-4" />
-            Reset
-          </Button>
-          <Button
-            type="button"
-            onClick={() => void handleSubmit()}
-            disabled={isSaving || !isLoaded || !isDirty || Boolean(validationMessage)}
-            className="min-h-11 min-w-[120px] md:min-h-10"
-          >
-            {isSaving ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              "Save URL"
-            )}
-          </Button>
-        </div>
+        {isDirty ? (
+          <div className="grid grid-cols-2 gap-2 border-t pt-4 sm:flex sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              className="min-h-11 md:min-h-10"
+              onClick={reset}
+              disabled={isSaving || !isLoaded}
+            >
+              <RotateCcw className="h-4 w-4" />
+              Reset
+            </Button>
+            <Button
+              type="button"
+              onClick={() => void handleSubmit()}
+              disabled={isSaving || !isLoaded || Boolean(validationMessage)}
+              className="min-h-11 min-w-[120px] md:min-h-10"
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Save URL"
+              )}
+            </Button>
+          </div>
+        ) : null}
       </div>
 
       <HomepagePresentationBuilder

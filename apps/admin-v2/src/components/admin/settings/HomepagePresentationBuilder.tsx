@@ -148,7 +148,7 @@ export function HomepagePresentationBuilder({
         <div>
           <h2 className="text-base font-semibold">Homepage</h2>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            Curate discovery and show only policy facts the store can prove.
+            Choose what buyers see after featured content.
           </p>
         </div>
         <Badge variant="outline" className="shrink-0 font-mono text-[11px]">
@@ -163,7 +163,7 @@ export function HomepagePresentationBuilder({
               Category rail
             </Label>
             <p className="text-xs text-muted-foreground">
-              Appears after the first homepage collection.
+              Shown after the first featured collection.
             </p>
           </div>
           <Switch
@@ -288,7 +288,7 @@ export function HomepagePresentationBuilder({
             triggerClassName="w-full"
           />
           <p className="text-xs text-muted-foreground">
-            Drag to set the buyer-facing order. Draft or internal categories stay saved but do not render publicly.
+            Drag to set the order. Draft and internal categories do not appear.
           </p>
         </div>
       </section>
@@ -299,7 +299,7 @@ export function HomepagePresentationBuilder({
             Delivery & returns strip
           </Label>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Uses active delivery methods and the saved return policy; unavailable facts are omitted.
+            Shows available delivery and return details.
           </p>
         </div>
         <Switch
@@ -313,11 +313,8 @@ export function HomepagePresentationBuilder({
         />
       </section>
 
-      <div className="space-y-3 border-t pt-4 sm:flex sm:items-center sm:justify-between sm:gap-3 sm:space-y-0">
-        <p className="text-xs text-muted-foreground">
-          Hero stories and collection placement remain managed in their own workspaces.
-        </p>
-        <div className="grid grid-cols-2 gap-2 sm:flex">
+      {dirty ? (
+        <div className="grid grid-cols-2 gap-2 border-t pt-4 sm:flex sm:justify-end">
           <Button
             type="button"
             variant="outline"
@@ -339,7 +336,7 @@ export function HomepagePresentationBuilder({
             ) : "Save homepage"}
           </Button>
         </div>
-      </div>
+      ) : null}
     </div>
   );
 }
