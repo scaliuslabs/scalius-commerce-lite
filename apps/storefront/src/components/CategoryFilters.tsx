@@ -518,6 +518,23 @@ export default function CategoryFilters({
       }),
     [facets, selectedFilters],
   );
+  const resetHref =
+    resetPath ?? (categorySlug ? `/categories/${categorySlug}` : "/search");
+  const hasResettableFilters = useMemo(
+    () =>
+      priceState.priceChanged ||
+      Boolean(
+        normalizeSearchQuery(
+          Array.isArray(currentFilters.q)
+            ? currentFilters.q.at(-1)
+            : currentFilters.q,
+        ),
+      ) ||
+      Object.values(selectedFilters).some(
+        (value) => value === true || (Array.isArray(value) && value.length > 0),
+      ),
+    [currentFilters.q, priceState.priceChanged, selectedFilters],
+  );
   const selectedAttributeValues = (slug: string): string[] => {
     const selected = selectedFilters[slug];
     return Array.isArray(selected) ? selected : [];
@@ -785,34 +802,29 @@ export default function CategoryFilters({
         </Accordion>
 
         {/* Desktop Reset Button */}
-        <div className="pt-6 hidden lg:block">
-          <Button variant="outline" asChild className="w-full">
-            <a
-              href={
-                resetPath ??
-                (categorySlug ? `/categories/${categorySlug}` : "/search")
-              }
-            >
-              Clear all
-            </a>
-          </Button>
-        </div>
+        {hasResettableFilters ? (
+          <div className="hidden pt-6 lg:block">
+            <Button variant="outline" asChild className="w-full">
+              <a href={resetHref}>Clear all</a>
+            </Button>
+          </div>
+        ) : null}
       </div>
 
       {/* Mobile Action Bar */}
       <div className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-background p-4 pb-[max(1rem,env(safe-area-inset-bottom))] lg:hidden">
-        <div className="grid grid-cols-2 gap-3">
+        <div
+          className={cn(
+            "grid gap-3",
+            hasResettableFilters ? "grid-cols-2" : "grid-cols-1",
+          )}
+        >
           {/* Mobile Reset Button */}
-          <Button variant="outline" asChild className="h-12">
-            <a
-              href={
-                resetPath ??
-                (categorySlug ? `/categories/${categorySlug}` : "/search")
-              }
-            >
-              Clear all
-            </a>
-          </Button>
+          {hasResettableFilters ? (
+            <Button variant="outline" asChild className="h-12">
+              <a href={resetHref}>Clear all</a>
+            </Button>
+          ) : null}
 
           {/* Mobile Apply Button */}
           <Button type="button" onClick={handleApplyFilters} className="h-12">
