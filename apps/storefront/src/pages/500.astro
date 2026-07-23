@@ -1,5 +1,8 @@
 ---
+import ErrorPageState from "@/components/ErrorPageState.astro";
 import "../styles/global.css";
+
+const retryHref = `${Astro.url.pathname}${Astro.url.search}`;
 ---
 
 <html lang="en">
@@ -8,21 +11,18 @@ import "../styles/global.css";
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="icon" href="/favicon.svg" />
     <meta name="robots" content="noindex,nofollow" />
-    <title>Server Error</title>
+    <title>Page unavailable</title>
   </head>
-  <body class="flex flex-col items-center justify-center min-h-screen bg-background text-foreground px-4">
-    <div class="text-center space-y-4 max-w-md">
-      <p class="text-7xl font-bold text-muted-foreground">500</p>
-      <h1 class="text-2xl font-semibold">Something Went Wrong</h1>
-      <p class="text-muted-foreground">
-        An unexpected error occurred. Please try again later.
-      </p>
-      <a
-        href="/"
-        class="inline-flex items-center justify-center rounded-md bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
-      >
-        Go to Homepage
-      </a>
-    </div>
+  <body class="flex min-h-screen flex-col bg-background text-foreground">
+    <ErrorPageState
+      code="500"
+      title="Page unavailable"
+      message="We couldn't load this page. Please try again in a moment."
+      primaryHref={retryHref}
+      primaryLabel="Try again"
+      secondaryHref="/"
+      secondaryLabel="Go to home"
+      fullHeight
+    />
   </body>
 </html>
