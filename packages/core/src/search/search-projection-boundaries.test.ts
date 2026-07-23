@@ -14,13 +14,16 @@ describe("predictive search product projection", () => {
     expect(source).not.toContain("categoryId: categories.id,");
   });
 
-  it("enriches the media lookup with the aliased product identity and accessible alt text", async () => {
+  it("projects accessible product media in the indexed search query without a second D1 read", async () => {
     const source = await readFile(new URL("./index.ts", import.meta.url), "utf8");
 
-    expect(source).toContain("const productIds = productsResult.map(p => p.id);");
-    expect(source).toContain("imageUrl: image?.url ?? null");
+    expect(source).toContain("function buildSearchImageProjection()");
+    expect(source).toContain("imageProjection: buildSearchImageProjection()");
+    expect(source).toContain("const image = parseSearchImageProjection(imageProjection);");
+    expect(source).toContain("imageUrl: image ? getCurrentPublicMediaUrl(image.objectKey) : null");
     expect(source).toContain("imageMediaId: image?.mediaId ?? null");
     expect(source).toContain("imageAlt: image?.altText ?? null");
+    expect(source).not.toContain("const productIds = productsResult.map");
   });
 
   it("ranks FTS matches and omits rich page bodies from predictive projections", async () => {
