@@ -33,6 +33,14 @@ function readScrollTop(href: string) {
   }
 }
 
+function hasStoredScrollTop(href: string) {
+  try {
+    return window.sessionStorage.getItem(storageKey(href)) !== null;
+  } catch {
+    return false;
+  }
+}
+
 function writeScrollTop(href: string, scrollTop: number) {
   try {
     window.sessionStorage.setItem(storageKey(href), String(Math.max(0, scrollTop)));
@@ -78,7 +86,7 @@ export function useAdminNestedScrollRestoration(
       }
     };
 
-    const schedulePopRestore = (href: string, frame = 0) => {
+    const scheduleStoredRestore = (href: string, frame = 0) => {
       cancelRestore();
       restoreFrameRef.current = window.requestAnimationFrame(() => {
         restoreFrameRef.current = null;
@@ -98,7 +106,7 @@ export function useAdminNestedScrollRestoration(
           return;
         }
 
-        schedulePopRestore(href, frame + 1);
+        scheduleStoredRestore(href, frame + 1);
       });
     };
 
@@ -116,9 +124,13 @@ export function useAdminNestedScrollRestoration(
     });
 
     const unsubscribeRendered = router.subscribe("onRendered", (event) => {
-      if (!nextNavigationIsPopRef.current) return;
+      const revisitingWorkspaceView =
+        event.pathChanged === false &&
+        event.hrefChanged &&
+        hasStoredScrollTop(event.toLocation.href);
+      if (!nextNavigationIsPopRef.current && !revisitingWorkspaceView) return;
 
-      schedulePopRestore(event.toLocation.href);
+      scheduleStoredRestore(event.toLocation.href);
     });
 
     return () => {

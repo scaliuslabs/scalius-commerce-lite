@@ -12,6 +12,8 @@ type RouterEventName = "onBeforeLoad" | "onRendered";
 type RouterEvent = {
   fromLocation?: { href: string };
   toLocation: { href: string };
+  pathChanged?: boolean;
+  hrefChanged?: boolean;
 };
 
 const routerMock = vi.hoisted(() => {
@@ -164,6 +166,50 @@ describe("useAdminNestedScrollRestoration", () => {
       scrollHeight: 1_600,
     });
     flushAnimationFrames(1);
+
+    expect(scrollElement.scrollTop).toBe(720);
+  });
+
+  it("restores a previously visited query-backed workspace view", () => {
+    const scrollElement = createAdminScrollElement({
+      clientHeight: 400,
+      scrollHeight: 1_600,
+    });
+    scrollElement.scrollTop = 720;
+
+    act(() => {
+      emitRouterEvent("onBeforeLoad", {
+        fromLocation: { href: "/admin/settings?section=seo" },
+        toLocation: { href: "/admin/settings?section=email" },
+        pathChanged: false,
+        hrefChanged: true,
+      });
+      emitRouterEvent("onRendered", {
+        fromLocation: { href: "/admin/settings?section=seo" },
+        toLocation: { href: "/admin/settings?section=email" },
+        pathChanged: false,
+        hrefChanged: true,
+      });
+    });
+
+    expect(window.requestAnimationFrame).not.toHaveBeenCalled();
+    scrollElement.scrollTop = 0;
+
+    act(() => {
+      emitRouterEvent("onBeforeLoad", {
+        fromLocation: { href: "/admin/settings?section=email" },
+        toLocation: { href: "/admin/settings?section=seo" },
+        pathChanged: false,
+        hrefChanged: true,
+      });
+      emitRouterEvent("onRendered", {
+        fromLocation: { href: "/admin/settings?section=email" },
+        toLocation: { href: "/admin/settings?section=seo" },
+        pathChanged: false,
+        hrefChanged: true,
+      });
+    });
+    flushAnimationFrames();
 
     expect(scrollElement.scrollTop).toBe(720);
   });

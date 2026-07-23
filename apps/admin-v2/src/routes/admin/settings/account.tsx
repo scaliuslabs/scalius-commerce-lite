@@ -37,6 +37,7 @@ function AccountSettingsPage() {
   const handleSectionChange = useCallback(
     (section: AccountSection, options?: { replace?: boolean }) => {
       void navigate({
+        resetScroll: false,
         replace: options?.replace ?? false,
         search: ((previous: Record<string, unknown>) => ({
           ...previous,

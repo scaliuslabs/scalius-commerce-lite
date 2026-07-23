@@ -29,6 +29,7 @@ function NotificationSettingsPage() {
 
   const handleSectionChange = (section: string) => {
     void navigate({
+      resetScroll: false,
       search: ((previous: Record<string, unknown>) => ({
         ...previous,
         section: section as NotificationSettingsSection,

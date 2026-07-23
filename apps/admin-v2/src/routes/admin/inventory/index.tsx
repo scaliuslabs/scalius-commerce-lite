@@ -43,6 +43,7 @@ function InventoryPage() {
   const handleSectionChange = useCallback(
     (section: InventoryWorkspaceSection) => {
       void navigate({
+        resetScroll: false,
         search: ((previous: Record<string, unknown>) => ({
           ...previous,
           section,

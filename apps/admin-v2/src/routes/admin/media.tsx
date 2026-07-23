@@ -40,6 +40,7 @@ function MediaPage() {
   ) => {
     const nextState = { ...workspaceState, ...updates };
     void navigate({
+      resetScroll: false,
       search: mediaWorkspaceStateToRouteSearch(nextState) as never,
       replace: options?.replace,
     });
