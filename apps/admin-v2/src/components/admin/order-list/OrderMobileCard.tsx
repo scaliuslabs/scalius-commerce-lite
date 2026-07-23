@@ -31,6 +31,7 @@ import {
   Pencil,
   Undo,
   Archive,
+  Check,
 } from "lucide-react";
 import { OrderStatusSelector } from "./OrderStatusSelector";
 import { LazyOrderItemsPopover } from "./LazyOrderItemsPopover";
@@ -138,44 +139,48 @@ export const OrderMobileCard = React.memo(function OrderMobileCard({
     >
       <CardContent className="p-4">
         {/* Header Row */}
-        <div className="flex items-start justify-between mb-3">
-          <div className="flex items-start gap-3">
-            {orderActions.canSelectOrdersForBulkActions && !showTrashed && (
-              <div
-                onClick={(e) => {
-                  e.preventDefault();
-                  onToggleSelection(order.id);
-                }}
-                className="cursor-pointer mt-0.5 select-none"
+        <div className="mb-2 grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-2">
+          {orderActions.canSelectOrdersForBulkActions && !showTrashed ? (
+            <div className="relative -ml-3 -mt-2 h-11 w-11 shrink-0">
+              <Checkbox
+                checked={isSelected}
+                onCheckedChange={() => onToggleSelection(order.id)}
+                className="absolute inset-0 z-10 h-11 w-11 cursor-pointer rounded-md border-0 bg-transparent text-transparent shadow-none data-[state=checked]:bg-transparent data-[state=checked]:text-transparent"
+                aria-label={`Select order ${order.id}`}
+              />
+              <span
+                aria-hidden="true"
+                className={`pointer-events-none absolute left-3 top-3 flex h-5 w-5 items-center justify-center rounded border shadow-sm ${
+                  isSelected
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-primary bg-background"
+                }`}
               >
-                <Checkbox
-                  checked={isSelected}
-                  onCheckedChange={() => {}}
-                  className="cursor-pointer pointer-events-none"
-                  aria-label={`Select order ${order.id}`}
-                />
-              </div>
-            )}
-            <div>
-              <Link
-                to={customerRoute}
-                params={{ orderId: order.id }}
-                className="text-base font-semibold text-[var(--foreground)] hover:text-primary transition-colors"
-              >
-                {order.customerName}
-              </Link>
-              <div className="flex flex-wrap items-center gap-2 mt-1">
-                <Badge variant="outline" className="text-xs">
-                  ID: {order.id.slice(0, 8)}
-                </Badge>
-                <LazyOrderItemsPopover
-                  orderId={order.id}
-                  itemCount={order.itemCount}
-                />
-              </div>
+                {isSelected ? <Check className="h-4 w-4" /> : null}
+              </span>
+            </div>
+          ) : (
+            <span aria-hidden="true" />
+          )}
+          <div className="min-w-0">
+            <Link
+              to={customerRoute}
+              params={{ orderId: order.id }}
+              className="line-clamp-2 break-words text-base font-semibold text-[var(--foreground)] transition-colors hover:text-primary"
+            >
+              {order.customerName}
+            </Link>
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <Badge variant="outline" className="text-xs">
+                ID: {order.id.slice(0, 8)}
+              </Badge>
+              <LazyOrderItemsPopover
+                orderId={order.id}
+                itemCount={order.itemCount}
+              />
             </div>
           </div>
-          <div className="text-right">
+          <div className="shrink-0 text-right">
             <div className="text-base font-bold text-[var(--foreground)]">
               {symbol}{order.totalAmount.toLocaleString()}
             </div>
@@ -184,15 +189,19 @@ export const OrderMobileCard = React.memo(function OrderMobileCard({
                 -{symbol}{(order.discountAmount ?? 0).toLocaleString()}
               </Badge>
             )}
-            <div className="flex flex-wrap items-center justify-end gap-1 mt-1">
-              <PaymentStatusBadge status={order.paymentStatus} />
-              <FulfillmentStatusBadge status={order.fulfillmentStatus} />
-              <PaymentMethodLabel method={order.paymentMethod} />
-              <PaymentRecoveryBadge recovery={order.paymentRecovery} compact />
-              <RefundRecoveryBadge operation={order.activeRefundOperation} compact />
-              <ShipmentRecoveryBadge recovery={order.shipmentRecovery} compact />
-            </div>
           </div>
+        </div>
+
+        <div
+          className="mb-3 flex flex-wrap items-center gap-1"
+          aria-label="Payment and fulfillment"
+        >
+          <PaymentStatusBadge status={order.paymentStatus} />
+          <FulfillmentStatusBadge status={order.fulfillmentStatus} />
+          <PaymentMethodLabel method={order.paymentMethod} />
+          <PaymentRecoveryBadge recovery={order.paymentRecovery} compact />
+          <RefundRecoveryBadge operation={order.activeRefundOperation} compact />
+          <ShipmentRecoveryBadge recovery={order.shipmentRecovery} compact />
         </div>
 
         {/* Contact Info */}
@@ -278,7 +287,12 @@ export const OrderMobileCard = React.memo(function OrderMobileCard({
             {formatDate(order.createdAt)}
           </span>
           <div className="flex items-center gap-1">
-            <Button asChild variant="ghost" size="sm" className="h-8 w-8 p-0">
+            <Button
+              asChild
+              variant="ghost"
+              size="sm"
+              className="h-11 w-11 p-0 sm:h-8 sm:w-8"
+            >
               <Link
                 to="/admin/orders/$orderId"
                 params={{ orderId: order.id }}
@@ -292,7 +306,7 @@ export const OrderMobileCard = React.memo(function OrderMobileCard({
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-8 w-8 p-0"
+                className="h-11 w-11 p-0 sm:h-8 sm:w-8"
                 onClick={() => onEdit(order.id)}
                 aria-label={`Edit order ${order.id}`}
               >
@@ -306,7 +320,7 @@ export const OrderMobileCard = React.memo(function OrderMobileCard({
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-8 w-8 p-0 text-primary"
+                    className="h-11 w-11 p-0 text-primary sm:h-8 sm:w-8"
                     onClick={() => onRestore(order.id, order.version)}
                     aria-label={`Restore order ${order.id}`}
                   >
@@ -318,7 +332,7 @@ export const OrderMobileCard = React.memo(function OrderMobileCard({
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-8 w-8 cursor-not-allowed p-0 text-[var(--muted-foreground)]"
+                className="h-11 w-11 cursor-not-allowed p-0 text-[var(--muted-foreground)] sm:h-8 sm:w-8"
                 title={
                   archiveBlockedReason
                 }
@@ -331,7 +345,7 @@ export const OrderMobileCard = React.memo(function OrderMobileCard({
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-8 w-8 p-0 text-destructive"
+                className="h-11 w-11 p-0 text-destructive sm:h-8 sm:w-8"
                 onClick={() => onArchive(order.id, order.version)}
                 aria-label={`Archive order ${order.id}`}
               >
