@@ -16,6 +16,16 @@ import { TwoFactorSetup } from "./TwoFactorSetup";
 import { AdminUsersManager } from "./AdminUsersManager";
 import { AccountSessions } from "./AccountSessions";
 import type { AccountSection } from "./account-sections";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
 
 export interface User {
   id: string;
@@ -112,14 +122,53 @@ export function AccountSettings({
 
   return (
     <div className="space-y-4 pb-8">
+      <div className="lg:hidden">
+        <Select
+          value={activeSection}
+          onValueChange={(value) => onSectionChange(value as AccountSection)}
+        >
+          <SelectTrigger
+            className="min-h-11 bg-card"
+            aria-label="Account settings section"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              <SelectLabel className="text-xs text-muted-foreground">
+                Personal
+              </SelectLabel>
+              {personalSections.map(({ value, label }) => (
+                <SelectItem key={value} value={value} className="min-h-11">
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+            {storeSections.length > 0 ? <SelectSeparator /> : null}
+            {storeSections.length > 0 ? (
+              <SelectGroup>
+                <SelectLabel className="text-xs text-muted-foreground">
+                  Store access
+                </SelectLabel>
+                {storeSections.map(({ value, label }) => (
+                  <SelectItem key={value} value={value} className="min-h-11">
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            ) : null}
+          </SelectContent>
+        </Select>
+      </div>
+
       <div className="grid min-w-0 gap-4 lg:grid-cols-[13rem_minmax(0,1fr)] lg:items-start">
         <nav
           aria-label="Account settings"
-          className="min-w-0 rounded-xl border bg-card p-2 lg:sticky lg:top-4"
+          className="hidden min-w-0 rounded-xl border bg-card p-2 lg:sticky lg:top-4 lg:block"
         >
-          <div className="overflow-x-auto pb-1 lg:overflow-visible lg:pb-0">
-            <div className="flex min-w-max gap-1 lg:min-w-0 lg:flex-col">
-              <p className="hidden px-3 pb-1 pt-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground lg:block">
+          <div>
+            <div className="flex flex-col gap-1">
+              <p className="px-3 pb-1 pt-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                 Personal
               </p>
               {personalSections.map(renderNavigationItem)}
@@ -130,7 +179,7 @@ export function AccountSettings({
                 />
               )}
               {storeSections.length > 0 && (
-                <p className="hidden px-3 pb-1 pt-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground lg:block">
+                <p className="px-3 pb-1 pt-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                   Store access
                 </p>
               )}

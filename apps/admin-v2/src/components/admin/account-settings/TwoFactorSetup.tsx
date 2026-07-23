@@ -29,6 +29,7 @@ import {
 } from "~/lib/api-functions/auth-management";
 import { refreshAdminRouteContext } from "~/lib/admin-route-context";
 import type { User } from "./AccountSettingsContainer";
+import { UnsavedChangesGuard } from "~/components/admin/shared/UnsavedChangesGuard";
 
 type TwoFactorStep = "method" | "password" | "qr" | "verify" | "backup";
 type TwoFactorMethod = "totp" | "email";
@@ -301,8 +302,21 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
     }
   };
 
+  const hasSetupDraft =
+    showSetup &&
+    (step !== "method" ||
+      selectedMethod !== currentMethod ||
+      password.length > 0 ||
+      verificationCode.length > 0 ||
+      backupCodes.length > 0);
+
   if (showSetup) {
     return (
+      <>
+      <UnsavedChangesGuard
+        isDirty={hasSetupDraft}
+        isSubmitting={isLoading}
+      />
       <Card className="max-w-3xl rounded-xl shadow-none">
         <CardHeader className="p-4 pb-3">
           <CardTitle className="flex items-center gap-2 text-base">
@@ -551,6 +565,7 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
           )}
         </CardContent>
       </Card>
+      </>
     );
   }
 

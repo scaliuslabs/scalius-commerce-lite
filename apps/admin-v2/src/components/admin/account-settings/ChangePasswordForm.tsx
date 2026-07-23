@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { getServerFnError } from "~/lib/api-helpers";
 import { changePassword } from "~/lib/api-functions/auth-management";
 import { useHydrated } from "~/hooks/use-hydrated";
+import { UnsavedChangesGuard } from "~/components/admin/shared/UnsavedChangesGuard";
 
 function getPasswordStrength(password: string) {
   if (!password) return { strength: 0, label: "", tone: "bg-muted" };
@@ -76,6 +77,11 @@ export function ChangePasswordForm() {
   };
 
   return (
+    <>
+      <UnsavedChangesGuard
+        isDirty={Boolean(currentPassword || newPassword || confirmPassword)}
+        isSubmitting={isLoading}
+      />
     <Card className="max-w-3xl rounded-xl shadow-none">
       <CardHeader className="p-4 pb-3">
         <CardTitle className="flex items-center gap-2 text-base">
@@ -244,5 +250,6 @@ export function ChangePasswordForm() {
         </form>
       </CardContent>
     </Card>
+    </>
   );
 }
