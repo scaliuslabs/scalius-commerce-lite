@@ -1,6 +1,8 @@
 import { useEffect, useRef } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
+import { useNavigate } from "@tanstack/react-router";
+import { toast } from "sonner";
 import {
   Check,
   Code2,
@@ -45,6 +47,7 @@ import {
 } from "@/components/admin/settings/provider-marks";
 import {
   getAnalyticsProviderDeliveryDefaults,
+  readAnalyticsSaveIdentity,
   selectAnalyticsCreateType,
 } from "@/components/admin/analytics-create-route-state";
 
@@ -156,6 +159,7 @@ export function AnalyticsForm({
   selectedType: routeSelectedType,
   onSelectedTypeChange,
 }: AnalyticsFormProps) {
+  const navigate = useNavigate();
   const { hasPermission } = usePermissions();
   const canSave = isEdit
     ? hasPermission(PERMISSIONS.ANALYTICS_EDIT)
@@ -196,6 +200,43 @@ export function AnalyticsForm({
       ...(isEdit && defaultValues?.id ? [queryKeys.analytics.detail(defaultValues.id)] : []),
     ],
     navigateTo: "/admin/analytics",
+    onSuccess: (result) => {
+      const saved = readAnalyticsSaveIdentity(result);
+      if (!saved) {
+        toast.error("Integration saved, but its revision could not be confirmed", {
+          description: "Return to Analytics and reopen the integration before editing again.",
+        });
+        void navigate({
+          to: "/admin/analytics",
+          search: {
+            page: 1,
+            limit: 20,
+            search: "",
+            sort: "updatedAt",
+            order: "desc",
+            trashed: false,
+            type: undefined,
+            status: undefined,
+          },
+        });
+        return;
+      }
+      if (isEdit) {
+        form.reset({
+          ...form.getValues(),
+          id: saved.id,
+          expectedRevision: saved.revision,
+        });
+        toast.success("Integration saved");
+        return;
+      }
+      toast.success("Integration created");
+      void navigate({
+        to: "/admin/analytics/$analyticsId/edit",
+        params: { analyticsId: saved.id },
+        replace: true,
+      });
+    },
   });
 
   const previousSuggestion = useRef(CONFIG_EXAMPLES[defaultType]);
