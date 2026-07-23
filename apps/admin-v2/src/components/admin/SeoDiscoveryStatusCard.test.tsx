@@ -325,6 +325,26 @@ function createWarningFeedDiagnostics() {
   };
 }
 
+function createExpectedExclusionsFeedDiagnostics() {
+  const result = createHealthyFeedDiagnostics();
+  return {
+    ...result,
+    totals: {
+      ...result.totals,
+      productsWithIssues: 3,
+    },
+    reasons: result.reasons.map((reason) => {
+      if (reason.reason === "product_feed_excluded") {
+        return { ...reason, products: 1 };
+      }
+      if (reason.reason === "inactive_deleted_unpublished") {
+        return { ...reason, products: 2 };
+      }
+      return reason;
+    }),
+  };
+}
+
 describe("SeoDiscoveryStatusCard", () => {
   let host: HTMLDivElement;
   let root: Root;
@@ -615,6 +635,19 @@ describe("SeoDiscoveryStatusCard", () => {
     expect(host.textContent).toContain(
       "More products exist outside this bounded scan.",
     );
+  });
+
+  it("does not frame intentional catalog exclusions as repair work", () => {
+    feedDiagnosticsState.data = createExpectedExclusionsFeedDiagnostics();
+
+    renderCard();
+
+    expect(host.textContent).toContain("Catalog has exclusions");
+    expect(host.textContent).toContain("Products outside feed: 3");
+    expect(host.textContent).toContain("Excluded by product");
+    expect(host.textContent).toContain("Inactive or deleted");
+    expect(host.textContent).not.toContain("Catalog needs attention");
+    expect(host.textContent).not.toContain("Products to fix");
   });
 
   it("refreshes feed diagnostics separately from the live proof", () => {
