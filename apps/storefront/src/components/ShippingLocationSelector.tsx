@@ -86,6 +86,7 @@ export default function ShippingLocationSelector({
         onValueChange={handleLocationChange}
         className="grid grid-cols-1 sm:grid-cols-2 gap-3"
         name="shippingLocation"
+        aria-label={shippingMethodLabel}
       >
         {shippingMethods.map((method) => {
           const normalFeeLabel = formatPriceShort(method.fee);
@@ -114,6 +115,7 @@ export default function ShippingLocationSelector({
                 <RadioGroupItem
                   value={method.id}
                   id={method.id}
+                  aria-label={`${method.name}, ${feeLabel}`}
                   className="w-4 h-4 text-black border-gray-300 data-[state=checked]:border-black data-[state=checked]:text-black shrink-0"
                 />
                 <span className="font-medium text-xs sm:text-sm text-gray-900 leading-tight">

@@ -27,6 +27,7 @@ interface CustomDropdownProps {
   name: string;
   id?: string;
   labelId?: string;
+  ariaLabel?: string;
   disabled?: boolean;
   required?: boolean;
   className?: string;
@@ -41,6 +42,7 @@ export default function CustomDropdown({
   name,
   id,
   labelId,
+  ariaLabel,
   disabled = false,
   required = false,
   className = "",
@@ -59,6 +61,8 @@ export default function CustomDropdown({
   const listboxId = `${componentId}-listbox`;
   const valueId = `${componentId}-value`;
   const selectedOption = options.find((option) => option.value === value);
+  const selectedLabel = selectedOption ? selectedOption.label : placeholder;
+  const searchLabel = `Search ${(ariaLabel ?? placeholder).toLocaleLowerCase()}`;
 
   const filteredOptions = useMemo(() => {
     const query = searchTerm.trim().toLocaleLowerCase();
@@ -221,7 +225,8 @@ export default function CustomDropdown({
         aria-haspopup="listbox"
         aria-expanded={isOpen}
         aria-controls={isOpen ? listboxId : undefined}
-        aria-labelledby={labelId ? `${labelId} ${valueId}` : undefined}
+        aria-label={ariaLabel ? `${ariaLabel}: ${selectedLabel}` : undefined}
+        aria-labelledby={!ariaLabel && labelId ? `${labelId} ${valueId}` : undefined}
       >
         <span
           id={valueId}
@@ -259,7 +264,7 @@ export default function CustomDropdown({
                 type="text"
                 role="combobox"
                 className="h-11 w-full rounded-md border border-border bg-background px-2.5 pr-8 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 sm:h-9"
-                aria-label={`Search ${placeholder.toLocaleLowerCase()}`}
+                aria-label={searchLabel}
                 aria-controls={listboxId}
                 aria-expanded="true"
                 aria-autocomplete="list"
@@ -268,7 +273,7 @@ export default function CustomDropdown({
                     ? `${listboxId}-option-${activeIndex}`
                     : undefined
                 }
-                placeholder={`Search ${placeholder.toLocaleLowerCase()}`}
+                placeholder={searchLabel}
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
                 onKeyDown={handleMenuKeyDown}
@@ -303,7 +308,7 @@ export default function CustomDropdown({
             ref={listboxRef}
             id={listboxId}
             role="listbox"
-            aria-label={placeholder}
+            aria-label={ariaLabel ? `${ariaLabel} options` : placeholder}
             className="min-h-0 flex-1 overflow-y-auto py-1"
           >
             {filteredOptions.length > 0 ? (

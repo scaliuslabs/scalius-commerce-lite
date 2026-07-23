@@ -51,4 +51,33 @@ describe("CustomDropdown", () => {
       "Dhaka",
     );
   });
+
+  it("uses a concise explicit field name for the trigger and search", async () => {
+    await act(async () => {
+      root.render(
+        <CustomDropdown
+          id="city"
+          ariaLabel="City"
+          name="city"
+          placeholder="Select a city"
+          options={[{ value: "dhaka", label: "Dhaka" }]}
+          value="dhaka"
+          onChange={vi.fn()}
+        />,
+      );
+    });
+
+    const trigger = host.querySelector<HTMLButtonElement>("#city")!;
+    expect(trigger.getAttribute("aria-label")).toBe("City: Dhaka");
+    expect(trigger.hasAttribute("aria-labelledby")).toBe(false);
+
+    await act(async () => trigger.click());
+
+    const search = host.querySelector<HTMLInputElement>('[role="combobox"]');
+    expect(search?.getAttribute("aria-label")).toBe("Search city");
+    expect(search?.getAttribute("placeholder")).toBe("Search city");
+    expect(
+      host.querySelector('[role="listbox"]')?.getAttribute("aria-label"),
+    ).toBe("City options");
+  });
 });
