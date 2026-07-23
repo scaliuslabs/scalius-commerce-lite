@@ -74,6 +74,17 @@ const FEED_REASON_LABELS: Record<ProductFeedDiagnosticReason, string> = {
   unavailable_excluded: "Sold out hidden",
 };
 
+const INFORMATIONAL_FEED_REASONS = new Set<ProductFeedDiagnosticReason>([
+  "product_feed_excluded",
+  "inactive_deleted_unpublished",
+  "unavailable_excluded",
+]);
+
+function feedReasonTone(reason: ProductFeedDiagnosticReason): SeoDiscoveryTone {
+  if (reason === "feed_disabled") return "disabled";
+  return INFORMATIONAL_FEED_REASONS.has(reason) ? "info" : "warning";
+}
+
 function toneClassName(tone: SeoDiscoveryTone): string {
   return TONE_CLASSES[tone];
 }
@@ -541,7 +552,19 @@ function getFeedDiagnosticsTone({
   if (error) return "warning";
   if (isBusy && !result) return "info";
   if (!result) return "info";
-  return result.totals.productsWithIssues > 0 ? "warning" : "ok";
+  if (result.totals.productsWithIssues === 0) return "ok";
+
+  const activeReasons = result.reasons.filter(
+    (reason) => reason.products > 0 || reason.rows > 0,
+  );
+  if (activeReasons.some((reason) => reason.reason === "feed_disabled")) {
+    return "disabled";
+  }
+  return activeReasons.length > 0 && activeReasons.every((reason) =>
+    INFORMATIONAL_FEED_REASONS.has(reason.reason)
+  )
+    ? "info"
+    : "warning";
 }
 
 function FeedDiagnosticsPanel({
@@ -573,6 +596,8 @@ function FeedDiagnosticsPanel({
         ? "Catalog ready"
         : tone === "disabled"
           ? "Catalog feed disabled"
+          : tone === "info" && result
+            ? "Catalog has exclusions"
           : "Catalog needs attention";
 
   return (
@@ -619,7 +644,7 @@ function FeedDiagnosticsPanel({
               Skipped rows: {formatCount(result.totals.skippedRows)}
             </Badge>
             <Badge variant="outline" className="border-border bg-background">
-              Products to fix: {formatCount(result.totals.productsWithIssues)}
+              {tone === "info" ? "Products outside feed" : "Products to fix"}: {formatCount(result.totals.productsWithIssues)}
             </Badge>
           </div>
 
@@ -674,11 +699,7 @@ function FeedDiagnosticsPanel({
                   </div>
                   <Badge
                     variant="outline"
-                    className={`w-fit shrink-0 self-start ${toneClassName(
-                      reason.reason === "feed_disabled"
-                        ? "disabled"
-                        : "warning",
-                    )}`}
+                    className={`w-fit shrink-0 self-start ${toneClassName(feedReasonTone(reason.reason))}`}
                   >
                     {formatCount(reason.products)}
                   </Badge>
