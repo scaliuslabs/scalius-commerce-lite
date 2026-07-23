@@ -164,9 +164,9 @@ export function deliveryAttemptLabel(group: Pick<
   return `${attempts} attempt${attempts === 1 ? "" : "s"}`;
 }
 
-export function outboxAttemptLabel(outbox: Pick<OrderNotificationOutboxDto, "status" | "attempts">): string {
+export function outboxAttemptLabel(outbox: Pick<OrderNotificationOutboxDto, "status" | "attempts">): string | null {
   if (TERMINAL_OUTBOX_STATUSES.has(outbox.status)) {
-    return "Delivery settled";
+    return null;
   }
   if (outbox.status === "dead_lettered") {
     return "Retry stopped";

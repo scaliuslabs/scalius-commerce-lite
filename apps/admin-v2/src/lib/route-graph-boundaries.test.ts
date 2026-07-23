@@ -1230,7 +1230,7 @@ describe("admin route graph boundaries", () => {
     expect(adminRouteSource).toContain("useAdminNestedScrollRestoration()");
     expect(adminScrollSource).toContain('window.addEventListener("popstate"');
     expect(adminScrollSource).toContain(
-      "schedulePopRestore(event.toLocation.href)",
+      "scheduleStoredRestore(event.toLocation.href)",
     );
     expect(adminScrollSource).not.toContain("scrollElement.scrollTop = 0");
     expect(adminRouteContextSource).toContain("ADMIN_ROUTE_CONTEXT_FRESH_MS");
@@ -1926,7 +1926,7 @@ describe("admin route graph boundaries", () => {
     expect(notificationsSource).toContain("!isHydrated || isLoading");
     expect(notificationsSource).toContain("buildReceiptDisplayGroups");
     expect(notificationDisplaySource).toContain("Stopped after");
-    expect(notificationDisplaySource).toContain("Delivery settled");
+    expect(notificationDisplaySource).toContain("return null");
     expect(notificationsSource).toContain("recorded attempt");
   });
 

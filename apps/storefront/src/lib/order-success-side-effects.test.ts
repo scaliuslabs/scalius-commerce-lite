@@ -45,11 +45,10 @@ describe("order success side effects", () => {
     expect(pageSource).toContain("supportRequests={order.supportRequests}");
     expect(pageSource).toContain("supportRequestActions={order.supportRequestActions}");
     expect(pageSource).toContain("supportRequestIntro={order.supportRequestIntro}");
-    expect(buttonsSource).toContain("Keep this browser receipt");
-    expect(buttonsSource).toContain("Guest receipts stay available in this browser for a limited time.");
-    expect(buttonsSource).toContain("Account history only includes orders placed while signed in.");
+    expect(buttonsSource).toContain("Save your receipt");
+    expect(buttonsSource).toContain("This guest receipt is private to this browser and available for a limited time.");
     expect(buttonsSource).toContain("navigator.clipboard");
-    expect(buttonsSource).toContain("Sign In For Future Orders");
+    expect(buttonsSource).toContain("Sign in for future orders");
     expect(buttonsSource).toContain("open-auth-modal");
     expect(buttonsSource).toContain("/account/orders/${encodeURIComponent(orderId)}");
   });

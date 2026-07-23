@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   Bell,
   CheckCircle2,
+  ChevronDown,
   Clock,
   Loader2,
   Mail,
@@ -165,6 +166,7 @@ function NotificationRow({
   const resendMutation = useResendOrderNotification();
   const timestamp = outboxTimestamp(notification);
   const lastError = describeNotificationIssue(notification.lastError);
+  const attemptLabel = outboxAttemptLabel(notification);
   const showOutboxError = Boolean(lastError && notification.receipts.length === 0);
   const receiptGroups = buildReceiptDisplayGroups(notification.receipts);
   const retrying =
@@ -191,11 +193,13 @@ function NotificationRow({
           ) : null}
         </div>
         <div className="flex items-center gap-2">
-          <div className="text-right text-xs text-muted-foreground">
-            <span title={`${notification.attempts} recorded attempt${notification.attempts === 1 ? "" : "s"}`}>
-              {outboxAttemptLabel(notification)}
-            </span>
-          </div>
+          {attemptLabel ? (
+            <div className="text-right text-xs text-muted-foreground">
+              <span title={`${notification.attempts} recorded attempt${notification.attempts === 1 ? "" : "s"}`}>
+                {attemptLabel}
+              </span>
+            </div>
+          ) : null}
           {canRetryNotifications && canRetry(notification) && (
             <Button
               type="button"
@@ -259,8 +263,8 @@ function NotificationRow({
           </div>
           <details className="group rounded-md border bg-muted/10">
             <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-3 text-xs font-medium text-muted-foreground sm:min-h-9">
-              Delivery details
-              <span className="ml-auto">{notification.source}</span>
+              View details
+              <ChevronDown className="ml-auto h-3.5 w-3.5 transition-transform group-open:rotate-180" />
             </summary>
             <div className="space-y-2 border-t p-2 sm:p-3">
               {receiptGroups.map((group) => (
