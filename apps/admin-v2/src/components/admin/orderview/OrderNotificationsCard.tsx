@@ -34,6 +34,7 @@ import {
   deliveryAttemptLabel,
   describeNotificationIssue,
   outboxAttemptLabel,
+  summarizeNotificationDelivery,
   type OrderNotificationReceiptDisplayGroup,
 } from "@/lib/order-notification-display";
 import type { Order, OrderTimestamp } from "./types";
@@ -51,6 +52,7 @@ const STATUS_STYLES: Record<string, string> = {
   failed: "border-red-200 bg-red-50 text-red-900 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-100",
   dead_lettered: "border-red-200 bg-red-50 text-red-900 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-100",
   skipped: "border-muted bg-muted/40 text-muted-foreground",
+  partial: "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-100",
 };
 
 const CHANNEL_ICONS: Record<string, React.ElementType> = {
@@ -131,9 +133,11 @@ function ReceiptRow({ group }: { group: OrderNotificationReceiptDisplayGroup }) 
           <Badge variant="outline" className={statusClass(group.status)}>
             {humanize(group.status)}
           </Badge>
-          <span className="text-muted-foreground">{group.provider}</span>
+          {group.provider !== group.channel ? (
+            <span className="text-muted-foreground">{group.provider}</span>
+          ) : null}
         </div>
-        <div className="truncate text-muted-foreground" title={group.providerStatus ?? undefined}>
+        <div className="break-words text-muted-foreground">
           {group.recipientLabel}
           {group.providerStatus ? ` • ${group.providerStatus}` : ""}
         </div>
@@ -169,6 +173,7 @@ function NotificationRow({
   const attemptLabel = outboxAttemptLabel(notification);
   const showOutboxError = Boolean(lastError && notification.receipts.length === 0);
   const receiptGroups = buildReceiptDisplayGroups(notification.receipts);
+  const deliverySummary = summarizeNotificationDelivery(notification);
   const retrying =
     retryMutation.isPending &&
     retryMutation.variables?.outboxId === notification.id;
@@ -184,8 +189,8 @@ function NotificationRow({
             <span className="font-medium text-foreground">
               {humanize(notification.notificationType)}
             </span>
-            <Badge variant="outline" className={statusClass(notification.status)}>
-              {humanize(notification.status)}
+            <Badge variant="outline" className={statusClass(deliverySummary.status)}>
+              {deliverySummary.label}
             </Badge>
           </div>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
@@ -247,8 +252,8 @@ function NotificationRow({
       )}
 
       {receiptGroups.length > 0 ? (
-        <details className="group mt-2 rounded-md border bg-muted/10">
-          <summary className="flex min-h-11 cursor-pointer list-none flex-wrap items-center gap-x-3 gap-y-1 px-3 text-xs sm:min-h-9">
+        <details className="group mt-2">
+          <summary className="flex min-h-9 cursor-pointer list-none flex-wrap items-center gap-x-3 gap-y-1 rounded-md text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
             {receiptGroups.map((group) => {
               const Icon = CHANNEL_ICONS[group.channel] ?? Send;
               return (
@@ -257,15 +262,15 @@ function NotificationRow({
                   className="inline-flex min-w-0 items-center gap-1.5"
                 >
                   <Icon className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="font-medium">{humanize(group.channel)}</span>
+                  <span className="font-medium text-foreground">{humanize(group.channel)}</span>
                   <span className="text-muted-foreground">{humanize(group.status)}</span>
                 </span>
               );
             })}
-            <span className="ml-auto font-medium text-muted-foreground">Details</span>
-            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-open:rotate-180" />
+            <span className="sr-only">Delivery details</span>
+            <ChevronDown className="ml-auto h-3.5 w-3.5 text-muted-foreground transition-transform group-open:rotate-180" />
           </summary>
-          <div className="space-y-2 border-t p-2 sm:p-3">
+          <div className="mt-2 space-y-2">
             {receiptGroups.map((group) => (
               <ReceiptRow key={group.key} group={group} />
             ))}
@@ -290,10 +295,9 @@ export function OrderNotificationsCard({ order }: { order: Order }) {
     staleTime: ORDER_DETAIL_PREFETCH_STALE_MS,
   });
   const notifications = data?.notifications ?? [];
-  const failedCount = notifications.filter((item) => item.status === "failed" || item.status === "dead_lettered").length;
-  const pendingCount = notifications.filter((item) =>
-    item.status === "pending" || item.status === "queued" || item.status === "processing" || item.status === "enqueueing",
-  ).length;
+  const deliverySummaries = notifications.map(summarizeNotificationDelivery);
+  const failedCount = deliverySummaries.filter((item) => item.status === "failed").length;
+  const pendingCount = deliverySummaries.filter((item) => item.status === "pending").length;
 
   return (
     <Card className="overflow-hidden">
