@@ -286,17 +286,17 @@ const expandedActionsXlWidth =
 <style>
   .header-expanded-center,
   .header-compact-center {
-    transition:
-      opacity 120ms ease,
-      transform 180ms cubic-bezier(0.25, 0.1, 0.25, 1),
-      visibility 0s linear;
+    will-change: opacity, transform;
   }
 
   .header-expanded-center {
     visibility: visible;
     opacity: 1;
     transform: translateY(0) scale(1);
-    transition-delay: 0ms, 0ms, 0ms;
+    transition:
+      opacity 120ms ease 160ms,
+      transform 180ms cubic-bezier(0.25, 0.1, 0.25, 1) 160ms,
+      visibility 0s linear 160ms;
   }
 
   .header-compact-center {
@@ -304,7 +304,10 @@ const expandedActionsXlWidth =
     visibility: hidden;
     opacity: 0;
     transform: translateY(0.5rem) scale(0.98);
-    transition-delay: 0ms, 0ms, 120ms;
+    transition:
+      opacity 120ms ease,
+      transform 180ms cubic-bezier(0.25, 0.1, 0.25, 1),
+      visibility 0s linear 120ms;
   }
 
   #main-header.is-scrolled .header-expanded-center {
@@ -312,7 +315,10 @@ const expandedActionsXlWidth =
     visibility: hidden;
     opacity: 0;
     transform: translateY(-0.5rem) scale(0.96);
-    transition-delay: 0ms, 0ms, 120ms;
+    transition:
+      opacity 240ms ease,
+      transform 240ms cubic-bezier(0.25, 0.1, 0.25, 1),
+      visibility 0s linear 240ms;
   }
 
   #main-header.is-scrolled .header-compact-center {
@@ -320,7 +326,10 @@ const expandedActionsXlWidth =
     visibility: visible;
     opacity: 1;
     transform: translateY(0) scale(1);
-    transition-delay: 0ms, 0ms, 0ms;
+    transition:
+      opacity 120ms ease 200ms,
+      transform 180ms cubic-bezier(0.25, 0.1, 0.25, 1) 200ms,
+      visibility 0s linear 200ms;
   }
 
   .header-full-nav-row {
@@ -354,17 +363,17 @@ const expandedActionsXlWidth =
 
   .header-expanded-actions,
   .header-scroll-search {
-    transition:
-      opacity 120ms ease,
-      transform 180ms cubic-bezier(0.25, 0.1, 0.25, 1),
-      visibility 0s linear;
+    will-change: opacity, transform;
   }
 
   .header-expanded-actions {
     visibility: visible;
     opacity: 1;
     transform: translateX(0);
-    transition-delay: 0ms, 0ms, 0ms;
+    transition:
+      opacity 120ms ease 160ms,
+      transform 180ms cubic-bezier(0.25, 0.1, 0.25, 1) 160ms,
+      visibility 0s linear 160ms;
   }
 
   .header-scroll-search {
@@ -372,7 +381,10 @@ const expandedActionsXlWidth =
     visibility: hidden;
     opacity: 0;
     transform: translateX(-0.5rem);
-    transition-delay: 0ms, 0ms, 120ms;
+    transition:
+      opacity 120ms ease,
+      transform 180ms cubic-bezier(0.25, 0.1, 0.25, 1),
+      visibility 0s linear 120ms;
   }
 
   #main-header.is-scrolled .header-action-morph {
@@ -385,7 +397,10 @@ const expandedActionsXlWidth =
     visibility: hidden;
     opacity: 0;
     transform: translateX(0.5rem);
-    transition-delay: 0ms, 0ms, 120ms;
+    transition:
+      opacity 120ms ease,
+      transform 180ms cubic-bezier(0.25, 0.1, 0.25, 1),
+      visibility 0s linear 120ms;
   }
 
   #main-header.is-scrolled .header-scroll-search {
@@ -393,7 +408,10 @@ const expandedActionsXlWidth =
     visibility: visible;
     opacity: 1;
     transform: translateX(0);
-    transition-delay: 0ms, 0ms, 0ms;
+    transition:
+      opacity 120ms ease 200ms,
+      transform 180ms cubic-bezier(0.25, 0.1, 0.25, 1) 200ms,
+      visibility 0s linear 200ms;
   }
 
   .storefront-header-logo {

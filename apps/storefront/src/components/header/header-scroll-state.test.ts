@@ -34,9 +34,10 @@ describe("header scroll state", () => {
     expect(source).toContain("header-expanded-center");
     expect(source).toContain("header-compact-center");
     expect(source).toContain("header-full-nav-row");
-    expect(source).toContain("transition-delay: 0ms, 0ms, 0ms");
-    expect(source).toContain("transition-delay: 0ms, 0ms, 120ms");
-    expect(source).toContain("opacity 120ms ease");
+    expect(source).toContain("opacity 240ms ease");
+    expect(source).toContain("opacity 120ms ease 200ms");
+    expect(source).toContain("visibility 0s linear 240ms");
+    expect(source).toContain("visibility 0s linear 200ms");
     expect(source).not.toContain("transition-delay: 80ms, 80ms, 0ms");
     expect(source).not.toContain("transition-delay: 40ms, 40ms, 0ms");
     expect(source).toContain(
@@ -46,6 +47,12 @@ describe("header scroll state", () => {
     expect(source).not.toContain(
       "group-[.is-scrolled]/header:opacity-100 group-[.is-scrolled]/header:scale-100",
     );
+
+    const navSource = readFileSync(
+      storefrontSourcePath("components", "header", "DesktopNav.astro"),
+      "utf8",
+    );
+    expect(navSource).toContain("relative flex shrink-0 items-center");
   });
 
   it("morphs desktop secondary actions without a display-driven layout jump", () => {
