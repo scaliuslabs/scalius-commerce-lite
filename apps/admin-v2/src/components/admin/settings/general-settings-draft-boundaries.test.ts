@@ -50,5 +50,9 @@ describe("general settings draft boundaries", () => {
     expect(source).toContain("ADMIN_IMAGE_PRESETS.invoiceLogo");
     expect(source).toContain("object-contain");
     expect(source).toContain("invoiceLogoInvalid");
+    expect(source).toContain('<MediaManager');
+    expect(source).toContain('setValue("invoiceLogoUrl", file.url)');
+    expect(source).toContain("Change logo");
+    expect(source).toContain("Image URL");
   });
 });
