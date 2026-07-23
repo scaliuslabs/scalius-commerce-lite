@@ -21,7 +21,10 @@ const productCard = readFileSync(
 
 describe("collection storefront workflow boundaries", () => {
   it("uses the authoritative total and exposes an accessible mobile filter dialog", () => {
-    expect(collectionPage).toContain("{pagination.total} products");
+    expect(collectionPage).toContain("{pagination.total}");
+    expect(collectionPage).toContain(
+      'pagination.total === 1 ? "product" : "products"',
+    );
     expect(collectionPage).toContain(
       'aria-controls="collection-filter-section"',
     );

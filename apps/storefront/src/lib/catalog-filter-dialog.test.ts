@@ -10,12 +10,17 @@ describe("catalog filter dialog", () => {
   beforeEach(() => {
     history.replaceState({}, "", "/catalog");
     document.body.innerHTML = `
-      <button id="mobile-filter-toggle" aria-controls="filter-section" aria-expanded="false">Filters</button>
-      <aside id="filter-section" class="hidden" aria-labelledby="mobile-filter-title">
-        <h2 id="mobile-filter-title">Filters</h2>
-        <button id="mobile-filter-close" aria-label="Close filters">Close</button>
-        <input aria-label="Filter value" />
-      </aside>
+      <header>Store header</header>
+      <main>
+        <button id="mobile-filter-toggle" aria-controls="filter-section" aria-expanded="false">Filters</button>
+        <aside id="filter-section" class="hidden" aria-labelledby="mobile-filter-title">
+          <h2 id="mobile-filter-title">Filters</h2>
+          <button id="mobile-filter-close" aria-label="Close filters">Close</button>
+          <input aria-label="Filter value" />
+        </aside>
+        <section>Catalog results</section>
+      </main>
+      <footer>Store footer</footer>
     `;
     vi.stubGlobal("matchMedia", () => ({
       matches: true,
@@ -49,12 +54,20 @@ describe("catalog filter dialog", () => {
 
     expect(dialog.getAttribute("role")).toBe("dialog");
     expect(dialog.getAttribute("aria-hidden")).toBe("true");
+    expect(dialog.inert).toBe(true);
 
     toggle.click();
     expect(dialog.classList.contains("hidden")).toBe(false);
     expect(dialog.getAttribute("aria-modal")).toBe("true");
+    expect(dialog.inert).toBe(false);
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
     expect(document.activeElement).toBe(close);
+    expect(document.querySelector("header")?.inert).toBe(true);
+    expect(toggle.inert).toBe(true);
+    expect(
+      document.querySelector<HTMLElement>("main > section")?.inert,
+    ).toBe(true);
+    expect(document.querySelector("footer")?.inert).toBe(true);
 
     input.focus();
     input.dispatchEvent(
@@ -66,8 +79,26 @@ describe("catalog filter dialog", () => {
       new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
     );
     expect(dialog.classList.contains("hidden")).toBe(true);
+    expect(dialog.inert).toBe(true);
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
     expect(document.activeElement).toBe(toggle);
+    expect(document.querySelector("header")?.inert).toBe(false);
+    expect(toggle.inert).toBe(false);
+    expect(
+      document.querySelector<HTMLElement>("main > section")?.inert,
+    ).toBe(false);
+    expect(document.querySelector("footer")?.inert).toBe(false);
+  });
+
+  it("preserves background elements that were already inert", () => {
+    const footer = document.querySelector("footer")!;
+    footer.inert = true;
+    setupCatalogFilterDialog();
+
+    document.querySelector<HTMLButtonElement>("#mobile-filter-toggle")!.click();
+    document.querySelector<HTMLButtonElement>("#mobile-filter-close")!.click();
+
+    expect(footer.inert).toBe(true);
   });
 
   it("supports collection-specific control IDs", () => {
