@@ -6,6 +6,14 @@ import {
 export const DEFAULT_ANALYTICS_CREATE_TYPE: AnalyticsScriptType =
   "cloudflare_web_analytics";
 
+export function getAnalyticsProviderDeliveryDefaults(
+  type: AnalyticsScriptType,
+): { location: "head" | "body_end"; usePartytown: boolean } {
+  return type === "cloudflare_web_analytics"
+    ? { location: "body_end", usePartytown: false }
+    : { location: "head", usePartytown: true };
+}
+
 export function normalizeAnalyticsCreateType(value: unknown): AnalyticsScriptType {
   return analyticsScriptTypes.includes(value as AnalyticsScriptType)
     ? (value as AnalyticsScriptType)
