@@ -8,6 +8,7 @@ import {
   selectAnalyticsCreateType,
   getAnalyticsCreateTypeFromHref,
   getAnalyticsProviderDeliveryDefaults,
+  readAnalyticsSaveIdentity,
 } from "./analytics-create-route-state";
 
 describe("analytics creation route state", () => {
@@ -45,6 +46,19 @@ describe("analytics creation route state", () => {
       location: "head",
       usePartytown: true,
     });
+  });
+
+  it("reads revision authority from create and update responses", () => {
+    expect(readAnalyticsSaveIdentity({ id: "analytics_1", revision: 3 })).toEqual({
+      id: "analytics_1",
+      revision: 3,
+    });
+    expect(
+      readAnalyticsSaveIdentity({
+        script: { id: "analytics_2", revision: 8 },
+      }),
+    ).toEqual({ id: "analytics_2", revision: 8 });
+    expect(readAnalyticsSaveIdentity({ script: null })).toBeNull();
   });
 
   it("omits the canonical default and serializes only non-default provider state", () => {

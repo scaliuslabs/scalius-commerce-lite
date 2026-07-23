@@ -62,6 +62,9 @@ describe("analytics list presentation boundaries", () => {
     expect(formSource).toContain("Not loaded on buyer pages.");
     expect(formSource).toContain("Loads on buyer pages after save.");
     expect(formSource.match(/getAnalyticsProviderDeliveryDefaults\(/g)).toHaveLength(3);
+    expect(formSource).toContain('toast.success("Integration saved")');
+    expect(formSource).toContain('to: "/admin/analytics/$analyticsId/edit"');
+    expect(formSource).toContain("expectedRevision: saved.revision");
     expect(formSource).not.toContain("Draft-safe setup");
     expect(formSource).not.toContain("Inactive draft");
     expect(formSource).not.toContain("remains a draft until explicitly activated");

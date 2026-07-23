@@ -14,6 +14,23 @@ export function getAnalyticsProviderDeliveryDefaults(
     : { location: "head", usePartytown: true };
 }
 
+export function readAnalyticsSaveIdentity(
+  result: unknown,
+): { id: string; revision: number } | null {
+  if (!result || typeof result !== "object") return null;
+  const payload = result as {
+    id?: unknown;
+    revision?: unknown;
+    script?: { id?: unknown; revision?: unknown } | null;
+  };
+  const id = payload.script?.id ?? payload.id;
+  const revision = payload.script?.revision ?? payload.revision;
+  return typeof id === "string" && id.length > 0 &&
+      typeof revision === "number" && Number.isInteger(revision) && revision > 0
+    ? { id, revision }
+    : null;
+}
+
 export function normalizeAnalyticsCreateType(value: unknown): AnalyticsScriptType {
   return analyticsScriptTypes.includes(value as AnalyticsScriptType)
     ? (value as AnalyticsScriptType)
