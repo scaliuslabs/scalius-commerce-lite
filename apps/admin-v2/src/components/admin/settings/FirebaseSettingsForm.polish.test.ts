@@ -9,9 +9,10 @@ const source = readFileSync(
 describe("Firebase push workspace", () => {
   it("combines provider health with browser configuration readiness", () => {
     expect(source).toContain("getAdminNotificationChannels");
-    expect(source).toContain("Push delivery ready");
-    expect(source).toContain("Server ready");
-    expect(source).toContain("Browser ready");
+    expect(source).toContain("Push configured");
+    expect(source).toContain("Server configured");
+    expect(source).toContain("Browser configured");
+    expect(source).not.toContain("Push delivery ready");
     expect(source).not.toContain("does not confirm a successful browser notification");
   });
 

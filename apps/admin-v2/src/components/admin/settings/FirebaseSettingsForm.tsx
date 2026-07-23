@@ -308,20 +308,20 @@ export default function FirebaseSettingsForm() {
               aria-hidden="true"
             />
             <span className="text-sm font-semibold">
-              {setupComplete ? "Push delivery ready" : "Push setup incomplete"}
+              {setupComplete ? "Push configured" : "Push setup incomplete"}
             </span>
             {dirty ? <Badge variant="outline">Unsaved</Badge> : null}
           </div>
           <div className="flex flex-wrap gap-2 sm:ml-auto">
             <Badge variant="outline">
               {providerReady
-                ? "Server ready"
+                ? "Server configured"
                 : readinessQuery.isError
                   ? "Server unavailable"
                   : "Server needs setup"}
             </Badge>
             <Badge variant="outline">
-              {savedBrowserConfigComplete ? "Browser ready" : "Browser needs setup"}
+              {savedBrowserConfigComplete ? "Browser configured" : "Browser needs setup"}
             </Badge>
           </div>
           {!providerReady ? (
