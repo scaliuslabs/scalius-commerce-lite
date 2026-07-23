@@ -50,11 +50,11 @@ function NewDiscountPage() {
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Create discount</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {selectedType
-              ? "Set eligibility, limits, and dates before activation."
-              : "Choose what the customer code will reduce."}
-          </p>
+          {selectedType && (
+            <p className="mt-1 text-sm text-muted-foreground">
+              Set eligibility, limits, and dates before activation.
+            </p>
+          )}
         </div>
         <div className="flex w-full items-center gap-2 sm:w-auto">
           {selectedType && (
