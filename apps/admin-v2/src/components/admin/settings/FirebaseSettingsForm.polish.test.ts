@@ -30,5 +30,9 @@ describe("Firebase push workspace", () => {
     expect(source).toContain("htmlFor={id}");
     expect(source).toContain('className="h-11 sm:h-9"');
     expect(source).toContain("min-h-11");
+    expect(source).toContain(
+      "grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]",
+    );
+    expect(source).not.toContain("flex-col-reverse");
   });
 });
