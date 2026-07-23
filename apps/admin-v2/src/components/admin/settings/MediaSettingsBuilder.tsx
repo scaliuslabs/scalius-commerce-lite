@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ChevronDown, Loader2, RotateCcw } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { getMediaSettings, updateMediaSettings } from "@/lib/api-functions/settings";
 import { useSettingsForm } from "@/hooks/use-settings-form";
 import { queryKeys } from "@/lib/query-keys";
@@ -97,11 +97,9 @@ export default function MediaSettingsBuilder() {
       errorMessage: "Failed to save media settings.",
     });
 
-  useEffect(() => {
-    if (values.allowedImageHostsText || values.canonicalHostAliasesText) {
-      setAdvancedOpen(true);
-    }
-  }, [values.allowedImageHostsText, values.canonicalHostAliasesText]);
+  const configuredHostCount =
+    fromLines(values.allowedImageHostsText).length +
+    fromLines(values.canonicalHostAliasesText).length;
 
   if (isLoading) {
     return (
@@ -164,12 +162,15 @@ export default function MediaSettingsBuilder() {
         open={advancedOpen}
         onToggle={(event) => setAdvancedOpen(event.currentTarget.open)}
       >
-        <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-medium [&::-webkit-details-marker]:hidden">
-          <span>
-            Advanced host rules
-            <span className="ml-2 text-xs font-normal text-muted-foreground">
-              Migrated or external media
-            </span>
+        <summary
+          aria-label={`Advanced host rules, ${configuredHostCount === 0 ? "none configured" : `${configuredHostCount} configured`}`}
+          className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-medium [&::-webkit-details-marker]:hidden"
+        >
+          <span>Advanced host rules</span>
+          <span className="ml-auto text-xs font-normal text-muted-foreground">
+            {configuredHostCount === 0
+              ? "Optional"
+              : `${configuredHostCount} host${configuredHostCount === 1 ? "" : "s"}`}
           </span>
           <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
         </summary>

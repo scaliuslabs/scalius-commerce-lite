@@ -9,7 +9,9 @@ const source = readFileSync(
 describe("media delivery settings", () => {
   it("keeps migration-only host rules in a discoverable advanced section", () => {
     expect(source).toContain("Advanced host rules");
-    expect(source).toContain("Migrated or external media");
+    expect(source).toContain("configuredHostCount");
+    expect(source).toContain('configuredHostCount === 0 ? "none configured"');
+    expect(source).not.toContain("setAdvancedOpen(true)");
     expect(source).toContain("<details");
     expect(source).toContain("open={advancedOpen}");
     expect(source).toContain("onToggle={(event) => setAdvancedOpen");
