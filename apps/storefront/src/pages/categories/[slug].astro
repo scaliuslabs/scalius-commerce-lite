@@ -251,26 +251,26 @@ const collectionJsonLd =
     }
   </Fragment>
   <div
-    class="min-h-screen bg-gray-50"
+    class="min-h-screen bg-muted/30"
     data-category-name={category?.name}
     data-products-for-analytics={JSON.stringify(analyticsProductData)}
   >
-    <div class="bg-linear-to-b from-gray-50 to-white border-b border-gray-100">
+    <div class="border-b border-border bg-linear-to-b from-muted/30 to-background">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-8">
         <nav class="text-sm mb-4">
           <ol class="flex items-center space-x-2">
             <li>
-              <a href="/" class="text-gray-500 hover:text-gray-900">Home</a>
+              <a href="/" class="text-muted-foreground hover:text-foreground">Home</a>
             </li>
-            <li class="text-gray-300">/</li>
+            <li class="text-muted-foreground/50">/</li>
             <li>
-              <span class="text-gray-900 font-medium">{category?.name}</span>
+              <span class="font-medium text-foreground">{category?.name}</span>
             </li>
           </ol>
         </nav>
         <div class="flex justify-between items-start gap-4 flex-wrap">
           <div class="space-y-2 max-w-xl">
-            <h1 class="text-3xl sm:text-4xl font-bold text-gray-900">
+            <h1 class="text-3xl font-bold text-foreground sm:text-4xl">
               {category?.name}
             </h1>
             {
@@ -278,17 +278,17 @@ const collectionJsonLd =
                 hasRenderableHtmlContent(categoryDescription) && (
                   <RichContent
                     content={categoryDescription}
-                    className="text-base leading-relaxed text-gray-500 sm:text-lg"
+                    className="text-base leading-relaxed text-muted-foreground sm:text-lg"
                     processShortcodes={false}
                   />
                 )
             }
           </div>
           <div
-            class="hidden items-center gap-2 rounded-lg border border-gray-100 bg-gray-50 px-3 py-1.5 shadow-sm sm:flex"
+            class="hidden items-center gap-2 rounded-lg border border-border bg-background px-3 py-1.5 shadow-sm sm:flex"
           >
-            <Tags className="w-4 h-4 text-gray-400" />
-            <span class="font-medium text-gray-900 text-sm">
+            <Tags className="h-4 w-4 text-muted-foreground" />
+            <span class="text-sm font-medium text-foreground">
               {pagination.total} {pagination.total === 1 ? "product" : "products"}
             </span>
           </div>
@@ -299,13 +299,13 @@ const collectionJsonLd =
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
       {
         showCatalogControls && (
-          <div class="sticky top-[calc(var(--header-height,3.5rem)+0.5rem)] z-30 -mx-1 mb-4 grid grid-cols-2 gap-2 rounded-xl bg-gray-50/95 p-1 backdrop-blur lg:hidden">
+          <div class="sticky top-[calc(var(--header-height,3.5rem)+0.5rem)] z-30 -mx-1 mb-4 grid grid-cols-2 gap-2 rounded-xl bg-background/95 p-1 backdrop-blur lg:hidden">
             <button
               type="button"
               id="mobile-filter-toggle"
               aria-controls="filter-section"
               aria-expanded="false"
-              class="relative flex min-h-11 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm font-semibold text-gray-800 shadow-sm"
+              class="relative flex min-h-11 items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 py-2.5 text-sm font-semibold text-foreground shadow-sm"
             >
               <SlidersHorizontal className="w-4 h-4" />
               <span>Filters</span>
@@ -324,7 +324,7 @@ const collectionJsonLd =
                 data-catalog-sort
                 data-list-pathname={productListPathname}
                 data-current-filters={canonicalFilterState}
-                class="min-h-11 w-full rounded-lg border-gray-200 bg-white py-2.5 pl-3 pr-8 text-sm font-semibold text-gray-800 shadow-sm focus:border-primary focus:ring-2 focus:ring-primary"
+                class="min-h-11 w-full rounded-lg border-border bg-background py-2.5 pl-3 pr-8 text-sm font-semibold text-foreground shadow-sm focus:border-primary focus:ring-2 focus:ring-primary"
               >
                 <option value="newest" selected={sortBy === "newest"}>
                   Latest
@@ -358,8 +358,8 @@ const collectionJsonLd =
               aria-labelledby="mobile-filter-title"
               class="fixed inset-0 z-60 hidden bg-black/50 lg:static lg:z-0 lg:block lg:w-80 lg:shrink-0 lg:bg-transparent"
             >
-              <div class="flex h-full w-full flex-col bg-white lg:sticky lg:top-[calc(var(--header-height,4rem)+1rem)] lg:max-h-[calc(100dvh-var(--header-height,4rem)-2rem)] lg:w-full lg:overflow-hidden lg:rounded-lg lg:border lg:border-gray-100 lg:shadow-sm">
-                <div class="flex justify-between items-center lg:hidden p-4 border-b bg-white">
+              <div class="flex h-full w-full flex-col bg-background text-foreground lg:sticky lg:top-[calc(var(--header-height,4rem)+1rem)] lg:max-h-[calc(100dvh-var(--header-height,4rem)-2rem)] lg:w-full lg:overflow-hidden lg:rounded-lg lg:border lg:border-border lg:shadow-sm">
+                <div class="flex items-center justify-between border-b border-border bg-background p-4 lg:hidden">
                   <h3 id="mobile-filter-title" class="font-semibold text-lg">
                     Filters
                   </h3>
@@ -367,7 +367,7 @@ const collectionJsonLd =
                     type="button"
                     id="mobile-filter-close"
                     aria-label="Close filters"
-                    class="inline-flex h-11 w-11 items-center justify-center rounded-lg hover:bg-gray-100"
+                    class="inline-flex h-11 w-11 items-center justify-center rounded-lg hover:bg-muted"
                   >
                     <X className="w-5 h-5" />
                   </button>
@@ -379,7 +379,7 @@ const collectionJsonLd =
 
                   <div class="p-4 lg:p-6">
                     <div class="relative mb-6">
-                      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                       <label for="category-filter-search" class="sr-only">
                         Search this category
                       </label>
@@ -389,7 +389,7 @@ const collectionJsonLd =
                         name="q"
                         placeholder="Search this category…"
                         value={queryState.query}
-                        class="w-full rounded-lg border-gray-300 py-2.5 pl-9 pr-4 text-sm focus:border-primary focus:ring-2 focus:ring-primary"
+                        class="w-full rounded-lg border-border bg-background py-2.5 pl-9 pr-4 text-sm text-foreground focus:border-primary focus:ring-2 focus:ring-primary"
                       />
                     </div>
                     <CategoryFilters
@@ -409,8 +409,8 @@ const collectionJsonLd =
         <div class="flex-1 min-w-0">
           {
             showCatalogControls && (
-              <div class="mb-6 hidden items-center justify-between gap-4 rounded-lg border border-gray-100 bg-white p-4 shadow-sm lg:flex">
-                <p class="text-sm font-medium text-gray-700">
+              <div class="mb-6 hidden items-center justify-between gap-4 rounded-lg border border-border bg-background p-4 shadow-sm lg:flex">
+                <p class="text-sm font-medium text-foreground">
                   Showing{" "}
                   <span class="font-bold text-primary">{products.length}</span>{" "}
                   of{" "}
@@ -421,7 +421,7 @@ const collectionJsonLd =
                 <div class="flex items-center gap-3">
                   <label
                     for="sortByDesktop"
-                    class="text-sm font-medium text-gray-700 whitespace-nowrap"
+                    class="whitespace-nowrap text-sm font-medium text-foreground"
                   >
                     Sort by:
                   </label>
@@ -431,7 +431,7 @@ const collectionJsonLd =
                     data-catalog-sort
                     data-list-pathname={productListPathname}
                     data-current-filters={canonicalFilterState}
-                    class="rounded-lg border-gray-300 text-sm focus:ring-2 focus:ring-primary focus:border-primary min-w-[140px]"
+                    class="min-w-[140px] rounded-lg border-border bg-background text-sm text-foreground focus:border-primary focus:ring-2 focus:ring-primary"
                   >
                     <option value="newest" selected={sortBy === "newest"}>
                       Latest
@@ -460,8 +460,8 @@ const collectionJsonLd =
             )
           }
 
-          <p class="mb-3 text-sm text-gray-600 lg:hidden">
-            <span class="font-semibold text-gray-900">{pagination.total}</span>{
+          <p class="mb-3 text-sm text-muted-foreground lg:hidden">
+            <span class="font-semibold text-foreground">{pagination.total}</span>{
               " "
             }
             {pagination.total === 1 ? "product" : "products"}
@@ -519,7 +519,7 @@ const collectionJsonLd =
           hasRenderableHtmlContent(categoryContent) &&
           !hasListingQuery && (
             <section
-              class="mx-auto mt-10 max-w-4xl border-t border-gray-200 pt-8 sm:mt-12 sm:pt-10"
+              class="mx-auto mt-10 max-w-4xl border-t border-border pt-8 sm:mt-12 sm:pt-10"
               aria-label={`${category.name} guide`}
             >
               <RichContent

@@ -4,6 +4,7 @@ import ProductCard from "@/components/cards/ProductCard.astro";
 import CategoryFilters from "@/components/CategoryFilters";
 import AppliedCatalogFilters from "@/components/catalog/AppliedCatalogFilters.astro";
 import CatalogEmptyState from "@/components/catalog/CatalogEmptyState.astro";
+import CatalogPagination from "@/components/catalog/CatalogPagination.astro";
 import RichContent from "@/components/RichContent.astro";
 import { getCollectionByIdResult } from "@/lib/api";
 import {
@@ -32,8 +33,6 @@ import {
   SlidersHorizontal,
   X,
   Search,
-  ChevronLeft,
-  ChevronRight,
 } from "lucide-react";
 
 const { id } = Astro.params;
@@ -206,9 +205,9 @@ const collectionJsonLd =
     }
   </Fragment>
 
-  <div class="min-h-screen bg-gray-50">
+  <div class="min-h-screen bg-muted/30">
     <section
-      class="bg-linear-to-b from-gray-50 to-white border-b border-gray-100"
+      class="border-b border-border bg-linear-to-b from-muted/30 to-background"
     >
       <div class="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
         <nav class="mb-4 text-sm">
@@ -216,15 +215,15 @@ const collectionJsonLd =
             <li>
               <a
                 href="/"
-                class="inline-flex items-center gap-1.5 text-gray-500 hover:text-gray-900"
+                class="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground"
               >
                 <ArrowLeft className="h-4 w-4" />
                 Home
               </a>
             </li>
-            <li class="text-gray-300">/</li>
+            <li class="text-muted-foreground/50">/</li>
             <li>
-              <span class="font-medium text-gray-900">{collection.name}</span>
+              <span class="font-medium text-foreground">{collection.name}</span>
             </li>
           </ol>
         </nav>
@@ -232,7 +231,7 @@ const collectionJsonLd =
         <div class="flex flex-wrap items-start justify-between gap-4">
           <div class="max-w-2xl space-y-2">
             <h1
-              class="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl"
+              class="text-3xl font-bold tracking-tight text-foreground sm:text-4xl"
             >
               {collection.name}
             </h1>
@@ -241,7 +240,7 @@ const collectionJsonLd =
                 hasRenderableHtmlContent(collectionDescription) && (
                   <RichContent
                     content={collectionDescription}
-                    className="text-base leading-relaxed text-gray-500 sm:text-lg"
+                    className="text-base leading-relaxed text-muted-foreground sm:text-lg"
                     processShortcodes={false}
                   />
                 )
@@ -263,10 +262,10 @@ const collectionJsonLd =
           </div>
 
           <div
-            class="hidden items-center gap-2 rounded-lg border border-gray-100 bg-white px-3 py-1.5 shadow-sm lg:flex"
+            class="hidden items-center gap-2 rounded-lg border border-border bg-background px-3 py-1.5 shadow-sm lg:flex"
           >
-            <Tags className="h-4 w-4 text-gray-400" />
-            <span class="text-sm font-medium text-gray-900">
+            <Tags className="h-4 w-4 text-muted-foreground" />
+            <span class="text-sm font-medium text-foreground">
               {pagination.total} {pagination.total === 1 ? "product" : "products"}
             </span>
           </div>
@@ -277,13 +276,13 @@ const collectionJsonLd =
     <section class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
       {
         showCatalogControls && (
-          <div class="sticky top-[calc(var(--header-height,3.5rem)+0.5rem)] z-30 -mx-1 mb-4 grid grid-cols-2 gap-2 rounded-xl bg-gray-50/95 p-1 backdrop-blur lg:hidden">
+          <div class="sticky top-[calc(var(--header-height,3.5rem)+0.5rem)] z-30 -mx-1 mb-4 grid grid-cols-2 gap-2 rounded-xl bg-background/95 p-1 backdrop-blur lg:hidden">
             <button
               id="collection-filter-toggle"
               type="button"
               aria-controls="collection-filter-section"
               aria-expanded="false"
-              class="relative flex min-h-11 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm font-semibold text-gray-800 shadow-sm"
+              class="relative flex min-h-11 items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 py-2.5 text-sm font-semibold text-foreground shadow-sm"
             >
               <SlidersHorizontal className="h-4 w-4" />
               <span>Filters</span>
@@ -302,7 +301,7 @@ const collectionJsonLd =
                 data-catalog-sort
                 data-list-pathname={collectionPath}
                 data-current-filters={canonicalFilterState}
-                class="min-h-11 w-full rounded-lg border-gray-200 bg-white py-2.5 pl-3 pr-8 text-sm font-semibold text-gray-800 shadow-sm focus:border-primary focus:ring-2 focus:ring-primary"
+                class="min-h-11 w-full rounded-lg border-border bg-background py-2.5 pl-3 pr-8 text-sm font-semibold text-foreground shadow-sm focus:border-primary focus:ring-2 focus:ring-primary"
               >
                 <option value="newest" selected={sortBy === "newest"}>
                   {defaultSortLabel}
@@ -336,8 +335,8 @@ const collectionJsonLd =
               class="fixed inset-0 z-60 hidden bg-black/50 lg:static lg:z-0 lg:block lg:w-80 lg:shrink-0 lg:bg-transparent"
               aria-labelledby="collection-filter-title"
             >
-              <div class="flex h-full w-full flex-col bg-white lg:sticky lg:top-[calc(var(--header-height,4rem)+1rem)] lg:max-h-[calc(100dvh-var(--header-height,4rem)-2rem)] lg:w-full lg:overflow-hidden lg:rounded-lg lg:border lg:border-gray-100 lg:shadow-sm">
-                <div class="flex items-center justify-between border-b p-4 lg:hidden">
+              <div class="flex h-full w-full flex-col bg-background text-foreground lg:sticky lg:top-[calc(var(--header-height,4rem)+1rem)] lg:max-h-[calc(100dvh-var(--header-height,4rem)-2rem)] lg:w-full lg:overflow-hidden lg:rounded-lg lg:border lg:border-border lg:shadow-sm">
+                <div class="flex items-center justify-between border-b border-border bg-background p-4 lg:hidden">
                   <h2
                     id="collection-filter-title"
                     class="text-lg font-semibold"
@@ -347,7 +346,7 @@ const collectionJsonLd =
                   <button
                     id="collection-filter-close"
                     type="button"
-                    class="inline-flex h-11 w-11 items-center justify-center rounded-lg hover:bg-gray-100"
+                    class="inline-flex h-11 w-11 items-center justify-center rounded-lg hover:bg-muted"
                     aria-label="Close filters"
                   >
                     <X className="h-5 w-5" />
@@ -358,13 +357,17 @@ const collectionJsonLd =
                   <input type="hidden" name="sortBy" value={sortBy} />
                   <div class="p-4 lg:p-6">
                     <div class="relative mb-6">
-                      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                      <label for="collection-filter-search" class="sr-only">
+                        Search this collection
+                      </label>
                       <input
+                        id="collection-filter-search"
                         type="search"
                         name="q"
                         placeholder="Search this collection…"
                         value={queryState.query}
-                        class="w-full rounded-lg border-gray-300 py-2.5 pl-9 pr-4 text-sm focus:border-primary focus:ring-2 focus:ring-primary"
+                        class="w-full rounded-lg border-border bg-background py-2.5 pl-9 pr-4 text-sm text-foreground focus:border-primary focus:ring-2 focus:ring-primary"
                       />
                     </div>
                     <CategoryFilters
@@ -384,8 +387,8 @@ const collectionJsonLd =
         <div class="min-w-0 flex-1">
           {
             showCatalogControls && (
-              <div class="mb-6 hidden items-center justify-between gap-4 rounded-lg border border-gray-100 bg-white p-4 shadow-sm lg:flex">
-                <p class="text-sm font-medium text-gray-700">
+              <div class="mb-6 hidden items-center justify-between gap-4 rounded-lg border border-border bg-background p-4 shadow-sm lg:flex">
+                <p class="text-sm font-medium text-foreground">
                   Showing{" "}
                   <span class="font-bold text-primary">{products.length}</span>{" "}
                   of{" "}
@@ -396,7 +399,7 @@ const collectionJsonLd =
                 <div class="flex items-center gap-3">
                   <label
                     for="collectionSortByDesktop"
-                    class="whitespace-nowrap text-sm font-medium text-gray-700"
+                    class="whitespace-nowrap text-sm font-medium text-foreground"
                   >
                     Sort by:
                   </label>
@@ -406,7 +409,7 @@ const collectionJsonLd =
                     data-catalog-sort
                     data-list-pathname={collectionPath}
                     data-current-filters={canonicalFilterState}
-                    class="min-w-[160px] rounded-lg border-gray-300 text-sm focus:border-primary focus:ring-2 focus:ring-primary"
+                    class="min-w-[160px] rounded-lg border-border bg-background text-sm text-foreground focus:border-primary focus:ring-2 focus:ring-primary"
                   >
                     <option value="newest" selected={sortBy === "newest"}>
                       {defaultSortLabel}
@@ -435,8 +438,8 @@ const collectionJsonLd =
             )
           }
 
-          <p class="mb-3 text-sm text-gray-600 lg:hidden">
-            <span class="font-semibold text-gray-900">{pagination.total}</span>{
+          <p class="mb-3 text-sm text-muted-foreground lg:hidden">
+            <span class="font-semibold text-foreground">{pagination.total}</span>{
               " "
             }
             {pagination.total === 1 ? "product" : "products"}
@@ -463,60 +466,11 @@ const collectionJsonLd =
                   ))}
                 </div>
 
-                {pagination.totalPages > 1 && (
-                  <nav
-                    class="mt-8 flex items-center justify-center"
-                    aria-label="Collection pagination"
-                  >
-                    <div class="flex items-center gap-1 rounded-lg border border-gray-100 bg-white p-2 shadow-sm">
-                      {pagination.page > 1 ? (
-                        <a
-                          href={getPaginationUrl(pagination.page - 1)}
-                          class="inline-flex h-9 w-9 items-center justify-center rounded-md border border-gray-200 text-gray-700 hover:bg-gray-50"
-                          aria-label="Previous page"
-                        >
-                          <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-                        </a>
-                      ) : (
-                        <button
-                          type="button"
-                          disabled
-                          aria-label="Previous page"
-                          class="inline-flex h-9 w-9 items-center justify-center rounded-md border border-gray-100 text-gray-300"
-                        >
-                          <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-                        </button>
-                      )}
-                      <span class="px-3 text-sm font-medium text-gray-700">
-                        Page {pagination.page} of {pagination.totalPages}
-                      </span>
-                      {pagination.page < pagination.totalPages ? (
-                        <a
-                          href={getPaginationUrl(pagination.page + 1)}
-                          class="inline-flex h-9 w-9 items-center justify-center rounded-md border border-gray-200 text-gray-700 hover:bg-gray-50"
-                          aria-label="Next page"
-                        >
-                          <ChevronRight
-                            className="h-4 w-4"
-                            aria-hidden="true"
-                          />
-                        </a>
-                      ) : (
-                        <button
-                          type="button"
-                          disabled
-                          aria-label="Next page"
-                          class="inline-flex h-9 w-9 items-center justify-center rounded-md border border-gray-100 text-gray-300"
-                        >
-                          <ChevronRight
-                            className="h-4 w-4"
-                            aria-hidden="true"
-                          />
-                        </button>
-                      )}
-                    </div>
-                  </nav>
-                )}
+                <CatalogPagination
+                  page={pagination.page}
+                  totalPages={pagination.totalPages}
+                  getPageUrl={getPaginationUrl}
+                />
               </>
             ) : (
               <CatalogEmptyState
@@ -537,7 +491,7 @@ const collectionJsonLd =
           hasRenderableHtmlContent(collectionContent) &&
           !hasListingQuery && (
             <section
-              class="mx-auto mt-10 max-w-4xl border-t border-gray-200 pt-8 sm:mt-12 sm:pt-10"
+              class="mx-auto mt-10 max-w-4xl border-t border-border pt-8 sm:mt-12 sm:pt-10"
               aria-label={`${collection.name} guide`}
             >
               <RichContent

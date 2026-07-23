@@ -22,25 +22,24 @@ const collection = readFileSync(
 );
 
 describe("shared catalog listing accessibility", () => {
-  it.each([pagination, collection])(
-    "uses non-focusable disabled pagination and named chevron controls",
-    (source) => {
-      expect(source).not.toContain('href="#"');
-      expect(source.match(/aria-label="Previous page"/g)).toHaveLength(2);
-      expect(source.match(/aria-label="Next page"/g)).toHaveLength(2);
-      expect(source).toContain("<button");
-      expect(source).toContain("disabled");
-      expect(source).toContain('aria-hidden="true"');
-      expect(source).not.toContain('aria-disabled="true"');
-    },
-  );
-
-  it("keeps collection pagination local so its compact page counter layout is unchanged", () => {
-    expect(collection).toContain("Page {pagination.page} of {pagination.totalPages}");
-    expect(collection).not.toContain("CatalogPagination");
+  it("uses non-focusable disabled pagination and named chevron controls", () => {
+    expect(pagination).not.toContain('href="#"');
+    expect(pagination.match(/aria-label="Previous page"/g)).toHaveLength(2);
+    expect(pagination.match(/aria-label="Next page"/g)).toHaveLength(2);
+    expect(pagination).toContain("<button");
+    expect(pagination).toContain("disabled");
+    expect(pagination).toContain('aria-hidden="true"');
+    expect(pagination).not.toContain('aria-disabled="true"');
   });
 
-  it.each([category, search])("shares one pagination and modal filter behavior", (source) => {
+  it("shares one accessible pagination implementation across catalog routes", () => {
+    for (const source of [category, search, collection]) {
+      expect(source).toContain("CatalogPagination");
+    }
+    expect(collection).not.toContain("Page {pagination.page} of {pagination.totalPages}");
+  });
+
+  it.each([category, search])("shares one modal filter behavior", (source) => {
     expect(source).toContain("CatalogPagination");
     expect(source).toContain("setupCatalogFilterDialog");
     expect(source).toContain('aria-controls="filter-section"');
