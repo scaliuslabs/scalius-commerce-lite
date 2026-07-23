@@ -9,6 +9,10 @@ const locationSelectorSource = readFileSync(
   new URL("./LocationSelector.tsx", import.meta.url),
   "utf8",
 );
+const customerEditRouteSource = readFileSync(
+  new URL("../../routes/admin/customers/$customerId/edit.tsx", import.meta.url),
+  "utf8",
+);
 
 describe("customer form workflow boundaries", () => {
   it("keeps the saved customer in context instead of returning to the list", () => {
@@ -52,5 +56,11 @@ describe("customer form workflow boundaries", () => {
     expect(customerFormSource).toContain("phone number already exists");
     expect(customerFormSource).toContain('form.setError("phone"');
     expect(customerFormSource).toContain("Phone number already in use");
+  });
+
+  it("keeps customer edit read failures on the route for recovery", () => {
+    expect(customerEditRouteSource).toContain("RouteErrorComponent");
+    expect(customerEditRouteSource).not.toContain(".catch(() => null)");
+    expect(customerEditRouteSource).not.toContain("throw redirect");
   });
 });
