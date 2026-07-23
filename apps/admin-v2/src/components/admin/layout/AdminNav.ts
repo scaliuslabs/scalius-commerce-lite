@@ -315,7 +315,7 @@ export const allNavSections: NavSection[] = [
               NAV_PERMISSIONS.SETTINGS_DELIVERY_PROVIDERS_VIEW,
           },
           {
-            name: "Fraud Checker",
+            name: "Fraud checks",
             href: "/admin/settings/fraud-checker",
             icon: ShieldAlert,
             requiredPermission: NAV_PERMISSIONS.SETTINGS_FRAUD_CHECKER_VIEW,

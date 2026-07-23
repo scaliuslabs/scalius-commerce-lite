@@ -9,7 +9,7 @@ export const Route = createFileRoute("/admin/settings/fraud-checker")({
   loader: async ({ context: { queryClient } }) => {
     await queryClient.ensureQueryData(fraudCheckerProvidersQueryOptions());
   },
-  head: () => ({ meta: [{ title: "Fraud Checker | Scalius Admin" }] }),
+  head: () => ({ meta: [{ title: "Fraud checks | Scalius Admin" }] }),
   errorComponent: RouteErrorComponent,
   component: FraudCheckerPage,
 });
@@ -21,9 +21,9 @@ function FraudCheckerPage() {
   return (
     <div className="container max-w-6xl space-y-4 py-6">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight">Fraud Checker</h1>
+        <h1 className="text-xl font-semibold tracking-tight">Fraud checks</h1>
         <p className="mt-0.5 text-sm text-muted-foreground">
-          Manage providers used for on-demand risk checks in Orders.
+          Risk lookup providers for order review.
         </p>
       </div>
       <FraudCheckerSettings providers={providers} />
