@@ -62,8 +62,32 @@ export function setupCatalogFilterDialog({
 
   const mobile = window.matchMedia("(max-width: 1023px)");
   let previousBodyOverflow = document.body.style.overflow;
+  const backgroundInertStates = new Map<HTMLElement, boolean>();
 
   const isOpen = () => mobile.matches && !dialog.classList.contains("hidden");
+  const setBackgroundInert = (inert: boolean) => {
+    if (!inert) {
+      backgroundInertStates.forEach((wasInert, element) => {
+        element.inert = wasInert;
+      });
+      backgroundInertStates.clear();
+      return;
+    }
+
+    let branch = dialog;
+    while (branch.parentElement) {
+      const parent = branch.parentElement;
+      Array.from(parent.children).forEach((sibling) => {
+        if (!(sibling instanceof HTMLElement) || sibling === branch) return;
+        if (!backgroundInertStates.has(sibling)) {
+          backgroundInertStates.set(sibling, sibling.inert);
+        }
+        sibling.inert = true;
+      });
+      if (parent === document.body) break;
+      branch = parent;
+    }
+  };
   const focusable = () =>
     [...dialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)].filter(
       (element) =>
@@ -73,11 +97,16 @@ export function setupCatalogFilterDialog({
 
   const syncSemantics = () => {
     if (mobile.matches) {
+      const open = isOpen();
       dialog.setAttribute("role", "dialog");
       dialog.setAttribute("aria-modal", "true");
-      dialog.setAttribute("aria-hidden", String(!isOpen()));
-      toggle.setAttribute("aria-expanded", String(isOpen()));
+      dialog.setAttribute("aria-hidden", String(!open));
+      dialog.inert = !open;
+      setBackgroundInert(open);
+      toggle.setAttribute("aria-expanded", String(open));
     } else {
+      setBackgroundInert(false);
+      dialog.inert = false;
       dialog.removeAttribute("role");
       dialog.removeAttribute("aria-modal");
       dialog.removeAttribute("aria-hidden");
@@ -186,6 +215,8 @@ export function setupCatalogFilterDialog({
     dialog.removeEventListener("keydown", handleDialogKeydown);
     mobile.removeEventListener("change", handleBreakpointChange);
     window.removeEventListener("popstate", handlePopState);
+    setBackgroundInert(false);
+    dialog.inert = false;
     document.body.style.overflow = previousBodyOverflow;
     dialog.removeAttribute("data-dialog-bound");
     delete runtimeWindow.__scaliusCatalogFilterCleanup;
