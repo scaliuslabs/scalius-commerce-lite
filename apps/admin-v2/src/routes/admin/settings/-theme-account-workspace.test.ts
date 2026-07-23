@@ -79,9 +79,10 @@ describe("theme and account settings workspace", () => {
     expect(source).toContain("Sessions");
     expect(source).toContain("AccountSessions");
     expect(source).toContain('aria-label="Account settings"');
+    expect(source).toContain('aria-label="Account settings section"');
     expect(source).toContain('aria-current={active ? "page" : undefined}');
-    expect(source).toContain("overflow-x-auto");
-    expect(source.match(/hidden px-3/g)).toHaveLength(2);
+    expect(source).not.toContain("overflow-x-auto");
+    expect(source.match(/<SelectLabel/g)).toHaveLength(2);
     expect(source).toContain("min-h-11");
     expect(source).toContain("renderSection");
     expect(source).not.toContain("TabsList");
