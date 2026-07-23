@@ -159,7 +159,9 @@ export function SliderTab({
           <span className="text-xs text-muted-foreground">
             Target {presentation.width} × {presentation.height} · focus controls the crop
           </span>
-          <Badge variant="outline" className="h-5 font-normal">Revision {slider.revision}</Badge>
+          <Badge variant="outline" className="h-5 font-normal">
+            {slider.images.length}/{HERO_SLIDE_LIMIT} slides
+          </Badge>
         </div>
         <MediaManager
           capability="image"
@@ -205,47 +207,42 @@ export function SliderTab({
         </Suspense>
       )}
 
-      <div className="sticky bottom-3 z-20 flex min-w-0 items-center justify-between gap-2 rounded-lg border bg-background/95 px-3 py-2 shadow-lg backdrop-blur">
-        <div className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
-          <span className={`h-2 w-2 rounded-full ${dirty ? "bg-amber-500" : "bg-emerald-500"}`} />
-          <span className="sm:hidden">{dirty ? "Unsaved" : "Saved"}</span>
-          <span className="hidden sm:inline">
-            {dirty ? "Unsaved changes" : "All changes saved"}
-          </span>
-          <span className="whitespace-nowrap">
-            · {slider.images.length}/{HERO_SLIDE_LIMIT}
-            <span className="hidden sm:inline"> slides</span>
-          </span>
+      {dirty || saving ? (
+        <div className="sticky bottom-3 z-20 flex min-w-0 items-center justify-between gap-2 rounded-lg border bg-background/95 px-3 py-2 shadow-lg backdrop-blur">
+          <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+            <span className="h-2 w-2 shrink-0 rounded-full bg-amber-500" />
+            <span>{saving ? "Saving…" : "Unsaved changes"}</span>
+          </div>
+          <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="min-h-11 px-2 sm:min-h-9 sm:px-3"
+              onClick={onDiscard}
+              disabled={saving}
+            >
+              <RotateCcw className="mr-1 h-4 w-4 sm:mr-2" />
+              Discard
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              className="min-h-11 px-2 sm:min-h-9 sm:px-3"
+              onClick={onSave}
+              disabled={saving || conflict || issues.length > 0}
+            >
+              {saving ? (
+                <Loader2 className="mr-1 h-4 w-4 animate-spin sm:mr-2" />
+              ) : (
+                <Save className="mr-1 h-4 w-4 sm:mr-2" />
+              )}
+              <span className="sm:hidden">Save</span>
+              <span className="hidden sm:inline">Save changes</span>
+            </Button>
+          </div>
         </div>
-        <div className="flex shrink-0 items-center gap-1 sm:gap-2">
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            className="min-h-11 px-2 sm:min-h-9 sm:px-3"
-            onClick={onDiscard}
-            disabled={!dirty || saving}
-          >
-            <RotateCcw className="mr-1 h-4 w-4 sm:mr-2" />
-            Discard
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            className="min-h-11 px-2 sm:min-h-9 sm:px-3"
-            onClick={onSave}
-            disabled={!dirty || saving || conflict || issues.length > 0}
-          >
-            {saving ? (
-              <Loader2 className="mr-1 h-4 w-4 animate-spin sm:mr-2" />
-            ) : (
-              <Save className="mr-1 h-4 w-4 sm:mr-2" />
-            )}
-            <span className="sm:hidden">Save</span>
-            <span className="hidden sm:inline">Save changes</span>
-          </Button>
-        </div>
-      </div>
+      ) : null}
     </div>
   );
 }
