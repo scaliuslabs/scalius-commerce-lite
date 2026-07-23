@@ -170,7 +170,7 @@ describe("useAdminNestedScrollRestoration", () => {
     expect(scrollElement.scrollTop).toBe(720);
   });
 
-  it("restores a previously visited query-backed workspace view", () => {
+  it("opens a directly selected workspace tab at the top even when it was visited before", () => {
     const scrollElement = createAdminScrollElement({
       clientHeight: 400,
       scrollHeight: 1_600,
@@ -197,6 +197,50 @@ describe("useAdminNestedScrollRestoration", () => {
     scrollElement.scrollTop = 0;
 
     act(() => {
+      emitRouterEvent("onBeforeLoad", {
+        fromLocation: { href: "/admin/settings?section=email" },
+        toLocation: { href: "/admin/settings?section=seo" },
+        pathChanged: false,
+        hrefChanged: true,
+      });
+      emitRouterEvent("onRendered", {
+        fromLocation: { href: "/admin/settings?section=email" },
+        toLocation: { href: "/admin/settings?section=seo" },
+        pathChanged: false,
+        hrefChanged: true,
+      });
+    });
+    flushAnimationFrames();
+
+    expect(scrollElement.scrollTop).toBe(0);
+  });
+
+  it("restores each workspace tab when browser history traverses to it", () => {
+    const scrollElement = createAdminScrollElement({
+      clientHeight: 400,
+      scrollHeight: 1_600,
+    });
+    scrollElement.scrollTop = 720;
+
+    act(() => {
+      emitRouterEvent("onBeforeLoad", {
+        fromLocation: { href: "/admin/settings?section=seo" },
+        toLocation: { href: "/admin/settings?section=email" },
+        pathChanged: false,
+        hrefChanged: true,
+      });
+      emitRouterEvent("onRendered", {
+        fromLocation: { href: "/admin/settings?section=seo" },
+        toLocation: { href: "/admin/settings?section=email" },
+        pathChanged: false,
+        hrefChanged: true,
+      });
+    });
+
+    expect(scrollElement.scrollTop).toBe(0);
+
+    act(() => {
+      window.dispatchEvent(new PopStateEvent("popstate"));
       emitRouterEvent("onBeforeLoad", {
         fromLocation: { href: "/admin/settings?section=email" },
         toLocation: { href: "/admin/settings?section=seo" },
