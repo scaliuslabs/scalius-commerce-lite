@@ -39,8 +39,10 @@ interface NavigatorWithConnection extends Navigator {
 
 const imageCache = new Map<string, HTMLImageElement>();
 const imagePreloads = new Map<string, Promise<void>>();
+const mobileZoomBackgroundInertStates = new Map<HTMLElement, boolean>();
 let activeController: AbortController | null = null;
 let videoThemePromise: Promise<void> | null = null;
+let bodyOverflowBeforeMobileZoom = "";
 
 async function enhanceProductVideo(video: HTMLVideoElement): Promise<void> {
   if (typeof customElements === "undefined") return;
@@ -179,6 +181,33 @@ function clearVideo(video: HTMLVideoElement): void {
   video.load();
 }
 
+function setMobileZoomBackgroundInert(
+  modal: HTMLElement,
+  inert: boolean,
+): void {
+  if (!inert) {
+    mobileZoomBackgroundInertStates.forEach((wasInert, element) => {
+      element.inert = wasInert;
+    });
+    mobileZoomBackgroundInertStates.clear();
+    return;
+  }
+
+  let branch: HTMLElement = modal;
+  while (branch.parentElement) {
+    const parent = branch.parentElement;
+    Array.from(parent.children).forEach((sibling) => {
+      if (!(sibling instanceof HTMLElement) || sibling === branch) return;
+      if (!mobileZoomBackgroundInertStates.has(sibling)) {
+        mobileZoomBackgroundInertStates.set(sibling, sibling.inert);
+      }
+      sibling.inert = true;
+    });
+    if (parent === document.body) break;
+    branch = parent;
+  }
+}
+
 function dispatchChange(item: GalleryItem): void {
   window.dispatchEvent(
     new CustomEvent<ProductMediaChangeDetail>("product-media-change", {
@@ -289,9 +318,11 @@ function setSelectedItem(
 function closeMobileZoom(root: HTMLElement): void {
   const modal = root.querySelector<HTMLElement>("[data-mobile-zoom-modal]");
   if (!modal || modal.getAttribute("aria-hidden") === "true") return;
+  modal.inert = true;
   modal.classList.add("opacity-0", "pointer-events-none");
   modal.setAttribute("aria-hidden", "true");
-  document.body.style.overflow = "";
+  setMobileZoomBackgroundInert(modal, false);
+  document.body.style.overflow = bodyOverflowBeforeMobileZoom;
 }
 
 function bindThumbnailRail(
@@ -449,6 +480,9 @@ function bindMobileZoom(root: HTMLElement, signal: AbortSignal): void {
       ? `${current.alt} — zoomed view`
       : "Zoomed product image";
     reset();
+    bodyOverflowBeforeMobileZoom = document.body.style.overflow;
+    setMobileZoomBackgroundInert(modal, true);
+    modal.inert = false;
     modal.classList.remove("opacity-0", "pointer-events-none");
     modal.setAttribute("aria-hidden", "false");
     document.body.style.overflow = "hidden";
@@ -457,6 +491,7 @@ function bindMobileZoom(root: HTMLElement, signal: AbortSignal): void {
 
   trigger.addEventListener("click", open, { signal });
   close.addEventListener("click", closeModal, { signal });
+  signal.addEventListener("abort", () => closeMobileZoom(root), { once: true });
   modal.addEventListener(
     "keydown",
     (event) => {
