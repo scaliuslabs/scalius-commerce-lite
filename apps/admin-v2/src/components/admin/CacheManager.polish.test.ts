@@ -19,6 +19,15 @@ describe("cache workspace presentation", () => {
     expect(source).not.toContain("bg-gradient");
   });
 
+  it("shows failed-work recovery only when it needs attention", () => {
+    const source = readSource("./CacheManager.tsx");
+
+    expect(source).toContain("const showFailedCacheWork =");
+    expect(source).toContain("storefrontDlqQuery.isError || storefrontDlqCount > 0");
+    expect(source).toContain("{showFailedCacheWork && (");
+    expect(source).not.toContain("Queue healthy. No purge or warm failures need attention.");
+  });
+
   it("fails closed and keeps operator actions usable on phones", () => {
     const source = readSource("./CacheManager.tsx");
 
@@ -27,6 +36,8 @@ describe("cache workspace presentation", () => {
     expect(source).toContain("No group defaults were assumed");
     expect(source).toContain("min-h-11");
     expect(source).toContain("aria-label={`Clear ${label} cache`}");
+    expect(source).toContain('"Not cleared manually"');
+    expect(source).not.toContain("Cleared Never");
   });
 
   it("uses the compact route heading shared by current settings pages", () => {
