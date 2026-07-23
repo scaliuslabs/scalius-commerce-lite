@@ -363,22 +363,32 @@ export function OrderToolbar({
       </div>
     ) : null;
 
+  const showCreateOrderAction = !showTrashed && orderActions.canCreateOrders;
+  const mobileExportLabel =
+    exportLabel === "Export current page" ? "Export" : "Recovery CSV";
   const actions: ReactNode = (
-    <div className="flex w-full flex-nowrap items-center gap-2 overflow-x-auto scrollbar-hide sm:w-auto sm:flex-wrap sm:overflow-visible">
+    <div
+      className={`grid w-full gap-2 sm:flex sm:w-auto sm:flex-wrap ${
+        showCreateOrderAction
+          ? "grid-cols-[minmax(0,1fr)_minmax(0,1fr)_2.75rem]"
+          : "grid-cols-2"
+      }`}
+    >
       <Button
         variant="outline"
         size="sm"
         onClick={onExportCSV}
-      className="h-11 px-3 text-xs sm:h-9"
+        className="h-11 min-w-0 px-3 text-xs sm:h-9"
       >
         <Download className="mr-1.5 h-3.5 w-3.5" />
-        {exportLabel}
+        <span className="sm:hidden">{mobileExportLabel}</span>
+        <span className="hidden sm:inline">{exportLabel}</span>
       </Button>
       <Button
         variant="outline"
         size="sm"
         asChild
-        className="h-11 px-3 text-xs sm:h-9"
+        className="h-11 min-w-0 px-3 text-xs sm:h-9"
       >
         <Link
           to="/admin/orders"
@@ -395,11 +405,11 @@ export function OrderToolbar({
           )}
         </Link>
       </Button>
-      {!showTrashed && orderActions.canCreateOrders && (
-        <Button size="sm" asChild className="h-11 px-3 text-xs sm:h-9">
-          <Link to="/admin/orders/new">
-            <Plus className="mr-1.5 h-3.5 w-3.5" />
-            Add order
+      {showCreateOrderAction && (
+        <Button size="sm" asChild className="h-11 min-w-0 px-0 text-xs sm:h-9 sm:px-3">
+          <Link to="/admin/orders/new" aria-label="Add order" title="Add order">
+            <Plus className="h-3.5 w-3.5 sm:mr-1.5" />
+            <span className="sr-only sm:not-sr-only">Add order</span>
           </Link>
         </Button>
       )}

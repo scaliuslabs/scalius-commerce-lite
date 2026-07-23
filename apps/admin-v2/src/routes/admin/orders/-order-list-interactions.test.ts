@@ -106,6 +106,12 @@ describe("order list interactions", () => {
     expect(toolbarSource).toContain("activeAdvancedFilterCount");
     expect(toolbarSource).toContain("Clear filters");
     expect(toolbarSource).toContain("Auto-refresh");
+    expect(toolbarSource).toContain(
+      '"grid-cols-[minmax(0,1fr)_minmax(0,1fr)_2.75rem]"',
+    );
+    expect(toolbarSource).toContain('className="sm:hidden">{mobileExportLabel}');
+    expect(toolbarSource).toContain('aria-label="Add order"');
+    expect(toolbarSource).not.toContain("overflow-x-auto scrollbar-hide");
 
     expect(dialogSource).toContain("if (isShipping) return");
     expect(dialogSource).toContain("if (isShipping && !nextOpen) return");
