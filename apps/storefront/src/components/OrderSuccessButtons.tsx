@@ -340,20 +340,24 @@ export default function OrderSuccessButtons({
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold text-foreground">Need help with this order?</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {supportRequestIntro}
-            </p>
+            {!activeSupportRequest && supportRequestActions.length > 0 ? (
+              <p className="mt-1 text-sm text-muted-foreground">
+                {supportRequestIntro}
+              </p>
+            ) : null}
           </div>
         </div>
 
-        {activeSupportRequest || latestSupportRequest ? (
-          <div className={`mt-4 rounded-lg border px-3 py-2 text-sm ${getSupportToneClass((activeSupportRequest ?? latestSupportRequest)!.severity)}`}>
-            <p className="font-medium">{(activeSupportRequest ?? latestSupportRequest)!.label}</p>
+        {latestSupportRequest ? (
+          <div className={`mt-4 rounded-lg border px-3 py-2 text-sm ${getSupportToneClass(latestSupportRequest.severity)}`}>
+            <p className="font-medium">{latestSupportRequest.label}</p>
             <p className="mt-1 text-xs opacity-80">
-              {getSupportRequestStatusMessage((activeSupportRequest ?? latestSupportRequest)!)}
+              {getSupportRequestStatusMessage(latestSupportRequest)}
             </p>
           </div>
-        ) : supportRequestActions.length > 0 ? (
+        ) : null}
+
+        {!activeSupportRequest && supportRequestActions.length > 0 ? (
           <div className="mt-4 space-y-3">
             <div className="grid gap-2 sm:grid-cols-3">
               {supportRequestActions.map((action) => (
@@ -449,11 +453,11 @@ export default function OrderSuccessButtons({
               </div>
             )}
           </div>
-        ) : (
+        ) : !latestSupportRequest ? (
           <p className="mt-4 rounded-lg border border-border bg-muted/20 px-3 py-2 text-sm text-muted-foreground">
             {firstDisabledReason ?? "Support requests are not available for this order right now."}
           </p>
-        )}
+        ) : null}
 
         {supportSubmitState.status === "success" && !activeSupportRequest && (
           <p className="mt-3 inline-flex items-center gap-1 text-sm text-primary" aria-live="polite">
