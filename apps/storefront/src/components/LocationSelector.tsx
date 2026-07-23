@@ -252,12 +252,14 @@ export default function LocationSelector({
       <div className="relative">
         <Label
           htmlFor="city"
+          id="city-label"
           className="mb-1 block text-xs font-semibold text-gray-700 uppercase tracking-wide"
         >
           {cityLabel} <span className="text-red-500 ml-0.5">*</span>
         </Label>
         <CustomDropdown
           id="city"
+          labelId="city-label"
           name="city"
           placeholder="Select a city"
           options={cityOptions}
@@ -272,12 +274,14 @@ export default function LocationSelector({
       <div className="relative">
         <Label
           htmlFor="zone"
+          id="zone-label"
           className="mb-1 block text-xs font-semibold text-gray-700 uppercase tracking-wide"
         >
           {zoneLabel} <span className="text-red-500 ml-0.5">*</span>
         </Label>
         <CustomDropdown
           id="zone"
+          labelId="zone-label"
           name="zone"
           placeholder="Select a zone"
           options={zoneOptions}
@@ -299,12 +303,14 @@ export default function LocationSelector({
         <div className="relative">
           <Label
             htmlFor="area"
+            id="area-label"
             className="mb-1 block text-xs font-semibold text-gray-700 uppercase tracking-wide"
           >
             {areaLabel}
           </Label>
           <CustomDropdown
             id="area"
+            labelId="area-label"
             name="area"
             placeholder="Select an area (optional)"
             options={areaOptions}

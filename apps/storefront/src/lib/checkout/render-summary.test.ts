@@ -428,7 +428,10 @@ describe("initCheckoutPage", () => {
     (window as unknown as { __CHECKOUT_CONFIG__: CheckoutConfig }).__CHECKOUT_CONFIG__ = {
       ...baseConfig,
       activeDefaultMethod: "cod",
-      gateways: [{ id: "cod", name: "Cash on Delivery" }],
+      gateways: [
+        { id: "cod", name: "Cash on Delivery" },
+        { id: "sslcommerz", name: "SSLCommerz" },
+      ],
     };
 
     await initCheckoutPage();
@@ -441,10 +444,65 @@ describe("initCheckoutPage", () => {
     expect(codMethod?.getAttribute("role")).toBe("radio");
     expect(codMethod?.getAttribute("aria-checked")).toBe("true");
     expect((codMethod as HTMLButtonElement).type).toBe("button");
+    expect(codMethod?.getAttribute("aria-label")).toContain(
+      "Cash on Delivery. Pay when your order arrives",
+    );
+    expect((codMethod as HTMLButtonElement).tabIndex).toBe(0);
     expect(codMethod?.classList.contains("border-primary")).toBe(true);
     expect((document.getElementById("payButton") as HTMLButtonElement).disabled).toBe(false);
     expect(document.getElementById("payButtonText")?.textContent).toContain("Place Order");
 
+    const onlineMethod = document.querySelector<HTMLButtonElement>(
+      '[data-method="sslcommerz"]',
+    );
+    expect(onlineMethod?.tabIndex).toBe(-1);
+
+    codMethod?.dispatchEvent(new KeyboardEvent("keydown", {
+      key: "ArrowDown",
+      bubbles: true,
+      cancelable: true,
+    }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(document.activeElement).toBe(onlineMethod);
+    expect(onlineMethod?.getAttribute("aria-checked")).toBe("true");
+    expect(onlineMethod?.tabIndex).toBe(0);
+    expect((codMethod as HTMLButtonElement).tabIndex).toBe(-1);
+  });
+
+  it("renders unknown gateway labels as text instead of executable markup", async () => {
+    document.body.innerHTML = `
+      <section id="orderSummary" class="hidden"><div id="summaryDetails"></div></section>
+      <div id="errorMsg" class="hidden"></div>
+      <div id="paymentMethods"></div>
+      <div id="stripeSection" class="hidden"></div>
+      <button id="payButton" disabled><span id="payButtonText">Select a payment method</span></button>
+    `;
+    sessionStorage.setItem("scalius_checkout_data", JSON.stringify({
+      cartItems: JSON.stringify({
+        line_1: { id: "prod_1", variantId: "var_1", price: 100, quantity: 1 },
+      }),
+      city: "city_1",
+      zone: "zone_1",
+      shippingMethodId: "ship_1",
+    }));
+    (window as unknown as { __CHECKOUT_CONFIG__: CheckoutConfig }).__CHECKOUT_CONFIG__ = {
+      ...baseConfig,
+      activeDefaultMethod: "custom",
+      gateways: [{
+        id: "custom",
+        name: '<img src=x onerror="window.__gatewayPwned=true">Custom pay',
+      }],
+    };
+
+    await initCheckoutPage();
+
+    const customMethod = document.querySelector('[data-method="custom"]');
+    expect(customMethod?.querySelector("img")).toBeNull();
+    expect(customMethod?.textContent).toContain(
+      '<img src=x onerror="window.__gatewayPwned=true">Custom pay',
+    );
+    expect(customMethod?.getAttribute("aria-label")).toContain("Custom pay");
   });
 
   it("preselects the only eligible method when a saved default is no longer available", async () => {
