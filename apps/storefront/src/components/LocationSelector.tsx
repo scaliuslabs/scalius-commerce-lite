@@ -260,6 +260,7 @@ export default function LocationSelector({
         <CustomDropdown
           id="city"
           labelId="city-label"
+          ariaLabel={cityLabel}
           name="city"
           placeholder="Select a city"
           options={cityOptions}
@@ -282,6 +283,7 @@ export default function LocationSelector({
         <CustomDropdown
           id="zone"
           labelId="zone-label"
+          ariaLabel={zoneLabel}
           name="zone"
           placeholder="Select a zone"
           options={zoneOptions}
@@ -311,6 +313,7 @@ export default function LocationSelector({
           <CustomDropdown
             id="area"
             labelId="area-label"
+            ariaLabel={areaLabel}
             name="area"
             placeholder="Select an area (optional)"
             options={areaOptions}

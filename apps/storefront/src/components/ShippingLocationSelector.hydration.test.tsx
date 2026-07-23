@@ -82,5 +82,11 @@ describe("ShippingLocationSelector hydration", () => {
     expect(recoverableErrors).toEqual([]);
     expect(container.textContent).toContain("Free");
     expect(container.textContent).not.toContain("৳110");
+    expect(
+      container.querySelector('[role="radiogroup"]')?.getAttribute("aria-label"),
+    ).toBe("Choose Delivery Option");
+    expect(
+      container.querySelector('[role="radio"]')?.getAttribute("aria-label"),
+    ).toBe("Standard delivery, Free");
   });
 });
