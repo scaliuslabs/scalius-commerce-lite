@@ -119,6 +119,13 @@ describe("rich text editor mobile boundaries", () => {
     expect(editorSource).toContain('aria-label="Exit fullscreen"');
     expect(editorSource).toContain('className="min-h-11 gap-1.5 sm:min-h-9"');
     expect(editorSource).toContain('ariaLabel={`${ariaLabel} formatting`}');
+    expect(editorSource).toContain('role={isFullscreen ? "dialog" : undefined}');
+    expect(editorSource).toContain('aria-modal={isFullscreen ? true : undefined}');
+    expect(editorSource).toContain("isolateRichTextFullscreenBackground(");
+    expect(editorSource).toContain(
+      `.querySelector<HTMLButtonElement>('[aria-label="Fullscreen"]')`,
+    );
+    expect(editorSource).toContain("?.focus({ preventScroll: true })");
     expect(menuSource).not.toContain("Minimize2");
   });
 

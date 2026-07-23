@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useId, useMemo, useState, useRef } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import { cn } from "@scalius/shared/utils";
 import {
@@ -11,7 +11,10 @@ import { TiptapMenuBar } from "./TiptapMenuBar";
 import { TiptapToolbarSkeleton } from "./TiptapToolbarSkeleton";
 import { createTiptapExtensions } from "./tiptap-extensions";
 import { reconcileExternalTiptapContent } from "./tiptap-content-sync";
-import { shouldExitRichTextFullscreen } from "./tiptap-fullscreen";
+import {
+  isolateRichTextFullscreenBackground,
+  shouldExitRichTextFullscreen,
+} from "./tiptap-fullscreen";
 
 interface TiptapEditorProps {
   content: string;
@@ -33,6 +36,7 @@ export function TiptapEditor({
   ariaLabel = "Rich text content",
 }: TiptapEditorProps) {
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const fullscreenTitleId = useId();
   const hasAutoFocusedRef = useRef(false);
   const editorAreaRef = useRef<HTMLDivElement>(null);
   const contentWrapperRef = useRef<HTMLDivElement>(null);
@@ -44,7 +48,8 @@ export function TiptapEditor({
 
   // Handle Escape key and body scroll lock for fullscreen
   useEffect(() => {
-    if (!isFullscreen) return;
+    const editorRoot = contentWrapperRef.current;
+    if (!isFullscreen || !editorRoot) return;
     const previousBodyOverflow = document.body.style.overflow;
     const previousBodyPaddingRight = document.body.style.paddingRight;
     const previousHtmlOverflow = document.documentElement.style.overflow;
@@ -52,7 +57,7 @@ export function TiptapEditor({
       window.innerWidth - document.documentElement.clientWidth;
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (shouldExitRichTextFullscreen(e, contentWrapperRef.current)) {
+      if (shouldExitRichTextFullscreen(e, editorRoot)) {
         setIsFullscreen(false);
       }
     };
@@ -65,6 +70,7 @@ export function TiptapEditor({
     }
 
     document.body.classList.add("editor-fullscreen-active");
+    const restoreBackground = isolateRichTextFullscreenBackground(editorRoot);
 
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
@@ -72,6 +78,12 @@ export function TiptapEditor({
       document.body.style.paddingRight = previousBodyPaddingRight;
       document.documentElement.style.overflow = previousHtmlOverflow;
       document.body.classList.remove("editor-fullscreen-active");
+      restoreBackground();
+      requestAnimationFrame(() => {
+        editorRoot
+          .querySelector<HTMLButtonElement>('[aria-label="Fullscreen"]')
+          ?.focus({ preventScroll: true });
+      });
     };
   }, [isFullscreen]);
 
@@ -187,6 +199,9 @@ export function TiptapEditor({
   const editorContent = (
     <div
       ref={contentWrapperRef}
+      role={isFullscreen ? "dialog" : undefined}
+      aria-modal={isFullscreen ? true : undefined}
+      aria-labelledby={isFullscreen ? fullscreenTitleId : undefined}
       className={cn(
         "flex min-w-0 w-full flex-col bg-background transition-colors",
         isFullscreen
@@ -198,7 +213,10 @@ export function TiptapEditor({
       {/* Fullscreen header */}
       {isFullscreen && (
         <div className="flex shrink-0 items-center justify-between gap-3 border-b px-3 py-2 sm:px-4">
-          <span className="text-sm font-medium text-muted-foreground">
+          <span
+            id={fullscreenTitleId}
+            className="text-sm font-medium text-muted-foreground"
+          >
             Edit content
           </span>
           <div className="flex items-center gap-3">
