@@ -20,6 +20,9 @@ describe("OrderReturnsCard boundaries", () => {
     expect(orderView).toContain('import { OrderReturnsCard } from "./orderview/OrderReturnsCard"');
     expect(card).toContain("getRemainingReturnableQuantities");
     expect(card).toContain("itemsById={itemsById}");
+    expect(card).toContain("Returns can be created after an item ships.");
+    expect(card).toContain("There are no remaining items available to return.");
+    expect(card).toContain("{canRequest && query.isSuccess ? (");
     expect(createDialog).toContain("Requesting a return does not refund payment or change stock.");
     expect(receiveDialog).toContain("Restock adds sellable inventory; damaged units do not.");
     expect(returnRow).toContain("Recover receipt");

@@ -42,10 +42,20 @@ export function OrderReturnsCard({ order }: { order: Order }) {
     () => getRemainingReturnableQuantities(order.items, returns),
     [order.items, returns],
   );
+  const normalizedStatus = order.status.toLowerCase();
+  const orderCanHaveReturns = ["shipped", "delivered", "completed"].includes(normalizedStatus);
+  const hasReturnableItems = [...remaining.values()].some((value) => value > 0);
   const canRequest =
     actions.canChangeOrderStatus &&
-    ["shipped", "delivered", "completed"].includes(order.status.toLowerCase()) &&
-    [...remaining.values()].some((value) => value > 0);
+    orderCanHaveReturns &&
+    hasReturnableItems;
+  const emptyMessage = !actions.canChangeOrderStatus
+    ? "No returns have been created for this order."
+    : ["pending", "processing", "confirmed"].includes(normalizedStatus)
+      ? "Returns can be created after an item ships."
+      : orderCanHaveReturns && !hasReturnableItems
+        ? "There are no remaining items available to return."
+        : "This order has no returnable items.";
 
   return (
     <Card className="overflow-hidden">
@@ -55,8 +65,8 @@ export function OrderReturnsCard({ order }: { order: Order }) {
           Returns
           {returns.length > 0 ? <Badge variant="secondary" className="text-sm">{returns.length}</Badge> : null}
         </CardTitle>
-        {actions.canChangeOrderStatus ? (
-          <Button type="button" size="sm" variant="outline" className="min-h-11 sm:min-h-9" disabled={!canRequest || query.isLoading} onClick={() => setDialog({ type: "create" })}>
+        {canRequest && query.isSuccess ? (
+          <Button type="button" size="sm" variant="outline" className="min-h-11 sm:min-h-9" onClick={() => setDialog({ type: "create" })}>
             <Plus className="mr-2 h-4 w-4" />
             New return
           </Button>
@@ -77,11 +87,11 @@ export function OrderReturnsCard({ order }: { order: Order }) {
           </div>
         ) : returns.length === 0 ? (
           <div className="p-4 text-sm text-muted-foreground">
-            <p className="font-medium text-foreground">No returns</p>
+            <p className="font-medium text-foreground">No returns yet</p>
             <p className="mt-1">
               {canRequest
-                ? "Create a return when shipped or delivered items come back. Refunds remain a separate payment action."
-                : "No shipped or delivered item quantity is currently available for a new return."}
+                ? "Create a return for items sent back by the customer. Refunds are handled separately."
+                : emptyMessage}
             </p>
           </div>
         ) : (
