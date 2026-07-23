@@ -28,14 +28,19 @@ describe("notification rules workspace", () => {
   });
 
   it("uses mobile-safe action and template controls", () => {
-    expect(source).toContain("min-h-11 shrink-0 sm:min-h-9");
+    expect(source).toContain(
+      "grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]",
+    );
+    expect(source).toContain("min-h-11 min-w-0 sm:min-h-9");
     expect(source).toContain('className="h-11 sm:h-9"');
-    expect(source).toContain("min-h-11 min-w-0");
+    expect(source).not.toContain("flex-col-reverse");
   });
 
   it("keeps the mobile rules workspace compact without hiding capabilities", () => {
     expect(source).toContain("CustomerChannelControl");
     expect(source).toContain("Customer channel rules and readiness");
+    expect(source).toContain("grid-cols-1 gap-2 sm:grid-cols-3");
+    expect(source).toContain("font-medium sm:truncate");
     expect(source.match(/<details key=\{group\.label\}/g)).toHaveLength(2);
     expect(source.match(/\{group\.keys\.length\} events/g)).toHaveLength(2);
     expect(source).toContain('className="divide-y md:hidden"');
