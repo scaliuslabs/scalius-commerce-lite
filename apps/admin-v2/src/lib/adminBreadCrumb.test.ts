@@ -9,6 +9,13 @@ describe("admin breadcrumbs", () => {
     ]);
   });
 
+  it("uses the merchant-facing fraud checks name", () => {
+    expect(generateAdminBreadcrumbs("/admin/settings/fraud-checker")).toEqual([
+      { title: "Settings", href: "/admin/settings" },
+      { title: "Fraud checks", href: undefined },
+    ]);
+  });
+
   it("keeps internal article IDs out of edit breadcrumbs", () => {
     expect(
       generateAdminBreadcrumbs("/admin/articles/article_internal-id/edit"),

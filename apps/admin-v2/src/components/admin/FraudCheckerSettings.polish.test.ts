@@ -10,9 +10,9 @@ describe("fraud checker workspace presentation", () => {
     const component = readSource("./FraudCheckerSettings.tsx");
     const route = readSource("../../routes/admin/settings/fraud-checker.tsx");
 
-    expect(route).toContain("on-demand risk checks in Orders");
-    expect(component).toContain("Fraud checks do not block checkout automatically");
-    expect(component).toContain("This enables manual checks in Orders");
+    expect(route).toContain("Risk lookup providers for order review");
+    expect(component).toContain("Checks are manual and never block checkout");
+    expect(component).toContain("Manual check only; checkout remains unaffected");
     expect(component).toContain("Results are shown for this browser session only");
   });
 
@@ -46,5 +46,17 @@ describe("fraud checker workspace presentation", () => {
 
     expect(route).toContain('text-xl font-semibold tracking-tight');
     expect(route).not.toContain("text-3xl");
+  });
+
+  it("keeps an empty create flow focused on one editor", () => {
+    const source = readSource("./FraudCheckerSettings.tsx");
+
+    expect(source).toContain("providers.length > 0 &&");
+    expect(source).toContain('? "mx-auto w-full max-w-2xl"');
+    expect(source).toContain("New provider");
+    expect(source).toContain("Save provider");
+    expect(source).toContain("disabled={isSaving || !form.formState.isDirty}");
+    expect(source).not.toContain("Finish or cancel this new provider");
+    expect(source).not.toContain(': "No changes"');
   });
 });
