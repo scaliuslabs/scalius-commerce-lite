@@ -12,7 +12,7 @@ const { navigation = [], id = "desktop-nav" } = Astro.props;
 const items = Array.isArray(navigation) ? navigation : [];
 
 const navItemClass =
-  "group/nav relative flex items-center justify-center px-4 py-2 rounded-full text-sm font-bold text-foreground bg-muted hover:bg-accent hover:text-foreground transition-all duration-200 ease-out cursor-pointer tracking-wide whitespace-nowrap nav-item hover:scale-[1.02] active:scale-[0.98]";
+  "group/nav relative flex shrink-0 items-center justify-center px-4 py-2 rounded-full text-sm font-bold text-foreground bg-muted hover:bg-accent hover:text-foreground transition-all duration-200 ease-out cursor-pointer tracking-wide whitespace-nowrap nav-item hover:scale-[1.02] active:scale-[0.98]";
 const dropdownPanelClass =
   "absolute top-full left-0 mt-2 pt-2 w-56 opacity-0 invisible group-hover/nav:opacity-100 group-hover/nav:visible transition-all duration-200 transform origin-top-left scale-95 group-hover/nav:scale-100 z-[100]";
 ---
