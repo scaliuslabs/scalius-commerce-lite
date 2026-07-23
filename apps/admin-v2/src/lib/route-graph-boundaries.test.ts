@@ -1230,7 +1230,7 @@ describe("admin route graph boundaries", () => {
     expect(adminRouteSource).toContain("useAdminNestedScrollRestoration()");
     expect(adminScrollSource).toContain('window.addEventListener("popstate"');
     expect(adminScrollSource).toContain(
-      "scheduleStoredRestore(event.toLocation.href)",
+      "restoreStoredScroll(event.toLocation.href)",
     );
     expect(adminScrollSource).not.toContain("scrollElement.scrollTop = 0");
     expect(adminRouteContextSource).toContain("ADMIN_ROUTE_CONTEXT_FRESH_MS");
