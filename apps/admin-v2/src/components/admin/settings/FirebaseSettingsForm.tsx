@@ -477,11 +477,11 @@ export default function FirebaseSettingsForm() {
           </CardContent>
         </Card>
 
-        <div className="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end">
+        <div className="grid grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] gap-2 border-t pt-4 sm:flex sm:justify-end">
           <Button
             type="button"
             variant="outline"
-            className="min-h-11 sm:min-h-9"
+            className="min-h-11 min-w-0 sm:min-h-9"
             disabled={!canEdit || !dirty}
             onClick={() => {
               setDraft(savedDraft);
@@ -494,7 +494,7 @@ export default function FirebaseSettingsForm() {
           </Button>
           <Button
             type="button"
-            className="min-h-11 sm:min-h-9 sm:min-w-32"
+            className="min-h-11 min-w-0 sm:min-h-9 sm:min-w-32"
             disabled={!canEdit || !dirty}
             onClick={() => saveMutation.mutate(draft)}
           >
