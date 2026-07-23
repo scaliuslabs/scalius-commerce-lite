@@ -56,6 +56,8 @@ describe("Breadcrumb", () => {
     const home = host.querySelector<HTMLAnchorElement>('a[href="/admin"]');
     expect(home?.textContent).toBe("Home");
     expect(home?.className).toContain("shrink-0");
+    expect(home?.className).toContain("h-11");
+    expect(home?.className).toContain("w-11");
 
     const dashboard = host.querySelector<HTMLAnchorElement>(
       'a[href="/admin/dashboard"]',
@@ -89,6 +91,7 @@ describe("Breadcrumb", () => {
     expect(currentLink?.getAttribute("aria-current")).toBe("page");
     expect(currentLink?.className).toContain("min-w-0");
     expect(currentLink?.className).toContain("overflow-hidden");
+    expect(currentLink?.className).toContain("min-h-11");
     expect(currentLink?.querySelector("span")?.className).toContain("truncate");
   });
 });

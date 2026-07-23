@@ -43,7 +43,7 @@ export function Breadcrumb({ items, className }: BreadcrumbProps) {
       {/* Home Link */}
       <Link
         to="/admin"
-        className="flex shrink-0 items-center px-2.5 py-1.5 rounded-md hover:bg-accent transition-all duration-300 text-muted-foreground hover:text-primary hover:scale-105 transform"
+        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-all duration-300 hover:scale-105 hover:bg-accent hover:text-primary sm:h-9 sm:w-9"
       >
         <Home className="h-[18px] w-[18px]" />
         <span className="sr-only">Home</span>
@@ -62,7 +62,7 @@ export function Breadcrumb({ items, className }: BreadcrumbProps) {
             )}
           >
             {/* Separator */}
-            <div className="mx-1 shrink-0 text-muted-foreground/50">
+            <div className="shrink-0 text-muted-foreground/50 sm:mx-1">
               <ChevronRight className="h-4 w-4" />
             </div>
 
@@ -72,7 +72,7 @@ export function Breadcrumb({ items, className }: BreadcrumbProps) {
                 to={item.href}
                 aria-current={isLast ? "page" : undefined}
                 className={cn(
-                  "group relative flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-muted-foreground transition-all duration-300 hover:bg-accent hover:text-primary",
+                  "group relative flex min-h-11 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-muted-foreground transition-all duration-300 hover:bg-accent hover:text-primary sm:min-h-9",
                   isLast ? "min-w-0 overflow-hidden" : "shrink-0",
                 )}
               >
