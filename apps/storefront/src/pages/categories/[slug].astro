@@ -288,9 +288,9 @@ const collectionJsonLd =
             class="hidden items-center gap-2 rounded-lg border border-gray-100 bg-gray-50 px-3 py-1.5 shadow-sm sm:flex"
           >
             <Tags className="w-4 h-4 text-gray-400" />
-            <span class="font-medium text-gray-900 text-sm"
-              >{pagination.total} products</span
-            >
+            <span class="font-medium text-gray-900 text-sm">
+              {pagination.total} {pagination.total === 1 ? "product" : "products"}
+            </span>
           </div>
         </div>
       </div>

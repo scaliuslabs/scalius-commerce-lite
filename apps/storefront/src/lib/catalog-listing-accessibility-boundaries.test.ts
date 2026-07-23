@@ -48,4 +48,18 @@ describe("shared catalog listing accessibility", () => {
     expect(source).not.toContain("function setupFilterInteractivity");
     expect(source).not.toContain("function generatePaginationLinks");
   });
+
+  it("keeps search result copy grammatical and visually consistent with catalog pages", () => {
+    expect(search).toContain('pagination.total === 1 ? "result" : "results"');
+    expect(search).toContain('pagination.total === 1 ? "product" : "products"');
+    expect(search).toContain('{query ? "Search results" : "All products"}');
+    expect(search).toContain("{!query && (");
+    expect(search).not.toContain('query ? "Search Results" : "Explore Our Products"');
+    expect(search).not.toContain('class="text-center mb-6 bg-white rounded-lg p-6');
+  });
+
+  it.each([category, search, collection])("uses singular product labels for one-item catalogs", (source) => {
+    expect(source).toContain('pagination.total === 1 ? "product" : "products"');
+    expect(source).not.toContain("{pagination.total} products");
+  });
 });
