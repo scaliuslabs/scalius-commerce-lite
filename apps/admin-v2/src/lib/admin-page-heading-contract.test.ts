@@ -28,8 +28,13 @@ describe("primary admin workspace heading contract", () => {
     expect(orderFormSource).toContain("Edit order");
     expect(orderFormSource).toContain('{" "}');
     expect(orderFormSource).toContain(') : "New order"}');
-    expect(orderViewHeaderSource).toContain("<h1 className=\"text-xl font-semibold text-foreground\">");
-    expect(orderViewHeaderSource).toContain("<span className=\"sr-only\">Order #{order.id} for </span>");
+    expect(orderViewHeaderSource).toContain(
+      '<h1 className="text-xl font-semibold tracking-tight text-foreground">',
+    );
+    expect(orderViewHeaderSource).toContain("Order #{order.id}");
+    expect(orderViewHeaderSource).not.toContain(
+      '<span className="sr-only">Order #{order.id} for </span>',
+    );
   });
 
   it("uses h1 for the media route and h2 when the workspace is embedded in a picker", () => {
