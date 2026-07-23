@@ -8,13 +8,15 @@ describe("email settings workspace", () => {
   const source = readFileSync(SOURCE, "utf8");
 
   it("reports runtime readiness without claiming delivery verification", () => {
-    expect(source).toContain("Runtime configured");
-    expect(source).toContain("This does not confirm a successful delivery.");
+    expect(source).toContain('runtimeConfigured ? "Ready"');
+    expect(source).toContain("successful delivery has not been tested.");
+    expect(source).toContain("title={runtimeConfigured");
+    expect(source).not.toContain("This does not confirm a successful delivery.");
     expect(source).not.toContain("Transactional email delivery for verification");
   });
 
   it("keeps provider fallback behavior visible", () => {
-    expect(source).toContain("The other configured provider is used automatically");
+    expect(source).toContain("The other configured provider is used as a fallback.");
     expect(source).toContain("Binding available");
     expect(source).toContain("API key saved");
   });
@@ -23,6 +25,7 @@ describe("email settings workspace", () => {
     expect(source).toContain("ADMIN_PERMISSIONS.SETTINGS_GENERAL_EDIT");
     expect(source).toContain("<UnsavedChangesGuard");
     expect(source).toContain("disabled={!canEdit || !dirty}");
+    expect(source).toContain("{dirty ? (");
     expect(source).toContain("Reset");
   });
 

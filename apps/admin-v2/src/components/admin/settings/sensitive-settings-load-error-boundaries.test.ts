@@ -47,7 +47,7 @@ describe("sensitive settings load-error boundaries", () => {
       {
         source: readFileSync(AUTH_SOURCE, "utf8"),
         title: "Auth settings unavailable",
-        saveLabel: "Save Auth Settings",
+        saveLabel: "Save changes",
       },
     ];
 

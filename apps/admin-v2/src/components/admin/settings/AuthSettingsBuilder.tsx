@@ -18,7 +18,14 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Loader2, Save, CheckCircle2, ExternalLink, AlertTriangle } from "lucide-react";
+import {
+    AlertTriangle,
+    CheckCircle2,
+    ExternalLink,
+    Loader2,
+    RotateCcw,
+    Save,
+} from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
     getSettingsLoadErrorMessage,
@@ -52,6 +59,7 @@ import {
     OfficialProviderMark,
     type ProviderMarkId,
 } from "./provider-marks";
+import { UnsavedChangesGuard } from "../shared/UnsavedChangesGuard";
 
 const MASKED_VALUE = "••••••••••••";
 type EmailCollectionMode = "none" | "optional" | "required";
@@ -319,7 +327,10 @@ export default function AuthSettingsBuilder() {
     const {
         values,
         setValue,
+        isDirty,
+        reset,
         isLoading,
+        isLoaded,
         isLoadError,
         loadError,
         isSaving,
@@ -466,24 +477,22 @@ export default function AuthSettingsBuilder() {
 
     return (
         <div className="space-y-5 max-w-2xl">
+            <UnsavedChangesGuard isDirty={isDirty} isSubmitting={isSaving} />
             <Card>
                 <CardHeader className="pb-3">
-                    <CardTitle className="text-base">Customer Login & Account Creation</CardTitle>
+                    <CardTitle className="text-base">Customer sign-in</CardTitle>
                     <CardDescription>
-                        Configure verification channels and the contact details collected from customers.
+                        Choose sign-in channels and contact fields.
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-5">
                     <div className="space-y-1.5">
-                        <Label>Quick Preset</Label>
-                        <p className="text-xs text-muted-foreground mb-1.5">
-                            Start from a common setup, then fine-tune channels and email collection below.
-                        </p>
+                        <Label>Preset</Label>
                         <Select
                             value={values.authVerificationMethod}
                             onValueChange={setPreset}
                         >
-                            <SelectTrigger className="w-full max-w-xs">
+                            <SelectTrigger className="h-11 w-full max-w-xs sm:h-9">
                                 <SelectValue placeholder="Select verification method" />
                             </SelectTrigger>
                             <SelectContent>
@@ -497,12 +506,7 @@ export default function AuthSettingsBuilder() {
                     </div>
 
                     <div className="space-y-4 rounded-lg border border-border p-4">
-                        <div>
-                            <Label>Verification Channels</Label>
-                            <p className="text-xs text-muted-foreground mt-1">
-                                Customers can choose from the enabled channels during sign in or account creation.
-                            </p>
-                        </div>
+                        <Label>Verification channels</Label>
                         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                             {CUSTOMER_AUTH_OTP_CHANNELS.map((channel) => {
                                 const channelSelected = customerAuthPolicy.otpChannels.includes(channel);
@@ -510,7 +514,7 @@ export default function AuthSettingsBuilder() {
                                 return (
                                     <label
                                         key={channel}
-                                        className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm"
+                                        className="flex min-h-11 items-center gap-2 rounded-md border border-border px-3 py-2 text-sm"
                                     >
                                         <Checkbox
                                             checked={channelSelected}
@@ -537,7 +541,13 @@ export default function AuthSettingsBuilder() {
                         )}
 
                         <div className="space-y-3">
-                            <Label>Email Collection</Label>
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                <Label>Email collection</Label>
+                                <span className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                                    <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+                                    Phone required
+                                </span>
+                            </div>
                             <RadioGroup
                                 value={getEmailCollectionMode(customerAuthPolicy)}
                                 onValueChange={(value) => setEmailCollectionMode(value as EmailCollectionMode)}
@@ -550,7 +560,7 @@ export default function AuthSettingsBuilder() {
                                 ] as const).map(([value, label]) => (
                                     <label
                                         key={value}
-                                        className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm"
+                                        className="flex min-h-11 items-center gap-2 rounded-md border border-border px-3 py-2 text-sm"
                                     >
                                         <RadioGroupItem value={value} />
                                         <span>{label}</span>
@@ -558,16 +568,10 @@ export default function AuthSettingsBuilder() {
                                 ))}
                             </RadioGroup>
 
-                            <div className="rounded-md border border-border px-3 py-2 text-sm">
-                                <div className="flex items-center gap-2">
-                                    <CheckCircle2 className="h-4 w-4 text-green-500" />
-                                    <span>Phone number required</span>
-                                </div>
-                            </div>
                         </div>
 
                         <div className="space-y-1.5">
-                            <Label>Default Channel</Label>
+                            <Label>Default channel</Label>
                             <Select
                                 value={customerAuthPolicy.defaultOtpChannel}
                                 onValueChange={(value) => {
@@ -578,7 +582,7 @@ export default function AuthSettingsBuilder() {
                                     }));
                                 }}
                             >
-                                <SelectTrigger className="w-full max-w-xs">
+                                <SelectTrigger className="h-11 w-full max-w-xs sm:h-9">
                                     <SelectValue placeholder="Select default channel" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -684,7 +688,7 @@ export default function AuthSettingsBuilder() {
                 <Card className="border-emerald-500/20 dark:bg-emerald-950/10">
                     <CardHeader className="pb-3">
                         <CardTitle className="text-base flex items-center gap-2">
-                            Email OTP Configuration
+                            Email OTP configuration
                             {emailConfigured && (
                                 <CheckCircle2 className="h-4 w-4 text-green-500" />
                             )}
@@ -729,14 +733,13 @@ export default function AuthSettingsBuilder() {
                                     provider={SMS_PROVIDER_PRESENTATION[values.smsProvider as keyof typeof SMS_PROVIDER_PRESENTATION].mark}
                                 />
                             ) : null}
-                            SMS Provider Configuration
+                            SMS provider
                             {smsConfigured && (
                                 <CheckCircle2 className="h-4 w-4 text-green-500" />
                             )}
                         </CardTitle>
                         <CardDescription>
-                            Select a Bangladesh SMS gateway provider and enter your credentials.
-                            Credentials are stored encrypted.
+                            Select a gateway. Credentials are encrypted.
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
@@ -749,9 +752,9 @@ export default function AuthSettingsBuilder() {
                         )}
 
                         <div className="space-y-1.5">
-                            <Label>SMS Provider</Label>
+                            <Label>Provider</Label>
                             <Select value={values.smsProvider} onValueChange={(val) => setValue("smsProvider", val)}>
-                                <SelectTrigger className="w-full max-w-xs">
+                                <SelectTrigger className="h-11 w-full max-w-xs sm:h-9">
                                     <SelectValue placeholder="Select SMS provider" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -896,17 +899,29 @@ export default function AuthSettingsBuilder() {
                 </Card>
             )}
 
-            <div className="flex justify-end pt-4 border-t border-border">
-                <Button
-                    onClick={() => handleSubmit()}
-                    disabled={isSaving || Boolean(providerReadinessIssue)}
-                    className="min-w-[140px]"
-                >
-                    {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    <Save className="mr-2 h-4 w-4" />
-                    Save Auth Settings
-                </Button>
-            </div>
+            {isDirty ? (
+                <div className="grid grid-cols-2 gap-2 border-t border-border pt-4 sm:flex sm:justify-end">
+                    <Button
+                        type="button"
+                        variant="outline"
+                        onClick={reset}
+                        disabled={isSaving}
+                        className="min-h-11 sm:min-h-9"
+                    >
+                        <RotateCcw className="mr-2 h-4 w-4" />
+                        Reset
+                    </Button>
+                    <Button
+                        onClick={() => handleSubmit()}
+                        disabled={isSaving || !isLoaded || Boolean(providerReadinessIssue)}
+                        className="min-h-11 min-w-[140px] sm:min-h-9"
+                    >
+                        {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        <Save className="mr-2 h-4 w-4" />
+                        Save changes
+                    </Button>
+                </div>
+            ) : null}
         </div>
     );
 }

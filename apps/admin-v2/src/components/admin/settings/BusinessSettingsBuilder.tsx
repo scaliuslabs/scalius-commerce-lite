@@ -109,14 +109,14 @@ export default function BusinessSettingsBuilder() {
       <UnsavedChangesGuard isDirty={isDirty} isSubmitting={isSaving} />
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Company Information</CardTitle>
+          <CardTitle className="text-base">Company information</CardTitle>
           <CardDescription>
             Legal identity used on invoices and store schema.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-1.5">
-            <Label htmlFor="company-name">Company Name</Label>
+            <Label htmlFor="company-name">Company name</Label>
             <Input
               id="company-name"
               placeholder="e.g., Acme Commerce Ltd."
@@ -126,16 +126,13 @@ export default function BusinessSettingsBuilder() {
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="legal-name">Legal Name</Label>
+            <Label htmlFor="legal-name">Legal name</Label>
             <Input
               id="legal-name"
-              placeholder="Registered trade name"
+              placeholder="Registered name, if different"
               value={values.legalName}
               onChange={(e) => setValue("legalName", e.target.value)}
             />
-            <p className="text-xs text-muted-foreground">
-              Optional registered name if different from the company name.
-            </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -143,13 +140,10 @@ export default function BusinessSettingsBuilder() {
               <Label htmlFor="tax-id">Tax ID</Label>
               <Input
                 id="tax-id"
-                placeholder="e.g., 123456789"
+                placeholder="TIN or BIN (optional)"
                 value={values.taxId}
                 onChange={(e) => setValue("taxId", e.target.value)}
               />
-              <p className="text-xs text-muted-foreground">
-                TIN or BIN, if applicable.
-              </p>
             </div>
 
             <div className="space-y-1.5">
@@ -180,14 +174,11 @@ export default function BusinessSettingsBuilder() {
 
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Business Address</CardTitle>
-          <CardDescription>
-            Used on invoices and merchant records.
-          </CardDescription>
+          <CardTitle className="text-base">Business address</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-1.5">
-            <Label htmlFor="address-line-1">Address Line 1</Label>
+            <Label htmlFor="address-line-1">Address line 1</Label>
             <Input
               id="address-line-1"
               placeholder="Street address"
@@ -197,7 +188,7 @@ export default function BusinessSettingsBuilder() {
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="address-line-2">Address Line 2</Label>
+            <Label htmlFor="address-line-2">Address line 2</Label>
             <Input
               id="address-line-2"
               placeholder="Floor, suite, unit (optional)"
@@ -218,7 +209,7 @@ export default function BusinessSettingsBuilder() {
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="state-region">State/Region</Label>
+              <Label htmlFor="state-region">State/region</Label>
               <Input
                 id="state-region"
                 placeholder="e.g., Dhaka Division"
@@ -228,7 +219,7 @@ export default function BusinessSettingsBuilder() {
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="postal-code">Postal Code</Label>
+              <Label htmlFor="postal-code">Postal code</Label>
               <Input
                 id="postal-code"
                 placeholder="e.g., 1205"
@@ -252,14 +243,11 @@ export default function BusinessSettingsBuilder() {
 
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Invoice Settings</CardTitle>
-          <CardDescription>
-            Numbering and branding for generated invoices.
-          </CardDescription>
+          <CardTitle className="text-base">Invoice settings</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-1.5">
-            <Label htmlFor="invoice-prefix">Invoice Number Prefix</Label>
+            <Label htmlFor="invoice-prefix">Invoice number prefix</Label>
             <Input
               id="invoice-prefix"
               placeholder="e.g., INV"
@@ -310,7 +298,7 @@ export default function BusinessSettingsBuilder() {
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="invoice-footer-text">Invoice Footer Text</Label>
+            <Label htmlFor="invoice-footer-text">Invoice footer text</Label>
             <textarea
               id="invoice-footer-text"
               placeholder="e.g., Thank you for your business!"
@@ -323,7 +311,8 @@ export default function BusinessSettingsBuilder() {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-2 gap-2 border-t border-border pt-4 sm:flex sm:justify-end">
+      {isDirty ? (
+        <div className="grid grid-cols-2 gap-2 border-t border-border pt-4 sm:flex sm:justify-end">
         <Button
           type="button"
           variant="outline"
@@ -347,7 +336,8 @@ export default function BusinessSettingsBuilder() {
           )}
           Save business
         </Button>
-      </div>
+        </div>
+      ) : null}
     </div>
   );
 }

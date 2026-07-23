@@ -350,7 +350,7 @@ export default function CurrencySettingsBuilder() {
       <UnsavedChangesGuard isDirty={isDirty} isSubmitting={isSaving} />
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Store Currency</CardTitle>
+          <CardTitle className="text-base">Store currency</CardTitle>
           <CardDescription>
             Used for catalog prices, checkout, and reporting.
           </CardDescription>
@@ -400,16 +400,16 @@ export default function CurrencySettingsBuilder() {
                     setPickerOpen(true);
                   }}
                   onFocus={() => setPickerOpen(true)}
-                  aria-describedby="currency-code-lock-help"
+                  aria-describedby={values.currencyCodeLocked ? "currency-code-lock-help" : undefined}
                   className="pl-9"
                 />
               </div>
             ) : null}
-            <p id="currency-code-lock-help" className="text-xs text-muted-foreground">
-              {values.currencyCodeLocked
-                ? "Changing stored price currency requires a dedicated migration."
-                : "Search by code, name, or symbol."}
-            </p>
+            {values.currencyCodeLocked ? (
+              <p id="currency-code-lock-help" className="text-xs text-muted-foreground">
+                Changing stored price currency requires a dedicated migration.
+              </p>
+            ) : null}
             {pickerOpen && (
               <div className="border rounded-md max-h-64 overflow-y-auto mt-1">
                 {filteredCurrencies.length === 0 ? (
@@ -451,7 +451,7 @@ export default function CurrencySettingsBuilder() {
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="currency-symbol">Currency Symbol</Label>
+            <Label htmlFor="currency-symbol">Currency symbol</Label>
             <Input
               id="currency-symbol"
               placeholder="e.g. ৳"
@@ -460,12 +460,12 @@ export default function CurrencySettingsBuilder() {
               className="max-w-xs"
             />
             <p className="text-xs text-muted-foreground">
-              Auto-filled from the currency; change it only for display.
+              Used for display; stored amounts keep the currency code above.
             </p>
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="usd-exchange-rate">USD Exchange Rate</Label>
+            <Label htmlFor="usd-exchange-rate">USD exchange rate</Label>
             <Input
               id="usd-exchange-rate"
               type="number"
@@ -487,13 +487,14 @@ export default function CurrencySettingsBuilder() {
               </p>
             )}
             <p id="usd-exchange-rate-help" className="text-xs text-muted-foreground">
-              {values.currencyCode} per USD. For 1 USD = 120 {values.currencyCode}, enter 120.
+              {values.currencyCode} per USD, for example 120.
             </p>
           </div>
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-2 gap-2 border-t border-border pt-4 sm:flex sm:justify-end">
+      {isDirty ? (
+        <div className="grid grid-cols-2 gap-2 border-t border-border pt-4 sm:flex sm:justify-end">
         <Button
           type="button"
           variant="outline"
@@ -520,7 +521,8 @@ export default function CurrencySettingsBuilder() {
           )}
           Save currency
         </Button>
-      </div>
+        </div>
+      ) : null}
     </div>
   );
 }

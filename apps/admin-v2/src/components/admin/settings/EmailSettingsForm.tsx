@@ -152,7 +152,7 @@ export default function EmailSettingsForm() {
   return (
     <>
       <UnsavedChangesGuard isDirty={dirty} isSubmitting={saveMutation.isPending} />
-      <div className="max-w-2xl space-y-5 pb-24">
+      <div className="max-w-2xl space-y-5">
         {!canManage && (
           <Alert>
             <AlertDescription>
@@ -169,16 +169,21 @@ export default function EmailSettingsForm() {
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="text-sm font-semibold">Transactional email</h3>
-                <Badge variant={runtimeConfigured ? "default" : "secondary"}>
-                  {runtimeConfigured ? "Runtime configured" : "Setup incomplete"}
+                <Badge
+                  variant={runtimeConfigured ? "default" : "secondary"}
+                  title={runtimeConfigured
+                    ? "Configuration is ready; successful delivery has not been tested."
+                    : undefined}
+                >
+                  {runtimeConfigured ? "Ready" : "Setup incomplete"}
                 </Badge>
                 {dirty && <Badge variant="outline">Unsaved changes</Badge>}
               </div>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {runtimeConfigured
-                  ? "A valid sender and at least one provider are available. This does not confirm a successful delivery."
-                  : data.readinessError ?? "Add a sender and an available provider to enable email delivery."}
-              </p>
+              {!runtimeConfigured ? (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {data.readinessError ?? "Add a sender and an available provider."}
+                </p>
+              ) : null}
             </div>
           </CardContent>
         </Card>
@@ -187,7 +192,7 @@ export default function EmailSettingsForm() {
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Primary provider</CardTitle>
             <CardDescription>
-              The other configured provider is used automatically if the primary is unavailable.
+              The other configured provider is used as a fallback.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -239,7 +244,7 @@ export default function EmailSettingsForm() {
                 )}
               </CardTitle>
               <CardDescription>
-                Uses the Worker <code>EMAIL</code> binding. Sender-domain onboarding stays in Cloudflare.
+                Uses the Worker <code>EMAIL</code> binding.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -314,7 +319,7 @@ export default function EmailSettingsForm() {
               Sender address
             </CardTitle>
             <CardDescription>
-              The From address on transactional email. Verify its domain with each provider you use.
+              Verify this domain with each provider you use.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-1.5">
@@ -335,7 +340,8 @@ export default function EmailSettingsForm() {
           </CardContent>
         </Card>
 
-        <div className="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end">
+        {dirty ? (
+          <div className="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end">
           <Button
             type="button"
             variant="outline"
@@ -359,7 +365,8 @@ export default function EmailSettingsForm() {
             )}
             Save changes
           </Button>
-        </div>
+          </div>
+        ) : null}
       </div>
     </>
   );

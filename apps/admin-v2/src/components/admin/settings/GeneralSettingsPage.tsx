@@ -1,6 +1,16 @@
 import { useEffect, useState, lazy, Suspense, type ReactNode } from "react";
 import { ErrorBoundary } from "../ErrorBoundary";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue,
+} from "../../ui/select";
 import { Loader2 } from "lucide-react";
 import type {
   HeaderBuilderPanel,
@@ -108,19 +118,21 @@ interface GeneralSettingsPageProps {
 }
 
 const tabs = [
-  { value: "header", label: "Header" },
-  { value: "footer", label: "Footer" },
-  { value: "seo", label: "SEO" },
-  { value: "storefront", label: "Storefront" },
-  { value: "email", label: "Email" },
-  { value: "currency", label: "Currency" },
-  { value: "media", label: "Media" },
-  { value: "business", label: "Business" },
-  { value: "countries", label: "Countries" },
-  { value: "auth", label: "Auth & access" },
-  { value: "security", label: "Security" },
-  { value: "scanner", label: "Scanner" },
+  { value: "header", label: "Header", group: "Storefront" },
+  { value: "footer", label: "Footer", group: "Storefront" },
+  { value: "seo", label: "SEO", group: "Storefront" },
+  { value: "storefront", label: "Storefront URL", group: "Storefront" },
+  { value: "media", label: "Media delivery", group: "Storefront" },
+  { value: "business", label: "Business details", group: "Operations" },
+  { value: "currency", label: "Currency", group: "Operations" },
+  { value: "countries", label: "Customer countries", group: "Operations" },
+  { value: "email", label: "Email delivery", group: "Operations" },
+  { value: "auth", label: "Customer sign-in", group: "Access & security" },
+  { value: "security", label: "Security", group: "Access & security" },
+  { value: "scanner", label: "Warehouse scanner", group: "Access & security" },
 ] as const;
+
+const tabGroups = ["Storefront", "Operations", "Access & security"] as const;
 
 export default function GeneralSettingsPage({
   headerConfig,
@@ -178,20 +190,50 @@ export default function GeneralSettingsPage({
           </h1>
         </div>
 
+        <div className="mb-4 lg:hidden">
+          <Select value={section} onValueChange={handleTabChange}>
+            <SelectTrigger aria-label="Settings section" className="h-11 w-full bg-card">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {tabGroups.map((group, groupIndex) => (
+                <SelectGroup key={group}>
+                  {groupIndex > 0 ? <SelectSeparator /> : null}
+                  <SelectLabel className="text-xs text-muted-foreground">
+                    {group}
+                  </SelectLabel>
+                  {tabs.filter((tab) => tab.group === group).map((tab) => (
+                    <SelectItem key={tab.value} value={tab.value} className="min-h-11">
+                      {tab.label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
         <Tabs
           value={section}
           onValueChange={handleTabChange}
           className="grid min-w-0 gap-4 lg:grid-cols-[12rem_minmax(0,1fr)]"
         >
-          <TabsList className="h-auto min-w-0 justify-start gap-0 overflow-x-auto rounded-none border-b border-border bg-transparent p-0 [scrollbar-width:thin] lg:sticky lg:top-16 lg:flex-col lg:self-start lg:overflow-visible lg:rounded-md lg:border lg:bg-card lg:p-1">
-            {tabs.map((tab) => (
-              <TabsTrigger
-                key={tab.value}
-                value={tab.value}
-                className="h-11 shrink-0 justify-start rounded-none border-b-2 border-transparent px-3 text-sm font-medium text-muted-foreground transition-none hover:text-foreground data-[state=active]:border-b-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none sm:h-10 lg:w-full lg:rounded-sm lg:border-b-0 lg:data-[state=active]:bg-muted"
-              >
-                {tab.label}
-              </TabsTrigger>
+          <TabsList className="hidden h-auto min-w-0 justify-start gap-0 rounded-md border border-border bg-card p-1 lg:sticky lg:top-16 lg:flex lg:flex-col lg:self-start">
+            {tabGroups.map((group) => (
+              <div key={group} role="presentation" className="w-full py-1 first:pt-0 last:pb-0">
+                <p className="px-2 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground first:pt-1">
+                  {group}
+                </p>
+                {tabs.filter((tab) => tab.group === group).map((tab) => (
+                  <TabsTrigger
+                    key={tab.value}
+                    value={tab.value}
+                    className="h-10 w-full justify-start rounded-sm px-2.5 text-sm font-medium text-muted-foreground transition-none hover:bg-muted/60 hover:text-foreground data-[state=active]:bg-muted data-[state=active]:text-foreground data-[state=active]:shadow-none"
+                  >
+                    {tab.label}
+                  </TabsTrigger>
+                ))}
+              </div>
             ))}
           </TabsList>
 
