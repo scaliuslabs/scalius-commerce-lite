@@ -35,7 +35,10 @@ describe("theme and account settings workspace", () => {
     expect(reviewSource).toContain("Draft changes");
     expect(reviewSource).toContain("Published history");
     expect(reviewSource).toContain("Restore as new revision");
-    expect(systemSource).toContain("Product detail");
+    expect(systemSource).toContain("xl:grid-cols-3");
+    expect(systemSource).not.toContain("Where it applies");
+    expect(systemSource).not.toContain("Current system");
+    expect(systemSource).not.toContain("One bounded set of choices");
     expect(source).toContain("Save draft");
     expect(source).toContain("createThemePreviewSession");
     expect(source).toContain("publishThemeDraft");

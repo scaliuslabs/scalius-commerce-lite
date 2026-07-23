@@ -273,7 +273,7 @@ describe("ThemeSettingsPage read authority", () => {
     expect(onSectionChange).toHaveBeenCalledWith("colors");
   });
 
-  it("keeps the fixed mobile action bar to one primary row", async () => {
+  it("keeps clean-state actions focused on preview", async () => {
     getThemeWorkspaceMock.mockResolvedValueOnce({
       published: { theme: DEFAULT_STOREFRONT_THEME_SETTINGS, revision: 8 },
       draft: {
@@ -299,16 +299,14 @@ describe("ThemeSettingsPage read authority", () => {
     );
 
     expect(actionBar?.className).toContain("py-2");
-    expect(primaryActions?.className).toContain(
-      "grid-cols-[2.75rem_repeat(3,minmax(0,1fr))]",
-    );
+    expect(primaryActions?.className).toContain("justify-end");
     expect(
       host.querySelector<HTMLButtonElement>(
         'button[aria-label="More theme actions"]',
       ),
     ).toBeTruthy();
-    expect(primaryActions?.textContent).toContain("Save");
     expect(primaryActions?.textContent).toContain("Preview");
-    expect(primaryActions?.textContent).toContain("Publish");
+    expect(primaryActions?.textContent).not.toContain("Save");
+    expect(primaryActions?.textContent).not.toContain("Publish");
   });
 });

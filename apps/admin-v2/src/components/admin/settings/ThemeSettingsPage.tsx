@@ -787,19 +787,19 @@ export default function ThemeSettingsPage({
         data-testid="theme-action-bar"
         className="fixed inset-x-0 bottom-0 z-20 border-t bg-background/95 px-3 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] backdrop-blur supports-[backdrop-filter]:bg-background/85 lg:left-[var(--sidebar-width,0px)] sm:py-3 sm:pb-[calc(0.75rem+env(safe-area-inset-bottom))]"
       >
-        <div className="mx-auto flex max-w-6xl flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <p className="truncate text-xs text-muted-foreground">
-            {dirty
-              ? "Unsaved in this tab"
-              : hasUnpublishedChanges
-                ? `Draft r${draftRevision || "new"} saved · not published`
-                : "Published style is current"}
-          </p>
+        <div className="mx-auto flex max-w-6xl flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+          {(dirty || hasUnpublishedChanges) && (
+            <p className="truncate text-xs text-muted-foreground sm:mr-auto">
+              {dirty
+                ? "Unsaved changes"
+                : `Draft r${draftRevision || "new"} is ready to publish`}
+            </p>
+          )}
           <div
             data-testid="theme-primary-actions"
-            className="grid grid-cols-[2.75rem_repeat(3,minmax(0,1fr))] gap-2 sm:flex"
+            className="flex items-center justify-end gap-2"
           >
-            <div className="sm:hidden">
+            <div className="w-11 shrink-0">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button
@@ -823,52 +823,39 @@ export default function ThemeSettingsPage({
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
-            <button
-              type="button"
-              onClick={handleDiscard}
-              disabled={operation !== null || !dirty}
-              className="hidden min-h-10 rounded-md px-3 text-sm font-medium text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40 sm:inline-flex sm:items-center sm:justify-center"
-            >
-              Discard
-            </button>
-            <button
-              type="button"
-              onClick={handleReset}
-              disabled={!canManage || operation !== null}
-              className="hidden min-h-10 items-center justify-center gap-1.5 rounded-md border bg-background px-3 text-sm font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40 sm:inline-flex"
-            >
-              <RotateCcw className="h-4 w-4" />
-              Defaults
-            </button>
-            <button
-              type="button"
-              onClick={() => void handleSaveDraft()}
-              aria-label={operation === "saving" ? "Saving theme draft" : "Save draft"}
-              disabled={!canManage || operation !== null || !dirty || publishBlocked || Boolean(conflict)}
-              className="inline-flex min-h-11 min-w-0 items-center justify-center gap-1.5 rounded-md border bg-background px-2 text-sm font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 sm:min-h-10 sm:px-3"
-            >
-              {operation === "saving" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              <span className="truncate">{operation === "saving" ? "Saving…" : "Save"}</span>
-              <span className="sr-only"> draft</span>
-            </button>
+            {dirty && (
+              <button
+                type="button"
+                onClick={() => void handleSaveDraft()}
+                aria-label={operation === "saving" ? "Saving theme draft" : "Save draft"}
+                disabled={!canManage || operation !== null || publishBlocked || Boolean(conflict)}
+                className="inline-flex min-h-11 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-md border bg-background px-3 text-sm font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 sm:min-h-10 sm:flex-none"
+              >
+                {operation === "saving" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                <span className="truncate">{operation === "saving" ? "Saving…" : "Save"}</span>
+                <span className="sr-only"> draft</span>
+              </button>
+            )}
             <button
               type="button"
               onClick={() => void handlePreview()}
               disabled={operation !== null || publishBlocked || Boolean(conflict) || !configuredStorefrontUrl || (!canManage && draftRevision === 0)}
-              className="inline-flex min-h-11 min-w-0 items-center justify-center gap-1.5 rounded-md border bg-background px-2 text-sm font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 sm:min-h-10 sm:px-3"
+              className="inline-flex min-h-11 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-md border bg-background px-3 text-sm font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 sm:min-h-10 sm:flex-none"
             >
               {operation === "previewing" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}
               {operation === "previewing" ? "Opening…" : "Preview"}
             </button>
-            <button
-              type="button"
-              onClick={() => void handlePublish()}
-              disabled={!canManage || operation !== null || !hasUnpublishedChanges || publishBlocked || Boolean(conflict)}
-              className="inline-flex min-h-11 min-w-0 items-center justify-center gap-1.5 rounded-md bg-primary px-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 sm:min-h-10 sm:px-4"
-            >
-              {operation === "publishing" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-              {operation === "publishing" ? "Publishing…" : "Publish"}
-            </button>
+            {hasUnpublishedChanges && (
+              <button
+                type="button"
+                onClick={() => void handlePublish()}
+                disabled={!canManage || operation !== null || publishBlocked || Boolean(conflict)}
+                className="inline-flex min-h-11 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 sm:min-h-10 sm:flex-none sm:px-4"
+              >
+                {operation === "publishing" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                {operation === "publishing" ? "Publishing…" : "Publish"}
+              </button>
+            )}
           </div>
         </div>
       </div>
