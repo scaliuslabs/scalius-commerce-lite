@@ -66,6 +66,7 @@ function TaxesPage() {
   const handleClassificationRouteStateChange = useCallback(
     (state: TaxClassificationRouteState) => {
       void navigate({
+        resetScroll: false,
         search: ((previous: Record<string, unknown>) => ({
           ...previous,
           section: "classification",

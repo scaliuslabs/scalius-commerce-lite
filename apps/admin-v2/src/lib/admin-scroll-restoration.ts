@@ -4,6 +4,7 @@ import { useRouter } from "@tanstack/react-router";
 const ADMIN_SCROLL_STORAGE_PREFIX = "scalius-admin-scroll-v2:";
 const DEFAULT_ADMIN_SCROLL_ELEMENT_ID = "admin-main-scroll";
 const MAX_RESTORE_FRAMES = 30;
+const WORKSPACE_VIEW_SEARCH_PARAMS = ["section", "panel", "kind"] as const;
 
 type NavigationTraverseEvent = Event & { navigationType?: string };
 type NavigationEventTarget = EventTarget & {
@@ -60,8 +61,9 @@ function workspaceViewChanged(fromHref: string, toHref: string) {
 
     if (from.pathname !== to.pathname) return false;
 
-    return from.searchParams.get("section") !== to.searchParams.get("section") ||
-      from.searchParams.get("panel") !== to.searchParams.get("panel");
+    return WORKSPACE_VIEW_SEARCH_PARAMS.some(
+      (key) => from.searchParams.get(key) !== to.searchParams.get(key),
+    );
   } catch {
     return false;
   }

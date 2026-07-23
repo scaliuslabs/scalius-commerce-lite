@@ -217,6 +217,41 @@ describe("useAdminNestedScrollRestoration", () => {
     expect(scrollElement.scrollTop).toBe(720);
   });
 
+  it("restores the durable Products and SKUs tax sub-workspaces independently", () => {
+    const scrollElement = createAdminScrollElement({
+      clientHeight: 400,
+      scrollHeight: 1_600,
+    });
+    scrollElement.scrollTop = 640;
+
+    act(() => {
+      emitRouterEvent("onBeforeLoad", {
+        fromLocation: { href: "/admin/settings/taxes?section=classification" },
+        toLocation: { href: "/admin/settings/taxes?section=classification&kind=variant" },
+      });
+      emitRouterEvent("onRendered", {
+        fromLocation: { href: "/admin/settings/taxes?section=classification" },
+        toLocation: { href: "/admin/settings/taxes?section=classification&kind=variant" },
+      });
+    });
+
+    expect(scrollElement.scrollTop).toBe(0);
+    scrollElement.scrollTop = 280;
+
+    act(() => {
+      emitRouterEvent("onBeforeLoad", {
+        fromLocation: { href: "/admin/settings/taxes?section=classification&kind=variant" },
+        toLocation: { href: "/admin/settings/taxes?section=classification" },
+      });
+      emitRouterEvent("onRendered", {
+        fromLocation: { href: "/admin/settings/taxes?section=classification&kind=variant" },
+        toLocation: { href: "/admin/settings/taxes?section=classification" },
+      });
+    });
+
+    expect(scrollElement.scrollTop).toBe(640);
+  });
+
   it("restores each workspace tab when browser history traverses to it", () => {
     const scrollElement = createAdminScrollElement({
       clientHeight: 400,
@@ -305,5 +340,26 @@ describe("useAdminNestedScrollRestoration", () => {
     });
 
     expect(scrollElement.scrollTop).toBe(720);
+  });
+
+  it("does not treat tax search and pagination as workspace changes", () => {
+    const scrollElement = createAdminScrollElement({
+      clientHeight: 400,
+      scrollHeight: 1_600,
+    });
+    scrollElement.scrollTop = 520;
+
+    act(() => {
+      emitRouterEvent("onBeforeLoad", {
+        fromLocation: { href: "/admin/settings/taxes?section=classification&kind=variant" },
+        toLocation: { href: "/admin/settings/taxes?section=classification&kind=variant&query=shoe&page=2" },
+      });
+      emitRouterEvent("onRendered", {
+        fromLocation: { href: "/admin/settings/taxes?section=classification&kind=variant" },
+        toLocation: { href: "/admin/settings/taxes?section=classification&kind=variant&query=shoe&page=2" },
+      });
+    });
+
+    expect(scrollElement.scrollTop).toBe(520);
   });
 });
