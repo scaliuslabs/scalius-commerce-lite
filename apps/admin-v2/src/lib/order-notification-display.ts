@@ -17,8 +17,50 @@ export interface OrderNotificationReceiptDisplayGroup {
   setupIssue: boolean;
 }
 
+export interface OrderNotificationDeliverySummary {
+  status: string;
+  label: string;
+}
+
 const TERMINAL_DELIVERY_STATUSES = new Set(["accepted", "delivered", "skipped"]);
 const TERMINAL_OUTBOX_STATUSES = new Set(["sent"]);
+
+export function summarizeNotificationDelivery(
+  outbox: Pick<OrderNotificationOutboxDto, "status" | "receipts">,
+): OrderNotificationDeliverySummary {
+  if (outbox.receipts.length === 0) {
+    return {
+      status: outbox.status,
+      label: humanize(outbox.status),
+    };
+  }
+
+  const statuses = outbox.receipts.map((receipt) => receipt.status);
+  const all = (status: string) => statuses.every((value) => value === status);
+  const has = (...values: string[]) => statuses.some((status) => values.includes(status));
+  const hasSuccessfulDelivery = has("accepted", "delivered");
+  const hasUnsentDelivery = has("failed", "skipped");
+
+  if (all("delivered")) return { status: "delivered", label: "Delivered" };
+  if (statuses.every((status) => status === "accepted" || status === "delivered")) {
+    return { status: "accepted", label: "Sent" };
+  }
+  if (all("skipped")) return { status: "skipped", label: "Not sent" };
+  if (all("failed")) return { status: "failed", label: "Failed" };
+  if (hasSuccessfulDelivery && hasUnsentDelivery) {
+    return { status: "partial", label: "Partially sent" };
+  }
+  if (has("pending", "queued", "enqueueing", "processing")) {
+    return { status: "pending", label: "Pending" };
+  }
+  if (has("failed")) return { status: "failed", label: "Failed" };
+  if (has("skipped")) return { status: "skipped", label: "Not sent" };
+
+  return {
+    status: outbox.status,
+    label: humanize(outbox.status),
+  };
+}
 
 export function describeNotificationIssue(value: string | null | undefined): string | null {
   const text = value?.trim();

@@ -83,12 +83,15 @@ describe("order operational reads", () => {
 
   it("keeps notification history compact without hiding delivery evidence", () => {
     expect(notificationsSource).toContain(
-      'className="group mt-2 rounded-md border bg-muted/10"',
+      'className="group mt-2"',
     );
     expect(notificationsSource).toContain("buildReceiptDisplayGroups");
+    expect(notificationsSource).toContain("summarizeNotificationDelivery");
     expect(notificationsSource).toContain("<ReceiptRow key={group.key} group={group} />");
     expect(notificationsSource).toContain("sr-only sm:not-sr-only");
-    expect(notificationsSource).toContain("Details");
+    expect(notificationsSource).toContain("Delivery details");
+    expect(notificationsSource).toContain('className="break-words text-muted-foreground"');
+    expect(notificationsSource).not.toContain('className="truncate text-muted-foreground"');
     expect(notificationsSource).not.toContain("View details");
   });
 

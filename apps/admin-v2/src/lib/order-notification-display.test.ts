@@ -5,6 +5,7 @@ import {
   deliveryAttemptLabel,
   describeNotificationIssue,
   outboxAttemptLabel,
+  summarizeNotificationDelivery,
 } from "./order-notification-display";
 
 function receipt(overrides: Partial<OrderNotificationReceiptDto>): OrderNotificationReceiptDto {
@@ -152,6 +153,26 @@ describe("order notification display", () => {
     expect(outboxAttemptLabel({ status: "sent", attempts: 275 })).toBeNull();
     expect(outboxAttemptLabel({ status: "failed", attempts: 8 })).toBe("Needs attention");
     expect(outboxAttemptLabel({ status: "failed", attempts: 2 })).toBe("2 attempts");
+  });
+
+  it("reports the recorded delivery outcome instead of the parent queue state", () => {
+    expect(summarizeNotificationDelivery({
+      status: "sent",
+      receipts: [receipt({ channel: "email", status: "skipped", acceptedAt: null })],
+    })).toEqual({ status: "skipped", label: "Not sent" });
+
+    expect(summarizeNotificationDelivery({
+      status: "sent",
+      receipts: [
+        receipt({ id: "push", status: "accepted" }),
+        receipt({ id: "email", channel: "email", status: "skipped", acceptedAt: null }),
+      ],
+    })).toEqual({ status: "partial", label: "Partially sent" });
+
+    expect(summarizeNotificationDelivery({
+      status: "sent",
+      receipts: [receipt({ status: "accepted" })],
+    })).toEqual({ status: "accepted", label: "Sent" });
   });
 
   it("does not label capped transient failures as paused provider setup", () => {
