@@ -25,6 +25,13 @@ describe("CommandPalette search request boundaries", () => {
     expect(source).toContain("}, PREDICTIVE_SEARCH_DEBOUNCE_MS);");
     expect(source).toContain('const PREDICTIVE_SEARCH_RESULT_LIMIT = "7";');
     expect(source).toContain("limit: PREDICTIVE_SEARCH_RESULT_LIMIT");
+
+    const layout = await readFile(
+      storefrontSourcePath("layouts", "Layout.astro"),
+      "utf8",
+    );
+    expect(layout).toContain("<CommandPalette client:load />");
+    expect(layout).not.toContain("<CommandPalette client:idle />");
   });
 
   it("exposes dialog/listbox semantics and keeps failures distinct from empty results", async () => {
@@ -53,7 +60,7 @@ describe("CommandPalette search request boundaries", () => {
     expect(source).toContain("<ProductThumbnail product={p}");
     expect(source).toContain("Pages");
     expect(source).toContain('type: "page"');
-    expect(source).toContain('trim: "border"');
+    expect(source).not.toContain('trim: "border"');
     expect(source).toContain("onLoad={() => setLoaded(true)}");
     expect(source).toContain("motion-reduce:animate-none");
   });

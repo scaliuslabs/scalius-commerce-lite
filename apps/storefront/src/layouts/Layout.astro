@@ -500,7 +500,7 @@ const runtimeGlobalsScript = [
 
     <Toaster position="top-right" expand={false} richColors closeButton />
 
-    <CommandPalette client:idle />
+    <CommandPalette client:load />
     <AuthModal client:idle />
 
     {bodyEndScripts.map((script) => <Fragment set:html={script.config} />)}

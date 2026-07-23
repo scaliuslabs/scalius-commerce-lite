@@ -14,4 +14,14 @@ describe("public search buyer-catalog boundaries", () => {
     expect(source).not.toContain("lte(products.price");
     expect(source).toContain("throw error;");
   });
+
+  it("projects the predictive thumbnail without a second media read", () => {
+    const source = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
+
+    expect(source).toContain("imageProjection: buildSearchImageProjection()");
+    expect(source).toContain("FROM product_media AS search_product_media");
+    expect(source).toContain("search_poster.status IN ('ready', 'trashed')");
+    expect(source).toContain("parseSearchImageProjection(imageProjection)");
+    expect(source).not.toContain("loadProductMediaProjections");
+  });
 });
