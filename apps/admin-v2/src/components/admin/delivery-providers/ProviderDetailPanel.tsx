@@ -143,14 +143,14 @@ export function ProviderDetailPanel({
   }
 
   return (
-    <Card className="md:col-span-2">
-      <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
-        <div className="flex items-center gap-3">
+    <Card className="md:col-span-2 [&_input]:min-h-11 sm:[&_input]:min-h-9">
+      <CardHeader className="flex flex-col gap-3 space-y-0 pb-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex min-w-0 items-center gap-3">
           <ProviderIcon type={formData.type} size="md" />
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <CardTitle className="text-base">
-                {isCreating ? "New Provider" : formData.name || "Provider Details"}
+                {isCreating ? "New provider" : formData.name || "Provider details"}
               </CardTitle>
               <Badge
                 variant="outline"
@@ -167,14 +167,15 @@ export function ProviderDetailPanel({
           </div>
         </div>
         {!isEditing && selectedProvider && (
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={onEdit}>
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
+            <Button variant="outline" size="sm" className="min-h-11 sm:min-h-9" onClick={onEdit}>
               <Pencil className="h-3.5 w-3.5 mr-1" />
               Edit
             </Button>
             <Button
               variant="outline"
               size="sm"
+              className="min-h-11 sm:min-h-9"
               onClick={onTest}
               disabled={isTesting}
             >
@@ -187,7 +188,7 @@ export function ProviderDetailPanel({
             </Button>
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <Button variant="destructive" size="sm" disabled={isDeleting}>
+                <Button variant="destructive" size="sm" className="min-h-11 sm:min-h-9" disabled={isDeleting}>
                   {isDeleting ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
                   ) : (
@@ -222,8 +223,8 @@ export function ProviderDetailPanel({
       <CardContent className="space-y-6">
         {/* Basic Information */}
         <div className="space-y-4">
-          <h4 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
-            Basic Information
+          <h4 className="text-sm font-medium text-muted-foreground">
+            Basic information
           </h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
@@ -245,7 +246,7 @@ export function ProviderDetailPanel({
                     onChangeType(val as DeliveryProviderType)
                   }
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="min-h-11 sm:min-h-9">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -324,8 +325,8 @@ export function ProviderDetailPanel({
 
         {/* Credentials */}
         <div className="space-y-4">
-          <h4 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
-            API Credentials
+          <h4 className="text-sm font-medium text-muted-foreground">
+            Credentials
           </h4>
 
           {formData.type === "pathao" && (
@@ -411,8 +412,8 @@ export function ProviderDetailPanel({
 
         {/* Configuration Section */}
         <div className="space-y-4">
-          <h4 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
-            Configuration
+          <h4 className="text-sm font-medium text-muted-foreground">
+            Provider settings
           </h4>
 
           {formData.type === "pathao" && (
@@ -434,7 +435,7 @@ export function ProviderDetailPanel({
                       onChangeConfig("defaultDeliveryType", Number(val))
                     }
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="min-h-11 sm:min-h-9">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -462,7 +463,7 @@ export function ProviderDetailPanel({
                       onChangeConfig("defaultItemType", Number(val))
                     }
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="min-h-11 sm:min-h-9">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -517,8 +518,8 @@ export function ProviderDetailPanel({
         <div className="space-y-4">
           <div className="flex items-center gap-2">
             <Webhook className="h-4 w-4 text-muted-foreground" />
-            <h4 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
-              Webhook Configuration
+            <h4 className="text-sm font-medium text-muted-foreground">
+              Webhook
             </h4>
           </div>
 
@@ -624,11 +625,11 @@ export function ProviderDetailPanel({
 
         {/* Action Bar */}
         {isEditing && (
-          <div className="flex items-center gap-2 pt-4 border-t border-border">
+          <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
             <Button
               onClick={onSave}
+              className="min-h-11 min-w-[100px] sm:min-h-9"
               disabled={isSaving || activeSaveBlocked}
-              className="min-w-[100px]"
             >
               {isSaving ? (
                 <Loader2 className="h-4 w-4 animate-spin mr-1" />
@@ -639,6 +640,7 @@ export function ProviderDetailPanel({
             </Button>
             <Button
               variant="outline"
+              className="min-h-11 sm:min-h-9"
               onClick={onTestCredentials}
               disabled={isTestingCredentials}
             >
@@ -647,9 +649,9 @@ export function ProviderDetailPanel({
               ) : (
                 <TestTube className="h-4 w-4 mr-1" />
               )}
-              Test Credentials
+              Test credentials
             </Button>
-            <Button variant="ghost" onClick={onCancel}>
+            <Button variant="ghost" className="min-h-11 sm:min-h-9" onClick={onCancel}>
               <X className="h-4 w-4 mr-1" />
               Cancel
             </Button>
@@ -660,8 +662,8 @@ export function ProviderDetailPanel({
         <div className="pt-6 border-t border-border mt-6">
           <Accordion type="single" collapsible className="w-full">
             <AccordionItem value="guide">
-              <AccordionTrigger className="text-sm font-medium text-muted-foreground uppercase tracking-wider py-2 hover:no-underline">
-                Integration Guide & Documentation
+              <AccordionTrigger className="py-2 text-sm font-medium text-muted-foreground hover:no-underline">
+                Setup guide
               </AccordionTrigger>
               <AccordionContent className="pt-4 text-muted-foreground">
                 {formData.type === "pathao" ? (

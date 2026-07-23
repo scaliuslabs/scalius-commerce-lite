@@ -15,6 +15,7 @@ import {
   testDeliveryCredentials,
 } from "~/lib/api-functions/delivery";
 import { queryKeys } from "~/lib/query-keys";
+import { UnsavedChangesGuard } from "~/components/admin/shared/UnsavedChangesGuard";
 
 // Default credentials structure per provider type
 const DEFAULT_CREDENTIALS = {
@@ -46,6 +47,25 @@ const DEFAULT_CONFIG = {
   },
 };
 
+type DeliveryProviderDraft = Omit<
+  DeliveryProviderRecord,
+  "createdAt" | "updatedAt"
+>;
+
+function draftsMatch(
+  current: DeliveryProviderDraft,
+  saved: DeliveryProviderDraft,
+): boolean {
+  return (
+    current.id === saved.id &&
+    current.name === saved.name &&
+    current.type === saved.type &&
+    current.credentials === saved.credentials &&
+    current.config === saved.config &&
+    current.isActive === saved.isActive
+  );
+}
+
 interface DeliveryProvidersContainerProps {
   providers: DeliveryProviderRecord[];
   apiBaseUrl?: string;
@@ -69,9 +89,7 @@ const DeliveryProvidersContainer: FC<DeliveryProvidersContainerProps> = ({
   const [copiedWebhookUrl, setCopiedWebhookUrl] = useState(false);
   const [copiedSecret, setCopiedSecret] = useState(false);
 
-  const [formData, setFormData] = useState<
-    Omit<DeliveryProviderRecord, "createdAt" | "updatedAt">
-  >({
+  const initialDraft: DeliveryProviderDraft = {
     id: "",
     name: "",
     type: "pathao",
@@ -79,7 +97,10 @@ const DeliveryProvidersContainer: FC<DeliveryProvidersContainerProps> = ({
     config: JSON.stringify(DEFAULT_CONFIG.pathao),
     isActive: false,
     readiness: null,
-  });
+  };
+  const [formData, setFormData] = useState<DeliveryProviderDraft>(initialDraft);
+  const [savedFormData, setSavedFormData] =
+    useState<DeliveryProviderDraft>(initialDraft);
 
   const parseJSON = (jsonString: string, fallback: Record<string, unknown> = {}) => {
     try {
@@ -99,8 +120,8 @@ const DeliveryProvidersContainer: FC<DeliveryProvidersContainerProps> = ({
   };
 
   const resetForm = (provider?: DeliveryProviderRecord) => {
-    if (provider) {
-      setFormData({
+    const nextDraft: DeliveryProviderDraft = provider
+      ? {
         id: provider.id,
         name: provider.name,
         type: provider.type as DeliveryProviderType,
@@ -108,9 +129,8 @@ const DeliveryProvidersContainer: FC<DeliveryProvidersContainerProps> = ({
         config: provider.config,
         isActive: provider.isActive,
         readiness: provider.readiness ?? null,
-      });
-    } else {
-      setFormData({
+      }
+      : {
         id: crypto.randomUUID(),
         name: "",
         type: "pathao",
@@ -118,8 +138,9 @@ const DeliveryProvidersContainer: FC<DeliveryProvidersContainerProps> = ({
         config: JSON.stringify(DEFAULT_CONFIG.pathao),
         isActive: false,
         readiness: null,
-      });
-    }
+      };
+    setFormData(nextDraft);
+    setSavedFormData(nextDraft);
   };
 
   const handleTypeChange = (type: DeliveryProviderType) => {
@@ -189,6 +210,7 @@ const DeliveryProvidersContainer: FC<DeliveryProvidersContainerProps> = ({
         );
       }
       setSelectedProvider(savedProvider);
+      resetForm(savedProvider);
       setIsEditing(false);
       setIsCreating(false);
       refreshDeliveryProviderQueries();
@@ -294,6 +316,8 @@ const DeliveryProvidersContainer: FC<DeliveryProvidersContainerProps> = ({
     setIsCreating(false);
   };
 
+  const isDraftDirty = isEditing && !draftsMatch(formData, savedFormData);
+
   const getWebhookUrl = (providerType: string) => {
     const base = apiBaseUrl ||
       (typeof window !== "undefined"
@@ -343,12 +367,17 @@ const DeliveryProvidersContainer: FC<DeliveryProvidersContainerProps> = ({
   };
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+      <UnsavedChangesGuard
+        isDirty={isDraftDirty}
+        isSubmitting={isSaving}
+      />
       <ProviderListSidebar
         providers={providers}
         selectedProviderId={selectedProvider?.id || null}
         onSelect={handleSelect}
         onCreate={handleCreate}
+        selectionDisabled={isEditing}
       />
 
       <ProviderDetailPanel
