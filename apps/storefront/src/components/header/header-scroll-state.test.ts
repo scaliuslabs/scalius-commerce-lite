@@ -34,9 +34,11 @@ describe("header scroll state", () => {
     expect(source).toContain("header-expanded-center");
     expect(source).toContain("header-compact-center");
     expect(source).toContain("header-full-nav-row");
-    expect(source).toContain("transition-delay: 80ms, 80ms, 0ms");
+    expect(source).toContain("transition-delay: 0ms, 0ms, 0ms");
     expect(source).toContain("transition-delay: 0ms, 0ms, 120ms");
-    expect(source).toContain("opacity 120ms ease 80ms");
+    expect(source).toContain("opacity 120ms ease");
+    expect(source).not.toContain("transition-delay: 80ms, 80ms, 0ms");
+    expect(source).not.toContain("transition-delay: 40ms, 40ms, 0ms");
     expect(source).toContain(
       "#main-header.is-scrolled .header-full-nav-row",
     );
