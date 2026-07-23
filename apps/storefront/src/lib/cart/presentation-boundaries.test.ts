@@ -32,6 +32,15 @@ describe("cart page presentation contract", () => {
     expect(source).toContain('aria-label="Decrease ${safeName} quantity"');
     expect(source).toContain('aria-label="Increase ${safeName} quantity"');
     expect(source).toContain('aria-label="Remove ${safeName} from cart"');
+    expect(source).toContain(
+      'class="flex h-11 items-center overflow-hidden rounded-md ring-1',
+    );
+    expect(source).toContain(
+      'class="flex h-full w-11 items-center justify-center text-sm',
+    );
+    expect(source).toContain(
+      'class="ml-1.5 flex h-11 w-11 shrink-0 items-center justify-center',
+    );
   });
 
   it("formats every cart amount with the configured ISO currency precision", () => {
@@ -78,6 +87,15 @@ describe("cart page presentation contract", () => {
     );
     expect(cartPageSource).toContain(
       'className="h-11 w-full bg-primary text-primary-foreground',
+    );
+    expect(cartPageSource).toContain(
+      'class="flex min-h-11 items-center rounded-md px-1',
+    );
+    expect(cartPageSource).toContain(
+      'class="h-11 min-w-0 flex-1 rounded-lg border border-input',
+    );
+    expect(cartPageSource).toContain(
+      'class="h-11 rounded-lg bg-primary px-4',
     );
     expect(cartPageSource).not.toContain("    .h-9 {\n      height: 2rem;");
     expect(cartPageSource).not.toContain("    .h-10 {\n      height: 2.25rem;");
