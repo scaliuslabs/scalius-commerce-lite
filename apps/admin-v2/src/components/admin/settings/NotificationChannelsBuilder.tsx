@@ -93,6 +93,8 @@ function CustomerChannelControl({
   issue,
   selection,
   disabled,
+  readyLabel = "Ready",
+  readyDescription,
   onToggle,
 }: {
   label: string;
@@ -101,10 +103,12 @@ function CustomerChannelControl({
   issue: string;
   selection: boolean | "indeterminate";
   disabled: boolean;
+  readyLabel?: string;
+  readyDescription?: string;
   onToggle: (enabled: boolean) => void;
 }) {
   const state = ready
-    ? "Ready"
+    ? readyLabel
     : activeRules > 0
       ? `${activeRules} paused`
       : "Needs setup";
@@ -112,7 +116,7 @@ function CustomerChannelControl({
   return (
     <label
       className="flex min-h-11 min-w-0 items-center gap-2 rounded-md border bg-background px-2.5 text-xs"
-      title={ready ? `${label} delivery is ready.` : issue}
+      title={ready ? readyDescription ?? `${label} delivery is ready.` : issue}
     >
       <Checkbox
         checked={selection}
@@ -720,6 +724,8 @@ export function NotificationChannelsBuilder() {
                 issue={readinessIssueText(emailError, "Email delivery needs setup.")}
                 selection={getCustomerChannelSelection(channels, "email")}
                 disabled={customerControlsDisabled}
+                readyLabel="Configured"
+                readyDescription="Email credentials and sender are configured; delivery has not been tested."
                 onToggle={(enabled) => handleToggleCustomerColumn("email", enabled)}
               />
               <CustomerChannelControl

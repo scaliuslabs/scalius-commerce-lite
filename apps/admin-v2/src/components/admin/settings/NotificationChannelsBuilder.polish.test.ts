@@ -14,6 +14,12 @@ describe("notification rules workspace", () => {
     expect(source).toContain("Saved rules stay paused.");
   });
 
+  it("does not present untested email delivery as ready", () => {
+    expect(source).toContain('readyLabel="Configured"');
+    expect(source).toContain("delivery has not been tested.");
+    expect(source).toContain("readyDescription");
+  });
+
   it("protects rule changes with permissions, reset, and navigation guards", () => {
     expect(source).toContain("ADMIN_PERMISSIONS.SETTINGS_GENERAL_EDIT");
     expect(source).toContain("<UnsavedChangesGuard");
