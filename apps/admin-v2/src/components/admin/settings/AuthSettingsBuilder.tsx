@@ -487,12 +487,12 @@ export default function AuthSettingsBuilder() {
                 </CardHeader>
                 <CardContent className="space-y-5">
                     <div className="space-y-1.5">
-                        <Label>Preset</Label>
+                        <Label htmlFor="customer-auth-preset">Preset</Label>
                         <Select
                             value={values.authVerificationMethod}
                             onValueChange={setPreset}
                         >
-                            <SelectTrigger className="h-11 w-full max-w-xs sm:h-9">
+                            <SelectTrigger id="customer-auth-preset" className="h-11 w-full max-w-xs sm:h-9">
                                 <SelectValue placeholder="Select verification method" />
                             </SelectTrigger>
                             <SelectContent>
@@ -505,8 +505,12 @@ export default function AuthSettingsBuilder() {
                         </Select>
                     </div>
 
-                    <div className="space-y-4 rounded-lg border border-border p-4">
-                        <Label>Verification channels</Label>
+                    <div
+                        role="group"
+                        aria-labelledby="verification-channels-label"
+                        className="space-y-4 rounded-lg border border-border p-4"
+                    >
+                        <Label id="verification-channels-label">Verification channels</Label>
                         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                             {CUSTOMER_AUTH_OTP_CHANNELS.map((channel) => {
                                 const channelSelected = customerAuthPolicy.otpChannels.includes(channel);
@@ -542,13 +546,14 @@ export default function AuthSettingsBuilder() {
 
                         <div className="space-y-3">
                             <div className="flex flex-wrap items-center justify-between gap-2">
-                                <Label>Email collection</Label>
+                                <Label id="email-collection-label">Email collection</Label>
                                 <span className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                                     <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
                                     Phone required
                                 </span>
                             </div>
                             <RadioGroup
+                                aria-labelledby="email-collection-label"
                                 value={getEmailCollectionMode(customerAuthPolicy)}
                                 onValueChange={(value) => setEmailCollectionMode(value as EmailCollectionMode)}
                                 className="grid grid-cols-1 gap-3 sm:grid-cols-3"
@@ -571,7 +576,7 @@ export default function AuthSettingsBuilder() {
                         </div>
 
                         <div className="space-y-1.5">
-                            <Label>Default channel</Label>
+                            <Label htmlFor="default-otp-channel">Default channel</Label>
                             <Select
                                 value={customerAuthPolicy.defaultOtpChannel}
                                 onValueChange={(value) => {
@@ -582,7 +587,7 @@ export default function AuthSettingsBuilder() {
                                     }));
                                 }}
                             >
-                                <SelectTrigger className="h-11 w-full max-w-xs sm:h-9">
+                                <SelectTrigger id="default-otp-channel" className="h-11 w-full max-w-xs sm:h-9">
                                     <SelectValue placeholder="Select default channel" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -752,9 +757,9 @@ export default function AuthSettingsBuilder() {
                         )}
 
                         <div className="space-y-1.5">
-                            <Label>Provider</Label>
+                            <Label htmlFor="sms-provider">Provider</Label>
                             <Select value={values.smsProvider} onValueChange={(val) => setValue("smsProvider", val)}>
-                                <SelectTrigger className="h-11 w-full max-w-xs sm:h-9">
+                                <SelectTrigger id="sms-provider" className="h-11 w-full max-w-xs sm:h-9">
                                     <SelectValue placeholder="Select SMS provider" />
                                 </SelectTrigger>
                                 <SelectContent>
