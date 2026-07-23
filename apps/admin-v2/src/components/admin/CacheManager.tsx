@@ -199,6 +199,8 @@ export function CacheManager() {
       : storefrontDlqMayHaveMore
         ? `${storefrontDlqCount}+ pending`
         : `${storefrontDlqCount} pending`;
+  const showFailedCacheWork =
+    storefrontDlqQuery.isError || storefrontDlqCount > 0;
   const storefrontDlqError =
     storefrontDlqQuery.error instanceof Error
       ? storefrontDlqQuery.error.message
@@ -298,55 +300,45 @@ export function CacheManager() {
         </Alert>
       )}
 
-      <Card className="border border-border/60 shadow-none">
-        <CardHeader className="pb-3">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div className="space-y-1">
-              <CardTitle className="flex flex-wrap items-center gap-2 text-base">
-                <AlertCircle className="h-4 w-4 text-muted-foreground" />
-                Failed cache work
-                <Badge variant="outline" className="font-normal">
-                  {storefrontDlqCountLabel}
-                </Badge>
-              </CardTitle>
-              <CardDescription>
-                Purge or warm jobs that exhausted automatic retries.
-              </CardDescription>
+      {showFailedCacheWork && (
+        <Card className="border border-border/60 shadow-none">
+          <CardHeader className="pb-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="space-y-1">
+                <CardTitle className="flex flex-wrap items-center gap-2 text-base">
+                  <AlertCircle className="h-4 w-4 text-muted-foreground" />
+                  Failed cache work
+                  <Badge variant="outline" className="font-normal">
+                    {storefrontDlqCountLabel}
+                  </Badge>
+                </CardTitle>
+                <CardDescription>
+                  Purge or warm jobs that exhausted automatic retries.
+                </CardDescription>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="min-h-11 gap-1.5 self-start sm:min-h-8"
+                onClick={() => void storefrontDlqQuery.refetch()}
+                disabled={storefrontDlqQuery.isFetching}
+              >
+                <RefreshCw
+                  className={`h-3.5 w-3.5 ${storefrontDlqQuery.isFetching ? "animate-spin" : ""}`}
+                />
+                Refresh
+              </Button>
             </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="min-h-11 gap-1.5 self-start sm:min-h-8"
-              onClick={() => void storefrontDlqQuery.refetch()}
-              disabled={storefrontDlqQuery.isFetching}
-            >
-              <RefreshCw
-                className={`h-3.5 w-3.5 ${storefrontDlqQuery.isFetching ? "animate-spin" : ""}`}
-              />
-              Refresh
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {storefrontDlqQuery.isLoading ? (
-            <div className="space-y-2">
-              <div className="h-14 rounded-md bg-muted animate-pulse" />
-              <div className="h-14 rounded-md bg-muted/70 animate-pulse" />
-            </div>
-          ) : storefrontDlqQuery.isError ? (
-            <Alert>
-              <AlertCircle className="h-4 w-4" />
-              <AlertTitle>Queue status unavailable</AlertTitle>
-              <AlertDescription>{storefrontDlqError}</AlertDescription>
-            </Alert>
-          ) : storefrontDlqCount === 0 ? (
-            <div className="flex items-center gap-2 rounded-md border border-dashed border-border bg-muted/30 px-3 py-3 text-sm text-muted-foreground">
-              <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-              Queue healthy. No purge or warm failures need attention.
-            </div>
-          ) : (
-            <>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {storefrontDlqQuery.isError ? (
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Queue status unavailable</AlertTitle>
+                <AlertDescription>{storefrontDlqError}</AlertDescription>
+              </Alert>
+            ) : (
               <div className="space-y-2">
                 {pendingStorefrontDlqFailures.map((failure) => {
                   const isReplaying =
@@ -452,16 +444,16 @@ export function CacheManager() {
                   );
                 })}
               </div>
-              {storefrontDlqMayHaveMore && (
-                <p className="text-xs text-muted-foreground">
-                  Showing the latest {STOREFRONT_CACHE_DLQ_LIMIT} pending items.
-                  Replay or ignore an item to reveal older pending failures.
-                </p>
-              )}
-            </>
-          )}
-        </CardContent>
-      </Card>
+            )}
+            {!storefrontDlqQuery.isError && storefrontDlqMayHaveMore && (
+              <p className="text-xs text-muted-foreground">
+                Showing the latest {STOREFRONT_CACHE_DLQ_LIMIT} pending items.
+                Replay or ignore an item to reveal older pending failures.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <section className="space-y-3" aria-labelledby="cache-groups-title">
         <div>
@@ -526,10 +518,11 @@ export function CacheManager() {
                     <div className="flex items-center justify-between gap-3 border-t pt-3">
                       <span className="flex items-center text-xs text-muted-foreground">
                         <Clock className="mr-1 h-3 w-3" />
-                        Cleared{" "}
                         {timestampsQuery.isError
-                          ? "unavailable"
-                          : getRelativeTime(lastCleared)}
+                          ? "Clear history unavailable"
+                          : lastCleared
+                            ? `Cleared ${getRelativeTime(lastCleared)}`
+                            : "Not cleared manually"}
                       </span>
                       {canManageCache && (
                         <Button
