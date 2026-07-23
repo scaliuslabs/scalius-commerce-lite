@@ -46,6 +46,12 @@ function getButton(host: HTMLElement, label: string): HTMLButtonElement {
   return button;
 }
 
+function findButton(host: HTMLElement, label: string): HTMLButtonElement | undefined {
+  return Array.from(host.querySelectorAll("button")).find((candidate) =>
+    candidate.textContent?.includes(label),
+  );
+}
+
 async function setStoreUrl(host: HTMLElement, value: string) {
   const input = host.querySelector<HTMLInputElement>("#storefront-url");
   if (!input) throw new Error("Expected Store URL input");
@@ -119,18 +125,18 @@ describe("StorefrontUrlBuilder", () => {
       );
     });
     await waitFor(() => {
-      expect(host.textContent).toContain("Save URL");
+      expect(host.textContent).toContain("Storefront URL");
     });
   }
 
-  it("shows a clean saved state and explains where the origin is used", async () => {
+  it("keeps clean-state actions out of the way and explains where the origin is used", async () => {
     await renderBuilder();
 
     expect(host.textContent).toContain(
-      "Used for storefront links, previews, discovery files, and cache refreshes.",
+      "Used for links, previews, discovery, and cache refreshes.",
     );
-    expect(getButton(host, "Reset").disabled).toBe(true);
-    expect(getButton(host, "Save URL").disabled).toBe(true);
+    expect(findButton(host, "Reset")).toBeUndefined();
+    expect(findButton(host, "Save URL")).toBeUndefined();
   });
 
   it("rejects a relative draft without calling the API", async () => {

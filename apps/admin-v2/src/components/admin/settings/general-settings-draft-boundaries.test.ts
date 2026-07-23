@@ -10,6 +10,7 @@ describe("general settings draft boundaries", () => {
     "CurrencySettingsBuilder.tsx",
     "AllowedCountriesBuilder.tsx",
     "AuthSettingsBuilder.tsx",
+    "MediaSettingsBuilder.tsx",
   ])("guards dirty %s drafts from route changes", (name) => {
     const source = readSource(name);
 
@@ -23,6 +24,7 @@ describe("general settings draft boundaries", () => {
     ["CurrencySettingsBuilder.tsx", "Save currency"],
     ["AllowedCountriesBuilder.tsx", "Save country policy"],
     ["AuthSettingsBuilder.tsx", "Save changes"],
+    ["MediaSettingsBuilder.tsx", "Save changes"],
   ])("keeps %s saves deliberate and phone-friendly", (name, saveLabel) => {
     const source = readSource(name);
 
