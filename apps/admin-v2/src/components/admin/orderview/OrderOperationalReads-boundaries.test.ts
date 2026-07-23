@@ -76,7 +76,20 @@ describe("order operational reads", () => {
     );
     expect(paymentSource).toContain('className="min-h-11 flex-1');
     expect(shipmentSource).toContain('className="min-h-11 w-full');
-    expect(notificationsSource).toContain('className="h-11 gap-1.5 sm:h-8"');
+    expect(notificationsSource).toContain(
+      'className="h-11 w-11 gap-1.5 p-0 sm:h-8 sm:w-auto sm:px-3"',
+    );
+  });
+
+  it("keeps notification history compact without hiding delivery evidence", () => {
+    expect(notificationsSource).toContain(
+      'className="group mt-2 rounded-md border bg-muted/10"',
+    );
+    expect(notificationsSource).toContain("buildReceiptDisplayGroups");
+    expect(notificationsSource).toContain("<ReceiptRow key={group.key} group={group} />");
+    expect(notificationsSource).toContain("sr-only sm:not-sr-only");
+    expect(notificationsSource).toContain("Details");
+    expect(notificationsSource).not.toContain("View details");
   });
 
   it("keeps provider identifiers behind an optional technical disclosure", () => {
