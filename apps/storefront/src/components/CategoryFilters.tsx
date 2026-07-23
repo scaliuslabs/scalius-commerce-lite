@@ -581,20 +581,20 @@ export default function CategoryFilters({
           {/* General Filters Section */}
           <AccordionItem
             value="general"
-            className="border border-gray-200 rounded-lg bg-white"
+            className="rounded-lg border border-border bg-background"
           >
             <AccordionTrigger className="px-4 py-3 hover:no-underline">
-              <span className="font-semibold text-gray-900">
+              <span className="font-semibold text-foreground">
                 Shopping options
               </span>
             </AccordionTrigger>
             <AccordionContent className="px-4 pb-4">
               <div className="space-y-4">
                 {/* On Sale Switch */}
-                <div className="flex min-h-11 items-center justify-between rounded-lg bg-gray-50 px-3 py-2">
+                <div className="flex min-h-11 items-center justify-between rounded-lg bg-muted/50 px-3 py-2">
                   <label
                     htmlFor="hasDiscount"
-                    className="text-sm font-medium text-gray-700 cursor-pointer"
+                    className="cursor-pointer text-sm font-medium text-foreground"
                   >
                     On sale
                   </label>
@@ -609,10 +609,10 @@ export default function CategoryFilters({
                 </div>
 
                 {/* Free Delivery Switch */}
-                <div className="flex min-h-11 items-center justify-between rounded-lg bg-gray-50 px-3 py-2">
+                <div className="flex min-h-11 items-center justify-between rounded-lg bg-muted/50 px-3 py-2">
                   <label
                     htmlFor="freeDelivery"
-                    className="text-sm font-medium text-gray-700 cursor-pointer"
+                    className="cursor-pointer text-sm font-medium text-foreground"
                   >
                     Free delivery
                   </label>
@@ -632,10 +632,10 @@ export default function CategoryFilters({
           {/* Price Range Section */}
           <AccordionItem
             value="price"
-            className="border border-gray-200 rounded-lg bg-white"
+            className="rounded-lg border border-border bg-background"
           >
             <AccordionTrigger className="px-4 py-3 hover:no-underline">
-              <span className="font-semibold text-gray-900">Price</span>
+              <span className="font-semibold text-foreground">Price</span>
             </AccordionTrigger>
             <AccordionContent className="px-4 pb-4">
               <div className="space-y-6">
@@ -653,7 +653,7 @@ export default function CategoryFilters({
                     className="w-full"
                   />
                   {/* Slider Value Display */}
-                  <div className="flex justify-between text-xs text-gray-500 mt-4 px-1">
+                  <div className="mt-4 flex justify-between px-1 text-xs text-muted-foreground">
                     <span>{formatCatalogPriceDisplay(priceState.minPrice)}</span>
                     <span>{formatCatalogPriceDisplay(priceState.maxPrice)}</span>
                   </div>
@@ -665,12 +665,12 @@ export default function CategoryFilters({
                   <div>
                     <label
                       htmlFor="catalog-min-price"
-                      className="block text-xs font-medium text-gray-600 mb-2"
+                      className="mb-2 block text-xs font-medium text-muted-foreground"
                     >
                       Minimum
                     </label>
                     <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
                         {getCurrencySymbol()}
                       </span>
                       <Input
@@ -693,12 +693,12 @@ export default function CategoryFilters({
                   <div>
                     <label
                       htmlFor="catalog-max-price"
-                      className="block text-xs font-medium text-gray-600 mb-2"
+                      className="mb-2 block text-xs font-medium text-muted-foreground"
                     >
                       Maximum
                     </label>
                     <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
                         {getCurrencySymbol()}
                       </span>
                       <Input
@@ -726,10 +726,10 @@ export default function CategoryFilters({
             <AccordionItem
               key={attr.id}
               value={attr.slug}
-              className="border border-gray-200 rounded-lg bg-white"
+              className="rounded-lg border border-border bg-background"
             >
               <AccordionTrigger className="px-4 py-3 hover:no-underline">
-                <span className="font-semibold text-gray-900">{attr.name}</span>
+                <span className="font-semibold text-foreground">{attr.name}</span>
               </AccordionTrigger>
               <AccordionContent className="px-4 pb-4">
                 <div className="space-y-1">
@@ -745,7 +745,7 @@ export default function CategoryFilters({
                           "flex min-h-11 items-center gap-3 rounded-md px-2 text-sm transition-colors",
                           disabled
                             ? "cursor-not-allowed opacity-40"
-                            : "cursor-pointer hover:bg-gray-50",
+                            : "cursor-pointer hover:bg-muted",
                         )}
                       >
                         <input
@@ -755,12 +755,12 @@ export default function CategoryFilters({
                           onChange={() =>
                             handleAttributeClick(attr.slug, value)
                           }
-                          className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                          className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
                         />
-                        <span className="min-w-0 flex-1 truncate font-medium text-gray-700">
+                        <span className="min-w-0 flex-1 truncate font-medium text-foreground">
                           {value}
                         </span>
-                        <span className="tabular-nums text-xs text-gray-400">
+                        <span className="tabular-nums text-xs text-muted-foreground">
                           {count}
                         </span>
                       </label>
@@ -800,7 +800,7 @@ export default function CategoryFilters({
       </div>
 
       {/* Mobile Action Bar */}
-      <div className="fixed inset-x-0 bottom-0 z-50 border-t bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))] lg:hidden">
+      <div className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-background p-4 pb-[max(1rem,env(safe-area-inset-bottom))] lg:hidden">
         <div className="grid grid-cols-2 gap-3">
           {/* Mobile Reset Button */}
           <Button variant="outline" asChild className="h-12">

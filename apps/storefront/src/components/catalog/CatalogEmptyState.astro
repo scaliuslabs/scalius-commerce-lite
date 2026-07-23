@@ -13,21 +13,21 @@ const { title, description, actionHref, actionLabel } = Astro.props;
 
 <section
   data-catalog-empty-state
-  class="rounded-xl border border-gray-200 bg-white px-5 py-10 text-center sm:px-8 sm:py-12"
+  class="rounded-xl border border-border bg-background px-5 py-10 text-center sm:px-8 sm:py-12"
 >
   <span
-    class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 text-gray-500"
+    class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground"
     aria-hidden="true"
   >
     <Search className="h-5 w-5" />
   </span>
-  <h2 class="mt-4 text-lg font-semibold text-gray-950">{title}</h2>
-  <p class="mx-auto mt-2 max-w-md text-sm leading-6 text-gray-600">
+  <h2 class="mt-4 text-lg font-semibold text-foreground">{title}</h2>
+  <p class="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">
     {description}
   </p>
   <a
     href={actionHref}
-    class="mt-5 inline-flex min-h-11 items-center justify-center rounded-lg bg-gray-950 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-gray-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-950 focus-visible:ring-offset-2"
+    class="mt-5 inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
   >
     {actionLabel}
   </a>
