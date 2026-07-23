@@ -1,0 +1,66 @@
+---
+interface Props {
+  code: "404" | "500";
+  title: string;
+  message: string;
+  primaryHref: string;
+  primaryLabel: string;
+  secondaryHref: string;
+  secondaryLabel: string;
+  fullHeight?: boolean;
+}
+
+const {
+  code,
+  title,
+  message,
+  primaryHref,
+  primaryLabel,
+  secondaryHref,
+  secondaryLabel,
+  fullHeight = false,
+} = Astro.props;
+---
+
+<section
+  class:list={[
+    "mx-auto flex w-full max-w-7xl items-center justify-center px-4 py-14 sm:px-6 sm:py-20",
+    fullHeight ? "min-h-svh grow" : "min-h-[62svh]",
+  ]}
+  aria-labelledby="error-page-title"
+>
+  <div class="w-full max-w-lg text-center">
+    <p
+      class="mx-auto mb-4 w-fit rounded-full border border-border bg-muted/50 px-3 py-1 text-xs font-semibold tracking-wide text-muted-foreground"
+    >
+      {code}
+    </p>
+    <h1
+      id="error-page-title"
+      class="text-balance text-3xl font-semibold tracking-tight text-foreground sm:text-4xl"
+    >
+      {title}
+    </h1>
+    <p class="mx-auto mt-3 max-w-md text-pretty text-base leading-7 text-muted-foreground">
+      {message}
+    </p>
+    <div class="mt-7 flex flex-col justify-center gap-3 sm:flex-row">
+      <a
+        href={primaryHref}
+        data-theme-component="button"
+        data-theme-variant="default"
+        class="inline-flex min-h-11 items-center justify-center rounded-md bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      >
+        {primaryLabel}
+      </a>
+      <a
+        href={secondaryHref}
+        data-theme-component="button"
+        data-theme-variant="outline"
+        class="inline-flex min-h-11 items-center justify-center rounded-md border border-border bg-background px-5 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      >
+        {secondaryLabel}
+      </a>
+    </div>
+  </div>
+</section>
