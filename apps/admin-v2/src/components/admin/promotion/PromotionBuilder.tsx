@@ -116,8 +116,8 @@ function OptionalAmountInput({
   onChange: (value: string) => void;
 }) {
   return (
-    <label htmlFor={id} className="space-y-1.5">
-      <Label>{label}</Label>
+    <div className="space-y-1.5">
+      <Label htmlFor={id}>{label}</Label>
       <div className="relative">
         {prefix ? <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">{prefix}</span> : null}
         <Input
@@ -129,7 +129,7 @@ function OptionalAmountInput({
           placeholder={placeholder}
         />
       </div>
-    </label>
+    </div>
   );
 }
 
@@ -364,7 +364,7 @@ export function PromotionBuilder({
             </CardHeader>
             <CardContent className="space-y-4 p-4 pt-0">
               <div className="grid gap-3 sm:grid-cols-2">
-                <label className="space-y-1.5">
+                <div className="space-y-1.5">
                   <Label htmlFor="promotion-name">Internal name</Label>
                   <Input
                     id="promotion-name"
@@ -376,8 +376,8 @@ export function PromotionBuilder({
                     aria-invalid={issueFor("name") ? true : undefined}
                   />
                   {issueFor("name") ? <p className="text-xs text-destructive">{issueFor("name")}</p> : null}
-                </label>
-                <label className="space-y-1.5">
+                </div>
+                <div className="space-y-1.5">
                   <Label htmlFor="promotion-title">Customer title <span className="font-normal text-muted-foreground">(optional)</span></Label>
                   <Input
                     id="promotion-title"
@@ -389,7 +389,7 @@ export function PromotionBuilder({
                     aria-invalid={issueFor("title") ? true : undefined}
                   />
                   {issueFor("title") ? <p className="text-xs text-destructive">{issueFor("title")}</p> : null}
-                </label>
+                </div>
               </div>
 
               <div className="flex items-center justify-between gap-3 rounded-lg border bg-muted/25 px-3 py-2">
@@ -477,18 +477,18 @@ export function PromotionBuilder({
             </CardHeader>
             <CardContent className="space-y-4 p-4 pt-0">
               <div className="grid gap-3 sm:grid-cols-2">
-                <label className="space-y-1.5">
+                <div className="space-y-1.5">
                   <Label htmlFor="promotion-start">Starts <span className="font-normal text-muted-foreground">(optional)</span></Label>
                   <Input id="promotion-start" type="datetime-local" value={draft.startsAtLocal} onChange={(event) => updateDraft({ startsAtLocal: event.target.value })} className="h-9" />
                   {issueFor("startsAtLocal") ? <p className="text-xs text-destructive">{issueFor("startsAtLocal")}</p> : null}
-                </label>
-                <label className="space-y-1.5">
+                </div>
+                <div className="space-y-1.5">
                   <Label htmlFor="promotion-end">Ends <span className="font-normal text-muted-foreground">(optional)</span></Label>
                   <Input id="promotion-end" type="datetime-local" value={draft.endsAtLocal} onChange={(event) => updateDraft({ endsAtLocal: event.target.value })} className="h-9" />
                   {issueFor("endsAtLocal") ? <p className="text-xs text-destructive">{issueFor("endsAtLocal")}</p> : null}
-                </label>
+                </div>
               </div>
-              <label className="block space-y-1.5">
+              <div className="space-y-1.5">
                 <Label htmlFor="promotion-timezone">Schedule timezone</Label>
                 <Input
                   id="promotion-timezone"
@@ -506,7 +506,7 @@ export function PromotionBuilder({
                   <option value="America/New_York" />
                 </datalist>
                 {issueFor("timezone") ? <p className="text-xs text-destructive">{issueFor("timezone")}</p> : null}
-              </label>
+              </div>
               <div className="grid gap-3 sm:grid-cols-3">
                 <div>
                   <OptionalAmountInput id="promotion-max-redemptions" label="Total uses" value={draft.maxRedemptions} placeholder="Unlimited" integer onChange={(maxRedemptions) => updateDraft({ maxRedemptions })} />
