@@ -34,5 +34,10 @@ describe("incomplete checkout presentation", () => {
       "Recovery context for active checkouts and archived hosted payments.",
     );
     expect(manager).toContain("Delete checkout records?");
+    expect(manager.match(/const \{ fmt \} = useCurrency\(\);/g)).toHaveLength(3);
+    expect(manager).not.toContain("amount.toFixed(2)");
+    expect(manager).toContain("Customer information");
+    expect(manager).toContain("Cart items (");
+    expect(manager).toContain('aria-label="Close incomplete checkout details"');
   });
 });

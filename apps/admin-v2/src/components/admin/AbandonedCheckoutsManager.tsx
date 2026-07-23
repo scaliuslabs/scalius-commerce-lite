@@ -79,12 +79,6 @@ interface Pagination {
   totalPages: number;
 }
 
-// --- Utility Functions ---
-
-const formatCurrency = (amount: number, sym: string) => {
-  return `${sym}${amount.toFixed(2)}`;
-};
-
 const getCheckoutDisplayId = (checkout: AbandonedCheckout): string => {
   return checkout.checkoutId || checkout.id;
 };
@@ -124,7 +118,7 @@ const CheckoutRow = React.memo(
     onDelete: (id: string) => void;
     canDelete: boolean;
   }) => {
-    const { symbol } = useCurrency();
+    const { fmt } = useCurrency();
     const display = useMemo(
       () => parseAbandonedCheckoutDisplay(checkout),
       [checkout],
@@ -161,8 +155,8 @@ const CheckoutRow = React.memo(
         </TableCell>
         <TableCell>
           {display.kind === "stale_hosted_payment_order"
-            ? `${display.paymentMethod?.toUpperCase() ?? "Gateway"} ${display.paymentStatus ?? "unpaid"} / ${formatCurrency(display.total, symbol)}`
-            : `${formatAbandonedCheckoutItemCount(display.items.length)} / ${formatCurrency(display.total, symbol)}`}
+            ? `${display.paymentMethod?.toUpperCase() ?? "Gateway"} ${display.paymentStatus ?? "unpaid"} / ${fmt(display.total)}`
+            : `${formatAbandonedCheckoutItemCount(display.items.length)} / ${fmt(display.total)}`}
         </TableCell>
         <TableCell className="text-muted-foreground">
           {timeSince(updatedAt)}
@@ -223,7 +217,7 @@ const CheckoutCard = React.memo(
     onDelete: (id: string) => void;
     canDelete: boolean;
   }) => {
-    const { symbol } = useCurrency();
+    const { fmt } = useCurrency();
     const display = useMemo(
       () => parseAbandonedCheckoutDisplay(checkout),
       [checkout],
@@ -236,8 +230,8 @@ const CheckoutCard = React.memo(
       [checkout.updatedAt],
     );
     const cartSummary = isHostedArchive
-      ? `${display.paymentMethod?.toUpperCase() ?? "Gateway"} ${display.paymentStatus ?? "unpaid"} · ${formatCurrency(display.total, symbol)}`
-      : `${display.items.length} ${display.items.length === 1 ? "item" : "items"} · ${formatCurrency(display.total, symbol)}`;
+      ? `${display.paymentMethod?.toUpperCase() ?? "Gateway"} ${display.paymentStatus ?? "unpaid"} · ${fmt(display.total)}`
+      : `${display.items.length} ${display.items.length === 1 ? "item" : "items"} · ${fmt(display.total)}`;
 
     return (
       <article className="border-b px-3 py-2.5 last:border-b-0" data-state={isSelected ? "selected" : undefined}>
@@ -314,7 +308,7 @@ const DetailsModal = ({
   checkout: AbandonedCheckout | null;
   onClose: () => void;
 }) => {
-  const { symbol } = useCurrency();
+  const { fmt } = useCurrency();
   if (!checkout) return null;
 
   const display = parseAbandonedCheckoutDisplay(checkout);
@@ -351,8 +345,8 @@ const DetailsModal = ({
                   <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs opacity-80">
                     {display.paymentMethod && <span>Gateway: {display.paymentMethod.toUpperCase()}</span>}
                     {display.paymentStatus && <span>Status: {display.paymentStatus}</span>}
-                    {display.paidAmount != null && <span>Paid: {formatCurrency(display.paidAmount, symbol)}</span>}
-                    {display.balanceDue != null && <span>Balance: {formatCurrency(display.balanceDue, symbol)}</span>}
+                    {display.paidAmount != null && <span>Paid: {fmt(display.paidAmount)}</span>}
+                    {display.balanceDue != null && <span>Balance: {fmt(display.balanceDue)}</span>}
                   </div>
                 </div>
                 {display.orderId && (
@@ -367,7 +361,7 @@ const DetailsModal = ({
           )}
           <div className="space-y-4">
             <h3 className="font-semibold text-lg flex items-center gap-2">
-              <User className="h-5 w-5 text-primary" /> Customer Information
+              <User className="h-5 w-5 text-primary" /> Customer information
             </h3>
             <div className="space-y-2.5 rounded-md border bg-muted/30 p-3 text-sm">
               <p className="flex items-start gap-3">
@@ -417,7 +411,7 @@ const DetailsModal = ({
           </div>
           <div className="space-y-4">
             <h3 className="font-semibold text-lg flex items-center gap-2">
-              <ShoppingCart className="h-5 w-5 text-primary" /> Cart Items (
+              <ShoppingCart className="h-5 w-5 text-primary" /> Cart items (
               {items.length})
             </h3>
             <div className="space-y-2">
@@ -435,7 +429,7 @@ const DetailsModal = ({
                         <p className="font-semibold">{item.name}</p>
                         <p className="text-xs text-muted-foreground">
                           Qty: {item.quantity} &times;{" "}
-                          {formatCurrency(item.price, symbol)}
+                          {fmt(item.price)}
                         </p>
                         {item.options && item.options.length > 0 && (
                           <p className="mt-1 text-xs text-muted-foreground">
@@ -445,7 +439,7 @@ const DetailsModal = ({
                       </div>
                     </div>
                     <p className="font-mono text-sm font-semibold" title="Saved cart estimate; checkout will revalidate price and availability">
-                      {formatCurrency(item.price * item.quantity, symbol)}
+                      {fmt(item.price * item.quantity)}
                     </p>
                   </div>
                 ))
@@ -458,13 +452,17 @@ const DetailsModal = ({
             {items.length > 0 && (
               <div className="flex justify-between font-bold text-lg border-t pt-3 mt-3">
                 <span>Saved cart estimate</span>
-                <span>{formatCurrency(total, symbol)}</span>
+                <span>{fmt(total)}</span>
               </div>
             )}
           </div>
         </div>
         <DialogFooter className="border-t px-5 py-3">
-          <Button variant="outline" onClick={onClose}>
+          <Button
+            variant="outline"
+            onClick={onClose}
+            aria-label="Close incomplete checkout details"
+          >
             Close
           </Button>
         </DialogFooter>
