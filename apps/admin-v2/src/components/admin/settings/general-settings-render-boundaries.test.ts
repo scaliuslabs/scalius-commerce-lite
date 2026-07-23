@@ -35,4 +35,12 @@ describe("General settings render boundaries", () => {
     expect(source).toContain("hidden h-auto");
     expect(source).not.toContain("overflow-x-auto");
   });
+
+  it("keeps visited editors mounted without displaying inactive panels", () => {
+    expect(source.match(/<TabsContent forceMount/g)).toHaveLength(12);
+    expect(source.match(/data-\[state=inactive\]:hidden/g)).toHaveLength(12);
+    expect(source).toContain(
+      '(mountedTabs.has("business") || section === "business")',
+    );
+  });
 });

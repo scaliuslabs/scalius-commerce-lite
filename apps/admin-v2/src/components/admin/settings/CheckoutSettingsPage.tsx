@@ -123,48 +123,48 @@ export default function CheckoutSettingsPage({
                 </TabsList>
 
                 <div className="mt-6">
-                    <TabsContent value="checkout-flow" className="mt-0">
-                        {mountedTabs.has("checkout-flow") && (
+                    <TabsContent forceMount value="checkout-flow" className="mt-0 data-[state=inactive]:hidden">
+                        {(mountedTabs.has("checkout-flow") || section === "checkout-flow") && (
                             <Suspense fallback={<TabSpinner />}>
                                 <CheckoutFlowSettings />
                             </Suspense>
                         )}
                     </TabsContent>
 
-                    <TabsContent value="payment" className="mt-0">
-                        {mountedTabs.has("payment") && (
+                    <TabsContent forceMount value="payment" className="mt-0 data-[state=inactive]:hidden">
+                        {(mountedTabs.has("payment") || section === "payment") && (
                             <Suspense fallback={<TabSpinner />}>
                                 <PaymentGatewaysManager />
                             </Suspense>
                         )}
                     </TabsContent>
 
-                    <TabsContent value="languages" className="mt-0">
-                        {mountedTabs.has("languages") && (
+                    <TabsContent forceMount value="languages" className="mt-0 data-[state=inactive]:hidden">
+                        {(mountedTabs.has("languages") || section === "languages") && (
                             <Suspense fallback={<TabSpinner />}>
                                 <CheckoutLanguagesManager />
                             </Suspense>
                         )}
                     </TabsContent>
 
-                    <TabsContent value="shipping" className="mt-0">
-                        {mountedTabs.has("shipping") && (
+                    <TabsContent forceMount value="shipping" className="mt-0 data-[state=inactive]:hidden">
+                        {(mountedTabs.has("shipping") || section === "shipping") && (
                             <Suspense fallback={<TabSpinner />}>
                                 <ShippingMethodsManager />
                             </Suspense>
                         )}
                     </TabsContent>
 
-                    <TabsContent value="delivery" className="mt-0">
-                        {mountedTabs.has("delivery") && (
+                    <TabsContent forceMount value="delivery" className="mt-0 data-[state=inactive]:hidden">
+                        {(mountedTabs.has("delivery") || section === "delivery") && (
                             <Suspense fallback={<TabSpinner />}>
                                 <DeliveryLocationsManager />
                             </Suspense>
                         )}
                     </TabsContent>
 
-                    <TabsContent value="customer-requests" className="mt-0">
-                        {mountedTabs.has("customer-requests") && (
+                    <TabsContent forceMount value="customer-requests" className="mt-0 data-[state=inactive]:hidden">
+                        {(mountedTabs.has("customer-requests") || section === "customer-requests") && (
                             <Suspense fallback={<TabSpinner />}>
                                 <CustomerRequestSettings />
                             </Suspense>

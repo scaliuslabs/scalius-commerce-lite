@@ -192,7 +192,8 @@ describe("useAdminNestedScrollRestoration", () => {
       });
     });
 
-    expect(window.requestAnimationFrame).not.toHaveBeenCalled();
+    flushAnimationFrames();
+    expect(scrollElement.scrollTop).toBe(0);
     scrollElement.scrollTop = 0;
 
     act(() => {
@@ -210,6 +211,56 @@ describe("useAdminNestedScrollRestoration", () => {
       });
     });
     flushAnimationFrames();
+
+    expect(scrollElement.scrollTop).toBe(720);
+  });
+
+  it("starts a first-time workspace tab at the top before its content swaps", () => {
+    const scrollElement = createAdminScrollElement({
+      clientHeight: 400,
+      scrollHeight: 1_600,
+    });
+    scrollElement.scrollTop = 720;
+
+    act(() => {
+      emitRouterEvent("onBeforeLoad", {
+        fromLocation: { href: "/admin/settings?section=seo" },
+        toLocation: { href: "/admin/settings?section=email" },
+        pathChanged: false,
+        hrefChanged: true,
+      });
+    });
+
+    expect(scrollElement.scrollTop).toBe(0);
+
+    act(() => {
+      emitRouterEvent("onRendered", {
+        fromLocation: { href: "/admin/settings?section=seo" },
+        toLocation: { href: "/admin/settings?section=email" },
+        pathChanged: false,
+        hrefChanged: true,
+      });
+    });
+    flushAnimationFrames();
+
+    expect(scrollElement.scrollTop).toBe(0);
+  });
+
+  it("does not reset scroll for filters within the active workspace tab", () => {
+    const scrollElement = createAdminScrollElement({
+      clientHeight: 400,
+      scrollHeight: 1_600,
+    });
+    scrollElement.scrollTop = 720;
+
+    act(() => {
+      emitRouterEvent("onBeforeLoad", {
+        fromLocation: { href: "/admin/media?folder=all&sort=newest" },
+        toLocation: { href: "/admin/media?folder=all&sort=oldest" },
+        pathChanged: false,
+        hrefChanged: true,
+      });
+    });
 
     expect(scrollElement.scrollTop).toBe(720);
   });
