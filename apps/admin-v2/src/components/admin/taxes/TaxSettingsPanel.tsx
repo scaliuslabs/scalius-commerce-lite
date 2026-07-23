@@ -181,6 +181,7 @@ export function TaxSettingsPanel({
             </Alert>
           ) : null}
 
+          {isDirty ? (
           <div className="grid grid-cols-2 gap-2 sm:flex sm:justify-end">
             <Button
               type="button"
@@ -202,6 +203,7 @@ export function TaxSettingsPanel({
               Save policy
             </Button>
           </div>
+          ) : null}
         </CardContent>
       </Card>
 
