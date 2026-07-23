@@ -68,9 +68,11 @@ const pagination = productsResponse?.pagination || {
   page: 1,
 };
 
-const pageTitle = query ? `Search results for "${query}"` : "Shop All Products";
+const pageTitle = query ? `Search results for "${query}"` : "All products";
+const resultCountLabel = `${pagination.total} ${pagination.total === 1 ? "result" : "results"}`;
+const productCountLabel = `${pagination.total} ${pagination.total === 1 ? "product" : "products"}`;
 const pageDescription = query
-  ? `Found ${pagination.total} products for "${query}".`
+  ? `Found ${productCountLabel} for "${query}".`
   : "Explore our full collection of products.";
 const productListPathname = Astro.url.pathname;
 const canonicalFilterState = JSON.stringify(currentFilters);
@@ -130,18 +132,15 @@ const analyticsProductData = products.map((p) => ({
     data-products-for-analytics={JSON.stringify(analyticsProductData)}
   >
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
-      <div
-        class="text-center mb-6 bg-white rounded-lg p-6 shadow-sm border border-gray-100"
-      >
-        <h1 class="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900">
-          {query ? "Search Results" : "Explore Our Products"}
+      <div class="mb-5 py-3 sm:mb-6 sm:py-4">
+        <h1 class="text-2xl font-bold text-gray-900 sm:text-3xl">
+          {query ? "Search results" : "All products"}
         </h1>
         {
           query && (
-            <p class="mt-2 text-base sm:text-lg text-gray-600">
-              <span class="font-semibold text-primary">{pagination.total}</span>{" "}
-              results for{" "}
-              <span class="font-medium text-gray-800">"{query}"</span>
+            <p class="mt-1.5 text-sm text-gray-600 sm:text-base">
+              <span class="font-semibold text-gray-900">{resultCountLabel}</span>{" "}
+              for <span class="font-medium text-gray-800">“{query}”</span>
             </p>
           )
         }
@@ -260,7 +259,8 @@ const analyticsProductData = products.map((p) => ({
               Showing <span class="font-bold text-primary"
                 >{products.length}</span
               > of{" "}
-              <span class="font-bold text-primary">{pagination.total}</span> products
+              <span class="font-bold text-primary">{pagination.total}</span>{" "}
+              {pagination.total === 1 ? "product" : "products"}
             </p>
 
             <div class="flex items-center gap-3">
@@ -300,12 +300,14 @@ const analyticsProductData = products.map((p) => ({
             </div>
           </div>
 
-          <p class="mb-3 text-sm text-gray-600 lg:hidden">
-            <span class="font-semibold text-gray-900">{pagination.total}</span>{
-              " "
-            }
-            {pagination.total === 1 ? "product" : "products"}
-          </p>
+          {!query && (
+            <p class="mb-3 text-sm text-gray-600 lg:hidden">
+              <span class="font-semibold text-gray-900">{pagination.total}</span>{
+                " "
+              }
+              {pagination.total === 1 ? "product" : "products"}
+            </p>
+          )}
 
           <AppliedCatalogFilters
             facets={facets}
