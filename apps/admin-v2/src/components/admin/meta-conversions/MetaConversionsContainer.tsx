@@ -33,11 +33,11 @@ export function MetaConversionsContainer({
         <TabsList className="grid min-h-11 w-full grid-cols-2 sm:min-h-9">
           <TabsTrigger value="settings" className="min-h-11 gap-2 sm:min-h-8">
             <Settings className="w-4 h-4" />
-            Settings
+            Setup
           </TabsTrigger>
           <TabsTrigger value="logs" className="min-h-11 gap-2 sm:min-h-8">
             <Activity className="w-4 h-4" />
-            Delivery activity
+            Delivery
           </TabsTrigger>
         </TabsList>
 

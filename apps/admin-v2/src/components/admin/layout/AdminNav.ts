@@ -321,7 +321,7 @@ export const allNavSections: NavSection[] = [
             requiredPermission: NAV_PERMISSIONS.SETTINGS_FRAUD_CHECKER_VIEW,
           },
           {
-            name: "Meta CAPI",
+            name: "Meta conversions",
             href: "/admin/settings/meta-conversion",
             icon: MetaCapiNavIcon,
             requiredPermission: NAV_PERMISSIONS.ANALYTICS_VIEW,

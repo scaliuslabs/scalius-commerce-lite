@@ -109,6 +109,28 @@ function MetaPixelParityPanel({
         : Info;
   const hasBrowserPixelIds = pixelParity.activeBrowserPixelIds.length > 0;
 
+  if (pixelParity.status === "ok") {
+    return (
+      <details className="rounded-md border bg-muted/20 px-3 py-1.5 text-sm">
+        <summary className="flex min-h-11 cursor-pointer items-center gap-2 font-medium sm:min-h-9">
+          <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+          Browser Pixel matches
+        </summary>
+        <div className="space-y-2 border-t py-2 text-xs text-muted-foreground">
+          <p>{pixelParity.message}</p>
+          <div className="flex flex-wrap gap-2">
+            <span className="rounded-md bg-background px-2 py-1 font-mono">
+              CAPI {pixelParity.capiPixelId}
+            </span>
+            <span className="rounded-md bg-background px-2 py-1 font-mono">
+              Browser {pixelParity.activeBrowserPixelIds.join(", ")}
+            </span>
+          </div>
+        </div>
+      </details>
+    );
+  }
+
   return (
     <Alert className={getParityClassName(pixelParity)}>
       <Icon className="h-4 w-4" />
@@ -131,26 +153,24 @@ function MetaPixelParityPanel({
             </span>
           )}
         </div>
-        {pixelParity.status !== "ok" ? (
-          <Button asChild variant="outline" size="sm" className="mt-2 min-h-11 sm:min-h-9">
-            <Link
-              to="/admin/analytics"
-              search={{
-                page: 1,
-                limit: 20,
-                search: "",
-                sort: "updatedAt",
-                order: "desc",
-                trashed: false,
-                type: undefined,
-                status: undefined,
-              }}
-            >
-              Review browser Pixel
-              <ArrowRight className="h-3.5 w-3.5" />
-            </Link>
-          </Button>
-        ) : null}
+        <Button asChild variant="outline" size="sm" className="mt-2 min-h-11 sm:min-h-9">
+          <Link
+            to="/admin/analytics"
+            search={{
+              page: 1,
+              limit: 20,
+              search: "",
+              sort: "updatedAt",
+              order: "desc",
+              trashed: false,
+              type: undefined,
+              status: undefined,
+            }}
+          >
+            Review browser Pixel
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </Button>
       </AlertDescription>
     </Alert>
   );
@@ -178,6 +198,7 @@ export function MetaConversionsSettingsForm({
   const setupComplete = Boolean(
     formData.pixelId.trim() && formData.accessToken.trim() && !settingsIssue,
   );
+  const testMode = Boolean(formData.testEventCode.trim());
 
   return (
     <>
@@ -210,13 +231,9 @@ export function MetaConversionsSettingsForm({
               </dd>
             </div>
             <div className="rounded-md border bg-muted/20 px-3 py-2">
-              <dt className="text-xs text-muted-foreground">Browser Pixel</dt>
+              <dt className="text-xs text-muted-foreground">Mode</dt>
               <dd className="mt-1 text-sm font-medium">
-                {pixelParity?.status === "ok"
-                  ? "Matched"
-                  : pixelParity
-                    ? "Needs review"
-                    : "Unavailable"}
+                {testMode ? "Test events" : "Live events"}
               </dd>
             </div>
           </dl>
@@ -232,15 +249,15 @@ export function MetaConversionsSettingsForm({
             </Alert>
           ) : null}
 
-        <form
-          method="post"
-          onSubmit={(e) => {
-            e.preventDefault();
-            handleSaveSettings();
-          }}
-          noValidate
-        >
-          <div className="space-y-6">
+          <form
+            method="post"
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleSaveSettings();
+            }}
+            noValidate
+          >
+            <div className="space-y-6">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="pixelId">Pixel ID</Label>
@@ -255,58 +272,41 @@ export function MetaConversionsSettingsForm({
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="testEventCode">
-                  Test event code (optional)
-                </Label>
-                <Input
-                  id="testEventCode"
-                  placeholder="Enter test event code"
-                  value={formData.testEventCode}
-                  disabled={!canEdit || isSettingsLoading}
-                  className="min-h-11 sm:min-h-9"
-                  onChange={(e) => updateFormData("testEventCode", e.target.value)}
-                />
+                <Label htmlFor="accessToken">Access token</Label>
+                <div className="relative">
+                  <Input
+                    id="accessToken"
+                    type={showAccessToken ? "text" : "password"}
+                    placeholder="Enter your Meta Conversions API access token"
+                    value={formData.accessToken}
+                    disabled={!canEdit || isSettingsLoading}
+                    onChange={(e) => updateFormData("accessToken", e.target.value)}
+                    className="min-h-11 pr-11 sm:min-h-9"
+                    autoComplete="off"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-0 top-0 h-full px-3 py-2"
+                    aria-label={showAccessToken ? "Hide access token" : "Show access token"}
+                    disabled={!canEdit || isSettingsLoading}
+                    onClick={() => setShowAccessToken(!showAccessToken)}
+                  >
+                    {showAccessToken ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
                 <p className="text-xs text-muted-foreground">
-                  New events appear in Meta Test Events until this code is removed.
+                  Stored encrypted. The saved token is never shown again.
                 </p>
               </div>
             </div>
 
             <MetaPixelParityPanel pixelParity={pixelParity} />
-
-            <div className="space-y-2">
-              <Label htmlFor="accessToken">Access token</Label>
-              <div className="relative">
-                <Input
-                  id="accessToken"
-                  type={showAccessToken ? "text" : "password"}
-                  placeholder="Enter your Meta Conversions API access token"
-                  value={formData.accessToken}
-                  disabled={!canEdit || isSettingsLoading}
-                  onChange={(e) => updateFormData("accessToken", e.target.value)}
-                  className="min-h-11 pr-11 sm:min-h-9"
-                  autoComplete="off"
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="absolute right-0 top-0 h-full px-3 py-2"
-                  aria-label={showAccessToken ? "Hide access token" : "Show access token"}
-                  disabled={!canEdit || isSettingsLoading}
-                  onClick={() => setShowAccessToken(!showAccessToken)}
-                >
-                  {showAccessToken ? (
-                    <EyeOff className="h-4 w-4" />
-                  ) : (
-                    <Eye className="h-4 w-4" />
-                  )}
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Stored encrypted. The saved token is never shown again.
-              </p>
-            </div>
 
             {settingsIssue || enableIssue ? (
               <Alert
@@ -331,6 +331,23 @@ export function MetaConversionsSettingsForm({
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="space-y-2">
+                <Label htmlFor="testEventCode">
+                  Test event code (optional)
+                </Label>
+                <Input
+                  id="testEventCode"
+                  placeholder="Enter test event code"
+                  value={formData.testEventCode}
+                  disabled={!canEdit || isSettingsLoading}
+                  className="min-h-11 sm:min-h-9"
+                  onChange={(e) => updateFormData("testEventCode", e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  While present, events are sent to Meta Test Events.
+                </p>
+              </div>
+
+              <div className="space-y-2">
                 <Label htmlFor="logRetentionDays">
                   Keep delivery logs (days)
                 </Label>
@@ -353,39 +370,36 @@ export function MetaConversionsSettingsForm({
                   Events older than this many days are removed by scheduled cleanup.
                 </p>
               </div>
+            </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="isEnabled">Send server events</Label>
-                <div className="flex min-h-11 items-center justify-between gap-3 rounded-md border px-3 py-2 sm:min-h-9">
-                  <span className="text-sm text-muted-foreground">
-                    {formData.isEnabled
-                      ? "Supported events are sent to Meta"
-                      : enableIssue
-                        ? "Complete setup before enabling"
-                        : "Server delivery is off"}
-                  </span>
-                  <Switch
-                    id="isEnabled"
-                    checked={formData.isEnabled}
-                    disabled={!canEdit || isSettingsLoading}
-                    onCheckedChange={(checked) =>
-                      updateFormData("isEnabled", checked)
-                    }
-                  />
-                </div>
+            <div className="space-y-2">
+              <Label htmlFor="isEnabled">Send server events</Label>
+              <div className="flex min-h-11 items-center justify-between gap-3 rounded-md border px-3 py-2 sm:min-h-9">
+                <span className="text-sm text-muted-foreground">
+                  {formData.isEnabled
+                    ? "Supported events are sent to Meta"
+                    : enableIssue
+                      ? "Complete setup before enabling"
+                      : "Server delivery is off"}
+                </span>
+                <Switch
+                  id="isEnabled"
+                  checked={formData.isEnabled}
+                  disabled={!canEdit || isSettingsLoading}
+                  onCheckedChange={(checked) =>
+                    updateFormData("isEnabled", checked)
+                  }
+                />
               </div>
             </div>
 
-            <Alert className="bg-muted/30">
-              <Info className="h-4 w-4" />
-              <AlertTitle>Delivery is verified separately</AlertTitle>
-              <AlertDescription>
-                Saving does not test Meta delivery. Review provider results in
-                Delivery activity.
-              </AlertDescription>
-            </Alert>
+            {formData.isEnabled ? (
+              <p className="text-xs text-muted-foreground">
+                Saving does not test delivery. Check the Delivery tab after events run.
+              </p>
+            ) : null}
 
-            {canEdit ? (
+            {canEdit && hasUnsavedChanges ? (
               <div className="flex flex-col gap-2 border-t pt-3 sm:flex-row sm:items-center">
                 <Button
                   type="submit"
@@ -399,24 +413,22 @@ export function MetaConversionsSettingsForm({
                   )}
                   Save changes
                 </Button>
-                {hasUnsavedChanges ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={handleResetForm}
-                    className="min-h-11 gap-2 sm:min-h-9"
-                  >
-                    <RotateCcw className="h-4 w-4" />
-                    Reset
-                  </Button>
-                ) : null}
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleResetForm}
+                  className="min-h-11 gap-2 sm:min-h-9"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  Reset
+                </Button>
                 <span className="text-xs text-muted-foreground" aria-live="polite">
-                  {hasUnsavedChanges ? "Unsaved changes" : "Settings are up to date"}
+                  Unsaved changes
                 </span>
               </div>
             ) : null}
-          </div>
-        </form>
+            </div>
+          </form>
         </CardContent>
       </Card>
     </>

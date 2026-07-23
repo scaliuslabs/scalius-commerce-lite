@@ -44,9 +44,9 @@ function MetaConversionPage() {
   return (
     <div className="container max-w-6xl space-y-4 py-6">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight">Meta CAPI</h1>
+        <h1 className="text-xl font-semibold tracking-tight">Meta conversions</h1>
         <p className="mt-0.5 text-sm text-muted-foreground">
-          Configure server events and review delivery results.
+          Server events and delivery results.
         </p>
       </div>
       <MetaConversionsManager
