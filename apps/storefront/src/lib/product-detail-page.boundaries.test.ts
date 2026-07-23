@@ -168,6 +168,18 @@ describe("product detail page SKU boundaries", () => {
     expect(preload).toContain('trim: "border"');
   });
 
+  it("loads the product controller before visible option controls can be used", () => {
+    const source = readFileSync(PRODUCT_PAGE_SOURCE, "utf8");
+
+    expect(source).toContain(
+      'import { init } from "@/components/product/scripts/product-controller"',
+    );
+    expect(source).toContain("init();");
+    expect(source).not.toContain(
+      'import("@/components/product/scripts/product-controller")',
+    );
+  });
+
   it("resolves exact variant query state for SSR metadata and analytics", () => {
     const source = readFileSync(PRODUCT_PAGE_SOURCE, "utf8");
 
