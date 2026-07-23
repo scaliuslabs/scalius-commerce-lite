@@ -116,7 +116,7 @@ function UserMenuFallback({ user }: { user: AdminHeaderUser }) {
   return (
     <div
       aria-hidden="true"
-      className="relative inline-flex items-center gap-3 rounded-lg px-2 py-1"
+      className="relative inline-flex h-11 items-center gap-3 rounded-lg px-2 sm:h-10"
     >
       <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-sm font-medium text-primary ring-2 ring-primary/10">
         {getUserInitials(user.name)}
@@ -178,9 +178,9 @@ export function AdminHeader({ user }: AdminHeaderProps) {
 
   return (
     <header className="h-14 shrink-0 border-b border-border px-3 sm:px-4 flex items-center justify-between bg-background transition-colors duration-200">
-      <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
-        <SidebarTrigger className="h-9 w-9 shrink-0 text-muted-foreground hover:text-foreground" />
-        <Separator orientation="vertical" className="mr-1 h-4 shrink-0" />
+      <div className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden sm:gap-2">
+        <SidebarTrigger className="h-11 w-11 shrink-0 text-muted-foreground hover:text-foreground sm:h-9 sm:w-9" />
+        <Separator orientation="vertical" className="h-4 shrink-0 sm:mr-1" />
         <Breadcrumb items={breadcrumbItems} />
       </div>
 

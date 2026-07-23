@@ -57,7 +57,7 @@ export function UserMenu({ user }: UserMenuProps) {
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
-          className="relative inline-flex items-center gap-3 hover:bg-muted/50 px-2 py-1 rounded-lg transition-all duration-200"
+          className="relative inline-flex h-11 items-center gap-3 rounded-lg px-2 py-1 transition-all duration-200 hover:bg-muted/50 sm:h-10"
         >
           <Avatar className="w-8 h-8 ring-2 ring-primary/10 hover:ring-primary/20 transition-all duration-200">
             {user.image && (
