@@ -376,6 +376,24 @@ describe("order list interactions", () => {
     );
   });
 
+  it("keeps compact mobile order facts readable and touch accessible", () => {
+    const mobileSource = readFileSync(ORDER_MOBILE_CARD_SOURCE, "utf8");
+
+    expect(mobileSource).toContain(
+      "grid-cols-[auto_minmax(0,1fr)_auto]",
+    );
+    expect(mobileSource).toContain('aria-label="Payment and fulfillment"');
+    expect(mobileSource).toContain(
+      "onCheckedChange={() => onToggleSelection(order.id)}",
+    );
+    expect(mobileSource).not.toContain("onCheckedChange={() => {}}");
+    expect(mobileSource).not.toContain("onClick={(e) =>");
+    expect(
+      mobileSource.match(/h-11 w-11/g)?.length ?? 0,
+    ).toBeGreaterThanOrEqual(6);
+    expect(mobileSource).toContain("sm:h-8 sm:w-8");
+  });
+
   it("uses explicit relevance only while starting an order search", () => {
     const routeSource = readFileSync(ORDERS_ROUTE_SOURCE, "utf8");
 
