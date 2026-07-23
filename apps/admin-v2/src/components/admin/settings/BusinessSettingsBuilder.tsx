@@ -8,7 +8,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, RotateCcw, Save } from "lucide-react";
+import { ImageIcon, Loader2, RotateCcw, Save, Trash2, Upload } from "lucide-react";
 import { useSettingsForm } from "@/hooks/use-settings-form";
 import { queryKeys } from "@/lib/query-keys";
 import {
@@ -21,6 +21,7 @@ import { UnsavedChangesGuard } from "../shared/UnsavedChangesGuard";
 import { normalizePublicMediaUrl } from "@scalius/shared/media-url";
 import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
 import { ADMIN_IMAGE_PRESETS } from "@/lib/admin-image-presentation";
+import { MediaManager } from "../media-manager";
 
 interface BusinessSettings {
   companyName: string;
@@ -157,17 +158,15 @@ export default function BusinessSettingsBuilder() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="business-email">Email</Label>
-              <Input
-                id="business-email"
-                type="email"
-                placeholder="e.g., info@acme.com"
-                value={values.email}
-                onChange={(e) => setValue("email", e.target.value)}
-              />
-            </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="business-email">Email</Label>
+            <Input
+              id="business-email"
+              type="email"
+              placeholder="e.g., info@acme.com"
+              value={values.email}
+              onChange={(e) => setValue("email", e.target.value)}
+            />
           </div>
         </CardContent>
       </Card>
@@ -261,30 +260,10 @@ export default function BusinessSettingsBuilder() {
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="invoice-logo-url">Invoice logo</Label>
-            <Input
-              id="invoice-logo-url"
-              type="url"
-              inputMode="url"
-              autoCapitalize="none"
-              autoCorrect="off"
-              spellCheck={false}
-              placeholder="https://cloud.example.com/logo.png"
-              value={values.invoiceLogoUrl}
-              onChange={(e) => setValue("invoiceLogoUrl", e.target.value)}
-              aria-invalid={invoiceLogoInvalid}
-              aria-describedby="invoice-logo-help invoice-logo-error"
-            />
-            {invoiceLogoInvalid ? (
-              <p id="invoice-logo-error" role="alert" className="text-xs text-destructive">
-                Use an HTTPS image URL or a root-relative application asset.
-              </p>
-            ) : null}
-            <p id="invoice-logo-help" className="text-xs text-muted-foreground">
-              Shown at the top of invoices without cropping.
-            </p>
-            {invoiceLogoUrl ? (
-              <div className="flex min-h-20 items-center rounded-lg border bg-muted/20 p-3">
+            <Label>Invoice logo</Label>
+            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_12rem] sm:items-start">
+              <div className="flex min-h-24 items-center justify-center rounded-lg border bg-muted/20 p-3">
+                {invoiceLogoUrl ? (
                 <img
                   src={getOptimizedImageUrl(
                     invoiceLogoUrl,
@@ -293,8 +272,65 @@ export default function BusinessSettingsBuilder() {
                   alt="Invoice logo preview"
                   className="max-h-14 max-w-full object-contain"
                 />
+                ) : (
+                  <div className="flex flex-col items-center gap-1.5 text-xs text-muted-foreground">
+                    <ImageIcon className="size-6 opacity-50" />
+                    No invoice logo
+                  </div>
+                )}
               </div>
-            ) : null}
+              <div className="space-y-2">
+                <MediaManager
+                  capability="image"
+                  onSelect={(file) => setValue("invoiceLogoUrl", file.url)}
+                  trigger={(
+                    <Button type="button" variant="outline" className="min-h-11 w-full md:min-h-10">
+                      <Upload className="size-4" />
+                      {invoiceLogoUrl ? "Change logo" : "Choose logo"}
+                    </Button>
+                  )}
+                />
+                {values.invoiceLogoUrl ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="min-h-11 w-full text-muted-foreground hover:text-destructive md:min-h-10"
+                    onClick={() => setValue("invoiceLogoUrl", "")}
+                  >
+                    <Trash2 className="size-4" />
+                    Remove
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+            <details className="rounded-md border bg-background">
+              <summary className="min-h-11 cursor-pointer list-none px-3 py-3 text-sm font-medium [&::-webkit-details-marker]:hidden">
+                Image URL
+              </summary>
+              <div className="border-t p-3">
+                <Input
+                  id="invoice-logo-url"
+                  type="url"
+                  inputMode="url"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  placeholder="https://cloud.example.com/logo.png"
+                  value={values.invoiceLogoUrl}
+                  onChange={(e) => setValue("invoiceLogoUrl", e.target.value)}
+                  aria-invalid={invoiceLogoInvalid}
+                  aria-describedby="invoice-logo-help invoice-logo-error"
+                />
+                {invoiceLogoInvalid ? (
+                  <p id="invoice-logo-error" role="alert" className="mt-1.5 text-xs text-destructive">
+                    Use an HTTPS image URL or a root-relative application asset.
+                  </p>
+                ) : null}
+              </div>
+            </details>
+            <p id="invoice-logo-help" className="text-xs text-muted-foreground">
+              Shown at the top of invoices without cropping.
+            </p>
           </div>
 
           <div className="space-y-1.5">
