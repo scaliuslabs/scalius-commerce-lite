@@ -261,12 +261,10 @@ function setSelectedItem(
     mobileTrigger?.removeAttribute("aria-disabled");
     placeholder?.classList.add("hidden");
 
-    const displayUrl = source === "initial" || imageCache.has(item.url)
-      ? item.url
-      : (item.previewUrl ?? item.url);
+    const displayUrl = item.url;
     const presentedItem = {
       ...item,
-      previewUrl: displayUrl === item.url ? null : displayUrl,
+      previewUrl: null,
     };
     root.dataset.activeMediaDisplayUrl = displayUrl;
 
@@ -282,17 +280,6 @@ function setSelectedItem(
     }
 
     dispatchChange({ ...presentedItem, source });
-    if (displayUrl !== item.url) {
-      void preloadImage(item.url, "high").then(() => {
-        if (
-          root.dataset.activeMediaKey !== currentKey ||
-          !imageCache.has(item.url)
-        ) return;
-        root.dataset.activeMediaDisplayUrl = item.url;
-        if (mobileImage) mobileImage.src = item.url;
-        if (desktopImage) desktopImage.src = item.url;
-      });
-    }
     return;
   }
 
@@ -564,7 +551,6 @@ function bindMobileZoom(root: HTMLElement, signal: AbortSignal): void {
 }
 
 function canWarmVariantImages(): boolean {
-  if (!window.matchMedia("(min-width: 1024px)").matches) return false;
   const connection = (navigator as NavigatorWithConnection).connection;
   if (connection?.saveData) return false;
   return (
@@ -579,6 +565,7 @@ function scheduleVariantImagePreload(
 ): void {
   if (!canWarmVariantImages()) return;
   const currentUrl = root.dataset.activeMediaUrl;
+  const limit = window.matchMedia("(min-width: 1024px)").matches ? 4 : 2;
   const urls = Array.from(
     root.querySelectorAll<HTMLButtonElement>(
       "[data-thumbnail-rail='desktop'] [data-gallery-thumbnail][data-media-kind='image'][data-variant-image='true']",
@@ -591,7 +578,7 @@ function scheduleVariantImagePreload(
       (url, index, values) =>
         url !== currentUrl && values.indexOf(url) === index,
     )
-    .slice(0, 4);
+    .slice(0, limit);
   if (urls.length === 0) return;
 
   const run = () => {

@@ -161,20 +161,20 @@ describe("mixed product media gallery", () => {
         .querySelector<HTMLElement>("[data-video-stage]")
         ?.classList.contains("hidden"),
     ).toBe(true);
-    expect(mobileImage.src).toContain("/image-preview.jpg");
-    expect(desktopMainImage.src).toContain("/image-preview.jpg");
+    expect(mobileImage.src).toContain("/image-main.jpg");
+    expect(desktopMainImage.src).toContain("/image-main.jpg");
     expect(root.dataset.activeMediaUrl).toBe("/image-main.jpg");
     expect(changes.at(-1)).toMatchObject({
       kind: "image",
       productMediaId: "pmed_image",
       mediaId: "med_image",
-      previewUrl: "/image-preview.jpg",
+      previewUrl: null,
       zoomUrl: "/image-zoom.jpg",
       source: "gallery",
     });
   });
 
-  it("shows the loaded preview immediately and promotes the decoded display image", async () => {
+  it("uses the display transform immediately instead of enlarging a thumbnail", () => {
     const requests: Array<{
       src: string;
       fetchPriority: string;
@@ -208,21 +208,12 @@ describe("mixed product media gallery", () => {
     const main = root.querySelector<HTMLImageElement>(
       "[data-desktop-main-image]",
     )!;
-    expect(main.src).toContain("/promotion-preview.jpg");
-    expect(requests[0]).toMatchObject({
-      src: "/promotion-full.jpg",
-      fetchPriority: "high",
-    });
-
-    requests[0]!.onload?.();
-    await Promise.resolve();
-    await Promise.resolve();
-
     expect(main.src).toContain("/promotion-full.jpg");
     expect(root.dataset.activeMediaDisplayUrl).toBe("/promotion-full.jpg");
+    expect(requests).toHaveLength(0);
   });
 
-  it("does not let a slower previous image replace the shopper's latest selection", async () => {
+  it("keeps the shopper's latest image selection authoritative", () => {
     const requests: Array<{
       src: string;
       onload: (() => void) | null;
@@ -261,17 +252,8 @@ describe("mixed product media gallery", () => {
     imageButton.dataset.mediaUrl = "/latest-full.jpg";
     imageButton.dataset.previewUrl = "/latest-preview.jpg";
     imageButton.click();
-    expect(main.src).toContain("/latest-preview.jpg");
-
-    requests[0]!.onload?.();
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(main.src).toContain("/latest-preview.jpg");
-
-    requests[1]!.onload?.();
-    await Promise.resolve();
-    await Promise.resolve();
     expect(main.src).toContain("/latest-full.jpg");
+    expect(requests).toHaveLength(0);
   });
 
   it("warms exact variant display images after idle but respects data saver", () => {
@@ -351,10 +333,17 @@ describe("mixed product media gallery", () => {
     mobileVariant.dataset.mediaKind = "image";
     mobileVariant.dataset.variantImage = "true";
     mobileVariant.dataset.mediaUrl = "/mobile-variant.jpg";
+    requests.length = 0;
     delete idle.callback;
     initProductMediaGallery(mobileRoot);
-    expect(idle.callback).toBeUndefined();
+    expect(idle.callback).toBeTypeOf("function");
     expect(requests).toHaveLength(0);
+    (idle.callback as (() => void) | undefined)?.();
+    expect(requests).toHaveLength(1);
+    expect(requests[0]).toMatchObject({
+      src: "/mobile-variant.jpg",
+      fetchPriority: "low",
+    });
 
     Reflect.deleteProperty(navigator, "connection");
   });
@@ -514,12 +503,13 @@ describe("storefront mixed-media source boundaries", () => {
     expect(gallery).toContain("variantImageIds.has(itemData.item.id)");
     expect(gallery).toContain("data-preview-url");
     expect(gallery).toContain("imageTransforms.preview");
-    expect(controller).toContain('preloadImage(item.url, "high")');
+    expect(controller).toContain("const displayUrl = item.url");
+    expect(controller).toContain("previewUrl: null");
     expect(controller).toContain("activeMediaDisplayUrl");
     expect(controller).toContain("imagePreloads");
     expect(controller).toContain("scheduleVariantImagePreload");
     expect(controller).toContain("[data-variant-image='true']");
-    expect(controller).toContain(".slice(0, 4)");
+    expect(controller).toContain(".slice(0, limit)");
     expect(controller).toContain('preloadImage(url, "low")');
     expect(controller).not.toContain("scheduleInitialImagePreload");
     expect(zoom).not.toContain("scheduleZoomImagePreload");

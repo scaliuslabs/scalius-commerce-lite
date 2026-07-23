@@ -627,23 +627,11 @@ const productCategoryAnalytics = productCategory
 </Layout>
 
 <script>
-  // Defer the product controller to break the critical chain for pricing-engine.js.
-  // The controller only needs to run after DOM is ready (init() does DOM queries).
-  if (document.readyState === "loading") {
-    document.addEventListener(
-      "DOMContentLoaded",
-      () => {
-        import("@/components/product/scripts/product-controller").then((m) =>
-          m.init(),
-        );
-      },
-      { once: true },
-    );
-  } else {
-    import("@/components/product/scripts/product-controller").then((m) =>
-      m.init(),
-    );
-  }
+  import { init } from "@/components/product/scripts/product-controller";
+
+  // Astro's bundled module scripts are deferred, so the product DOM is ready
+  // without leaving visible option controls temporarily inert.
+  init();
 </script>
 <script>
   import type { Product, Category, ProductVariant } from "@/lib/api";
