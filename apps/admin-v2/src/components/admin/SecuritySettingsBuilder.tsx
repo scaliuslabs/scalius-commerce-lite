@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
+  ChevronDown,
   CheckCircle2,
   Loader2,
   LockKeyhole,
@@ -32,19 +33,9 @@ import {
   getSecuritySettings,
   updateSecuritySettings,
 } from "@/lib/api-functions/settings";
-import {
-  getInheritedSecuritySources,
-  type InheritedSecuritySourceKind,
-} from "@/lib/api-functions/security-runtime";
+import { getInheritedSecuritySources } from "@/lib/api-functions/security-runtime";
 import { queryKeys } from "@/lib/query-keys";
 import { SettingsLoadFailure } from "./settings/SettingsLoadFailure";
-
-const SOURCE_KIND_LABELS: Record<InheritedSecuritySourceKind, string> = {
-  storefront: "Storefront",
-  api: "Connect",
-  dashboard: "Admin",
-  media: "Media",
-};
 
 function sourcesEqual(left: readonly string[], right: readonly string[]): boolean {
   return left.length === right.length && left.every((source, index) => source === right[index]);
@@ -75,6 +66,7 @@ export function SecuritySettingsBuilder() {
   const [savedMerchantSources, setSavedMerchantSources] = useState<string[] | null>(null);
   const [sourceDraft, setSourceDraft] = useState("");
   const [sourceError, setSourceError] = useState<string | null>(null);
+  const [merchantListOpen, setMerchantListOpen] = useState(false);
   const dirty = Boolean(
     merchantSources
     && savedMerchantSources
@@ -96,6 +88,10 @@ export function SecuritySettingsBuilder() {
     setMerchantSources(nextSources);
     setSavedMerchantSources(nextSources);
   }, [dirty, hasPendingInput, inheritedOrigins, securityQuery.data]);
+
+  useEffect(() => {
+    if (dirty) setMerchantListOpen(true);
+  }, [dirty]);
 
   const saveMutation = useMutation({
     mutationFn: (nextSources: string[]) => updateSecuritySettings({
@@ -163,7 +159,7 @@ export function SecuritySettingsBuilder() {
         isDirty={dirty || hasPendingInput}
         isSubmitting={saveMutation.isPending}
       />
-      <div className="max-w-4xl space-y-5 pb-24">
+      <div className="max-w-4xl space-y-5">
         {!canManage && (
           <Alert>
             <AlertDescription>
@@ -178,7 +174,7 @@ export function SecuritySettingsBuilder() {
             <div className="min-w-0">
               <h3 className="text-sm font-semibold">Inherited platform trust</h3>
               <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
-                Read-only origins from the deployed platform. They do not belong in merchant additions.
+                Read-only origins from the deployed platform.
               </p>
             </div>
           </div>
@@ -223,9 +219,11 @@ export function SecuritySettingsBuilder() {
                         Not configured or invalid
                       </span>
                     )}
-                    <p className="mt-0.5 text-[11px] leading-4 text-muted-foreground">
-                      {source.consequence}
-                    </p>
+                    {!source.source ? (
+                      <p className="mt-0.5 text-[11px] leading-4 text-muted-foreground">
+                        {source.consequence}
+                      </p>
+                    ) : null}
                   </div>
                   <Badge
                     variant="outline"
@@ -238,7 +236,7 @@ export function SecuritySettingsBuilder() {
                     ) : (
                       <AlertTriangle className="mr-1 h-3 w-3" />
                     )}
-                    {SOURCE_KIND_LABELS[source.kind]}
+                    {source.source ? "Trusted" : "Missing"}
                   </Badge>
                 </div>
               ))}
@@ -298,9 +296,17 @@ export function SecuritySettingsBuilder() {
             </p>
           </div>
 
-          <div className="mt-4 rounded-md border">
-            {merchantSources.length > 0 ? (
-              <div className="divide-y">
+          {merchantSources.length > 0 ? (
+            <details
+              className="group mt-4 rounded-md border"
+              open={merchantListOpen}
+              onToggle={(event) => setMerchantListOpen(event.currentTarget.open)}
+            >
+              <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-sm font-medium [&::-webkit-details-marker]:hidden">
+                {merchantSources.length} trusted {merchantSources.length === 1 ? "origin" : "origins"}
+                <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
+              </summary>
+              <div className="divide-y border-t">
                 {merchantSources.map((source) => (
                   <div key={source} className="flex min-w-0 items-center justify-between gap-3 px-3 py-1.5">
                     <code className="min-w-0 truncate text-xs">{source}</code>
@@ -318,47 +324,51 @@ export function SecuritySettingsBuilder() {
                   </div>
                 ))}
               </div>
-            ) : (
+            </details>
+          ) : (
+            <div className="mt-4 rounded-md border">
               <p className="px-3 py-4 text-xs leading-5 text-muted-foreground">
                 No merchant-added origins. Platform and first-class integration defaults still apply.
               </p>
-            )}
-          </div>
+            </div>
+          )}
 
           <p className="mt-3 text-[11px] leading-4 text-muted-foreground">
             Merchant additions currently apply to scripts, connections, frames, images, and workers.
           </p>
         </section>
 
-        <div className="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end">
-          <Button
-            type="button"
-            variant="outline"
-            className="min-h-11 sm:min-h-9"
-            disabled={!canEdit || (!dirty && !hasPendingInput)}
-            onClick={() => {
-              setMerchantSources(savedMerchantSources);
-              setSourceDraft("");
-              setSourceError(null);
-            }}
-          >
-            <RotateCcw className="mr-2 h-4 w-4" />
-            Reset
-          </Button>
-          <Button
-            type="button"
-            className="min-h-11 sm:min-h-9 sm:min-w-36"
-            disabled={!canEdit || !dirty}
-            onClick={() => saveMutation.mutate(merchantSources)}
-          >
-            {saveMutation.isPending ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Save className="mr-2 h-4 w-4" />
-            )}
-            Save policy
-          </Button>
-        </div>
+        {dirty || hasPendingInput ? (
+          <div className="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              className="min-h-11 sm:min-h-9"
+              disabled={!canEdit}
+              onClick={() => {
+                setMerchantSources(savedMerchantSources);
+                setSourceDraft("");
+                setSourceError(null);
+              }}
+            >
+              <RotateCcw className="mr-2 h-4 w-4" />
+              Reset
+            </Button>
+            <Button
+              type="button"
+              className="min-h-11 sm:min-h-9 sm:min-w-36"
+              disabled={!canEdit || !dirty}
+              onClick={() => saveMutation.mutate(merchantSources)}
+            >
+              {saveMutation.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="mr-2 h-4 w-4" />
+              )}
+              Save policy
+            </Button>
+          </div>
+        ) : null}
       </div>
     </>
   );

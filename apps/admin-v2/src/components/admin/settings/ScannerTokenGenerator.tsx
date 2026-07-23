@@ -161,10 +161,10 @@ export function ScannerTokenGenerator() {
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-base">
             <ScanBarcode className="h-5 w-5" />
-            Warehouse scanner access
+            Scanner access
           </CardTitle>
           <CardDescription>
-            Create a one-time link for one warehouse device. It must be claimed within {TOKEN_LIFETIME_MINUTES} minutes.
+            Create a one-time device link. It expires in {TOKEN_LIFETIME_MINUTES} minutes.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -238,9 +238,6 @@ export function ScannerTokenGenerator() {
               </div>
               <div className="max-w-sm space-y-1">
                 <p className="text-sm font-medium">No active scanner link</p>
-                <p className="text-xs leading-5 text-muted-foreground">
-                  The QR link can be claimed once. The claimed device receives a separate session; the token is not reused.
-                </p>
               </div>
               <Button
                 type="button"
@@ -253,7 +250,7 @@ export function ScannerTokenGenerator() {
                 ) : (
                   <ScanBarcode className="mr-2 h-4 w-4" />
                 )}
-                Create scanner link
+                Create link
               </Button>
             </div>
           )}
