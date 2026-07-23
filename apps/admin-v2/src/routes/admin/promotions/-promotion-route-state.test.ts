@@ -62,4 +62,11 @@ describe("promotion workspace routes", () => {
     expect(listSource).toContain('className="h-11 pl-9 sm:h-9"');
     expect(listSource).toContain('className="h-11 w-full sm:h-9 sm:w-40"');
   });
+
+  it("associates promotion fields with one explicit label", () => {
+    expect(editorSource).toContain("<Label htmlFor={id}>{label}</Label>");
+    expect(editorSource).toContain('<Label htmlFor="promotion-name">');
+    expect(editorSource).toContain('<Label htmlFor="promotion-timezone">');
+    expect(editorSource).not.toMatch(/<label\b/);
+  });
 });
