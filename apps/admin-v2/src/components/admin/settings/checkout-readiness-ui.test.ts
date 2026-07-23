@@ -104,10 +104,14 @@ describe("checkout settings status presentation", () => {
     expect(pageSource).toContain("overflow-x-auto");
     expect(pageSource).toContain("min-h-11 shrink-0");
     expect(pageSource).toContain("shrink-0 rounded-none");
+    expect(pageSource).toContain('aria-label="Checkout settings section"');
+    expect(pageSource).toContain('className="mb-4 sm:hidden"');
+    expect(pageSource).toContain("sm:flex");
     expect(pageSource).toContain('aria-label="Checkout settings sections"');
     expect(pageSource).toContain("list.scrollTo");
-    expect(pageSource).toContain("list.scrollWidth - list.clientWidth");
-    expect(pageSource).toContain("activeTab.offsetLeft");
+    expect(pageSource).toContain("getNearestTabScrollLeft");
+    expect(pageSource).toContain("scrollLeft: list.scrollLeft");
+    expect(pageSource).toContain("tabOffsetLeft: activeTab.offsetLeft");
     expect(requestsSource).toContain(
       "Approval and payment processing stay with the order.",
     );

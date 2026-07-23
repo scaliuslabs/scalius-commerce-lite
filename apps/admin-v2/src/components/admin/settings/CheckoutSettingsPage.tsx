@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState, lazy, Suspense } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../ui/tabs";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "../../ui/select";
 import { Loader2 } from "lucide-react";
 import type { CheckoutSettingsSection } from "./checkout-settings-sections";
 
@@ -50,6 +57,38 @@ interface CheckoutSettingsPageProps {
     onSectionChange: (section: CheckoutSettingsSection) => void;
 }
 
+export function getNearestTabScrollLeft({
+    scrollLeft,
+    clientWidth,
+    scrollWidth,
+    tabOffsetLeft,
+    tabOffsetWidth,
+    edgePadding = 8,
+}: {
+    scrollLeft: number;
+    clientWidth: number;
+    scrollWidth: number;
+    tabOffsetLeft: number;
+    tabOffsetWidth: number;
+    edgePadding?: number;
+}) {
+    const maxScroll = Math.max(0, scrollWidth - clientWidth);
+    const visibleLeft = scrollLeft + edgePadding;
+    const visibleRight = scrollLeft + clientWidth - edgePadding;
+    const tabRight = tabOffsetLeft + tabOffsetWidth;
+
+    if (tabOffsetLeft < visibleLeft) {
+        return Math.max(0, Math.min(maxScroll, tabOffsetLeft - edgePadding));
+    }
+    if (tabRight > visibleRight) {
+        return Math.max(
+            0,
+            Math.min(maxScroll, tabRight - clientWidth + edgePadding),
+        );
+    }
+    return scrollLeft;
+}
+
 export default function CheckoutSettingsPage({
     section,
     onSectionChange,
@@ -73,12 +112,17 @@ export default function CheckoutSettingsPage({
         const frame = window.requestAnimationFrame(() => {
             const list = tabListRef.current;
             const activeTab = tabRefs.current.get(section);
-            if (!list || !activeTab) return;
-            const maxScroll = Math.max(0, list.scrollWidth - list.clientWidth);
-            const centered = activeTab.offsetLeft
-                - (list.clientWidth - activeTab.offsetWidth) / 2;
+            if (!list || !activeTab || list.clientWidth === 0) return;
+            const nextScrollLeft = getNearestTabScrollLeft({
+                scrollLeft: list.scrollLeft,
+                clientWidth: list.clientWidth,
+                scrollWidth: list.scrollWidth,
+                tabOffsetLeft: activeTab.offsetLeft,
+                tabOffsetWidth: activeTab.offsetWidth,
+            });
+            if (nextScrollLeft === list.scrollLeft) return;
             list.scrollTo({
-                left: Math.max(0, Math.min(maxScroll, centered)),
+                left: nextScrollLeft,
                 behavior: "auto",
             });
         });
@@ -102,10 +146,32 @@ export default function CheckoutSettingsPage({
                 onValueChange={handleTabChange}
                 className="w-full"
             >
+                <div className="mb-4 sm:hidden">
+                    <Select value={section} onValueChange={handleTabChange}>
+                        <SelectTrigger
+                            aria-label="Checkout settings section"
+                            className="h-11 w-full bg-card"
+                        >
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {tabs.map((tab) => (
+                                <SelectItem
+                                    key={tab.value}
+                                    value={tab.value}
+                                    className="min-h-11"
+                                >
+                                    {tab.label}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+
                 <TabsList
                     ref={tabListRef}
                     aria-label="Checkout settings sections"
-                    className="h-auto w-full scroll-px-3 justify-start gap-0 overflow-x-auto rounded-none border-b border-border bg-transparent p-0 [scrollbar-width:thin]"
+                    className="hidden h-auto w-full scroll-px-3 justify-start gap-0 overflow-x-auto rounded-none border-b border-border bg-transparent p-0 [scrollbar-width:thin] sm:flex"
                 >
                     {tabs.map((tab) => (
                         <TabsTrigger
