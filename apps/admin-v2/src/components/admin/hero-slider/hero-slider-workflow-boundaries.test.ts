@@ -48,13 +48,20 @@ describe("hero slider workflow boundaries", () => {
     expect(tabSource).toContain("Load latest");
   });
 
-  it("keeps the mobile save bar compact without hiding its state or actions", () => {
+  it("shows save actions only while the active hero has work to preserve", () => {
+    expect(tabSource).toContain(
+      "{dirty || saving ? (",
+    );
     expect(tabSource).toContain(
       'className="sticky bottom-3 z-20 flex min-w-0 items-center justify-between gap-2',
     );
     expect(tabSource).toContain('className="flex shrink-0 items-center gap-1 sm:gap-2"');
     expect(tabSource).toContain('<span className="sm:hidden">Save</span>');
-    expect(tabSource).toContain('<span className="sm:hidden">{dirty ? "Unsaved" : "Saved"}</span>');
+    expect(tabSource).toContain("{saving ? \"Saving…\" : \"Unsaved changes\"}");
+    expect(tabSource).toContain(
+      "{slider.images.length}/{HERO_SLIDE_LIMIT} slides",
+    );
+    expect(tabSource).not.toContain("All changes saved");
     expect(containerSource).toContain(
       "Manage separate desktop and mobile homepage banners.",
     );
