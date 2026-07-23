@@ -11,6 +11,7 @@
 //  4. Redirects to /order-success on completion
 
 import Layout from "@/layouts/Layout.astro";
+import CheckoutLoadingOverlay from "@/components/CheckoutLoadingOverlay.astro";
 import { getLayoutData, getCheckoutConfig } from "@/lib/api";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 
@@ -73,44 +74,18 @@ const serializedCheckoutConfig = serializeJsonForInlineScript(checkoutConfig);
       <span id="payButtonText">Select a payment method</span>
     </button>
 
-    <p class="text-[10px] text-muted-foreground text-center mt-3">
-      Secure checkout • SSL Encrypted
+    <p class="text-xs text-muted-foreground text-center mt-3">
+      Secure checkout
     </p>
   </div>
 </Layout>
 
-<!-- Loading overlay -->
-<div
-  id="loadingOverlay"
-  style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); z-index: 99999; backdrop-filter: blur(4px);"
->
-  <div
-    style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border-radius: 8px; text-align: center; width: 280px; box-shadow: 0 4px 10px rgba(0,0,0,0.2);"
-  >
-    <div
-      style="margin: 0 auto 15px; width: 48px; height: 48px; border: 4px solid #f3f3f3; border-top: 4px solid #000; border-radius: 50%; animation: spin 1s linear infinite;"
-    >
-    </div>
-    <h3 id="loadingTitle" style="margin: 0 0 8px; font-size: 16px; font-weight: bold;">
-      Processing Payment
-    </h3>
-    <p id="loadingMsg" style="margin: 0 0 12px; font-size: 13px; color: #666;">
-      Please wait while we securely process your order.
-    </p>
-    <div
-      style="width: 100%; height: 5px; background: #f3f3f3; border-radius: 2.5px; overflow: hidden;"
-    >
-      <div
-        id="loadingProgressBar"
-        style="width: 0%; height: 100%; background: #000; transition: width 0.5s;"
-      >
-      </div>
-    </div>
-  </div>
-</div>
+<CheckoutLoadingOverlay
+  title="Processing payment"
+  message="Confirming your order and payment details."
+/>
 
 <style>
-  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
   .space-y-3 > * { position: relative; }
 </style>
 

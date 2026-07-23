@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import LocationSelector from "@/components/LocationSelector";
 import ShippingLocationSelector from "@/components/ShippingLocationSelector";
 import PhoneField from "@/components/PhoneField";
+import CheckoutLoadingOverlay from "@/components/CheckoutLoadingOverlay.astro";
 import { getCities, processOrder } from "@/lib/cart/server";
 import {
   getShippingMethods,
@@ -462,7 +463,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
         <!-- Trust badges -->
         <div class="mt-4 text-center">
           <p class="text-[10px] text-muted-foreground">
-            Secure Checkout • SSL Encrypted
+            Secure checkout
           </p>
         </div>
       </div>
@@ -678,35 +679,10 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
   </div>
 </Layout>
 
-<!-- Loading overlay -->
-<div
-  id="loadingOverlay"
-  style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); z-index: 99999; backdrop-filter: blur(4px);"
->
-  <div
-    style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border-radius: 8px; text-align: center; width: 280px; box-shadow: 0 4px 10px rgba(0,0,0,0.2);"
-  >
-    <div
-      style="margin: 0 auto 15px; width: 48px; height: 48px; border: 4px solid #f3f3f3; border-top: 4px solid #000; border-radius: 50%; animation: spin 1s linear infinite;"
-    >
-    </div>
-    <h3 style="margin: 0 0 8px; font-size: 16px; font-weight: bold;">
-      {lang.languageData.processingOrderTitle}
-    </h3>
-    <p style="margin: 0 0 12px; font-size: 13px; color: #666;">
-      {lang.languageData.processingOrderMessage}
-    </p>
-    <div
-      style="width: 100%; height: 5px; background: #f3f3f3; border-radius: 2.5px; overflow: hidden;"
-    >
-      <div
-        id="loadingProgressBar"
-        style="width: 0%; height: 100%; background: #000; transition: width 0.5s;"
-      >
-      </div>
-    </div>
-  </div>
-</div>
+<CheckoutLoadingOverlay
+  title={lang.languageData.processingOrderTitle}
+  message={lang.languageData.processingOrderMessage}
+/>
 
 <script>
   import { initCartFunctionality } from "@/lib/cart/client";
@@ -718,6 +694,10 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     writeCheckoutTransferSession,
   } from "@/lib/checkout/session-state";
   import { getShippingAddressError } from "@/lib/checkout/shipping-address";
+  import {
+    hideCheckoutLoadingOverlay,
+    showCheckoutLoadingOverlay,
+  } from "@/lib/checkout/loading-overlay";
 
   type CustomerAutofillProfile = {
     name?: string | null;
@@ -744,6 +724,14 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     meta?.dataset.checkoutUnavailableMessage ||
     "Checkout is temporarily unavailable. Please try again shortly.";
   const guestCheckoutEnabled = meta?.dataset.guestCheckoutEnabled !== "false"; // default true
+  const checkoutLanguage = window.__CHECKOUT_LANGUAGE__ as
+    | {
+        languageData?: {
+          processingOrderTitle?: string;
+          processingOrderMessage?: string;
+        };
+      }
+    | undefined;
 
   const runWhenDomReady = (callback: () => void | Promise<void>) => {
     if (document.readyState === "loading") {
@@ -875,13 +863,6 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     const submitButton = document.getElementById(
       "submitButton",
     ) as HTMLButtonElement;
-    const loadingOverlay = document.getElementById(
-      "loadingOverlay",
-    ) as HTMLElement;
-    const progressBar = document.getElementById(
-      "loadingProgressBar",
-    ) as HTMLElement;
-
     const isCartEmpty = () => {
       const input = document.getElementById(
         "cartItemsInput",
@@ -901,10 +882,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
 
     const showCheckoutTransferError = (message: string) => {
       restoreSubmitButton();
-      if (loadingOverlay) {
-        loadingOverlay.style.display = "none";
-        document.body.style.overflow = "";
-      }
+      hideCheckoutLoadingOverlay();
 
       const messageEl = document.getElementById("cartValidationMessage");
       if (!messageEl) {
@@ -1236,55 +1214,25 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
           submitButton.disabled = true;
           submitButton.textContent = "Redirecting to Payment...";
 
-          if (loadingOverlay) {
-            const loadingTitle = loadingOverlay.querySelector("h3");
-            const loadingMsg = loadingOverlay.querySelector("p");
-            if (loadingTitle)
-              loadingTitle.textContent = "Redirecting to Payment";
-            if (loadingMsg)
-              loadingMsg.textContent =
-                "Please wait while we load the payment gateway options.";
-            loadingOverlay.style.display = "block";
-            document.body.style.overflow = "hidden";
-          }
-
-          if (progressBar) {
-            progressBar.style.width = "0%";
-            setTimeout(() => {
-              progressBar.style.width = "40%";
-            }, 100);
-            setTimeout(() => {
-              progressBar.style.width = "80%";
-            }, 300);
-          }
-
-          // Add a slight delay for a smooth visual transition
-          setTimeout(() => {
-            window.location.href = "/checkout";
-          }, 400);
+          showCheckoutLoadingOverlay({
+            title: "Opening payment options",
+            message: "Confirming your total and available payment methods.",
+          });
+          window.location.href = "/checkout";
           return;
         }
 
         // ── COD-only flow: normal form POST ──
         submitButton.disabled = true;
         submitButton.textContent = "Processing...";
-        if (loadingOverlay) {
-          loadingOverlay.style.display = "block";
-          document.body.style.overflow = "hidden";
-          window.scrollTo(0, 0);
-        }
-        if (progressBar) {
-          progressBar.style.width = "0%";
-          setTimeout(() => {
-            progressBar.style.width = "30%";
-          }, 300);
-          setTimeout(() => {
-            progressBar.style.width = "60%";
-          }, 1000);
-          setTimeout(() => {
-            progressBar.style.width = "80%";
-          }, 2000);
-        }
+        showCheckoutLoadingOverlay({
+          title:
+            checkoutLanguage?.languageData?.processingOrderTitle ||
+            "Processing your order",
+          message:
+            checkoutLanguage?.languageData?.processingOrderMessage ||
+            "Confirming your order details.",
+        });
       },
       { signal: cartPageSignal },
     );
@@ -1315,14 +1263,6 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
   button:focus {
     outline: 2px solid #3b82f6;
     outline-offset: 2px;
-  }
-  @keyframes spin {
-    from {
-      transform: rotate(0deg);
-    }
-    to {
-      transform: rotate(360deg);
-    }
   }
   @media (max-width: 640px) {
     .container {

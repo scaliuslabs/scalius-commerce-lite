@@ -1,0 +1,30 @@
+---
+interface Props {
+  title: string;
+  message: string;
+}
+
+const { title, message } = Astro.props;
+---
+
+<div
+  id="loadingOverlay"
+  class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/65 p-4 backdrop-blur-sm focus:outline-none"
+  role="status"
+  aria-live="polite"
+  aria-atomic="true"
+  aria-hidden="true"
+  tabindex="-1"
+>
+  <div class="w-full max-w-xs rounded-2xl border border-border bg-background p-6 text-center text-foreground shadow-2xl">
+    <div
+      class="mx-auto mb-4 size-10 rounded-full border-2 border-muted border-t-foreground motion-safe:animate-spin"
+      aria-hidden="true"
+    >
+    </div>
+    <h2 id="loadingTitle" class="text-base font-semibold">{title}</h2>
+    <p id="loadingMsg" class="mt-1.5 text-sm leading-5 text-muted-foreground">
+      {message}
+    </p>
+  </div>
+</div>

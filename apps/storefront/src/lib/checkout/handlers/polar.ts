@@ -7,11 +7,11 @@ import { fetchPaymentSessionWithProcessingRetry } from "../payment-session-retry
 export const polarHandler: GatewayHandler = {
   id: "polar",
   meta: {
-    label: "Global Digital Payment",
+    label: "International card & Cash App",
     icon: `<svg class="w-6 h-6 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 10V3L4 14h7v7l9-11h-7z" />
     </svg>`,
-    desc: "Any Cards or Cash App",
+    desc: "Cards and Cash App",
   },
 
   getButtonText(_isPartialPayment: boolean): string {
