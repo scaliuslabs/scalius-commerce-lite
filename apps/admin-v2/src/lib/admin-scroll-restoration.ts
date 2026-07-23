@@ -33,14 +33,6 @@ function readScrollTop(href: string) {
   }
 }
 
-function hasStoredScrollTop(href: string) {
-  try {
-    return window.sessionStorage.getItem(storageKey(href)) !== null;
-  } catch {
-    return false;
-  }
-}
-
 function writeScrollTop(href: string, scrollTop: number) {
   try {
     window.sessionStorage.setItem(storageKey(href), String(Math.max(0, scrollTop)));
@@ -138,12 +130,16 @@ export function useAdminNestedScrollRestoration(
 
       // A tab/panel is its own workspace view. Position the nested scroller
       // before React swaps panels so a short lazy fallback cannot clamp the
-      // previous view's scroll position and produce a visible jump.
+      // previous view's scroll position and produce a visible jump. A direct
+      // tab choice starts at the top; browser history restores that view's
+      // saved position.
       if (workspaceViewChanged(
         event.fromLocation.href,
         event.toLocation.href,
       )) {
-        const targetTop = readScrollTop(event.toLocation.href);
+        const targetTop = nextNavigationIsPopRef.current
+          ? readScrollTop(event.toLocation.href)
+          : 0;
         const maxTop = Math.max(
           0,
           scrollElement.scrollHeight - scrollElement.clientHeight,
@@ -153,21 +149,7 @@ export function useAdminNestedScrollRestoration(
     });
 
     const unsubscribeRendered = router.subscribe("onRendered", (event) => {
-      const switchedWorkspaceView = event.fromLocation
-        ? workspaceViewChanged(
-            event.fromLocation.href,
-            event.toLocation.href,
-          )
-        : false;
-      const revisitingQueryState =
-        event.pathChanged === false &&
-        event.hrefChanged &&
-        hasStoredScrollTop(event.toLocation.href);
-      if (
-        !nextNavigationIsPopRef.current &&
-        !switchedWorkspaceView &&
-        !revisitingQueryState
-      ) return;
+      if (!nextNavigationIsPopRef.current) return;
 
       scheduleStoredRestore(event.toLocation.href);
     });
