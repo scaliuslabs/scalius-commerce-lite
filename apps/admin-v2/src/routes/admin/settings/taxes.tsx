@@ -54,6 +54,7 @@ function TaxesPage() {
   const handleSectionChange = useCallback(
     (section: TaxWorkspaceSection) => {
       void navigate({
+        resetScroll: false,
         search: ((previous: Record<string, unknown>) => ({
           ...previous,
           section,

@@ -32,6 +32,7 @@ function MetaConversionPage() {
   const handleSectionChange = useCallback(
     (section: MetaConversionsWorkspaceSection) => {
       void navigate({
+        resetScroll: false,
         search: ((previous: Record<string, unknown>) => ({
           ...previous,
           section,

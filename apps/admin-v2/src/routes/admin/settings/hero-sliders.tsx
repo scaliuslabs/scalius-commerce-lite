@@ -24,6 +24,7 @@ function HeroSlidersPage() {
   const handleSectionChange = useCallback(
     (section: HeroSliderWorkspaceSection) => {
       void navigate({
+        resetScroll: false,
         search: ((previous: Record<string, unknown>) => ({
           ...previous,
           section,

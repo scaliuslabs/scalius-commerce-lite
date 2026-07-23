@@ -32,6 +32,7 @@ function ThemePage() {
   const handleSectionChange = useCallback(
     (section: ThemeWorkspaceSection) => {
       void navigate({
+        resetScroll: false,
         search: ((previous: Record<string, unknown>) => ({
           ...previous,
           section,
@@ -43,6 +44,7 @@ function ThemePage() {
   const handlePreviewLocationChange = useCallback(
     (previewPath: string, previewDevice: ThemePreviewDevice) => {
       void navigate({
+        resetScroll: false,
         search: ((previous: Record<string, unknown>) => ({
           ...previous,
           previewPath,

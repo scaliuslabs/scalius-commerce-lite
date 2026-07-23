@@ -41,6 +41,7 @@ function SettingsPage() {
   const handleSectionChange = useCallback(
     (section: GeneralSettingsSection) => {
       void navigate({
+        resetScroll: false,
         search: ((previous: Record<string, unknown>) => ({
           ...previous,
           section,
@@ -53,6 +54,7 @@ function SettingsPage() {
   const handlePanelChange = useCallback(
     (panel: GeneralSettingsPanel) => {
       void navigate({
+        resetScroll: false,
         search: ((previous: Record<string, unknown>) => ({
           ...previous,
           panel,

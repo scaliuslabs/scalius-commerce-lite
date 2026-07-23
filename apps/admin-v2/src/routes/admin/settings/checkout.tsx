@@ -30,6 +30,7 @@ function CheckoutPage() {
   const handleSectionChange = useCallback(
     (section: CheckoutSettingsSection) => {
       void navigate({
+        resetScroll: false,
         search: ((previous: Record<string, unknown>) => ({
           ...previous,
           section,

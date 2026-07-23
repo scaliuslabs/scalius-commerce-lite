@@ -48,6 +48,7 @@ function NavigationPage() {
   const navigate = useNavigate();
   const updateSearch = (updates: Partial<NavigationSearch>, replace = false) => {
     void navigate({
+      resetScroll: false,
       search: ((current: NavigationSearch) => ({ ...current, ...updates })) as never,
       replace,
     });
