@@ -245,6 +245,28 @@ describe("product detail page SKU boundaries", () => {
     expect(source).not.toContain('type="radio"');
   });
 
+  it("keeps purchase controls finger-sized without bloating desktop", () => {
+    const source = readFileSync(PRODUCT_SUMMARY_SOURCE, "utf8");
+
+    expect(source).toContain(
+      'id="quantity-minus" class="inline-flex h-11 w-11',
+    );
+    expect(source).toContain(
+      'id="quantity-plus" class="inline-flex h-11 w-11',
+    );
+    expect(source).toContain(
+      "variant-option-btn flex h-11 min-w-11",
+    );
+    expect(source).toContain("lg:h-9 lg:min-w-9");
+    expect(
+      source.match(/data-action="(?:add-to-cart|buy-now)"/g),
+    ).toHaveLength(2);
+    expect(
+      source.match(/flex min-h-11 items-center justify-center/g),
+    ).toHaveLength(2);
+    expect(source).toContain("lg:min-h-10");
+  });
+
   it("uses product.hasVariants for customer option metadata instead of buyer SKU count", () => {
     const source = readFileSync(PRODUCT_PAGE_SOURCE, "utf8");
 
