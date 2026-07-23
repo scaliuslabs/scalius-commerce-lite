@@ -14,26 +14,29 @@ const outcomeSource = readFileSync(
 );
 
 describe("SEO outcome-first workspace", () => {
-  it("places the public outcome before the editor and keeps it visible on desktop", () => {
-    expect(builderSource.indexOf("<SeoDiscoveryStatusCard")).toBeLessThan(
-      builderSource.indexOf("Search appearance"),
-    );
+  it("keeps the public outcome visible on desktop without preceding mobile controls", () => {
+    expect(builderSource).toContain('className="order-last min-w-0 xl:sticky xl:top-4"');
     expect(builderSource).toContain("xl:sticky xl:top-4");
     expect(outcomeSource).toContain("Public discovery outcome");
-    expect(outcomeSource).toContain("Live proof checks the");
+    expect(outcomeSource).toContain(
+      "Preview current edits and inspect published discovery files.",
+    );
+    expect(outcomeSource).toContain('className="group border-t border-border first:border-t-0"');
   });
 
   it("keeps exact discovery authorities and consequences in the same workspace", () => {
     for (const authority of [
-      "Product Catalog Feed",
-      "UCP Catalog Discovery",
-      "Structured Data",
-      "Return Policy Schema",
-      "Additional robots.txt rules",
+      "Product catalog feed",
+      "UCP catalog discovery",
+      "Structured data",
+      "Return policy schema",
+      "Advanced robots.txt rules",
     ]) {
       expect(builderSource).toContain(authority);
     }
     expect(builderSource).toContain("Save discovery settings");
+    expect(builderSource).toContain("<UnsavedChangesGuard");
+    expect(builderSource).toContain("{isDirty ? (");
   });
 
   it("keeps the nested return-policy editor shrink-safe beside the outcome rail", () => {
@@ -49,6 +52,10 @@ describe("SEO outcome-first workspace", () => {
     expect(builderSource).toContain(
       'className="grid min-w-0 gap-2 md:col-span-2"',
     );
-    expect(builderSource.match(/SelectTrigger[^>]+className="min-w-0"/g)).toHaveLength(3);
+    expect(
+      builderSource.match(
+        /SelectTrigger[^>]+className="min-h-11 min-w-0 sm:min-h-9"/g,
+      ),
+    ).toHaveLength(3);
   });
 });

@@ -7,6 +7,8 @@ import {
   Rss,
   Search,
   AlertCircle,
+  ChevronDown,
+  RotateCcw,
   Truck,
   Undo2,
 } from "lucide-react";
@@ -50,6 +52,7 @@ import {
 import { generalSettingsQueryOptions } from "@/lib/api-query-options/settings";
 import { useSettingsForm } from "@/hooks/use-settings-form";
 import { queryKeys } from "@/lib/query-keys";
+import { UnsavedChangesGuard } from "@/components/admin/shared/UnsavedChangesGuard";
 
 interface SeoConfig {
   siteTitle: string;
@@ -175,9 +178,12 @@ export function SeoSettingsBuilder() {
     values,
     setValues,
     isLoading,
+    isLoaded,
     isLoadError,
     loadError,
     isSaving,
+    isDirty,
+    reset,
     handleSubmit,
     refetch,
   } = useSettingsForm<SeoConfig>({
@@ -301,27 +307,31 @@ export function SeoSettingsBuilder() {
     );
   }
 
-  return (
-    <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_20rem]">
-      <aside className="order-first min-w-0 xl:order-last xl:sticky xl:top-4">
-        <SeoDiscoveryStatusCard
-          discovery={values.discovery}
-          robotsTxt={values.robotsTxt}
-          businessIdentity={businessIdentity}
-          hasStoreLogo={hasStoreLogo}
-        />
-      </aside>
+  const hasCustomRobotsRules =
+    values.robotsTxt.trim() !== defaultConfig.robotsTxt.trim();
 
-      <div className="min-w-0 space-y-5">
+  return (
+    <>
+      <UnsavedChangesGuard isDirty={isDirty} isSubmitting={isSaving} />
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_20rem]">
+        <aside className="order-last min-w-0 xl:sticky xl:top-4">
+          <SeoDiscoveryStatusCard
+            discovery={values.discovery}
+            robotsTxt={values.robotsTxt}
+            businessIdentity={businessIdentity}
+            hasStoreLogo={hasStoreLogo}
+          />
+        </aside>
+
+        <div className="min-w-0 space-y-5">
         <section className="overflow-hidden rounded-lg border border-border bg-background">
           <div className="flex items-start gap-3 border-b border-border px-4 py-3">
             <Search className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
             <div className="min-w-0">
               <h3 className="text-sm font-semibold">Search appearance</h3>
               <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
-                Set the fallback title and homepage summary shown to buyers and
-                search engines. Products, categories, and pages can override
-                them.
+                Defaults for the homepage and pages without their own search
+                preview.
               </p>
             </div>
           </div>
@@ -334,6 +344,7 @@ export function SeoSettingsBuilder() {
                   value={values.siteTitle}
                   onChange={(e) => updateField("siteTitle", e.target.value)}
                   placeholder="Your Awesome Store - Gadgets, Gizmos, and More"
+                  className="min-h-11 sm:min-h-9"
                 />
                 {values.siteTitle && (
                   <CharacterCounter
@@ -354,6 +365,7 @@ export function SeoSettingsBuilder() {
                   value={values.homepageTitle}
                   onChange={(e) => updateField("homepageTitle", e.target.value)}
                   placeholder="Welcome to Your Awesome Store | Shop Online"
+                  className="min-h-11 sm:min-h-9"
                 />
                 {values.homepageTitle && (
                   <CharacterCounter
@@ -401,10 +413,9 @@ export function SeoSettingsBuilder() {
           <div className="flex items-center gap-3 border-b border-border px-4 py-3">
             <Search className="h-4 w-4 text-muted-foreground" />
             <div>
-              <h3 className="text-sm font-semibold">Discovery Controls</h3>
+              <h3 className="text-sm font-semibold">Discovery controls</h3>
               <p className="text-xs text-muted-foreground">
-                Choose which public discovery files and global schema are
-                emitted.
+                Choose public discovery files and structured data.
               </p>
             </div>
           </div>
@@ -441,7 +452,7 @@ export function SeoSettingsBuilder() {
             <div className="border-b border-border p-4">
               <div className="mb-3 flex items-center gap-2 text-sm font-medium">
                 <Rss className="h-4 w-4 text-muted-foreground" />
-                Product Catalog Feed
+                Product catalog feed
               </div>
               <div className="space-y-3">
                 <label className="flex items-center justify-between gap-4 text-sm">
@@ -453,20 +464,24 @@ export function SeoSettingsBuilder() {
                     }
                   />
                 </label>
-                <label className="flex items-center justify-between gap-4 text-sm">
-                  <span>Include sold-out items</span>
-                  <Switch
-                    checked={values.discovery.feeds.includeUnavailableProducts}
-                    onCheckedChange={(checked) =>
-                      updateDiscovery(
-                        "feeds",
-                        "includeUnavailableProducts",
-                        checked,
-                      )
-                    }
-                  />
-                </label>
-                <div className="grid gap-2">
+                {values.discovery.feeds.productCatalogEnabled ? (
+                  <>
+                    <label className="flex items-center justify-between gap-4 text-sm">
+                      <span>Include sold-out items</span>
+                      <Switch
+                        checked={
+                          values.discovery.feeds.includeUnavailableProducts
+                        }
+                        onCheckedChange={(checked) =>
+                          updateDiscovery(
+                            "feeds",
+                            "includeUnavailableProducts",
+                            checked,
+                          )
+                        }
+                      />
+                    </label>
+                    <div className="grid gap-2">
                   <Label htmlFor="feed-variant-strategy" className="text-xs">
                     Feed output mode
                   </Label>
@@ -480,7 +495,10 @@ export function SeoSettingsBuilder() {
                       )
                     }
                   >
-                    <SelectTrigger id="feed-variant-strategy">
+                    <SelectTrigger
+                      id="feed-variant-strategy"
+                      className="min-h-11 sm:min-h-9"
+                    >
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -495,8 +513,8 @@ export function SeoSettingsBuilder() {
                     product rows only when a catalog tool should receive one row
                     per product.
                   </p>
-                </div>
-                <div className="grid gap-2">
+                    </div>
+                    <div className="grid gap-2">
                   <Label htmlFor="feed-title" className="text-xs">
                     Feed title
                   </Label>
@@ -507,9 +525,10 @@ export function SeoSettingsBuilder() {
                       updateDiscovery("feeds", "title", event.target.value)
                     }
                     placeholder="Product Catalog"
+                    className="min-h-11 sm:min-h-9"
                   />
-                </div>
-                <div className="grid gap-2">
+                    </div>
+                    <div className="grid gap-2">
                   <Label htmlFor="feed-description" className="text-xs">
                     Feed description
                   </Label>
@@ -524,25 +543,26 @@ export function SeoSettingsBuilder() {
                       )
                     }
                     placeholder="Complete product catalog for feed tools"
+                    className="min-h-11 sm:min-h-9"
                   />
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Controls the Google/Base RSS product catalog at
-                  `/api/product-feed.xml`; `/api/facebook-feed.xml` remains as a
-                  compatibility alias for existing Meta catalog syncs.
-                </p>
+                    </div>
+                    <p className="text-xs leading-5 text-muted-foreground">
+                      Provides Google-compatible XML and a Meta compatibility
+                      feed.
+                    </p>
+                  </>
+                ) : null}
               </div>
             </div>
 
             <div className="border-b border-border p-4 md:border-r">
               <div className="mb-3 flex items-center gap-2 text-sm font-medium">
                 <Search className="h-4 w-4 text-muted-foreground" />
-                UCP Catalog Discovery
+                UCP catalog discovery
               </div>
               <p className="text-xs leading-5 text-muted-foreground">
-                Default-on when the Store URL is HTTPS. Exposes read-only
-                catalog search and lookup from feed-ready products only;
-                checkout, cart, orders, and payments stay hidden.
+                Read-only catalog search for shopping agents. Requires an HTTPS
+                Store URL.
               </p>
             </div>
 
@@ -565,7 +585,7 @@ export function SeoSettingsBuilder() {
             <div className="p-4 md:col-span-2">
               <div className="mb-3 flex items-center gap-2 text-sm font-medium">
                 <Braces className="h-4 w-4 text-muted-foreground" />
-                Structured Data
+                Structured data
               </div>
               <div className="space-y-3">
                 <label className="flex items-center justify-between gap-4 text-sm">
@@ -666,11 +686,11 @@ export function SeoSettingsBuilder() {
                   <Undo2 className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                   <div className="min-w-0">
                     <div className="text-sm font-medium">
-                      Return Policy Schema
+                      Return policy schema
                     </div>
                     <p className="text-xs leading-5 text-muted-foreground">
-                      Saves return-policy facts for OnlineStore/Product schema;
-                      it does not change checkout, refunds, or order handling.
+                      Publishes the saved policy to search engines. It does not
+                      change order handling.
                     </p>
                   </div>
                 </div>
@@ -692,7 +712,8 @@ export function SeoSettingsBuilder() {
                 </label>
               </div>
 
-              <div className="mt-4 grid min-w-0 gap-3 md:grid-cols-2">
+              {returnPolicy.enabled ? (
+                <div className="mt-4 grid min-w-0 gap-3 md:grid-cols-2">
                 <div className="grid min-w-0 gap-2">
                   <Label htmlFor="return-policy-country" className="text-xs">
                     Country
@@ -710,7 +731,7 @@ export function SeoSettingsBuilder() {
                       })
                     }
                     placeholder="BD"
-                    className="uppercase"
+                    className="min-h-11 uppercase sm:min-h-9"
                   />
                 </div>
 
@@ -734,7 +755,7 @@ export function SeoSettingsBuilder() {
                   >
                     <SelectTrigger
                       id="return-policy-category"
-                      className="min-w-0"
+                      className="min-h-11 min-w-0 sm:min-h-9"
                     >
                       <SelectValue />
                     </SelectTrigger>
@@ -771,6 +792,7 @@ export function SeoSettingsBuilder() {
                         })
                       }
                       placeholder="7"
+                      className="min-h-11 sm:min-h-9"
                     />
                   </div>
                 ) : null}
@@ -788,7 +810,10 @@ export function SeoSettingsBuilder() {
                     }
                     disabled={isNoReturnsPolicy}
                   >
-                    <SelectTrigger id="return-policy-fees" className="min-w-0">
+                    <SelectTrigger
+                      id="return-policy-fees"
+                      className="min-h-11 min-w-0 sm:min-h-9"
+                    >
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -815,7 +840,7 @@ export function SeoSettingsBuilder() {
                   >
                     <SelectTrigger
                       id="return-policy-method"
-                      className="min-w-0"
+                      className="min-h-11 min-w-0 sm:min-h-9"
                     >
                       <SelectValue />
                     </SelectTrigger>
@@ -845,6 +870,7 @@ export function SeoSettingsBuilder() {
                       })
                     }
                     placeholder="/returns"
+                    className="min-h-11 sm:min-h-9"
                   />
                   {returnPolicyUrlInvalid ? (
                     <p className="text-xs leading-5 text-amber-700">
@@ -858,47 +884,75 @@ export function SeoSettingsBuilder() {
                     </p>
                   )}
                 </div>
-              </div>
+                </div>
+              ) : null}
             </div>
           </div>
         </div>
 
-        <section className="rounded-lg border border-border bg-background p-4">
-          <div className="space-y-2">
-            <Label htmlFor="robots-txt">Additional robots.txt rules</Label>
-            <Textarea
-              id="robots-txt"
-              value={values.robotsTxt}
-              onChange={(e) => updateField("robotsTxt", e.target.value)}
-              placeholder={`User-agent: *\nAllow: /`}
-              rows={6}
-              className="font-mono text-sm"
-            />
-            <p className="text-xs leading-5 text-muted-foreground">
-              Add crawler allow or disallow rules only. Sitemap lines are
-              managed by the Advertise sitemap URL switch and normalized to the
-              current Store URL.
-            </p>
-          </div>
+        <section className="overflow-hidden rounded-lg border border-border bg-background">
+          <details className="group" open={hasCustomRobotsRules}>
+            <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 marker:content-none">
+              <div className="min-w-0">
+                <h3 className="text-sm font-semibold">
+                  Advanced robots.txt rules
+                </h3>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {hasCustomRobotsRules
+                    ? "Custom crawler rules are active."
+                    : "Optional crawler allow and disallow rules."}
+                </p>
+              </div>
+              <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
+            </summary>
+            <div className="space-y-2 border-t border-border p-4">
+              <Label htmlFor="robots-txt">Crawler rules</Label>
+              <Textarea
+                id="robots-txt"
+                value={values.robotsTxt}
+                onChange={(e) => updateField("robotsTxt", e.target.value)}
+                placeholder={`User-agent: *\nAllow: /`}
+                rows={6}
+                className="font-mono text-sm"
+              />
+              <p className="text-xs leading-5 text-muted-foreground">
+                Sitemap URLs are managed by the switch above.
+              </p>
+            </div>
+          </details>
         </section>
 
-        <div className="flex justify-end pt-4 border-t border-border">
-          <Button
-            onClick={handleSubmit}
-            disabled={isSaving}
-            className="min-w-[120px]"
-          >
-            {isSaving ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              "Save discovery settings"
-            )}
-          </Button>
+        {isDirty ? (
+          <div className="flex flex-col-reverse gap-2 border-t border-border pt-4 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={reset}
+              disabled={isSaving}
+              className="min-h-11 sm:min-h-9"
+            >
+              <RotateCcw className="h-4 w-4" />
+              Reset
+            </Button>
+            <Button
+              type="button"
+              onClick={handleSubmit}
+              disabled={isSaving || !isLoaded}
+              className="min-h-11 min-w-[120px] sm:min-h-9"
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Save discovery settings"
+              )}
+            </Button>
+          </div>
+        ) : null}
         </div>
       </div>
-    </div>
+    </>
   );
 }
