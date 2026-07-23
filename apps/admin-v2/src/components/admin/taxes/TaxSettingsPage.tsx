@@ -5,6 +5,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { taxConfigurationQueryOptions } from "@/lib/api-query-options/taxes";
 import { ADMIN_PERMISSIONS } from "@/lib/admin-permissions";
 import { usePermissions } from "@/contexts/PermissionContext";
@@ -51,9 +58,9 @@ export function TaxSettingsPage({
     <div className="container max-w-7xl space-y-5 py-6">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Taxes</h1>
+          <h1 className="text-xl font-semibold tracking-tight">Taxes</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Configure verified classes and destination rates, then test the checkout calculation.
+            Tax classes, destination rates, and checkout preview.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -96,7 +103,33 @@ export function TaxSettingsPage({
       </Card>
 
       <Tabs value={section} onValueChange={(value) => onSectionChange(value as TaxWorkspaceSection)} className="space-y-5">
-        <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto rounded-lg border bg-muted/40 p-1 [scrollbar-width:thin]">
+        <div className="sm:hidden">
+          <Select
+            value={section}
+            onValueChange={(value) =>
+              onSectionChange(value as TaxWorkspaceSection)
+            }
+          >
+            <SelectTrigger
+              className="min-h-11 bg-card"
+              aria-label="Tax workspace section"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {tabs.map((tab) => (
+                <SelectItem
+                  key={tab.value}
+                  value={tab.value}
+                  className="min-h-11"
+                >
+                  {tab.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <TabsList className="hidden h-auto w-full justify-start gap-1 rounded-lg border bg-muted/40 p-1 sm:flex">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             return (

@@ -46,9 +46,14 @@ describe("tax workspace merchant copy", () => {
     const preview = source("./TaxPreviewPanel.tsx");
 
     expect(workspace).toContain("min-h-11");
+    expect(workspace).toContain('aria-label="Tax workspace section"');
+    expect(workspace).toContain('className="sm:hidden"');
+    expect(workspace).toContain("sm:flex");
+    expect(workspace).not.toContain("overflow-x-auto");
     expect(workspace).toContain('configuration.classes.length === 1 ? "class" : "classes"');
     expect(workspace).toContain('activeRateCount === 1 ? "rate" : "rates"');
     expect(policy).toContain("min-h-11");
+    expect(policy).toContain("{isDirty ? (");
     expect(classes).toContain('className="space-y-2 md:hidden"');
     expect(classes).toContain('className="hidden md:block"');
     expect(rates).toContain('className="space-y-2 md:hidden"');
