@@ -24,6 +24,10 @@ import { fetchAuthoritativeTaxQuote } from "./tax-quote-client";
 import type { CheckoutTaxQuote } from "./tax-quote-contract";
 import { cartItemVariantLabel } from "../cart/item-options";
 import { isGatewayTestMode } from "./gateway-environment";
+import {
+  hideCheckoutLoadingOverlay,
+  showCheckoutLoadingOverlay,
+} from "./loading-overlay";
 
 // Register all built-in gateway handlers
 registerGateway(codHandler);
@@ -549,8 +553,11 @@ function renderGateways(): void {
 
     // Adjust label if partial payment is required
     let label = meta.label;
-    if (checkoutConfig.partialPaymentEnabled && (gw.id === "stripe" || gw.id === "sslcommerz" || gw.id === "polar")) {
-      label = depositRequired ? `Pay Advance via ${meta.label}` : `Pay Online via ${meta.label}`;
+    if (
+      depositRequired &&
+      (gw.id === "stripe" || gw.id === "sslcommerz" || gw.id === "polar")
+    ) {
+      label = `${meta.label} · advance payment`;
     }
 
     const card = document.createElement("button");
@@ -678,35 +685,21 @@ async function processPayment(): Promise<void> {
   setPayButton("Processing...", true);
   trackAddPaymentInfoForSelection(selectedMethod);
 
-  const loadingOverlay = document.getElementById("loadingOverlay");
-  const loadingTitle = document.getElementById("loadingTitle");
-  const loadingMsg = document.getElementById("loadingMsg");
-  const progressBar = document.getElementById("loadingProgressBar");
-
-  if (loadingOverlay) {
-    if (loadingTitle) loadingTitle.textContent = selectedMethod === "cod" ? "Confirming Order" : "Initializing Delivery";
-    if (loadingMsg) loadingMsg.textContent = "Please wait while we safely process your order in our systems.";
-    loadingOverlay.style.display = "block";
-
-    if (progressBar) {
-      progressBar.style.width = "0%";
-      setTimeout(() => {
-        progressBar.style.width = "40%";
-      }, 200);
-      setTimeout(() => {
-        progressBar.style.width = "75%";
-      }, 1000);
-      setTimeout(() => {
-        progressBar.style.width = "90%";
-      }, 2500);
-    }
-  }
+  showCheckoutLoadingOverlay(
+    selectedMethod === "cod"
+      ? {
+          title: "Placing your order",
+          message: "Confirming item availability and delivery.",
+        }
+      : {
+          title: "Opening secure payment",
+          message: "You'll continue with the selected payment provider.",
+        },
+  );
 
   const handler = getGateway(selectedMethod);
   if (!handler) {
-    if (loadingOverlay) {
-      loadingOverlay.style.display = "none";
-    }
+    hideCheckoutLoadingOverlay();
     showError("Unknown payment method selected.");
     isProcessing = false;
     setPayButton("Continue to Payment", false);
@@ -747,9 +740,7 @@ async function processPayment(): Promise<void> {
 
     if (!result.success) {
       if (result.cartIssues && result.cartIssues.length > 0) {
-        if (loadingOverlay) {
-          loadingOverlay.style.display = "none";
-        }
+        hideCheckoutLoadingOverlay({ restoreFocus: false });
         redirectToCartForRepair({
           valid: false,
           issues: result.cartIssues,
@@ -760,9 +751,7 @@ async function processPayment(): Promise<void> {
 
       const recovery = getPaymentResultRecovery(result);
       if (recovery) {
-        if (loadingOverlay) {
-          loadingOverlay.style.display = "none";
-        }
+        hideCheckoutLoadingOverlay();
         isProcessing = false;
         showError(recovery.message);
         setPayButton(recovery.buttonText, false);
@@ -771,9 +760,7 @@ async function processPayment(): Promise<void> {
       throw new Error(getPaymentResultErrorMessage(result));
     }
   } catch (err: unknown) {
-    if (loadingOverlay) {
-      loadingOverlay.style.display = "none";
-    }
+    hideCheckoutLoadingOverlay();
     showError(err instanceof Error ? err.message : "An error occurred. Please try again.");
     isProcessing = false;
 
