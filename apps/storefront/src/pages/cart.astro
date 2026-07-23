@@ -20,6 +20,7 @@ import {
 } from "@/lib/api";
 import { getCustomerSessionTokenFromCookie } from "@/lib/customer-session-cookie";
 import { createOrderReceiptCookieHeader } from "@/lib/order-receipt-cookie";
+import { MIN_SHIPPING_ADDRESS_LENGTH } from "@/lib/checkout/shipping-address";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import type { CartValidationIssue } from "@/lib/api/orders";
 
@@ -588,10 +589,18 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
                   id="shippingAddress"
                   name="shippingAddress"
                   required
+                  minLength={MIN_SHIPPING_ADDRESS_LENGTH}
+                  aria-describedby="shippingAddressError"
                   placeholder={lang.languageData.shippingAddressPlaceholder}
                   rows={2}
                   className="w-full min-h-16 resize-none bg-muted border-input rounded-lg focus:bg-background focus:border-primary focus:ring-primary/20 px-3 py-2 text-sm text-foreground"
                 />
+                <p
+                  id="shippingAddressError"
+                  class="mt-1 hidden text-xs font-medium text-destructive"
+                  role="alert"
+                >
+                </p>
               </div>
 
               <div class="sm:col-span-2 border-t border-border pt-4">
@@ -611,6 +620,12 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
                       areaLabel={lang.languageData.areaLabel}
                       showAreaField={lang.fieldVisibility.showAreaField}
                     />
+                    <p
+                      id="shippingLocationError"
+                      class="mt-1 hidden text-xs font-medium text-destructive"
+                      role="alert"
+                    >
+                    </p>
                   </div>
                 </div>
               </div>
@@ -702,6 +717,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     clearCheckoutTransferSession,
     writeCheckoutTransferSession,
   } from "@/lib/checkout/session-state";
+  import { getShippingAddressError } from "@/lib/checkout/shipping-address";
 
   type CustomerAutofillProfile = {
     name?: string | null;
@@ -932,6 +948,50 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
 
     if (!form || !submitButton) return;
 
+    const shippingAddressInput = document.getElementById(
+      "shippingAddress",
+    ) as HTMLTextAreaElement | null;
+    const shippingAddressError = document.getElementById(
+      "shippingAddressError",
+    );
+    const shippingLocationError = document.getElementById(
+      "shippingLocationError",
+    );
+    const syncShippingAddressValidity = (showError: boolean) => {
+      if (!shippingAddressInput) return true;
+      const message = getShippingAddressError(shippingAddressInput.value);
+      shippingAddressInput.setCustomValidity(message ?? "");
+      if (shippingAddressError) {
+        shippingAddressError.textContent = showError ? (message ?? "") : "";
+        shippingAddressError.classList.toggle("hidden", !showError || !message);
+      }
+      return message === null;
+    };
+
+    shippingAddressInput?.addEventListener(
+      "input",
+      () => {
+        const errorIsVisible =
+          shippingAddressError?.classList.contains("hidden") === false;
+        syncShippingAddressValidity(errorIsVisible);
+      },
+      { signal: cartPageSignal },
+    );
+    shippingAddressInput?.addEventListener(
+      "invalid",
+      () => syncShippingAddressValidity(true),
+      { signal: cartPageSignal },
+    );
+    window.addEventListener(
+      "checkout-location-change",
+      () => {
+        if (!shippingLocationError) return;
+        shippingLocationError.textContent = "";
+        shippingLocationError.classList.add("hidden");
+      },
+      { signal: cartPageSignal },
+    );
+
     form.addEventListener(
       "submit",
       async (e) => {
@@ -1010,14 +1070,54 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
           submitAfterCartValidation = false;
         }
 
+        if (!syncShippingAddressValidity(true)) {
+          e.preventDefault();
+          restoreSubmitButton();
+          shippingAddressInput?.focus({ preventScroll: true });
+          shippingAddressInput?.reportValidity();
+          shippingAddressInput?.scrollIntoView({
+            behavior: "smooth",
+            block: "center",
+          });
+          return;
+        }
+
+        const cityInput = document.querySelector<HTMLInputElement>(
+          '[name="city"]',
+        );
+        const zoneInput = document.querySelector<HTMLInputElement>(
+          '[name="zone"]',
+        );
+        if (!cityInput?.value?.trim() || !zoneInput?.value?.trim()) {
+          e.preventDefault();
+          restoreSubmitButton();
+          const missingCity = !cityInput?.value?.trim();
+          const message = missingCity
+            ? "Choose a city and zone to continue."
+            : "Choose a zone to continue.";
+          if (shippingLocationError) {
+            shippingLocationError.textContent = message;
+            shippingLocationError.classList.remove("hidden");
+            shippingLocationError.scrollIntoView({
+              behavior: "smooth",
+              block: "center",
+            });
+          }
+          const target = document.querySelector<HTMLButtonElement>(
+            missingCity
+              ? 'button[aria-label^="City:"]'
+              : 'button[aria-label^="Zone:"]',
+          );
+          target?.focus({ preventScroll: true });
+          return;
+        }
+
         // Required fields validation
         const requiredFields = [
           "customerName",
           "customerPhone",
           "shippingAddress",
           "shippingLocation",
-          "city",
-          "zone",
         ];
         const missing: string[] = [];
         for (const field of requiredFields) {
