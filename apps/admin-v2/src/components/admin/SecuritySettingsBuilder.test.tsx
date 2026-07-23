@@ -17,6 +17,10 @@ describe("SecuritySettingsBuilder contract", () => {
     expect(source).toContain("Additional storefront services");
     expect(source).toContain("getInheritedSecuritySources");
     expect(source).toContain("merchantSources.map");
+    expect(source).toContain('source.source ? "Trusted" : "Missing"');
+    expect(source).toContain("{dirty || hasPendingInput ? (");
+    expect(source).toContain("merchantListOpen");
+    expect(source).toContain('merchantSources.length === 1 ? "origin" : "origins"');
     expect(source).not.toContain("Comma-separated domains");
   });
 

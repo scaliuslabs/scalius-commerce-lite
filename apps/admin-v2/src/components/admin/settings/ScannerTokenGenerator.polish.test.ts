@@ -11,13 +11,13 @@ describe("scanner access workspace", () => {
     expect(source).toContain("SCANNER_TOKEN_TTL_SECONDS");
     expect(source).toContain("SCANNER_SESSION_TTL_SECONDS");
     expect(source).not.toContain("6 * 60 * 60 * 1000");
-    expect(source).toContain("must be claimed within");
+    expect(source).toContain("It expires in");
     expect(source).toContain("after the latest check-in");
   });
 
   it("keeps token claim and device-session language distinct", () => {
     expect(source).toContain("The first device to open this link claims it");
-    expect(source).toContain("the token is not reused");
+    expect(source).not.toContain("The QR link can be claimed once");
     expect(source).toContain("expiresAt ?? Date.now() + TOKEN_LIFETIME_MS");
   });
 
