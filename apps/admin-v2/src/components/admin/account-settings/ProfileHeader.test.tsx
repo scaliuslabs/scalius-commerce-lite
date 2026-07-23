@@ -27,6 +27,7 @@ const toastMock = vi.hoisted(() => ({
 
 vi.mock("@tanstack/react-router", () => ({
   useRouter: () => routerMock,
+  useBlocker: () => ({ proceed: vi.fn(), reset: vi.fn(), status: "idle" }),
 }));
 
 vi.mock("~/lib/api-functions/auth-management", () => ({
