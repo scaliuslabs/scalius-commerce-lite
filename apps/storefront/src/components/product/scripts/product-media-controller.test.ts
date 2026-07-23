@@ -52,35 +52,47 @@ function renderGallery(initial = "pmed_video") {
     }),
   ].join("");
   document.body.innerHTML = `
-    <div
-      data-product-gallery
-      data-initial-product-media-id="${initial}"
-      data-fallback-url="/fallback-main.jpg"
-      data-fallback-zoom-url="/fallback-zoom.jpg"
-      data-fallback-media-id="med_poster"
-      data-fallback-alt="Fallback image"
-    >
-      <div data-image-stage="desktop" class="hidden lg:block">
-        <img data-desktop-main-image src="/fallback-main.jpg" />
+    <header data-page-background></header>
+    <main>
+      <div
+        data-product-gallery
+        data-initial-product-media-id="${initial}"
+        data-fallback-url="/fallback-main.jpg"
+        data-fallback-zoom-url="/fallback-zoom.jpg"
+        data-fallback-media-id="med_poster"
+        data-fallback-alt="Fallback image"
+      >
+        <div data-image-stage="desktop" class="hidden lg:block">
+          <img data-desktop-main-image src="/fallback-main.jpg" />
+        </div>
+        <button data-image-stage="mobile" data-mobile-image-trigger>
+          <img data-mobile-main-image src="/fallback-main.jpg" />
+        </button>
+        <div data-video-stage class="hidden">
+          <div data-video-placeholder></div>
+          <media-theme-microvideo data-product-video-player>
+            <video data-product-video controls slot="media"></video>
+          </media-theme-microvideo>
+        </div>
+        <div data-thumbnail-rail="desktop">${buttons}</div>
+        <div data-thumbnail-rail="mobile">${buttons}</div>
+        <div data-mobile-zoom-modal role="dialog" aria-hidden="true" inert>
+          <button data-close-mobile-zoom tabindex="-1">Close</button>
+          <div data-panzoom-container>
+            <img data-fullscreen-image />
+          </div>
+        </div>
       </div>
-      <button data-image-stage="mobile" data-mobile-image-trigger>
-        <img data-mobile-main-image src="/fallback-main.jpg" />
-      </button>
-      <div data-video-stage class="hidden">
-        <div data-video-placeholder></div>
-        <media-theme-microvideo data-product-video-player>
-          <video data-product-video controls slot="media"></video>
-        </media-theme-microvideo>
-      </div>
-      <div data-thumbnail-rail="desktop">${buttons}</div>
-      <div data-thumbnail-rail="mobile">${buttons}</div>
-    </div>
+      <aside data-page-background></aside>
+    </main>
+    <footer data-page-background></footer>
   `;
   return document.querySelector<HTMLElement>("[data-product-gallery]")!;
 }
 
 beforeEach(() => {
   document.body.innerHTML = "";
+  document.body.style.overflow = "";
   Object.defineProperty(window, "matchMedia", {
     configurable: true,
     value: vi.fn().mockReturnValue({ matches: false }),
@@ -432,6 +444,39 @@ describe("mixed product media gallery", () => {
     expect(video.getAttribute("aria-current")).toBe("true");
     expect(changes).toHaveBeenCalledTimes(1);
   });
+
+  it("makes mobile zoom a real modal and restores the page on close", () => {
+    document.body.style.overflow = "clip";
+    const root = renderGallery("pmed_image");
+    initProductMediaGallery(root);
+
+    const trigger = root.querySelector<HTMLButtonElement>(
+      "[data-mobile-image-trigger]",
+    )!;
+    const modal = root.querySelector<HTMLElement>("[data-mobile-zoom-modal]")!;
+    const close = root.querySelector<HTMLButtonElement>(
+      "[data-close-mobile-zoom]",
+    )!;
+    const background = Array.from(
+      document.querySelectorAll<HTMLElement>("[data-page-background]"),
+    );
+
+    trigger.click();
+
+    expect(modal.inert).toBe(false);
+    expect(modal.getAttribute("aria-hidden")).toBe("false");
+    expect(background.every((element) => element.inert)).toBe(true);
+    expect(document.activeElement).toBe(close);
+    expect(document.body.style.overflow).toBe("hidden");
+
+    close.click();
+
+    expect(modal.inert).toBe(true);
+    expect(modal.getAttribute("aria-hidden")).toBe("true");
+    expect(background.every((element) => !element.inert)).toBe(true);
+    expect(document.activeElement).toBe(trigger);
+    expect(document.body.style.overflow).toBe("clip");
+  });
 });
 
 describe("storefront mixed-media source boundaries", () => {
@@ -472,6 +517,11 @@ describe("storefront mixed-media source boundaries", () => {
     const styles = readFileSync(GLOBAL_STYLE_SOURCE, "utf8");
     expect(styles).toContain("media-theme-microvideo::part(button)");
     expect(styles).toContain("min-width: 44px");
+  });
+
+  it("keeps the closed mobile zoom dialog inert until the controller opens it", () => {
+    const gallery = readFileSync(GALLERY_SOURCE, "utf8");
+    expect(gallery).toMatch(/data-mobile-zoom-modal[\s\S]*?aria-hidden="true"[\s\S]*?\binert\b/);
   });
 
   it("passes the ordered media contract directly and removes the image adapter type", () => {
