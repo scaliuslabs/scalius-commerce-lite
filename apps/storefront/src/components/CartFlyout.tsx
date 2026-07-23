@@ -220,9 +220,11 @@ export default function CartFlyout() {
             </SheetTitle>
           </div>
 
-          <SheetClose className="group p-1.5 -mr-1.5 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground transition-all active:scale-90 focus:outline-none cursor-pointer">
+          <SheetClose
+            aria-label="Close cart"
+            className="group -mr-2 flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground transition-all hover:bg-muted hover:text-foreground active:scale-90 focus:outline-none sm:-mr-2 sm:h-9 sm:w-9 cursor-pointer"
+          >
             <X className="h-4 w-4 sm:h-5 sm:w-5 transition-transform duration-300 group-hover:rotate-90" />
-            <span className="sr-only">Close</span>
           </SheetClose>
         </div>
 
@@ -247,9 +249,9 @@ export default function CartFlyout() {
                   onClick={() => setCartOpen(false)}
                   variant="default"
                   size="sm"
-                  className="h-7 px-4 text-[10px] sm:text-xs font-bold rounded-full mt-1 bg-primary text-primary-foreground hover:bg-primary/90 cursor-pointer"
+                  className="mt-1 h-11 rounded-full bg-primary px-5 text-xs font-bold text-primary-foreground hover:bg-primary/90 sm:h-9 cursor-pointer"
                 >
-                  Start Shopping
+                  Start shopping
                 </Button>
               </div>
             ) : (
@@ -282,7 +284,7 @@ export default function CartFlyout() {
                     <div className="flex flex-1 flex-col min-w-0 justify-between py-0">
                       <div className="flex justify-between items-start gap-1.5">
                         <div className="space-y-0.5 min-w-0 flex-1">
-                          <h3 className="text-[12px] sm:text-[13.5px] font-bold text-foreground leading-tight truncate pr-1">
+                          <h3 className="line-clamp-2 pr-1 text-[12px] font-bold leading-tight text-foreground sm:text-[13.5px]">
                             <a
                               href={`/products/${item.slug || item.id}`}
                               className="hover:text-muted-foreground transition-colors"
@@ -313,9 +315,9 @@ export default function CartFlyout() {
                         </div>
                       </div>
 
-                      {/* Controls Row - Tighter on mobile */}
+                      {/* Controls Row */}
                       <div className="flex items-end justify-between mt-1">
-                        <div className="flex items-center border border-input rounded-md bg-muted/50 h-6 sm:h-7 overflow-hidden">
+                        <div className="flex h-11 items-center overflow-hidden rounded-md bg-muted/50 ring-1 ring-inset ring-input sm:h-8">
                           <button
                             aria-label={`Decrease ${item.name} quantity`}
                             onClick={() => {
@@ -326,11 +328,11 @@ export default function CartFlyout() {
                               else
                                 updateCartItemByKey(key, { quantity: newQ });
                             }}
-                            className="w-6 sm:w-8 h-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-background transition-colors active:bg-muted cursor-pointer"
+                            className="flex h-full w-11 items-center justify-center text-muted-foreground transition-colors hover:bg-background hover:text-foreground active:bg-muted sm:w-8 cursor-pointer"
                           >
-                            <Minus className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+                            <Minus className="h-3 w-3" />
                           </button>
-                          <span className="w-5 sm:w-6 text-center text-[11px] sm:text-[12px] font-bold text-foreground tabular-nums h-full flex items-center justify-center leading-none">
+                          <span className="flex h-full w-7 items-center justify-center text-center text-xs font-bold leading-none text-foreground tabular-nums sm:w-6">
                             {item.quantity}
                           </span>
                           <button
@@ -341,9 +343,9 @@ export default function CartFlyout() {
                                 quantity: item.quantity + 1,
                               });
                             }}
-                            className="w-6 sm:w-8 h-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-background transition-colors active:bg-muted cursor-pointer"
+                            className="flex h-full w-11 items-center justify-center text-muted-foreground transition-colors hover:bg-background hover:text-foreground active:bg-muted sm:w-8 cursor-pointer"
                           >
-                            <Plus className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+                            <Plus className="h-3 w-3" />
                           </button>
                         </div>
 
@@ -353,7 +355,7 @@ export default function CartFlyout() {
                             disableAutoClose();
                             removeCartItemByKey(key);
                           }}
-                          className="text-muted-foreground hover:text-destructive p-1 rounded-md hover:bg-destructive/10 transition-colors active:scale-90 cursor-pointer"
+                          className="flex h-11 w-11 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive active:scale-90 sm:h-8 sm:w-8 cursor-pointer"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
@@ -421,28 +423,29 @@ export default function CartFlyout() {
               </div>
             </div>
 
-            {/* Mobile Footer: Super Compact Bar */}
+            {/* Mobile Footer */}
             <div className="flex sm:hidden items-center gap-3 px-1 pb-1">
               {/* Left: Total */}
-              <div className="flex flex-col justify-center min-w-0">
-                <div className="flex items-center gap-1.5 mb-0.5">
-                  <span className="text-[9px] text-muted-foreground font-bold uppercase">
+              <div className="flex min-w-0 items-center gap-1">
+                <div className="flex flex-col justify-center">
+                  <span className="text-[10px] font-bold uppercase text-muted-foreground">
                     Total
                   </span>
-                  <button
-                    onClick={() => {
-                      disableAutoClose();
-                      clearCart();
-                      setCartOpen(false);
-                    }}
-                    className="text-[9px] text-muted-foreground underline decoration-dotted hover:text-destructive cursor-pointer"
-                  >
-                    Clear
-                  </button>
+                  <div className="text-lg font-extrabold leading-none text-foreground tabular-nums">
+                    {formatPriceShort(cart.totalAmount)}
+                  </div>
                 </div>
-                <div className="text-lg font-extrabold text-foreground tabular-nums leading-none">
-                  {formatPriceShort(cart.totalAmount)}
-                </div>
+                <button
+                  aria-label="Clear cart"
+                  onClick={() => {
+                    disableAutoClose();
+                    clearCart();
+                    setCartOpen(false);
+                  }}
+                  className="flex min-h-11 items-center rounded-md px-2 text-[11px] font-medium text-muted-foreground underline decoration-dotted underline-offset-2 hover:text-destructive cursor-pointer"
+                >
+                  Clear
+                </button>
               </div>
 
               {/* Right: Action */}
@@ -451,7 +454,7 @@ export default function CartFlyout() {
                   disableAutoClose();
                   handleCheckout();
                 }}
-                className="flex-1 h-9 rounded-full text-[12px] font-bold bg-primary text-primary-foreground shadow-sm active:scale-[0.97] flex items-center justify-center gap-2 ml-auto cursor-pointer"
+                className="ml-auto flex h-11 flex-1 items-center justify-center gap-2 rounded-full bg-primary text-[12px] font-bold text-primary-foreground shadow-sm active:scale-[0.97] cursor-pointer"
               >
                 <span>Checkout</span>
                 <ArrowRight className="h-3 w-3" />

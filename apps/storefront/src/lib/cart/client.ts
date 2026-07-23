@@ -878,14 +878,14 @@ export async function renderCartItems() {
           <div class="w-16 h-16 sm:w-20 sm:h-20 bg-muted rounded-lg overflow-hidden shrink-0"><img src="${safeImage}" alt="${safeName}" class="w-full h-full object-contain object-center" /></div>
           <div class="flex-1 min-w-0">
             <div class="flex justify-between">
-              <div class="min-w-0"><h3 class="font-medium truncate text-sm sm:text-base text-foreground">${safeName}</h3><div class="text-xs sm:text-sm text-muted-foreground mt-0.5 sm:mt-1">${variantInfo}</div></div>
-              <button aria-label="Remove ${safeName} from cart" class="text-muted-foreground hover:text-destructive transition-colors ml-1.5 sm:ml-2 p-0.5" onclick="window.removeFromCart(${jsCartKey})"><svg class="w-4 h-4 sm:w-5 sm:h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 18L18 6M6 6l12 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              <div class="min-w-0"><h3 class="line-clamp-2 text-sm font-medium text-foreground sm:text-base">${safeName}</h3><div class="mt-0.5 text-xs text-muted-foreground sm:mt-1 sm:text-sm">${variantInfo}</div></div>
+              <button aria-label="Remove ${safeName} from cart" class="ml-1.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive sm:ml-2 sm:h-9 sm:w-9" onclick="window.removeFromCart(${jsCartKey})"><svg class="w-4 h-4 sm:w-5 sm:h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 18L18 6M6 6l12 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
             </div>
             <div class="flex items-center justify-between mt-1.5 sm:mt-2">
-              <div class="flex items-center gap-1.5 sm:gap-2">
-                <button aria-label="Decrease ${safeName} quantity" class="w-6 h-6 sm:w-7 sm:h-7 rounded-md sm:rounded-lg ring-1 sm:ring-2 ring-border flex items-center justify-center hover:bg-muted text-xs sm:text-sm text-foreground" onclick="window.updateCartQuantity(${jsCartKey}, ${Math.max(0, item.quantity - 1)})">-</button>
-                <span class="w-5 sm:w-6 text-center text-xs sm:text-sm text-foreground">${item.quantity}</span>
-                <button aria-label="Increase ${safeName} quantity" class="w-6 h-6 sm:w-7 sm:h-7 rounded-md sm:rounded-lg ring-1 sm:ring-2 ring-border flex items-center justify-center hover:bg-muted text-xs sm:text-sm text-foreground" onclick="window.updateCartQuantity(${jsCartKey}, ${item.quantity + 1})">+</button>
+              <div class="flex h-11 items-center overflow-hidden rounded-md ring-1 ring-inset ring-border sm:h-8">
+                <button aria-label="Decrease ${safeName} quantity" class="flex h-full w-11 items-center justify-center text-sm text-foreground hover:bg-muted sm:w-8" onclick="window.updateCartQuantity(${jsCartKey}, ${Math.max(0, item.quantity - 1)})">-</button>
+                <span class="flex h-full w-7 items-center justify-center text-center text-xs text-foreground sm:w-6 sm:text-sm">${item.quantity}</span>
+                <button aria-label="Increase ${safeName} quantity" class="flex h-full w-11 items-center justify-center text-sm text-foreground hover:bg-muted sm:w-8" onclick="window.updateCartQuantity(${jsCartKey}, ${item.quantity + 1})">+</button>
               </div>
               <div class="text-right"><div class="font-medium text-sm sm:text-base text-foreground">${formatPriceShort(item.price * item.quantity)}</div><div class="text-xs text-muted-foreground">${formatPriceShort(item.price)} each</div></div>
             </div>

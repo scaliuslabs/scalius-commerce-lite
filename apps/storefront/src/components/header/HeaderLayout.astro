@@ -418,6 +418,12 @@ const expandedActionsXlWidth =
     max-width: var(--header-logo-mobile-width);
   }
 
+  @media (max-width: 21rem) {
+    .storefront-header-logo {
+      max-width: min(var(--header-logo-mobile-width), 5.75rem);
+    }
+  }
+
   @media (min-width: 64rem) {
     .storefront-header-logo {
       max-width: var(--header-logo-width);

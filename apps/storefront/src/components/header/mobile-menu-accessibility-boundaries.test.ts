@@ -62,6 +62,10 @@ describe("mobile menu accessibility boundaries", () => {
     expect(layout).toMatch(/id="mobile-search-toggle"[\s\S]*?h-11 w-11/);
     expect(layout).toMatch(/id="account-link"[\s\S]*?h-11 w-11/);
     expect(layout).toMatch(/id="cart-button"[\s\S]*?h-11 min-w-11/);
+    expect(layout).toContain("@media (max-width: 21rem)");
+    expect(layout).toContain(
+      "max-width: min(var(--header-logo-mobile-width), 5.75rem)",
+    );
     expect(menu).toMatch(/id="mobile-menu-close"[\s\S]*?h-11 w-11/);
     expect(menu).toContain("pb-[max(1rem,env(safe-area-inset-bottom))]");
     expect(menu).toContain("h-11 w-11 shrink-0");
