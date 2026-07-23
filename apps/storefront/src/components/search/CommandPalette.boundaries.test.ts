@@ -55,7 +55,8 @@ describe("CommandPalette search request boundaries", () => {
     expect(source).toContain("setSearchRetry((value) => value + 1)");
     expect(source).toContain('aria-label="Close search"');
     expect(source).toContain("min-h-11 min-w-11");
-    expect(source).toContain("font-medium h-11 tracking-tight");
+    expect(source).toContain("h-11 w-full");
+    expect(source).toContain("font-medium tracking-tight");
     expect(source).toContain('aria-busy={isLoading}');
     expect(source).toContain("<ProductThumbnail product={p}");
     expect(source).toContain("Pages");
@@ -66,6 +67,8 @@ describe("CommandPalette search request boundaries", () => {
     expect(source).toContain("View all results for “{normalizedQuery}”");
     expect(source).toContain("min-h-14 shrink-0");
     expect(source).toContain("sm:hidden");
+    expect(source).toContain('placeholder="Search products…"');
+    expect(source).not.toMatch(/(?:bg|text|border)-gray-/);
   });
 
   it("does not leave results from the previous query actionable while refreshing", async () => {
