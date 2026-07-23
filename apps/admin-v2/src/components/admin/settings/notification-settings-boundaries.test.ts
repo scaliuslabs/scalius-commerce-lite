@@ -25,7 +25,13 @@ describe("notification settings ownership", () => {
     );
     expect(notificationRouteSource).toContain('value="rules"');
     expect(notificationRouteSource).toContain('value="push"');
-    expect(notificationRouteSource).toContain("<NotificationChannelsBuilder />");
+    expect(notificationRouteSource).toContain("audience={audience}");
+    expect(notificationRouteSource).toContain(
+      "onAudienceChange={handleAudienceChange}",
+    );
+    expect(notificationRouteSource).toContain(
+      "normalizeNotificationRulesPanel(search.panel)",
+    );
     expect(notificationRouteSource).toContain("<FirebaseSettingsForm />");
     expect(notificationRouteSource).toContain(
       'search.section === "push"',

@@ -10,6 +10,8 @@ import {
 } from "./general-settings-sections";
 import {
   DEFAULT_NOTIFICATION_SETTINGS_SECTION,
+  DEFAULT_NOTIFICATION_RULES_PANEL,
+  normalizeNotificationRulesPanel,
   normalizeNotificationSettingsSection,
 } from "./notification-settings-sections";
 
@@ -74,6 +76,15 @@ describe("settings section normalization", () => {
     for (const value of [undefined, null, "", "firebase", false]) {
       expect(normalizeNotificationSettingsSection(value)).toBe(
         DEFAULT_NOTIFICATION_SETTINGS_SECTION,
+      );
+    }
+  });
+
+  it("normalizes notification audiences for stable deep links", () => {
+    expect(normalizeNotificationRulesPanel("admins")).toBe("admins");
+    for (const value of [undefined, null, "", "staff", false]) {
+      expect(normalizeNotificationRulesPanel(value)).toBe(
+        DEFAULT_NOTIFICATION_RULES_PANEL,
       );
     }
   });

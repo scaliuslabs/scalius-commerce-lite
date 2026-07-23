@@ -5,6 +5,8 @@ import { OfficialProviderMark } from "~/components/admin/settings/provider-marks
 import NotificationChannelsBuilder from "~/components/admin/settings/NotificationChannelsBuilder";
 import {
   normalizeNotificationSettingsSection,
+  normalizeNotificationRulesPanel,
+  type NotificationRulesPanel,
   type NotificationSettingsSection,
 } from "~/components/admin/settings/notification-settings-sections";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
@@ -13,7 +15,12 @@ import { RouteErrorComponent } from "~/lib/route-error";
 export function validateNotificationSettingsSearch(
   search: Record<string, unknown>,
 ) {
-  return { section: normalizeNotificationSettingsSection(search.section) };
+  const section = normalizeNotificationSettingsSection(search.section);
+  const panel = normalizeNotificationRulesPanel(search.panel);
+  return {
+    section,
+    ...(section === "rules" && panel !== "customers" ? { panel } : {}),
+  };
 }
 
 export const Route = createFileRoute("/admin/settings/notifications")({
@@ -26,6 +33,7 @@ export const Route = createFileRoute("/admin/settings/notifications")({
 function NotificationSettingsPage() {
   const search = Route.useSearch();
   const navigate = useNavigate();
+  const audience = normalizeNotificationRulesPanel(search.panel);
 
   const handleSectionChange = (section: string) => {
     void navigate({
@@ -33,6 +41,17 @@ function NotificationSettingsPage() {
       search: ((previous: Record<string, unknown>) => ({
         ...previous,
         section: section as NotificationSettingsSection,
+      })) as never,
+    });
+  };
+
+  const handleAudienceChange = (panel: NotificationRulesPanel) => {
+    void navigate({
+      resetScroll: false,
+      search: ((previous: Record<string, unknown>) => ({
+        ...previous,
+        section: "rules",
+        panel: panel === "customers" ? undefined : panel,
       })) as never,
     });
   };
@@ -56,7 +75,12 @@ function NotificationSettingsPage() {
         </TabsList>
 
         <TabsContent value="rules" className="mt-4">
-          {search.section === "rules" ? <NotificationChannelsBuilder /> : null}
+          {search.section === "rules" ? (
+            <NotificationChannelsBuilder
+              audience={audience}
+              onAudienceChange={handleAudienceChange}
+            />
+          ) : null}
         </TabsContent>
 
         <TabsContent value="push" className="mt-4">

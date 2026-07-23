@@ -34,6 +34,7 @@ import {
   type CustomerNotificationChannel,
   type CustomerNotificationConfig,
 } from "@/components/admin/settings/notification-channel-policy";
+import type { NotificationRulesPanel } from "@/components/admin/settings/notification-settings-sections";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -355,7 +356,13 @@ function AdminRulesMatrix({
   );
 }
 
-export function NotificationChannelsBuilder() {
+export function NotificationChannelsBuilder({
+  audience,
+  onAudienceChange,
+}: {
+  audience: NotificationRulesPanel;
+  onAudienceChange: (audience: NotificationRulesPanel) => void;
+}) {
   const { hasPermission } = usePermissions();
   const canManage = hasPermission(ADMIN_PERMISSIONS.SETTINGS_GENERAL_EDIT);
   const [channels, setChannels] = useState<CustomerNotificationConfig>(
@@ -387,9 +394,6 @@ export function NotificationChannelsBuilder() {
   const [isAdminLoading, setIsAdminLoading] = useState(true);
   const [adminLoadError, setAdminLoadError] = useState<string | null>(null);
   const [isAdminSaving, setIsAdminSaving] = useState(false);
-  const [audience, setAudience] = useState<"customers" | "admins">(
-    "customers",
-  );
 
   const customerIssues = useMemo(
     () => [
@@ -650,7 +654,7 @@ export function NotificationChannelsBuilder() {
           aria-selected={audience === "customers"}
           variant={audience === "customers" ? "secondary" : "ghost"}
           className="h-11 flex-1 gap-2 px-4 sm:h-9 sm:flex-none"
-          onClick={() => setAudience("customers")}
+          onClick={() => onAudienceChange("customers")}
         >
           <Users className="h-4 w-4" />
           Customers
@@ -664,7 +668,7 @@ export function NotificationChannelsBuilder() {
           aria-selected={audience === "admins"}
           variant={audience === "admins" ? "secondary" : "ghost"}
           className="h-11 flex-1 gap-2 px-4 sm:h-9 sm:flex-none"
-          onClick={() => setAudience("admins")}
+          onClick={() => onAudienceChange("admins")}
         >
           <ShieldCheck className="h-4 w-4" />
           Administrators
