@@ -71,7 +71,7 @@
     "html2pdf.js": "^0.14.0",
     "html5-qrcode": "^2.3.8",
     "jsbarcode": "3.12.3",
-    "lucide-react": "^1.25.0",
+    "lucide-react": "^1.27.0",
     "media-chrome": "4.19.2",
     "nanoid": "^6.0.0",
     "qrcode": "^1.5.4",
