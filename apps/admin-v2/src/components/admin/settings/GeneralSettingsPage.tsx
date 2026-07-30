@@ -25,6 +25,7 @@ import type {
   GeneralSettingsSection,
 } from "./general-settings-sections";
 import type { NavigationConfigSectionReadiness } from "~/lib/api-functions/settings";
+import { useWorkspaceScrollMemory } from "~/hooks/use-workspace-scroll-memory";
 
 const HeaderBuilder = lazy(() =>
   import("../header-builder").then((m) => ({
@@ -159,8 +160,14 @@ export default function GeneralSettingsPage({
     });
   }, [section]);
 
+  const rememberWorkspaceScroll = useWorkspaceScrollMemory(
+    `${section}:${panel ?? ""}`,
+  );
   const handleTabChange = (value: string) => {
     onSectionChange(value as GeneralSettingsSection);
+  };
+  const handlePanelChange = (nextPanel: GeneralSettingsPanel) => {
+    onPanelChange(nextPanel);
   };
   const headerPanel = section === "header"
     ? (panel as HeaderBuilderPanel | undefined)
@@ -183,14 +190,18 @@ export default function GeneralSettingsPage({
         </div>
       }
     >
-      <div className="mx-auto max-w-6xl">
+      <div
+        className="mx-auto max-w-6xl"
+        onPointerDownCapture={rememberWorkspaceScroll}
+        onKeyDownCapture={rememberWorkspaceScroll}
+      >
         <div className="mb-4">
           <h1 className="text-xl font-semibold tracking-tight">
             General settings
           </h1>
         </div>
 
-        <div className="mb-4 lg:hidden">
+        <div className="sticky top-0 z-20 -mx-3 mb-4 bg-gray-50 px-3 py-2 dark:bg-[#0a0a0a] sm:-mx-4 sm:px-4 md:-mx-6 md:px-6 lg:hidden">
           <Select value={section} onValueChange={handleTabChange}>
             <SelectTrigger aria-label="Settings section" className="h-11 w-full bg-card">
               <SelectValue />
@@ -247,7 +258,7 @@ export default function GeneralSettingsPage({
                       initialConfig={headerConfig}
                       initialRevision={headerRevision}
                       readiness={headerReadiness}
-                      onPanelChange={onPanelChange}
+                      onPanelChange={handlePanelChange}
                     />
                   </Suspense>
                 )}
@@ -263,7 +274,7 @@ export default function GeneralSettingsPage({
                       initialConfig={footerConfig}
                       initialRevision={footerRevision}
                       readiness={footerReadiness}
-                      onPanelChange={onPanelChange}
+                      onPanelChange={handlePanelChange}
                     />
                   </Suspense>
                 )}

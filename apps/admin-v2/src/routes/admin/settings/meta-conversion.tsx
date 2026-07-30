@@ -9,6 +9,7 @@ import {
 import { metaConversionsSettingsQueryOptions } from "~/lib/api-query-options/settings";
 import type { MetaConversionsSettingsResponse } from "~/types/api-responses";
 import { RouteErrorComponent } from "~/lib/route-error";
+import { useWorkspaceScrollMemory } from "~/hooks/use-workspace-scroll-memory";
 
 export function validateMetaConversionsSearch(search: Record<string, unknown>) {
   return { section: normalizeMetaConversionsWorkspaceSection(search.section) };
@@ -29,6 +30,7 @@ function MetaConversionPage() {
   const search = Route.useSearch();
   const navigate = useNavigate();
   const r = data as unknown as MetaConversionsSettingsResponse;
+  const rememberWorkspaceScroll = useWorkspaceScrollMemory(search.section);
   const handleSectionChange = useCallback(
     (section: MetaConversionsWorkspaceSection) => {
       void navigate({
@@ -43,7 +45,11 @@ function MetaConversionPage() {
   );
 
   return (
-    <div className="container max-w-6xl space-y-4 py-6">
+    <div
+      className="container max-w-6xl space-y-4 py-6"
+      onPointerDownCapture={rememberWorkspaceScroll}
+      onKeyDownCapture={rememberWorkspaceScroll}
+    >
       <div>
         <h1 className="text-xl font-semibold tracking-tight">Meta conversions</h1>
         <p className="mt-0.5 text-sm text-muted-foreground">

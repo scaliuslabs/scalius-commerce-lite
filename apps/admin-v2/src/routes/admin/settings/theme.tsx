@@ -10,6 +10,7 @@ import {
   type ThemeWorkspaceSection,
 } from "~/components/admin/settings/theme-workspace";
 import { RouteErrorComponent } from "~/lib/route-error";
+import { useWorkspaceScrollMemory } from "~/hooks/use-workspace-scroll-memory";
 
 export function validateThemeSearch(search: Record<string, unknown>) {
   return {
@@ -29,6 +30,7 @@ export const Route = createFileRoute("/admin/settings/theme")({
 function ThemePage() {
   const search = Route.useSearch();
   const navigate = useNavigate();
+  const rememberWorkspaceScroll = useWorkspaceScrollMemory(search.section);
   const handleSectionChange = useCallback(
     (section: ThemeWorkspaceSection) => {
       void navigate({
@@ -56,12 +58,18 @@ function ThemePage() {
   );
 
   return (
-    <ThemeSettingsPage
-      section={search.section}
-      onSectionChange={handleSectionChange}
-      previewPath={search.previewPath}
-      previewDevice={search.previewDevice}
-      onPreviewLocationChange={handlePreviewLocationChange}
-    />
+    <div
+      className="contents"
+      onPointerDownCapture={rememberWorkspaceScroll}
+      onKeyDownCapture={rememberWorkspaceScroll}
+    >
+      <ThemeSettingsPage
+        section={search.section}
+        onSectionChange={handleSectionChange}
+        previewPath={search.previewPath}
+        previewDevice={search.previewDevice}
+        onPreviewLocationChange={handlePreviewLocationChange}
+      />
+    </div>
   );
 }

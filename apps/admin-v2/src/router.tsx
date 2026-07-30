@@ -8,6 +8,7 @@ import {
   reloadRecoverableRouteOnce,
   RECOVERABLE_ROUTE_RELOAD_KEY,
 } from "./lib/recoverable-route-error";
+import { getAdminScrollRestorationKey } from "./lib/admin-scroll-restoration";
 
 function DefaultPendingComponent() {
   return (
@@ -104,6 +105,7 @@ export function getRouter() {
     routeTree,
     context: { queryClient },
     scrollRestoration: true,
+    getScrollRestorationKey: getAdminScrollRestorationKey,
     scrollToTopSelectors: ["#admin-main-scroll"],
     scrollRestorationBehavior: "instant",
     defaultPreload: false,

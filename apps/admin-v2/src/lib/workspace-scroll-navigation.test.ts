@@ -2,9 +2,9 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-const workspaceRoutes = [
+const inPlaceWorkspaceRoutes = [
   ["routes/admin/settings/index.tsx", 2],
-  ["routes/admin/settings/notifications.tsx", 1],
+  ["routes/admin/settings/notifications.tsx", 2],
   ["routes/admin/settings/hero-sliders.tsx", 1],
   ["routes/admin/settings/theme.tsx", 2],
   ["routes/admin/settings/checkout.tsx", 1],
@@ -17,8 +17,8 @@ const workspaceRoutes = [
 ] as const;
 
 describe("in-place admin workspace navigation", () => {
-  it.each(workspaceRoutes)(
-    "%s retains the current workspace scroll position",
+  it.each(inPlaceWorkspaceRoutes)(
+    "%s retains scroll for controls that update the current view",
     (path, minimumOccurrences) => {
       const source = readFileSync(
         fileURLToPath(new URL(`../${path}`, import.meta.url)),

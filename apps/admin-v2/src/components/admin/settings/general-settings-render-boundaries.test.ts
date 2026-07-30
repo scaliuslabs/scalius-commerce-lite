@@ -32,6 +32,7 @@ describe("General settings render boundaries", () => {
     expect(source).toContain("<SelectGroup");
     expect(source).toContain('className="min-h-11"');
     expect(source).toContain("lg:hidden");
+    expect(source).toContain("sticky top-0 z-20");
     expect(source).toContain("hidden h-auto");
     expect(source).not.toContain("overflow-x-auto");
   });
