@@ -25,7 +25,7 @@ describe("header scroll state", () => {
     expect(shouldUseCompactHeader(HEADER_COMPACT_EXIT_PX, true)).toBe(false);
   });
 
-  it("hands desktop center states off without a blank or cluttered midpoint", () => {
+  it("hands desktop center states off without a blank midpoint", () => {
     const source = readFileSync(
       storefrontSourcePath("components", "header", "HeaderLayout.astro"),
       "utf8",
@@ -34,10 +34,12 @@ describe("header scroll state", () => {
     expect(source).toContain("header-expanded-center");
     expect(source).toContain("header-compact-center");
     expect(source).toContain("header-full-nav-row");
-    expect(source).toContain("opacity 240ms ease");
-    expect(source).toContain("opacity 120ms ease 200ms");
-    expect(source).toContain("visibility 0s linear 240ms");
-    expect(source).toContain("visibility 0s linear 200ms");
+    expect(source.match(/opacity 160ms linear 40ms/g)).toHaveLength(4);
+    expect(source.match(/opacity 160ms linear,/g)).toHaveLength(4);
+    expect(source.match(/visibility 0s linear 40ms/g)).toHaveLength(4);
+    expect(source.match(/visibility 0s linear 160ms/g)).toHaveLength(4);
+    expect(source).not.toContain("opacity 120ms ease 200ms");
+    expect(source).not.toContain("visibility 0s linear 200ms");
     expect(source).not.toContain("transition-delay: 80ms, 80ms, 0ms");
     expect(source).not.toContain("transition-delay: 40ms, 40ms, 0ms");
     expect(source).toContain(
