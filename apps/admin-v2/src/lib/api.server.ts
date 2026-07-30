@@ -202,7 +202,7 @@ async function apiFetchRaw(
     // from wrangler.jsonc, but the API runs in a separate Miniflare process.
     const configuredApiBase = cfEnv.PUBLIC_API_BASE_URL as string | undefined;
     if (cfEnv.API && !isLocalApiBase(configuredApiBase)) {
-      const target = `http://api.internal${fullPath}`;
+      const target = `https://api.internal${fullPath}`;
       const resp = await cfEnv.API.fetch(target, fetchOptions);
       return { response: resp, timeout };
     }

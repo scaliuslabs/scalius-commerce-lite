@@ -25,7 +25,7 @@ interface HttpOptions {
 export function createServiceBindingClient(options: ServiceBindingOptions): Client {
   return createClient(
     createConfig({
-      baseUrl: "http://api.internal",
+      baseUrl: "https://api.internal",
       headers: options.headers,
       fetch: (input, init) => options.serviceBinding.fetch(input, init),
     }),

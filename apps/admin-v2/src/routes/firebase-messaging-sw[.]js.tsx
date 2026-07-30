@@ -17,7 +17,7 @@ export const Route = createFileRoute("/firebase-messaging-sw.js")({
           let response: Response;
           if (cfEnv?.API) {
             response = await cfEnv.API.fetch(
-              new URL("/api/v1/auth/firebase-config", "http://api.internal").toString(),
+              new URL("/api/v1/auth/firebase-config", "https://api.internal").toString(),
             );
           } else {
             const apiBase = cfEnv?.PUBLIC_API_BASE_URL || "http://localhost:8787";
