@@ -83,10 +83,15 @@ export function TiptapTablePopover({
 
   const addTable = () => {
     if (!canInsert) return;
-    insertRichTextTable(editor, {
+    const inserted = insertRichTextTable(editor, {
       rows,
       cols,
       withHeaderRow: tableWithHeader,
+    });
+    if (!inserted) return;
+    setOpen(false);
+    requestAnimationFrame(() => {
+      editor.commands.focus(undefined, { scrollIntoView: false });
     });
   };
 

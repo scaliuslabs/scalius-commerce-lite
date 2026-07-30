@@ -20,7 +20,10 @@ function blockInsertionChain(editor: Editor) {
     editor.state.doc.resolve(editor.state.selection.to),
     1,
   ).from;
-  return editor.chain().focus().setTextSelection(insertionPosition);
+  // Media pickers and popovers temporarily make the editor background inert.
+  // The document transaction does not need DOM focus; callers restore focus
+  // after their overlay has closed.
+  return editor.chain().setTextSelection(insertionPosition);
 }
 
 /** Inserts block media without deleting a non-collapsed text selection. */

@@ -153,20 +153,22 @@ export const TiptapMenuBar = ({
     setImageAlt("");
     setImageError(null);
     setImageOpen(false);
+    insertRichTextImage(editor, {
+      src: url,
+      alt: imageAlt.trim(),
+    });
     requestAnimationFrame(() => {
-      insertRichTextImage(editor, {
-        src: url,
-        alt: imageAlt.trim(),
-      });
+      editor.commands.focus(undefined, { scrollIntoView: false });
     });
   };
 
   const handleMediaSelect = (file: MediaFile) => {
+    insertRichTextImage(editor, {
+      src: file.url,
+      alt: file.altText?.trim() || file.filename,
+    });
     requestAnimationFrame(() => {
-      insertRichTextImage(editor, {
-        src: file.url,
-        alt: file.altText?.trim() || file.filename,
-      });
+      editor.commands.focus(undefined, { scrollIntoView: false });
     });
   };
 
@@ -179,11 +181,12 @@ export const TiptapMenuBar = ({
     setVideoUrl("");
     setVideoError(null);
     setVideoOpen(false);
+    insertRichTextVideo(editor, {
+      src: normalized.src,
+      provider: normalized.provider,
+    });
     requestAnimationFrame(() => {
-      insertRichTextVideo(editor, {
-        src: normalized.src,
-        provider: normalized.provider,
-      });
+      editor.commands.focus(undefined, { scrollIntoView: false });
     });
   };
 
