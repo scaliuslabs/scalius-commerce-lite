@@ -19,7 +19,6 @@ import {
   getDefaultAdminPath,
   shouldAllowAdminPath,
 } from "~/lib/admin-access";
-import { useAdminNestedScrollRestoration } from "~/lib/admin-scroll-restoration";
 
 export const Route = createFileRoute("/admin")({
   beforeLoad: async ({ location }) => {
@@ -42,7 +41,6 @@ export const Route = createFileRoute("/admin")({
 function AdminLayout() {
   const authContext = Route.useRouteContext();
   const { user, permissions, isSuperAdmin } = authContext;
-  useAdminNestedScrollRestoration();
 
   useEffect(() => {
     primeAdminRouteContextCache(authContext);
@@ -58,9 +56,9 @@ function AdminLayout() {
             <div
               id="admin-main-scroll"
               data-scroll-restoration-id="admin-main-scroll"
-              className="flex-1 overflow-y-auto [overflow-anchor:none] px-3 sm:px-4 md:px-6 pt-4 pb-4 bg-gray-50 dark:bg-[#0a0a0a]"
+              className="flex-1 overflow-y-auto bg-gray-50 px-3 pb-4 pt-4 dark:bg-[#0a0a0a] sm:px-4 md:px-6 lg:[scrollbar-gutter:stable]"
             >
-              <div data-admin-scroll-content className="max-w-7xl mx-auto">
+              <div className="mx-auto max-w-7xl">
                 <Outlet />
               </div>
             </div>
