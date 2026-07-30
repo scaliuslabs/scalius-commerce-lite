@@ -342,10 +342,10 @@ importers:
     dependencies:
       '@hono/swagger-ui':
         specifier: ^0.6.1
-        version: 0.6.1(hono@4.12.31)
+        version: 0.6.1(hono@4.12.32)
       '@hono/zod-openapi':
         specifier: ^1.5.1
-        version: 1.5.1(hono@4.12.31)(zod@4.4.3)
+        version: 1.5.1(hono@4.12.32)(zod@4.4.3)
       '@paralleldrive/cuid2':
         specifier: ^3.3.0
         version: 3.3.0
@@ -371,8 +371,8 @@ importers:
         specifier: ^0.45.2
         version: 0.45.2(@cloudflare/workers-types@5.20260730.1)(@opentelemetry/api@1.9.1)(kysely@0.29.4)(sql.js@1.14.1)
       hono:
-        specifier: ^4.12.31
-        version: 4.12.31
+        specifier: ^4.12.32
+        version: 4.12.32
       jsonwebtoken:
         specifier: ^9.0.3
         version: 9.0.3
@@ -4886,8 +4886,8 @@ packages:
   hermes-parser@0.25.1:
     resolution: {integrity: sha512-6pEjquH3rqaI6cYAXYPcz9MS4rY6R4ngRgrgfDshRptUZIc3lw0MCIJIGDj9++mfySOuPTHB4nrSW99BCvOPIA==}
 
-  hono@4.12.31:
-    resolution: {integrity: sha512-zJIHFrl6bq3RDd2YusFNCDlM8qUprxKswyi/OPzPyzKDdyBXDqWx8bZlZ7R+saTdSTatUmb3O7K4SspGPaEOQg==}
+  hono@4.12.32:
+    resolution: {integrity: sha512-XcuyW9qE2kJn07PkecMOBd5Vq/hMy7mmGw+idz1yblbg9N17ijJODrvPkn7/dwL3Kulj8LcRJ69DLOWf91dRUg==}
     engines: {node: '>=16.9.0'}
 
   html-escaper@3.0.3:
@@ -7723,21 +7723,21 @@ snapshots:
 
   '@hey-api/types@0.1.4': {}
 
-  '@hono/swagger-ui@0.6.1(hono@4.12.31)':
+  '@hono/swagger-ui@0.6.1(hono@4.12.32)':
     dependencies:
-      hono: 4.12.31
+      hono: 4.12.32
 
-  '@hono/zod-openapi@1.5.1(hono@4.12.31)(zod@4.4.3)':
+  '@hono/zod-openapi@1.5.1(hono@4.12.32)(zod@4.4.3)':
     dependencies:
       '@asteasolutions/zod-to-openapi': 8.5.0(zod@4.4.3)
-      '@hono/zod-validator': 0.9.0(hono@4.12.31)(zod@4.4.3)
-      hono: 4.12.31
+      '@hono/zod-validator': 0.9.0(hono@4.12.32)(zod@4.4.3)
+      hono: 4.12.32
       openapi3-ts: 4.6.0
       zod: 4.4.3
 
-  '@hono/zod-validator@0.9.0(hono@4.12.31)(zod@4.4.3)':
+  '@hono/zod-validator@0.9.0(hono@4.12.32)(zod@4.4.3)':
     dependencies:
-      hono: 4.12.31
+      hono: 4.12.32
       zod: 4.4.3
 
   '@hookform/resolvers@5.5.7(@standard-schema/spec@1.1.0)(ajv@8.20.0)(react-hook-form@7.83.0(react@19.2.8))(zod@4.4.3)':
@@ -11143,7 +11143,7 @@ snapshots:
     dependencies:
       hermes-estree: 0.25.1
 
-  hono@4.12.31: {}
+  hono@4.12.32: {}
 
   html-escaper@3.0.3: {}
 
