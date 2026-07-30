@@ -10,10 +10,10 @@
     "lint": "eslint src/"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20260722.1",
+    "@cloudflare/workers-types": "^5.20260730.1",
     "@scalius/tsconfig": "workspace:*",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10",
-    "wrangler": "4.113.0"
+    "wrangler": "4.116.0"
   }
 }
