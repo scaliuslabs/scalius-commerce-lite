@@ -17,7 +17,7 @@ export function getProductActionsPresentation(input: {
   const productName = input.productName.trim() || "Product";
 
   if (!input.anyVariantAvailable) {
-    const ariaLabel = `${productName} is unavailable`;
+    const ariaLabel = `Unavailable — ${productName}`;
     return {
       addToCart: { disabled: true, label: "Unavailable", ariaLabel },
       buyNow: { disabled: true, label: "Unavailable", ariaLabel },
@@ -29,12 +29,12 @@ export function getProductActionsPresentation(input: {
       addToCart: {
         disabled: true,
         label: "Select Options",
-        ariaLabel: `Select an available ${productName} option to add to cart`,
+        ariaLabel: `Select Options — choose an available ${productName} option`,
       },
       buyNow: {
         disabled: true,
         label: "Buy Now",
-        ariaLabel: `Select an available ${productName} option before buying`,
+        ariaLabel: `Buy Now — select an available ${productName} option first`,
       },
     };
   }
@@ -43,12 +43,12 @@ export function getProductActionsPresentation(input: {
     addToCart: {
       disabled: false,
       label: "Add to Cart",
-      ariaLabel: `Add ${productName} to cart`,
+      ariaLabel: `Add to Cart — ${productName}`,
     },
     buyNow: {
       disabled: false,
       label: "Buy Now",
-      ariaLabel: `Buy ${productName} now`,
+      ariaLabel: `Buy Now — ${productName}`,
     },
   };
 }

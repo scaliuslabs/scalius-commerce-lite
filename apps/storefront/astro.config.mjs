@@ -10,7 +10,8 @@ import { CDN_DOMAINS } from "./src/lib/image-config.ts";
 import cloudflare from "@astrojs/cloudflare";
 import { readBuildAssetsDirectory } from "./scripts/build-assets-directory.mjs";
 
-const persistStatePath = process.env.SCALIUS_WRANGLER_STATE || "../../.wrangler/state";
+const persistStatePath =
+  process.env.SCALIUS_WRANGLER_STATE || "../../.wrangler/state";
 const buildAssetsDirectory = readBuildAssetsDirectory(
   new URL("./src/config/build-id.ts", import.meta.url),
 );
@@ -40,7 +41,9 @@ export default defineConfig({
     // changes. Scope the whole asset directory to BUILD_ID so a browser can safely
     // cache deployed JS/CSS as immutable without executing a previous build.
     assets: buildAssetsDirectory,
-    inlineStylesheets: "always",
+    // Keep small route styles inline, but let substantial shared stylesheets load
+    // in parallel and remain cached while shoppers move between storefront pages.
+    inlineStylesheets: "auto",
   },
 
   output: "server",

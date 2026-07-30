@@ -159,6 +159,7 @@ interface Window {
   __CURRENCY_CODE__?: string;
   __CURRENCY_DECIMAL_PLACES__?: number;
   __META_CAPI_BROWSER_EVENTS_ENABLED__?: boolean;
+  __TIKTOK_PIXEL_ENABLED__?: boolean;
   __BUILD_ID__?: string;
   __CHECKOUT_CONFIG__?: unknown;
   __CHECKOUT_LANGUAGE__?: unknown;
@@ -169,10 +170,7 @@ interface Window {
   ttq?: {
     load?: (...args: unknown[]) => void;
     page?: (...args: unknown[]) => void;
-    track?: (
-      eventName: string,
-      parameters?: Record<string, unknown>,
-    ) => void;
+    track?: (eventName: string, parameters?: Record<string, unknown>) => void;
     [key: string]: unknown;
   };
   zaraz?: {
@@ -192,10 +190,7 @@ interface Window {
   validateCartSnapshot?: () => Promise<boolean>;
   hasCartValidationIssues?: () => boolean;
   getCartBlockedMessage?: () => string;
-  updateCartQuantity?: (
-    cartKey: string,
-    quantity: number,
-  ) => void;
+  updateCartQuantity?: (cartKey: string, quantity: number) => void;
   removeFromCart?: (cartKey: string) => void;
   removeCartIssueItem?: (cartKey: string) => void;
   reduceCartIssueItem?: (cartKey: string) => void;

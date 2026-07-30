@@ -12,6 +12,13 @@ const REACT_SINGLETON_DEPS = [
 ];
 
 describe("storefront Vite React singleton boundaries", () => {
+  it("keeps large shared styles cacheable instead of duplicating them in every page", () => {
+    const source = readFileSync(storefrontRootPath("astro.config.mjs"), "utf8");
+
+    expect(source).toContain('inlineStylesheets: "auto"');
+    expect(source).not.toContain('inlineStylesheets: "always"');
+  });
+
   it("dedupes every React server and JSX entrypoint for dev SSR", () => {
     const source = readFileSync(storefrontRootPath("astro.config.mjs"), "utf8");
 
@@ -21,6 +28,8 @@ describe("storefront Vite React singleton boundaries", () => {
 
     expect(source).toContain("const reactSingletonDeps");
     expect(source).toMatch(/resolve:\s*{[\s\S]*dedupe:\s*reactSingletonDeps/);
-    expect(source).not.toMatch(/ssr:\s*{[\s\S]*optimizeDeps:\s*{[\s\S]*exclude:\s*reactSingletonDeps/);
+    expect(source).not.toMatch(
+      /ssr:\s*{[\s\S]*optimizeDeps:\s*{[\s\S]*exclude:\s*reactSingletonDeps/,
+    );
   });
 });

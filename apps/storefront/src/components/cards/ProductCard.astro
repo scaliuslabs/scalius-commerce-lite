@@ -3,7 +3,7 @@
 import type { Product } from "@/lib/api";
 import { ArrowRight } from "lucide-react";
 import { formatDiscountBadge } from "@/components/product/lib/pricing-engine";
-import { getProductImageUrl } from "@/lib/product-media";
+import { getProductImageSrcSet, getProductImageUrl } from "@/lib/product-media";
 import { DEFAULT_CURRENCY, formatPriceShort } from "@scalius/shared/currency";
 
 interface Props {
@@ -17,17 +17,18 @@ const {
   currencySymbol = DEFAULT_CURRENCY.symbol,
   currencyCode = DEFAULT_CURRENCY.code,
 } = Astro.props;
-const formatMoney = (price: number) => formatPriceShort(price, {
-  symbol: currencySymbol,
-  code: currencyCode,
-});
+const formatMoney = (price: number) =>
+  formatPriceShort(price, {
+    symbol: currencySymbol,
+    code: currencyCode,
+  });
 
 const hasDiscount = product.discountedPrice < product.price;
 const pricePrefix = product.priceVaries ? "From " : "";
 const discountBadge = formatDiscountBadge(
   product.discountType,
   product.discountPercentage,
-  product.discountAmount
+  product.discountAmount,
 );
 
 const productImageUrl = getProductImageUrl(product.imageUrl, {
@@ -37,6 +38,32 @@ const productImageUrl = getProductImageUrl(product.imageUrl, {
   format: "auto",
   fit: "contain",
 });
+const productImageSrcSet = getProductImageSrcSet(product.imageUrl, [
+  {
+    descriptor: "240w",
+    width: 240,
+    height: 240,
+    quality: 78,
+    format: "auto",
+    fit: "contain",
+  },
+  {
+    descriptor: "400w",
+    width: 400,
+    height: 400,
+    quality: 80,
+    format: "auto",
+    fit: "contain",
+  },
+  {
+    descriptor: "640w",
+    width: 640,
+    height: 640,
+    quality: 82,
+    format: "auto",
+    fit: "contain",
+  },
+]);
 ---
 
 <div
@@ -52,6 +79,8 @@ const productImageUrl = getProductImageUrl(product.imageUrl, {
     >
       <img
         src={productImageUrl}
+        srcset={productImageSrcSet || undefined}
+        sizes="(max-width: 639px) 50vw, (max-width: 1023px) 33vw, (max-width: 1279px) 25vw, 20vw"
         alt={product.imageAlt || product.name}
         width={400}
         height={400}
@@ -62,7 +91,9 @@ const productImageUrl = getProductImageUrl(product.imageUrl, {
     </a>
 
     <!-- Badges -->
-    <div class="absolute top-3 left-3 flex flex-col gap-1.5 pointer-events-none">
+    <div
+      class="absolute top-3 left-3 flex flex-col gap-1.5 pointer-events-none"
+    >
       {
         discountBadge && (
           <span class="px-2.5 py-1 text-[10px] font-bold tracking-wider uppercase text-destructive-foreground bg-destructive rounded-full shadow-sm">
@@ -114,7 +145,9 @@ const productImageUrl = getProductImageUrl(product.imageUrl, {
             </span>
           )
         }
-        <span class="text-base sm:text-lg font-extrabold text-foreground tracking-tight leading-tight">
+        <span
+          class="text-base sm:text-lg font-extrabold text-foreground tracking-tight leading-tight"
+        >
           {pricePrefix}{formatMoney(product.discountedPrice)}
         </span>
       </div>
@@ -122,8 +155,8 @@ const productImageUrl = getProductImageUrl(product.imageUrl, {
       <!-- Mobile Action -->
       <a
         href={`/products/${product.slug}`}
-        class="lg:hidden h-8 w-8 flex items-center justify-center rounded-xl bg-muted text-foreground active:scale-90 transition-all border border-border"
-        aria-label="View product"
+        class="lg:hidden h-11 w-11 flex items-center justify-center rounded-xl bg-muted text-foreground active:scale-90 transition-all border border-border"
+        aria-label={`View ${product.name}`}
       >
         <ArrowRight className="h-3.5 w-3.5" />
       </a>

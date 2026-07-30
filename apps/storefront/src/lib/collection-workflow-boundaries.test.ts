@@ -77,6 +77,30 @@ describe("collection storefront workflow boundaries", () => {
     expect(grid).toContain(".slice(0, config.maxProducts || 8)");
   });
 
+  it("keeps carousel progress controls touchable and product images responsive", () => {
+    expect(carousel).toContain(
+      'className="flex h-11 w-11 items-center justify-center rounded-full',
+    );
+    expect(carousel).toContain("{current + 1} / {count}");
+    expect(carousel).toContain(
+      'className="group flex h-6 w-6 items-center justify-center rounded-full"',
+    );
+    expect(carousel).toContain('className="hidden items-center sm:flex"');
+    expect(carousel).toContain(
+      'aria-current={current === i ? "true" : undefined}',
+    );
+    expect(carousel).toContain("getProductImageSrcSet");
+    expect(carousel).toContain('descriptor: "480w"');
+    expect(carousel).toContain('sizes="(max-width: 639px) 72vw');
+    expect(carousel).toContain(
+      'className="lg:hidden h-11 w-11 flex items-center justify-center',
+    );
+    expect(productCard).toContain("getProductImageSrcSet");
+    expect(productCard).toContain('sizes="(max-width: 639px) 50vw');
+    expect(productCard).toContain("h-11 w-11");
+    expect(productCard).toContain("aria-label={`View ${product.name}`}");
+  });
+
   it("does not autoplay the carousel for reduced-motion users", () => {
     expect(carousel).toContain("prefers-reduced-motion: reduce");
   });
@@ -90,8 +114,7 @@ describe("collection storefront workflow boundaries", () => {
     expect(carousel).toContain(
       'const pricePrefix = product.priceVaries ? "From " : "";',
     );
-    expect(carousel).toContain(
-      "{pricePrefix}{formatMoney(product.discountedPrice)}",
-    );
+    expect(carousel).toContain("{pricePrefix}");
+    expect(carousel).toContain("{formatMoney(product.discountedPrice)}");
   });
 });

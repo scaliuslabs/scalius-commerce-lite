@@ -87,6 +87,15 @@ if (themePreviewToken) {
 const analyticsScripts: AnalyticsConfig[] = isThemePreview
   ? []
   : layoutData?.analytics || [];
+const tiktokPixelEnabled = analyticsScripts.some((script) => {
+  const type = script.type.trim().toLowerCase();
+  return (
+    type === "tiktok_pixel" ||
+    /(?:analytics\.tiktok\.com|TiktokAnalyticsObject|\bttq\.(?:load|page|track)\s*\()/i.test(
+      script.config,
+    )
+  );
+});
 const navigationData = layoutData?.navigation || [];
 
 // Provide sensible defaults if API fails to prevent blank header/footer
@@ -264,6 +273,7 @@ const runtimeGlobalsScript = [
   `window.__CURRENCY_CODE__=${serializeJsonForInlineScript(currencyCode)};`,
   `window.__CURRENCY_DECIMAL_PLACES__=${serializeJsonForInlineScript(currencyDecimalPlaces)};`,
   `window.__META_CAPI_BROWSER_EVENTS_ENABLED__=${serializeJsonForInlineScript(!isThemePreview && layoutData?.metaCapi?.browserEventsEnabled === true)};`,
+  `window.__TIKTOK_PIXEL_ENABLED__=${serializeJsonForInlineScript(tiktokPixelEnabled)};`,
 ].join("");
 ---
 

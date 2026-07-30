@@ -5,7 +5,9 @@
 
 export const GALLERY_CONFIG = {
   imageTransforms: {
-    preview: 320,
+    // Covers the largest rendered thumbnail without shipping a 320px source
+    // into a roughly 96–130px slot.
+    preview: 160,
     display: 600,
     zoom: 1400,
   },
