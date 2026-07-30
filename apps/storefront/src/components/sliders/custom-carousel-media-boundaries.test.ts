@@ -12,9 +12,7 @@ describe("homepage carousel media boundaries", () => {
     expect(source).toContain('type === "desktop" ? "(min-width: 768px)"');
     expect(source).toContain('"(max-width: 767px)"');
     expect(source).toContain("<picture");
-    expect(source).toContain(
-      "srcset={index === 0 ? source : undefined}",
-    );
+    expect(source).toContain("srcset={index === 0 ? source : undefined}");
     expect(source).toContain("data-srcset={index === 0 ? undefined : source}");
     expect(source).toContain("src={transparentPixel}");
   });
@@ -25,6 +23,19 @@ describe("homepage carousel media boundaries", () => {
     expect(source).toContain("width={presentation.width}");
     expect(source).toContain("height={height}");
     expect(source).toContain("getHeroSlideObjectPosition(focalPoint)");
+    expect(source).toContain(
+      'index === 0 ? (type === "desktop" ? 90 : 85) : 80',
+    );
+    expect(source).not.toContain("quality: index === 0 ? 90 : 80");
+  });
+
+  it("uses full touch targets without inflating the visible carousel dots", () => {
+    expect(source).toContain(
+      'class="group flex h-11 w-11 items-center justify-center rounded-full"',
+    );
+    expect(source).toContain("data-nav-indicator");
+    expect(source).toContain('aria-current={index === 0 ? "true" : undefined}');
+    expect(source).toContain("w-11 h-11");
   });
 
   it("warms later slides just in time and tears timers down on navigation", () => {

@@ -484,6 +484,13 @@ function trackTikTokEvent(
   eventName: TikTokStandardEvent,
   params: TikTokParams,
 ): void {
+  // Partytown installs the forwarded ttq.track bridge even when a merchant has
+  // not configured TikTok. Fail closed so the bridge cannot dispatch into an
+  // absent worker-side pixel and surface an unhandled `undefined.track` error.
+  if (window.__TIKTOK_PIXEL_ENABLED__ !== true) {
+    return;
+  }
+
   const track = window.ttq?.track;
   if (typeof track !== "function") {
     return;
@@ -610,8 +617,7 @@ function normalizeStorefrontAnalyticsProducts(
         if (price !== undefined) item.item_price = price;
         return item;
       })
-      .filter((product): product is FbCommerceContent => product !== null) ??
-    []
+      .filter((product): product is FbCommerceContent => product !== null) ?? []
   );
 }
 
@@ -667,7 +673,9 @@ export function trackStorefrontAddPaymentInfoOnce(data: {
   }
 
   const checkoutId = data.checkoutId?.trim() || "unknown-checkout";
-  if (!claimAnalyticsEventKey(`AddPaymentInfo:${checkoutId}:${paymentMethod}`)) {
+  if (
+    !claimAnalyticsEventKey(`AddPaymentInfo:${checkoutId}:${paymentMethod}`)
+  ) {
     return false;
   }
 

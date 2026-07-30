@@ -6,13 +6,15 @@ import Collection1 from "../components/collection1.astro";
 import Hero from "@/components/hero.astro";
 import HomepageCategoryRail from "@/components/homepage/HomepageCategoryRail.astro";
 import HomepageTrustStrip from "@/components/homepage/HomepageTrustStrip.astro";
-import {
-  getHomepageData,
-  type CollectionWithProducts,
-} from "@/lib/api";
+import { getHomepageData, type CollectionWithProducts } from "@/lib/api";
 import { loadPageWithLayout } from "@/lib/page-data";
 import { buildAbsoluteStorefrontSeoUrl } from "@/lib/seo-base-url";
 import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-response";
+import { getOptimizedImageUrl } from "@/lib/image-optimizer";
+import {
+  HERO_SLIDE_DEFAULT_FOCAL_POINT,
+  getHeroSlideImageTransform,
+} from "@scalius/shared/hero-slider";
 
 // Parallel fetch: layout data + homepage data
 const { layoutData, pageData: homepageData } = await loadPageWithLayout(() =>
@@ -33,6 +35,26 @@ const seo = homepageData?.seo ?? {
   homepageMetaDescription: null as string | null,
 };
 const hero = homepageData?.hero || { desktop: null, mobile: null };
+const firstDesktopHero = hero.desktop?.images?.[0] ?? null;
+const firstMobileHero = hero.mobile?.images?.[0] ?? null;
+const desktopHeroPreload = firstDesktopHero
+  ? getOptimizedImageUrl(firstDesktopHero.url, {
+      ...getHeroSlideImageTransform(
+        "desktop",
+        firstDesktopHero.focalPoint ?? HERO_SLIDE_DEFAULT_FOCAL_POINT,
+        { quality: 90 },
+      ),
+    })
+  : "";
+const mobileHeroPreload = firstMobileHero
+  ? getOptimizedImageUrl(firstMobileHero.url, {
+      ...getHeroSlideImageTransform(
+        "mobile",
+        firstMobileHero.focalPoint ?? HERO_SLIDE_DEFAULT_FOCAL_POINT,
+        { quality: 85 },
+      ),
+    })
+  : "";
 const activeCollections = homepageData?.collections || [];
 const presentation = homepageData.presentation;
 const firstCollection = activeCollections[0] ?? null;
@@ -66,7 +88,6 @@ function isCollection2(
 ): collection is CollectionWithProducts & { presentation: "carousel" } {
   return collection.presentation === "carousel";
 }
-
 ---
 
 <Layout
@@ -76,6 +97,31 @@ function isCollection2(
   canonicalUrl={canonicalUrl ?? undefined}
   ogType="website"
 >
+  <Fragment slot="head">
+    {
+      mobileHeroPreload && (
+        <link
+          rel="preload"
+          as="image"
+          href={mobileHeroPreload}
+          media="(max-width: 767px)"
+          fetchpriority="high"
+        />
+      )
+    }
+    {
+      desktopHeroPreload && (
+        <link
+          rel="preload"
+          as="image"
+          href={desktopHeroPreload}
+          media="(min-width: 768px)"
+          fetchpriority="high"
+        />
+      )
+    }
+  </Fragment>
+
   <h1 class="sr-only">{homepageHeading}</h1>
 
   <section class="w-full">
@@ -83,33 +129,39 @@ function isCollection2(
   </section>
 
   <div class="flex flex-col">
-    {firstCollection && (
-      <Fragment key={firstCollection.id}>
-        {isCollection1(firstCollection) && (
-          <Collection1
-            collection={firstCollection}
-            currencySymbol={currencySymbol}
-            currencyCode={currencyCode}
-          />
-        )}
-        {isCollection2(firstCollection) && <Collection2 collection={firstCollection} />}
-      </Fragment>
-    )}
+    {
+      firstCollection && (
+        <Fragment key={firstCollection.id}>
+          {isCollection1(firstCollection) && (
+            <Collection1
+              collection={firstCollection}
+              currencySymbol={currencySymbol}
+              currencyCode={currencyCode}
+            />
+          )}
+          {isCollection2(firstCollection) && (
+            <Collection2 collection={firstCollection} />
+          )}
+        </Fragment>
+      )
+    }
 
     <HomepageCategoryRail rail={presentation.categoryRail} />
 
-    {remainingCollections.map((collection) => (
-      <Fragment key={collection.id}>
-        {isCollection1(collection) && (
-          <Collection1
-            collection={collection}
-            currencySymbol={currencySymbol}
-            currencyCode={currencyCode}
-          />
-        )}
-        {isCollection2(collection) && <Collection2 collection={collection} />}
-      </Fragment>
-    ))}
+    {
+      remainingCollections.map((collection) => (
+        <Fragment key={collection.id}>
+          {isCollection1(collection) && (
+            <Collection1
+              collection={collection}
+              currencySymbol={currencySymbol}
+              currencyCode={currencyCode}
+            />
+          )}
+          {isCollection2(collection) && <Collection2 collection={collection} />}
+        </Fragment>
+      ))
+    }
 
     <HomepageTrustStrip strip={presentation.trustStrip} />
   </div>

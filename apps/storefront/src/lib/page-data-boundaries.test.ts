@@ -29,7 +29,9 @@ describe("storefront page data boundaries", () => {
       "utf8",
     );
 
-    const layoutPromiseIndex = source.indexOf("const layoutPromise = getLayoutData()");
+    const layoutPromiseIndex = source.indexOf(
+      "const layoutPromise = getLayoutData()",
+    );
     const productPromiseIndex = source.indexOf(
       "const productPromise = getProductBySlugResult(slug)",
     );
@@ -59,7 +61,9 @@ describe("storefront page data boundaries", () => {
       "buildProductListPaginationHref",
     );
     const getPaginationUrlIndex = source.indexOf("function getPaginationUrl");
-    const paginationLinksIndex = source.indexOf("function generatePaginationLinks");
+    const paginationLinksIndex = source.indexOf(
+      "function generatePaginationLinks",
+    );
     const paginationUrlSource = source.slice(
       getPaginationUrlIndex,
       paginationLinksIndex,
@@ -67,7 +71,9 @@ describe("storefront page data boundaries", () => {
     const optionsIndex = source.indexOf(
       "const productListOptions: ProductListOptions = initialQueryState.options",
     );
-    const promiseAllIndex = source.indexOf("[layoutData, productsResponse] = await Promise.all([");
+    const promiseAllIndex = source.indexOf(
+      "[layoutData, productsResponse] = await Promise.all([",
+    );
     const categoryFetchIndex = source.indexOf("getCategoryBySlug");
 
     expect(paginationHelperIndex).toBeGreaterThan(-1);
@@ -84,7 +90,9 @@ describe("storefront page data boundaries", () => {
     expect(source.slice(promiseAllIndex)).toContain(
       "getProductsByCategory(slug, productListOptions)",
     );
-    expect(source).toContain("const facets: ProductFacet[] = productsResponse.facets ?? []");
+    expect(source).toContain(
+      "const facets: ProductFacet[] = productsResponse.facets ?? []",
+    );
     expect(source).not.toContain("getFilterableAttributes");
   });
 
@@ -98,7 +106,9 @@ describe("storefront page data boundaries", () => {
       "buildProductListPaginationHref",
     );
     const getPaginationUrlIndex = source.indexOf("function getPaginationUrl");
-    const paginationLinksIndex = source.indexOf("function generatePaginationLinks");
+    const paginationLinksIndex = source.indexOf(
+      "function generatePaginationLinks",
+    );
     const paginationUrlSource = source.slice(
       getPaginationUrlIndex,
       paginationLinksIndex,
@@ -106,7 +116,9 @@ describe("storefront page data boundaries", () => {
     const optionsIndex = source.indexOf(
       "const productListOptions: ProductListOptions = initialQueryState.options",
     );
-    const promiseAllIndex = source.indexOf("[layoutData, productsResponse] = await Promise.all([");
+    const promiseAllIndex = source.indexOf(
+      "[layoutData, productsResponse] = await Promise.all([",
+    );
 
     expect(paginationHelperIndex).toBeGreaterThan(-1);
     expect(getPaginationUrlIndex).toBeGreaterThan(-1);
@@ -118,8 +130,12 @@ describe("storefront page data boundaries", () => {
     expect(optionsIndex).toBeGreaterThan(-1);
     expect(promiseAllIndex).toBeGreaterThan(optionsIndex);
     expect(source.slice(promiseAllIndex)).toContain("getLayoutData()");
-    expect(source.slice(promiseAllIndex)).toContain("getAllProducts(productListOptions)");
-    expect(source).toContain("const facets: ProductFacet[] = productsResponse.facets ?? []");
+    expect(source.slice(promiseAllIndex)).toContain(
+      "getAllProducts(productListOptions)",
+    );
+    expect(source).toContain(
+      "const facets: ProductFacet[] = productsResponse.facets ?? []",
+    );
     expect(source).not.toContain("getFilterableAttributes");
   });
 
@@ -171,7 +187,7 @@ describe("storefront page data boundaries", () => {
       'if (productResult.state === "unavailable" || !layoutData)',
     );
     expect(productSource).toContain(
-      "const response = storefrontDataUnavailableResponse(\n    \"We could not load this product. Please try again shortly.\"",
+      'const response = storefrontDataUnavailableResponse(\n    "We could not load this product. Please try again shortly."',
     );
     expect(searchSource).toContain("storefrontDataUnavailableResponse");
     expect(searchSource).toContain("if (!layoutData || !productsResponse)");
@@ -180,12 +196,12 @@ describe("storefront page data boundaries", () => {
       "if (!layoutData || !productsResponse || !productsResponse.category)",
     );
     expect(categorySource).toContain(
-      "const response = storefrontDataUnavailableResponse(\n      \"We could not load this category. Please try again shortly.\"",
+      'const response = storefrontDataUnavailableResponse(\n      "We could not load this category. Please try again shortly."',
     );
     expect(cmsPageSource).toContain("storefrontDataUnavailableResponse");
     expect(cmsPageSource).toContain("if (!layoutData)");
     expect(cmsPageSource).toContain(
-      "const response = storefrontDataUnavailableResponse(\n    \"We could not load this page. Please try again shortly.\"",
+      'const response = storefrontDataUnavailableResponse(\n    "We could not load this page. Please try again shortly."',
     );
     expect(collectionSource).toContain("storefrontDataUnavailableResponse");
     expect(collectionSource).toContain(
@@ -195,7 +211,7 @@ describe("storefront page data boundaries", () => {
       'if (collectionResult.state === "unavailable" || !layoutData)',
     );
     expect(collectionSource).toContain(
-      "const response = storefrontDataUnavailableResponse(\n    \"We could not load this collection. Please try again shortly.\"",
+      'const response = storefrontDataUnavailableResponse(\n    "We could not load this collection. Please try again shortly."',
     );
   });
 
@@ -206,7 +222,7 @@ describe("storefront page data boundaries", () => {
     );
     const headingSource = source.slice(
       source.indexOf("const homepageHeading ="),
-      source.indexOf('import { DEFAULT_CURRENCY }'),
+      source.indexOf("import { DEFAULT_CURRENCY }"),
     );
 
     expect(source).toContain("const homepageHeading =");
@@ -215,6 +231,20 @@ describe("storefront page data boundaries", () => {
     );
     expect(headingSource).toContain("layoutData.business?.legalName?.trim()");
     expect(source).toContain('<h1 class="sr-only">{homepageHeading}</h1>');
+  });
+
+  it("preloads only the first viewport-matched homepage hero", () => {
+    const source = readFileSync(
+      `${STOREFRONT_SRC_ROOT}/pages/index.astro`,
+      "utf8",
+    );
+
+    expect(source).toContain("const desktopHeroPreload =");
+    expect(source).toContain("const mobileHeroPreload =");
+    expect(source).toContain('media="(max-width: 767px)"');
+    expect(source).toContain('media="(min-width: 768px)"');
+    expect(source.match(/rel="preload"/g)).toHaveLength(2);
+    expect(source.match(/fetchpriority="high"/g)).toHaveLength(2);
   });
 
   it("uses the consolidated CMS page render endpoint", () => {

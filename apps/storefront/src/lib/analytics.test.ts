@@ -38,6 +38,7 @@ describe("storefront analytics", () => {
     window.ttq = {
       track: vi.fn(),
     };
+    window.__TIKTOK_PIXEL_ENABLED__ = true;
     window.zaraz = {
       ecommerce: vi.fn().mockResolvedValue(undefined),
       track: vi.fn().mockResolvedValue(undefined),
@@ -454,9 +455,11 @@ describe("storefront analytics", () => {
       },
     ]);
     expect(JSON.stringify(window.dataLayer)).not.toContain("buyer@example.com");
-    expect(JSON.stringify((window.ttq?.track as ReturnType<typeof vi.fn>).mock.calls)).not.toContain(
-      "buyer@example.com",
-    );
+    expect(
+      JSON.stringify(
+        (window.ttq?.track as ReturnType<typeof vi.fn>).mock.calls,
+      ),
+    ).not.toContain("buyer@example.com");
     expect(sendServerEventMock).toHaveBeenCalledWith(
       expect.objectContaining({
         eventId: "Purchase:order_1",
@@ -623,6 +626,25 @@ describe("storefront analytics", () => {
       "AddToCart",
       expect.objectContaining({ content_ids: ["sku_1"] }),
       { eventID: "AddToCart:generated" },
+    );
+  });
+
+  it("does not call Partytown's forwarding stub when TikTok is not configured", () => {
+    window.__TIKTOK_PIXEL_ENABLED__ = false;
+
+    trackFbViewContent({
+      content_ids: ["sku_1"],
+      contents: [{ id: "sku_1", quantity: 1, item_price: 100 }],
+      currency: "BDT",
+      value: 100,
+    });
+
+    expect(window.ttq?.track).not.toHaveBeenCalled();
+    expect(window.fbq).toHaveBeenCalledWith(
+      "track",
+      "ViewContent",
+      expect.objectContaining({ content_ids: ["sku_1"] }),
+      { eventID: "ViewContent:generated" },
     );
   });
 

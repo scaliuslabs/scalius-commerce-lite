@@ -3,58 +3,66 @@ import { getProductActionsPresentation } from "./product-actions";
 
 describe("product action presentation", () => {
   it("requires an exact option combination before either purchase action", () => {
-    expect(getProductActionsPresentation({
-      productName: "Rider Court Trainers",
-      exactVariantAvailable: false,
-      anyVariantAvailable: true,
-    })).toEqual({
+    expect(
+      getProductActionsPresentation({
+        productName: "Rider Court Trainers",
+        exactVariantAvailable: false,
+        anyVariantAvailable: true,
+      }),
+    ).toEqual({
       addToCart: {
         disabled: true,
         label: "Select Options",
-        ariaLabel: "Select an available Rider Court Trainers option to add to cart",
+        ariaLabel:
+          "Select Options — choose an available Rider Court Trainers option",
       },
       buyNow: {
         disabled: true,
         label: "Buy Now",
-        ariaLabel: "Select an available Rider Court Trainers option before buying",
+        ariaLabel:
+          "Buy Now — select an available Rider Court Trainers option first",
       },
     });
   });
 
   it("exposes accurate accessible names for an available exact SKU", () => {
-    expect(getProductActionsPresentation({
-      productName: "Rider Court Trainers",
-      exactVariantAvailable: true,
-      anyVariantAvailable: true,
-    })).toEqual({
+    expect(
+      getProductActionsPresentation({
+        productName: "Rider Court Trainers",
+        exactVariantAvailable: true,
+        anyVariantAvailable: true,
+      }),
+    ).toEqual({
       addToCart: {
         disabled: false,
         label: "Add to Cart",
-        ariaLabel: "Add Rider Court Trainers to cart",
+        ariaLabel: "Add to Cart — Rider Court Trainers",
       },
       buyNow: {
         disabled: false,
         label: "Buy Now",
-        ariaLabel: "Buy Rider Court Trainers now",
+        ariaLabel: "Buy Now — Rider Court Trainers",
       },
     });
   });
 
   it("keeps sold-out actions disabled and explicit", () => {
-    expect(getProductActionsPresentation({
-      productName: "Rider Court Trainers",
-      exactVariantAvailable: false,
-      anyVariantAvailable: false,
-    })).toEqual({
+    expect(
+      getProductActionsPresentation({
+        productName: "Rider Court Trainers",
+        exactVariantAvailable: false,
+        anyVariantAvailable: false,
+      }),
+    ).toEqual({
       addToCart: {
         disabled: true,
         label: "Unavailable",
-        ariaLabel: "Rider Court Trainers is unavailable",
+        ariaLabel: "Unavailable — Rider Court Trainers",
       },
       buyNow: {
         disabled: true,
         label: "Unavailable",
-        ariaLabel: "Rider Court Trainers is unavailable",
+        ariaLabel: "Unavailable — Rider Court Trainers",
       },
     });
   });

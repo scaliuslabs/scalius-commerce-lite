@@ -14,8 +14,12 @@ import { ArrowRight, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { Button } from "@/components/ui/button";
 import { formatDiscountBadge } from "@/components/product/lib/pricing-engine";
-import { getProductImageUrl } from "@/lib/product-media";
-import { formatPriceShort, getCurrencyCode, getCurrencySymbol } from "@/lib/currency";
+import { getProductImageSrcSet, getProductImageUrl } from "@/lib/product-media";
+import {
+  formatPriceShort,
+  getCurrencyCode,
+  getCurrencySymbol,
+} from "@/lib/currency";
 
 function ProductCarouselCard({ product }: { product: Product }) {
   const productImageUrl = getProductImageUrl(product.imageUrl, {
@@ -25,12 +29,47 @@ function ProductCarouselCard({ product }: { product: Product }) {
     format: "auto",
     fit: "contain",
   });
+  const productImageSrcSet = getProductImageSrcSet(product.imageUrl, [
+    {
+      descriptor: "320w",
+      width: 320,
+      height: 320,
+      quality: 78,
+      format: "auto",
+      fit: "contain",
+    },
+    {
+      descriptor: "400w",
+      width: 400,
+      height: 400,
+      quality: 80,
+      format: "auto",
+      fit: "contain",
+    },
+    {
+      descriptor: "480w",
+      width: 480,
+      height: 480,
+      quality: 81,
+      format: "auto",
+      fit: "contain",
+    },
+    {
+      descriptor: "640w",
+      width: 640,
+      height: 640,
+      quality: 82,
+      format: "auto",
+      fit: "contain",
+    },
+  ]);
 
   const hasDiscount = product.discountedPrice < product.price;
-  const formatMoney = (price: number) => formatPriceShort(price, {
-    symbol: getCurrencySymbol(),
-    code: getCurrencyCode(),
-  });
+  const formatMoney = (price: number) =>
+    formatPriceShort(price, {
+      symbol: getCurrencySymbol(),
+      code: getCurrencyCode(),
+    });
   const pricePrefix = product.priceVaries ? "From " : "";
   const discountBadge = formatDiscountBadge(
     product.discountType,
@@ -49,6 +88,8 @@ function ProductCarouselCard({ product }: { product: Product }) {
         >
           <img
             src={productImageUrl}
+            srcSet={productImageSrcSet || undefined}
+            sizes="(max-width: 639px) 72vw, (max-width: 1023px) 33vw, (max-width: 1279px) 25vw, 20vw"
             alt={product.imageAlt || product.name}
             width={400}
             height={400}
@@ -89,14 +130,15 @@ function ProductCarouselCard({ product }: { product: Product }) {
               </span>
             )}
             <span className="text-base sm:text-lg font-extrabold text-foreground tracking-tight leading-tight">
-              {pricePrefix}{formatMoney(product.discountedPrice)}
+              {pricePrefix}
+              {formatMoney(product.discountedPrice)}
             </span>
           </div>
           {/* Mobile View Button */}
           <a
             href={`/products/${product.slug}`}
-            className="lg:hidden h-8 w-8 flex items-center justify-center rounded-xl bg-muted text-foreground active:scale-90 transition-all border border-border"
-            aria-label="View product"
+            className="lg:hidden h-11 w-11 flex items-center justify-center rounded-xl bg-muted text-foreground active:scale-90 transition-all border border-border"
+            aria-label={`View ${product.name}`}
           >
             <ArrowRight className="h-3.5 w-3.5" />
           </a>
@@ -164,12 +206,12 @@ export default function ProductCarousel({
 
           <div className="flex items-center gap-2">
             <a
-                href={collectionHref}
-                className="group hidden sm:flex items-center gap-1.5 text-xs font-bold text-foreground hover:text-primary transition-colors"
-              >
-                View collection
-                <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />
-              </a>
+              href={collectionHref}
+              className="group hidden sm:flex items-center gap-1.5 text-xs font-bold text-foreground hover:text-primary transition-colors"
+            >
+              View collection
+              <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />
+            </a>
 
             {/* Desktop Navigation Arrows */}
             <div className="hidden md:flex items-center gap-1.5 ml-1">
@@ -223,14 +265,44 @@ export default function ProductCarousel({
 
         {/* Footer Navigation */}
         <div className="mt-2 flex flex-col sm:flex-row items-center justify-between gap-3">
-          {/* Progress Indicators (Dots) */}
-          <div className="flex items-center gap-1.5">
+          {/* Compact mobile controls stay usable even with a large catalog. */}
+          {count > 1 && (
+            <div className="flex min-h-11 items-center sm:hidden">
+              <button
+                type="button"
+                className="flex h-11 w-11 items-center justify-center rounded-full text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                onClick={() => api?.scrollPrev()}
+                aria-label={`Previous products in ${title}`}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <span
+                className="min-w-14 text-center text-xs font-semibold tabular-nums text-muted-foreground"
+                role="status"
+                aria-live="polite"
+              >
+                {current + 1} / {count}
+              </span>
+              <button
+                type="button"
+                className="flex h-11 w-11 items-center justify-center rounded-full text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                onClick={() => api?.scrollNext()}
+                aria-label={`Next products in ${title}`}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+
+          {/* Direct progress navigation remains compact on wider screens. */}
+          <div className="hidden items-center sm:flex">
             {Array.from({ length: count }).map((_, i) => (
               <button
                 key={i}
-                className="group relative p-1.5 -m-1.5" // Optimized target
+                className="group flex h-6 w-6 items-center justify-center rounded-full"
                 onClick={() => api?.scrollTo(i)}
                 aria-label={`Go to slide ${i + 1}`}
+                aria-current={current === i ? "true" : undefined}
               >
                 <div
                   className={cn(
@@ -245,12 +317,12 @@ export default function ProductCarousel({
           </div>
 
           <a
-              href={collectionHref}
-              className="sm:hidden flex items-center gap-2 text-[10px] font-bold text-foreground border-b border-primary/30 pb-0.5"
-            >
-              View collection
-              <ArrowRight className="h-3 w-3" />
-            </a>
+            href={collectionHref}
+            className="flex min-h-11 items-center gap-2 px-3 text-xs font-semibold text-foreground underline decoration-primary/30 underline-offset-4 sm:hidden"
+          >
+            View collection
+            <ArrowRight className="h-3 w-3" />
+          </a>
         </div>
       </div>
     </section>
