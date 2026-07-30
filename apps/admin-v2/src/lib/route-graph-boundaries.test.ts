@@ -1174,10 +1174,6 @@ describe("admin route graph boundaries", () => {
       join(ADMIN_SRC_ROOT, "routes", "admin.tsx"),
       "utf8",
     );
-    const adminScrollSource = readFileSync(
-      join(ADMIN_SRC_ROOT, "lib", "admin-scroll-restoration.ts"),
-      "utf8",
-    );
     const adminRouteContextSource = readFileSync(
       join(ADMIN_SRC_ROOT, "lib", "admin-route-context.ts"),
       "utf8",
@@ -1227,14 +1223,9 @@ describe("admin route graph boundaries", () => {
     expect(adminRouteSource).toContain(
       'data-scroll-restoration-id="admin-main-scroll"',
     );
-    expect(adminRouteSource).toContain("[overflow-anchor:none]");
-    expect(adminRouteSource).toContain("data-admin-scroll-content");
-    expect(adminRouteSource).toContain("useAdminNestedScrollRestoration()");
-    expect(adminScrollSource).toContain('window.addEventListener("popstate"');
-    expect(adminScrollSource).toContain(
-      "restoreStoredScroll(event.toLocation.href)",
-    );
-    expect(adminScrollSource).not.toContain("scrollElement.scrollTop = 0");
+    expect(adminRouteSource).toContain("lg:[scrollbar-gutter:stable]");
+    expect(adminRouteSource).not.toContain("[overflow-anchor:none]");
+    expect(adminRouteSource).not.toContain("useAdminNestedScrollRestoration");
     expect(adminRouteContextSource).toContain("ADMIN_ROUTE_CONTEXT_FRESH_MS");
     expect(adminRouteContextSource).toContain("ADMIN_ROUTE_CONTEXT_STALE_MS");
     expect(adminRouteContextSource).toContain(
