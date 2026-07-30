@@ -180,7 +180,7 @@ describe("api.server cookie forwarding", () => {
     await expect(apiBaseGet("/cache/stats")).resolves.toEqual({ ok: true });
 
     expect(apiFetch).toHaveBeenCalledWith(
-      "http://api.internal/api/v1/cache/stats",
+      "https://api.internal/api/v1/cache/stats",
       expect.objectContaining({
         method: "GET",
         signal: expect.any(AbortSignal),

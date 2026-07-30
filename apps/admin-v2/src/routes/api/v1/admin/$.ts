@@ -77,7 +77,7 @@ export async function proxyToApi(request: Request): Promise<Response> {
   const configuredApiBase = env.PUBLIC_API_BASE_URL as string | undefined;
   try {
     if (env.API && !isLocalApiBase(configuredApiBase)) {
-      const target = `http://api.internal${url.pathname}${url.search}`;
+      const target = `https://api.internal${url.pathname}${url.search}`;
       const response = await env.API.fetch(target, init);
       return wrapResponseWithAdminApiReadTimeout(response, timeout);
     }

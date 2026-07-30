@@ -56,7 +56,7 @@ export const ALL: APIRoute = async ({ request, params }) => {
 
   if (canUseServiceBinding) {
     // Production: service binding (zero-latency internal routing)
-    targetUrl = `http://api.internal${apiPath}`;
+    targetUrl = `https://api.internal${apiPath}`;
     fetcher = env!.BACKEND_API.fetch.bind(env!.BACKEND_API);
   } else {
     // Local dev: HTTP to API worker

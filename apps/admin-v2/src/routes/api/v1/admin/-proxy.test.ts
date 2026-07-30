@@ -84,6 +84,32 @@ describe("admin API proxy", () => {
     expect((fetchMock.mock.calls[0]?.[1] as RequestInit).signal).toBeUndefined();
   });
 
+  it("uses HTTPS for production service-binding requests", async () => {
+    const apiFetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ success: true, data: { ok: true } }), {
+        status: 200,
+      }),
+    );
+    (mocks.cfEnv as { API?: { fetch: typeof apiFetch } }).API = {
+      fetch: apiFetch,
+    };
+
+    const { proxyToApi } = await import("./$");
+    const response = await proxyToApi(
+      new Request("https://dashboard.test/api/v1/admin/media/uploads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename: "test.png" }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(apiFetch).toHaveBeenCalledWith(
+      "https://api.internal/api/v1/admin/media/uploads",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
   it("rejects cross-origin cookie write requests before forwarding", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
