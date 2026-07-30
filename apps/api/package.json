@@ -23,7 +23,7 @@
     "@scalius/database": "workspace:*",
     "@scalius/shared": "workspace:*",
     "bcryptjs": "^3.0.3",
-    "better-auth": "^1.6.23",
+    "better-auth": "^1.6.25",
     "drizzle-orm": "^0.45.2",
     "hono": "^4.12.31",
     "jsonwebtoken": "^9.0.3",
