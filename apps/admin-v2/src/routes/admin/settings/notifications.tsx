@@ -11,6 +11,7 @@ import {
 } from "~/components/admin/settings/notification-settings-sections";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { RouteErrorComponent } from "~/lib/route-error";
+import { useWorkspaceScrollMemory } from "~/hooks/use-workspace-scroll-memory";
 
 export function validateNotificationSettingsSearch(
   search: Record<string, unknown>,
@@ -34,6 +35,9 @@ function NotificationSettingsPage() {
   const search = Route.useSearch();
   const navigate = useNavigate();
   const audience = normalizeNotificationRulesPanel(search.panel);
+  const rememberWorkspaceScroll = useWorkspaceScrollMemory(
+    `${search.section}:${audience}`,
+  );
 
   const handleSectionChange = (section: string) => {
     void navigate({
@@ -57,7 +61,11 @@ function NotificationSettingsPage() {
   };
 
   return (
-    <div className="mx-auto max-w-6xl space-y-4">
+    <div
+      className="mx-auto max-w-6xl space-y-4"
+      onPointerDownCapture={rememberWorkspaceScroll}
+      onKeyDownCapture={rememberWorkspaceScroll}
+    >
       <div>
         <h1 className="text-xl font-semibold tracking-tight">Notifications</h1>
       </div>

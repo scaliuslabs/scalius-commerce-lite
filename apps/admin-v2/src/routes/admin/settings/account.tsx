@@ -7,6 +7,7 @@ import type { AccountSecurity } from "~/types/api-responses";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { normalizeAccountSection } from "~/components/admin/account-settings/account-sections";
 import type { AccountSection } from "~/components/admin/account-settings/account-sections";
+import { useWorkspaceScrollMemory } from "~/hooks/use-workspace-scroll-memory";
 
 export function validateAccountSearch(search: Record<string, unknown>) {
   return { section: normalizeAccountSection(search.section) };
@@ -34,6 +35,7 @@ function AccountSettingsPage() {
     twoFactorEnabled: user.twoFactorEnabled ?? false,
     twoFactorMethod: security.twoFactorMethod,
   };
+  const rememberWorkspaceScroll = useWorkspaceScrollMemory(search.section);
   const handleSectionChange = useCallback(
     (section: AccountSection, options?: { replace?: boolean }) => {
       void navigate({
@@ -49,7 +51,11 @@ function AccountSettingsPage() {
   );
 
   return (
-    <div className="mx-auto max-w-6xl">
+    <div
+      className="mx-auto max-w-6xl"
+      onPointerDownCapture={rememberWorkspaceScroll}
+      onKeyDownCapture={rememberWorkspaceScroll}
+    >
       <div className="mb-4">
         <h1 className="text-xl font-semibold tracking-tight">Account</h1>
       </div>

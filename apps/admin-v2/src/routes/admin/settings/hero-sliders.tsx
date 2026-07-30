@@ -6,6 +6,7 @@ import {
   type HeroSliderWorkspaceSection,
 } from "~/components/admin/hero-slider/hero-slider-workspace";
 import { RouteErrorComponent } from "~/lib/route-error";
+import { useWorkspaceScrollMemory } from "~/hooks/use-workspace-scroll-memory";
 
 export function validateHeroSliderSearch(search: Record<string, unknown>) {
   return { section: normalizeHeroSliderWorkspaceSection(search.section) };
@@ -21,6 +22,7 @@ export const Route = createFileRoute("/admin/settings/hero-sliders")({
 function HeroSlidersPage() {
   const search = Route.useSearch();
   const navigate = useNavigate();
+  const rememberWorkspaceScroll = useWorkspaceScrollMemory(search.section);
   const handleSectionChange = useCallback(
     (section: HeroSliderWorkspaceSection) => {
       void navigate({
@@ -35,9 +37,15 @@ function HeroSlidersPage() {
   );
 
   return (
-    <HeroSliderManager
-      section={search.section}
-      onSectionChange={handleSectionChange}
-    />
+    <div
+      className="contents"
+      onPointerDownCapture={rememberWorkspaceScroll}
+      onKeyDownCapture={rememberWorkspaceScroll}
+    >
+      <HeroSliderManager
+        section={search.section}
+        onSectionChange={handleSectionChange}
+      />
+    </div>
   );
 }

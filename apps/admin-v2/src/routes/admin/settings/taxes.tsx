@@ -17,6 +17,7 @@ import {
 } from "~/lib/admin-access";
 import { getFreshAdminRouteContext } from "~/lib/admin-route-context";
 import { RouteErrorComponent } from "~/lib/route-error";
+import { useWorkspaceScrollMemory } from "~/hooks/use-workspace-scroll-memory";
 
 export async function requireFreshTaxesRouteAuthority() {
   const context = await getFreshAdminRouteContext();
@@ -51,6 +52,9 @@ function TaxesPage() {
   const search = Route.useSearch();
   const navigate = useNavigate();
   const classificationRouteState = normalizeTaxClassificationRouteState(search);
+  const rememberWorkspaceScroll = useWorkspaceScrollMemory(
+    `${search.section}:${classificationRouteState.kind}:${classificationRouteState.search}:${classificationRouteState.page}`,
+  );
   const handleSectionChange = useCallback(
     (section: TaxWorkspaceSection) => {
       void navigate({
@@ -80,11 +84,17 @@ function TaxesPage() {
   );
 
   return (
-    <TaxSettingsPage
-      section={search.section}
-      onSectionChange={handleSectionChange}
-      classificationRouteState={classificationRouteState}
-      onClassificationRouteStateChange={handleClassificationRouteStateChange}
-    />
+    <div
+      className="contents"
+      onPointerDownCapture={rememberWorkspaceScroll}
+      onKeyDownCapture={rememberWorkspaceScroll}
+    >
+      <TaxSettingsPage
+        section={search.section}
+        onSectionChange={handleSectionChange}
+        classificationRouteState={classificationRouteState}
+        onClassificationRouteStateChange={handleClassificationRouteStateChange}
+      />
+    </div>
   );
 }

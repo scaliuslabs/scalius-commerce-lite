@@ -9,6 +9,7 @@ import {
 } from "../../ui/select";
 import { Loader2 } from "lucide-react";
 import type { CheckoutSettingsSection } from "./checkout-settings-sections";
+import { useWorkspaceScrollMemory } from "~/hooks/use-workspace-scroll-memory";
 
 const CheckoutFlowSettings = lazy(() =>
     import("./CheckoutFlowSettings")
@@ -129,12 +130,17 @@ export default function CheckoutSettingsPage({
         return () => window.cancelAnimationFrame(frame);
     }, [section]);
 
+    const rememberWorkspaceScroll = useWorkspaceScrollMemory(section);
     const handleTabChange = (value: string) => {
         onSectionChange(value as CheckoutSettingsSection);
     };
 
     return (
-        <div className="mx-auto max-w-6xl">
+        <div
+            className="mx-auto max-w-6xl"
+            onPointerDownCapture={rememberWorkspaceScroll}
+            onKeyDownCapture={rememberWorkspaceScroll}
+        >
             <div className="mb-4">
                 <h1 className="text-xl font-semibold tracking-tight">
                     Checkout
