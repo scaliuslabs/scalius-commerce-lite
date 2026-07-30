@@ -70,12 +70,12 @@ describe("rich text editor mobile boundaries", () => {
 
   it("keeps image sizing usable without a precision pointer", () => {
     expect(imageViewSource).toContain('aria-label="Image size"');
-    expect(imageViewSource).toContain('<SelectItem value="25%">25%</SelectItem>');
+    expect(imageViewSource).toContain('<option value="25%">25%</option>');
     expect(imageViewSource).toContain(
-      '<SelectItem value="100%">Full width</SelectItem>',
+      '<option value="100%">Full width</option>',
     );
     expect(imageViewSource).toContain(
-      '<SelectItem value="custom">Custom…</SelectItem>',
+      '<option value="custom">Custom…</option>',
     );
     expect(imageViewSource).toContain(
       'aria-label="Custom image width percentage"',
@@ -91,7 +91,12 @@ describe("rich text editor mobile boundaries", () => {
     expect(imageViewSource).toContain(
       '"flex h-11 w-11 items-center justify-center rounded transition-colors hover:bg-accent sm:h-8 sm:w-8"',
     );
-    expect(imageViewSource).toContain('className="z-[10002]"');
+    expect(imageViewSource).toContain(
+      "selected || sizeFocused || detailsOpen || editingCustomSize",
+    );
+    expect(imageViewSource).toContain("onFocus={() => setSizeFocused(true)}");
+    expect(imageViewSource).toContain("onBlur={() => setSizeFocused(false)}");
+    expect(imageViewSource).not.toContain("<SelectContent");
     expect(imageViewSource).toContain("inline-flex w-fit max-w-full");
     expect(imageExtensionSource).toContain(
       'event.target.closest("[data-image-controls]")',

@@ -18,13 +18,6 @@ import { Input } from "../input";
 import { Label } from "../label";
 import { Popover, PopoverContent, PopoverTrigger } from "../popover";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../select";
-import {
   clampRichTextImageWidth,
   normalizeRichTextImageWidthPercent,
   richTextImageWidthPercent,
@@ -42,6 +35,7 @@ export function ResizableImageView({
   const [resizing, setResizing] = useState(false);
   const [displayWidth, setDisplayWidth] = useState<number | null>(null);
   const [imageError, setImageError] = useState(false);
+  const [sizeFocused, setSizeFocused] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [altDraft, setAltDraft] = useState<string>(alt || "");
   const [editingCustomSize, setEditingCustomSize] = useState(false);
@@ -141,6 +135,19 @@ export function ResizableImageView({
     : width
       ? "custom-current"
       : "auto";
+  const controlsVisible =
+    selected || sizeFocused || detailsOpen || editingCustomSize;
+
+  const changeSize = (value: string) => {
+    if (value === "custom") {
+      setCustomSizeDraft(
+        width ? String(parseInt(width, 10) || 50) : "50",
+      );
+      setEditingCustomSize(true);
+      return;
+    }
+    updateAttributes({ width: value === "auto" ? null : value });
+  };
 
   const applyCustomSize = () => {
     const nextWidth = normalizeRichTextImageWidthPercent(customSizeDraft);
@@ -211,7 +218,7 @@ export function ResizableImageView({
       </div>
 
       <div className="leading-normal">
-        {selected && !resizing && (
+        {controlsVisible && !resizing && (
           <div
             className="mt-2 inline-flex w-fit max-w-full flex-wrap items-center gap-1 rounded-md border bg-background p-1 shadow-sm"
             data-image-controls
@@ -308,39 +315,26 @@ export function ResizableImageView({
                 </Button>
               </div>
             ) : (
-              <Select
+              <select
+                aria-label="Image size"
+                className="h-11 min-w-28 rounded-md border border-input bg-background px-2 text-xs shadow-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 sm:h-8"
                 value={sizeValue}
-                onValueChange={(value) => {
-                  if (value === "custom") {
-                    setCustomSizeDraft(
-                      width ? String(parseInt(width, 10) || 50) : "50",
-                    );
-                    setEditingCustomSize(true);
-                    return;
-                  }
-                  updateAttributes({ width: value === "auto" ? null : value });
-                }}
+                onFocus={() => setSizeFocused(true)}
+                onBlur={() => setSizeFocused(false)}
+                onChange={(event) => changeSize(event.target.value)}
               >
-                <SelectTrigger
-                  aria-label="Image size"
-                  className="h-11 w-auto min-w-28 gap-2 px-2 text-xs sm:h-8"
-                >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="z-[10002]">
-                  <SelectItem value="auto">Natural</SelectItem>
-                  <SelectItem value="25%">25%</SelectItem>
-                  <SelectItem value="50%">50%</SelectItem>
-                  <SelectItem value="75%">75%</SelectItem>
-                  <SelectItem value="100%">Full width</SelectItem>
-                  {sizeValue === "custom-current" ? (
-                    <SelectItem value="custom-current" disabled>
-                      Custom · {width}
-                    </SelectItem>
-                  ) : null}
-                  <SelectItem value="custom">Custom…</SelectItem>
-                </SelectContent>
-              </Select>
+                <option value="auto">Natural</option>
+                <option value="25%">25%</option>
+                <option value="50%">50%</option>
+                <option value="75%">75%</option>
+                <option value="100%">Full width</option>
+                {sizeValue === "custom-current" ? (
+                  <option value="custom-current" disabled>
+                    Custom · {width}
+                  </option>
+                ) : null}
+                <option value="custom">Custom…</option>
+              </select>
             )}
             <Popover
               open={detailsOpen}

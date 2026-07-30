@@ -46,6 +46,55 @@ describe("rich-text editing document contract", () => {
     );
   });
 
+  it("handles the real Enter key in paragraphs and list items", () => {
+    const host = document.createElement("div");
+    document.body.append(host);
+    editor = new Editor({
+      element: host,
+      extensions: createTiptapExtensions("Write something"),
+      content: "<p>First</p>",
+    });
+
+    editor.commands.focus("end");
+    expect(
+      host.querySelector(".ProseMirror")?.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      ),
+    ).toBe(false);
+    expect(editor.chain().insertContent("Second").run()).toBe(true);
+    expect(editor.getHTML()).toBe("<p>First</p><p>Second</p>");
+
+    editor.commands.setContent("<ul><li><p>Item one</p></li></ul>");
+    let itemEnd = 0;
+    editor.state.doc.descendants((node, position) => {
+      if (node.isText && node.textContent === "Item one") {
+        itemEnd = position + node.nodeSize;
+      }
+    });
+    expect(itemEnd).toBeGreaterThan(0);
+    editor.commands.setTextSelection(itemEnd);
+    editor.commands.focus();
+    expect(
+      host.querySelector(".ProseMirror")?.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      ),
+    ).toBe(false);
+    expect(editor.chain().insertContent("Item two").run()).toBe(true);
+    expect(editor.getHTML()).toContain(
+      "<ul class=\"list-disc pl-5\"><li><p>Item one</p></li><li><p>Item two</p></li></ul>",
+    );
+
+    host.remove();
+  });
+
   it("round-trips bullet lists, numbered lists, and blockquotes", () => {
     const instance = createEditor("<p>Item one</p><p>Item two</p>");
     instance.commands.selectAll();

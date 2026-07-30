@@ -69,6 +69,7 @@ vi.mock("./TiptapTablePopover", () => ({
 const makeEditor = () => {
   const setImage = vi.fn();
   const setVideoEmbed = vi.fn();
+  const focusEditor = vi.fn();
   const run = vi.fn(() => true);
   const chain = {
     focus: vi.fn(() => chain),
@@ -100,6 +101,9 @@ const makeEditor = () => {
   return {
     editor: {
       chain: vi.fn(() => chain),
+      commands: {
+        focus: focusEditor,
+      },
       can: vi.fn(() => ({
         undo: () => true,
         redo: () => true,
@@ -114,6 +118,7 @@ const makeEditor = () => {
     } as unknown as Editor,
     setImage,
     setVideoEmbed,
+    focusEditor,
     chain,
   };
 };
@@ -172,6 +177,35 @@ describe("TiptapMenuBar", () => {
       alt: "section-image.jpg",
     });
     expect(second.chain.setTextSelection).toHaveBeenCalledWith(1);
+  });
+
+  it("commits a picked image before waiting for dialog focus restoration", () => {
+    const restoreFocus: FrameRequestCallback[] = [];
+    requestAnimationFrameSpy.mockImplementationOnce((callback: FrameRequestCallback) => {
+      restoreFocus.push(callback);
+      return 1;
+    });
+    const instance = makeEditor();
+
+    act(() => {
+      root.render(
+        <TiptapMenuBar editor={instance.editor} toggleModal={vi.fn()} />,
+      );
+    });
+    act(() => {
+      host
+        .querySelector<HTMLButtonElement>('button[aria-label="Media Library"]')
+        ?.click();
+    });
+
+    expect(instance.setImage).toHaveBeenCalledOnce();
+    expect(instance.focusEditor).not.toHaveBeenCalled();
+    expect(restoreFocus).toHaveLength(1);
+
+    restoreFocus[0]?.(0);
+    expect(instance.focusEditor).toHaveBeenCalledWith(undefined, {
+      scrollIntoView: false,
+    });
   });
 
   it("keeps compact editor actions touch-sized on mobile", () => {
