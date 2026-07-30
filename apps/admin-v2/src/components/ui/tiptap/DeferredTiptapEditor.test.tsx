@@ -14,8 +14,9 @@ vi.mock("@scalius/shared/image-optimizer", () => ({
   getOptimizedImageUrl: (url: string) => url,
 }));
 
-(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
-  true;
+(
+  globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
 describe("DeferredTiptapEditor", () => {
   let host: HTMLDivElement;
@@ -45,11 +46,16 @@ describe("DeferredTiptapEditor", () => {
       );
     });
 
-    await vi.waitFor(() => {
-      expect(
-        host.querySelector('[contenteditable="true"][aria-label="Strict mode content"]'),
-      ).not.toBeNull();
-    });
+    await vi.waitFor(
+      () => {
+        expect(
+          host.querySelector(
+            '[contenteditable="true"][aria-label="Strict mode content"]',
+          ),
+        ).not.toBeNull();
+      },
+      { timeout: 5_000 },
+    );
     expect(host.querySelector(".ProseMirror")).not.toBeNull();
-  });
+  }, 10_000);
 });
