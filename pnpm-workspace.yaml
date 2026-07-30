@@ -83,3 +83,5 @@ minimumReleaseAgeExclude:
   - react-dom@19.2.8
   - react@19.2.8
   - react-is@19.2.8
+  - '@tanstack/react-start-rsc@0.1.32'
+  - '@tanstack/react-start@1.168.33'
