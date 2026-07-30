@@ -14,24 +14,12 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useHydrated } from "@/hooks/use-hydrated";
+import { getSignInErrorMessage } from "./login-error";
 
 interface SignInResponse {
   error?: { message?: string } | null;
   twoFactorRedirect?: boolean;
   twoFactorMethods?: readonly unknown[];
-}
-
-function getSignInError(error: unknown) {
-  if (error instanceof Error && error.message) return error.message;
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    "message" in error &&
-    typeof error.message === "string"
-  ) {
-    return error.message;
-  }
-  return "Invalid email or password.";
 }
 
 export function LoginForm() {
@@ -57,7 +45,7 @@ export function LoginForm() {
       })) as SignInResponse;
 
       if (response.error) {
-        setError(response.error.message || "Invalid email or password.");
+        setError(getSignInErrorMessage(response.error));
         setIsLoading(false);
         return;
       }
@@ -71,7 +59,7 @@ export function LoginForm() {
       await navigate({ to: "/admin", replace: true });
     } catch (signInError) {
       setPassword("");
-      setError(getSignInError(signInError));
+      setError(getSignInErrorMessage(signInError));
       setIsLoading(false);
     }
   }
