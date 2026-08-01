@@ -1,6 +1,6 @@
-import { createServerFn } from "@tanstack/react-start";
+import { createAdminApiFunction as createServerFn } from "../admin-api-function";
 import type { NavigationResourceType } from "@scalius/shared/navigation-target";
-import { apiGet } from "../api.server";
+import { apiGet } from "../api";
 
 export interface NavigationSource {
   id: string;

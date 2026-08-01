@@ -7,7 +7,7 @@ describe("public attribute query boundaries", () => {
     it("keeps search facets on exact FTS-matched buyer-visible products", () => {
         const searchHelper = source.slice(source.indexOf("export async function getPublicAttributesForSearch"));
 
-        expect(searchHelper).toContain('ftsMatch("products_fts", "products", search)');
+        expect(searchHelper).toContain('ftsMatch(db, "products_fts", "products", search)');
         expect(searchHelper).toContain("publicProductHasBuyerResolvableSku()");
         expect(searchHelper).toContain("searchCondition");
         expect(searchHelper).not.toContain("matchingCategories");

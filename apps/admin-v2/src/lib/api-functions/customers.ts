@@ -1,4 +1,4 @@
-import { createServerFn } from "@tanstack/react-start";
+import { createAdminApiFunction as createServerFn } from "../admin-api-function";
 import type {
   GetApiV1AdminCustomersByIdHistoryResponse,
   GetApiV1AdminCustomersByIdHistoryData,
@@ -10,7 +10,7 @@ import type {
   PostApiV1AdminCustomersResponse,
   PutApiV1AdminCustomersByIdData,
 } from "@scalius/api-client/types";
-import { apiDelete, apiGet, apiPost, apiPut } from "../api.server";
+import { apiDelete, apiGet, apiPost, apiPut } from "../api";
 
 type JsonSerializable<T> = T extends Array<infer Item>
   ? JsonSerializable<Item>[]

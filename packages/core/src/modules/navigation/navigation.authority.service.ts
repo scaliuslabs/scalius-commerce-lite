@@ -57,7 +57,11 @@ import {
     resolveNavigationItemsForPublic,
 } from "./navigation.resolver";
 import { parseNavigationConfig } from "./navigation.validation";
-import { sanitizeFtsQuery } from "../../search/fts5";
+import {
+    ftsMatch,
+    isFts5SearchEnabled,
+    sanitizeFtsQuery,
+} from "../../search/fts5";
 
 const NAVIGATION_REVISION_GUARD = "NAVIGATION_REVISION_CONFLICT";
 const NAVIGATION_PAGE_LIMIT = 100;
@@ -613,6 +617,14 @@ export async function searchNavigationMenuItems(
     const sanitized = sanitizeFtsQuery(query);
     if (!sanitized) return { items: [] };
     const limit = normalizeLimit(input.limit ?? 50);
+    const fts5Enabled = isFts5SearchEnabled(db);
+    const searchCondition = ftsMatch(
+        db,
+        "navigation_menu_items_fts",
+        "navigation_menu_items",
+        query,
+    );
+    if (!searchCondition) return { items: [] };
     const matches = await db
         .select({
             item: navigationMenuItems,
@@ -625,17 +637,19 @@ export async function searchNavigationMenuItems(
         .from(navigationMenuItems)
         .where(and(
             eq(navigationMenuItems.menuId, menuId),
-            sql`${sql.raw("navigation_menu_items")}.rowid IN (
-                SELECT rowid FROM navigation_menu_items_fts
-                WHERE navigation_menu_items_fts MATCH ${sanitized}
-                  AND menu_id = ${menuId}
-            )`,
+            searchCondition,
         ))
-        .orderBy(sql`(
-            SELECT rank FROM navigation_menu_items_fts
-            WHERE rowid = ${sql.raw("navigation_menu_items")}.rowid
-              AND navigation_menu_items_fts MATCH ${sanitized}
-        ) ASC`, asc(navigationMenuItems.position), asc(navigationMenuItems.id))
+        .orderBy(
+            fts5Enabled
+                ? sql`(
+                    SELECT rank FROM navigation_menu_items_fts
+                    WHERE rowid = ${sql.raw("navigation_menu_items")}.rowid
+                      AND navigation_menu_items_fts MATCH ${sanitized}
+                ) ASC`
+                : asc(navigationMenuItems.label),
+            asc(navigationMenuItems.position),
+            asc(navigationMenuItems.id),
+        )
         .limit(limit)
         .all();
 
@@ -910,20 +924,46 @@ export async function deleteNavigationMenuItem(
     itemId: string,
     expectedRevision: number,
 ) {
+    const rows = await db
+        .select({
+            id: navigationMenuItems.id,
+            parentId: navigationMenuItems.parentId,
+        })
+        .from(navigationMenuItems)
+        .where(eq(navigationMenuItems.menuId, menuId))
+        .limit(NAVIGATION_MENU_ITEM_LIMIT + 1)
+        .all();
+    if (rows.length > NAVIGATION_MENU_ITEM_LIMIT) {
+        throw new ValidationError(`A menu can contain at most ${NAVIGATION_MENU_ITEM_LIMIT} items.`);
+    }
+    if (!rows.some((row) => row.id === itemId)) {
+        throw new NotFoundError("Menu item not found.");
+    }
+
+    const childrenByParent = new Map<string, string[]>();
+    for (const row of rows) {
+        if (!row.parentId) continue;
+        const children = childrenByParent.get(row.parentId) ?? [];
+        children.push(row.id);
+        childrenByParent.set(row.parentId, children);
+    }
+    const subtreeIds = [itemId];
+    const seen = new Set(subtreeIds);
+    for (let index = 0; index < subtreeIds.length; index += 1) {
+        for (const childId of childrenByParent.get(subtreeIds[index]!) ?? []) {
+            if (seen.has(childId)) continue;
+            seen.add(childId);
+            subtreeIds.push(childId);
+        }
+    }
+
+    const encodedSubtreeIds = JSON.stringify(subtreeIds);
     const result = await executeMenuMutation(db, menuId, expectedRevision, [
         db.delete(navigationMenuItems)
             .where(and(
                 eq(navigationMenuItems.menuId, menuId),
                 sql`${navigationMenuItems.id} IN (
-                    WITH RECURSIVE subtree(id) AS (
-                        SELECT ${itemId}
-                        UNION ALL
-                        SELECT child.id
-                        FROM navigation_menu_items AS child
-                        JOIN subtree AS parent ON child.parent_id = parent.id
-                        WHERE child.menu_id = ${menuId}
-                    )
-                    SELECT id FROM subtree
+                    SELECT value FROM json_each(${encodedSubtreeIds})
                 )`,
             ))
             .returning({ id: navigationMenuItems.id }),

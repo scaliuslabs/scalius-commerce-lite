@@ -1,5 +1,5 @@
-import { createServerFn } from "@tanstack/react-start";
-import { apiGet, apiPatch, apiPost } from "../api.server";
+import { createAdminApiFunction as createServerFn } from "../admin-api-function";
+import { apiGet, apiPatch, apiPost } from "../api";
 
 export interface InventoryVariant {
   id: string;

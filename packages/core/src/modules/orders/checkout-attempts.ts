@@ -1,10 +1,16 @@
-import type { Database } from "@scalius/database/client";
-import { checkoutAttempts } from "@scalius/database/schema";
+import { buildBatchGuard, type Database } from "@scalius/database/client";
+import { checkoutAttempts, orderReceipts } from "@scalius/database/schema";
 import { and, eq, isNull, lte, or, sql } from "drizzle-orm";
+import type { BatchItem } from "drizzle-orm/batch";
 import { generateOrderId } from "@scalius/shared/order-utils";
 import { ConflictError, ServiceUnavailableError } from "@scalius/core/errors";
 import type { CreateStorefrontOrderInput } from "./orders.types";
-import { createOrderReceiptToken, recordOrderReceipt } from "./order-receipts";
+import {
+  createOrderReceiptToken,
+  hashOrderReceiptToken,
+  ORDER_RECEIPT_TOKEN_TTL_SECONDS,
+  recordOrderReceipt,
+} from "./order-receipts";
 
 export interface CheckoutAttemptIdentity {
   requestKey: string;
@@ -38,8 +44,27 @@ const CHECKOUT_ATTEMPT_LEASE_SECONDS = 5 * 60;
 const MAX_ERROR_LENGTH = 500;
 const CHECKOUT_ATTEMPT_REQUEST_KEY_PREFIX = "checkout_submit:v1:";
 const CHECKOUT_STATUS_TOKEN_PREFIX = "cst_";
+const CHECKOUT_ATTEMPT_COMMIT_CONFLICT = "CHECKOUT_ATTEMPT_COMMIT_CONFLICT";
 
 type CheckoutAttemptRow = typeof checkoutAttempts.$inferSelect;
+type SQLiteBatchItem = BatchItem<"sqlite">;
+
+export interface PreparedCheckoutAttemptCommit {
+  guard: SQLiteBatchItem;
+  writes: SQLiteBatchItem[];
+}
+
+function checkoutAttemptClaimIdentityCondition(attempt: ClaimedCheckoutAttempt) {
+  return and(
+    eq(checkoutAttempts.id, attempt.id),
+    eq(checkoutAttempts.requestKey, attempt.requestKey),
+    eq(checkoutAttempts.requestHash, attempt.requestHash),
+    eq(checkoutAttempts.orderId, attempt.orderId),
+    eq(checkoutAttempts.checkoutToken, attempt.checkoutToken),
+    eq(checkoutAttempts.status, "processing"),
+    eq(checkoutAttempts.claimId, attempt.claimId),
+  );
+}
 
 export async function buildCheckoutAttemptIdentity(
   input: CreateStorefrontOrderInput,
@@ -207,6 +232,96 @@ export async function resolveExistingCheckoutAttempt<TResponse>(
   if (existing.claimExpiresAt == null || existing.claimExpiresAt <= nowSeconds) return null;
 
   return processingResultFromAttempt(existing);
+}
+
+/**
+ * Prepare the final checkout-attempt and durable receipt writes for composition
+ * into the same transaction as the order. The guard prevents an expired/lost
+ * claim from committing buyer-visible order state.
+ */
+export async function prepareCheckoutAttemptCommit<TResponse>(
+  db: Database,
+  attempt: ClaimedCheckoutAttempt,
+  options: {
+    paymentMethod: string;
+    totalAmount: number;
+    response: TResponse;
+  },
+): Promise<PreparedCheckoutAttemptCommit> {
+  const responsePayload = JSON.stringify(options.response);
+  const tokenHash = await hashOrderReceiptToken(attempt.checkoutToken);
+  const identityCondition = checkoutAttemptClaimIdentityCondition(attempt);
+
+  const guard = buildBatchGuard(db, sql`CASE WHEN EXISTS (
+    SELECT 1
+    FROM ${checkoutAttempts}
+    WHERE ${identityCondition}
+  ) THEN 1 ELSE json_extract(${CHECKOUT_ATTEMPT_COMMIT_CONFLICT}, '$') END`);
+
+  const attemptWrite = db
+    .update(checkoutAttempts)
+    .set({
+      status: "committed",
+      paymentMethod: options.paymentMethod,
+      totalAmount: options.totalAmount,
+      responsePayload,
+      claimId: null,
+      claimExpiresAt: null,
+      lastError: null,
+      updatedAt: sql`unixepoch()`,
+    })
+    .where(identityCondition);
+
+  const receiptWrite = db
+    .insert(orderReceipts)
+    .values({
+      tokenHash,
+      orderId: attempt.orderId,
+      source: "checkout_attempt",
+      status: "active",
+      expiresAt: sql`unixepoch() + ${ORDER_RECEIPT_TOKEN_TTL_SECONDS}`,
+      createdAt: sql`unixepoch()`,
+      updatedAt: sql`unixepoch()`,
+    })
+    .onConflictDoUpdate({
+      target: orderReceipts.tokenHash,
+      set: {
+        orderId: attempt.orderId,
+        source: "checkout_attempt",
+        status: "active",
+        expiresAt: sql`unixepoch() + ${ORDER_RECEIPT_TOKEN_TTL_SECONDS}`,
+        updatedAt: sql`unixepoch()`,
+      },
+    });
+
+  return {
+    guard,
+    writes: [attemptWrite, receiptWrite] as SQLiteBatchItem[],
+  };
+}
+
+export async function isCheckoutAttemptClaimCurrent(
+  db: Database,
+  attempt: ClaimedCheckoutAttempt,
+): Promise<boolean> {
+  const row = await db
+    .select({ id: checkoutAttempts.id })
+    .from(checkoutAttempts)
+    .where(checkoutAttemptClaimIdentityCondition(attempt))
+    .get();
+  return row?.id === attempt.id;
+}
+
+export function isCheckoutAttemptCommitConflictError(error: unknown): boolean {
+  let current = error;
+  for (let depth = 0; depth < 5 && current; depth += 1) {
+    const message = current instanceof Error ? current.message : String(current);
+    if (new RegExp(CHECKOUT_ATTEMPT_COMMIT_CONFLICT, "i").test(message)) return true;
+    current = current instanceof Error
+      ? (current as Error & { cause?: unknown }).cause
+      : null;
+  }
+  return false;
 }
 
 export async function markCheckoutAttemptCommitted<TResponse>(

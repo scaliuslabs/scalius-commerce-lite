@@ -38,6 +38,7 @@ import {
     isStockRestoreStatus,
 } from "../inventory/inventory-transitions";
 import {
+    prepareStockReservationBatch,
     reserveStockBatch,
     releaseReservedStockBatch,
     validateStockBatchAvailability,
@@ -46,7 +47,11 @@ import type { ReservationEntry } from "../inventory";
 
 import { sql, desc, eq, inArray, isNotNull, isNull, and, type SQL } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
-import { ftsMatch, sanitizeFtsQuery } from "../../search/fts5";
+import {
+    ftsMatch,
+    isFts5SearchEnabled,
+    sanitizeFtsQuery,
+} from "../../search/fts5";
 import { generateOrderId } from "@scalius/shared/order-utils";
 import { calculateCustomerStats } from "@scalius/shared/customer-utils";
 import { calculateDiscountedPriceAtPrecision } from "@scalius/shared/price-utils";
@@ -133,7 +138,6 @@ import { getOrderArchiveStatusBlockedReason } from "./order-archive-policy";
 // ─────────────────────────────────────────
 
 type SQLiteBatchItem = BatchItem<"sqlite">;
-const ADMIN_CREATE_ROLLBACK_RELEASE_KEY = "admin-order-create-rollback:v1";
 const MAX_ORDER_LIST_LIMIT = 100;
 
 export interface AdminOrderFullEditSource {
@@ -1143,26 +1147,30 @@ export async function listOrders(db: Database, options: {
     if (trimmedSearch) {
         const phoneSearchTerms = buildPhoneSearchTerms(trimmedSearch);
         const phoneCondition = buildPhoneSearchCondition(phoneSearchTerms);
-        const ftsCondition = ftsMatch("orders_fts", "orders", trimmedSearch);
+        const ftsCondition = ftsMatch(db, "orders_fts", "orders", trimmedSearch);
 
         if (isLikelyPhoneSearch(trimmedSearch) && phoneCondition) {
             whereConditions.push(ftsCondition ? sql`(${ftsCondition} OR ${phoneCondition})` : phoneCondition);
-            const sanitized = sanitizeFtsQuery(trimmedSearch);
-            rankExpression = sql`
-                COALESCE(
-                    (SELECT rank FROM orders_fts WHERE rowid = orders.rowid AND orders_fts MATCH ${sanitized}),
-                    999999
-                ) ASC
-            `;
+            if (isFts5SearchEnabled(db)) {
+                const sanitized = sanitizeFtsQuery(trimmedSearch);
+                rankExpression = sql`
+                    COALESCE(
+                        (SELECT rank FROM orders_fts WHERE rowid = orders.rowid AND orders_fts MATCH ${sanitized}),
+                        999999
+                    ) ASC
+                `;
+            }
         } else if (ftsCondition) {
             whereConditions.push(ftsCondition);
-            const sanitized = sanitizeFtsQuery(trimmedSearch);
-            rankExpression = sql`
-                COALESCE(
-                    (SELECT rank FROM orders_fts WHERE rowid = orders.rowid AND orders_fts MATCH ${sanitized}),
-                    999999
-                ) ASC
-            `;
+            if (isFts5SearchEnabled(db)) {
+                const sanitized = sanitizeFtsQuery(trimmedSearch);
+                rankExpression = sql`
+                    COALESCE(
+                        (SELECT rank FROM orders_fts WHERE rowid = orders.rowid AND orders_fts MATCH ${sanitized}),
+                        999999
+                    ) ASC
+                `;
+            }
         }
     }
 
@@ -1873,23 +1881,20 @@ export async function createOrder(
                 quantity: item.quantity,
                 pool: "regular" as const,
             }));
-        if (reservationEntries.length > 0) {
-            const batchItems = reservationEntries.map(e => ({
-                variantId: e.variantId,
-                quantity: e.quantity,
+        const inventoryPlan = await prepareStockReservationBatch(
+            db,
+            reservationEntries.map((entry) => ({
+                variantId: entry.variantId,
+                quantity: entry.quantity,
                 orderId,
-            }));
-            const reserveResult = await reserveStockBatch(
-                db,
-                batchItems,
-                "regular",
-                { reservationKey: `admin-order-create:v2:${orderId}` },
+            })),
+            "regular",
+            { reservationKey: `admin-order-create:v2:${orderId}` },
+        );
+        if (!inventoryPlan.success) {
+            throw new ValidationError(
+                inventoryPlan.error ?? "Insufficient stock for one or more items",
             );
-            if (!reserveResult.success) {
-                throw new ValidationError(
-                    reserveResult.error ?? "Insufficient stock for one or more items",
-                );
-            }
         }
 
         return {
@@ -1904,6 +1909,7 @@ export async function createOrder(
             taxQuote,
             quote,
             reservationEntries,
+            inventoryPlan,
         };
     })().catch(async (error) => {
         await markAdminOrderCreateAttemptFailed(db, attempt, error).catch(() => undefined);
@@ -1921,6 +1927,7 @@ export async function createOrder(
         taxQuote,
         quote,
         reservationEntries,
+        inventoryPlan,
     } = prepared;
     let customerId = existingCustomer?.id;
 
@@ -1929,6 +1936,7 @@ export async function createOrder(
     // If any statement fails, none are committed.
     const writeBatch: SQLiteBatchItem[] = [
         buildAdminOrderCreateAttemptGuard(db, attempt),
+        ...inventoryPlan.statements,
     ];
 
     if (!existingCustomer) {
@@ -2132,20 +2140,9 @@ export async function createOrder(
             );
         }
 
-        // DB write failed -- prove any reservations we made were released.
-        if (reservationEntries.length > 0) {
-            const releaseResult = await releaseReservedStockBatch(db, reservationEntries, orderId, {
-                releaseKey: ADMIN_CREATE_ROLLBACK_RELEASE_KEY,
-            });
-            if (!releaseResult.success) {
-                console.error("[orders.admin] Failed to prove reserved stock release after manual order create failure:", {
-                    orderId,
-                    error: releaseResult.error,
-                    manualReconciliationRequired: releaseResult.manualReconciliationRequired,
-                });
-                throw new ServiceUnavailableError("Manual order inventory cleanup is temporarily unavailable. Please try again.");
-            }
-        }
+        // Inventory guards, ledger edges, counters, customer/order facts, COD,
+        // tax snapshots, and idempotency evidence share this one transaction.
+        // A failed batch has no reservation to compensate.
         await markAdminOrderCreateAttemptFailed(db, attempt, batchError).catch(() => undefined);
         throw batchError;
     }

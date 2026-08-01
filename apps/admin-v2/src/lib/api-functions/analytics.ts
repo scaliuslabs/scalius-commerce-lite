@@ -1,11 +1,11 @@
-import { createServerFn } from "@tanstack/react-start";
+import { createAdminApiFunction as createServerFn } from "../admin-api-function";
 import type {
   AnalyticsProviderHealthResponse,
   AnalyticsScript,
   AnalyticsScriptSummary,
   AnalyticsScriptsListResponse,
 } from "~/types/api-responses";
-import { apiDelete, apiGet, apiPost, apiPut } from "../api.server";
+import { apiDelete, apiGet, apiPost, apiPut } from "../api";
 
 export interface AnalyticsQueryInput {
   [key: string]: string | number | boolean | undefined;

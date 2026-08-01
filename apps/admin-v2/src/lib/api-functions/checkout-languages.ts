@@ -1,5 +1,5 @@
-import { createServerFn } from "@tanstack/react-start";
-import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from "../api.server";
+import { createAdminApiFunction as createServerFn } from "../admin-api-function";
+import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from "../api";
 
 export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };

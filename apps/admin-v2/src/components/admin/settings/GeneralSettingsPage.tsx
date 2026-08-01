@@ -166,9 +166,6 @@ export default function GeneralSettingsPage({
   const handleTabChange = (value: string) => {
     onSectionChange(value as GeneralSettingsSection);
   };
-  const handlePanelChange = (nextPanel: GeneralSettingsPanel) => {
-    onPanelChange(nextPanel);
-  };
   const headerPanel = section === "header"
     ? (panel as HeaderBuilderPanel | undefined)
     : undefined;
@@ -258,7 +255,7 @@ export default function GeneralSettingsPage({
                       initialConfig={headerConfig}
                       initialRevision={headerRevision}
                       readiness={headerReadiness}
-                      onPanelChange={handlePanelChange}
+                      onPanelChange={onPanelChange}
                     />
                   </Suspense>
                 )}
@@ -274,7 +271,7 @@ export default function GeneralSettingsPage({
                       initialConfig={footerConfig}
                       initialRevision={footerRevision}
                       readiness={footerReadiness}
-                      onPanelChange={handlePanelChange}
+                      onPanelChange={onPanelChange}
                     />
                   </Suspense>
                 )}

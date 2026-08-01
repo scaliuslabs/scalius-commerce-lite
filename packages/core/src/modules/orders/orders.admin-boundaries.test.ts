@@ -201,13 +201,13 @@ describe("admin order list boundaries", () => {
     expect(createSource).toContain("buildAdminOrderCreateAttemptIdentity(data, actorId)");
     expect(createSource).toContain("claimAdminOrderCreateAttempt<{ id: string }>");
     expect(createSource).toContain("buildAdminOrderCreateAttemptGuard(db, attempt)");
+    expect(createSource).toContain("prepareStockReservationBatch(");
+    expect(createSource).toContain("...inventoryPlan.statements");
     expect(createSource).toContain("writeBatch.push(buildAdminOrderCreateAttemptCommit(db, attempt, response))");
     expect(createSource).toContain("resolveAdminOrderCreateAttempt<{ id: string }>");
-    expect(createSource.indexOf("resolveAdminOrderCreateAttempt<{ id: string }>")).toBeLessThan(
-      createSource.indexOf("releaseReservedStockBatch(db, reservationEntries, orderId"),
-    );
-    expect(createSource.indexOf("isAdminOrderCreateAttemptGuardError(batchError)")).toBeLessThan(
-      createSource.indexOf("releaseReservedStockBatch(db, reservationEntries, orderId"),
+    expect(createSource).not.toContain("releaseReservedStockBatch(");
+    expect(createSource.indexOf("buildAdminOrderCreateAttemptGuard(db, attempt)")).toBeLessThan(
+      createSource.indexOf("...inventoryPlan.statements"),
     );
   });
 

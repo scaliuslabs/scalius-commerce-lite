@@ -23,7 +23,6 @@ import {
 } from "@scalius/database/schema";
 import {
     adminPrincipalExists,
-    type AdminPrincipalExistsDb,
 } from "@scalius/core/auth/admin-setup";
 import {
     claimAdminSetup,
@@ -1791,12 +1790,8 @@ app.openapi(getAccountSecurityRoute, async (c) => {
 
 const setupApp = new OpenAPIHono<{ Bindings: Env }>();
 
-function getAdminPrincipalExistsDb(env: Env, db: Database): AdminPrincipalExistsDb {
-    return env.DB ?? db as unknown as AdminPrincipalExistsDb;
-}
-
-async function firstAdminExists(env: Env, db: Database): Promise<boolean> {
-    return adminPrincipalExists(getAdminPrincipalExistsDb(env, db));
+async function firstAdminExists(db: Database): Promise<boolean> {
+    return adminPrincipalExists(db);
 }
 
 // ── Admin Exists Check (for setup page) ──
@@ -1813,7 +1808,7 @@ const adminExistsRoute = createRoute({
 
 setupApp.openapi(adminExistsRoute, async (c) => {
     const db = c.get("db");
-    const adminExists = await firstAdminExists(c.env as Env, db);
+    const adminExists = await firstAdminExists(db);
     return ok(c, { adminExists });
 });
 
@@ -1873,7 +1868,7 @@ setupApp.openapi(setupRoute, async (c) => {
     const env = c.env as Env;
 
     // Check admin exists FIRST (before rate limiting) — this is the primary guard
-    const adminExists = await firstAdminExists(env, db);
+    const adminExists = await firstAdminExists(db);
 
     if (adminExists) {
         const ip = c.req.header("cf-connecting-ip") || c.req.header("x-forwarded-for") || "unknown";
@@ -1896,7 +1891,7 @@ setupApp.openapi(setupRoute, async (c) => {
     try {
         setupClaim = await claimAdminSetup(db);
 
-        const currentAdminExists = await firstAdminExists(env, db);
+        const currentAdminExists = await firstAdminExists(db);
         if (currentAdminExists) {
             await markAdminSetupClaimCompleted(db, setupClaim, null);
             setupClaim = null;
@@ -1934,7 +1929,7 @@ setupApp.openapi(setupRoute, async (c) => {
                 throw error;
             }
 
-            const currentAdminExists = await firstAdminExists(env, db);
+            const currentAdminExists = await firstAdminExists(db);
             if (currentAdminExists) {
                 throw new ForbiddenError("An admin user already exists. Please use the login page.");
             }

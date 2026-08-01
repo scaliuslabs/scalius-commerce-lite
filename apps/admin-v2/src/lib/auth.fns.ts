@@ -6,9 +6,10 @@
 
 import { createServerFn } from "@tanstack/react-start";
 import { redirect } from "@tanstack/react-router";
+import { getDb, type Database } from "@scalius/database/client";
 import { getAdminSessionFromCookieHeader } from "./admin-session.server";
 
-type AdminDb = Pick<D1Database, "prepare">;
+type AdminDb = Pick<Database, "get">;
 
 const ADMIN_EXISTS_CACHE_TTL_MS = 5 * 60_000;
 
@@ -87,8 +88,9 @@ async function getCachedAdminExists(db: AdminDb): Promise<boolean> {
 export const getSessionInfo = createServerFn().handler(async () => {
   const { getRequestHeader } = await import("@tanstack/react-start/server");
   const env = await getWorkerEnv();
+  const db = getDb(env);
   const authResult = await getAdminSessionFromCookieHeader(
-    env.DB,
+    db,
     getRequestHeader("cookie"),
     env.BETTER_AUTH_SECRET,
   );
@@ -116,8 +118,9 @@ export const getSessionInfo = createServerFn().handler(async () => {
  */
 export const checkAdminExists = createServerFn().handler(async () => {
   const env = await getWorkerEnv();
+  const db = getDb(env);
   try {
-    return await getCachedAdminExists(env.DB);
+    return await getCachedAdminExists(db);
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "";
     if (msg.includes("no such table")) return false;
@@ -137,9 +140,10 @@ export const loginPageGuard = createServerFn().handler(async () => {
 
   // Check if any admin exists in the shared Better Auth D1 database.
   const env = await getWorkerEnv();
+  const db = getDb(env);
   let adminExists = true; // fail-closed: assume admin exists unless proven otherwise
   try {
-    adminExists = await getCachedAdminExists(env.DB);
+    adminExists = await getCachedAdminExists(db);
   } catch (e: unknown) {
     // "no such table" = fresh DB after reset → no admin
     // Any other DB error = fail-closed, show login (safe for production)
@@ -152,7 +156,7 @@ export const loginPageGuard = createServerFn().handler(async () => {
 
   // Check session
   const authResult = await getAdminSessionFromCookieHeader(
-    env.DB,
+    db,
     getRequestHeader("cookie"),
     env.BETTER_AUTH_SECRET,
   );
@@ -183,11 +187,12 @@ export const loginPageGuard = createServerFn().handler(async () => {
 export const adminRouteGuard = createServerFn().handler(async () => {
   const { getRequestHeader } = await import("@tanstack/react-start/server");
   const env = await getWorkerEnv();
+  const db = getDb(env);
 
   // Check if any admin exists in the shared Better Auth D1 database.
   let adminExists = true; // fail-closed
   try {
-    adminExists = await getCachedAdminExists(env.DB);
+    adminExists = await getCachedAdminExists(db);
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "";
     if (msg.includes("no such table")) adminExists = false;
@@ -198,7 +203,7 @@ export const adminRouteGuard = createServerFn().handler(async () => {
 
   // Check session
   const authResult = await getAdminSessionFromCookieHeader(
-    env.DB,
+    db,
     getRequestHeader("cookie"),
     env.BETTER_AUTH_SECRET,
   );
@@ -258,9 +263,10 @@ export const adminRouteGuard = createServerFn().handler(async () => {
 export const redirectIfAuthenticated = createServerFn().handler(async () => {
   const { getRequestHeader } = await import("@tanstack/react-start/server");
   const env = await getWorkerEnv();
+  const db = getDb(env);
 
   const authResult = await getAdminSessionFromCookieHeader(
-    env.DB,
+    db,
     getRequestHeader("cookie"),
     env.BETTER_AUTH_SECRET,
   );

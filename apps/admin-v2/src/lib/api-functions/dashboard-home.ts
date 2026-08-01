@@ -1,5 +1,5 @@
-import { createServerFn } from "@tanstack/react-start";
-import { apiGet } from "../api.server";
+import { createAdminApiFunction as createServerFn } from "../admin-api-function";
+import { apiGet } from "../api";
 
 export interface DashboardHomeStatsPayload {
   totalProducts: number;

@@ -332,6 +332,7 @@ function createReserveStockBatchDb(options: {
         from() {
           return {
             ...query,
+            ...("batchGuard" in projection ? { kind: "batchGuard" as const } : {}),
             innerJoin() {
               return query;
             },
@@ -404,6 +405,7 @@ describe("reserveStockBatch strict movement claims", () => {
     expect(result.success).toBe(true);
     expect(batchCalls).toHaveLength(1);
     expect(batchCalls[0]).toEqual([
+      expect.objectContaining({ kind: "batchGuard" }),
       expect.objectContaining({ kind: "insertMovement", table: inventoryMovements }),
       expect.objectContaining({ kind: "updateVariant", table: productVariants }),
     ]);

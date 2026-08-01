@@ -1,6 +1,6 @@
-import { createServerFn } from "@tanstack/react-start";
+import { createAdminApiFunction as createServerFn } from "../admin-api-function";
 import type { ProductFeedDiagnosticsReport } from "@scalius/core/modules/products";
-import { apiGet } from "../api.server";
+import { apiGet } from "../api";
 
 export type SeoFeedDiagnosticsResult = ProductFeedDiagnosticsReport;
 

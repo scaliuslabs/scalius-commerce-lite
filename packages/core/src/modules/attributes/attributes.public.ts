@@ -266,7 +266,7 @@ export async function getPublicAttributesForSearch(
     search: string,
     categoryId?: string,
 ): Promise<{ filters: PublicAttributeFilter[] }> {
-    const searchCondition = ftsMatch("products_fts", "products", search);
+    const searchCondition = ftsMatch(db, "products_fts", "products", search);
     if (!searchCondition) return { filters: [] };
 
     const productConditions: SQL[] = [

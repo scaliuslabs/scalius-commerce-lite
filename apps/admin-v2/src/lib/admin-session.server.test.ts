@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { SQL } from "drizzle-orm";
+import { SQLiteSyncDialect } from "drizzle-orm/sqlite-core";
 import {
   getAdminSessionFromCookieHeader,
   getAdminSessionTokenFromCookieHeader,
@@ -14,15 +16,11 @@ vi.mock("@scalius/core/utils/transient-d1", () => ({
 }));
 
 function createSessionDb(row: Record<string, unknown> | null) {
-  const first = vi.fn(async () => row);
-  const bind = vi.fn(() => ({ first }));
-  const prepare = vi.fn((_sql: string) => ({ bind }));
+  const get = vi.fn(async (_query: SQL) => row);
 
   return {
-    db: { prepare },
-    first,
-    bind,
-    prepare,
+    db: { get },
+    get,
   };
 }
 
@@ -91,13 +89,13 @@ describe("admin session direct D1 lookup", () => {
 
     await expect(
       getAdminSessionFromCookieHeader(
-        db.db as unknown as Pick<D1Database, "prepare">,
+        db.db,
         "theme=dark",
         TEST_SECRET,
       ),
     ).resolves.toBeNull();
 
-    expect(db.prepare).not.toHaveBeenCalled();
+    expect(db.get).not.toHaveBeenCalled();
     expect(mocks.retryTransientD1).not.toHaveBeenCalled();
   });
 
@@ -107,7 +105,7 @@ describe("admin session direct D1 lookup", () => {
 
     await expect(
       getAdminSessionFromCookieHeader(
-        db.db as unknown as Pick<D1Database, "prepare">,
+        db.db,
         "better-auth.session_token=session_token",
         TEST_SECRET,
       ),
@@ -115,13 +113,13 @@ describe("admin session direct D1 lookup", () => {
 
     await expect(
       getAdminSessionFromCookieHeader(
-        db.db as unknown as Pick<D1Database, "prepare">,
+        db.db,
         `better-auth.session_token=${signedCookie}tampered`,
         TEST_SECRET,
       ),
     ).resolves.toBeNull();
 
-    expect(db.prepare).not.toHaveBeenCalled();
+    expect(db.get).not.toHaveBeenCalled();
     expect(mocks.retryTransientD1).not.toHaveBeenCalled();
   });
 
@@ -143,7 +141,7 @@ describe("admin session direct D1 lookup", () => {
 
     await expect(
       getAdminSessionFromCookieHeader(
-        db.db as unknown as Pick<D1Database, "prepare">,
+        db.db,
         `better-auth.session_token=${signedCookie}`,
         TEST_SECRET,
       ),
@@ -165,11 +163,13 @@ describe("admin session direct D1 lookup", () => {
       },
     });
 
-    expect(db.bind).toHaveBeenCalledWith("session_token");
-    const sql = String(db.prepare.mock.calls[0]?.[0] ?? "");
-    expect(sql).toContain("s.expires_at > unixepoch()");
-    expect(sql).toContain("u.banned = 0");
-    expect(sql).toContain("u.must_change_password");
-    expect(sql).toContain("u.must_enroll_two_factor");
+    const query = new SQLiteSyncDialect().sqlToQuery(
+      db.get.mock.calls[0]?.[0] as SQL,
+    );
+    expect(query.params).toEqual(["session_token"]);
+    expect(query.sql).toContain("s.expires_at > unixepoch()");
+    expect(query.sql).toContain("u.banned = 0");
+    expect(query.sql).toContain("u.must_change_password");
+    expect(query.sql).toContain("u.must_enroll_two_factor");
   });
 });

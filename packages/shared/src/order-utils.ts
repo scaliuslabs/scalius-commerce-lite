@@ -1,9 +1,17 @@
+const ORDER_ID_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+export const ORDER_ID_LENGTH = 16;
+
 /**
- * Generates a readable order ID in the format A39K02 (6 characters, uppercase letters and numbers)
+ * Generate a readable 80-bit order identity. The Crockford alphabet avoids
+ * ambiguous I/L/O/U characters and its power-of-two size keeps byte mapping
+ * unbiased. Existing six-character order IDs remain valid; only new IDs use
+ * the collision-resistant format.
  */
 export function generateOrderId(): string {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-  const bytes = new Uint8Array(6);
+  const bytes = new Uint8Array(ORDER_ID_LENGTH);
   crypto.getRandomValues(bytes);
-  return Array.from(bytes, b => chars[b % chars.length]).join("");
+  return Array.from(
+    bytes,
+    (byte) => ORDER_ID_ALPHABET[byte & 31],
+  ).join("");
 }

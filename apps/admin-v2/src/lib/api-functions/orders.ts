@@ -1,4 +1,4 @@
-import { createServerFn } from "@tanstack/react-start";
+import { createAdminApiFunction as createServerFn } from "../admin-api-function";
 import type {
   DeleteApiV1AdminOrdersByIdShipmentsByShipmentIdResponse,
   GetApiV1AdminOrdersByIdCodResponse,
@@ -39,7 +39,7 @@ import type {
   PostApiV1AdminOrdersBulkShipData,
   PostApiV1AdminOrdersBulkShipResponse,
 } from "@scalius/api-client/types";
-import { apiDelete, apiGet, apiPost, apiPut } from "../api.server";
+import { apiDelete, apiGet, apiPost, apiPut } from "../api";
 import type {
   PaginationPayload,
   ProductListItemDto,

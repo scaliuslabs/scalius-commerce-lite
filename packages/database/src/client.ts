@@ -1,58 +1,61 @@
-// packages/database/src/client.ts
-// Cloudflare D1 database adapter – replaces libSQL/Turso
-
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "./schema";
+import {
+  resolveDatabaseConfiguration,
+  type DatabaseEnvironment,
+  type DatabaseProvider,
+} from "./provider";
+import { createTursoDatabase } from "./turso-adapter";
 import type { Database } from "./types";
 
-export type { Database } from "./types";
+const providerByDatabase = new WeakMap<object, DatabaseProvider>();
 
-// Module-level singleton – set once per isolate on the first request.
-// D1 bindings are stable handles to the same underlying database across
-// requests, so sharing a single Drizzle instance is safe and free
-// (unlike Turso, D1 has no per-connection TLS handshake cost).
-let _db: Database | null = null;
+export type { Database } from "./types";
+export type {
+  DatabaseConfiguration,
+  DatabaseEnvironment,
+  DatabaseProvider,
+} from "./provider";
+export {
+  getDatabaseProviderCapabilities,
+  resolveDatabaseConfiguration,
+} from "./provider";
+export { createTursoDatabase, isTursoConflictError } from "./turso-adapter";
 
 /**
- * Initialise (or return the cached) Drizzle database instance.
+ * Compose a database client for the current request or Worker event.
  *
- * @param env - Cloudflare Workers env object containing `env.DB: D1Database`
+ * D1 remains the default. Installing both Turso secrets selects the Turso
+ * adapter unless DATABASE_PROVIDER explicitly pins D1 for rollback.
  */
-export function getDb(env?: { DB?: D1Database } & Record<string, unknown>): Database {
-  if (_db) return _db;
+export function getDb(env?: DatabaseEnvironment): Database {
+  const config = resolveDatabaseConfiguration(env);
 
-  const d1 = env?.DB as D1Database | undefined;
-  if (!d1) {
-    throw new Error(
-      "D1 database binding (env.DB) is not available. " +
-        "Make sure the DB binding is configured in wrangler.jsonc and " +
-        "the Astro middleware has initialised the database context.",
-    );
+  if (config.provider === "turso") {
+    const database = createTursoDatabase({
+      url: config.url,
+      authToken: config.authToken,
+    });
+    providerByDatabase.set(database as object, "turso");
+    return database;
   }
 
-  _db = drizzle(d1, { schema });
-  return _db;
+  // Drizzle construction is local and cheap. Avoiding mutable isolate-global
+  // state prevents one binding/provider from leaking into another request.
+  const database = drizzle(config.binding, { schema });
+  providerByDatabase.set(database as object, "d1");
+  return database;
 }
 
 /**
- * Legacy proxy export – resolves to the module-level Drizzle instance.
- *
- * Existing Astro pages / API routes / lib files that do
- *   `import { db } from "@/db"`
- * continue to work without modification, provided the Astro middleware
- * (src/middleware.ts) calls `getDb(env)` before any page handler runs.
+ * Read immutable provider metadata for a composed database client. Unregistered
+ * test doubles retain the D1/FTS5 behavior used by existing unit tests.
  */
-export const db = new Proxy({} as Database, {
-  get(_target, prop) {
-    if (!_db) {
-      throw new Error(
-        "Database accessed before initialisation. " +
-          "Ensure the Astro middleware has run getDb(env) for this request.",
-      );
-    }
-    return _db[prop as keyof Database];
-  },
-});
+export function getDatabaseProviderForClient(
+  database: Database,
+): DatabaseProvider {
+  return providerByDatabase.get(database as object) ?? "d1";
+}
 
 export { schema };
 export { buildBatchGuard, safeBatch } from "./batch-helper";

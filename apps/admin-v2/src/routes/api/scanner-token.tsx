@@ -20,6 +20,9 @@ import {
 
 interface CloudflareEnv {
   DB?: D1Database;
+  DATABASE_PROVIDER?: "d1" | "turso";
+  TURSO_DATABASE_URL?: string;
+  TURSO_AUTH_TOKEN?: string;
   CACHE?: Pick<KVNamespace, "get" | "put" | "delete">;
 }
 
@@ -140,8 +143,11 @@ function getScannerDb(
   env: CloudflareEnv,
   getDbOverride?: (env: CloudflareEnv) => Database,
 ): Database | null {
-  if (!env.DB) return null;
-  return getDbOverride ? getDbOverride(env) : getDb(env as Env);
+  try {
+    return getDbOverride ? getDbOverride(env) : getDb(env as Env);
+  } catch {
+    return null;
+  }
 }
 
 export async function handleCreateScannerToken(

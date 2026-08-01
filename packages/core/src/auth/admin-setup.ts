@@ -3,7 +3,7 @@ import { adminSetupClaims, adminSetupRateLimits, user } from "@scalius/database/
 import { and, eq, gt, isNull, lt, lte, or, sql } from "drizzle-orm";
 import { ConflictError, ForbiddenError, RateLimitError } from "../errors";
 
-export type AdminPrincipalExistsDb = Pick<D1Database, "prepare">;
+export type AdminPrincipalExistsDb = Pick<Database, "get">;
 
 export interface ClaimedAdminSetup {
   singletonKey: typeof ADMIN_SETUP_SINGLETON_KEY;
@@ -53,9 +53,7 @@ function adminPrincipalExistsSql() {
 }
 
 export async function adminPrincipalExists(db: AdminPrincipalExistsDb): Promise<boolean> {
-  const row = await db
-    .prepare(ADMIN_PRINCIPAL_EXISTS_QUERY)
-    .first<{ found: number }>();
+  const row = await db.get<{ found: number }>(sql.raw(ADMIN_PRINCIPAL_EXISTS_QUERY));
 
   return row != null;
 }

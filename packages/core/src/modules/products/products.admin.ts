@@ -17,8 +17,12 @@ import {
     productOptionValues,
     productVariantOptionValues,
 } from "@scalius/database/schema";
-import { and, sql, desc, eq, asc, inArray, isNull } from "drizzle-orm";
-import { sanitizeFtsQuery } from "../../search/fts5";
+import { and, sql, desc, eq, asc, inArray, isNull, or } from "drizzle-orm";
+import {
+    ftsMatch,
+    isFts5SearchEnabled,
+    sanitizeFtsQuery,
+} from "../../search/fts5";
 import type { CreateProductInput, UpdateProductInput } from "./products.validation";
 import { nanoid } from "nanoid";
 import { AppError, NotFoundError, ConflictError, ValidationError } from "@scalius/core/errors";
@@ -433,16 +437,37 @@ export async function listProducts(db: Database, options: {
 
         const sanitized = sanitizeFtsQuery(search);
         if (sanitized) {
-            const ftsCondition = sql`(${sql.raw("products")}.rowid IN (SELECT rowid FROM products_fts WHERE products_fts MATCH ${sanitized}) OR EXISTS (SELECT 1 FROM ${productVariants} WHERE ${productVariants.productId} = ${products.id} AND ${productVariants.deletedAt} IS NULL AND ${sql.raw("product_variants")}.rowid IN (SELECT rowid FROM product_variants_fts WHERE product_variants_fts MATCH ${sanitized})))`;
+            const productSearch = ftsMatch(
+                db,
+                "products_fts",
+                "products",
+                search,
+            );
+            const variantSearch = ftsMatch(
+                db,
+                "product_variants_fts",
+                "product_variants",
+                search,
+            );
+            const ftsCondition = or(
+                productSearch,
+                variantSearch
+                    ? sql`EXISTS (SELECT 1 FROM ${productVariants} WHERE ${productVariants.productId} = ${products.id} AND ${productVariants.deletedAt} IS NULL AND ${variantSearch})`
+                    : undefined,
+            );
 
             if (barcodeKey) {
                 // Also match by exact barcode value
                 const barcodeCondition = sql`EXISTS (SELECT 1 FROM ${productVariants} WHERE ${productVariants.productId} = ${products.id} AND ${productVariantBarcodeIdentityEquals(barcodeKey)} AND ${productVariants.deletedAt} IS NULL)`;
-                whereConditions.push(sql`(${ftsCondition} OR ${barcodeCondition})`);
-            } else {
+                whereConditions.push(ftsCondition
+                    ? sql`(${ftsCondition} OR ${barcodeCondition})`
+                    : barcodeCondition);
+            } else if (ftsCondition) {
                 whereConditions.push(ftsCondition);
             }
-            rankExpression = sql`COALESCE((SELECT rank FROM products_fts WHERE rowid = products.rowid AND products_fts MATCH ${sanitized}), 0) ASC`;
+            if (isFts5SearchEnabled(db)) {
+                rankExpression = sql`COALESCE((SELECT rank FROM products_fts WHERE rowid = products.rowid AND products_fts MATCH ${sanitized}), 0) ASC`;
+            }
         } else if (barcodeKey) {
             // FTS sanitized to nothing but it's a barcode — search by barcode only
             const barcodeCondition = sql`EXISTS (SELECT 1 FROM ${productVariants} WHERE ${productVariants.productId} = ${products.id} AND ${productVariantBarcodeIdentityEquals(barcodeKey)} AND ${productVariants.deletedAt} IS NULL)`;

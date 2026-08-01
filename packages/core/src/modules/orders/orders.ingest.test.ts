@@ -5,8 +5,11 @@ import type { StorefrontOrderCommitPayload } from "./orders.types";
 
 const mocks = vi.hoisted(() => ({
   safeBatch: vi.fn(),
-  reserveStockBatch: vi.fn(),
-  releaseReservedStockBatch: vi.fn(),
+  prepareStockReservationBatch: vi.fn(),
+  isInventoryReservationConflictError: vi.fn(() => false),
+  prepareCheckoutAttemptCommit: vi.fn(),
+  isCheckoutAttemptClaimCurrent: vi.fn(async () => true),
+  isCheckoutAttemptCommitConflictError: vi.fn(() => false),
   verifyPromotionCheckoutSnapshot: vi.fn(),
 }));
 
@@ -16,13 +19,20 @@ vi.mock("@scalius/database/client", async (importOriginal) => ({
 }));
 
 vi.mock("../inventory", () => ({
-  reserveStockBatch: mocks.reserveStockBatch,
-  releaseReservedStockBatch: mocks.releaseReservedStockBatch,
+  prepareStockReservationBatch: mocks.prepareStockReservationBatch,
+  isInventoryReservationConflictError: mocks.isInventoryReservationConflictError,
 }));
 
 vi.mock("../promotions", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../promotions")>()),
   verifyPromotionCheckoutSnapshot: mocks.verifyPromotionCheckoutSnapshot,
+}));
+
+vi.mock("./checkout-attempts", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./checkout-attempts")>()),
+  prepareCheckoutAttemptCommit: mocks.prepareCheckoutAttemptCommit,
+  isCheckoutAttemptClaimCurrent: mocks.isCheckoutAttemptClaimCurrent,
+  isCheckoutAttemptCommitConflictError: mocks.isCheckoutAttemptCommitConflictError,
 }));
 
 import { commitStorefrontOrderPayload } from "./orders.ingest";
@@ -204,12 +214,27 @@ function createDbMock(options: {
 describe("commitStorefrontOrderPayload discount trigger failures", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.reserveStockBatch.mockResolvedValue({ success: true, results: [] });
-    mocks.releaseReservedStockBatch.mockResolvedValue({ success: true, results: [] });
+    mocks.prepareStockReservationBatch.mockImplementation(async (_db, items: unknown[]) => ({
+      success: true,
+      results: [],
+      statements: items.length > 0 ? [{ kind: "inventory-guard-and-write" }] : [],
+      availabilityChangedSubjects: [],
+      resolveIdempotentReplay: vi.fn(async () => null),
+    }));
+    mocks.isInventoryReservationConflictError.mockReturnValue(false);
+    mocks.prepareCheckoutAttemptCommit.mockResolvedValue({
+      guard: { kind: "checkout-attempt-guard" },
+      writes: [
+        { kind: "checkout-attempt-commit" },
+        { kind: "checkout-receipt" },
+      ],
+    });
+    mocks.isCheckoutAttemptClaimCurrent.mockResolvedValue(true);
+    mocks.isCheckoutAttemptCommitConflictError.mockReturnValue(false);
     mocks.verifyPromotionCheckoutSnapshot.mockReset();
   });
 
-  it("maps max-uses trigger aborts to a checkout validation error and releases reserved stock", async () => {
+  it("maps max-uses trigger aborts while the atomic batch rolls inventory back", async () => {
     const db = createDbMock();
     mocks.safeBatch.mockRejectedValue(new Error("D1_ERROR: DISCOUNT_MAX_USES_EXCEEDED"));
 
@@ -219,12 +244,7 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
       name: "ValidationError",
       message: "Discount code has reached its usage limit",
     });
-    expect(mocks.releaseReservedStockBatch).toHaveBeenCalledWith(
-      db,
-      [{ variantId: "variant_1", quantity: 2, pool: "regular", orderId: "order_discount" }],
-      "order_discount",
-      { releaseKey: "checkout-rollback:v1" },
-    );
+    expect(mocks.safeBatch).toHaveBeenCalledOnce();
   });
 
   it("creates a CRM profile for true guest checkout without granting account ownership", async () => {
@@ -246,7 +266,7 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
     expect(result.customerId).toMatch(/^cust_/);
     expect(result.accountOwnerCustomerId).toBeNull();
     expect(db.update).not.toHaveBeenCalled();
-    expect(mocks.reserveStockBatch).not.toHaveBeenCalled();
+    expect(mocks.prepareStockReservationBatch).toHaveBeenCalledOnce();
     expect(mocks.safeBatch).toHaveBeenCalledOnce();
     expect(db.insertValues).toContainEqual(expect.objectContaining({
       phone: "+8801712345678",
@@ -303,7 +323,7 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
     expect(mocks.safeBatch).toHaveBeenCalledOnce();
   });
 
-  it("releases stock and retries one guest phone race without double CRM writes", async () => {
+  it("retries one guest phone race after the failed atomic batch without compensation", async () => {
     const db = createDbMock({
       customerReads: [
         undefined,
@@ -324,8 +344,7 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
       accountOwnerCustomerId: null,
       alreadyCommitted: false,
     });
-    expect(mocks.reserveStockBatch).toHaveBeenCalledTimes(2);
-    expect(mocks.releaseReservedStockBatch).toHaveBeenCalledOnce();
+    expect(mocks.prepareStockReservationBatch).toHaveBeenCalledTimes(2);
     expect(mocks.safeBatch).toHaveBeenCalledTimes(2);
   });
 
@@ -367,7 +386,7 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
         message: "Customer account is no longer active. Please sign in again.",
       });
 
-    expect(mocks.reserveStockBatch).not.toHaveBeenCalled();
+    expect(mocks.prepareStockReservationBatch).not.toHaveBeenCalled();
     expect(mocks.safeBatch).not.toHaveBeenCalled();
   });
 
@@ -382,7 +401,7 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
         message: "Discount already used by this customer",
       });
 
-    expect(mocks.releaseReservedStockBatch).toHaveBeenCalledOnce();
+    expect(mocks.safeBatch).toHaveBeenCalledOnce();
   });
 
   it("commits one typed redemption and immutable line allocation in the order batch", async () => {
@@ -457,7 +476,7 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
     ]);
   });
 
-  it("maps concurrent typed budget exhaustion and releases reserved inventory", async () => {
+  it("maps concurrent typed budget exhaustion from the all-or-nothing batch", async () => {
     const db = createDbMock();
     const payload = createPayload({
       discountUsage: null,
@@ -492,7 +511,7 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
     await expect(commitStorefrontOrderPayload(db, payload)).rejects.toThrow(
       "campaign budget is no longer available",
     );
-    expect(mocks.releaseReservedStockBatch).toHaveBeenCalledOnce();
+    expect(mocks.safeBatch).toHaveBeenCalledOnce();
   });
 
   it("returns the committed order on a checkout retry without re-claiming the promotion", async () => {
@@ -513,9 +532,10 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
       customerId: "cust_existing",
       accountOwnerCustomerId: "cust_existing",
       alreadyCommitted: true,
+      availabilityChangedSubjects: [],
     });
     expect(mocks.verifyPromotionCheckoutSnapshot).not.toHaveBeenCalled();
-    expect(mocks.reserveStockBatch).not.toHaveBeenCalled();
+    expect(mocks.prepareStockReservationBatch).not.toHaveBeenCalled();
     expect(mocks.safeBatch).not.toHaveBeenCalled();
   });
 
@@ -526,10 +546,10 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
     await expect(commitStorefrontOrderPayload(db, createPayload()))
       .rejects.toThrow("A valid phone number is required to use this discount");
 
-    expect(mocks.releaseReservedStockBatch).toHaveBeenCalledOnce();
+    expect(mocks.safeBatch).toHaveBeenCalledOnce();
   });
 
-  it("preserves unrelated commit errors after releasing reserved stock", async () => {
+  it("preserves unrelated atomic commit errors", async () => {
     const db = createDbMock();
     const rawError = new Error("D1 batch unavailable");
     mocks.safeBatch.mockRejectedValue(rawError);
@@ -537,39 +557,72 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
     await expect(commitStorefrontOrderPayload(db, createPayload()))
       .rejects.toBe(rawError);
 
-    expect(mocks.releaseReservedStockBatch).toHaveBeenCalledOnce();
+    expect(mocks.safeBatch).toHaveBeenCalledOnce();
   });
 
-  it("fails closed when reserved stock cleanup cannot be proven after a commit error", async () => {
+  it("composes inventory and order writes into one batch with no cleanup batch", async () => {
     const db = createDbMock();
-    mocks.safeBatch.mockRejectedValue(new Error("D1 batch unavailable"));
-    mocks.releaseReservedStockBatch.mockResolvedValue({
-      success: false,
-      results: [
-        {
-          success: false,
-          variantId: "variant_1",
-          previousStock: 0,
-          newStock: 0,
-          error: "Reservation release batch failed",
-        },
-      ],
-      error: "Reservation release batch failed",
-      manualReconciliationRequired: true,
+    const inventoryStatement = { kind: "inventory-guard-ledger-and-cas" };
+    mocks.prepareStockReservationBatch.mockResolvedValue({
+      success: true,
+      results: [],
+      statements: [inventoryStatement],
+      availabilityChangedSubjects: [],
+      resolveIdempotentReplay: vi.fn(async () => null),
+    });
+    mocks.safeBatch.mockResolvedValue([]);
+
+    await commitStorefrontOrderPayload(db, createPayload());
+
+    expect(mocks.safeBatch).toHaveBeenCalledOnce();
+    const statements = mocks.safeBatch.mock.calls[0]?.[1] as unknown[];
+    expect(statements[0]).toBe(inventoryStatement);
+    expect(statements.length).toBeGreaterThan(1);
+  });
+
+  it("atomically commits the checkout claim, inventory, order, outbox, and receipt", async () => {
+    const db = createDbMock();
+    const inventoryStatement = { kind: "inventory-guard-ledger-and-cas" };
+    const attemptGuard = { kind: "checkout-attempt-guard" };
+    const attemptWrite = { kind: "checkout-attempt-commit" };
+    const receiptWrite = { kind: "checkout-receipt" };
+    mocks.prepareStockReservationBatch.mockResolvedValue({
+      success: true,
+      results: [],
+      statements: [inventoryStatement],
+      availabilityChangedSubjects: [],
+      resolveIdempotentReplay: vi.fn(async () => null),
+    });
+    mocks.prepareCheckoutAttemptCommit.mockResolvedValue({
+      guard: attemptGuard,
+      writes: [attemptWrite, receiptWrite],
+    });
+    mocks.safeBatch.mockResolvedValue([]);
+
+    await commitStorefrontOrderPayload(db, createPayload(), {
+      attempt: {
+        id: "attempt_1",
+        requestKey: "checkout_submit:v1:key",
+        requestHash: "request_hash",
+        claimId: "claim_1",
+        orderId: "order_discount",
+        checkoutToken: "chk_order_discount",
+        statusToken: "cst_status",
+      },
+      response: { orderId: "order_discount", message: "Order created" },
     });
 
-    await expect(commitStorefrontOrderPayload(db, createPayload()))
-      .rejects.toMatchObject({
-        name: "ServiceUnavailableError",
-        message: "Checkout inventory cleanup is temporarily unavailable. Please try again.",
-      });
-
-    expect(mocks.releaseReservedStockBatch).toHaveBeenCalledOnce();
+    expect(mocks.safeBatch).toHaveBeenCalledOnce();
+    const statements = mocks.safeBatch.mock.calls[0]?.[1] as unknown[];
+    expect(statements[0]).toBe(attemptGuard);
+    expect(statements[1]).toBe(inventoryStatement);
+    expect(statements.at(-2)).toBe(attemptWrite);
+    expect(statements.at(-1)).toBe(receiptWrite);
   });
 
   it("maps reservation failures to structured cart item issues", async () => {
     const db = createDbMock();
-    mocks.reserveStockBatch.mockResolvedValue({
+    mocks.prepareStockReservationBatch.mockResolvedValue({
       success: false,
       error: "Insufficient stock for variant variant_1. Available: 0, Requested: 2",
       results: [
@@ -581,6 +634,9 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
           error: "Insufficient stock for variant variant_1. Available: 0, Requested: 2",
         },
       ],
+      statements: [],
+      availabilityChangedSubjects: [],
+      resolveIdempotentReplay: vi.fn(async () => null),
     });
 
     const result = commitStorefrontOrderPayload(db, createPayload());

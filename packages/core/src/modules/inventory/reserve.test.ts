@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Database } from "@scalius/database/client";
-import { reserveStockBatch } from "./reserve";
+import { SQLiteSyncDialect } from "drizzle-orm/sqlite-core";
+import type { SQL } from "drizzle-orm";
+import { prepareStockReservationBatch, reserveStockBatch } from "./reserve";
 
 function createReservationReadDb(rows: unknown[]): Database {
   return {
@@ -16,6 +18,48 @@ function createReservationReadDb(rows: unknown[]): Database {
     update: vi.fn(),
     insert: vi.fn(),
   } as unknown as Database;
+}
+
+function createTrackedReservationPlanDb(row: Record<string, unknown>): {
+  db: Database;
+  guardExpressions: SQL[];
+} {
+  const guardExpressions: SQL[] = [];
+  const db = {
+    select: vi.fn((projection: Record<string, unknown>) => ({
+      from: vi.fn(() => {
+        if ("batchGuard" in projection) {
+          guardExpressions.push(projection.batchGuard as SQL);
+          return { kind: "guard" };
+        }
+        if ("ledgerVersion" in projection) {
+          return { where: vi.fn(() => ({ all: vi.fn(async () => []) })) };
+        }
+        if ("count" in projection) {
+          return { where: vi.fn(() => ({ get: vi.fn(async () => ({ count: 0 })) })) };
+        }
+        return {
+          innerJoin: vi.fn(() => ({
+            where: vi.fn(() => ({ all: vi.fn(async () => [row]) })),
+          })),
+        };
+      }),
+    })),
+    insert: vi.fn(() => ({
+      select: vi.fn(() => ({
+        returning: vi.fn(() => ({ kind: "movement" })),
+      })),
+    })),
+    update: vi.fn(() => ({
+      set: vi.fn(() => ({
+        where: vi.fn(() => ({
+          returning: vi.fn(() => ({ kind: "counter-update" })),
+        })),
+      })),
+    })),
+  } as unknown as Database;
+
+  return { db, guardExpressions };
 }
 
 describe("reserveStockBatch sellability guard", () => {
@@ -105,5 +149,47 @@ describe("reserveStockBatch sellability guard", () => {
     expect(db.select).toHaveBeenCalledTimes(1);
     expect(db.update).not.toHaveBeenCalled();
     expect(db.insert).not.toHaveBeenCalled();
+  });
+
+  it("prepares a guarded ledger edge and CAS update without executing writes", async () => {
+    const { db, guardExpressions } = createTrackedReservationPlanDb({
+      id: "variant_a",
+      productId: "product_a",
+      slug: "product-a",
+      categoryId: "category_a",
+      stock: 3,
+      reservedStock: 1,
+      preorderStock: 0,
+      allowPreorder: false,
+      allowBackorder: false,
+      backorderLimit: 0,
+      trackInventory: true,
+      stockVersion: 7,
+    });
+
+    const plan = await prepareStockReservationBatch(
+      db,
+      [{ variantId: "variant_a", quantity: 2, orderId: "order_1" }],
+      "regular",
+      { reservationKey: "checkout-test" },
+    );
+
+    expect(plan.success).toBe(true);
+    expect(plan.statements).toHaveLength(3);
+    expect(guardExpressions).toHaveLength(1);
+    const guard = new SQLiteSyncDialect().sqlToQuery(guardExpressions[0]!);
+    expect(guard.sql).toContain('"products"."id" = "product_variants"."product_id"');
+    expect(guard.sql).toContain('"product_variants"."id" = ?');
+    expect(guard.sql).toContain('"product_variants"."stock_version"');
+    expect(guard.sql).toContain('"product_variants"."stock" - "product_variants"."reserved_stock" >= ?');
+    expect(guard.params).toContain(7);
+    expect(guard.params).toContain(2);
+    expect(guard.params).toContain("INVENTORY_RESERVATION_CONFLICT");
+    expect(plan.availabilityChangedSubjects).toEqual([{
+      productId: "product_a",
+      slug: "product-a",
+      categoryId: "category_a",
+    }]);
+    expect((db as unknown as { batch?: unknown }).batch).toBeUndefined();
   });
 });

@@ -1,6 +1,6 @@
-import { createServerFn } from "@tanstack/react-start";
+import { createAdminApiFunction as createServerFn } from "../admin-api-function";
 import type { HomepagePresentationConfig } from "@scalius/shared/homepage-presentation";
-import { apiGet, apiPost } from "../api.server";
+import { apiGet, apiPost } from "../api";
 
 export interface HomepagePresentationDocument {
   config: HomepagePresentationConfig;

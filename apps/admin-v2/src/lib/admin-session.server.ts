@@ -1,4 +1,8 @@
-type AdminDb = Pick<D1Database, "prepare">;
+import { sql, type SQL } from "drizzle-orm";
+
+type AdminDb = {
+  get(query: SQL): Promise<unknown>;
+};
 
 const SESSION_COOKIE_NAMES = [
   "better-auth.session_token",
@@ -138,9 +142,7 @@ export async function getAdminSessionFromCookieHeader(
 
   const { retryTransientD1 } = await import("@scalius/core/utils/transient-d1");
   const row = await retryTransientD1(() =>
-    db
-      .prepare(
-        `SELECT
+    db.get(sql`SELECT
           s.id as sessionId,
           s.user_id as userId,
           s.two_factor_verified as twoFactorVerified,
@@ -154,18 +156,15 @@ export async function getAdminSessionFromCookieHeader(
           u.is_super_admin as isSuperAdmin
         FROM session s
         INNER JOIN user u ON u.id = s.user_id
-        WHERE s.token = ?
+        WHERE s.token = ${token}
           AND s.expires_at > unixepoch()
           AND (
             u.banned = 0
             OR u.banned IS NULL
             OR (u.ban_expires IS NOT NULL AND u.ban_expires <= unixepoch())
           )
-        LIMIT 1`,
-      )
-      .bind(token)
-      .first<AdminSessionRow>(),
-  );
+        LIMIT 1`),
+  ) as AdminSessionRow | undefined;
 
   if (!row) return null;
 

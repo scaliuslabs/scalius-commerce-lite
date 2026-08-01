@@ -1,6 +1,6 @@
-import { createServerFn } from "@tanstack/react-start";
+import { createAdminApiFunction as createServerFn } from "../admin-api-function";
 import type { AbandonedCheckout } from "~/types/api-responses";
-import { apiDelete, apiGet } from "../api.server";
+import { apiDelete, apiGet } from "../api";
 
 export interface AbandonedCheckoutsQueryInput {
   [key: string]: string | number | undefined;

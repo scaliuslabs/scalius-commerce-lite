@@ -227,7 +227,7 @@ export async function listCategories(
     }
 
     if (search) {
-        const cond = ftsMatch("categories_fts", "categories", search);
+        const cond = ftsMatch(db, "categories_fts", "categories", search);
         if (cond) whereConditions.push(cond);
     }
     if (status) whereConditions.push(eq(categories.status, status));

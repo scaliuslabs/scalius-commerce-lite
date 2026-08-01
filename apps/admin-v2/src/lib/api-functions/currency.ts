@@ -1,6 +1,6 @@
-import { createServerFn } from "@tanstack/react-start";
+import { createAdminApiFunction as createServerFn } from "../admin-api-function";
 import { normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
-import { apiGet, apiPost } from "../api.server";
+import { apiGet, apiPost } from "../api";
 
 export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };

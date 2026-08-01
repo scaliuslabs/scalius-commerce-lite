@@ -36,7 +36,6 @@ import {
   commitStorefrontOrderPayload,
   createStorefrontOrder,
   getCheckoutAttemptRequestKeyFromStatusToken,
-  markCheckoutAttemptCommitted,
   markCheckoutAttemptFailed,
   resolveExistingCheckoutAttempt,
   runStorefrontOrderPostCommitSideEffects,
@@ -58,7 +57,8 @@ import {
 import { CUSTOMER_AUTH_OTP_CHANNELS } from "@scalius/shared/customer-auth-policy";
 import {
   getOptionalExecutionContext,
-  invalidateProductAvailabilityCaches,
+  invalidateProductAvailabilityCacheSubjects,
+  type ProductAvailabilityCacheSubject,
   type WaitUntilExecutionContext,
 } from "../utils/cache-invalidation";
 import { AppError, NotFoundError, ValidationError, RateLimitError, UnauthorizedError, ServiceUnavailableError } from "../utils/api-error";
@@ -103,18 +103,19 @@ type CheckoutOrderPolicyResult = {
 async function invalidateStorefrontOrderAvailabilityCaches(
   db: Database,
   env: Env,
-  orderId: string,
+  subjects: readonly ProductAvailabilityCacheSubject[],
   executionCtx: WaitUntilExecutionContext | undefined,
 ): Promise<void> {
+  if (subjects.length === 0) return;
   try {
-    await invalidateProductAvailabilityCaches(
-      db,
-      { orderIds: [orderId] },
+    await invalidateProductAvailabilityCacheSubjects(
+      subjects,
       { env, executionCtx },
+      db,
     );
   } catch (error) {
     console.error("[Orders] Failed to invalidate product availability caches after order commit:", {
-      orderId,
+      productCount: subjects.length,
       error,
     });
   }
@@ -1772,22 +1773,6 @@ app.openapi(createOrderRoute, async (c) => {
 
     const executionCtx = getOptionalExecutionContext(c);
 
-    try {
-      await commitStorefrontOrderPayload(db, result.commitPayload);
-      orderCommitted = true;
-    } catch (commitError) {
-      scheduleCheckoutFailureStatusHint(
-        c.env,
-        checkoutAttempt.statusToken,
-        result.orderId,
-        commitError instanceof ValidationError
-          ? commitError.message
-          : "Order creation failed. Please try again.",
-        executionCtx,
-      );
-      throw commitError;
-    }
-
     const responsePayload = {
       checkoutToken: result.checkoutToken,
       receiptToken: result.checkoutToken,
@@ -1805,19 +1790,24 @@ app.openapi(createOrderRoute, async (c) => {
       message: "Order created",
     };
 
+    let commitResult;
     try {
-      await markCheckoutAttemptCommitted(db, checkoutAttempt, {
-        paymentMethod: result.paymentMethod,
-        totalAmount: result.totalAmount,
+      commitResult = await commitStorefrontOrderPayload(db, result.commitPayload, {
+        attempt: checkoutAttempt,
         response: responsePayload,
       });
-    } catch (markError) {
-      const checkoutStatusKey = await getCheckoutStatusKvKey(checkoutAttempt.statusToken);
-      console.error("[Orders] Failed to mark checkout attempt committed after order commit:", {
-        orderId: result.orderId,
-        checkoutStatusKeyPrefix: checkoutStatusKey.slice(0, 28),
-        error: markError,
-      });
+      orderCommitted = true;
+    } catch (commitError) {
+      scheduleCheckoutFailureStatusHint(
+        c.env,
+        checkoutAttempt.statusToken,
+        result.orderId,
+        commitError instanceof ValidationError
+          ? commitError.message
+          : "Order creation failed. Please try again.",
+        executionCtx,
+      );
+      throw commitError;
     }
 
     scheduleCheckoutSuccessRecoveryHints(
@@ -1830,7 +1820,12 @@ app.openapi(createOrderRoute, async (c) => {
 
     const sideEffects = Promise.all([
       runStorefrontOrderPostCommitSideEffects(db, c.env, result.commitPayload),
-      invalidateStorefrontOrderAvailabilityCaches(db, c.env, result.orderId, executionCtx),
+      invalidateStorefrontOrderAvailabilityCaches(
+        db,
+        c.env,
+        commitResult.availabilityChangedSubjects,
+        executionCtx,
+      ),
     ]).then(() => undefined);
     if (executionCtx && typeof executionCtx.waitUntil === "function") {
       executionCtx.waitUntil(sideEffects);

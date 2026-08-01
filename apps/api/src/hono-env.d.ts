@@ -43,7 +43,7 @@ declare global {
   // Secrets are set in the Cloudflare dashboard (or via wrangler secret put).
   type Env = {
     // Service / resource bindings
-    DB: D1Database;
+    DB?: D1Database;
     CACHE: KVNamespace;
     BUCKET: R2Bucket;
     SHARED_AUTH_CACHE: KVNamespace;
@@ -62,6 +62,9 @@ declare global {
     JWT_SECRET?: string;
     FIREBASE_SERVICE_ACCOUNT_CRED_JSON?: string;
     CREDENTIAL_ENCRYPTION_KEY?: string;
+    DATABASE_PROVIDER?: "d1" | "turso";
+    TURSO_DATABASE_URL?: string;
+    TURSO_AUTH_TOKEN?: string;
 
     // Variables (set in wrangler.jsonc [vars] or dashboard)
     BETTER_AUTH_URL?: string;

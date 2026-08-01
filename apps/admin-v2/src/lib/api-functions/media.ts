@@ -1,5 +1,5 @@
-import { createServerFn } from "@tanstack/react-start";
-import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from "../api.server";
+import { createAdminApiFunction as createServerFn } from "../admin-api-function";
+import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from "../api";
 
 export type MediaTimestamp = string | number;
 export type MediaKindDto = "image" | "video";
