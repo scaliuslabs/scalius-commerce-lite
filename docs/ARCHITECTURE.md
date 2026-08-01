@@ -49,16 +49,17 @@ does not certify a clean tree by itself.
 ## Database Provider Boundary
 
 D1 remains the zero-configuration starter database. Turso is the supported
-concurrent-writer scale tier. Routes and domain services receive the same
-`@scalius/database` surface; provider selection, transport adaptation,
-capability fallbacks, atomic batches, and conflict retry stay inside the
-database/core boundaries. Do not add provider branches throughout domain code.
+concurrent-writer SQLite tier, but selecting it is not by itself a throughput
+guarantee. Routes and domain services receive the same `@scalius/database`
+surface; provider selection, transport adaptation, capability fallbacks,
+atomic batches, and conflict retry stay inside the database/core boundaries.
+Do not add provider branches throughout domain code.
 
 Provisioning and migration belong to the external control plane, not Worker
-request paths. A provider switch is valid only after a write freeze, two settled
-matching source snapshots, canonical normalization, atomic target import,
-foreign-key/integrity checks, and exact logical schema/data fingerprints. See
-[Database portability and cutover](DATABASE-PORTABILITY.md).
+request paths. A provider switch is valid only after a write freeze, one
+bookmark-bound canonical source export, canonical normalization, native target
+import, foreign-key/integrity checks, and exact logical schema/data
+fingerprints. See [Database portability and cutover](DATABASE-PORTABILITY.md).
 
 ---
 

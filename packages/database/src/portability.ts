@@ -628,6 +628,9 @@ export function verifySqlitePortabilityManifests(
   if (source.schemaDigest !== target.schemaDigest) {
     issues.push("SQLite schema digest differs.");
   }
+  if (source.fingerprint !== target.fingerprint) {
+    issues.push("SQLite database fingerprint differs.");
+  }
 
   const sourceTables = new Map(source.tables.map((table) => [table.name, table]));
   const targetTables = new Map(target.tables.map((table) => [table.name, table]));

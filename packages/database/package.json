@@ -13,7 +13,13 @@
   },
   "scripts": {
     "compile:data-export": "tsx scripts/compile-sqlite-data-export.ts",
+    "export:d1-portable": "tsx scripts/export-d1-portable.ts",
+    "load:checkout-live": "tsx scripts/live-checkout-load.ts",
+    "rehearse:near-limit": "tsx scripts/near-limit-migration-rehearsal.ts",
     "normalize:d1-export": "tsx scripts/normalize-d1-export.ts",
+    "prepare:turso-upload": "tsx scripts/prepare-turso-upload.ts",
+    "provision-upload:turso": "tsx scripts/provision-and-upload-turso.ts",
+    "upload:turso-bundle": "tsx scripts/upload-turso-bundle.ts",
     "compile:migrations": "tsx scripts/compile-provider-migrations.ts",
     "lint": "eslint src/",
     "typecheck": "../../node_modules/typescript7/bin/tsc --noEmit",
@@ -21,6 +27,7 @@
     "verify:portability-export": "tsx scripts/verify-sqlite-export.ts"
   },
   "dependencies": {
+    "@tursodatabase/database": "^0.7.2",
     "@tursodatabase/serverless": "^1.4.0",
     "drizzle-orm": "^0.45.2"
   },

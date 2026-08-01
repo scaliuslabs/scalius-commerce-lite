@@ -18,10 +18,18 @@ describe("database migration checkpoint", () => {
     checkpoint = advanceDatabaseMigrationCheckpoint(checkpoint, {
       type: "lock_source",
       writeFenceSha256: digest("1"),
+      sourceBookmark: "d1-bookmark-1",
     });
     checkpoint = advanceDatabaseMigrationCheckpoint(checkpoint, {
       type: "record_export",
       exportArtifactSha256: digest("2"),
+      exportArtifactBytes: 8_000_000_000,
+      exportBookmark: "d1-bookmark-1",
+    });
+    checkpoint = advanceDatabaseMigrationCheckpoint(checkpoint, {
+      type: "prepare_artifact",
+      preparedArtifactSha256: digest("5"),
+      preparedArtifactBytes: 7_500_000_000,
       sourceDataFingerprint: digest("a"),
     });
     checkpoint = advanceDatabaseMigrationCheckpoint(checkpoint, {
@@ -64,17 +72,26 @@ describe("database migration checkpoint", () => {
       advanceDatabaseMigrationCheckpoint(planned, {
         type: "record_export",
         exportArtifactSha256: digest("2"),
-        sourceDataFingerprint: digest("a"),
+        exportArtifactBytes: 100,
+        exportBookmark: "d1-bookmark-2",
       }),
     ).toThrow(/expected source_write_locked/);
 
     let imported = advanceDatabaseMigrationCheckpoint(planned, {
       type: "lock_source",
       writeFenceSha256: digest("1"),
+      sourceBookmark: "d1-bookmark-2",
     });
     imported = advanceDatabaseMigrationCheckpoint(imported, {
       type: "record_export",
       exportArtifactSha256: digest("2"),
+      exportArtifactBytes: 100,
+      exportBookmark: "d1-bookmark-2",
+    });
+    imported = advanceDatabaseMigrationCheckpoint(imported, {
+      type: "prepare_artifact",
+      preparedArtifactSha256: digest("5"),
+      preparedArtifactBytes: 90,
       sourceDataFingerprint: digest("a"),
     });
     imported = advanceDatabaseMigrationCheckpoint(imported, {
@@ -99,6 +116,7 @@ describe("database migration checkpoint", () => {
     checkpoint = advanceDatabaseMigrationCheckpoint(checkpoint, {
       type: "lock_source",
       writeFenceSha256: digest("1"),
+      sourceBookmark: "d1-bookmark-3",
     });
     checkpoint = advanceDatabaseMigrationCheckpoint(checkpoint, {
       type: "rollback",
@@ -107,5 +125,45 @@ describe("database migration checkpoint", () => {
 
     expect(checkpoint.phase).toBe("rolled_back");
     expect(checkpoint.evidence.rollbackProofSha256).toBe(digest("f"));
+  });
+
+  it("binds one export to the frozen D1 bookmark", () => {
+    let checkpoint = createDatabaseMigrationCheckpoint({
+      migrationId: "migration_4",
+      sourceProvider: "d1",
+      targetProvider: "turso",
+    });
+    checkpoint = advanceDatabaseMigrationCheckpoint(checkpoint, {
+      type: "lock_source",
+      writeFenceSha256: digest("1"),
+      sourceBookmark: "bookmark-before-export",
+    });
+
+    expect(() => advanceDatabaseMigrationCheckpoint(checkpoint, {
+      type: "record_export",
+      exportArtifactSha256: digest("2"),
+      exportArtifactBytes: 8_500_000_000,
+      exportBookmark: "bookmark-after-unexpected-write",
+    })).toThrow(/does not match the frozen source bookmark/i);
+  });
+
+  it("treats identical event delivery as a retry but rejects changed evidence", () => {
+    const planned = createDatabaseMigrationCheckpoint({
+      migrationId: "migration_5",
+      sourceProvider: "d1",
+      targetProvider: "turso",
+    });
+    const lockEvent = {
+      type: "lock_source" as const,
+      writeFenceSha256: digest("1"),
+      sourceBookmark: "retry-bookmark",
+    };
+    const locked = advanceDatabaseMigrationCheckpoint(planned, lockEvent);
+
+    expect(advanceDatabaseMigrationCheckpoint(locked, lockEvent)).toBe(locked);
+    expect(() => advanceDatabaseMigrationCheckpoint(locked, {
+      ...lockEvent,
+      sourceBookmark: "different-bookmark",
+    })).toThrow(/different sourceBookmark/i);
   });
 });
