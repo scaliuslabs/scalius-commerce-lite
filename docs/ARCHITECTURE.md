@@ -28,8 +28,8 @@ Browser (Customer/Admin)
 └──────────────────────┬──────────────────────────────┘
                        │
 ┌──────────────────────┴──────────────────────────────┐
-│  @scalius/database (Drizzle + D1)                    │
-│  Versioned schema, migrations, and D1 invariants      │
+│  @scalius/database (Drizzle + SQLite providers)       │
+│  Canonical schema, migrations, and atomic invariants  │
 └─────────────────────────────────────────────────────┘
 ```
 
@@ -45,6 +45,20 @@ does not certify a clean tree by itself.
 | Services (@scalius/core/modules/) | @scalius/database, @scalius/shared | Never imports routes |
 | Schema (@scalius/database/schema/) | drizzle-orm only | Never imports services or routes |
 | Shared (@scalius/shared/) | Nothing | Pure utility, no dependencies |
+
+## Database Provider Boundary
+
+D1 remains the zero-configuration starter database. Turso is the supported
+concurrent-writer scale tier. Routes and domain services receive the same
+`@scalius/database` surface; provider selection, transport adaptation,
+capability fallbacks, atomic batches, and conflict retry stay inside the
+database/core boundaries. Do not add provider branches throughout domain code.
+
+Provisioning and migration belong to the external control plane, not Worker
+request paths. A provider switch is valid only after a write freeze, two settled
+matching source snapshots, canonical normalization, atomic target import,
+foreign-key/integrity checks, and exact logical schema/data fingerprints. See
+[Database portability and cutover](DATABASE-PORTABILITY.md).
 
 ---
 
@@ -156,7 +170,7 @@ Products, Categories, Collections, Attributes, Pages, Navigation, Media, Analyti
 PAYMENTS ──── INVENTORY
 ```
 
-This is **tight coupling by design**. Payment confirmation must atomically update inventory and order status. The `db.batch()` pattern ensures all three are consistent or none are.
+This is **tight coupling by design**. Payment confirmation must atomically update inventory and order status. The provider-backed `safeBatch()` boundary ensures all three are consistent or none are.
 
 ---
 
@@ -186,7 +200,7 @@ This is **tight coupling by design**. Payment confirmation must atomically updat
             └──────────┘─────────────┘
 ```
 
-**Transition Protection:** Order status inventory transitions write a deterministic, movement-generation-based `inventory_movements.id` claim and the variant counter CAS update in one D1 `safeBatch()`. Exact duplicate `transition:*` claims are treated as idempotent retries, mismatched duplicate claims fail closed for manual reconciliation, and the final `orders.inventoryAction` update is CAS-guarded against the action observed before the stock transition. Every stock mutation still uses `stockVersion` with 3 retries and exponential backoff.
+**Transition Protection:** Order status inventory transitions write a deterministic, movement-generation-based `inventory_movements.id` claim and the variant counter CAS update in one provider-backed `safeBatch()`. Exact duplicate `transition:*` claims are treated as idempotent retries, mismatched duplicate claims fail closed for manual reconciliation, and the final `orders.inventoryAction` update is CAS-guarded against the action observed before the stock transition. Every stock mutation still uses `stockVersion` with bounded conflict retry.
 
 ---
 
@@ -336,7 +350,7 @@ commerce lifecycle. Stable-release confidence comes from focused invariant
 tests, sequential package gates, deployed Cloudflare
 smokes, and current operational evidence. The
 orders/payments/inventory triangle remains intentionally coupled at its atomic
-D1 commit boundary; every other dependency should be justified by current code
+database commit boundary; every other dependency should be justified by current code
 and boundary tests.
 
 ---
@@ -376,7 +390,7 @@ and boundary tests.
 1. **Inventory deduction happens on SHIPMENT, not on payment** — stock stays reserved until physically shipped
 2. **All status transitions go through `validateTransition()`** — no direct DB updates bypassing state machine
 3. **All stock mutations use `stockVersion` CAS** — prevents race conditions
-4. **All payment processing uses `db.batch()`** — atomic across order + payment + inventory
+4. **All payment processing uses `safeBatch()`** — atomic across order + payment + inventory on the selected provider
 5. **Webhook handlers claim before side effects** — duplicates return success; queue-send failures mark the event failed and return retryable errors
 6. **Response envelope is always `{ success: true, data: T }`** — storefront proxies unwrap before returning to browser
 7. **Secrets come from `env.*` (runtime), never `import.meta.env` (build-time)**

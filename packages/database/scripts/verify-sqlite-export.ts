@@ -1,7 +1,7 @@
-import { readdir, readFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { chmod, mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { fileURLToPath } from "node:url";
 
 import {
   createSqlitePortabilityManifest,
@@ -10,9 +10,13 @@ import {
   verifySqlitePortabilityManifests,
   type SqlitePortabilityExecutor,
 } from "../src/portability";
-
-const scriptDirectory = dirname(fileURLToPath(import.meta.url));
-const migrationDirectory = resolve(scriptDirectory, "../migrations");
+import {
+  createProviderSchemaDatabase,
+  dropTriggers,
+  loadSqliteSqlFile,
+  readFinalTriggerDefinitions,
+  restoreTriggers,
+} from "./sqlite-provider-schema";
 
 function requiredEnvironment(name: string): string {
   const value = process.env[name]?.trim();
@@ -20,16 +24,22 @@ function requiredEnvironment(name: string): string {
   return value;
 }
 
-function parseArguments(argv: readonly string[]): { sourceExport: string } {
+function parseArguments(argv: readonly string[]): {
+  sourceExport: string;
+  sqliteBinary: string;
+} {
   let sourceExport: string | undefined;
+  let sqliteBinary = process.env.SQLITE3_BIN?.trim() || "sqlite3";
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
     if (argument === "--") continue;
     if (argument === "--source-export") sourceExport = argv[++index];
+    else if (argument === "--sqlite-binary") sqliteBinary = argv[++index] ?? "";
     else throw new Error(`Unknown argument ${JSON.stringify(argument)}.`);
   }
   if (!sourceExport?.trim()) throw new Error("--source-export is required.");
-  return { sourceExport: resolve(sourceExport) };
+  if (!sqliteBinary.trim()) throw new Error("--sqlite-binary must not be empty.");
+  return { sourceExport: resolve(sourceExport), sqliteBinary };
 }
 
 function assertDisposableTarget(databaseUrl: string, expectedName: string): void {
@@ -56,52 +66,56 @@ function createNodeSqliteExecutor(database: DatabaseSync): SqlitePortabilityExec
 }
 
 async function main(): Promise<void> {
-  const { sourceExport } = parseArguments(process.argv.slice(2));
+  const { sourceExport, sqliteBinary } = parseArguments(process.argv.slice(2));
   const databaseUrl = requiredEnvironment("TURSO_DATABASE_URL");
   const authToken = requiredEnvironment("TURSO_AUTH_TOKEN");
   const expectedName = requiredEnvironment("SCALIUS_TEST_DATABASE_NAME");
   assertDisposableTarget(databaseUrl, expectedName);
 
-  const sourceDatabase = new DatabaseSync(":memory:");
-  sourceDatabase.exec("PRAGMA foreign_keys=ON;");
-  const migrationNames = (await readdir(migrationDirectory))
-    .filter((name) => /^\d{4}_.+\.sql$/.test(name))
-    .sort((left, right) => left.localeCompare(right));
-  for (const name of migrationNames) {
-    sourceDatabase.exec(await readFile(join(migrationDirectory, name), "utf8"));
-  }
-  sourceDatabase.exec("PRAGMA foreign_keys=OFF;");
-  const applicationTables = sourceDatabase.prepare(`
-    SELECT name
-    FROM sqlite_schema
-    WHERE type = 'table'
-      AND name NOT LIKE 'sqlite_%'
-    ORDER BY name
-  `).all() as Array<{ name: string }>;
-  for (const { name } of applicationTables) {
-    if (/_fts(?:_|$)/i.test(name)) continue;
-    sourceDatabase.exec(`DELETE FROM "${name.replaceAll('"', '""')}";`);
-  }
-  sourceDatabase.exec(await readFile(sourceExport, "utf8"));
-  sourceDatabase.exec("PRAGMA foreign_keys=ON;");
-  const sourceForeignKeyViolations = sourceDatabase
-    .prepare("PRAGMA foreign_key_check")
-    .all();
-  if (sourceForeignKeyViolations.length > 0) {
-    throw new Error("Source export reconstruction contains foreign-key violations.");
-  }
-
-  const targetExecutor = createTursoPortabilityExecutor({
-    url: databaseUrl,
-    authToken,
-  });
+  const workingDirectory = await mkdtemp(join(tmpdir(), "scalius-portability-verify-"));
+  const sourceDatabasePath = join(workingDirectory, "source.sqlite3");
+  let sourceDatabase: DatabaseSync | undefined;
+  let targetExecutor: SqlitePortabilityExecutor | undefined;
   try {
+    sourceDatabase = await createProviderSchemaDatabase("d1", sourceDatabasePath);
+    await chmod(sourceDatabasePath, 0o600);
+    sourceDatabase.exec("PRAGMA foreign_keys=ON;");
+    const sourceTriggers = readFinalTriggerDefinitions(sourceDatabase);
+    sourceDatabase.exec("PRAGMA foreign_keys=OFF;");
+    dropTriggers(sourceDatabase, sourceTriggers);
+    const applicationTables = sourceDatabase.prepare(`
+      SELECT name
+      FROM sqlite_schema
+      WHERE type = 'table'
+        AND name NOT LIKE 'sqlite_%'
+      ORDER BY name
+    `).all() as Array<{ name: string }>;
+    for (const { name } of applicationTables) {
+      if (/_fts(?:_|$)/i.test(name)) continue;
+      sourceDatabase.exec(`DELETE FROM "${name.replaceAll('"', '""')}";`);
+    }
+    sourceDatabase.close();
+    sourceDatabase = undefined;
+
+    await loadSqliteSqlFile(sqliteBinary, sourceDatabasePath, sourceExport);
+    sourceDatabase = new DatabaseSync(sourceDatabasePath);
+    restoreTriggers(sourceDatabase, sourceTriggers);
+    sourceDatabase.exec("PRAGMA foreign_keys=ON;");
+    const sourceForeignKeyViolations = sourceDatabase
+      .prepare("PRAGMA foreign_key_check")
+      .all();
+    if (sourceForeignKeyViolations.length > 0) {
+      throw new Error("Source export reconstruction contains foreign-key violations.");
+    }
+
+    targetExecutor = createTursoPortabilityExecutor({
+      url: databaseUrl,
+      authToken,
+    });
     const sourceExecutor = createNodeSqliteExecutor(sourceDatabase);
     const [source, target] = await Promise.all([
-      createSqlitePortabilityManifest(sourceExecutor, {
-        chunkSize: 25,
-      }),
-      createSqlitePortabilityManifest(targetExecutor, { chunkSize: 25 }),
+      createSqlitePortabilityManifest(sourceExecutor),
+      createSqlitePortabilityManifest(targetExecutor),
     ]);
     const verification = verifySqlitePortabilityManifests(source, target);
     let schemaIssues: string[] = [];
@@ -141,8 +155,9 @@ async function main(): Promise<void> {
     })}\n`);
     if (!verification.ok) process.exitCode = 1;
   } finally {
-    await targetExecutor.close?.();
-    sourceDatabase.close();
+    await targetExecutor?.close?.();
+    sourceDatabase?.close();
+    await rm(workingDirectory, { recursive: true, force: true });
   }
 }
 

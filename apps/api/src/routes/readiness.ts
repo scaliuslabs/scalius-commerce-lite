@@ -134,7 +134,10 @@ async function databaseCheck(env: Env): Promise<CheckResult> {
           () => config.binding.prepare("SELECT 1 AS ok").first<{ ok: number }>(),
           { delaysMs: READINESS_D1_RETRY_DELAYS_MS },
         )
-      : await getDb(env).get<{ ok: number }>(sql`SELECT 1 AS ok`);
+      : await getDb(env)
+          .select({ ok: sql<number>`1` })
+          .from(sql`(SELECT 1)`)
+          .get();
     if (row?.ok !== 1) {
       throw new Error(`unexpected ${config.provider} probe result`);
     }
