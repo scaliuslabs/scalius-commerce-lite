@@ -163,7 +163,7 @@ export async function listPages(
   const conditions: (SQL | undefined)[] = [];
   conditions.push(eq(pages.contentType, contentType));
   if (search) {
-    const cond = ftsMatch("pages_fts", "pages", search);
+    const cond = ftsMatch(db, "pages_fts", "pages", search);
     if (cond) conditions.push(cond);
   }
   if (showTrashed) {

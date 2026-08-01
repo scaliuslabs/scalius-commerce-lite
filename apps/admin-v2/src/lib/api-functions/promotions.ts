@@ -1,4 +1,4 @@
-import { createServerFn } from "@tanstack/react-start";
+import { createAdminApiFunction as createServerFn } from "../admin-api-function";
 import type {
   GetApiV1AdminPromotionsByIdResponse,
   GetApiV1AdminPromotionsData,
@@ -13,7 +13,7 @@ import type {
   PutApiV1AdminPromotionsByIdResponse,
 } from "@scalius/api-client/types";
 
-import { apiDelete, apiGet, apiPost, apiPut } from "../api.server";
+import { apiDelete, apiGet, apiPost, apiPut } from "../api";
 
 type JsonValue = null | boolean | number | string | JsonValue[] | {
   [key: string]: JsonValue;

@@ -13,6 +13,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   createNavigationMenu,
   createNavigationMenuItem,
+  deleteNavigationMenuItem,
   getNavigationMenuMoveOptions,
   getPublishedNavigationMenuTree,
   getPublishedNavigationPlacements,
@@ -399,6 +400,45 @@ describe("navigation authority D1 commands", () => {
     })).rejects.toBeInstanceOf(NavigationRevisionConflictError);
     expect(sqlite!.prepare("SELECT revision FROM navigation_menus WHERE id = ?").get(menu.id))
       .toEqual({ revision: 8 });
+  });
+
+  it("deletes a bounded menu subtree without recursive SQL", async () => {
+    const db = createDatabase();
+    const menu = await createNavigationMenu(db, { name: "Delete tree" });
+    const root = await createNavigationMenuItem(db, menu.id, {
+      expectedRevision: 1,
+      label: "Root",
+      labelMode: "custom",
+      target: { type: "label" },
+    });
+    const rootId = (root.item as { id: string }).id;
+    const child = await createNavigationMenuItem(db, menu.id, {
+      expectedRevision: 2,
+      parentId: rootId,
+      label: "Child",
+      labelMode: "custom",
+      target: { type: "label" },
+    });
+    const childId = (child.item as { id: string }).id;
+    await createNavigationMenuItem(db, menu.id, {
+      expectedRevision: 3,
+      parentId: childId,
+      label: "Grandchild",
+      labelMode: "custom",
+      target: { type: "internal_path", path: "/search" },
+    });
+
+    await expect(deleteNavigationMenuItem(db, menu.id, rootId, 4)).resolves.toEqual({
+      deletedCount: 3,
+      revision: 5,
+    });
+    await expect(listNavigationMenuItems(db, menu.id, { parentId: null })).resolves.toMatchObject({
+      items: [],
+    });
+    await expect(deleteNavigationMenuItem(db, menu.id, rootId, 5))
+      .rejects.toThrow("Menu item not found");
+    expect(sqlite!.prepare("SELECT revision FROM navigation_menus WHERE id = ?").get(menu.id))
+      .toEqual({ revision: 5 });
   });
 
   it("trashes only an unplaced menu and restores it without republishing", async () => {

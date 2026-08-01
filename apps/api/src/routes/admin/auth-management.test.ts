@@ -2,6 +2,8 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { SQL } from "drizzle-orm";
+import { SQLiteSyncDialect } from "drizzle-orm/sqlite-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -602,16 +604,11 @@ function createAccountSessionsDbMock(options: {
 }
 
 function createSetupDbMock(options: { adminExistsResult?: unknown } = {}) {
-  const adminExistsFirst = vi.fn(async () =>
+  const adminExistsGet = vi.fn(async (_query?: SQL) =>
     Object.prototype.hasOwnProperty.call(options, "adminExistsResult")
       ? options.adminExistsResult
       : null
   );
-  const adminExistsPrepare = vi.fn((query: string) => {
-    void query;
-    return { first: adminExistsFirst };
-  });
-  const adminExistsGet = vi.fn(async () => null);
   const adminExistsLimit = vi.fn(() => ({ get: adminExistsGet }));
   const adminExistsWhere = vi.fn(() => ({ limit: adminExistsLimit }));
   const existingUserGet = vi.fn(async () => ({ id: "existing_user" }));
@@ -623,15 +620,13 @@ function createSetupDbMock(options: { adminExistsResult?: unknown } = {}) {
   return {
     __adminExistsGet: adminExistsGet,
     __adminExistsLimit: adminExistsLimit,
-    __adminExistsPrepare: adminExistsPrepare,
-    __adminExistsFirst: adminExistsFirst,
     __adminExistsWhere: adminExistsWhere,
     __deleteWhere: deleteWhere,
     __existingUserGet: existingUserGet,
     __updateSet: updateSet,
     __updateWhere: updateWhere,
     delete: vi.fn(() => ({ where: deleteWhere })),
-    prepare: adminExistsPrepare,
+    get: adminExistsGet,
     select: vi.fn((selection: Record<string, unknown>) => ({
       from: vi.fn(() =>
         "found" in selection
@@ -2151,7 +2146,9 @@ describe("first-admin setup recovery", () => {
     expect(signUpEmail).not.toHaveBeenCalled();
     expect(mocks.enforceAdminSetupRateLimit).not.toHaveBeenCalled();
     expect(mocks.claimAdminSetup).not.toHaveBeenCalled();
-    const query = db.__adminExistsPrepare.mock.calls[0]?.[0] ?? "";
+    const query = new SQLiteSyncDialect().sqlToQuery(
+      db.__adminExistsGet.mock.calls[0]?.[0] as SQL,
+    ).sql;
     expect(query).not.toContain("admin_user.role = 'admin'");
     expect(query).toContain("from user_roles");
     expect(query).toContain("inner join role_permissions");

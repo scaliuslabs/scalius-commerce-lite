@@ -1,5 +1,5 @@
-import { createServerFn } from "@tanstack/react-start";
-import { apiGet, apiPost } from "../api.server";
+import { createAdminApiFunction as createServerFn } from "../admin-api-function";
+import { apiGet, apiPost } from "../api";
 
 type MessagePayload = { message?: string };
 

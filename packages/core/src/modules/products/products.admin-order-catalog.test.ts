@@ -15,10 +15,11 @@ describe("admin order catalog product search", () => {
     expect(source).toContain("whereConditions.push(eq(products.isActive, true))");
   });
 
-  it("does not surface a product because a retired SKU still matches FTS", () => {
-    const searchBlock = source.split("const ftsCondition")[1]?.split("if (barcodeKey)")[0] ?? "";
+  it("does not surface a product because a retired SKU still matches text search", () => {
+    const searchBlock = source.split("const variantSearch")[1]?.split("if (barcodeKey)")[0] ?? "";
     expect(searchBlock).toContain("productVariants.deletedAt");
     expect(searchBlock).toContain("IS NULL");
-    expect(searchBlock).toContain("product_variants_fts MATCH");
+    expect(source).toContain('"product_variants_fts",');
+    expect(source).toContain('"product_variants",');
   });
 });

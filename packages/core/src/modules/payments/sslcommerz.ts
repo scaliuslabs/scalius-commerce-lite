@@ -29,6 +29,12 @@ import { getDecimalPlaces } from "@scalius/shared/currency";
 const SANDBOX_BASE = "https://sandbox.sslcommerz.com";
 const PRODUCTION_BASE = "https://securepay.sslcommerz.com";
 const SSL_COMMERZ_TRAN_SUFFIX_LENGTH = 8;
+export const SSL_COMMERZ_TRAN_ID_MAX_LENGTH = 30;
+const SSL_COMMERZ_PAYMENT_TYPE_CODE = {
+  full: "F",
+  deposit: "D",
+  balance: "B",
+} as const;
 export const SSL_COMMERZ_BDT_AMOUNT_LIMITS = {
   currency: "BDT",
   min: 10,
@@ -81,7 +87,22 @@ export function buildSSLCommerzTranId(
   paymentType: InitSSLCommerzSessionParams["paymentType"],
   suffix = createTransactionSuffix(),
 ): string {
-  return `${orderId}_${paymentType}_${suffix.replace(/[^a-zA-Z0-9]/g, "").slice(0, SSL_COMMERZ_TRAN_SUFFIX_LENGTH).toUpperCase()}`;
+  const normalizedSuffix = suffix
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .slice(0, SSL_COMMERZ_TRAN_SUFFIX_LENGTH)
+    .toUpperCase();
+  const legacyFormat = `${orderId}_${paymentType}_${normalizedSuffix}`;
+  if (legacyFormat.length <= SSL_COMMERZ_TRAN_ID_MAX_LENGTH) {
+    return legacyFormat;
+  }
+
+  const compactFormat = `${orderId}_${SSL_COMMERZ_PAYMENT_TYPE_CODE[paymentType]}${normalizedSuffix}`;
+  if (compactFormat.length > SSL_COMMERZ_TRAN_ID_MAX_LENGTH) {
+    throw new ValidationError(
+      `SSLCommerz transaction ID exceeds ${SSL_COMMERZ_TRAN_ID_MAX_LENGTH} characters.`,
+    );
+  }
+  return compactFormat;
 }
 
 export function parseSSLCommerzTranId(tranId: string): {
@@ -90,13 +111,31 @@ export function parseSSLCommerzTranId(tranId: string): {
   transactionId: string;
 } {
   const match = /^(.+)_(full|deposit|balance)_([a-zA-Z0-9]{6,32})$/.exec(tranId);
-  if (!match) {
-    return { orderId: tranId, paymentType: null, transactionId: tranId };
+  if (match) {
+    return {
+      orderId: match[1]!,
+      paymentType: match[2] as InitSSLCommerzSessionParams["paymentType"],
+      transactionId: tranId,
+    };
+  }
+
+  const compactMatch = /^(.+)_([FDB])([a-zA-Z0-9]{6,8})$/.exec(tranId);
+  if (compactMatch) {
+    const paymentType = {
+      F: "full",
+      D: "deposit",
+      B: "balance",
+    }[compactMatch[2]!] as InitSSLCommerzSessionParams["paymentType"];
+    return {
+      orderId: compactMatch[1]!,
+      paymentType,
+      transactionId: tranId,
+    };
   }
 
   return {
-    orderId: match[1]!,
-    paymentType: match[2] as InitSSLCommerzSessionParams["paymentType"],
+    orderId: tranId,
+    paymentType: null,
     transactionId: tranId,
   };
 }

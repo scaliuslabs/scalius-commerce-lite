@@ -18,7 +18,7 @@ vi.mock("@tanstack/react-start", () => ({
   }),
 }));
 
-vi.mock("../api.server", () => apiMocks);
+vi.mock("../api", () => apiMocks);
 
 import {
   activatePromotion,

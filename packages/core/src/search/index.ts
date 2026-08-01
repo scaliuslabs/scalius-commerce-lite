@@ -1,7 +1,11 @@
 import type { Database } from "@scalius/database/client";
 import { products, categories, pages } from "@scalius/database/schema";
 import { eq, sql, and, type SQL } from "drizzle-orm";
-import { ftsMatch, sanitizeFtsQuery } from "./fts5";
+import {
+  ftsMatch,
+  isFts5SearchEnabled,
+  sanitizeFtsQuery,
+} from "./fts5";
 import { publicProductBaseConditions } from "../modules/products/products.public-eligibility";
 import {
   buildBuyerCatalogPricingProjection,
@@ -137,6 +141,7 @@ export async function search(
   const searchCategories = options?.searchCategories !== false;
   const hasValidQuery = query && query.trim() !== "";
   const sanitizedQuery = hasValidQuery ? sanitizeFtsQuery(query) : "";
+  const fts5Enabled = isFts5SearchEnabled(db);
   if (hasValidQuery && !sanitizedQuery) {
     return { products: [], pages: [], categories: [] };
   }
@@ -145,7 +150,7 @@ export async function search(
     // Build Product Query
     const productConditions: SQL[] = publicProductBaseConditions();
     if (hasValidQuery) {
-      const cond = ftsMatch("products_fts", "products", query);
+      const cond = ftsMatch(db, "products_fts", "products", query);
       if (cond) productConditions.push(cond);
     }
     if (options?.categoryId) {
@@ -194,7 +199,7 @@ export async function search(
       ))
       .where(and(...productConditions))
       .orderBy(
-        hasValidQuery
+        hasValidQuery && fts5Enabled
           ? sql`COALESCE((SELECT rank FROM products_fts WHERE rowid = products.rowid AND products_fts MATCH ${sanitizedQuery}), 0) ASC`
           : products.name,
       )
@@ -203,7 +208,7 @@ export async function search(
     // Build Pages Query
     const pageConditions = [sql`${pages.deletedAt} IS NULL AND ${pages.isPublished} = 1`];
     if (hasValidQuery) {
-      const pageCond = ftsMatch("pages_fts", "pages", query);
+      const pageCond = ftsMatch(db, "pages_fts", "pages", query);
       if (pageCond) pageConditions.push(pageCond);
     }
     const pageQuery = searchPages
@@ -216,7 +221,7 @@ export async function search(
         .from(pages)
         .where(and(...pageConditions))
         .orderBy(
-          hasValidQuery
+          hasValidQuery && fts5Enabled
             ? sql`COALESCE((SELECT rank FROM pages_fts WHERE rowid = pages.rowid AND pages_fts MATCH ${sanitizedQuery}), 0) ASC`
             : pages.title,
         )
@@ -226,7 +231,7 @@ export async function search(
     // Build Categories Query
     const categoryConditions = publicCategoryConditions();
     if (hasValidQuery) {
-      const catCond = ftsMatch("categories_fts", "categories", query);
+      const catCond = ftsMatch(db, "categories_fts", "categories", query);
       if (catCond) categoryConditions.push(catCond);
     }
     const categoryQuery = searchCategories
@@ -239,7 +244,7 @@ export async function search(
         .from(categories)
         .where(and(...categoryConditions))
         .orderBy(
-          hasValidQuery
+          hasValidQuery && fts5Enabled
             ? sql`COALESCE((SELECT rank FROM categories_fts WHERE rowid = categories.rowid AND categories_fts MATCH ${sanitizedQuery}), 0) ASC`
             : categories.name,
         )

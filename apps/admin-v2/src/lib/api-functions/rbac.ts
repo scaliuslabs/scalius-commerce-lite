@@ -1,5 +1,5 @@
-import { createServerFn } from "@tanstack/react-start";
-import { apiDelete, apiGet, apiPost, apiPut } from "../api.server";
+import { createAdminApiFunction as createServerFn } from "../admin-api-function";
+import { apiDelete, apiGet, apiPost, apiPut } from "../api";
 
 export interface RbacRole {
   id: string;

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { Database } from "@scalius/database/client";
+import * as schema from "@scalius/database/schema";
 import { orderReceipts } from "@scalius/database/schema";
+import { drizzle } from "drizzle-orm/d1";
 import { ConflictError } from "@scalius/core/errors";
 import {
   buildCheckoutAttemptIdentity,
@@ -9,6 +11,7 @@ import {
   getCheckoutAttemptRequestKeyFromStatusToken,
   markCheckoutAttemptCommitted,
   markCheckoutAttemptFailed,
+  prepareCheckoutAttemptCommit,
   resolveExistingCheckoutAttempt,
 } from "./checkout-attempts";
 import { hashOrderReceiptToken } from "./order-receipts";
@@ -43,6 +46,45 @@ type ReceiptRow = {
 };
 
 describe("checkout attempts", () => {
+  it("prepares the claim guard, committed response, and receipt for one outer batch", async () => {
+    const db = drizzle({} as D1Database, { schema }) as unknown as Database;
+    const plan = await prepareCheckoutAttemptCommit(
+      db,
+      {
+        id: "attempt_1",
+        requestKey: "checkout_submit:v1:key",
+        requestHash: "request_hash",
+        claimId: "claim_1",
+        orderId: "order_1",
+        checkoutToken: "chk_receipt_secret",
+        statusToken: "cst_status",
+      },
+      {
+        paymentMethod: "cod",
+        totalAmount: 125,
+        response: { orderId: "order_1", message: "Order created" },
+      },
+    );
+
+    const compile = (statement: unknown) =>
+      (statement as { toSQL(): { sql: string; params: unknown[] } }).toSQL();
+    const guard = compile(plan.guard);
+    const attemptWrite = compile(plan.writes[0]);
+    const receiptWrite = compile(plan.writes[1]);
+
+    expect(plan.writes).toHaveLength(2);
+    expect(guard.sql).toContain("checkout_attempts");
+    expect(guard.params).toContain("CHECKOUT_ATTEMPT_COMMIT_CONFLICT");
+    expect(guard.params).toContain("claim_1");
+    expect(attemptWrite.sql.toLowerCase()).toContain('update "checkout_attempts"');
+    expect(attemptWrite.params).toContain(JSON.stringify({
+      orderId: "order_1",
+      message: "Order created",
+    }));
+    expect(receiptWrite.sql.toLowerCase()).toContain('insert into "order_receipts"');
+    expect(receiptWrite.params).toContain(await hashOrderReceiptToken("chk_receipt_secret"));
+  });
+
   it("replays a committed checkout submit without creating another claim", async () => {
     const fake = createFakeCheckoutAttemptDb();
     const identity = await buildCheckoutAttemptIdentity(buildInput());

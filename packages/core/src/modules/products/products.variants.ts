@@ -830,9 +830,10 @@ export async function deleteVariant(
               AND ${productVariants.deletedAt} IS NULL
         ) AND NOT EXISTS (
             SELECT 1 FROM ${orderItems}
-            INNER JOIN ${orders} ON ${orderItems.orderId} = ${orders.id}
-            WHERE ${orderItems.variantId} = ${variantId}
-              AND ${orders.deletedAt} IS NULL
+            INNER JOIN ${orders}
+              ON ${sql.raw('"order_items"."order_id"')} = ${sql.raw('"orders"."id"')}
+            WHERE ${sql.raw('"order_items"."variant_id"')} = ${variantId}
+              AND ${sql.raw('"orders"."deleted_at"')} IS NULL
               AND ${not(inArray(orders.status, ORDER_STATUSES_THAT_ALLOW_SKU_RETIREMENT))}
         ) AND (
             coalesce((

@@ -223,7 +223,7 @@ interface Queue<T = unknown> {
 // Must stay in sync with apps/admin-v2/wrangler.jsonc.
 interface Env {
   // Resource bindings
-  DB: D1Database;
+  DB?: D1Database;
   CACHE: KVNamespace;
   SESSION: KVNamespace;
   BUCKET: R2Bucket;
@@ -239,6 +239,9 @@ interface Env {
   JWT_SECRET?: string;
   FIREBASE_SERVICE_ACCOUNT_CRED_JSON?: string;
   CREDENTIAL_ENCRYPTION_KEY?: string;
+  DATABASE_PROVIDER?: "d1" | "turso";
+  TURSO_DATABASE_URL?: string;
+  TURSO_AUTH_TOKEN?: string;
 
   // Variables
   BETTER_AUTH_URL?: string;

@@ -28,7 +28,7 @@ const mocks = vi.hoisted(() => ({
   createReceiptOrderSupportRequest: vi.fn(),
   getOrderSupportRequestStatusLabel: vi.fn((status: string) => status),
   getReceiptOrderSupportRequestState: vi.fn(),
-  invalidateProductAvailabilityCaches: vi.fn(),
+  invalidateProductAvailabilityCacheSubjects: vi.fn(),
   rateLimit: vi.fn(async () => ({ allowed: true })),
   getClientIp: vi.fn(() => "127.0.0.1"),
   getCustomerBySession: vi.fn(),
@@ -68,7 +68,7 @@ vi.mock("../utils/cache-invalidation", () => ({
       return undefined;
     }
   },
-  invalidateProductAvailabilityCaches: mocks.invalidateProductAvailabilityCaches,
+  invalidateProductAvailabilityCacheSubjects: mocks.invalidateProductAvailabilityCacheSubjects,
 }));
 
 vi.mock("@scalius/shared/rate-limit", () => ({
@@ -183,9 +183,11 @@ beforeEach(() => {
   });
   mocks.markCheckoutAttemptCommitted.mockResolvedValue(undefined);
   mocks.markCheckoutAttemptFailed.mockResolvedValue(undefined);
-  mocks.commitStorefrontOrderPayload.mockResolvedValue(undefined);
+  mocks.commitStorefrontOrderPayload.mockResolvedValue({
+    availabilityChangedSubjects: [],
+  });
   mocks.runStorefrontOrderPostCommitSideEffects.mockResolvedValue(undefined);
-  mocks.invalidateProductAvailabilityCaches.mockResolvedValue(undefined);
+  mocks.invalidateProductAvailabilityCacheSubjects.mockResolvedValue(undefined);
   mocks.validateStorefrontCartItems.mockResolvedValue({
     valid: true,
     issues: [],
@@ -1251,14 +1253,18 @@ describe("create order commit/KV ordering", () => {
     };
     mocks.commitStorefrontOrderPayload.mockImplementation(async () => {
       calls.push("commit");
-    });
-    mocks.markCheckoutAttemptCommitted.mockImplementation(async () => {
-      calls.push("mark-committed");
+      return {
+        availabilityChangedSubjects: [{
+          productId: "product_1",
+          slug: "queue-product",
+          categoryId: "category_1",
+        }],
+      };
     });
     mocks.runStorefrontOrderPostCommitSideEffects.mockImplementation(async () => {
       calls.push("side-effects");
     });
-    mocks.invalidateProductAvailabilityCaches.mockImplementation(async () => {
+    mocks.invalidateProductAvailabilityCacheSubjects.mockImplementation(async () => {
       calls.push("availability");
     });
 
@@ -1284,7 +1290,7 @@ describe("create order commit/KV ordering", () => {
       const kvKeys = kv.put.mock.calls.map(([key]) => String(key));
       const statusWrite = kv.put.mock.calls.find(([key]) => key === statusKey) as [string, string, unknown?] | undefined;
       const receiptWrite = kv.put.mock.calls.find(([key]) => key === receiptKey) as [string, string, unknown?] | undefined;
-      expect(calls.slice(0, 2)).toEqual(["commit", "mark-committed"]);
+      expect(calls[0]).toBe("commit");
       expect(calls).toContain(`kv:${statusKey}`);
       expect(calls).toContain(`kv:${receiptKey}`);
       expect(calls).toContain("side-effects");
@@ -1304,6 +1310,19 @@ describe("create order commit/KV ordering", () => {
       expect(mocks.commitStorefrontOrderPayload).toHaveBeenCalledWith(
         expect.anything(),
         expect.objectContaining({ orderData: { id: "order_1" } }),
+        expect.objectContaining({
+          attempt: expect.objectContaining({
+            id: "coa_1",
+            claimId: "coac_1",
+            orderId: "order_1",
+            checkoutToken: "chk_order_1",
+          }),
+          response: expect.objectContaining({
+            orderId: "order_1",
+            receiptToken: "chk_order_1",
+            statusToken: DEFAULT_STATUS_TOKEN,
+          }),
+        }),
       );
       expect(mocks.createStorefrontOrder).toHaveBeenCalledWith(
         expect.anything(),
@@ -1324,41 +1343,27 @@ describe("create order commit/KV ordering", () => {
         undefined,
         { code: "BDT", decimalPlaces: 2 },
       );
-      expect(mocks.markCheckoutAttemptCommitted).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.objectContaining({
-          id: "coa_1",
-          claimId: "coac_1",
-          orderId: "order_1",
-          checkoutToken: "chk_order_1",
-        }),
-        expect.objectContaining({
-          paymentMethod: "cod",
-          totalAmount: 100,
-          response: expect.objectContaining({
-            orderId: "order_1",
-            receiptToken: "chk_order_1",
-            statusToken: DEFAULT_STATUS_TOKEN,
-          }),
-        }),
-      );
-      expect(mocks.invalidateProductAvailabilityCaches).toHaveBeenCalledWith(
-        expect.anything(),
-        { orderIds: ["order_1"] },
+      expect(mocks.markCheckoutAttemptCommitted).not.toHaveBeenCalled();
+      expect(mocks.invalidateProductAvailabilityCacheSubjects).toHaveBeenCalledWith(
+        [{
+          productId: "product_1",
+          slug: "queue-product",
+          categoryId: "category_1",
+        }],
         expect.objectContaining({
           env: expect.objectContaining({ CACHE: kv }),
           executionCtx,
         }),
+        expect.anything(),
       );
     } finally {
       consoleError.mockRestore();
     }
   });
 
-  it("does not log raw checkout proof when marking a committed attempt fails", async () => {
+  it("does not run the retired post-commit attempt marker or log raw checkout proof", async () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
     try {
-      mocks.markCheckoutAttemptCommitted.mockRejectedValueOnce(new Error("mark failed"));
       const { app, kv } = createTestApp();
 
       const response = await app.request(
@@ -1374,7 +1379,7 @@ describe("create order commit/KV ordering", () => {
       const responseText = await response.clone().text();
       expect(response.status, responseText).toBe(201);
       const serializedLogs = JSON.stringify(consoleError.mock.calls);
-      expect(serializedLogs).toContain("checkoutStatusKeyPrefix");
+      expect(mocks.markCheckoutAttemptCommitted).not.toHaveBeenCalled();
       expect(serializedLogs).not.toContain("chk_order_1");
     } finally {
       consoleError.mockRestore();
@@ -1702,7 +1707,14 @@ describe("create order commit/KV ordering", () => {
         taxQuote: DEFAULT_TAX_QUOTE,
         commitPayload: { orderData: { id: "order_cache_failure" } },
       });
-      mocks.invalidateProductAvailabilityCaches.mockRejectedValue(new Error("cache unavailable"));
+      mocks.commitStorefrontOrderPayload.mockResolvedValue({
+        availabilityChangedSubjects: [{
+          productId: "product_cache_failure",
+          slug: "cache-failure",
+          categoryId: null,
+        }],
+      });
+      mocks.invalidateProductAvailabilityCacheSubjects.mockRejectedValue(new Error("cache unavailable"));
       const { app, kv } = createTestApp();
 
       const response = await app.request(
@@ -1719,14 +1731,18 @@ describe("create order commit/KV ordering", () => {
       expect(response.status, responseText).toBe(201);
       expect(mocks.commitStorefrontOrderPayload).toHaveBeenCalledOnce();
       expect(mocks.runStorefrontOrderPostCommitSideEffects).toHaveBeenCalledOnce();
-      expect(mocks.invalidateProductAvailabilityCaches).toHaveBeenCalledWith(
-        expect.anything(),
-        { orderIds: ["order_cache_failure"] },
+      expect(mocks.invalidateProductAvailabilityCacheSubjects).toHaveBeenCalledWith(
+        [{
+          productId: "product_cache_failure",
+          slug: "cache-failure",
+          categoryId: null,
+        }],
         expect.any(Object),
+        expect.anything(),
       );
       expect(consoleError).toHaveBeenCalledWith(
         "[Orders] Failed to invalidate product availability caches after order commit:",
-        expect.objectContaining({ orderId: "order_cache_failure" }),
+        expect.objectContaining({ productCount: 1 }),
       );
     } finally {
       consoleError.mockRestore();
@@ -1771,7 +1787,7 @@ describe("create order commit/KV ordering", () => {
     });
     expect(statusKey).not.toContain("chk_order_2");
     expect(mocks.runStorefrontOrderPostCommitSideEffects).not.toHaveBeenCalled();
-    expect(mocks.invalidateProductAvailabilityCaches).not.toHaveBeenCalled();
+    expect(mocks.invalidateProductAvailabilityCacheSubjects).not.toHaveBeenCalled();
     expect(mocks.markCheckoutAttemptFailed).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ id: "coa_1", claimId: "coac_1" }),
@@ -1816,7 +1832,7 @@ describe("create order commit/KV ordering", () => {
       },
     });
     expect(mocks.runStorefrontOrderPostCommitSideEffects).not.toHaveBeenCalled();
-    expect(mocks.invalidateProductAvailabilityCaches).not.toHaveBeenCalled();
+    expect(mocks.invalidateProductAvailabilityCacheSubjects).not.toHaveBeenCalled();
     expect(mocks.markCheckoutAttemptFailed).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ id: "coa_1", claimId: "coac_1" }),
@@ -2443,12 +2459,11 @@ describe("create order commit/KV ordering", () => {
     expect(mocks.commitStorefrontOrderPayload).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ orderData: expect.objectContaining({ totalAmountMinor: 12_000 }) }),
+      expect.objectContaining({
+        response: expect.objectContaining({ totalAmount: 120 }),
+      }),
     );
-    expect(mocks.markCheckoutAttemptCommitted).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.anything(),
-      expect.objectContaining({ totalAmount: 120 }),
-    );
+    expect(mocks.markCheckoutAttemptCommitted).not.toHaveBeenCalled();
   });
 
   it("rate limits a new checkout before claim creation or order writes", async () => {

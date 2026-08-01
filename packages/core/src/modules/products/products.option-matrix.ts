@@ -785,11 +785,12 @@ export async function saveProductOptionMatrix(
                   AND ${productVariants.deletedAt} IS NULL
             ) = ${retiringVariants.length} AND NOT EXISTS (
                 SELECT 1 FROM ${orderItems}
-                INNER JOIN ${orders} ON ${orders.id} = ${orderItems.orderId}
-                WHERE ${orderItems.variantId} IN (
+                INNER JOIN ${orders}
+                  ON ${sql.raw('"orders"."id"')} = ${sql.raw('"order_items"."order_id"')}
+                WHERE ${sql.raw('"order_items"."variant_id"')} IN (
                     SELECT CAST(value AS TEXT) FROM json_each(${retiringIds})
                 )
-                  AND ${orders.deletedAt} IS NULL
+                  AND ${sql.raw('"orders"."deleted_at"')} IS NULL
                   AND ${not(inArray(orders.status, CLOSED_ORDER_STATUSES))}
             ) THEN 1 ELSE json_extract('OPTION_MATRIX_RETIRE_CONFLICT', '$') END
         `));

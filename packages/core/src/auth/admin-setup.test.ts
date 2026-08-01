@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
+import type { SQL } from "drizzle-orm";
+import { SQLiteSyncDialect } from "drizzle-orm/sqlite-core";
 import type { Database } from "@scalius/database/client";
 import { adminSetupClaims, adminSetupRateLimits, user } from "@scalius/database/schema";
 import { ConflictError, ForbiddenError, RateLimitError } from "../errors";
@@ -41,22 +43,18 @@ type UserRow = {
 
 describe("admin setup coordination", () => {
   it("checks admin existence through super-admin and RBAC permission state", async () => {
-    const statement = {
-      first: vi.fn(async () => ({ found: 1 })),
-    };
     const db = {
-      prepare: vi.fn((query: string) => {
-        void query;
-        return statement;
-      }),
+      get: vi.fn(async (_query: SQL) => ({ found: 1 })),
     };
 
     await expect(
       adminPrincipalExists(db as unknown as Parameters<typeof adminPrincipalExists>[0]),
     ).resolves.toBe(true);
 
-    expect(db.prepare).toHaveBeenCalledTimes(1);
-    const query = db.prepare.mock.calls[0]?.[0] ?? "";
+    expect(db.get).toHaveBeenCalledTimes(1);
+    const query = new SQLiteSyncDialect().sqlToQuery(
+      db.get.mock.calls[0]?.[0] as SQL,
+    ).sql;
     expect(query).not.toContain("admin_user.role = 'admin'");
     expect(query).toContain("is_super_admin = 1");
     expect(query).toContain("from user_roles");

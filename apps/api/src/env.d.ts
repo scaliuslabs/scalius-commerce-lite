@@ -145,7 +145,7 @@ interface Message<T = unknown> {
 // Must stay in sync with wrangler.jsonc.
 interface Env {
   // Service / resource bindings
-  DB: D1Database;
+  DB?: D1Database;
   CACHE: KVNamespace;
   BUCKET: R2Bucket;
   SHARED_AUTH_CACHE: KVNamespace;
@@ -164,6 +164,9 @@ interface Env {
   JWT_SECRET?: string;
   FIREBASE_SERVICE_ACCOUNT_CRED_JSON?: string;
   CREDENTIAL_ENCRYPTION_KEY?: string;
+  DATABASE_PROVIDER?: "d1" | "turso";
+  TURSO_DATABASE_URL?: string;
+  TURSO_AUTH_TOKEN?: string;
 
   // Note: Stripe and SSLCommerz credentials are stored in the DB settings table
   // and managed via the admin dashboard — NOT as environment variables.

@@ -6,14 +6,21 @@
   "exports": {
     "./schema": "./src/schema/index.ts",
     "./client": "./src/client.ts",
+    "./migration-control": "./src/migration-control.ts",
+    "./migration-artifacts": "./src/migration-artifacts.ts",
+    "./portability": "./src/portability.ts",
     "./types": "./src/types.ts"
   },
   "scripts": {
+    "compile:data-export": "tsx scripts/compile-sqlite-data-export.ts",
+    "compile:migrations": "tsx scripts/compile-provider-migrations.ts",
     "lint": "eslint src/",
     "typecheck": "../../node_modules/typescript7/bin/tsc --noEmit",
-    "check:migrations": "node scripts/check-migration-metadata.mjs"
+    "check:migrations": "node scripts/check-migration-metadata.mjs",
+    "verify:portability-export": "tsx scripts/verify-sqlite-export.ts"
   },
   "dependencies": {
+    "@tursodatabase/serverless": "^1.4.0",
     "drizzle-orm": "^0.45.2"
   },
   "devDependencies": {

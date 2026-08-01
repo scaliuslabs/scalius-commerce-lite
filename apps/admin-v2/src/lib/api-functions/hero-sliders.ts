@@ -1,6 +1,6 @@
-import { createServerFn } from "@tanstack/react-start";
+import { createAdminApiFunction as createServerFn } from "../admin-api-function";
 import type { HeroSlideFocalPoint } from "@scalius/shared/hero-slider";
-import { apiGet, apiPost, apiPut } from "../api.server";
+import { apiGet, apiPost, apiPut } from "../api";
 
 export type HeroSliderType = "desktop" | "mobile";
 

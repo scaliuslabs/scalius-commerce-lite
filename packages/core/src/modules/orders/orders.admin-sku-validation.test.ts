@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Database } from "@scalius/database/client";
 import { PaymentStatus } from "@scalius/database/schema";
-import { ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
+import { ValidationError } from "@scalius/core/errors";
 import type { CreateOrderInput } from "./orders.validation";
 import type { StorefrontTaxQuoteInput } from "../tax";
 
 const inventoryMocks = vi.hoisted(() => ({
+    prepareStockReservationBatch: vi.fn(),
     reserveStockBatch: vi.fn(),
     releaseReservedStockBatch: vi.fn(),
     validateStockBatchAvailability: vi.fn(),
@@ -35,6 +36,7 @@ const createAttemptMocks = vi.hoisted(() => ({
 }));
 
 vi.mock("../inventory", () => ({
+    prepareStockReservationBatch: inventoryMocks.prepareStockReservationBatch,
     reserveStockBatch: inventoryMocks.reserveStockBatch,
     releaseReservedStockBatch: inventoryMocks.releaseReservedStockBatch,
     validateStockBatchAvailability: inventoryMocks.validateStockBatchAvailability,
@@ -77,6 +79,13 @@ import { createOrder, resolveAdminOrderItemInventory } from "./orders.admin";
 
 beforeEach(() => {
     vi.clearAllMocks();
+    inventoryMocks.prepareStockReservationBatch.mockResolvedValue({
+        success: true,
+        results: [],
+        statements: [{ kind: "inventory-guard" }, { kind: "inventory-movement" }, { kind: "inventory-update" }],
+        availabilityChangedSubjects: [],
+        resolveIdempotentReplay: vi.fn(async () => null),
+    });
     inventoryMocks.reserveStockBatch.mockResolvedValue({ success: true, results: [] });
     inventoryMocks.releaseReservedStockBatch.mockResolvedValue({ success: true, results: [] });
     inventoryMocks.validateStockBatchAvailability.mockResolvedValue({ success: true, results: [] });
@@ -593,6 +602,7 @@ describe("resolveAdminOrderItemInventory", () => {
             }),
         ]);
         expect(inventoryMocks.reserveStockBatch).not.toHaveBeenCalled();
+        expect(inventoryMocks.prepareStockReservationBatch).not.toHaveBeenCalled();
         expect(transitionMocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
         expect(inventoryMocks.releaseReservedStockBatch).not.toHaveBeenCalled();
         expect(batch).not.toHaveBeenCalled();
@@ -677,6 +687,7 @@ describe("resolveAdminOrderItemInventory", () => {
             .rejects.toThrow("Selected zone is no longer available for the chosen city.");
 
         expect(inventoryMocks.reserveStockBatch).not.toHaveBeenCalled();
+        expect(inventoryMocks.prepareStockReservationBatch).not.toHaveBeenCalled();
         expect(transitionMocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
         expect(inventoryMocks.releaseReservedStockBatch).not.toHaveBeenCalled();
         expect(batch).not.toHaveBeenCalled();
@@ -823,7 +834,7 @@ describe("resolveAdminOrderItemInventory", () => {
         },
     );
 
-    it("uses strict release when a manual order write fails after reserving tracked stock", async () => {
+    it("composes tracked stock reservation into the failed manual-order transaction", async () => {
         const { db, batch } = createOrderDbWithSkuRows([
             {
                 id: "var_tracked",
@@ -847,18 +858,18 @@ describe("resolveAdminOrderItemInventory", () => {
             ],
         }), "admin_test")).rejects.toBe(batchError);
 
-        expect(inventoryMocks.reserveStockBatch).toHaveBeenCalledWith(
+        expect(inventoryMocks.prepareStockReservationBatch).toHaveBeenCalledWith(
             db,
             [{ variantId: "var_tracked", quantity: 2, orderId: expect.any(String) }],
             "regular",
             { reservationKey: expect.stringMatching(/^admin-order-create:v2:/) },
         );
-        expect(inventoryMocks.releaseReservedStockBatch).toHaveBeenCalledWith(
-            db,
-            [{ variantId: "var_tracked", quantity: 2, pool: "regular" }],
-            expect.any(String),
-            { releaseKey: "admin-order-create-rollback:v1" },
-        );
+        expect(batch).toHaveBeenCalledWith(expect.arrayContaining([
+            { kind: "inventory-guard" },
+            { kind: "inventory-movement" },
+            { kind: "inventory-update" },
+        ]));
+        expect(inventoryMocks.releaseReservedStockBatch).not.toHaveBeenCalled();
         expect(transitionMocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
     });
 
@@ -895,7 +906,7 @@ describe("resolveAdminOrderItemInventory", () => {
         expect(inventoryMocks.releaseReservedStockBatch).not.toHaveBeenCalled();
     });
 
-    it("fails closed when manual order reservation cleanup cannot be proven", async () => {
+    it("does not depend on reservation compensation after a failed create batch", async () => {
         const { db, batch } = createOrderDbWithSkuRows([
             {
                 id: "var_tracked",
@@ -906,7 +917,8 @@ describe("resolveAdminOrderItemInventory", () => {
                 productDeletedAt: null,
             },
         ]);
-        batch.mockRejectedValueOnce(new Error("D1 write failed"));
+        const batchError = new Error("D1 write failed");
+        batch.mockRejectedValueOnce(batchError);
         inventoryMocks.releaseReservedStockBatch.mockResolvedValueOnce({
             success: false,
             results: [{
@@ -930,13 +942,14 @@ describe("resolveAdminOrderItemInventory", () => {
             ],
         }), "admin_test");
 
-        await expect(failure).rejects.toMatchObject({
-            name: "ServiceUnavailableError",
-            message: "Manual order inventory cleanup is temporarily unavailable. Please try again.",
-        });
-        await expect(failure).rejects.toBeInstanceOf(ServiceUnavailableError);
+        await expect(failure).rejects.toBe(batchError);
 
-        expect(inventoryMocks.releaseReservedStockBatch).toHaveBeenCalledOnce();
+        expect(inventoryMocks.releaseReservedStockBatch).not.toHaveBeenCalled();
+        expect(createAttemptMocks.markFailed).toHaveBeenCalledWith(
+            db,
+            expect.any(Object),
+            batchError,
+        );
         expect(transitionMocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
     });
 });

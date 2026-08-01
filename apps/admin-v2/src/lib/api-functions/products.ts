@@ -1,6 +1,6 @@
-import { createServerFn } from "@tanstack/react-start";
+import { createAdminApiFunction as createServerFn } from "../admin-api-function";
 import type { ProductCondition } from "@scalius/shared/product-condition";
-import { apiDelete, apiGet, apiPost, apiPut } from "../api.server";
+import { apiDelete, apiGet, apiPost, apiPut } from "../api";
 
 type Timestamp = string | number;
 type NullableTimestamp = Timestamp | null;

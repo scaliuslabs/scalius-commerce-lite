@@ -294,7 +294,7 @@ export async function listCollectionProductOptions(
 
     const whereConditions: SQL[] = [isNull(products.deletedAt)];
     const searchCondition = search
-        ? ftsMatch("products_fts", "products", search)
+        ? ftsMatch(db, "products_fts", "products", search)
         : undefined;
     if (searchCondition) whereConditions.push(searchCondition);
     if (categoryIds.length > 0) {

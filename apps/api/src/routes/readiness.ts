@@ -1,5 +1,10 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { retryTransientD1 } from "@scalius/core/utils/transient-d1";
+import {
+  getDb,
+  resolveDatabaseConfiguration,
+} from "@scalius/database/client";
+import { sql } from "drizzle-orm";
 import { getRequestCorrelation } from "../utils/http-correlation";
 import { logOpsEvent } from "../utils/ops-log";
 
@@ -107,16 +112,31 @@ function queueBindingCheck(name: string, queue: unknown): CheckResult {
   };
 }
 
-async function d1Check(env: Env): Promise<CheckResult> {
-  if (!env.DB) return missing("d1");
-
-  return runProbe("d1", true, async () => {
-    const row = await retryTransientD1(
-      () => env.DB.prepare("SELECT 1 AS ok").first<{ ok: number }>(),
-      { delaysMs: READINESS_D1_RETRY_DELAYS_MS },
+async function databaseCheck(env: Env): Promise<CheckResult> {
+  let config: ReturnType<typeof resolveDatabaseConfiguration>;
+  try {
+    config = resolveDatabaseConfiguration(env);
+  } catch (error) {
+    const hasTursoConfiguration = Boolean(
+      env.DATABASE_PROVIDER === "turso" ||
+      env.TURSO_DATABASE_URL ||
+      env.TURSO_AUTH_TOKEN,
     );
+    return missing(
+      hasTursoConfiguration ? "database" : "d1",
+      sanitizeError(error),
+    );
+  }
+
+  return runProbe(config.provider, true, async () => {
+    const row = config.provider === "d1"
+      ? await retryTransientD1(
+          () => config.binding.prepare("SELECT 1 AS ok").first<{ ok: number }>(),
+          { delaysMs: READINESS_D1_RETRY_DELAYS_MS },
+        )
+      : await getDb(env).get<{ ok: number }>(sql`SELECT 1 AS ok`);
     if (row?.ok !== 1) {
-      throw new Error("unexpected D1 probe result");
+      throw new Error(`unexpected ${config.provider} probe result`);
     }
     return "SELECT 1";
   }, READINESS_REMOTE_PROBE_TIMEOUT_MS);
@@ -182,7 +202,7 @@ app.get("/readyz", async (c) => {
   const env = c.env;
 
   const asyncChecks = await Promise.all([
-    d1Check(env),
+    databaseCheck(env),
     kvCheck("api_cache_kv", env.CACHE),
     kvCheck("shared_auth_kv", env.SHARED_AUTH_CACHE),
     r2Check(env),

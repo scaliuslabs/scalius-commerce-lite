@@ -380,7 +380,7 @@ export async function listCustomers(
     if (search) {
         const digitsOnly = search.replace(/[^0-9]/g, "");
         const looksLikePhone = digitsOnly.length >= 4 && digitsOnly.length / search.replace(/\s/g, "").length > 0.5;
-        const ftsCondition = ftsMatch("customers_fts", "customers", search);
+        const ftsCondition = ftsMatch(db, "customers_fts", "customers", search);
 
         if (looksLikePhone && ftsCondition) {
             whereConditions.push(sql`(${ftsCondition} OR ${customers.phone} LIKE ${"%" + digitsOnly + "%"})`);

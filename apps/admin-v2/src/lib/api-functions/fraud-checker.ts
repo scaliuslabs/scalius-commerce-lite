@@ -1,6 +1,6 @@
-import { createServerFn } from "@tanstack/react-start";
+import { createAdminApiFunction as createServerFn } from "../admin-api-function";
 import type { FraudCheckProviderType } from "@scalius/core/modules/fraud-checker/provider";
-import { apiDelete, apiGet, apiPost, apiPut } from "../api.server";
+import { apiDelete, apiGet, apiPost, apiPut } from "../api";
 
 export interface FraudCheckerProviderPayload {
   id: string;

@@ -102,7 +102,7 @@ async function listReadyResources(
       .where(and(
         ...publicCategoryConditions(),
         afterResourceCursor(categories.name, categories.id, input.cursor),
-        query ? ftsMatch("categories_fts", "categories", query) : undefined,
+        query ? ftsMatch(db, "categories_fts", "categories", query) : undefined,
       ))
       .orderBy(asc(categories.name), asc(categories.id))
       .limit(rowLimit);
@@ -130,7 +130,7 @@ async function listReadyResources(
         isNull(pages.deletedAt),
         eq(pages.isPublished, true),
         afterResourceCursor(pages.title, pages.id, input.cursor),
-        query ? ftsMatch("pages_fts", "pages", query) : undefined,
+        query ? ftsMatch(db, "pages_fts", "pages", query) : undefined,
       ))
       .orderBy(asc(pages.title), asc(pages.id))
       .limit(rowLimit);
@@ -156,7 +156,7 @@ async function listReadyResources(
         isNull(products.deletedAt),
         eq(products.isActive, true),
         afterResourceCursor(products.name, products.id, input.cursor),
-        query ? ftsMatch("products_fts", "products", query) : undefined,
+        query ? ftsMatch(db, "products_fts", "products", query) : undefined,
       ))
       .orderBy(asc(products.name), asc(products.id))
       .limit(rowLimit);

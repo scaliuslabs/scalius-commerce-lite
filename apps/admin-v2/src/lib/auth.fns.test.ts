@@ -1,13 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { SQL } from "drizzle-orm";
+import { SQLiteSyncDialect } from "drizzle-orm/sqlite-core";
 
 const mocks = vi.hoisted(() => ({
   cfEnv: {} as { BETTER_AUTH_SECRET?: string; DB?: unknown },
+  getDb: vi.fn((env: { DB?: unknown }) => env.DB),
   retryTransientD1: vi.fn((operation: () => unknown) => operation()),
   getRequestHeader: vi.fn(),
   loadUserPermissions: vi.fn(),
 }));
 
 vi.mock("cloudflare:workers", () => ({ env: mocks.cfEnv }));
+
+vi.mock("@scalius/database/client", () => ({
+  getDb: mocks.getDb,
+}));
 
 vi.mock("@scalius/core/utils/transient-d1", () => ({
   retryTransientD1: mocks.retryTransientD1,
@@ -32,66 +39,52 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 
 function createAdminExistsDb(counts: number[]) {
-  const first = vi.fn(async () =>
+  const get = vi.fn(async (_query: SQL) =>
     (counts.shift() ?? 0) > 0 ? { found: 1 } : null,
   );
-  const bind = vi.fn(() => ({ first }));
-  const prepare = vi.fn((query: string) => {
-    void query;
-    return { bind, first };
-  });
 
   return {
-    db: { prepare },
-    first,
-    bind,
-    prepare,
+    db: { get },
+    get,
   };
 }
 
 function createDeferredAdminExistsDb() {
   let resolveFirst: (value: { found: number }) => void = () => {};
-  const first = vi.fn(
+  const get = vi.fn(
     () =>
       new Promise<{ found: number }>((resolve) => {
         resolveFirst = resolve;
       }),
   );
-  const bind = vi.fn(() => ({ first }));
-  const prepare = vi.fn((query: string) => {
-    void query;
-    return { bind, first };
-  });
 
   return {
-    db: { prepare },
-    first,
-    bind,
-    prepare,
+    db: { get },
+    get,
     resolveFirst: (value: { found: number }) => resolveFirst(value),
   };
 }
 
 function createAdminGuardDb(sessionRow: Record<string, unknown> | null) {
-  const adminFirst = vi.fn(async () => ({ found: 1 }));
-  const sessionFirst = vi.fn(async () => sessionRow);
-  const adminBind = vi.fn(() => ({ first: adminFirst }));
-  const sessionBind = vi.fn(() => ({ first: sessionFirst }));
-  const prepare = vi.fn((sql: string) => {
-    if (sql.includes("FROM session s")) {
-      return { bind: sessionBind };
-    }
-    return { bind: adminBind, first: adminFirst };
+  const adminGet = vi.fn(async () => ({ found: 1 }));
+  const sessionGet = vi.fn(async () => sessionRow);
+  const get = vi.fn((query: SQL) => {
+    const compiled = new SQLiteSyncDialect().sqlToQuery(query);
+    return compiled.sql.includes("FROM session s")
+      ? sessionGet()
+      : adminGet();
   });
 
   return {
-    db: { prepare },
-    adminFirst,
-    sessionFirst,
-    adminBind,
-    sessionBind,
-    prepare,
+    db: { get },
+    adminGet,
+    sessionGet,
+    get,
   };
+}
+
+function compileQuery(query: SQL): { sql: string; params: unknown[] } {
+  return new SQLiteSyncDialect().sqlToQuery(query);
 }
 
 const TEST_SECRET = "test-better-auth-secret";
@@ -144,16 +137,15 @@ describe("admin setup guard cache", () => {
     await expect(checkAdminExists()).resolves.toBe(true);
     await expect(checkAdminExists()).resolves.toBe(true);
 
-    expect(db.prepare).toHaveBeenCalledTimes(1);
-    const query = db.prepare.mock.calls[0]?.[0] ?? "";
+    expect(db.get).toHaveBeenCalledTimes(1);
+    const query = compileQuery(db.get.mock.calls[0]?.[0] as SQL).sql;
     expect(query).not.toContain("admin_user.role = 'admin'");
     expect(query).toContain("is_super_admin = 1");
     expect(query).toContain("from user_roles");
     expect(query).toContain("inner join role_permissions");
     expect(query).toContain("from user_permissions as granted_permissions");
     expect(query).toContain("granted_permissions.granted = 1");
-    expect(db.bind).not.toHaveBeenCalled();
-    expect(db.first).toHaveBeenCalledTimes(1);
+    expect(db.get).toHaveBeenCalledTimes(1);
   });
 
   it("does not treat RBAC-only admin state as unbootstrapped on login", async () => {
@@ -163,8 +155,8 @@ describe("admin setup guard cache", () => {
 
     await expect(loginPageGuard()).resolves.toBeNull();
 
-    expect(db.prepare).toHaveBeenCalledTimes(1);
-    const query = db.prepare.mock.calls[0]?.[0] ?? "";
+    expect(db.get).toHaveBeenCalledTimes(1);
+    const query = compileQuery(db.get.mock.calls[0]?.[0] as SQL).sql;
     expect(query).toContain("from user_roles");
     expect(query).toContain("from user_permissions as granted_permissions");
   });
@@ -177,8 +169,7 @@ describe("admin setup guard cache", () => {
     await expect(checkAdminExists()).resolves.toBe(false);
     await expect(checkAdminExists()).resolves.toBe(true);
 
-    expect(db.prepare).toHaveBeenCalledTimes(2);
-    expect(db.first).toHaveBeenCalledTimes(2);
+    expect(db.get).toHaveBeenCalledTimes(2);
   });
 
   it("deduplicates concurrent cold admin-exists reads inside one isolate", async () => {
@@ -196,8 +187,7 @@ describe("admin setup guard cache", () => {
     const secondCheck = checkAdminExists();
 
     await vi.waitFor(() => {
-      expect(db.prepare).toHaveBeenCalledTimes(1);
-      expect(db.first).toHaveBeenCalledTimes(1);
+      expect(db.get).toHaveBeenCalledTimes(1);
     });
 
     db.resolveFirst({ found: 1 });
@@ -220,7 +210,7 @@ describe("admin setup guard cache", () => {
     vi.setSystemTime(new Date("2026-06-19T00:06:00.000Z"));
 
     await expect(checkAdminExists()).resolves.toBe(true);
-    expect(db.prepare).toHaveBeenCalledTimes(2);
+    expect(db.get).toHaveBeenCalledTimes(2);
   });
 
   it("passes the fresh Better Auth super-admin value into RBAC loading", async () => {
@@ -255,7 +245,8 @@ describe("admin setup guard cache", () => {
       "admin",
       true,
     );
-    expect(db.sessionBind).toHaveBeenCalledWith("token");
+    const sessionQuery = compileQuery(db.get.mock.calls[1]?.[0] as SQL);
+    expect(sessionQuery.params).toEqual(["token"]);
   });
 
   it("redirects password-onboarding sessions to reset before RBAC", async () => {
@@ -344,7 +335,7 @@ describe("admin setup guard cache", () => {
 
     await expect(loginPageGuard()).resolves.toBeNull();
 
-    expect(db.prepare).toHaveBeenCalledTimes(1);
+    expect(db.get).toHaveBeenCalledTimes(1);
   });
 
   it("keeps setup recovery ahead of login no-cookie fast path", async () => {
@@ -356,7 +347,7 @@ describe("admin setup guard cache", () => {
       redirect: { to: "/auth/setup" },
     });
 
-    expect(db.prepare).toHaveBeenCalledTimes(1);
+    expect(db.get).toHaveBeenCalledTimes(1);
   });
 
   it("redirects anonymous admin requests without session or RBAC reads", async () => {
@@ -368,7 +359,7 @@ describe("admin setup guard cache", () => {
       redirect: { to: "/auth/login" },
     });
 
-    expect(db.prepare).toHaveBeenCalledTimes(1);
+    expect(db.get).toHaveBeenCalledTimes(1);
     expect(mocks.loadUserPermissions).not.toHaveBeenCalled();
   });
 
@@ -381,7 +372,7 @@ describe("admin setup guard cache", () => {
       redirect: { to: "/auth/setup" },
     });
 
-    expect(db.prepare).toHaveBeenCalledTimes(1);
+    expect(db.get).toHaveBeenCalledTimes(1);
     expect(mocks.loadUserPermissions).not.toHaveBeenCalled();
   });
 

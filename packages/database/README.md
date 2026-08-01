@@ -1,6 +1,9 @@
 # @scalius/database
 
-Drizzle ORM schema, client factory, and migrations for Cloudflare D1 (SQLite). This package defines the checked data model in `src/schema/**` and provides a singleton `getDb()` factory for Drizzle-over-D1.
+Drizzle ORM schema, request-safe client composition, and SQLite migrations for
+Cloudflare D1 and Turso. D1 is the zero-configuration default. Installing both
+`TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` selects the stable fetch-only Turso
+adapter; `DATABASE_PROVIDER=d1` is an explicit rollback override.
 
 ## Export Map
 
@@ -8,6 +11,9 @@ Drizzle ORM schema, client factory, and migrations for Cloudflare D1 (SQLite). T
 {
   "./schema": "./src/schema/index.ts",
   "./client": "./src/client.ts",
+  "./migration-control": "./src/migration-control.ts",
+  "./migration-artifacts": "./src/migration-artifacts.ts",
+  "./portability": "./src/portability.ts",
   "./types":  "./src/types.ts"
 }
 ```
@@ -18,8 +24,13 @@ import { products, orders, customers } from "@scalius/database/schema";
 import type { Product, Order, Customer } from "@scalius/database/schema";
 
 // Database client
-import { getDb, db, schema } from "@scalius/database/client";
+import { getDb, schema } from "@scalius/database/client";
 import type { Database } from "@scalius/database/client";
+
+// Control-plane migration building blocks
+import { advanceDatabaseMigrationCheckpoint } from "@scalius/database/migration-control";
+import { compileSqliteMigrationForProvider } from "@scalius/database/migration-artifacts";
+import { createSqlitePortabilityManifest } from "@scalius/database/portability";
 
 // Database type alias
 import type { Database } from "@scalius/database/types";
@@ -27,11 +38,31 @@ import type { Database } from "@scalius/database/types";
 
 ## Client Factory
 
-`src/client.ts` provides two access patterns:
+`getDb(env)` composes a fresh lightweight Drizzle client for the current request
+or Worker event. It never stores the active binding or merchant in mutable
+isolate-global state. D1 uses `drizzle-orm/d1`. Turso uses the official stable
+`@tursodatabase/serverless` transport through Drizzle's stable remote SQLite
+driver; dynamic batches execute as one atomic `BEGIN CONCURRENT` request and
+retry only explicit MVCC busy/conflict failures.
 
-1. **`getDb(env)`** -- Initializes a Drizzle instance from `env.DB` (D1 binding). Module-level singleton: first call creates the instance, subsequent calls return the cached one. D1 bindings are stable handles -- no per-connection TLS handshake cost.
+Provider selection is fail-closed:
 
-2. **`db`** (legacy proxy) -- A `Proxy` object that delegates to the module-level singleton. Existing code using `import { db } from "@scalius/database/client"` works without modification, provided `getDb(env)` was called first (by Astro middleware or the Hono per-request initializer).
+- no Turso secrets: require `env.DB` and use D1;
+- both Turso secrets: use Turso;
+- only one Turso secret: reject the deployment configuration;
+- `DATABASE_PROVIDER=d1`: require/use D1 even while Turso secrets are retained
+  for a controlled rollback;
+- `DATABASE_PROVIDER=turso`: require/use both Turso secrets.
+
+Migration/copy/cutover orchestration does not run in this package or on request
+paths. It belongs to the external control plane and repo-owned migration tools.
+
+The capability matrix is deliberately small. D1 supports FTS5, recursive CTEs,
+and `WITHOUT ROWID`, but serializes writes inside one database. Turso supports
+concurrent writers and does not currently support those three SQLite features.
+Provider-aware core helpers supply bounded search/navigation alternatives, and
+the migration compiler removes only the unsupported physical artifacts. Do not
+spread provider checks through domain services.
 
 ## Schema Files
 
@@ -248,7 +279,9 @@ All entity IDs are `text` primary keys generated as `"prefix_" + nanoid()`.
 
 Some tables use plain `nanoid()` without a prefix: `collections`, `deliveryShipments`, `deliveryProviders`.
 
-Order IDs use `generateOrderId()` from `@scalius/shared/order-utils` -- 6-character alphanumeric (e.g., `A39K02`), not nanoid.
+New order and order-item IDs use `generateOrderId()` from
+`@scalius/shared/order-utils`: 16-character Crockford-base32 identities with 80
+bits of randomness. Existing six-character order IDs remain valid.
 
 Auth tables (`user`, `session`, `account`, `verification`, `twoFactor`) use Better Auth's built-in ID generation.
 
@@ -292,6 +325,34 @@ Validate migration metadata after schema or migration edits:
 pnpm --filter @scalius/database check:migrations
 ```
 
+Compile an immutable provider-specific migration bundle into an empty directory:
+
+```bash
+pnpm --filter @scalius/database compile:migrations \
+  --provider turso --out /path/to/empty-output
+```
+
+The manifest records the canonical and compiled SHA-256 for every file plus one
+bundle digest. D1 output is byte-identical to the canonical migration chain.
+
+Compile a trusted D1 data-only SQL export for Turso:
+
+```bash
+pnpm --filter @scalius/database compile:data-export \
+  --provider turso --input /path/to/d1-export.sql --out /path/to/turso-import.sql
+```
+
+Turso data imports run in one foreign-key-disabled transaction because Wrangler's
+data-only export is table-name ordered rather than dependency ordered. The control
+plane must run `PRAGMA foreign_key_check` and the deterministic portability verifier
+before cutover; disabling checks without that verification is invalid.
+
+The portability manifest walks every application table in primary-key keyset
+chunks and records logical schema, row, chunk, and whole-database digests. It
+ignores vendor internals and derived FTS objects, and refuses an application table
+without a primary key. The durable orchestration state machine is resumable and
+requires evidence references at every non-skippable transition.
+
 Drizzle config (`drizzle.config.ts`):
 - Schema: `./src/schema/index.ts`
 - Output: `./migrations`
@@ -301,6 +362,7 @@ Drizzle config (`drizzle.config.ts`):
 
 | Package | Purpose |
 |---------|---------|
+| `@tursodatabase/serverless` ^1.4.0 | Fetch-only Turso transport and concurrent atomic batches |
 | `drizzle-orm` ^0.45.2 | ORM, schema definitions, query builder |
 | `drizzle-kit` (dev) ^0.31.10 | Migration generation |
 | `@cloudflare/workers-types` (dev) | `D1Database` type |

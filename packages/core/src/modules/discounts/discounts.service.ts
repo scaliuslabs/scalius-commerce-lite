@@ -101,7 +101,7 @@ export async function listDiscounts(db: Database, options: { page: number; limit
 
     const conditions = [];
     if (search) {
-        const cond = ftsMatch("discounts_fts", "discounts", search);
+        const cond = ftsMatch(db, "discounts_fts", "discounts", search);
         if (cond) conditions.push(cond);
     }
     if (showTrashed) {

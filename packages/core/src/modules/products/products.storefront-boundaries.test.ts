@@ -199,17 +199,18 @@ describe("storefront product query boundaries", () => {
         expect(lookupHelper).toContain("lookup_variant.sku = public_lookup.value");
         expect(lookupHelper).toContain("lookup_variant.deleted_at IS NULL");
         expect(listBody).toContain("return readStorefrontCatalogPage(db, params);");
-        expect(catalogReader).toContain("const conditions = buildStorefrontProductConditions(params, {}, buyerPricing);");
+        expect(catalogReader).toContain("const conditions = buildStorefrontProductConditions(db, params, {}, buyerPricing);");
         expect(listBody).not.toContain("includeLookupHandles");
         expect(listBody).not.toContain("includeVariantLookups");
-        expect(feedBody).toContain("const conditions = buildStorefrontProductConditions(params, {");
+        expect(feedBody).toContain("const conditions = buildStorefrontProductConditions(db, params, {");
         expect(feedBody).toContain("includeLookupHandles: true");
         expect(feedBody).toContain("includeVariantLookups: true");
         expect(feedBody).toContain("includeCategorySearchMatches: true");
         expect(feedBody).toContain("}, buyerPricing);");
         expect(feedBody).toContain("conditions.push(eq(products.excludeFromProductFeed, false));");
         expect(source).toContain("function buildFeedCategorySearchCondition");
-        expect(source).toContain('MATCH ${`name : (${sanitized})`}');
+        expect(source).toContain('"categories_fts",');
+        expect(source).toContain('"categories",');
         expect(source).toContain("eq(categories.slug, normalizedSlug)");
         expect(source).toContain("publishedCategoryIdExists(products.categoryId)");
         expect(source).toContain("MAX_PUBLIC_CATEGORY_SEARCH_SLUG_LENGTH");
@@ -327,7 +328,7 @@ describe("storefront product query boundaries", () => {
         const categoryHelperIndex = source.indexOf("export async function getStorefrontCategoryProducts");
         const collectionHelperIndex = source.indexOf("export async function getStorefrontCollectionProducts");
         const listingSearchConditionsIndex = source.indexOf(
-            'const searchConditions = [ftsMatch("products_fts", "products", search)];',
+            'const searchConditions = [ftsMatch(db, "products_fts", "products", search)];',
             conditionsHelperIndex,
         );
         const newestSortIndex = source.indexOf(

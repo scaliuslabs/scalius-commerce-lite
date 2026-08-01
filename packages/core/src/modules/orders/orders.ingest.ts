@@ -20,8 +20,13 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { nanoid } from "nanoid";
 
-import { ServiceUnavailableError, ValidationError } from "../../errors";
-import { reserveStockBatch, releaseReservedStockBatch } from "../inventory";
+import { ConflictError, ServiceUnavailableError, ValidationError } from "../../errors";
+import {
+    isInventoryReservationConflictError,
+    prepareStockReservationBatch,
+    type PreparedStockReservationBatch,
+    type StockReservationAvailabilitySubject,
+} from "../inventory";
 import {
     buildMetaPurchaseOutboxClaimInsert,
     isOrderEligibleForMetaPurchase,
@@ -43,6 +48,13 @@ import {
     verifyPromotionCheckoutSnapshot,
     type AppliedPromotion,
 } from "../promotions";
+import {
+    isCheckoutAttemptClaimCurrent,
+    isCheckoutAttemptCommitConflictError,
+    prepareCheckoutAttemptCommit,
+    type ClaimedCheckoutAttempt,
+    type PreparedCheckoutAttemptCommit,
+} from "./checkout-attempts";
 
 type ReservationPool = "regular" | "preorder" | "backorder";
 type SQLiteBatchItem = BatchItem<"sqlite">;
@@ -58,6 +70,12 @@ export interface StorefrontOrderCommitResult {
     customerId: string | null;
     accountOwnerCustomerId: string | null;
     alreadyCommitted: boolean;
+    availabilityChangedSubjects: StockReservationAvailabilitySubject[];
+}
+
+export interface StorefrontOrderCheckoutCommit<TResponse = unknown> {
+    attempt: ClaimedCheckoutAttempt;
+    response: TResponse;
 }
 
 type ReservationEntry = {
@@ -71,7 +89,8 @@ type ReservationEntry = {
 // value stable so crash retries can recognize reservations created before this
 // source-level queue retirement.
 const CHECKOUT_RESERVATION_KEY = "checkout-ingest:v1";
-const CHECKOUT_ROLLBACK_RELEASE_KEY = "checkout-rollback:v1";
+const INVENTORY_COMMIT_MAX_CONFLICTS = 3;
+const INVENTORY_COMMIT_BASE_BACKOFF_MS = 5;
 
 function isCustomerPhoneConstraintError(error: unknown): boolean {
     let current = error;
@@ -278,14 +297,12 @@ function buildReservationItemIssues(
         });
 }
 
-async function reserveOrderInventory(
+async function prepareOrderInventory(
     db: Database,
     payload: StorefrontOrderCommitPayload,
-): Promise<ReservationEntry[]> {
+): Promise<PreparedStockReservationBatch> {
     const entries = getReservationEntries(payload);
-    if (entries.length === 0) return [];
-
-    const result = await reserveStockBatch(
+    const result = await prepareStockReservationBatch(
         db,
         entries.map((entry) => ({
             variantId: entry.variantId,
@@ -316,23 +333,7 @@ async function reserveOrderInventory(
         });
     }
 
-    return entries;
-}
-
-async function releaseReservedEntries(db: Database, entries: ReservationEntry[]): Promise<void> {
-    if (entries.length === 0) return;
-    const orderId = entries[0]!.orderId;
-    const result = await releaseReservedStockBatch(db, entries, orderId, {
-        releaseKey: CHECKOUT_ROLLBACK_RELEASE_KEY,
-    });
-    if (!result.success) {
-        console.error("[orders/commit] Failed to prove reserved stock release after order commit failure:", {
-            orderId,
-            error: result.error,
-            manualReconciliationRequired: result.manualReconciliationRequired,
-        });
-        throw new ServiceUnavailableError("Checkout inventory cleanup is temporarily unavailable. Please try again.");
-    }
+    return result;
 }
 
 function buildOrderWriteBatch(
@@ -708,51 +709,190 @@ function isStorefrontOrderPayloadEligibleForMetaPurchase(
 export async function commitStorefrontOrderPayload(
     db: Database,
     payload: StorefrontOrderCommitPayload,
-    retryGuestProfileRace = true,
+    checkoutCommit?: StorefrontOrderCheckoutCommit,
 ): Promise<StorefrontOrderCommitResult> {
-    const existing = await loadExistingCommittedOrder(db, payload.orderData.id);
-    if (existing) {
+    if (
+        checkoutCommit
+        && (
+            checkoutCommit.attempt.orderId !== payload.orderData.id
+            || checkoutCommit.attempt.checkoutToken !== payload.checkoutToken
+        )
+    ) {
+        throw new ValidationError("Checkout attempt identity does not match the prepared order.");
+    }
+
+    let guestProfileRaceRetried = false;
+    let inventoryConflictCount = 0;
+
+    while (true) {
+        const existing = await loadExistingCommittedOrder(db, payload.orderData.id);
+        if (existing) {
+            await finalizeCheckoutAttemptForExistingOrder(db, payload, checkoutCommit);
+            return {
+                orderId: existing.id,
+                customerId: existing.customerId,
+                accountOwnerCustomerId: existing.accountOwnerCustomerId,
+                alreadyCommitted: true,
+                availabilityChangedSubjects: [],
+            };
+        }
+
+        const customer = await resolveCustomerForOrder(db, payload);
+        if (payload.discountUsage && payload.promotion) {
+            throw new ValidationError("An order cannot combine legacy and typed discount authorities.");
+        }
+        const appliedPromotion = payload.promotion
+            ? await verifyPromotionCheckoutSnapshot(db, payload.promotion, customer.id)
+            : null;
+        await assertDiscountUsageStillAvailable(db, payload);
+
+        const inventoryPlan = await prepareOrderInventory(db, payload);
+        const checkoutAttemptPlan = checkoutCommit
+            ? await prepareCheckoutAttemptCommit(db, checkoutCommit.attempt, {
+                paymentMethod: payload.orderData.paymentMethod,
+                totalAmount: payload.orderData.totalAmount,
+                response: checkoutCommit.response,
+            })
+            : null;
+        const orderWrites = buildOrderWriteBatch(db, payload, customer, appliedPromotion);
+        const atomicWrites: SQLiteBatchItem[] = [
+            ...(checkoutAttemptPlan ? [checkoutAttemptPlan.guard] : []),
+            ...inventoryPlan.statements,
+            ...orderWrites,
+            ...(checkoutAttemptPlan?.writes ?? []),
+        ];
+
+        try {
+            await safeBatch(db, atomicWrites);
+        } catch (error) {
+            const committedAfterError = await loadExistingCommittedOrder(db, payload.orderData.id)
+                .catch(() => undefined);
+            if (committedAfterError) {
+                return {
+                    orderId: committedAfterError.id,
+                    customerId: committedAfterError.customerId,
+                    accountOwnerCustomerId: committedAfterError.accountOwnerCustomerId,
+                    alreadyCommitted: true,
+                    availabilityChangedSubjects: [],
+                };
+            }
+
+            const discountConstraintError = getDiscountUsageConstraintError(error)
+                ?? getPromotionRedemptionConstraintError(error);
+            if (discountConstraintError) throw discountConstraintError;
+
+            if (
+                !guestProfileRaceRetried
+                && customer.createProfile
+                && isCustomerPhoneConstraintError(error)
+            ) {
+                guestProfileRaceRetried = true;
+                continue;
+            }
+
+            if (checkoutAttemptPlan && isCheckoutAttemptCommitConflictError(error)) {
+                throw new ConflictError("Checkout attempt changed before the order could be committed. Please retry.");
+            }
+
+            if (checkoutAttemptPlan && isMalformedJsonBatchGuardError(error)) {
+                const claimIsCurrent = await isCheckoutAttemptClaimCurrent(db, checkoutCommit!.attempt)
+                    .catch(() => null);
+                if (claimIsCurrent === false) {
+                    throw new ConflictError("Checkout attempt changed before the order could be committed. Please retry.");
+                }
+                if (claimIsCurrent === null) throw error;
+            }
+
+            const idempotentReservation = await inventoryPlan.resolveIdempotentReplay(error);
+            if (idempotentReservation?.success) {
+                await safeBatch(db, [
+                    ...(checkoutAttemptPlan ? [checkoutAttemptPlan.guard] : []),
+                    ...orderWrites,
+                    ...(checkoutAttemptPlan?.writes ?? []),
+                ] as SQLiteBatchItem[]);
+                return {
+                    orderId: payload.orderData.id,
+                    customerId: customer.id,
+                    accountOwnerCustomerId: customer.accountOwnerCustomerId,
+                    alreadyCommitted: false,
+                    availabilityChangedSubjects: inventoryPlan.availabilityChangedSubjects,
+                };
+            }
+            if (idempotentReservation?.manualReconciliationRequired) {
+                throw new ServiceUnavailableError(
+                    "Checkout inventory state needs reconciliation before this order can be retried.",
+                );
+            }
+
+            if (isInventoryReservationConflictError(error)) {
+                inventoryConflictCount += 1;
+                if (inventoryConflictCount < INVENTORY_COMMIT_MAX_CONFLICTS) {
+                    await new Promise((resolve) => setTimeout(
+                        resolve,
+                        INVENTORY_COMMIT_BASE_BACKOFF_MS * Math.pow(2, inventoryConflictCount - 1),
+                    ));
+                    continue;
+                }
+                throw new ServiceUnavailableError(
+                    "Inventory is changing quickly. Please retry checkout.",
+                );
+            }
+
+            throw error;
+        }
+
         return {
-            orderId: existing.id,
-            customerId: existing.customerId,
-            accountOwnerCustomerId: existing.accountOwnerCustomerId,
-            alreadyCommitted: true,
+            orderId: payload.orderData.id,
+            customerId: customer.id,
+            accountOwnerCustomerId: customer.accountOwnerCustomerId,
+            alreadyCommitted: false,
+            availabilityChangedSubjects: inventoryPlan.availabilityChangedSubjects,
         };
     }
+}
 
-    const customer = await resolveCustomerForOrder(db, payload);
-    if (payload.discountUsage && payload.promotion) {
-        throw new ValidationError("An order cannot combine legacy and typed discount authorities.");
+function isMalformedJsonBatchGuardError(error: unknown): boolean {
+    let current = error;
+    for (let depth = 0; depth < 5 && current; depth += 1) {
+        const message = current instanceof Error ? current.message : String(current);
+        if (/malformed json/i.test(message)) return true;
+        current = current instanceof Error
+            ? (current as Error & { cause?: unknown }).cause
+            : null;
     }
-    const appliedPromotion = payload.promotion
-        ? await verifyPromotionCheckoutSnapshot(db, payload.promotion, customer.id)
-        : null;
-    await assertDiscountUsageStillAvailable(db, payload);
-    const reservedEntries = await reserveOrderInventory(db, payload);
+    return false;
+}
 
+async function finalizeCheckoutAttemptForExistingOrder(
+    db: Database,
+    payload: StorefrontOrderCommitPayload,
+    checkoutCommit: StorefrontOrderCheckoutCommit | undefined,
+): Promise<void> {
+    if (!checkoutCommit) return;
+
+    const plan: PreparedCheckoutAttemptCommit = await prepareCheckoutAttemptCommit(
+        db,
+        checkoutCommit.attempt,
+        {
+            paymentMethod: payload.orderData.paymentMethod,
+            totalAmount: payload.orderData.totalAmount,
+            response: checkoutCommit.response,
+        },
+    );
     try {
-        const writes = buildOrderWriteBatch(db, payload, customer, appliedPromotion);
-        await safeBatch(db, writes);
+        await safeBatch(db, [plan.guard, ...plan.writes] as SQLiteBatchItem[]);
     } catch (error) {
-        const discountConstraintError = getDiscountUsageConstraintError(error)
-            ?? getPromotionRedemptionConstraintError(error);
-        await releaseReservedEntries(db, reservedEntries);
+        // A committed matching attempt is already durable after an uncertain
+        // response. With no other guards in this repair batch, malformed JSON
+        // also means the processing claim is no longer current.
         if (
-            retryGuestProfileRace
-            && customer.createProfile
-            && isCustomerPhoneConstraintError(error)
+            isCheckoutAttemptCommitConflictError(error)
+            || isMalformedJsonBatchGuardError(error)
         ) {
-            return commitStorefrontOrderPayload(db, payload, false);
+            return;
         }
-        throw discountConstraintError ?? error;
+        throw error;
     }
-
-    return {
-        orderId: payload.orderData.id,
-        customerId: customer.id,
-        accountOwnerCustomerId: customer.accountOwnerCustomerId,
-        alreadyCommitted: false,
-    };
 }
 
 export async function runStorefrontOrderPostCommitSideEffects(

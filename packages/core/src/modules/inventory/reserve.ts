@@ -5,7 +5,8 @@
 
 import { eq, and, sql, inArray, isNull } from "drizzle-orm";
 import { inventoryMovements, products, productVariants } from "@scalius/database/schema";
-import { safeBatch, type Database } from "@scalius/database/client";
+import { buildBatchGuard, safeBatch, type Database } from "@scalius/database/client";
+import type { BatchItem } from "drizzle-orm/batch";
 import { recordMovement } from "./movements";
 import type { ReservationEntry, StockOperationResult } from "./types";
 import { validatePositiveQuantity } from "./validation";
@@ -19,7 +20,9 @@ import {
 
 const MAX_RETRIES = 3;
 const BASE_BACKOFF_MS = 50;
+const INVENTORY_RESERVATION_CONFLICT = "INVENTORY_RESERVATION_CONFLICT";
 type ReservationPool = "regular" | "preorder" | "backorder";
+type SQLiteBatchItem = BatchItem<"sqlite">;
 
 /**
  * Reserve stock for a single variant using optimistic locking.
@@ -261,12 +264,30 @@ export interface ReserveStockBatchOptions {
   reservationKey?: string;
 }
 
-type ReserveStockBatchResult = {
+export type ReserveStockBatchResult = {
   success: boolean;
   results: StockOperationResult[];
   error?: string;
   manualReconciliationRequired?: boolean;
 };
+
+export interface StockReservationAvailabilitySubject {
+  productId: string;
+  slug: string | null;
+  categoryId: string | null;
+}
+
+/**
+ * A validated reservation plan whose statements can be composed into a larger
+ * atomic checkout batch. Preparing performs reads only; callers decide when to
+ * execute the guarded ledger and counter writes.
+ */
+export interface PreparedStockReservationBatch extends ReserveStockBatchResult {
+  statements: SQLiteBatchItem[];
+  /** Products whose public in-stock boolean changes if this plan commits. */
+  availabilityChangedSubjects: StockReservationAvailabilitySubject[];
+  resolveIdempotentReplay(error: unknown): Promise<ReserveStockBatchResult | null>;
+}
 
 type ReservationMovementClaim = {
   id: string;
@@ -281,29 +302,26 @@ type ReservationMovementClaim = {
 } & InventoryLedgerV2EdgeFields;
 
 /**
- * Atomically reserve stock for multiple variants using D1 batch.
- *
- * Unlike `reserveMultiple` (which reserves sequentially and rolls back on
- * failure), this function:
- *   1. Reads all variant states upfront
- *   2. Validates ALL stock availability before writing anything
- *   3. Batches all CAS updates into a single `db.batch()` call (atomic in D1)
- *   4. Verifies all CAS updates succeeded; batch-rolls-back on any conflict
- *
- * This prevents orphaned reservations: either ALL variants are reserved or NONE are.
- *
- * Retries the entire batch up to MAX_RETRIES times on CAS conflict.
+ * Prepare guarded ledger-v2 reservation statements without executing them.
+ * This is the checkout composition seam: inventory, order, promotion, outbox,
+ * and idempotency writes can all share one database transaction.
  */
-export async function reserveStockBatch(
+export async function prepareStockReservationBatch(
   db: Database,
   items: ReservationBatchItem[],
   pool: ReservationPool = "regular",
   options: ReserveStockBatchOptions = {},
-): Promise<ReserveStockBatchResult> {
+): Promise<PreparedStockReservationBatch> {
   for (const item of items) validatePositiveQuantity(item.quantity);
 
   if (items.length === 0) {
-    return { success: true, results: [] };
+    return {
+      success: true,
+      results: [],
+      statements: [],
+      availabilityChangedSubjects: [],
+      resolveIdempotentReplay: async () => null,
+    };
   }
 
   // Deduplicate stock counter updates by variant. Audit movements are grouped
@@ -323,187 +341,158 @@ export async function reserveStockBatch(
       })),
       error: `Variant ${multiOrderVariant} cannot be reserved for multiple orders in one counter mutation`,
       manualReconciliationRequired: true,
+      statements: [],
+      availabilityChangedSubjects: [],
+      resolveIdempotentReplay: async () => null,
     };
   }
 
-  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    // Phase 1: Read all variant states
-    const variantLoad = await loadReservationVariantStates(db, entries);
-    if (!variantLoad.success) return variantLoad;
-    const variants = variantLoad.variants;
+  const variantLoad = await loadReservationVariantStates(db, entries);
+  if (!variantLoad.success) {
+    return {
+      ...variantLoad,
+      statements: [],
+      availabilityChangedSubjects: [],
+      resolveIdempotentReplay: async () => null,
+    };
+  }
+  const variants = variantLoad.variants;
 
-    // Phase 2: Validate ALL stock availability before writing anything
-    const validationErrors = getStockAvailabilityErrors(entries, variants, pool);
+  const validationErrors = getStockAvailabilityErrors(entries, variants, pool);
+  if (validationErrors.length > 0) {
+    return {
+      success: false,
+      results: validationErrors,
+      error: validationErrors[0]?.error,
+      statements: [],
+      availabilityChangedSubjects: [],
+      resolveIdempotentReplay: async () => null,
+    };
+  }
 
-    if (validationErrors.length > 0) {
-      return {
-        success: false,
-        results: validationErrors,
-        error: validationErrors[0]?.error,
-      };
-    }
+  const trackedEntries = entries.filter((entry) => variants.get(entry.variantId)?.trackInventory !== false);
+  const trackedMovementEntries = movementEntries.filter((entry) => variants.get(entry.variantId)?.trackInventory !== false);
+  const results = buildReservationSuccessResults(entries, variants, pool);
+  if (trackedEntries.length === 0) {
+    return {
+      success: true,
+      results,
+      statements: [],
+      availabilityChangedSubjects: [],
+      resolveIdempotentReplay: async () => null,
+    };
+  }
 
-    const trackedEntries = entries.filter((entry) => variants.get(entry.variantId)?.trackInventory !== false);
-    const trackedMovementEntries = movementEntries.filter((entry) => variants.get(entry.variantId)?.trackInventory !== false);
-    if (trackedEntries.length === 0) {
-      return { success: true, results: buildReservationSuccessResults(entries, variants, pool) };
-    }
+  const movementClaims = await buildReservationMovementClaims(
+    db,
+    trackedMovementEntries,
+    variants,
+    pool,
+    options,
+  );
+  const guardQueries = trackedEntries.map((entry) =>
+    buildReservationBatchGuard(db, entry, variants.get(entry.variantId)!, pool)
+  );
+  const movementQueries = movementClaims.map((claim) =>
+    buildReservationMovementInsert(db, claim, variants.get(claim.variantId)!)
+  );
+  const updateQueries = trackedEntries.map((entry) => {
+    const variant = variants.get(entry.variantId)!;
+    const updateSet = pool === "preorder"
+      ? {
+          preorderStock: sql`${productVariants.preorderStock} - ${entry.quantity}`,
+          reservedStock: sql`${productVariants.reservedStock} + ${entry.quantity}`,
+          stockVersion: sql`${productVariants.stockVersion} + 1`,
+          updatedAt: sql`unixepoch()`,
+        }
+      : {
+          reservedStock: sql`${productVariants.reservedStock} + ${entry.quantity}`,
+          stockVersion: sql`${productVariants.stockVersion} + 1`,
+          updatedAt: sql`unixepoch()`,
+        };
 
-    // Phase 3: Build strict movement claims and all CAS update queries.
-    const movementClaims = await buildReservationMovementClaims(
+    return db
+      .update(productVariants)
+      .set(updateSet)
+      .where(and(
+        eq(productVariants.id, entry.variantId),
+        isNull(productVariants.deletedAt),
+        eq(productVariants.stockVersion, variant.stockVersion),
+      ))
+      .returning({ id: productVariants.id });
+  });
+
+  return {
+    success: true,
+    results,
+    statements: [...guardQueries, ...movementQueries, ...updateQueries] as SQLiteBatchItem[],
+    availabilityChangedSubjects: buildReservationAvailabilityChangedSubjects(
+      trackedEntries,
+      variants,
+    ),
+    resolveIdempotentReplay: (error) => resolveDuplicateReservationBatch(
       db,
-      trackedMovementEntries,
+      movementClaims,
+      entries,
       variants,
       pool,
-      options,
-    );
-    const movementQueries = movementClaims.map((claim) =>
-      buildReservationMovementInsert(db, claim, variants.get(claim.variantId)!)
-    );
-    const updateQueries = trackedEntries.map((entry) => {
-      const variant = variants.get(entry.variantId)!;
-      const updateSet =
-        pool === "preorder"
-          ? {
-              preorderStock: sql`${productVariants.preorderStock} - ${entry.quantity}`,
-              reservedStock: sql`${productVariants.reservedStock} + ${entry.quantity}`,
-              stockVersion: sql`${productVariants.stockVersion} + 1`,
-              updatedAt: sql`unixepoch()`,
-            }
-          : {
-              reservedStock: sql`${productVariants.reservedStock} + ${entry.quantity}`,
-              stockVersion: sql`${productVariants.stockVersion} + 1`,
-              updatedAt: sql`unixepoch()`,
-            };
+      error,
+    ),
+  };
+}
 
-      return db
-        .update(productVariants)
-        .set(updateSet)
-        .where(
-          and(
-            eq(productVariants.id, entry.variantId),
-            isNull(productVariants.deletedAt),
-            eq(productVariants.stockVersion, variant.stockVersion)
-          )
-        )
-        .returning({ id: productVariants.id });
-    });
+/**
+ * Reserve stock as a standalone atomic operation. Checkout uses the preparation
+ * API above and composes these statements with its own durable writes.
+ */
+export async function reserveStockBatch(
+  db: Database,
+  items: ReservationBatchItem[],
+  pool: ReservationPool = "regular",
+  options: ReserveStockBatchOptions = {},
+): Promise<ReserveStockBatchResult> {
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    const plan = await prepareStockReservationBatch(db, items, pool, options);
+    if (!plan.success || plan.statements.length === 0) return plan;
 
-    // Phase 4: Execute all movement claims and updates atomically via D1 batch
-    let batchResults: { id: string }[][];
     try {
-      batchResults = await safeBatch(db, [...movementQueries, ...updateQueries] as never) as { id: string }[][];
-    } catch (err: unknown) {
-      const idempotentResult = await resolveDuplicateReservationBatch(
-        db,
-        movementClaims,
-        entries,
-        variants,
-        pool,
-        err,
-      );
+      await safeBatch(db, plan.statements);
+      return { success: true, results: plan.results };
+    } catch (error: unknown) {
+      const idempotentResult = await plan.resolveIdempotentReplay(error);
       if (idempotentResult) return idempotentResult;
 
-      console.error("[inventory/reserve] Batch execution failed:", err);
-      return {
-        success: false,
-        results: trackedEntries.map((e) => ({
-          success: false,
-          variantId: e.variantId,
-          previousStock: 0,
-          newStock: 0,
-          error: "Batch execution failed",
-        })),
-        error: "Batch execution failed",
-      };
-    }
-
-    // Phase 5: Verify all movement claims and CAS updates succeeded
-    const failedMovementIndices: number[] = [];
-    const insertedMovementIds: string[] = [];
-    for (let i = 0; i < movementClaims.length; i++) {
-      const batchResult = batchResults[i];
-      if (!batchResult || batchResult.length === 0) {
-        failedMovementIndices.push(i);
-      } else {
-        insertedMovementIds.push(movementClaims[i]!.id);
-      }
-    }
-
-    const failedUpdateIndices: number[] = [];
-    for (let i = 0; i < updateQueries.length; i++) {
-      const batchResult = batchResults[movementQueries.length + i];
-      if (!batchResult || batchResult.length === 0) {
-        failedUpdateIndices.push(i);
-      }
-    }
-
-    if (failedMovementIndices.length > 0 || failedUpdateIndices.length > 0) {
-      // CAS conflict on some variants — roll back all successful claims/updates
-      const rollbackQueries = trackedEntries
-        .filter((_, i) => !failedUpdateIndices.includes(i))
-        .map((entry) => {
-          return db
-            .update(productVariants)
-            .set({
-              reservedStock: sql`MAX(0, ${productVariants.reservedStock} - ${entry.quantity})`,
-              ...(pool === "preorder"
-                ? { preorderStock: sql`${productVariants.preorderStock} + ${entry.quantity}` }
-                : {}),
-              stockVersion: sql`${productVariants.stockVersion} + 1`,
-              updatedAt: sql`unixepoch()`,
-            })
-            .where(eq(productVariants.id, entry.variantId));
-        });
-
-      const movementRollbackQueries = insertedMovementIds.map((id) =>
-        db.delete(inventoryMovements).where(eq(inventoryMovements.id, id))
-      );
-
-      if (rollbackQueries.length > 0 || movementRollbackQueries.length > 0) {
-        try {
-          await safeBatch(db, [...movementRollbackQueries, ...rollbackQueries] as never);
-        } catch (rollbackErr: unknown) {
-          console.error("[inventory/reserve] Batch rollback failed:", rollbackErr);
-        }
-      }
-
-      // Retry if we haven't exhausted attempts
-      if (attempt < MAX_RETRIES - 1) {
+      if (isInventoryReservationConflictError(error) && attempt < MAX_RETRIES - 1) {
         const backoff = BASE_BACKOFF_MS * Math.pow(2, attempt);
         await new Promise((resolve) => setTimeout(resolve, backoff));
         continue;
       }
 
+      if (!isInventoryReservationConflictError(error)) {
+        console.error("[inventory/reserve] Batch execution failed:", error);
+        return {
+          success: false,
+          results: plan.results.map((result) => ({
+            ...result,
+            success: false,
+            error: "Batch execution failed",
+          })),
+          error: "Batch execution failed",
+        };
+      }
+
       return {
         success: false,
-        results: entries.map((e) => {
-          const movementFailed = failedMovementIndices.some(
-            (movementIndex) => movementClaims[movementIndex]?.variantId === e.variantId,
-          );
-          const trackedIndex = trackedEntries.findIndex((entry) => entry.variantId === e.variantId);
-          const updateFailed = trackedIndex >= 0 && failedUpdateIndices.includes(trackedIndex);
-          return {
-            success: !movementFailed && !updateFailed,
-            variantId: e.variantId,
-            previousStock: 0,
-            newStock: 0,
-            error: updateFailed
-              ? `CAS conflict for variant ${e.variantId}`
-              : movementFailed
-                ? `Reservation claim conflict for variant ${e.variantId}`
-                : undefined,
-          };
-        }),
+        results: plan.results.map((result) => ({
+          ...result,
+          success: false,
+          error: `Concurrent inventory change for variant ${result.variantId}`,
+        })),
         error: `Failed to reserve stock batch after ${MAX_RETRIES} retries due to concurrent modifications`,
       };
     }
-
-    // Phase 6: All succeeded
-    return { success: true, results: buildReservationSuccessResults(entries, variants, pool) };
   }
 
-  // Should not reach here, but satisfy TypeScript
   return {
     success: false,
     results: [],
@@ -513,6 +502,9 @@ export async function reserveStockBatch(
 
 type ReservationVariantState = {
   id: string;
+  productId: string;
+  slug: string | null;
+  categoryId: string | null;
   stock: number;
   reservedStock: number;
   preorderStock: number;
@@ -522,6 +514,71 @@ type ReservationVariantState = {
   trackInventory: boolean;
   stockVersion: number;
 };
+
+function buildReservationAvailabilityChangedSubjects(
+  entries: ReservationBatchItem[],
+  variants: Map<string, ReservationVariantState>,
+): StockReservationAvailabilitySubject[] {
+  const subjects = new Map<string, StockReservationAvailabilitySubject>();
+  for (const entry of entries) {
+    const variant = variants.get(entry.variantId)!;
+    const availableBefore = variant.stock - variant.reservedStock > 0;
+    const availableAfter = variant.stock - (variant.reservedStock + entry.quantity) > 0;
+    if (availableBefore === availableAfter) continue;
+    subjects.set(variant.productId, {
+      productId: variant.productId,
+      slug: variant.slug,
+      categoryId: variant.categoryId,
+    });
+  }
+  return [...subjects.values()];
+}
+
+function buildReservationBatchGuard(
+  db: Database,
+  entry: ReservationBatchItem,
+  variant: ReservationVariantState,
+  pool: ReservationPool,
+): SQLiteBatchItem {
+  const availability = pool === "preorder"
+    ? sql`${productVariants.allowPreorder} = 1
+        AND ${productVariants.preorderStock} >= ${entry.quantity}`
+    : pool === "backorder"
+      ? sql`${productVariants.allowBackorder} = 1
+          AND (
+            ${productVariants.backorderLimit} = 0
+            OR ${productVariants.reservedStock} + ${entry.quantity} <= ${productVariants.backorderLimit}
+          )`
+      : sql`${productVariants.stock} - ${productVariants.reservedStock} >= ${entry.quantity}`;
+
+  return buildBatchGuard(db, sql`CASE WHEN EXISTS (
+    SELECT 1
+    FROM ${productVariants}
+    INNER JOIN ${products}
+      ON ${sql.raw('"products"."id"')} = ${sql.raw('"product_variants"."product_id"')}
+    WHERE ${sql.raw('"product_variants"."id"')} = ${entry.variantId}
+      AND ${sql.raw('"product_variants"."stock_version"')} = ${variant.stockVersion}
+      AND ${sql.raw('"product_variants"."track_inventory"')} = 1
+      AND ${sql.raw('"product_variants"."deleted_at"')} IS NULL
+      AND ${sql.raw('"products"."is_active"')} = 1
+      AND ${sql.raw('"products"."deleted_at"')} IS NULL
+      AND ${availability}
+  ) THEN 1 ELSE json_extract(${INVENTORY_RESERVATION_CONFLICT}, '$') END`);
+}
+
+export function isInventoryReservationConflictError(error: unknown): boolean {
+  let current = error;
+  for (let depth = 0; depth < 5 && current; depth += 1) {
+    const message = current instanceof Error ? current.message : String(current);
+    if (new RegExp(`${INVENTORY_RESERVATION_CONFLICT}|malformed json`, "i").test(message)) {
+      return true;
+    }
+    current = current instanceof Error
+      ? (current as Error & { cause?: unknown }).cause
+      : null;
+  }
+  return false;
+}
 
 function reservationMovementType(pool: ReservationPool): "reserved" | "preorder_reserved" {
   return pool === "preorder" ? "preorder_reserved" : "reserved";
@@ -879,6 +936,9 @@ async function loadReservationVariantStates(
   const rows = await db
     .select({
       id: productVariants.id,
+      productId: products.id,
+      slug: products.slug,
+      categoryId: products.categoryId,
       stock: productVariants.stock,
       reservedStock: productVariants.reservedStock,
       preorderStock: productVariants.preorderStock,

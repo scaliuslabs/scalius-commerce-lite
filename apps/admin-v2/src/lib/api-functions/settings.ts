@@ -1,4 +1,4 @@
-import { createServerFn } from "@tanstack/react-start";
+import { createAdminApiFunction as createServerFn } from "../admin-api-function";
 import type { CustomerAuthMethod } from "@scalius/shared/customer-auth-policy";
 import type { StorefrontThemeSettings } from "@scalius/shared/storefront-theme";
 import type {
@@ -12,7 +12,7 @@ import type {
   PostApiV1AdminSettingsSeoData,
   PutApiV1AdminSettingsCheckoutFlowData,
 } from "@scalius/api-client/types";
-import { apiDelete, apiGet, apiPost, apiPut } from "../api.server";
+import { apiDelete, apiGet, apiPost, apiPut } from "../api";
 import type {
   MetaConversionsSettings,
   MetaConversionsSettingsResponse,

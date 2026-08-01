@@ -9,7 +9,7 @@ import {
     productAttributes,
 } from "@scalius/database/schema";
 import { and, sql, desc, eq, isNull, inArray, or, lt, type SQL } from "drizzle-orm";
-import { ftsMatch, sanitizeFtsQuery } from "../../search/fts5";
+import { ftsMatch } from "../../search/fts5";
 import { unixToDate } from "@scalius/shared/utils";
 import { calculateDiscountedPrice } from "@scalius/shared/price-utils";
 import type {
@@ -199,16 +199,15 @@ function buildCategoryLookupCondition(category: string): SQL {
     )`;
 }
 
-function buildFeedCategorySearchCondition(search: string): SQL | undefined {
-    const sanitized = sanitizeFtsQuery(search);
-    if (!sanitized) return undefined;
-
+function buildFeedCategorySearchCondition(db: Database, search: string): SQL | undefined {
     const normalizedSlug = search.trim().toLowerCase();
-    const categoryNameCondition = sql`${sql.raw("categories.rowid")} IN (
-        SELECT rowid
-        FROM ${sql.raw("categories_fts")}
-        WHERE ${sql.raw("categories_fts")} MATCH ${`name : (${sanitized})`}
-    )`;
+    const categoryNameCondition = ftsMatch(
+        db,
+        "categories_fts",
+        "categories",
+        search,
+        { column: "name" },
+    );
     const categoryMatch = or(
         categoryNameCondition,
         normalizedSlug.length <= MAX_PUBLIC_CATEGORY_SEARCH_SLUG_LENGTH
@@ -262,6 +261,7 @@ function buildProductLookupCondition(
 }
 
 function buildStorefrontProductConditions(
+    db: Database,
     params: StorefrontProductFilterInput,
     options: StorefrontProductConditionOptions = {},
     buyerPricing?: BuyerCatalogPricingProjection,
@@ -280,9 +280,9 @@ function buildStorefrontProductConditions(
 
     if (category) conditions.push(buildCategoryLookupCondition(category));
     if (search) {
-        const searchConditions = [ftsMatch("products_fts", "products", search)];
+        const searchConditions = [ftsMatch(db, "products_fts", "products", search)];
         if (options.includeCategorySearchMatches) {
-            searchConditions.push(buildFeedCategorySearchCondition(search));
+            searchConditions.push(buildFeedCategorySearchCondition(db, search));
         }
         conditions.push(
             or(
@@ -687,8 +687,8 @@ async function readStorefrontCatalogPage(
         attributeFilters = [],
     } = params;
     const buyerPricing = buildBuyerCatalogPricingProjection(db);
-    const conditions = buildStorefrontProductConditions(params, {}, buyerPricing);
-    const priceRangeConditions = buildStorefrontProductConditions({
+    const conditions = buildStorefrontProductConditions(db, params, {}, buyerPricing);
+    const priceRangeConditions = buildStorefrontProductConditions(db, {
         ...params,
         minPrice: undefined,
         maxPrice: undefined,
@@ -867,7 +867,7 @@ export async function getStorefrontFeedProducts(
     }
     const buyerPricing = buildBuyerCatalogPricingProjection(db);
     const feedCreatedAt = sql<number>`CAST(${products.createdAt} AS INTEGER)`;
-    const conditions = buildStorefrontProductConditions(params, {
+    const conditions = buildStorefrontProductConditions(db, params, {
         includeLookupHandles: true,
         includeVariantLookups: true,
         includeCategorySearchMatches: true,
@@ -992,7 +992,7 @@ export async function getStorefrontSitemapProducts(
         limit = 100,
     } = params;
     const conditions = [
-        ...buildStorefrontProductConditions({}),
+        ...buildStorefrontProductConditions(db, {}),
         eq(products.noIndex, false),
         eq(products.excludeFromSitemap, false),
     ];
@@ -1407,7 +1407,7 @@ export async function searchStorefrontProducts(
     const offset = (page - 1) * limit;
 
     const conditions: SQL[] = publicProductBaseConditions();
-    const searchCondition = search ? ftsMatch("products_fts", "products", search) : null;
+    const searchCondition = search ? ftsMatch(db, "products_fts", "products", search) : null;
     if (search) {
         conditions.push(searchCondition ?? sql`0 = 1`);
     }
