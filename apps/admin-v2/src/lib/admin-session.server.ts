@@ -43,6 +43,49 @@ interface AdminSessionRow {
   isSuperAdmin: number | boolean | null;
 }
 
+function normalizeAdminSessionRow(row: unknown): AdminSessionRow | undefined {
+  if (row == null) return undefined;
+  if (!Array.isArray(row)) return row as AdminSessionRow;
+  if (row.length !== 11) return undefined;
+
+  const [
+    sessionId,
+    userId,
+    twoFactorVerified,
+    name,
+    email,
+    image,
+    role,
+    twoFactorEnabled,
+    mustChangePassword,
+    mustEnrollTwoFactor,
+    isSuperAdmin,
+  ] = row;
+  if (
+    typeof sessionId !== "string" ||
+    typeof userId !== "string" ||
+    typeof name !== "string" ||
+    typeof email !== "string" ||
+    (image !== null && typeof image !== "string") ||
+    (role !== null && typeof role !== "string")
+  ) {
+    return undefined;
+  }
+  return {
+    sessionId,
+    userId,
+    twoFactorVerified: twoFactorVerified as number | boolean | null,
+    name,
+    email,
+    image,
+    role,
+    twoFactorEnabled: twoFactorEnabled as number | boolean | null,
+    mustChangePassword: mustChangePassword as number | boolean | null,
+    mustEnrollTwoFactor: mustEnrollTwoFactor as number | boolean | null,
+    isSuperAdmin: isSuperAdmin as number | boolean | null,
+  };
+}
+
 function truthy(value: number | boolean | null | undefined): boolean {
   return value === true || value === 1;
 }
@@ -141,7 +184,7 @@ export async function getAdminSessionFromCookieHeader(
   if (!token) return null;
 
   const { retryTransientD1 } = await import("@scalius/core/utils/transient-d1");
-  const row = await retryTransientD1(() =>
+  const rawRow = await retryTransientD1(() =>
     db.get(sql`SELECT
           s.id as sessionId,
           s.user_id as userId,
@@ -164,7 +207,8 @@ export async function getAdminSessionFromCookieHeader(
             OR (u.ban_expires IS NOT NULL AND u.ban_expires <= unixepoch())
           )
         LIMIT 1`),
-  ) as AdminSessionRow | undefined;
+  );
+  const row = normalizeAdminSessionRow(rawRow);
 
   if (!row) return null;
 

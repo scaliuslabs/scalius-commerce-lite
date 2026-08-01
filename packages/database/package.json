@@ -13,6 +13,7 @@
   },
   "scripts": {
     "compile:data-export": "tsx scripts/compile-sqlite-data-export.ts",
+    "normalize:d1-export": "tsx scripts/normalize-d1-export.ts",
     "compile:migrations": "tsx scripts/compile-provider-migrations.ts",
     "lint": "eslint src/",
     "typecheck": "../../node_modules/typescript7/bin/tsc --noEmit",

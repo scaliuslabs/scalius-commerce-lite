@@ -14,7 +14,7 @@
 </h4>
 
 <p align="center">
-  Full-stack e-commerce platform — admin dashboard, storefront, and API — deployed as Cloudflare Workers. Turborepo monorepo with TanStack Start, Astro, Hono, and Cloudflare D1.
+  Full-stack e-commerce platform — admin dashboard, storefront, and API — deployed as Cloudflare Workers. Turborepo monorepo with TanStack Start, Astro, Hono, and provider-portable SQLite.
 </p>
 
 <p align="center">
@@ -67,7 +67,7 @@ scripts/          # Dev setup, deploy pipeline, dev server wrapper
 | Admin Dashboard | TanStack Start + TanStack Router + TanStack Query + React 19 |
 | Storefront | Astro 7 SSR + React 19 |
 | API | Hono + @hono/zod-openapi (auto-generated OpenAPI/Swagger) |
-| Database | Cloudflare D1 (SQLite) + Drizzle ORM + FTS5 full-text search |
+| Database | Drizzle ORM + Cloudflare D1 by default; Turso is the concurrent-writer scale tier |
 | UI | Tailwind CSS v4 + shadcn/ui + Radix primitives |
 | Auth | Better Auth (email/password + optional 2FA with TOTP/email OTP) |
 | Caching | Cloudflare KV + in-memory L1 + Cache API L2 (storefront) |
@@ -106,8 +106,8 @@ flowchart TB
         CoreModules["@scalius/core<br/>(domain services)"]
     end
 
-    subgraph Infra ["Cloudflare Infrastructure"]
-        D1[(D1 Database<br/>Drizzle schema)]
+    subgraph Infra ["Platform Resources"]
+        SQLiteDB[(SQLite Authority<br/>D1 starter / Turso scale tier)]
         KV[(KV Namespaces<br/>cache + sessions + auth)]
         R2[(R2 Bucket<br/>media storage)]
         Queues["5 Queues<br/>(payment-events, notifications,<br/>auth-otp, auth-otp-dlq,<br/>storefront-cache)"]
@@ -126,7 +126,7 @@ flowchart TB
 
     AdminV2 -->|"Service Binding (env.API)"| API
     Storefront -->|"Service Binding (env.BACKEND_API)"| API
-    API --> D1
+    API --> SQLiteDB
     API --> KV
     API --> R2
     API -->|Enqueue| Queues
@@ -150,7 +150,7 @@ flowchart TB
 graph LR
     A["Admin-V2<br/>:4323"] -->|env.API| C["API Worker<br/>:8787"]
     B["Storefront<br/>:4322"] -->|env.BACKEND_API| C
-    C --> D[(D1)]
+    C --> D[(SQLite<br/>D1 / Turso)]
     C --> E[(KV)]
     C --> F[(R2)]
 ```
@@ -165,7 +165,7 @@ In production, service bindings are zero-latency RPC calls (no HTTP overhead). I
 - Products with variants (merchant-defined Option 1/Option 2 axes, SKU, barcode), images, rich content, attributes, and catalog schema mapping that keeps size/color as helpful defaults without forcing every product option to be size/color
 - Categories, collections (manual & dynamic), product attributes
 - Inventory management with stock versioning (CAS), reservations, low-stock alerts
-- FTS5 full-text search with Bengali tokenizer support
+- Provider-aware catalog search: FTS5 with the Bengali tokenizer on D1 and a bounded indexed fallback on Turso
 
 ### Sales
 - Orders with 11-state machine (pending → processing → confirmed → shipped → delivered → completed)
@@ -331,7 +331,15 @@ All error responses: `{ "success": false, "error": { "code": "...", "message": "
 
 ## Database (`packages/database/`)
 
-Drizzle schema and SQL migrations for Cloudflare D1 (SQLite). The schema declarations and migration journal are the source of truth; avoid copying volatile table or migration counts into docs.
+Drizzle schema and canonical SQLite migrations for Cloudflare D1 and Turso. D1
+is the zero-configuration starter. Turso is selected only after a verified
+control-plane migration and provides the concurrent-writer scale tier. The
+schema declarations and migration journal are the source of truth; avoid
+copying volatile table or migration counts into docs.
+
+See [Database portability and cutover](docs/DATABASE-PORTABILITY.md) for the
+provider boundary, deterministic migration protocol, rollback rule, and current
+verification evidence.
 
 | Domain | Key Tables |
 |--------|------------|
@@ -346,7 +354,9 @@ Drizzle schema and SQL migrations for Cloudflare D1 (SQLite). The schema declara
 | Content | pages, heroSections, heroSliders, pageTemplates |
 | System | settings, siteSettings, analytics, adminFcmTokens, shippingMethods, checkoutLanguages |
 
-FTS5 full-text search with Bengali tokenizer is enabled by migration `0031`.
+FTS5 full-text search with the Bengali tokenizer is enabled on D1. Turso's
+provider-compiled migration bundle omits unsupported FTS5 artifacts and domain
+search uses the provider-aware fallback without branching in route code.
 
 ---
 
@@ -373,6 +383,8 @@ pnpm release:check          # Read-only release smoke across API, dashboard, sto
 pnpm db:generate        # Generate Drizzle migrations from schema changes
 pnpm db:migrate:local   # Apply pending migrations locally
 pnpm db:studio          # Open Drizzle Studio DB browser
+pnpm --filter @scalius/database normalize:d1-export -- --input <d1.sql> --out <data.sql>
+pnpm --filter @scalius/database compile:data-export -- --provider turso --input <data.sql> --out <import.sql>
 
 # Testing & Quality
 pnpm lint               # ESLint all seven code workspaces through Turbo
@@ -546,12 +558,19 @@ pnpm dev:reset --admin-email owner@example.test --admin-password 'Use-12+-chars'
 pnpm run deploy
 ```
 
-Pipeline: `typecheck → build → migrate (remote D1) → deploy all workers`
+Default D1 pipeline: `typecheck → build → migrate (remote D1) → deploy all workers`
 
 Targeted deploy shortcuts use the same safety wrapper: `pnpm run deploy:api`
 typechecks, builds the API, applies remote D1 migrations, then deploys the API
 Worker; admin and storefront shortcuts typecheck before their focused build and
 deploy.
+
+The deployment wrapper intentionally does not infer or perform a Turso cutover.
+For a Turso merchant, the external control plane freezes every writer, copies
+and verifies the database, installs `DATABASE_PROVIDER=turso` plus both Turso
+secrets, deploys API and admin, verifies readiness, and only then removes the
+freeze. Adding connection secrets without migrating and fingerprinting the data
+is not a valid switch.
 
 ### Production Domains
 
@@ -568,12 +587,16 @@ Not every worker has every binding. Wrangler configs are the source of truth for
 
 | Binding | Type | Purpose |
 |---------|------|---------|
-| `DB` | D1 | Shared SQLite database |
+| `DB` | D1 | Starter database and retained rollback archive after a Turso cutover |
 | `CACHE` | KV | General caching |
 | `SESSION` | KV | Better Auth sessions |
 | `SHARED_AUTH_CACHE` | KV | Cross-worker auth token cache |
 | `BUCKET` | R2 | Media file storage |
 | `API` / `BACKEND_API` | Service Binding | Admin/Storefront → API |
+
+Turso deployments additionally install the `DATABASE_PROVIDER`,
+`TURSO_DATABASE_URL`, and `TURSO_AUTH_TOKEN` Worker secrets on API and admin.
+Secret values are control-plane state and must never be committed.
 
 ---
 

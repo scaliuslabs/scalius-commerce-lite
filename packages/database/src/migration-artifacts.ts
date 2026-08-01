@@ -5,6 +5,52 @@ import {
 
 export const DRIZZLE_STATEMENT_BREAKPOINT = "--> statement-breakpoint";
 
+export interface SqliteTriggerDefinition {
+  name: string;
+  sql: string;
+}
+
+export interface SqliteDataExportEnvelope {
+  prefix: string;
+  suffix: string;
+}
+
+function quoteSqliteIdentifier(identifier: string): string {
+  return `"${identifier.replaceAll('"', '""')}"`;
+}
+
+function normalizeTriggerDefinitions(
+  definitions: readonly SqliteTriggerDefinition[],
+): readonly SqliteTriggerDefinition[] {
+  const names = new Set<string>();
+  return definitions.map((definition) => {
+    const name = definition.name.trim();
+    const sql = definition.sql.trim().replace(/;\s*$/, "");
+    if (!name) throw new Error("SQLite trigger name must not be empty.");
+    if (!/^CREATE\s+TRIGGER\b/i.test(sql)) {
+      throw new Error(`SQLite trigger ${JSON.stringify(name)} has invalid SQL.`);
+    }
+    if (names.has(name)) {
+      throw new Error(`SQLite trigger ${JSON.stringify(name)} is duplicated.`);
+    }
+    names.add(name);
+    return { name, sql };
+  });
+}
+
+function normalizeTableNames(tableNames: readonly string[]): readonly string[] {
+  const names = new Set<string>();
+  return tableNames.map((tableName) => {
+    const name = tableName.trim();
+    if (!name) throw new Error("SQLite table name must not be empty.");
+    if (names.has(name)) {
+      throw new Error(`SQLite table ${JSON.stringify(name)} is duplicated.`);
+    }
+    names.add(name);
+    return name;
+  });
+}
+
 function stripLeadingSqlComments(statement: string): string {
   let remaining = statement.trimStart();
   while (remaining) {
@@ -93,6 +139,8 @@ export function compileSqliteMigrationForProvider(
 export function compileSqliteDataExportForProvider(
   dataExportSql: string,
   provider: DatabaseProvider,
+  triggerDefinitions: readonly SqliteTriggerDefinition[] = [],
+  applicationTables: readonly string[] = [],
 ): string {
   if (provider === "d1") return dataExportSql;
   if (!dataExportSql.trim()) {
@@ -103,12 +151,45 @@ export function compileSqliteDataExportForProvider(
     /^\s*PRAGMA\s+defer_foreign_keys\s*=\s*TRUE\s*;\s*/i,
     "",
   );
-  return [
+  const envelope = createSqliteDataExportEnvelopeForProvider(
+    provider,
+    triggerDefinitions,
+    applicationTables,
+  );
+  return `${envelope.prefix}${exportBody.trim()}\n${envelope.suffix}`;
+}
+
+/**
+ * Build the small deterministic wrapper around a potentially multi-gigabyte
+ * data-only export. The CLI uses this envelope to stream the export without
+ * retaining the database contents in JavaScript memory.
+ */
+export function createSqliteDataExportEnvelopeForProvider(
+  provider: DatabaseProvider,
+  triggerDefinitions: readonly SqliteTriggerDefinition[] = [],
+  applicationTables: readonly string[] = [],
+): SqliteDataExportEnvelope {
+  if (provider === "d1") return { prefix: "", suffix: "" };
+
+  const triggers = normalizeTriggerDefinitions(triggerDefinitions);
+  const tables = normalizeTableNames(applicationTables);
+  const prefix = [
     "PRAGMA foreign_keys=OFF;",
     "BEGIN;",
-    exportBody.trim(),
+    ...triggers.map(
+      (trigger) => `DROP TRIGGER IF EXISTS ${quoteSqliteIdentifier(trigger.name)};`,
+    ),
+    ...tables.map(
+      (table) => `DELETE FROM ${quoteSqliteIdentifier(table)};`,
+    ),
+    "",
+  ].join("\n");
+  const suffix = [
+    ...triggers.map((trigger) => `${trigger.sql};`),
     "COMMIT;",
     "PRAGMA foreign_keys=ON;",
     "",
   ].join("\n");
+
+  return { prefix, suffix };
 }

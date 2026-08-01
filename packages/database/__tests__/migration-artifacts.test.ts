@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import {
   compileSqliteDataExportForProvider,
   compileSqliteMigrationForProvider,
+  createSqliteDataExportEnvelopeForProvider,
   isFts5MigrationStatement,
   isLegacyNavigationRecursiveBackfill,
 } from "../src/migration-artifacts";
@@ -91,5 +92,74 @@ describe("provider migration artifacts", () => {
     ].join("\n"));
     expect(() => compileSqliteDataExportForProvider("   ", "turso"))
       .toThrow(/must not be empty/i);
+  });
+
+  it("suspends and restores final Turso triggers inside the import transaction", () => {
+    const compiled = compileSqliteDataExportForProvider(
+      "INSERT INTO child VALUES(1);\n",
+      "turso",
+      [{
+        name: 'child_"guard',
+        sql: "CREATE TRIGGER child_guard BEFORE INSERT ON child BEGIN SELECT 1; END",
+      }],
+      ["child"],
+    );
+
+    expect(compiled).toBe([
+      "PRAGMA foreign_keys=OFF;",
+      "BEGIN;",
+      'DROP TRIGGER IF EXISTS "child_""guard";',
+      'DELETE FROM "child";',
+      "INSERT INTO child VALUES(1);",
+      "CREATE TRIGGER child_guard BEFORE INSERT ON child BEGIN SELECT 1; END;",
+      "COMMIT;",
+      "PRAGMA foreign_keys=ON;",
+      "",
+    ].join("\n"));
+
+    expect(createSqliteDataExportEnvelopeForProvider(
+      "turso",
+      [{
+        name: 'child_"guard',
+        sql: "CREATE TRIGGER child_guard BEFORE INSERT ON child BEGIN SELECT 1; END",
+      }],
+      ["child"],
+    )).toEqual({
+      prefix: [
+        "PRAGMA foreign_keys=OFF;",
+        "BEGIN;",
+        'DROP TRIGGER IF EXISTS "child_""guard";',
+        'DELETE FROM "child";',
+        "",
+      ].join("\n"),
+      suffix: [
+        "CREATE TRIGGER child_guard BEFORE INSERT ON child BEGIN SELECT 1; END;",
+        "COMMIT;",
+        "PRAGMA foreign_keys=ON;",
+        "",
+      ].join("\n"),
+    });
+  });
+
+  it("rejects malformed or duplicate trigger definitions", () => {
+    expect(() => compileSqliteDataExportForProvider(
+      "INSERT INTO child VALUES(1);",
+      "turso",
+      [{ name: "guard", sql: "DROP TABLE child" }],
+    )).toThrow(/invalid sql/i);
+    expect(() => compileSqliteDataExportForProvider(
+      "INSERT INTO child VALUES(1);",
+      "turso",
+      [
+        { name: "guard", sql: "CREATE TRIGGER guard BEFORE INSERT ON child BEGIN SELECT 1; END" },
+        { name: "guard", sql: "CREATE TRIGGER guard2 BEFORE INSERT ON child BEGIN SELECT 1; END" },
+      ],
+    )).toThrow(/duplicated/i);
+    expect(() => compileSqliteDataExportForProvider(
+      "INSERT INTO child VALUES(1);",
+      "turso",
+      [],
+      ["child", "child"],
+    )).toThrow(/duplicated/i);
   });
 });

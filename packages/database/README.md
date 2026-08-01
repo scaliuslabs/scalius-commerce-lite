@@ -340,23 +340,48 @@ pnpm --filter @scalius/database compile:migrations \
 The manifest records the canonical and compiled SHA-256 for every file plus one
 bundle digest. D1 output is byte-identical to the canonical migration chain.
 
-Compile a trusted D1 data-only SQL export for Turso:
+Normalize a trusted full D1 SQL export onto the current portable schema, then
+compile the normalized data-only artifact for Turso:
 
 ```bash
+pnpm --filter @scalius/database normalize:d1-export \
+  --input /path/to/d1-full-export.sql --out /path/to/normalized-data.sql
 pnpm --filter @scalius/database compile:data-export \
-  --provider turso --input /path/to/d1-export.sql --out /path/to/turso-import.sql
+  --provider turso --input /path/to/normalized-data.sql --out /path/to/turso-import.sql
 ```
 
-Turso data imports run in one foreign-key-disabled transaction because Wrangler's
-data-only export is table-name ordered rather than dependency ordered. The control
-plane must run `PRAGMA foreign_key_check` and the deterministic portability verifier
-before cutover; disabling checks without that verification is invalid.
+The normalizer streams the full export into a private temporary SQLite file,
+projects every current table onto the canonical Turso columns, rejects missing
+tables/columns or row-count drift, and requires clean foreign-key and integrity
+checks before writing a mode-0600 data artifact. This safely removes retired source
+columns without parsing or holding a multi-gigabyte SQL dump in JavaScript memory;
+its JSON evidence lists every discarded source column and ignored retired source
+table with its row count. It requires the `sqlite3` binary (override with
+`SQLITE3_BIN`). The compiler also streams the normalized artifact into a mode-0600
+output while calculating both SHA-256 digests, so a near-limit D1 export is never
+held in JavaScript memory. Turso data imports
+then run in one foreign-key-disabled transaction because Wrangler's data export is
+not dependency ordered. The compiler derives the final Turso trigger set from the
+canonical migrations, drops those triggers inside the import transaction, and
+clears migration-seeded rows from all current application tables before loading the
+snapshot. It restores the triggers before commit so dependency-sensitive guards
+cannot reject a valid snapshot merely because its parent rows appear later in the
+dump.
+The control plane must run `PRAGMA foreign_key_check` and the deterministic
+portability verifier before cutover; disabling checks without that verification is
+invalid. Export only the current canonical application-table set: retired source
+tables remain in the retained source database and are not part of the portable
+runtime fingerprint.
 
 The portability manifest walks every application table in primary-key keyset
-chunks and records logical schema, row, chunk, and whole-database digests. It
+chunks (250 rows by default) and records logical schema, row, chunk, and
+whole-database digests. It
 ignores vendor internals and derived FTS objects, and refuses an application table
 without a primary key. The durable orchestration state machine is resumable and
-requires evidence references at every non-skippable transition.
+requires evidence references at every non-skippable transition. The verifier
+reconstructs the normalized source in a private disk-backed SQLite file through
+the same streaming loader, so fingerprint verification also avoids retaining a
+multi-gigabyte export in JavaScript memory.
 
 Drizzle config (`drizzle.config.ts`):
 - Schema: `./src/schema/index.ts`

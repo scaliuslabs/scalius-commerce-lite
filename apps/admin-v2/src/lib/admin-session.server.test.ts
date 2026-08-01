@@ -15,7 +15,7 @@ vi.mock("@scalius/core/utils/transient-d1", () => ({
   retryTransientD1: mocks.retryTransientD1,
 }));
 
-function createSessionDb(row: Record<string, unknown> | null) {
+function createSessionDb(row: unknown) {
   const get = vi.fn(async (_query: SQL) => row);
 
   return {
@@ -171,5 +171,59 @@ describe("admin session direct D1 lookup", () => {
     expect(query.sql).toContain("u.banned = 0");
     expect(query.sql).toContain("u.must_change_password");
     expect(query.sql).toContain("u.must_enroll_two_factor");
+  });
+
+  it("maps Turso raw array rows using the selected column order", async () => {
+    const db = createSessionDb([
+      "session_1",
+      "user_1",
+      1,
+      "Admin",
+      "admin@example.com",
+      null,
+      "admin",
+      1,
+      0,
+      0,
+      1,
+    ]);
+    const signedCookie = await signCookieValue("session_token");
+
+    await expect(
+      getAdminSessionFromCookieHeader(
+        db.db,
+        `better-auth.session_token=${signedCookie}`,
+        TEST_SECRET,
+      ),
+    ).resolves.toEqual({
+      user: {
+        id: "user_1",
+        name: "Admin",
+        email: "admin@example.com",
+        image: null,
+        role: "admin",
+        twoFactorEnabled: true,
+        mustChangePassword: false,
+        mustEnrollTwoFactor: false,
+        isSuperAdmin: true,
+      },
+      session: {
+        id: "session_1",
+        twoFactorVerified: true,
+      },
+    });
+  });
+
+  it("fails closed for an incomplete Turso raw array row", async () => {
+    const db = createSessionDb(["session_1", "user_1"]);
+    const signedCookie = await signCookieValue("session_token");
+
+    await expect(
+      getAdminSessionFromCookieHeader(
+        db.db,
+        `better-auth.session_token=${signedCookie}`,
+        TEST_SECRET,
+      ),
+    ).resolves.toBeNull();
   });
 });
