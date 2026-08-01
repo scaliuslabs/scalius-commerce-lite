@@ -1,8 +1,10 @@
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { fileURLToPath } from "node:url";
 
@@ -18,13 +20,27 @@ export const canonicalMigrationDirectory = resolve(
   "../migrations",
 );
 
+export interface SqliteSqlLoadReceipt {
+  bytes: number;
+  sha256: string;
+}
+
 export async function loadSqliteSqlFile(
   sqliteBinary: string,
   databasePath: string,
   inputPath: string,
-): Promise<void> {
+): Promise<SqliteSqlLoadReceipt> {
   const child = spawn(sqliteBinary, ["-bail", databasePath], {
     stdio: ["pipe", "ignore", "ignore"],
+  });
+  const hash = createHash("sha256");
+  let bytes = 0;
+  const meter = new Transform({
+    transform(chunk: Buffer, _encoding, callback) {
+      bytes += chunk.length;
+      hash.update(chunk);
+      callback(null, chunk);
+    },
   });
   const exited = new Promise<void>((resolveExit, rejectExit) => {
     child.once("error", rejectExit);
@@ -36,9 +52,10 @@ export async function loadSqliteSqlFile(
     });
   });
   await Promise.all([
-    pipeline(createReadStream(inputPath), child.stdin),
+    pipeline(createReadStream(inputPath), meter, child.stdin),
     exited,
   ]);
+  return { bytes, sha256: hash.digest("hex") };
 }
 
 export async function createProviderSchemaDatabase(

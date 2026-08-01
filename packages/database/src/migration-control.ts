@@ -1,5 +1,5 @@
 export const DATABASE_MIGRATION_CHECKPOINT_VERSION =
-  "scalius-database-migration/v1" as const;
+  "scalius-database-migration/v2" as const;
 
 export type PortableDatabaseProvider = "d1" | "turso" | "postgresql";
 
@@ -7,6 +7,7 @@ export type DatabaseMigrationPhase =
   | "planned"
   | "source_write_locked"
   | "source_exported"
+  | "artifact_prepared"
   | "target_imported"
   | "verified"
   | "secrets_installed"
@@ -17,7 +18,11 @@ export type DatabaseMigrationPhase =
 
 export interface DatabaseMigrationEvidence {
   writeFenceSha256?: string;
+  sourceBookmark?: string;
   exportArtifactSha256?: string;
+  exportArtifactBytes?: number;
+  preparedArtifactSha256?: string;
+  preparedArtifactBytes?: number;
   sourceDataFingerprint?: string;
   targetDataFingerprint?: string;
   importReceiptSha256?: string;
@@ -38,10 +43,21 @@ export interface DatabaseMigrationCheckpoint {
 }
 
 export type DatabaseMigrationEvent =
-  | { type: "lock_source"; writeFenceSha256: string }
+  | {
+      type: "lock_source";
+      writeFenceSha256: string;
+      sourceBookmark: string;
+    }
   | {
       type: "record_export";
       exportArtifactSha256: string;
+      exportArtifactBytes: number;
+      exportBookmark: string;
+    }
+  | {
+      type: "prepare_artifact";
+      preparedArtifactSha256: string;
+      preparedArtifactBytes: number;
       sourceDataFingerprint: string;
     }
   | {
@@ -78,6 +94,142 @@ function requireSha256(value: string, label: string): string {
 
 function requireFingerprint(value: string, label: string): string {
   return requireSha256(value, label);
+}
+
+function requireNonNegativeSafeInteger(value: number, label: string): number {
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new Error(`${label} must be a non-negative safe integer.`);
+  }
+  return value;
+}
+
+function requireMatchingEvidence(
+  actual: unknown,
+  expected: unknown,
+  label: string,
+): void {
+  if (actual !== expected) {
+    throw new Error(`Replayed migration event has different ${label}.`);
+  }
+}
+
+function replayAlreadyAppliedEvent(
+  checkpoint: DatabaseMigrationCheckpoint,
+  event: DatabaseMigrationEvent,
+): boolean {
+  const evidence = checkpoint.evidence;
+  switch (event.type) {
+    case "lock_source":
+      if (evidence.writeFenceSha256 === undefined) return false;
+      requireMatchingEvidence(
+        evidence.writeFenceSha256,
+        requireSha256(event.writeFenceSha256, "writeFenceSha256"),
+        "writeFenceSha256",
+      );
+      requireMatchingEvidence(
+        evidence.sourceBookmark,
+        requireOpaqueReference(event.sourceBookmark, "sourceBookmark"),
+        "sourceBookmark",
+      );
+      return true;
+    case "record_export":
+      if (evidence.exportArtifactSha256 === undefined) return false;
+      requireMatchingEvidence(
+        evidence.exportArtifactSha256,
+        requireSha256(event.exportArtifactSha256, "exportArtifactSha256"),
+        "exportArtifactSha256",
+      );
+      requireMatchingEvidence(
+        evidence.exportArtifactBytes,
+        requireNonNegativeSafeInteger(
+          event.exportArtifactBytes,
+          "exportArtifactBytes",
+        ),
+        "exportArtifactBytes",
+      );
+      requireMatchingEvidence(
+        evidence.sourceBookmark,
+        requireOpaqueReference(event.exportBookmark, "exportBookmark"),
+        "exportBookmark",
+      );
+      return true;
+    case "prepare_artifact":
+      if (evidence.preparedArtifactSha256 === undefined) return false;
+      requireMatchingEvidence(
+        evidence.preparedArtifactSha256,
+        requireSha256(event.preparedArtifactSha256, "preparedArtifactSha256"),
+        "preparedArtifactSha256",
+      );
+      requireMatchingEvidence(
+        evidence.preparedArtifactBytes,
+        requireNonNegativeSafeInteger(
+          event.preparedArtifactBytes,
+          "preparedArtifactBytes",
+        ),
+        "preparedArtifactBytes",
+      );
+      requireMatchingEvidence(
+        evidence.sourceDataFingerprint,
+        requireFingerprint(event.sourceDataFingerprint, "sourceDataFingerprint"),
+        "sourceDataFingerprint",
+      );
+      return true;
+    case "record_import":
+      if (evidence.importReceiptSha256 === undefined) return false;
+      requireMatchingEvidence(
+        evidence.importReceiptSha256,
+        requireSha256(event.importReceiptSha256, "importReceiptSha256"),
+        "importReceiptSha256",
+      );
+      requireMatchingEvidence(
+        evidence.targetDatabaseRef,
+        requireOpaqueReference(event.targetDatabaseRef, "targetDatabaseRef"),
+        "targetDatabaseRef",
+      );
+      return true;
+    case "verify_target":
+      if (evidence.targetDataFingerprint === undefined) return false;
+      requireMatchingEvidence(
+        evidence.targetDataFingerprint,
+        requireFingerprint(event.targetDataFingerprint, "targetDataFingerprint"),
+        "targetDataFingerprint",
+      );
+      return true;
+    case "install_secrets":
+      if (evidence.secretVersionRef === undefined) return false;
+      requireMatchingEvidence(
+        evidence.secretVersionRef,
+        requireOpaqueReference(event.secretVersionRef, "secretVersionRef"),
+        "secretVersionRef",
+      );
+      return true;
+    case "record_deployment":
+      if (evidence.workerVersionRef === undefined) return false;
+      requireMatchingEvidence(
+        evidence.workerVersionRef,
+        requireOpaqueReference(event.workerVersionRef, "workerVersionRef"),
+        "workerVersionRef",
+      );
+      return true;
+    case "record_smoke":
+      if (evidence.smokeProofSha256 === undefined) return false;
+      requireMatchingEvidence(
+        evidence.smokeProofSha256,
+        requireSha256(event.smokeProofSha256, "smokeProofSha256"),
+        "smokeProofSha256",
+      );
+      return true;
+    case "complete_cutover":
+      return checkpoint.phase === "complete";
+    case "rollback":
+      if (evidence.rollbackProofSha256 === undefined) return false;
+      requireMatchingEvidence(
+        evidence.rollbackProofSha256,
+        requireSha256(event.rollbackProofSha256, "rollbackProofSha256"),
+        "rollbackProofSha256",
+      );
+      return true;
+  }
 }
 
 export function createDatabaseMigrationCheckpoint(input: {
@@ -117,6 +269,7 @@ export function advanceDatabaseMigrationCheckpoint(
   if (checkpoint.version !== DATABASE_MIGRATION_CHECKPOINT_VERSION) {
     throw new Error(`Unsupported database migration checkpoint ${checkpoint.version}.`);
   }
+  if (replayAlreadyAppliedEvent(checkpoint, event)) return checkpoint;
   const evidence = { ...checkpoint.evidence };
   let phase: DatabaseMigrationPhase;
 
@@ -127,22 +280,52 @@ export function advanceDatabaseMigrationCheckpoint(
         event.writeFenceSha256,
         "writeFenceSha256",
       );
+      evidence.sourceBookmark = requireOpaqueReference(
+        event.sourceBookmark,
+        "sourceBookmark",
+      );
       phase = "source_write_locked";
       break;
-    case "record_export":
+    case "record_export": {
       requirePhase(checkpoint, "source_write_locked", event.type);
       evidence.exportArtifactSha256 = requireSha256(
         event.exportArtifactSha256,
         "exportArtifactSha256",
       );
+      evidence.exportArtifactBytes = requireNonNegativeSafeInteger(
+        event.exportArtifactBytes,
+        "exportArtifactBytes",
+      );
+      const exportBookmark = requireOpaqueReference(
+        event.exportBookmark,
+        "exportBookmark",
+      );
+      if (exportBookmark !== evidence.sourceBookmark) {
+        throw new Error(
+          "D1 export bookmark does not match the frozen source bookmark.",
+        );
+      }
+      phase = "source_exported";
+      break;
+    }
+    case "prepare_artifact":
+      requirePhase(checkpoint, "source_exported", event.type);
+      evidence.preparedArtifactSha256 = requireSha256(
+        event.preparedArtifactSha256,
+        "preparedArtifactSha256",
+      );
+      evidence.preparedArtifactBytes = requireNonNegativeSafeInteger(
+        event.preparedArtifactBytes,
+        "preparedArtifactBytes",
+      );
       evidence.sourceDataFingerprint = requireFingerprint(
         event.sourceDataFingerprint,
         "sourceDataFingerprint",
       );
-      phase = "source_exported";
+      phase = "artifact_prepared";
       break;
     case "record_import":
-      requirePhase(checkpoint, "source_exported", event.type);
+      requirePhase(checkpoint, "artifact_prepared", event.type);
       evidence.importReceiptSha256 = requireSha256(
         event.importReceiptSha256,
         "importReceiptSha256",
