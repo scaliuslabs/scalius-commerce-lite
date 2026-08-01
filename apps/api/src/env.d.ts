@@ -167,6 +167,7 @@ interface Env {
   DATABASE_PROVIDER?: "d1" | "turso";
   TURSO_DATABASE_URL?: string;
   TURSO_AUTH_TOKEN?: string;
+  DATABASE_MIGRATION_FREEZE?: string;
 
   // Note: Stripe and SSLCommerz credentials are stored in the DB settings table
   // and managed via the admin dashboard — NOT as environment variables.

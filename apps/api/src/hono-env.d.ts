@@ -65,6 +65,7 @@ declare global {
     DATABASE_PROVIDER?: "d1" | "turso";
     TURSO_DATABASE_URL?: string;
     TURSO_AUTH_TOKEN?: string;
+    DATABASE_MIGRATION_FREEZE?: string;
 
     // Variables (set in wrangler.jsonc [vars] or dashboard)
     BETTER_AUTH_URL?: string;

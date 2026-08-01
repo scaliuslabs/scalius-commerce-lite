@@ -56,6 +56,11 @@ Provider selection is fail-closed:
 
 Migration/copy/cutover orchestration does not run in this package or on request
 paths. It belongs to the external control plane and repo-owned migration tools.
+The deployed API/admin Workers expose the separate `DATABASE_MIGRATION_FREEZE`
+control-plane secret so a live copy can stop HTTP writes, queue consumption, and
+scheduled mutations while still exposing API health/readiness. Follow
+`audit/OPERATIONAL_RUNBOOK.md`; never copy a live D1 database without proving two
+settled source snapshots match.
 
 The capability matrix is deliberately small. D1 supports FTS5, recursive CTEs,
 and `WITHOUT ROWID`, but serializes writes inside one database. Turso supports

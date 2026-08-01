@@ -108,6 +108,35 @@ describe("API Worker startup boundaries", () => {
     });
   });
 
+  it("serves only health probes while the database migration freeze is active", async () => {
+    const fetch = vi.fn(() => new Response("healthy"));
+    vi.doMock("./app", () => ({ default: { fetch } }));
+    vi.doMock("./queue-consumer", () => ({ handleQueueBatch: vi.fn() }));
+    vi.doMock("./scheduled-maintenance", () => ({ runScheduledMaintenance: vi.fn() }));
+
+    const { default: ApiWorker } = await import("./worker");
+    const worker = new ApiWorker(
+      undefined as never,
+      { DATABASE_MIGRATION_FREEZE: "1" } as Env,
+    ) as unknown as TestApiWorker;
+
+    const blocked = await worker.fetch(
+      new Request("https://api.example.test/api/v1/products"),
+    );
+    expect(blocked.status).toBe(503);
+    expect(await blocked.json()).toMatchObject({
+      code: "DATABASE_MIGRATION_IN_PROGRESS",
+    });
+    expect(fetch).not.toHaveBeenCalled();
+
+    const health = await worker.fetch(
+      new Request("https://api.example.test/api/v1/health"),
+    );
+    expect(health.status).toBe(200);
+    expect(await health.text()).toBe("healthy");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
   it("loads only the queue graph for queue invocations", async () => {
     const loaded = {
       app: false,
@@ -199,5 +228,35 @@ describe("API Worker startup boundaries", () => {
       queue: false,
       scheduled: true,
     });
+  });
+
+  it("retries queues and skips cron work while the database migration freeze is active", async () => {
+    const handleQueueBatch = vi.fn();
+    const runScheduledMaintenance = vi.fn();
+    vi.doMock("./app", () => ({ default: { fetch: vi.fn() } }));
+    vi.doMock("./queue-consumer", () => ({ handleQueueBatch }));
+    vi.doMock("./scheduled-maintenance", () => ({ runScheduledMaintenance }));
+
+    const { default: ApiWorker } = await import("./worker");
+    const worker = new ApiWorker(
+      undefined as never,
+      { DATABASE_MIGRATION_FREEZE: "true" } as Env,
+    ) as unknown as TestApiWorker;
+    const retryAll = vi.fn();
+    const batch = {
+      messages: [],
+      retryAll,
+    } as unknown as MessageBatch<Record<string, unknown>>;
+    const controller = {
+      cron: "*/15 * * * *",
+      scheduledTime: 1783166400000,
+    } as unknown as ScheduledController;
+
+    await worker.queue(batch);
+    await worker.scheduled(controller);
+
+    expect(retryAll).toHaveBeenCalledWith({ delaySeconds: 60 });
+    expect(handleQueueBatch).not.toHaveBeenCalled();
+    expect(runScheduledMaintenance).not.toHaveBeenCalled();
   });
 });
