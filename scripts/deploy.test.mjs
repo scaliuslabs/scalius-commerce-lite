@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   cacheStatusBuildId,
+  getExternalSchemaPreflightCommand,
   getBuildCommandForTarget,
   getDeployCommandForTarget,
   getSequentialWorkspaceCommand,
@@ -8,6 +9,7 @@ import {
   parseOnlyTarget,
   parseStorefrontBuildId,
   sampleApiReadiness,
+  resolveDeploymentDatabaseProvider,
   warmStorefrontPath,
 } from "./deploy.mjs";
 
@@ -143,6 +145,27 @@ describe("deploy target wiring", () => {
     expect(() => getTypecheckCommandForTarget("removed-worker")).toThrow(
       "Unknown deploy target: removed-worker",
     );
+  });
+
+  it("keeps external schema changes out of ordinary deploys", () => {
+    expect(resolveDeploymentDatabaseProvider({
+      vars: { DATABASE_PROVIDER: "postgres" },
+      d1_databases: [{ database_name: "starter" }],
+    })).toBe("postgres");
+    const command = getExternalSchemaPreflightCommand(
+      "postgres",
+      "merchant.example.neon.tech",
+    );
+    expect(command).toContain("upgrade:schema --provider postgres");
+    expect(command).toContain("--dry-run --require-current");
+    expect(command).not.toContain("freeze-proof");
+  });
+
+  it("rejects missing external preflight identity", () => {
+    expect(() => getExternalSchemaPreflightCommand("postgres", ""))
+      .toThrow(/database-target-host/i);
+    expect(() => getExternalSchemaPreflightCommand("d1", "example.test"))
+      .toThrow(/turso or postgres/i);
   });
 });
 

@@ -17,18 +17,26 @@ import {
   POSTGRES_SCHEMA_BUNDLE_VERSION,
 } from "./postgres-schema";
 import { readApplicationTableNames } from "./sqlite-provider-schema";
+import {
+  POSTGRES_MIGRATION_CONTROL_SCHEMA,
+  POSTGRES_MIGRATION_LOCK_KEY_SQL,
+  POSTGRES_MIGRATION_RECEIPTS_TABLE,
+  POSTGRES_MIGRATION_STATE_TABLE,
+} from "../src/postgres-migration-control";
 
 export const SQLITE_TO_POSTGRES_CHECKPOINT_VERSION =
   "scalius-sqlite-to-postgres/v4" as const;
 export const POSTGRES_CONTENT_FINGERPRINT_VERSION =
   "scalius-postgres-content/v1" as const;
-export const POSTGRES_MIGRATION_CONTROL_SCHEMA =
-  "_scalius_migration" as const;
-const POSTGRES_MIGRATION_STATE_TABLE = "sqlite_to_postgres_state";
-const POSTGRES_MIGRATION_RECEIPTS_TABLE = "sqlite_to_postgres_receipts";
+export {
+  POSTGRES_MIGRATION_CONTROL_SCHEMA,
+  POSTGRES_MIGRATION_LOCK_KEY_SQL,
+  POSTGRES_MIGRATION_RECEIPTS_TABLE,
+  POSTGRES_MIGRATION_STATE_TABLE,
+};
 export const POSTGRES_MIGRATION_LOCK_SQL = [
   "SELECT CASE WHEN pg_try_advisory_lock(",
-  "  hashtextextended('scalius-sqlite-to-postgres:' || current_database(), 0)",
+  `  ${POSTGRES_MIGRATION_LOCK_KEY_SQL}`,
   ") THEN 'SCALIUS_LOCKED' ELSE 'SCALIUS_BUSY' END AS lock_result;",
 ].join("\n");
 

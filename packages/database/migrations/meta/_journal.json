@@ -351,6 +351,13 @@
       "when": 1785670000000,
       "tag": "0049_checkout_side_effect_authority_fence",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "6",
+      "when": 1785713376985,
+      "tag": "0050_schema_release_contract",
+      "breakpoints": true
     }
   ]
 }

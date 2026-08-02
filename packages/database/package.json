@@ -14,6 +14,7 @@
     "./inventory-authority": "./src/inventory-authority.ts",
     "./migration-control": "./src/migration-control.ts",
     "./migration-artifacts": "./src/migration-artifacts.ts",
+    "./schema-contract": "./src/schema-contract.ts",
     "./portability": "./src/portability.ts",
     "./types": "./src/types.ts"
   },
@@ -32,6 +33,7 @@
     "prepare:turso-upload": "tsx scripts/prepare-turso-upload.ts",
     "provision-upload:turso": "tsx scripts/provision-and-upload-turso.ts",
     "upload:turso-bundle": "tsx scripts/upload-turso-bundle.ts",
+    "upgrade:schema": "tsx scripts/upgrade-provider-schema.ts",
     "compile:migrations": "tsx scripts/compile-provider-migrations.ts",
     "lint": "eslint src/",
     "typecheck": "../../node_modules/typescript7/bin/tsc --noEmit",

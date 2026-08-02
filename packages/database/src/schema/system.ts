@@ -8,6 +8,32 @@ import { sql } from "drizzle-orm";
 import { UNIX_NOW } from "./shared";
 import { user } from "./auth";
 
+/**
+ * Provider-neutral release schema authority. D1, TursoDB, and PostgreSQL
+ * record the same ordered migration identities, allowing Worker readiness to
+ * reject a reachable but incompatible database before serving commerce
+ * traffic. Provider migration tooling owns these rows; application routes do
+ * not mutate them.
+ */
+export const scaliusSchemaMigrations = sqliteTable(
+    "scalius_schema_migrations",
+    {
+        version: integer("version").primaryKey(),
+        name: text("name").notNull().unique(),
+        sourceSha256: text("source_sha256").notNull(),
+        appliedAt: integer("applied_at", { mode: "timestamp" })
+            .notNull()
+            .default(UNIX_NOW),
+    },
+    (table) => [
+        check("scalius_schema_migrations_version_positive", sql`${table.version} >= 1`),
+        check(
+            "scalius_schema_migrations_source_sha256",
+            sql`length(${table.sourceSha256}) = 64`,
+        ),
+    ],
+);
+
 export const settings = sqliteTable(
     "settings",
     {
