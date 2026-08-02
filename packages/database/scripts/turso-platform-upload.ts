@@ -18,6 +18,21 @@ export interface TursoStoragePreflight {
   requiresOverage: boolean;
 }
 
+export interface TursoLoadBudgetPreflight {
+  organization: string;
+  plan: string;
+  overagesEnabled: boolean;
+  rowsReadQuota: number;
+  rowsReadUsed: number;
+  rowsReadAvailable: number;
+  rowsReadBudget: number;
+  rowsWrittenQuota: number;
+  rowsWrittenUsed: number;
+  rowsWrittenAvailable: number;
+  rowsWrittenBudget: number;
+  requiresOverage: boolean;
+}
+
 export interface TursoPlatformUploadOptions {
   organization: string;
   databaseName: string;
@@ -148,6 +163,116 @@ export async function preflightTursoUploadStorage(input: {
   if (requiresOverage && !input.allowStorageOverage) {
     throw new Error(
       "Turso storage preflight requires --allow-storage-overage before a billable upload.",
+    );
+  }
+  return result;
+}
+
+/**
+ * Reserve an explicit organization-level usage envelope before a live load
+ * run. Turso meters row scans and writes across every database in the same
+ * organization, so a disposable database alone is not a production-safe
+ * benchmark boundary.
+ */
+export async function preflightTursoLoadBudget(input: {
+  organization: string;
+  platformToken: string;
+  rowsReadBudget: number;
+  rowsWrittenBudget: number;
+  allowUsageOverage?: boolean;
+  fetchImpl?: typeof fetch;
+}): Promise<TursoLoadBudgetPreflight> {
+  const organization = requireSlug(input.organization, "organization");
+  const rowsReadBudget = requireNonNegativeSafeInteger(
+    input.rowsReadBudget,
+    "load-test row-read budget",
+  );
+  const rowsWrittenBudget = requireNonNegativeSafeInteger(
+    input.rowsWrittenBudget,
+    "load-test row-write budget",
+  );
+  if (rowsReadBudget < 1 || rowsWrittenBudget < 1) {
+    throw new Error("Turso load-test row budgets must both be positive.");
+  }
+
+  const request = input.fetchImpl ?? fetch;
+  const headers = authorizationHeaders(input.platformToken);
+  const [subscriptionResponse, usageResponse, plansResponse] = await Promise.all([
+    request(organizationUrl(organization, "/subscription"), { headers }),
+    request(organizationUrl(organization, "/usage"), { headers }),
+    request(`${TURSO_PLATFORM_API_BASE}/plans`, { headers }),
+  ]);
+  if (!subscriptionResponse.ok) throw await providerError(subscriptionResponse);
+  if (!usageResponse.ok) throw await providerError(usageResponse);
+  if (!plansResponse.ok) throw await providerError(plansResponse);
+
+  const subscriptionPayload = await subscriptionResponse.json() as {
+    subscription?: { plan?: unknown; overages?: unknown };
+  };
+  const usagePayload = await usageResponse.json() as {
+    organization?: {
+      usage?: { rows_read?: unknown; rows_written?: unknown };
+    };
+  };
+  const plansPayload = await plansResponse.json() as {
+    plans?: Array<{
+      name?: unknown;
+      quotas?: { rowsRead?: unknown; rowsWritten?: unknown };
+    }>;
+  };
+  const plan = String(subscriptionPayload.subscription?.plan ?? "")
+    .trim()
+    .toLowerCase();
+  const overagesEnabled = subscriptionPayload.subscription?.overages === true;
+  const matchingPlan = plansPayload.plans?.find((candidate) =>
+    String(candidate.name ?? "").trim().toLowerCase() === plan
+  );
+  if (!plan || !matchingPlan) {
+    throw new Error("Turso load preflight could not resolve the active plan quota.");
+  }
+
+  const rowsReadQuota = requireNonNegativeSafeInteger(
+    matchingPlan.quotas?.rowsRead,
+    "plan row-read quota",
+  );
+  const rowsWrittenQuota = requireNonNegativeSafeInteger(
+    matchingPlan.quotas?.rowsWritten,
+    "plan row-write quota",
+  );
+  const rowsReadUsed = requireNonNegativeSafeInteger(
+    usagePayload.organization?.usage?.rows_read,
+    "organization rows read",
+  );
+  const rowsWrittenUsed = requireNonNegativeSafeInteger(
+    usagePayload.organization?.usage?.rows_written,
+    "organization rows written",
+  );
+  const rowsReadAvailable = Math.max(0, rowsReadQuota - rowsReadUsed);
+  const rowsWrittenAvailable = Math.max(0, rowsWrittenQuota - rowsWrittenUsed);
+  const requiresOverage = rowsReadBudget > rowsReadAvailable
+    || rowsWrittenBudget > rowsWrittenAvailable;
+  const result: TursoLoadBudgetPreflight = {
+    organization,
+    plan,
+    overagesEnabled,
+    rowsReadQuota,
+    rowsReadUsed,
+    rowsReadAvailable,
+    rowsReadBudget,
+    rowsWrittenQuota,
+    rowsWrittenUsed,
+    rowsWrittenAvailable,
+    rowsWrittenBudget,
+    requiresOverage,
+  };
+  if (requiresOverage && !overagesEnabled) {
+    throw new Error(
+      `Turso load preflight refused the run: requested budgets require ${rowsReadBudget} row reads and ${rowsWrittenBudget} row writes, but only ${rowsReadAvailable} reads and ${rowsWrittenAvailable} writes remain and overages are disabled.`,
+    );
+  }
+  if (requiresOverage && !input.allowUsageOverage) {
+    throw new Error(
+      "Turso load preflight requires an explicit usage-overage acknowledgement before a billable run.",
     );
   }
   return result;

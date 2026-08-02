@@ -20,6 +20,11 @@ import {
     type InventoryLedgerV2EdgeFields,
     type InventoryLedgerV2Event,
 } from "./ledger-v2";
+import {
+    CHECKOUT_LANE_INVENTORY_AUTHORITY,
+    parseCheckoutLaneInventoryEdges,
+    terminateCheckoutLaneReservations,
+} from "./checkout-lane-transitions";
 
 // The set of order statuses that mean "this order is dead / returned"
 const STOCK_RESTORE_STATUSES = new Set(["cancelled", "returned", "refunded"]);
@@ -81,7 +86,11 @@ type InventoryTransitionOrder = {
     status: string;
     inventoryAction: string;
     inventoryPool: string;
+    inventoryAuthority: "legacy_counter" | "checkout_lane_v1";
     version: number;
+    checkoutAggregateVersion: number | null;
+    checkoutInventoryEdges: string | null;
+    checkoutProjectionStatus: string | null;
 };
 
 type InventoryVariantState = {
@@ -126,7 +135,11 @@ export async function buildInventoryStatements(
             status: orders.status,
             inventoryAction: orders.inventoryAction,
             inventoryPool: orders.inventoryPool,
+            inventoryAuthority: orders.inventoryAuthority,
             version: orders.version,
+            checkoutAggregateVersion: orders.checkoutAggregateVersion,
+            checkoutInventoryEdges: orders.checkoutInventoryEdges,
+            checkoutProjectionStatus: orders.checkoutProjectionStatus,
         })
         .from(orders)
         .where(eq(orders.id, orderId))
@@ -139,6 +152,23 @@ export async function buildInventoryStatements(
     const needsDeduct = STOCK_DEDUCT_STATUSES.has(newStatus);
 
     if (needsRestore && currentAction === "reserved") {
+        if (order.inventoryAuthority === CHECKOUT_LANE_INVENTORY_AUTHORITY) {
+            const terminal = await terminateCheckoutLaneReservations(
+                db,
+                order,
+                newStatus,
+                "released",
+            );
+            await checkLowStockForTransitionEntries(
+                db,
+                terminal.variantIds.map((variantId) => ({
+                    variantId,
+                    quantity: 1,
+                    pool: "regular",
+                })),
+            );
+            return { statements: [], newAction: terminal.action };
+        }
         await releaseOrderReservations(db, order);
         return {
             statements: [buildInventoryActionUpdate(db, order, "restored")],
@@ -155,6 +185,23 @@ export async function buildInventoryStatements(
     }
 
     if (needsDeduct && currentAction === "reserved") {
+        if (order.inventoryAuthority === CHECKOUT_LANE_INVENTORY_AUTHORITY) {
+            const terminal = await terminateCheckoutLaneReservations(
+                db,
+                order,
+                newStatus,
+                "deducted",
+            );
+            await checkLowStockForTransitionEntries(
+                db,
+                terminal.variantIds.map((variantId) => ({
+                    variantId,
+                    quantity: 1,
+                    pool: "regular",
+                })),
+            );
+            return { statements: [], newAction: terminal.action };
+        }
         await deductOrderStock(db, order);
         return {
             statements: [buildInventoryActionUpdate(db, order, "deducted")],
@@ -169,7 +216,7 @@ export async function buildInventoryStatements(
     if (needsReReserve) {
         await reserveOrderItems(db, order);
         return {
-            statements: [buildInventoryActionUpdate(db, order, "reserved")],
+            statements: [buildInventoryActionUpdate(db, order, "reserved", "legacy_counter")],
             newAction: "reserved",
         };
     }
@@ -244,7 +291,11 @@ export async function applyClaimedInventoryEntryBatch(
             status: "",
             inventoryAction: "",
             inventoryPool: input.pool,
+            inventoryAuthority: "legacy_counter",
             version: 0,
+            checkoutAggregateVersion: null,
+            checkoutInventoryEdges: null,
+            checkoutProjectionStatus: null,
         },
         input.operation,
         entries,
@@ -261,13 +312,19 @@ function buildInventoryActionUpdate(
     db: Database,
     order: InventoryTransitionOrder,
     inventoryAction: InventoryAction,
+    inventoryAuthority?: "legacy_counter",
 ) {
     return db.update(orders)
-        .set({ inventoryAction, updatedAt: sql`unixepoch()` })
+        .set({
+            inventoryAction,
+            ...(inventoryAuthority ? { inventoryAuthority } : {}),
+            updatedAt: sql`unixepoch()`,
+        })
         .where(
             and(
                 eq(orders.id, order.id),
                 eq(orders.inventoryAction, order.inventoryAction),
+                eq(orders.inventoryAuthority, order.inventoryAuthority),
             ),
         )
         .returning({ id: orders.id });
@@ -277,7 +334,7 @@ async function deductOrderStock(
     db: Database,
     order: InventoryTransitionOrder,
 ): Promise<void> {
-    const entries = await getOrderInventoryEntries(db, order.id, order.inventoryPool);
+    const entries = await getOrderInventoryEntries(db, order);
 
     if (entries.length > 0) {
         await applyStrictInventoryTransitionMovements(db, order, "deduct", entries);
@@ -292,7 +349,7 @@ async function releaseOrderReservations(
     db: Database,
     order: InventoryTransitionOrder,
 ): Promise<void> {
-    const entries = await getOrderInventoryEntries(db, order.id, order.inventoryPool);
+    const entries = await getOrderInventoryEntries(db, order);
 
     if (entries.length > 0) {
         await applyStrictInventoryTransitionMovements(db, order, "release", entries);
@@ -308,7 +365,7 @@ async function reserveOrderItems(
     db: Database,
     order: InventoryTransitionOrder,
 ): Promise<void> {
-    const entries = await getOrderInventoryEntries(db, order.id, order.inventoryPool);
+    const entries = await getOrderInventoryEntries(db, order);
 
     if (entries.length > 0) {
         const batchItems = await buildTransitionReservationBatchItems(db, order, entries);
@@ -326,7 +383,7 @@ async function restoreDeductedOrderStock(
     db: Database,
     order: InventoryTransitionOrder,
 ): Promise<void> {
-    const entries = await getOrderInventoryEntries(db, order.id, order.inventoryPool);
+    const entries = await getOrderInventoryEntries(db, order);
 
     if (entries.length > 0) {
         await applyStrictInventoryTransitionMovements(db, order, "restore", entries);
@@ -952,7 +1009,10 @@ async function loadTransitionReservationGeneration(
             const restoredGeneration = events
                 .filter((event) =>
                     event.reservationGeneration != null &&
-                    (event.type === "deducted" || event.type === "preorder_deducted")
+                    (
+                        event.type === "deducted"
+                        || event.type === "preorder_deducted"
+                    )
                 )
                 .reduce((maximum, event) => Math.max(maximum, event.reservationGeneration ?? 0), 0);
             if (restoredGeneration > 0) return restoredGeneration;
@@ -1125,8 +1185,7 @@ async function checkLowStockForTransitionEntries(
 
 async function getOrderInventoryEntries(
     db: Database,
-    orderId: string,
-    inventoryPool: string,
+    order: InventoryTransitionOrder,
 ): Promise<ReservationEntry[]> {
     const items = await db
         .select({
@@ -1135,10 +1194,22 @@ async function getOrderInventoryEntries(
             inventoryTracked: orderItems.inventoryTracked,
         })
         .from(orderItems)
-        .where(eq(orderItems.orderId, orderId))
+        .where(eq(orderItems.orderId, order.id))
         .all();
 
-    const pool = normalizeInventoryPool(inventoryPool);
+    const pool = normalizeInventoryPool(order.inventoryPool);
+    if (
+        items.length === 0
+        && order.checkoutAggregateVersion === 1
+        && order.checkoutProjectionStatus !== "complete"
+        && order.checkoutInventoryEdges
+    ) {
+        return parseCheckoutLaneInventoryEdges(order.checkoutInventoryEdges).map((edge) => ({
+            variantId: edge.variantId,
+            quantity: edge.quantity,
+            pool,
+        }));
+    }
 
     return items
         .filter((i) => i.variantId !== null && i.inventoryTracked)

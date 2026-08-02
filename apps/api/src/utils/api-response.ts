@@ -29,6 +29,33 @@ type ErrorStatusCode = 400 | 401 | 403 | 404 | 409 | 422 | 429 | 500 | 503;
 
 const INTERNAL_ERROR_MESSAGE = "Internal Server Error";
 
+function safeUnexpectedErrorMetadata(err: unknown): {
+  errorName: string;
+  infrastructureCode?: string;
+  upstreamStatus?: number;
+} {
+  if (!(err instanceof Error)) return { errorName: typeof err };
+
+  const candidate = err as Error & { code?: unknown };
+  const infrastructureCode =
+    typeof candidate.code === "string" &&
+    /^[A-Z][A-Z0-9_]{0,63}$/.test(candidate.code)
+      ? candidate.code
+      : undefined;
+  const upstreamStatusMatch = candidate.message.match(
+    /^HTTP error! status: ([45][0-9]{2})$/i,
+  );
+  const upstreamStatus = upstreamStatusMatch
+    ? Number(upstreamStatusMatch[1])
+    : undefined;
+
+  return {
+    errorName: candidate.name,
+    infrastructureCode,
+    upstreamStatus,
+  };
+}
+
 function toErrorStatusCode(status: number): ErrorStatusCode {
   const allowedStatuses: ErrorStatusCode[] = [
     400,
@@ -109,7 +136,7 @@ export function logApiError(
     path: request?.path,
     requestId: request?.requestId,
     cfRay: request?.cfRay,
-    errorName: err instanceof Error ? err.name : typeof err,
+    ...safeUnexpectedErrorMetadata(err),
   });
 }
 

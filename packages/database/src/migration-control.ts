@@ -1,5 +1,5 @@
 export const DATABASE_MIGRATION_CHECKPOINT_VERSION =
-  "scalius-database-migration/v2" as const;
+  "scalius-database-migration/v3" as const;
 
 export type PortableDatabaseProvider = "d1" | "turso" | "postgresql";
 
@@ -13,16 +13,19 @@ export type DatabaseMigrationPhase =
   | "secrets_installed"
   | "worker_deployed"
   | "smoke_passed"
+  | "target_write_observed"
   | "complete"
   | "rolled_back";
 
 export interface DatabaseMigrationEvidence {
   writeFenceSha256?: string;
-  sourceBookmark?: string;
+  sourceSnapshotRef?: string;
+  exportReceiptSha256?: string;
   exportArtifactSha256?: string;
   exportArtifactBytes?: number;
   preparedArtifactSha256?: string;
   preparedArtifactBytes?: number;
+  retiredSchemaArchiveSha256?: string | null;
   sourceDataFingerprint?: string;
   targetDataFingerprint?: string;
   importReceiptSha256?: string;
@@ -30,6 +33,7 @@ export interface DatabaseMigrationEvidence {
   secretVersionRef?: string;
   workerVersionRef?: string;
   smokeProofSha256?: string;
+  targetWriteProofSha256?: string;
   rollbackProofSha256?: string;
 }
 
@@ -46,18 +50,21 @@ export type DatabaseMigrationEvent =
   | {
       type: "lock_source";
       writeFenceSha256: string;
-      sourceBookmark: string;
+      sourceSnapshotRef: string;
     }
   | {
       type: "record_export";
       exportArtifactSha256: string;
       exportArtifactBytes: number;
-      exportBookmark: string;
+      exportReceiptSha256: string;
+      exportSnapshotRef: string;
     }
   | {
       type: "prepare_artifact";
       preparedArtifactSha256: string;
       preparedArtifactBytes: number;
+      sourceArtifactSha256: string;
+      retiredSchemaArchiveSha256: string | null;
       sourceDataFingerprint: string;
     }
   | {
@@ -69,6 +76,7 @@ export type DatabaseMigrationEvent =
   | { type: "install_secrets"; secretVersionRef: string }
   | { type: "record_deployment"; workerVersionRef: string }
   | { type: "record_smoke"; smokeProofSha256: string }
+  | { type: "record_target_write"; targetWriteProofSha256: string }
   | { type: "complete_cutover" }
   | { type: "rollback"; rollbackProofSha256: string };
 
@@ -127,9 +135,9 @@ function replayAlreadyAppliedEvent(
         "writeFenceSha256",
       );
       requireMatchingEvidence(
-        evidence.sourceBookmark,
-        requireOpaqueReference(event.sourceBookmark, "sourceBookmark"),
-        "sourceBookmark",
+        evidence.sourceSnapshotRef,
+        requireOpaqueReference(event.sourceSnapshotRef, "sourceSnapshotRef"),
+        "sourceSnapshotRef",
       );
       return true;
     case "record_export":
@@ -148,9 +156,14 @@ function replayAlreadyAppliedEvent(
         "exportArtifactBytes",
       );
       requireMatchingEvidence(
-        evidence.sourceBookmark,
-        requireOpaqueReference(event.exportBookmark, "exportBookmark"),
-        "exportBookmark",
+        evidence.exportReceiptSha256,
+        requireSha256(event.exportReceiptSha256, "exportReceiptSha256"),
+        "exportReceiptSha256",
+      );
+      requireMatchingEvidence(
+        evidence.sourceSnapshotRef,
+        requireOpaqueReference(event.exportSnapshotRef, "exportSnapshotRef"),
+        "exportSnapshotRef",
       );
       return true;
     case "prepare_artifact":
@@ -167,6 +180,21 @@ function replayAlreadyAppliedEvent(
           "preparedArtifactBytes",
         ),
         "preparedArtifactBytes",
+      );
+      requireMatchingEvidence(
+        evidence.exportArtifactSha256,
+        requireSha256(event.sourceArtifactSha256, "sourceArtifactSha256"),
+        "sourceArtifactSha256",
+      );
+      requireMatchingEvidence(
+        evidence.retiredSchemaArchiveSha256,
+        event.retiredSchemaArchiveSha256 === null
+          ? null
+          : requireSha256(
+              event.retiredSchemaArchiveSha256,
+              "retiredSchemaArchiveSha256",
+            ),
+        "retiredSchemaArchiveSha256",
       );
       requireMatchingEvidence(
         evidence.sourceDataFingerprint,
@@ -217,6 +245,14 @@ function replayAlreadyAppliedEvent(
         evidence.smokeProofSha256,
         requireSha256(event.smokeProofSha256, "smokeProofSha256"),
         "smokeProofSha256",
+      );
+      return true;
+    case "record_target_write":
+      if (evidence.targetWriteProofSha256 === undefined) return false;
+      requireMatchingEvidence(
+        evidence.targetWriteProofSha256,
+        requireSha256(event.targetWriteProofSha256, "targetWriteProofSha256"),
+        "targetWriteProofSha256",
       );
       return true;
     case "complete_cutover":
@@ -280,9 +316,9 @@ export function advanceDatabaseMigrationCheckpoint(
         event.writeFenceSha256,
         "writeFenceSha256",
       );
-      evidence.sourceBookmark = requireOpaqueReference(
-        event.sourceBookmark,
-        "sourceBookmark",
+      evidence.sourceSnapshotRef = requireOpaqueReference(
+        event.sourceSnapshotRef,
+        "sourceSnapshotRef",
       );
       phase = "source_write_locked";
       break;
@@ -296,13 +332,17 @@ export function advanceDatabaseMigrationCheckpoint(
         event.exportArtifactBytes,
         "exportArtifactBytes",
       );
-      const exportBookmark = requireOpaqueReference(
-        event.exportBookmark,
-        "exportBookmark",
+      evidence.exportReceiptSha256 = requireSha256(
+        event.exportReceiptSha256,
+        "exportReceiptSha256",
       );
-      if (exportBookmark !== evidence.sourceBookmark) {
+      const exportSnapshotRef = requireOpaqueReference(
+        event.exportSnapshotRef,
+        "exportSnapshotRef",
+      );
+      if (exportSnapshotRef !== evidence.sourceSnapshotRef) {
         throw new Error(
-          "D1 export bookmark does not match the frozen source bookmark.",
+          "Export snapshot does not match the frozen source snapshot.",
         );
       }
       phase = "source_exported";
@@ -318,6 +358,22 @@ export function advanceDatabaseMigrationCheckpoint(
         event.preparedArtifactBytes,
         "preparedArtifactBytes",
       );
+      const sourceArtifactSha256 = requireSha256(
+        event.sourceArtifactSha256,
+        "sourceArtifactSha256",
+      );
+      if (sourceArtifactSha256 !== evidence.exportArtifactSha256) {
+        throw new Error(
+          "Prepared artifact did not consume the write-fenced source export.",
+        );
+      }
+      evidence.retiredSchemaArchiveSha256 =
+        event.retiredSchemaArchiveSha256 === null
+          ? null
+          : requireSha256(
+              event.retiredSchemaArchiveSha256,
+              "retiredSchemaArchiveSha256",
+            );
       evidence.sourceDataFingerprint = requireFingerprint(
         event.sourceDataFingerprint,
         "sourceDataFingerprint",
@@ -375,13 +431,22 @@ export function advanceDatabaseMigrationCheckpoint(
       );
       phase = "smoke_passed";
       break;
-    case "complete_cutover":
+    case "record_target_write":
       requirePhase(checkpoint, "smoke_passed", event.type);
+      evidence.targetWriteProofSha256 = requireSha256(
+        event.targetWriteProofSha256,
+        "targetWriteProofSha256",
+      );
+      phase = "target_write_observed";
+      break;
+    case "complete_cutover":
+      requirePhase(checkpoint, "target_write_observed", event.type);
       phase = "complete";
       break;
     case "rollback":
       if (
         checkpoint.phase === "planned" ||
+        checkpoint.phase === "target_write_observed" ||
         checkpoint.phase === "complete" ||
         checkpoint.phase === "rolled_back"
       ) {
@@ -401,5 +466,7 @@ export function advanceDatabaseMigrationCheckpoint(
 export function isDatabaseMigrationReadyForCutover(
   checkpoint: DatabaseMigrationCheckpoint,
 ): boolean {
-  return checkpoint.phase === "smoke_passed" || checkpoint.phase === "complete";
+  return checkpoint.phase === "smoke_passed"
+    || checkpoint.phase === "target_write_observed"
+    || checkpoint.phase === "complete";
 }

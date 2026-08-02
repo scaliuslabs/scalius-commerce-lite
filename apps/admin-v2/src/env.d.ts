@@ -239,9 +239,10 @@ interface Env {
   JWT_SECRET?: string;
   FIREBASE_SERVICE_ACCOUNT_CRED_JSON?: string;
   CREDENTIAL_ENCRYPTION_KEY?: string;
-  DATABASE_PROVIDER?: "d1" | "turso";
+  DATABASE_PROVIDER?: "d1" | "turso" | "postgres";
   TURSO_DATABASE_URL?: string;
   TURSO_AUTH_TOKEN?: string;
+  POSTGRES_DATABASE_URL?: string;
   DATABASE_MIGRATION_FREEZE?: string;
 
   // Variables

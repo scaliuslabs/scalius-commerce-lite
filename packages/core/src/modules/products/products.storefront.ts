@@ -8,6 +8,7 @@ import {
     productAttributeValues,
     productAttributes,
 } from "@scalius/database/schema";
+import { effectiveRegularReservedStockSql } from "@scalius/database/inventory-authority";
 import { and, sql, desc, eq, isNull, inArray, or, lt, type SQL } from "drizzle-orm";
 import { ftsMatch } from "../../search/fts5";
 import { unixToDate } from "@scalius/shared/utils";
@@ -379,7 +380,7 @@ function buildAttributeProductSubquery(
                 sql`EXISTS (
                     SELECT 1
                     FROM json_each(${filtersJson}) AS selected_filter
-                    JOIN json_each(json_extract(selected_filter.value, '$.values')) AS selected_value
+                    CROSS JOIN json_each(json_extract(selected_filter.value, '$.values')) AS selected_value
                     WHERE CAST(json_extract(selected_filter.value, '$.slug') AS TEXT) = ${productAttributes.slug}
                       AND CAST(selected_value.value AS TEXT) = ${productAttributeValues.value}
                 )`,
@@ -623,7 +624,7 @@ async function readStorefrontFeedVariantMap(
                 barcodeType: productVariants.barcodeType,
                 price: productVariants.price,
                 stock: productVariants.stock,
-                reservedStock: productVariants.reservedStock,
+                reservedStock: effectiveRegularReservedStockSql(),
                 isDefault: productVariants.isDefault,
                 trackInventory: productVariants.trackInventory,
                 discountType: productVariants.discountType,
@@ -1143,7 +1144,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             sku: productVariants.sku,
             price: productVariants.price,
             stock: productVariants.stock,
-            reservedStock: productVariants.reservedStock,
+            reservedStock: effectiveRegularReservedStockSql(),
             isDefault: productVariants.isDefault,
             trackInventory: productVariants.trackInventory,
             lowStockThreshold: productVariants.lowStockThreshold,
@@ -1367,7 +1368,7 @@ async function readStorefrontSearchVariantMap(
                 sku: productVariants.sku,
                 price: productVariants.price,
                 stock: productVariants.stock,
-                reservedStock: productVariants.reservedStock,
+                reservedStock: effectiveRegularReservedStockSql(),
                 isDefault: productVariants.isDefault,
                 trackInventory: productVariants.trackInventory,
                 discountType: productVariants.discountType,

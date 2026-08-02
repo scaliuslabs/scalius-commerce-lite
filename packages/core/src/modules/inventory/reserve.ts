@@ -5,7 +5,17 @@
 
 import { eq, and, sql, inArray, isNull } from "drizzle-orm";
 import { inventoryMovements, products, productVariants } from "@scalius/database/schema";
-import { buildBatchGuard, safeBatch, type Database } from "@scalius/database/client";
+import {
+  availableRegularStockSql,
+  coordinatedRegularReservedStockSql,
+  effectiveRegularReservedStockSql,
+} from "@scalius/database/inventory-authority";
+import {
+  buildBatchGuard,
+  isTursoConflictError,
+  safeBatch,
+  type Database,
+} from "@scalius/database/client";
 import type { BatchItem } from "drizzle-orm/batch";
 import { recordMovement } from "./movements";
 import type { ReservationEntry, StockOperationResult } from "./types";
@@ -46,7 +56,7 @@ export async function reserveStock(
       .select({
         id: productVariants.id,
         stock: productVariants.stock,
-        reservedStock: productVariants.reservedStock,
+        reservedStock: effectiveRegularReservedStockSql(),
         preorderStock: productVariants.preorderStock,
         allowPreorder: productVariants.allowPreorder,
         allowBackorder: productVariants.allowBackorder,
@@ -155,6 +165,17 @@ export async function reserveStock(
           stockVersion: sql`${productVariants.stockVersion} + 1`,
           updatedAt: sql`unixepoch()`,
         };
+    const mutationAvailability = pool === "preorder"
+      ? sql`${productVariants.allowPreorder} = 1
+          AND ${productVariants.preorderStock} >= ${quantity}`
+      : pool === "backorder"
+        ? sql`${productVariants.allowBackorder} = 1
+            AND (
+              ${productVariants.backorderLimit} = 0
+              OR ${effectiveRegularReservedStockSql()} + ${quantity}
+                <= ${productVariants.backorderLimit}
+            )`
+        : sql`${availableRegularStockSql()} >= ${quantity}`;
 
     const result = await db
       .update(productVariants)
@@ -163,7 +184,8 @@ export async function reserveStock(
           and(
             eq(productVariants.id, variantId),
             isNull(productVariants.deletedAt),
-            eq(productVariants.stockVersion, variant.stockVersion)
+            eq(productVariants.stockVersion, variant.stockVersion),
+            mutationAvailability,
           )
         )
       .returning({ id: productVariants.id });
@@ -262,6 +284,13 @@ export interface ReserveStockBatchOptions {
    * non-deterministic unless they explicitly opt in.
    */
   reservationKey?: string;
+  /**
+   * Order identities proven to have no prior ledger edges. Checkout may set
+   * this only for a new in-memory attempt whose attempt/order/inventory facts
+   * will share one transaction. Retried or legacy identities must read their
+   * existing generation.
+   */
+  freshOrderIds?: ReadonlySet<string>;
 }
 
 export type ReserveStockBatchResult = {
@@ -286,6 +315,14 @@ export interface PreparedStockReservationBatch extends ReserveStockBatchResult {
   statements: SQLiteBatchItem[];
   /** Products whose public in-stock boolean changes if this plan commits. */
   availabilityChangedSubjects: StockReservationAvailabilitySubject[];
+  /**
+   * Resolve the exact availability transition from this plan's own batch
+   * results. Fresh checkout plans use the transaction's post-update counters;
+   * callers fall back to availabilityChangedSubjects after uncertain commits.
+   */
+  resolveCommittedAvailabilitySubjects?(
+    batchResults: readonly unknown[],
+  ): StockReservationAvailabilitySubject[];
   resolveIdempotentReplay(error: unknown): Promise<ReserveStockBatchResult | null>;
 }
 
@@ -390,6 +427,57 @@ export async function prepareStockReservationBatch(
     pool,
     options,
   );
+  const useCurrentTransactionState = Boolean(options.freshOrderIds) &&
+    trackedMovementEntries.every((entry) =>
+      entry.orderId !== undefined && options.freshOrderIds!.has(entry.orderId)
+    );
+
+  if (useCurrentTransactionState) {
+    const movementQueries = movementClaims.map((claim) =>
+      buildFreshReservationMovementInsert(db, claim, pool)
+    );
+    const updateQueries = movementClaims.map((claim) =>
+      buildFreshReservationCounterUpdate(db, claim)
+    );
+    const finalGuards = movementClaims.map((claim) =>
+      buildFreshReservationFinalGuard(db, claim)
+    );
+
+    const possibleAvailabilitySubjects = buildReservationSubjects(
+      trackedEntries,
+      variants,
+    );
+
+    return {
+      success: true,
+      results,
+      statements: [
+        ...movementQueries,
+        ...updateQueries,
+        ...finalGuards,
+      ] as SQLiteBatchItem[],
+      // A missing/uncertain batch result must invalidate conservatively. The
+      // normal success path narrows this to the exact zero-crossing below.
+      availabilityChangedSubjects: possibleAvailabilitySubjects,
+      resolveCommittedAvailabilitySubjects: (batchResults) =>
+        resolveFreshReservationAvailabilitySubjects({
+          batchResults,
+          movementCount: movementQueries.length,
+          movementClaims,
+          variants,
+          fallback: possibleAvailabilitySubjects,
+        }),
+      resolveIdempotentReplay: (error) => resolveDuplicateReservationBatch(
+        db,
+        movementClaims,
+        entries,
+        variants,
+        pool,
+        error,
+      ),
+    };
+  }
+
   const guardQueries = trackedEntries.map((entry) =>
     buildReservationBatchGuard(db, entry, variants.get(entry.variantId)!, pool)
   );
@@ -506,6 +594,7 @@ type ReservationVariantState = {
   slug: string | null;
   categoryId: string | null;
   stock: number;
+  legacyReservedStock?: number;
   reservedStock: number;
   preorderStock: number;
   allowPreorder: boolean;
@@ -534,6 +623,64 @@ function buildReservationAvailabilityChangedSubjects(
   return [...subjects.values()];
 }
 
+function buildReservationSubjects(
+  entries: ReservationBatchItem[],
+  variants: Map<string, ReservationVariantState>,
+): StockReservationAvailabilitySubject[] {
+  const subjects = new Map<string, StockReservationAvailabilitySubject>();
+  for (const entry of entries) {
+    const variant = variants.get(entry.variantId)!;
+    subjects.set(variant.productId, {
+      productId: variant.productId,
+      slug: variant.slug,
+      categoryId: variant.categoryId,
+    });
+  }
+  return [...subjects.values()];
+}
+
+function resolveFreshReservationAvailabilitySubjects(input: {
+  batchResults: readonly unknown[];
+  movementCount: number;
+  movementClaims: readonly ReservationMovementClaim[];
+  variants: Map<string, ReservationVariantState>;
+  fallback: StockReservationAvailabilitySubject[];
+}): StockReservationAvailabilitySubject[] {
+  const subjects = new Map<string, StockReservationAvailabilitySubject>();
+
+  for (let index = 0; index < input.movementClaims.length; index += 1) {
+    const result = input.batchResults[input.movementCount + index];
+    const row = Array.isArray(result) && result.length === 1
+      ? result[0]
+      : null;
+    if (!row || typeof row !== "object") return input.fallback;
+
+    const stock = (row as { stock?: unknown }).stock;
+    const reservedStock = (row as { reservedStock?: unknown }).reservedStock;
+    if (
+      typeof stock !== "number" || !Number.isSafeInteger(stock) ||
+      typeof reservedStock !== "number" || !Number.isSafeInteger(reservedStock)
+    ) {
+      return input.fallback;
+    }
+
+    const claim = input.movementClaims[index]!;
+    const availableBefore = stock - (reservedStock - claim.quantity) > 0;
+    const availableAfter = stock - reservedStock > 0;
+    if (availableBefore === availableAfter) continue;
+
+    const variant = input.variants.get(claim.variantId);
+    if (!variant) return input.fallback;
+    subjects.set(variant.productId, {
+      productId: variant.productId,
+      slug: variant.slug,
+      categoryId: variant.categoryId,
+    });
+  }
+
+  return [...subjects.values()];
+}
+
 function buildReservationBatchGuard(
   db: Database,
   entry: ReservationBatchItem,
@@ -547,9 +694,9 @@ function buildReservationBatchGuard(
       ? sql`${productVariants.allowBackorder} = 1
           AND (
             ${productVariants.backorderLimit} = 0
-            OR ${productVariants.reservedStock} + ${entry.quantity} <= ${productVariants.backorderLimit}
+            OR ${effectiveRegularReservedStockSql()} + ${entry.quantity} <= ${productVariants.backorderLimit}
           )`
-      : sql`${productVariants.stock} - ${productVariants.reservedStock} >= ${entry.quantity}`;
+      : sql`${availableRegularStockSql()} >= ${entry.quantity}`;
 
   return buildBatchGuard(db, sql`CASE WHEN EXISTS (
     SELECT 1
@@ -567,6 +714,8 @@ function buildReservationBatchGuard(
 }
 
 export function isInventoryReservationConflictError(error: unknown): boolean {
+  if (isTursoConflictError(error)) return true;
+
   let current = error;
   for (let depth = 0; depth < 5 && current; depth += 1) {
     const message = current instanceof Error ? current.message : String(current);
@@ -692,10 +841,13 @@ async function buildReservationMovementClaims(
 
   for (const entry of movementEntries) {
     const variant = variants.get(entry.variantId)!;
+    const legacyReservedStock = variant.legacyReservedStock ?? variant.reservedStock;
     const reservationKey = entry.reservationKey ?? options.reservationKey;
     const deterministic = Boolean(entry.movementId || (reservationKey && entry.orderId));
     const reservationGeneration = entry.orderId
-      ? await loadReservationLedgerGeneration(db, entry.orderId, entry.variantId, pool)
+      ? options.freshOrderIds?.has(entry.orderId)
+        ? 1
+        : await loadReservationLedgerGeneration(db, entry.orderId, entry.variantId, pool)
       : null;
     const legacyHashGeneration = reservationGeneration == null
       ? 0
@@ -716,13 +868,13 @@ async function buildReservationMovementClaims(
       reservationGeneration,
       before: {
         stock: variant.stock,
-        reservedStock: variant.reservedStock,
+        reservedStock: legacyReservedStock,
         preorderStock: variant.preorderStock,
         stockVersion: variant.stockVersion,
       },
       after: {
         stock: variant.stock,
-        reservedStock: variant.reservedStock + entry.quantity,
+        reservedStock: legacyReservedStock + entry.quantity,
         preorderStock: pool === "preorder"
           ? variant.preorderStock - entry.quantity
           : variant.preorderStock,
@@ -781,6 +933,180 @@ function buildReservationMovementInsert(
         AND ${productVariants.stockVersion} = ${variant.stockVersion}
     `)
     .returning({ id: inventoryMovements.id });
+}
+
+/**
+ * Brand-new checkout orders do not need a stale application-side CAS value.
+ * Derive the complete ledger edge from the row visible inside the transaction
+ * so a provider-level BEGIN CONCURRENT retry can safely re-evaluate it after a
+ * competing checkout commits.
+ */
+function buildFreshReservationMovementInsert(
+  db: Database,
+  claim: ReservationMovementClaim,
+  pool: ReservationPool,
+) {
+  const variant = {
+    id: sql.raw('"product_variants"."id"'),
+    productId: sql.raw('"product_variants"."product_id"'),
+    stock: sql.raw('"product_variants"."stock"'),
+    reservedStock: sql.raw('"product_variants"."reserved_stock"'),
+    preorderStock: sql.raw('"product_variants"."preorder_stock"'),
+    trackInventory: sql.raw('"product_variants"."track_inventory"'),
+    stockVersion: sql.raw('"product_variants"."stock_version"'),
+    allowPreorder: sql.raw('"product_variants"."allow_preorder"'),
+    allowBackorder: sql.raw('"product_variants"."allow_backorder"'),
+    backorderLimit: sql.raw('"product_variants"."backorder_limit"'),
+    deletedAt: sql.raw('"product_variants"."deleted_at"'),
+  };
+  const product = {
+    id: sql.raw('"products"."id"'),
+    isActive: sql.raw('"products"."is_active"'),
+    deletedAt: sql.raw('"products"."deleted_at"'),
+  };
+  const availability = pool === "preorder"
+    ? sql`${variant.allowPreorder} = 1
+        AND ${variant.preorderStock} >= ${claim.quantity}`
+    : pool === "backorder"
+      ? sql`${variant.allowBackorder} = 1
+          AND (
+            ${variant.backorderLimit} = 0
+            OR ${variant.reservedStock}
+              + ${coordinatedRegularReservedStockSql(variant.id)}
+              + ${claim.quantity} <= ${variant.backorderLimit}
+          )`
+      : sql`${variant.stock} - ${variant.reservedStock}
+          - ${coordinatedRegularReservedStockSql(variant.id)} >= ${claim.quantity}`;
+  const nextPreorderStock = pool === "preorder"
+    ? sql`${variant.preorderStock} - ${claim.quantity}`
+    : sql`${variant.preorderStock}`;
+  const preorderDelta = pool === "preorder" ? -claim.quantity : 0;
+
+  return db
+    .insert(inventoryMovements)
+    .select(sql`
+      SELECT
+        ${claim.id},
+        ${variant.id},
+        ${claim.orderId ?? null},
+        ${claim.type},
+        ${claim.quantity},
+        ${variant.stock},
+        ${variant.stock},
+        ${claim.notes},
+        NULL,
+        2,
+        ${pool},
+        ${claim.reservationGeneration},
+        ${variant.stockVersion},
+        ${variant.stockVersion} + 1,
+        0,
+        ${variant.reservedStock},
+        ${variant.reservedStock} + ${claim.quantity},
+        ${claim.quantity},
+        ${variant.preorderStock},
+        ${nextPreorderStock},
+        ${preorderDelta},
+        unixepoch()
+      FROM ${productVariants}
+      INNER JOIN ${products}
+        ON ${product.id} = ${variant.productId}
+      WHERE ${variant.id} = ${claim.variantId}
+        AND ${variant.trackInventory} = 1
+        AND ${variant.deletedAt} IS NULL
+        AND ${product.isActive} = 1
+        AND ${product.deletedAt} IS NULL
+        AND ${availability}
+    `)
+    .returning({ id: inventoryMovements.id });
+}
+
+function buildFreshReservationCounterUpdate(
+  db: Database,
+  claim: ReservationMovementClaim,
+) {
+  const movement = {
+    id: sql.raw('"inventory_movements"."id"'),
+    variantId: sql.raw('"inventory_movements"."variant_id"'),
+    stockVersionBefore: sql.raw('"inventory_movements"."stock_version_before"'),
+  };
+  const variant = {
+    id: sql.raw('"product_variants"."id"'),
+    stockVersion: sql.raw('"product_variants"."stock_version"'),
+  };
+  const movementMatchesCurrentVersion = sql`EXISTS (
+    SELECT 1
+    FROM ${inventoryMovements}
+    WHERE ${movement.id} = ${claim.id}
+      AND ${movement.variantId} = ${variant.id}
+      AND ${movement.stockVersionBefore} = ${variant.stockVersion}
+  )`;
+
+  return db
+    .update(productVariants)
+    .set({
+      reservedStock: sql`${productVariants.reservedStock} + ${claim.quantity}`,
+      ...(claim.pool === "preorder"
+        ? {
+            preorderStock: sql`${productVariants.preorderStock} - ${claim.quantity}`,
+          }
+        : {}),
+      stockVersion: sql`${productVariants.stockVersion} + 1`,
+      updatedAt: sql`unixepoch()`,
+    })
+    .where(and(
+      eq(productVariants.id, claim.variantId),
+      isNull(productVariants.deletedAt),
+      movementMatchesCurrentVersion,
+    ))
+    .returning({
+      id: productVariants.id,
+      stock: productVariants.stock,
+      reservedStock: effectiveRegularReservedStockSql(),
+    });
+}
+
+function buildFreshReservationFinalGuard(
+  db: Database,
+  claim: ReservationMovementClaim,
+): SQLiteBatchItem {
+  const variant = {
+    id: sql.raw('"product_variants"."id"'),
+    stock: sql.raw('"product_variants"."stock"'),
+    reservedStock: sql.raw('"product_variants"."reserved_stock"'),
+    preorderStock: sql.raw('"product_variants"."preorder_stock"'),
+    stockVersion: sql.raw('"product_variants"."stock_version"'),
+  };
+  const movement = {
+    id: sql.raw('"inventory_movements"."id"'),
+    variantId: sql.raw('"inventory_movements"."variant_id"'),
+    orderId: sql.raw('"inventory_movements"."order_id"'),
+    type: sql.raw('"inventory_movements"."type"'),
+    quantity: sql.raw('"inventory_movements"."quantity"'),
+    pool: sql.raw('"inventory_movements"."pool"'),
+    reservationGeneration: sql.raw('"inventory_movements"."reservation_generation"'),
+    stockVersionAfter: sql.raw('"inventory_movements"."stock_version_after"'),
+    newStock: sql.raw('"inventory_movements"."new_stock"'),
+    newReservedStock: sql.raw('"inventory_movements"."new_reserved_stock"'),
+    newPreorderStock: sql.raw('"inventory_movements"."new_preorder_stock"'),
+  };
+  return buildBatchGuard(db, sql`CASE WHEN EXISTS (
+    SELECT 1
+    FROM ${productVariants}
+    INNER JOIN ${inventoryMovements}
+      ON ${movement.variantId} = ${variant.id}
+    WHERE ${variant.id} = ${claim.variantId}
+      AND ${movement.id} = ${claim.id}
+      AND ${movement.orderId} = ${claim.orderId ?? null}
+      AND ${movement.type} = ${claim.type}
+      AND ${movement.quantity} = ${claim.quantity}
+      AND ${movement.pool} = ${claim.pool}
+      AND ${movement.reservationGeneration} = ${claim.reservationGeneration}
+      AND ${variant.stockVersion} = ${movement.stockVersionAfter}
+      AND ${variant.stock} = ${movement.newStock}
+      AND ${variant.reservedStock} = ${movement.newReservedStock}
+      AND ${variant.preorderStock} = ${movement.newPreorderStock}
+  ) THEN 1 ELSE json_extract(${INVENTORY_RESERVATION_CONFLICT}, '$') END`);
 }
 
 function findVariantWithMultipleReservationOrders(
@@ -940,7 +1266,8 @@ async function loadReservationVariantStates(
       slug: products.slug,
       categoryId: products.categoryId,
       stock: productVariants.stock,
-      reservedStock: productVariants.reservedStock,
+      legacyReservedStock: productVariants.reservedStock,
+      reservedStock: effectiveRegularReservedStockSql(),
       preorderStock: productVariants.preorderStock,
       allowPreorder: productVariants.allowPreorder,
       allowBackorder: productVariants.allowBackorder,

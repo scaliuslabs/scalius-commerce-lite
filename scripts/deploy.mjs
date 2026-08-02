@@ -9,6 +9,8 @@
  *   node scripts/deploy.mjs --only storefront # typecheck + build/deploy storefront
  *   node scripts/deploy.mjs --only ops-monitor # typecheck + build/deploy ops monitor
  *   node scripts/deploy.mjs --only api --dry-run # typecheck + build + dist checks only
+ *   node scripts/deploy.mjs --only api --wrangler-config path/to/wrangler.jsonc
+ *     --health-only # isolated custom config: verify deployment + /health, not production bindings
  *   node scripts/deploy.mjs --migrate-only   # apply migrations to remote D1 only
  *   node scripts/deploy.mjs --migrate-only --local  # apply migrations to local D1 only
  *
@@ -35,6 +37,11 @@ const args = process.argv.slice(2);
 const migrateOnly = args.includes("--migrate-only");
 const local = args.includes("--local");
 const dryRun = args.includes("--dry-run");
+const healthOnly = args.includes("--health-only");
+const wranglerConfigArgIndex = args.indexOf("--wrangler-config");
+const customWranglerConfigPath = wranglerConfigArgIndex === -1
+  ? null
+  : resolve(root, args[wranglerConfigArgIndex + 1] || "");
 const localPersistPath = process.env.SCALIUS_WRANGLER_STATE || "../../.wrangler/state";
 const deployTargets = ["api", "admin", "storefront", "ops-monitor"];
 const selectableDeployTargets = deployTargets;
@@ -73,8 +80,8 @@ function readJsoncFile(path) {
 }
 
 // ── Read wrangler.jsonc from apps/api/ (strip // comments so JSON.parse works)
-function readWranglerConfig() {
-  return readJsoncFile(resolve(apiDir, "wrangler.jsonc"));
+function readWranglerConfig(path = resolve(apiDir, "wrangler.jsonc")) {
+  return readJsoncFile(path);
 }
 
 // ── Run a shell command, streaming output, throwing on failure
@@ -169,10 +176,14 @@ export function getSequentialWorkspaceCommand(task) {
   return `${pnpm} exec turbo run ${task} --concurrency=1`;
 }
 
-export function getDeployCommandForTarget(target) {
+export function getDeployCommandForTarget(target, apiWranglerConfigPath = null) {
   switch (target) {
     case "api":
-      return { cmd: `${pnpm} exec wrangler deploy`, label: "Deploy API Worker", cwd: apiDir };
+      return {
+        cmd: `${pnpm} exec wrangler deploy${apiWranglerConfigPath ? ` --config ${shellQuote(apiWranglerConfigPath)}` : ""}`,
+        label: "Deploy API Worker",
+        cwd: apiDir,
+      };
     case "admin":
       return {
         cmd: `${pnpm} exec wrangler deploy`,
@@ -202,8 +213,8 @@ function buildTarget(target) {
   run(getBuildCommandForTarget(target), labels[target]);
 }
 
-function deployTarget(target) {
-  const { cmd, label, cwd } = getDeployCommandForTarget(target);
+function deployTarget(target, apiWranglerConfigPath = null) {
+  const { cmd, label, cwd } = getDeployCommandForTarget(target, apiWranglerConfigPath);
   runWithRetry(cmd, label, cwd);
 }
 
@@ -608,9 +619,12 @@ async function verifyStorefrontDeploy() {
   await warmStorefrontAfterDeploy(storefrontUrl, generatedConfig, expectedBuildId);
 }
 
-async function verifyApiDeploy(config) {
+async function verifyApiDeploy(config, apiWranglerConfigPath = null, options = {}) {
+  const configFlag = apiWranglerConfigPath
+    ? ` --config ${shellQuote(apiWranglerConfigPath)}`
+    : "";
   const deployments = runJson(
-    `${pnpm} exec wrangler deployments list --json`,
+    `${pnpm} exec wrangler deployments list --json${configFlag}`,
     "Verify latest API Worker deployment",
     apiDir,
   );
@@ -627,6 +641,10 @@ async function verifyApiDeploy(config) {
   }
 
   await verifyHttpOk(buildApiV1Url(apiBaseUrl, "/health"), "Verify live API /health");
+  if (options.healthOnly) {
+    console.log("✓ Custom API health-only verification skipped production binding readiness checks.");
+    return;
+  }
   await sampleApiReadiness(apiBaseUrl);
 }
 
@@ -650,9 +668,14 @@ function verifyLatestWorkerDeployment(cwd, label, configPath = null) {
   return deployedVersion.version_id;
 }
 
-async function verifyPostDeployTarget(target, apiConfig) {
+async function verifyPostDeployTarget(
+  target,
+  apiConfig,
+  apiWranglerConfigPath = null,
+  options = {},
+) {
   if (target === "api") {
-    await verifyApiDeploy(apiConfig);
+    await verifyApiDeploy(apiConfig, apiWranglerConfigPath, options);
   }
   if (target === "admin") {
     verifyLatestWorkerDeployment(adminV2Dir, "Admin V2 Worker");
@@ -672,16 +695,20 @@ function checkDistEnvFiles(targets = deployTargets) {
 
 // ── Main
 export async function main() {
+  if (wranglerConfigArgIndex !== -1 && !args[wranglerConfigArgIndex + 1]) {
+    console.error("✗ --wrangler-config requires a path.");
+    process.exit(1);
+  }
   let config;
   try {
-    config = readWranglerConfig();
+    config = readWranglerConfig(customWranglerConfigPath ?? undefined);
   } catch (e) {
-    console.error("✗ Could not parse apps/api/wrangler.jsonc:", e.message);
+    console.error(`✗ Could not parse ${customWranglerConfigPath ?? "apps/api/wrangler.jsonc"}:`, e.message);
     process.exit(1);
   }
 
   const d1 = config.d1_databases?.[0];
-  if (!d1?.database_name) {
+  if (!d1?.database_name && !customWranglerConfigPath) {
     console.error(
       "✗ No d1_databases[0].database_name found in apps/api/wrangler.jsonc.\n" +
       "  Add a D1 database binding before deploying."
@@ -689,10 +716,18 @@ export async function main() {
     process.exit(1);
   }
 
-  const dbName = d1.database_name;
+  const dbName = d1?.database_name ?? null;
   const target = local ? "local" : "remote";
   const persistFlag = local ? ` --persist-to ${shellQuote(localPersistPath)}` : "";
   const requestedTarget = validateOnlyTarget();
+  if (customWranglerConfigPath && (requestedTarget !== "api" || migrateOnly)) {
+    console.error("✗ --wrangler-config is supported only with --only api deploys.");
+    process.exit(1);
+  }
+  if (healthOnly && !customWranglerConfigPath) {
+    console.error("✗ --health-only is allowed only with an explicit --wrangler-config API deploy.");
+    process.exit(1);
+  }
 
   if (migrateOnly) {
     console.log(`\n🗄  Applying D1 migrations → "${dbName}" (${target})\n`);
@@ -716,7 +751,11 @@ export async function main() {
     return;
   }
 
-  console.log(`\n🚀 ${dryRun ? "Validating deploy for" : "Deploying"} "${config.name}"${requestedTarget ? ` (${requestedTarget} only)` : ""} → D1: "${dbName}"\n`);
+  console.log(
+    `\n🚀 ${dryRun ? "Validating deploy for" : "Deploying"} "${config.name}"${requestedTarget ? ` (${requestedTarget} only)` : ""}`
+    + (dbName ? ` → D1: "${dbName}"` : " → external database bindings")
+    + "\n",
+  );
   console.log("=".repeat(60));
 
   try {
@@ -738,16 +777,20 @@ export async function main() {
         return;
       }
 
-      if (requestedTarget === "api") {
+      if (requestedTarget === "api" && dbName) {
+        const migrationTarget = customWranglerConfigPath ? "DB" : dbName;
+        const migrationConfigFlag = customWranglerConfigPath
+          ? ` --config ${shellQuote(customWranglerConfigPath)}`
+          : "";
         runWithRetry(
-          `${pnpm} exec wrangler d1 migrations apply ${dbName} --remote`,
+          `${pnpm} exec wrangler d1 migrations apply ${migrationTarget} --remote${migrationConfigFlag}`,
           `Apply D1 migrations → ${dbName}`,
           apiDir
         );
       }
 
-      deployTarget(requestedTarget);
-      await verifyPostDeployTarget(requestedTarget, config);
+      deployTarget(requestedTarget, customWranglerConfigPath);
+      await verifyPostDeployTarget(requestedTarget, config, customWranglerConfigPath, { healthOnly });
       console.log(`\n✓ Deploy complete (${requestedTarget}).`);
       return;
     }

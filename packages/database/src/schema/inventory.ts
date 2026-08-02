@@ -1,7 +1,8 @@
 // src/db/schema/inventory.ts
 // Inventory tracking tables: inventoryMovements, productLowStockAlerts.
 
-import { sqliteTable, text, integer, index, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, index, uniqueIndex, primaryKey, check } from "drizzle-orm/sqlite-core";
+import { sql } from "drizzle-orm";
 import type { InferSelectModel } from "drizzle-orm";
 import { products, productVariants } from "./products";
 import { UNIX_NOW } from "./shared";
@@ -95,6 +96,121 @@ export const inventoryOperations = sqliteTable("inventory_operations", {
     index("inventory_operations_movement_idx").on(table.movementId),
 ]);
 
+/**
+ * Checkout reservation authority split into independent capacity lanes.
+ *
+ * A checkout transaction mutates only the lane recorded in its immutable
+ * order edge. The sum of finite lane capacities is reconciled to the owning
+ * variant pool before coordinated checkout is enabled. D1 serializes lane
+ * commits; concurrent-writer providers may safely commit disjoint lanes in
+ * parallel without sharing a hot reservation counter.
+ */
+export const inventoryReservationLanes = sqliteTable("inventory_reservation_lanes", {
+    variantId: text("variant_id")
+        .notNull()
+        .references(() => productVariants.id, { onDelete: "cascade" }),
+    pool: text("pool", {
+        enum: ["regular", "preorder", "backorder"],
+    }).notNull(),
+    lane: integer("lane").notNull(),
+    /** Null capacity is reserved for an explicitly unlimited backorder pool. */
+    capacity: integer("capacity"),
+    reservedQuantity: integer("reserved_quantity").notNull().default(0),
+    version: integer("version").notNull().default(0),
+    /** Product-variant stock CAS version from the last capacity reconciliation. */
+    sourceStockVersion: integer("source_stock_version").notNull(),
+    createdAt: integer("created_at").notNull().default(UNIX_NOW),
+    updatedAt: integer("updated_at").notNull().default(UNIX_NOW),
+}, (table) => [
+    primaryKey({
+        name: "inventory_reservation_lanes_pk",
+        columns: [table.variantId, table.pool, table.lane],
+    }),
+    check(
+        "inventory_reservation_lanes_pool_check",
+        sql`${table.pool} IN ('regular', 'preorder', 'backorder')`,
+    ),
+    check(
+        "inventory_reservation_lanes_lane_check",
+        sql`${table.lane} BETWEEN 0 AND 31`,
+    ),
+    check(
+        "inventory_reservation_lanes_reserved_check",
+        sql`${table.reservedQuantity} >= 0`,
+    ),
+    check(
+        "inventory_reservation_lanes_capacity_check",
+        sql`${table.capacity} IS NULL OR (${table.capacity} >= 0 AND ${table.reservedQuantity} <= ${table.capacity})`,
+    ),
+    check(
+        "inventory_reservation_lanes_finite_pool_check",
+        sql`${table.pool} = 'backorder' OR ${table.capacity} IS NOT NULL`,
+    ),
+    index("inventory_reservation_lanes_pool_idx").on(table.pool, table.variantId),
+]);
+
+/**
+ * Immutable terminal edges for coordinated checkout reservations.
+ *
+ * The original reservation edge is embedded in the immutable order aggregate;
+ * this table proves exactly how that lane reservation was consumed. One
+ * aggregate edge can terminate only once, either by release or stock
+ * deduction. Physical stock deductions additionally write ledger-v2 in
+ * `inventory_movements` in the same transaction.
+ */
+export const checkoutInventoryLaneMovements = sqliteTable("checkout_inventory_lane_movements", {
+    id: text("id").primaryKey(),
+    orderId: text("order_id").notNull(),
+    variantId: text("variant_id")
+        .notNull()
+        .references(() => productVariants.id, { onDelete: "restrict" }),
+    pool: text("pool", { enum: ["regular"] }).notNull(),
+    lane: integer("lane").notNull(),
+    operation: text("operation", { enum: ["released", "deducted"] }).notNull(),
+    quantity: integer("quantity").notNull(),
+    laneCapacityBefore: integer("lane_capacity_before").notNull(),
+    laneReservedBefore: integer("lane_reserved_before").notNull(),
+    laneReservedAfter: integer("lane_reserved_after").notNull(),
+    laneVersionBefore: integer("lane_version_before").notNull(),
+    laneVersionAfter: integer("lane_version_after").notNull(),
+    sourceStockVersionBefore: integer("source_stock_version_before").notNull(),
+    sourceStockVersionAfter: integer("source_stock_version_after").notNull(),
+    stockBefore: integer("stock_before").notNull(),
+    stockAfter: integer("stock_after").notNull(),
+    legacyReservedStockBefore: integer("legacy_reserved_stock_before").notNull(),
+    legacyReservedStockAfter: integer("legacy_reserved_stock_after").notNull(),
+    createdAt: integer("created_at").notNull().default(UNIX_NOW),
+}, (table) => [
+    uniqueIndex("checkout_inventory_lane_movements_edge_uidx").on(
+        table.orderId,
+        table.variantId,
+        table.pool,
+        table.lane,
+    ),
+    index("checkout_inventory_lane_movements_variant_idx").on(table.variantId, table.createdAt),
+    index("checkout_inventory_lane_movements_order_idx").on(table.orderId),
+    check(
+        "checkout_inventory_lane_movements_shape_check",
+        sql`${table.pool} = 'regular'
+            AND ${table.lane} BETWEEN 0 AND 31
+            AND ${table.operation} IN ('released', 'deducted')
+            AND ${table.quantity} > 0
+            AND ${table.laneCapacityBefore} >= 0
+            AND ${table.laneReservedBefore} >= ${table.quantity}
+            AND ${table.laneReservedAfter} = ${table.laneReservedBefore} - ${table.quantity}
+            AND ${table.laneVersionBefore} >= 0
+            AND ${table.laneVersionAfter} = ${table.laneVersionBefore} + 1
+            AND ${table.sourceStockVersionBefore} >= 1
+            AND ${table.sourceStockVersionAfter} = ${table.sourceStockVersionBefore}
+                + CASE WHEN ${table.operation} = 'deducted' THEN 1 ELSE 0 END
+            AND ${table.stockBefore} >= 0
+            AND ${table.stockAfter} = ${table.stockBefore}
+                - CASE WHEN ${table.operation} = 'deducted' THEN ${table.quantity} ELSE 0 END
+            AND ${table.legacyReservedStockBefore} >= 0
+            AND ${table.legacyReservedStockAfter} = ${table.legacyReservedStockBefore}`,
+    ),
+]);
+
 export const productLowStockAlerts = sqliteTable("product_low_stock_alerts", {
     id: text("id").primaryKey(),
     variantId: text("variant_id")
@@ -124,4 +240,5 @@ export const productLowStockAlerts = sqliteTable("product_low_stock_alerts", {
 
 export type InventoryMovement = InferSelectModel<typeof inventoryMovements>;
 export type InventoryOperation = InferSelectModel<typeof inventoryOperations>;
+export type InventoryReservationLane = InferSelectModel<typeof inventoryReservationLanes>;
 export type ProductLowStockAlert = InferSelectModel<typeof productLowStockAlerts>;

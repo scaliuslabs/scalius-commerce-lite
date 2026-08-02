@@ -18,6 +18,7 @@ import {
 } from "../scripts/turso-upload-bundle";
 import {
   preflightTursoUploadStorage,
+  preflightTursoLoadBudget,
 } from "../scripts/turso-platform-upload";
 import {
   TURSO_UPLOAD_RECEIPT_VERSION,
@@ -50,6 +51,7 @@ async function createBundle(): Promise<string> {
         filename: "source.sql",
         bytes: 100,
         sha256: digest("1"),
+        portableExport: null,
       },
       artifact: {
         engine: "turso-mvcc",
@@ -72,6 +74,7 @@ async function createBundle(): Promise<string> {
         foreignKeyViolations: 0,
         integrity: "ok",
       },
+      retiredSchemaArchive: null,
       portabilityManifest: {
         version: "scalius-sqlite-portability/v2",
         chunkSize: 1_000,
@@ -98,6 +101,7 @@ async function writeFakeUploadReceipt(
     databaseHostname: hostname,
     artifactSha256: artifact.sha256,
     artifactBytes: artifact.bytes,
+    retiredSchemaArchiveSha256: null,
     sourceFingerprint: digest("3"),
     targetFingerprint: digest("3"),
     schemaDigest: digest("2"),
@@ -313,5 +317,72 @@ describe("Turso Platform upload orchestration", () => {
 
     expect(requests).toHaveLength(3);
     expect(requests).not.toContain(expect.stringMatching(/\/databases$/));
+  });
+
+  it("refuses a load run that cannot fit the remaining organization row quotas", async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/subscription")) {
+        return Response.json({ subscription: { plan: "starter", overages: false } });
+      }
+      if (url.endsWith("/usage")) {
+        return Response.json({
+          organization: { usage: { rows_read: 755, rows_written: 20 } },
+        });
+      }
+      if (url.endsWith("/plans")) {
+        return Response.json({
+          plans: [{
+            name: "starter",
+            quotas: { rowsRead: 500, rowsWritten: 1_000 },
+          }],
+        });
+      }
+      return new Response("unexpected request", { status: 500 });
+    });
+
+    await expect(preflightTursoLoadBudget({
+      organization: "capacity-tests",
+      platformToken: "platform-token-secret",
+      rowsReadBudget: 100,
+      rowsWrittenBudget: 50,
+      fetchImpl,
+    })).rejects.toThrow(/only 0 reads and 980 writes remain/);
+  });
+
+  it("reports a bounded non-billable load budget", async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/subscription")) {
+        return Response.json({ subscription: { plan: "scaler", overages: false } });
+      }
+      if (url.endsWith("/usage")) {
+        return Response.json({
+          organization: { usage: { rows_read: 1_000, rows_written: 200 } },
+        });
+      }
+      if (url.endsWith("/plans")) {
+        return Response.json({
+          plans: [{
+            name: "scaler",
+            quotas: { rowsRead: 10_000, rowsWritten: 2_000 },
+          }],
+        });
+      }
+      return new Response("unexpected request", { status: 500 });
+    });
+
+    await expect(preflightTursoLoadBudget({
+      organization: "capacity-tests",
+      platformToken: "platform-token-secret",
+      rowsReadBudget: 2_000,
+      rowsWrittenBudget: 500,
+      fetchImpl,
+    })).resolves.toMatchObject({
+      plan: "scaler",
+      rowsReadAvailable: 9_000,
+      rowsWrittenAvailable: 1_800,
+      requiresOverage: false,
+    });
   });
 });

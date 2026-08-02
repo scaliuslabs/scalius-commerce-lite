@@ -16,11 +16,14 @@ const DEFAULT_STATUS_TOKEN = buildCheckoutStatusTokenFromRequestKey(DEFAULT_STAT
 
 const mocks = vi.hoisted(() => ({
   createStorefrontOrder: vi.fn(),
+  loadStorefrontCheckoutAuthority: vi.fn(),
   buildCheckoutAttemptIdentity: vi.fn(),
   resolveExistingCheckoutAttempt: vi.fn(),
-  claimCheckoutAttempt: vi.fn(),
-  markCheckoutAttemptCommitted: vi.fn(),
-  markCheckoutAttemptFailed: vi.fn(),
+  createAtomicCheckoutAttempt: vi.fn(),
+  getCoordinatedCheckoutEligibility: vi.fn(),
+  prepareCheckoutCommitCommand: vi.fn(),
+  submitCheckoutCommitToCoordinator: vi.fn(),
+  submitCheckoutIntentToCoordinator: vi.fn(),
   commitStorefrontOrderPayload: vi.fn(),
   runStorefrontOrderPostCommitSideEffects: vi.fn(),
   validateStorefrontCartItems: vi.fn(),
@@ -46,19 +49,25 @@ vi.mock("@scalius/core/modules/orders", async (importOriginal) => {
     CUSTOMER_ORDER_SUPPORT_REQUEST_TYPES: ["cancel_pre_shipment", "return", "refund"],
     buildCheckoutAttemptIdentity: mocks.buildCheckoutAttemptIdentity,
     resolveExistingCheckoutAttempt: mocks.resolveExistingCheckoutAttempt,
-    claimCheckoutAttempt: mocks.claimCheckoutAttempt,
+    createAtomicCheckoutAttempt: mocks.createAtomicCheckoutAttempt,
+    getCoordinatedCheckoutEligibility: mocks.getCoordinatedCheckoutEligibility,
+    prepareCheckoutCommitCommand: mocks.prepareCheckoutCommitCommand,
     createReceiptOrderSupportRequest: mocks.createReceiptOrderSupportRequest,
     createStorefrontOrder: mocks.createStorefrontOrder,
+    loadStorefrontCheckoutAuthority: mocks.loadStorefrontCheckoutAuthority,
     getOrderSupportRequestStatusLabel: mocks.getOrderSupportRequestStatusLabel,
     getReceiptOrderSupportRequestState: mocks.getReceiptOrderSupportRequestState,
-    markCheckoutAttemptCommitted: mocks.markCheckoutAttemptCommitted,
-    markCheckoutAttemptFailed: mocks.markCheckoutAttemptFailed,
     commitStorefrontOrderPayload: mocks.commitStorefrontOrderPayload,
     runStorefrontOrderPostCommitSideEffects: mocks.runStorefrontOrderPostCommitSideEffects,
     validateStorefrontCartItems: mocks.validateStorefrontCartItems,
     validateStorefrontDeliveryPreflight: mocks.validateStorefrontDeliveryPreflight,
   };
 });
+
+vi.mock("../checkout-coordinator", () => ({
+  submitCheckoutCommitToCoordinator: mocks.submitCheckoutCommitToCoordinator,
+  submitCheckoutIntentToCoordinator: mocks.submitCheckoutIntentToCoordinator,
+}));
 
 vi.mock("../utils/cache-invalidation", () => ({
   getOptionalExecutionContext: (c: { executionCtx?: unknown }) => {
@@ -84,7 +93,8 @@ vi.mock("@scalius/core/modules/customers/customer-auth.service", () => ({
   },
 }));
 
-vi.mock("@scalius/core/modules/payments/gateway-settings", () => ({
+vi.mock("@scalius/core/modules/payments/gateway-settings", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/payments/gateway-settings")>()),
   FRESH_GATEWAY_SETTINGS_READ_OPTIONS: { bypassMemoryCache: true },
   getActivePaymentMethods: mocks.getActivePaymentMethods,
 }));
@@ -163,26 +173,49 @@ beforeEach(() => {
   mocks.calculateStorefrontTaxQuote.mockResolvedValue(DEFAULT_TAX_QUOTE);
   mocks.isDiscountValid.mockResolvedValue({ valid: false });
   mocks.calculateDiscountAmount.mockResolvedValue(0);
+  mocks.createStorefrontOrder.mockResolvedValue({
+    checkoutToken: "chk_order_1",
+    orderId: "order_1",
+    paymentMethod: "cod",
+    totalAmount: 100,
+    taxQuote: DEFAULT_TAX_QUOTE,
+    commitPayload: { orderData: { id: "order_1" } },
+  });
   mocks.buildCheckoutAttemptIdentity.mockResolvedValue({
     requestKey: "checkout_submit:v1:test",
     requestHash: "request_hash_1",
     checkoutRequestId: "checkout_req_123456",
   });
   mocks.resolveExistingCheckoutAttempt.mockResolvedValue(null);
-  mocks.claimCheckoutAttempt.mockResolvedValue({
-    status: "claimed",
-    attempt: {
-      id: "coa_1",
-      requestKey: "checkout_submit:v1:test",
-      requestHash: "request_hash_1",
-      claimId: "coac_1",
-      orderId: "order_1",
-      checkoutToken: "chk_order_1",
-      statusToken: DEFAULT_STATUS_TOKEN,
-    },
+  mocks.createAtomicCheckoutAttempt.mockReturnValue({
+    commitMode: "atomic",
+    origin: "new",
+    id: "coa_1",
+    requestKey: "checkout_submit:v1:test",
+    requestHash: "request_hash_1",
+    orderId: "order_1",
+    checkoutToken: "chk_order_1",
+    statusToken: DEFAULT_STATUS_TOKEN,
   });
-  mocks.markCheckoutAttemptCommitted.mockResolvedValue(undefined);
-  mocks.markCheckoutAttemptFailed.mockResolvedValue(undefined);
+  mocks.getCoordinatedCheckoutEligibility.mockReturnValue({
+    eligible: false,
+    reason: "unsupported_test_payload",
+  });
+  mocks.prepareCheckoutCommitCommand.mockResolvedValue({
+    schemaVersion: 1,
+    requestKey: "checkout_submit:v1:test",
+  });
+  mocks.submitCheckoutCommitToCoordinator.mockResolvedValue({
+    ok: true,
+    replay: false,
+    orderId: "order_1",
+    response: null,
+    availabilityChangedSubjects: [],
+  });
+  mocks.submitCheckoutIntentToCoordinator.mockResolvedValue({
+    ok: false,
+    code: "CHECKOUT_COMMIT_UNAVAILABLE",
+  });
   mocks.commitStorefrontOrderPayload.mockResolvedValue({
     availabilityChangedSubjects: [],
   });
@@ -267,6 +300,53 @@ function createTestApp(options: {
       })),
     })),
   };
+  mocks.loadStorefrontCheckoutAuthority.mockImplementation(async (database, input, encryptionKey) => {
+    const currency = await mocks.getCurrencySettings(database);
+    const cartValidation = await mocks.validateStorefrontCartItems(database, input.items, {
+      inventoryPool: input.inventoryPool,
+      currencyCode: currency.currencyCode,
+    });
+    if (!cartValidation.valid) {
+      throw new ValidationError("Some items in your cart need attention.", {
+        itemIssues: cartValidation.issues,
+      });
+    }
+    const deliveryPreflight = await mocks.validateStorefrontDeliveryPreflight(database, {
+      city: input.city,
+      zone: input.zone,
+      area: input.area,
+      shippingMethodId: input.shippingMethodId,
+      currencyCode: currency.currencyCode,
+    }, cartValidation);
+    const activePaymentMethods = await mocks.getActivePaymentMethods(
+      database,
+      kv,
+      encryptionKey,
+      { bypassMemoryCache: true },
+    );
+    return {
+      authorityRevision: 1,
+      currency,
+      cartValidation,
+      deliveryPreflight,
+      checkoutSettings: {
+        guestCheckoutEnabled: options.guestCheckoutEnabled ?? true,
+        checkoutMode: options.checkoutMode ?? "all",
+        partialPaymentEnabled: options.partialPaymentEnabled ?? false,
+        partialPaymentAmount: options.partialPaymentAmount ?? 0,
+      },
+      allowedCountries: {
+        allowedCountries: options.allowedCountries ?? [],
+        allowedCountriesMode: options.allowedCountriesMode ?? "include",
+      },
+      activePaymentMethods,
+      taxAuthority: { settings: {}, classes: [], rates: [] },
+      sideEffects: {
+        orderCreatedNotification: true,
+        metaPurchase: true,
+      },
+    };
+  });
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
   app.onError((error, c) => {
     const { body, status } = errorResponseFromError(error);
@@ -478,7 +558,6 @@ describe("cart validation preflight", () => {
       },
     });
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
-    expect(mocks.claimCheckoutAttempt).not.toHaveBeenCalled();
     expect(mocks.validateStorefrontDeliveryPreflight).not.toHaveBeenCalled();
     expect(kv.put).not.toHaveBeenCalled();
   });
@@ -535,7 +614,6 @@ describe("cart validation preflight", () => {
       expect.objectContaining({ valid: true }),
     );
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
-    expect(mocks.claimCheckoutAttempt).not.toHaveBeenCalled();
     expect(kv.put).not.toHaveBeenCalled();
   });
 
@@ -577,7 +655,6 @@ describe("cart validation preflight", () => {
       },
     });
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
-    expect(mocks.claimCheckoutAttempt).not.toHaveBeenCalled();
     expect(kv.put).not.toHaveBeenCalled();
   });
 });
@@ -695,7 +772,6 @@ describe("authoritative tax quote", () => {
         shippingAmount: 60,
       }),
     );
-    expect(mocks.claimCheckoutAttempt).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -1233,6 +1309,85 @@ describe("create order currency parity", () => {
 });
 
 describe("create order commit/KV ordering", () => {
+  it("routes eligible checkouts through the coordinator and preserves post-commit work", async () => {
+    const commitPayload = { orderData: { id: "order_1" }, marker: "coordinated" };
+    const coordinatedResponse = {
+      checkoutToken: "chk_order_1",
+      receiptToken: "chk_order_1",
+      statusToken: DEFAULT_STATUS_TOKEN,
+      orderId: "order_1",
+      paymentMethod: "cod",
+      totalAmount: 100,
+      totalAmountMinor: 10_000,
+      taxAmount: 0,
+      taxAmountMinor: 0,
+      taxLabel: "Tax",
+      pricesIncludeTax: false,
+      currencyCode: "BDT",
+      decimalPlaces: 2,
+      message: "Order created",
+    };
+    const availabilityChangedSubjects = [{
+      productId: "product_1",
+      slug: "queue-product",
+      categoryId: "category_1",
+    }];
+    const coordinatorBinding = {} as DurableObjectNamespace;
+
+    mocks.createStorefrontOrder.mockResolvedValue({
+      checkoutToken: "chk_order_1",
+      orderId: "order_1",
+      paymentMethod: "cod",
+      totalAmount: 100,
+      taxQuote: DEFAULT_TAX_QUOTE,
+      commitPayload,
+    });
+    mocks.submitCheckoutIntentToCoordinator.mockResolvedValue({
+      ok: true,
+      replay: false,
+      orderId: "order_1",
+      response: coordinatedResponse,
+      availabilityChangedSubjects,
+      postCommitPayload: commitPayload,
+    });
+
+    const { app, kv } = createTestApp();
+    const response = await app.request(
+      "/api/v1/orders",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(validOrderBody),
+      },
+      { CACHE: kv, CHECKOUT_COORDINATOR: coordinatorBinding } as never,
+    );
+
+    expect(response.status, await response.clone().text()).toBe(201);
+    expect(await response.json()).toMatchObject({
+      success: true,
+      data: coordinatedResponse,
+    });
+    expect(mocks.submitCheckoutIntentToCoordinator).toHaveBeenCalledWith(
+      coordinatorBinding,
+      expect.objectContaining({
+        attempt: expect.objectContaining({ orderId: "order_1" }),
+        data: expect.objectContaining({ paymentMethod: "cod" }),
+      }),
+    );
+    expect(mocks.submitCheckoutCommitToCoordinator).not.toHaveBeenCalled();
+    expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
+    expect(mocks.runStorefrontOrderPostCommitSideEffects).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ CHECKOUT_COORDINATOR: coordinatorBinding }),
+      commitPayload,
+    );
+    expect(mocks.invalidateProductAvailabilityCacheSubjects).toHaveBeenCalledWith(
+      availabilityChangedSubjects,
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+
   it("commits the order before scheduling checkout recovery hints and side effects", async () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const waitUntilPromises: Promise<unknown>[] = [];
@@ -1313,7 +1468,8 @@ describe("create order commit/KV ordering", () => {
         expect.objectContaining({
           attempt: expect.objectContaining({
             id: "coa_1",
-            claimId: "coac_1",
+            commitMode: "atomic",
+            origin: "new",
             orderId: "order_1",
             checkoutToken: "chk_order_1",
           }),
@@ -1342,8 +1498,10 @@ describe("create order commit/KV ordering", () => {
         }),
         undefined,
         { code: "BDT", decimalPlaces: 2 },
+        undefined,
+        expect.objectContaining({ partialPaymentEnabled: false }),
+        expect.objectContaining({ classes: [], rates: [] }),
       );
-      expect(mocks.markCheckoutAttemptCommitted).not.toHaveBeenCalled();
       expect(mocks.invalidateProductAvailabilityCacheSubjects).toHaveBeenCalledWith(
         [{
           productId: "product_1",
@@ -1361,7 +1519,7 @@ describe("create order commit/KV ordering", () => {
     }
   });
 
-  it("does not run the retired post-commit attempt marker or log raw checkout proof", async () => {
+  it("does not log raw checkout proof after the atomic commit", async () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
     try {
       const { app, kv } = createTestApp();
@@ -1379,7 +1537,6 @@ describe("create order commit/KV ordering", () => {
       const responseText = await response.clone().text();
       expect(response.status, responseText).toBe(201);
       const serializedLogs = JSON.stringify(consoleError.mock.calls);
-      expect(mocks.markCheckoutAttemptCommitted).not.toHaveBeenCalled();
       expect(serializedLogs).not.toContain("chk_order_1");
     } finally {
       consoleError.mockRestore();
@@ -1432,11 +1589,8 @@ describe("create order commit/KV ordering", () => {
     expect(mocks.getActivePaymentMethods).not.toHaveBeenCalled();
     expect(mocks.getCustomerBySession).not.toHaveBeenCalled();
     expect(mocks.rateLimit).not.toHaveBeenCalled();
-    expect(mocks.claimCheckoutAttempt).not.toHaveBeenCalled();
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
     expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
-    expect(mocks.markCheckoutAttemptCommitted).not.toHaveBeenCalled();
-    expect(mocks.markCheckoutAttemptFailed).not.toHaveBeenCalled();
     expect(kv.put).not.toHaveBeenCalled();
   });
 
@@ -1474,14 +1628,15 @@ describe("create order commit/KV ordering", () => {
     expect(mocks.getActivePaymentMethods).not.toHaveBeenCalled();
     expect(mocks.getCustomerBySession).not.toHaveBeenCalled();
     expect(mocks.rateLimit).not.toHaveBeenCalled();
-    expect(mocks.claimCheckoutAttempt).not.toHaveBeenCalled();
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
     expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
     expect(kv.put).not.toHaveBeenCalled();
   });
 
-  it("still honors a replay won after the read-only precheck race", async () => {
-    mocks.claimCheckoutAttempt.mockResolvedValue({
+  it("replays the winner when atomic commit arbitration loses a race", async () => {
+    mocks.resolveExistingCheckoutAttempt
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
       status: "replay",
       response: {
         checkoutToken: "chk_race_replay",
@@ -1493,6 +1648,9 @@ describe("create order commit/KV ordering", () => {
         message: "Order created",
       },
     });
+    mocks.commitStorefrontOrderPayload.mockRejectedValue(
+      new ConflictError("Another checkout submit committed first."),
+    );
     const { app, kv } = createTestApp();
 
     const response = await app.request(
@@ -1511,19 +1669,22 @@ describe("create order commit/KV ordering", () => {
       orderId: "order_race_replay",
       receiptToken: "chk_race_replay",
     });
-    expect(mocks.resolveExistingCheckoutAttempt).toHaveBeenCalledOnce();
-    expect(mocks.claimCheckoutAttempt).toHaveBeenCalledOnce();
-    expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
-    expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
-    expect(kv.put).not.toHaveBeenCalled();
+    expect(mocks.resolveExistingCheckoutAttempt).toHaveBeenCalledTimes(2);
+    expect(mocks.createStorefrontOrder).toHaveBeenCalledOnce();
+    expect(mocks.commitStorefrontOrderPayload).toHaveBeenCalledOnce();
   });
 
-  it("still honors an active duplicate won after the read-only precheck race", async () => {
-    mocks.claimCheckoutAttempt.mockResolvedValue({
+  it("returns an active legacy winner when atomic commit arbitration loses a race", async () => {
+    mocks.resolveExistingCheckoutAttempt
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
       status: "processing",
       orderId: "order_race_processing",
       statusToken: DEFAULT_STATUS_TOKEN,
     });
+    mocks.commitStorefrontOrderPayload.mockRejectedValue(
+      new ConflictError("Another checkout submit committed first."),
+    );
     const { app, kv } = createTestApp();
 
     const response = await app.request(
@@ -1546,14 +1707,13 @@ describe("create order commit/KV ordering", () => {
     });
     expect(json.data.statusToken).not.toMatch(/^chk_/);
     expect(json.data).not.toHaveProperty("checkoutToken");
-    expect(mocks.resolveExistingCheckoutAttempt).toHaveBeenCalledOnce();
-    expect(mocks.claimCheckoutAttempt).toHaveBeenCalledOnce();
-    expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
-    expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
+    expect(mocks.resolveExistingCheckoutAttempt).toHaveBeenCalledTimes(2);
+    expect(mocks.createStorefrontOrder).toHaveBeenCalledOnce();
+    expect(mocks.commitStorefrontOrderPayload).toHaveBeenCalledOnce();
     expect(kv.put).not.toHaveBeenCalled();
   });
 
-  it("rejects changed checkout details before policy, rate limiting, or claim creation", async () => {
+  it("rejects changed checkout details before policy, rate limiting, or order preparation", async () => {
     mocks.resolveExistingCheckoutAttempt.mockRejectedValue(
       new ConflictError("This checkout request was already used for different checkout details. Please refresh checkout and try again."),
     );
@@ -1576,13 +1736,12 @@ describe("create order commit/KV ordering", () => {
     expect(mocks.getActivePaymentMethods).not.toHaveBeenCalled();
     expect(mocks.getCustomerBySession).not.toHaveBeenCalled();
     expect(mocks.rateLimit).not.toHaveBeenCalled();
-    expect(mocks.claimCheckoutAttempt).not.toHaveBeenCalled();
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
     expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
     expect(kv.put).not.toHaveBeenCalled();
   });
 
-  it("rejects stale cart items before policy, rate limiting, or checkout attempt claim", async () => {
+  it("rejects stale cart items before policy, rate limiting, or atomic attempt creation", async () => {
     mocks.validateStorefrontCartItems.mockResolvedValue({
       valid: false,
       issues: [
@@ -1641,14 +1800,12 @@ describe("create order commit/KV ordering", () => {
     expect(mocks.getActivePaymentMethods).not.toHaveBeenCalled();
     expect(mocks.getCustomerBySession).not.toHaveBeenCalled();
     expect(mocks.rateLimit).not.toHaveBeenCalled();
-    expect(mocks.claimCheckoutAttempt).not.toHaveBeenCalled();
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
     expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
-    expect(mocks.markCheckoutAttemptFailed).not.toHaveBeenCalled();
     expect(kv.put).not.toHaveBeenCalled();
   });
 
-  it("rejects stale delivery choices before policy, rate limiting, or checkout attempt claim", async () => {
+  it("rejects stale delivery choices before policy, rate limiting, or atomic attempt creation", async () => {
     mocks.validateStorefrontDeliveryPreflight.mockRejectedValue(
       new ValidationError("Selected zone is no longer available for the chosen city."),
     );
@@ -1689,10 +1846,8 @@ describe("create order commit/KV ordering", () => {
     expect(mocks.getActivePaymentMethods).not.toHaveBeenCalled();
     expect(mocks.getCustomerBySession).not.toHaveBeenCalled();
     expect(mocks.rateLimit).not.toHaveBeenCalled();
-    expect(mocks.claimCheckoutAttempt).not.toHaveBeenCalled();
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
     expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
-    expect(mocks.markCheckoutAttemptFailed).not.toHaveBeenCalled();
     expect(kv.put).not.toHaveBeenCalled();
   });
 
@@ -1749,7 +1904,7 @@ describe("create order commit/KV ordering", () => {
     }
   });
 
-  it("marks checkout failed if synchronous order commit fails after KV state is created", async () => {
+  it("reports checkout failure without creating a durable failed-attempt write", async () => {
     mocks.createStorefrontOrder.mockResolvedValue({
       checkoutToken: "chk_order_2",
       orderId: "order_2",
@@ -1788,11 +1943,6 @@ describe("create order commit/KV ordering", () => {
     expect(statusKey).not.toContain("chk_order_2");
     expect(mocks.runStorefrontOrderPostCommitSideEffects).not.toHaveBeenCalled();
     expect(mocks.invalidateProductAvailabilityCacheSubjects).not.toHaveBeenCalled();
-    expect(mocks.markCheckoutAttemptFailed).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ id: "coa_1", claimId: "coac_1" }),
-      expect.any(Error),
-    );
     const failedStatusWrite = kv.put.mock.calls.at(-1) as [string, string] | undefined;
     expect(failedStatusWrite?.[0]).toBe(statusKey);
     expect(JSON.parse(String(failedStatusWrite?.[1]))).toMatchObject({
@@ -1833,11 +1983,6 @@ describe("create order commit/KV ordering", () => {
     });
     expect(mocks.runStorefrontOrderPostCommitSideEffects).not.toHaveBeenCalled();
     expect(mocks.invalidateProductAvailabilityCacheSubjects).not.toHaveBeenCalled();
-    expect(mocks.markCheckoutAttemptFailed).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ id: "coa_1", claimId: "coac_1" }),
-      discountError,
-    );
     const statusKey = await getCheckoutStatusKvKey(DEFAULT_STATUS_TOKEN);
     await vi.waitFor(() => {
       expect(kv.put).toHaveBeenCalled();
@@ -1852,7 +1997,7 @@ describe("create order commit/KV ordering", () => {
     });
   });
 
-  it("rejects phones outside the configured include countries before payment settings, rate limits, or claims", async () => {
+  it("rejects phones outside the configured include countries before payment settings, rate limits, or attempt creation", async () => {
     const { app, kv } = createTestApp({
       allowedCountries: ["BD"],
       allowedCountriesMode: "include",
@@ -1881,16 +2026,15 @@ describe("create order commit/KV ordering", () => {
     expect(mocks.resolveExistingCheckoutAttempt).toHaveBeenCalledOnce();
     expect(mocks.validateStorefrontCartItems).toHaveBeenCalledOnce();
     expect(mocks.validateStorefrontDeliveryPreflight).toHaveBeenCalledOnce();
-    expect(mocks.getActivePaymentMethods).not.toHaveBeenCalled();
+    expect(mocks.getActivePaymentMethods).toHaveBeenCalledOnce();
     expect(mocks.getCustomerBySession).not.toHaveBeenCalled();
     expect(mocks.rateLimit).not.toHaveBeenCalled();
-    expect(mocks.claimCheckoutAttempt).not.toHaveBeenCalled();
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
     expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
     expect(kv.put).not.toHaveBeenCalled();
   });
 
-  it("rejects phones listed in configured exclude countries before payment settings, rate limits, or claims", async () => {
+  it("rejects phones listed in configured exclude countries before payment settings, rate limits, or attempt creation", async () => {
     const { app, kv } = createTestApp({
       allowedCountries: ["BD"],
       allowedCountriesMode: "exclude",
@@ -1913,10 +2057,9 @@ describe("create order commit/KV ordering", () => {
         message: "Phone numbers from BD are not accepted",
       },
     });
-    expect(mocks.getActivePaymentMethods).not.toHaveBeenCalled();
+    expect(mocks.getActivePaymentMethods).toHaveBeenCalledOnce();
     expect(mocks.getCustomerBySession).not.toHaveBeenCalled();
     expect(mocks.rateLimit).not.toHaveBeenCalled();
-    expect(mocks.claimCheckoutAttempt).not.toHaveBeenCalled();
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
     expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
     expect(kv.put).not.toHaveBeenCalled();
@@ -1937,7 +2080,6 @@ describe("create order commit/KV ordering", () => {
 
     expect(response.status).toBe(401);
     expect(mocks.resolveExistingCheckoutAttempt).toHaveBeenCalledOnce();
-    expect(mocks.claimCheckoutAttempt).not.toHaveBeenCalled();
     expect(mocks.getCustomerBySession).not.toHaveBeenCalled();
     expect(mocks.rateLimit).not.toHaveBeenCalled();
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
@@ -2017,7 +2159,6 @@ describe("create order commit/KV ordering", () => {
     });
     expect(mocks.getCustomerBySession).toHaveBeenCalledWith(db, "session_guest_enabled_mismatch", undefined);
     expect(mocks.rateLimit).not.toHaveBeenCalled();
-    expect(mocks.claimCheckoutAttempt).not.toHaveBeenCalled();
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
     expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
     expect(kv.put).not.toHaveBeenCalled();
@@ -2050,7 +2191,6 @@ describe("create order commit/KV ordering", () => {
     });
     expect(mocks.getCustomerBySession).toHaveBeenCalledWith(db, "expired_session", undefined);
     expect(mocks.rateLimit).not.toHaveBeenCalled();
-    expect(mocks.claimCheckoutAttempt).not.toHaveBeenCalled();
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
     expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
     expect(kv.put).not.toHaveBeenCalled();
@@ -2109,6 +2249,9 @@ describe("create order commit/KV ordering", () => {
         source: "authenticated",
       },
       { code: "BDT", decimalPlaces: 2 },
+      undefined,
+      expect.objectContaining({ partialPaymentEnabled: false }),
+      expect.objectContaining({ classes: [], rates: [] }),
     );
     expect(mocks.commitStorefrontOrderPayload).toHaveBeenCalledOnce();
   });
@@ -2232,12 +2375,11 @@ describe("create order commit/KV ordering", () => {
 
     expect(response.status).toBe(503);
     expect(mocks.resolveExistingCheckoutAttempt).toHaveBeenCalledOnce();
-    expect(mocks.claimCheckoutAttempt).not.toHaveBeenCalled();
     expect(mocks.rateLimit).not.toHaveBeenCalled();
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
   });
 
-  it("fails closed for SSLCommerz before claim creation when only JWT fallback could read credentials", async () => {
+  it("fails closed for SSLCommerz before attempt creation when only JWT fallback could read credentials", async () => {
     mocks.getActivePaymentMethods.mockImplementation(async (_db, _kv, encryptionKey?: string) => ({
       enabledMethods: encryptionKey === "jwt-fallback" ? ["sslcommerz"] : [],
       defaultMethod: encryptionKey === "jwt-fallback" ? "sslcommerz" : "cod",
@@ -2268,10 +2410,8 @@ describe("create order commit/KV ordering", () => {
       expect.objectContaining({ bypassMemoryCache: true }),
     );
     expect(mocks.rateLimit).not.toHaveBeenCalled();
-    expect(mocks.claimCheckoutAttempt).not.toHaveBeenCalled();
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
     expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
-    expect(mocks.markCheckoutAttemptFailed).not.toHaveBeenCalled();
     expect(kv.put).not.toHaveBeenCalled();
   });
 
@@ -2306,7 +2446,6 @@ describe("create order commit/KV ordering", () => {
     });
     expect(mocks.calculateStorefrontTaxQuote).not.toHaveBeenCalled();
     expect(mocks.rateLimit).not.toHaveBeenCalled();
-    expect(mocks.claimCheckoutAttempt).not.toHaveBeenCalled();
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
     expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
     expect(kv.put).not.toHaveBeenCalled();
@@ -2338,6 +2477,18 @@ describe("create order commit/KV ordering", () => {
       subtotalMinor: Math.round(subtotal * 100),
       totalMinor: Math.round(subtotal * 100),
     });
+    mocks.createStorefrontOrder.mockResolvedValue({
+      checkoutToken: "chk_ssl_bounds",
+      orderId: "order_ssl_bounds",
+      paymentMethod: "sslcommerz",
+      totalAmount: subtotal,
+      taxQuote: {
+        ...DEFAULT_TAX_QUOTE,
+        subtotalMinor: Math.round(subtotal * 100),
+        totalMinor: Math.round(subtotal * 100),
+      },
+      commitPayload: { orderData: { id: "order_ssl_bounds" } },
+    });
     const { app, kv } = createTestApp();
 
     const response = await app.request(
@@ -2358,11 +2509,8 @@ describe("create order commit/KV ordering", () => {
       },
     });
     expect(mocks.rateLimit).not.toHaveBeenCalled();
-    expect(mocks.claimCheckoutAttempt).not.toHaveBeenCalled();
-    expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
+    expect(mocks.createStorefrontOrder).toHaveBeenCalledOnce();
     expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
-    expect(mocks.markCheckoutAttemptCommitted).not.toHaveBeenCalled();
-    expect(mocks.markCheckoutAttemptFailed).not.toHaveBeenCalled();
     expect(kv.put).not.toHaveBeenCalled();
   });
 
@@ -2408,11 +2556,8 @@ describe("create order commit/KV ordering", () => {
       },
     });
     expect(mocks.rateLimit).not.toHaveBeenCalled();
-    expect(mocks.claimCheckoutAttempt).not.toHaveBeenCalled();
-    expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
+    expect(mocks.createStorefrontOrder).toHaveBeenCalledOnce();
     expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
-    expect(mocks.markCheckoutAttemptCommitted).not.toHaveBeenCalled();
-    expect(mocks.markCheckoutAttemptFailed).not.toHaveBeenCalled();
     expect(kv.put).not.toHaveBeenCalled();
   });
 
@@ -2463,10 +2608,69 @@ describe("create order commit/KV ordering", () => {
         response: expect.objectContaining({ totalAmount: 120 }),
       }),
     );
-    expect(mocks.markCheckoutAttemptCommitted).not.toHaveBeenCalled();
   });
 
-  it("rate limits a new checkout before claim creation or order writes", async () => {
+  it("uses native on-machine checkout limiters without touching KV counters", async () => {
+    const ipLimiter = { limit: vi.fn(async () => ({ success: true })) };
+    const phoneLimiter = { limit: vi.fn(async () => ({ success: true })) };
+    const { app, kv } = createTestApp();
+
+    const response = await app.request(
+      "/api/v1/orders",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(validOrderBody),
+      },
+      {
+        CACHE: kv,
+        ORDER_IP_RATE_LIMITER: ipLimiter,
+        ORDER_PHONE_RATE_LIMITER: phoneLimiter,
+        PUBLIC_API_BASE_URL: "https://merchant-api.example",
+      } as never,
+    );
+
+    expect(response.status, await response.clone().text()).toBe(201);
+    expect(ipLimiter.limit).toHaveBeenCalledWith({
+      key: expect.stringMatching(/^checkout:ip:[a-f0-9]{64}$/),
+    });
+    expect(phoneLimiter.limit).toHaveBeenCalledWith({
+      key: expect.stringMatching(/^checkout:phone:[a-f0-9]{64}$/),
+    });
+    expect(JSON.stringify([
+      ipLimiter.limit.mock.calls,
+      phoneLimiter.limit.mock.calls,
+    ])).not.toContain(validOrderBody.customerPhone);
+    expect(mocks.rateLimit).not.toHaveBeenCalled();
+  });
+
+  it("rejects a checkout denied by a native limiter before order writes", async () => {
+    const ipLimiter = { limit: vi.fn(async () => ({ success: true })) };
+    const phoneLimiter = { limit: vi.fn(async () => ({ success: false })) };
+    const { app, kv } = createTestApp();
+
+    const response = await app.request(
+      "/api/v1/orders",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(validOrderBody),
+      },
+      {
+        CACHE: kv,
+        ORDER_IP_RATE_LIMITER: ipLimiter,
+        ORDER_PHONE_RATE_LIMITER: phoneLimiter,
+      } as never,
+    );
+
+    expect(response.status).toBe(429);
+    expect(mocks.createAtomicCheckoutAttempt).toHaveBeenCalledOnce();
+    expect(mocks.createStorefrontOrder).toHaveBeenCalledOnce();
+    expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
+    expect(mocks.rateLimit).not.toHaveBeenCalled();
+  });
+
+  it("rate limits a new checkout after pure preparation but before order writes", async () => {
     mocks.rateLimit.mockResolvedValue({ allowed: false });
     const { app, kv } = createTestApp();
 
@@ -2483,10 +2687,8 @@ describe("create order commit/KV ordering", () => {
     expect(response.status).toBe(429);
     expect(mocks.resolveExistingCheckoutAttempt).toHaveBeenCalledOnce();
     expect(mocks.rateLimit).toHaveBeenCalledTimes(2);
-    expect(mocks.claimCheckoutAttempt).not.toHaveBeenCalled();
-    expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
+    expect(mocks.createStorefrontOrder).toHaveBeenCalledOnce();
     expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
-    expect(mocks.markCheckoutAttemptFailed).not.toHaveBeenCalled();
   });
 
   it("rejects COD before commit when partial payment requires an online deposit", async () => {
@@ -2630,7 +2832,6 @@ describe("create order commit/KV ordering", () => {
       },
     });
     expect(kv.put).not.toHaveBeenCalled();
-    expect(mocks.claimCheckoutAttempt).not.toHaveBeenCalled();
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
     expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
     expect(mocks.runStorefrontOrderPostCommitSideEffects).not.toHaveBeenCalled();
@@ -2662,10 +2863,5 @@ describe("create order commit/KV ordering", () => {
     expect(kv.put).not.toHaveBeenCalled();
     expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
     expect(mocks.runStorefrontOrderPostCommitSideEffects).not.toHaveBeenCalled();
-    expect(mocks.markCheckoutAttemptFailed).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ id: "coa_1", claimId: "coac_1" }),
-      unavailableError,
-    );
   });
 });

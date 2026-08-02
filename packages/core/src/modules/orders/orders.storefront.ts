@@ -10,6 +10,7 @@ import {
     fromMinorUnits,
     toMinorUnits,
     type StorefrontDiscountType,
+    type StorefrontTaxAuthoritySnapshot,
 } from "../tax";
 import {
     evaluateStorefrontPromotionCode,
@@ -27,7 +28,7 @@ import {
 } from "@scalius/database/schema";
 import { nanoid } from "nanoid";
 
-import { eq, and, isNull } from "drizzle-orm";
+import { eq, and, inArray, isNull } from "drizzle-orm";
 import { generateOrderId } from "@scalius/shared/order-utils";
 import { ValidationError } from "@scalius/core/errors";
 import type {
@@ -47,7 +48,8 @@ import {
     type ActiveDeliveryLocationRow,
 } from "./delivery-location-validation";
 
-interface ShippingMethodRow {
+export interface StorefrontShippingMethodRow {
+    id: string;
     fee: number;
     isActive: boolean;
     deletedAt: Date | number | null;
@@ -68,7 +70,15 @@ export interface StorefrontDeliveryPreflightResult {
     areaName: string | null;
 }
 
+export interface StorefrontCheckoutPolicySnapshot {
+    partialPaymentEnabled: boolean;
+    authorityRevision?: number;
+    orderCreatedNotificationEnabled?: boolean;
+    metaPurchaseEnabled?: boolean;
+}
+
 const STOREFRONT_DELIVERY_PREFLIGHT_RESULT_PROOF = Symbol("scalius.storefrontDeliveryPreflightResult");
+const STOREFRONT_CHECKOUT_POLICY_SNAPSHOT_PROOF = Symbol("scalius.storefrontCheckoutPolicySnapshot");
 
 function markTrustedStorefrontDeliveryPreflightResult(
     result: StorefrontDeliveryPreflightResult,
@@ -108,52 +118,74 @@ export function isTrustedStorefrontDeliveryPreflightResult(
     return Boolean(result && Reflect.get(result, STOREFRONT_DELIVERY_PREFLIGHT_RESULT_PROOF) === true);
 }
 
-export async function validateStorefrontDeliveryPreflight(
+export function createTrustedStorefrontCheckoutPolicySnapshot(
+    snapshot: StorefrontCheckoutPolicySnapshot,
+): StorefrontCheckoutPolicySnapshot {
+    const trustedSnapshot = { ...snapshot };
+    Object.defineProperty(trustedSnapshot, STOREFRONT_CHECKOUT_POLICY_SNAPSHOT_PROOF, {
+        value: true,
+        enumerable: false,
+    });
+    return trustedSnapshot;
+}
+
+export function isTrustedStorefrontCheckoutPolicySnapshot(
+    snapshot: StorefrontCheckoutPolicySnapshot | undefined,
+): snapshot is StorefrontCheckoutPolicySnapshot {
+    return Boolean(snapshot && Reflect.get(snapshot, STOREFRONT_CHECKOUT_POLICY_SNAPSHOT_PROOF) === true);
+}
+
+export function selectActiveStorefrontShippingMethodRows(
     storefrontDb: Database,
+    shippingMethodId: string | null | undefined,
+) {
+    return selectActiveStorefrontShippingMethodRowsByIds(
+        storefrontDb,
+        shippingMethodId ? [shippingMethodId] : [],
+    );
+}
+
+export function selectActiveStorefrontShippingMethodRowsByIds(
+    storefrontDb: Database,
+    rawShippingMethodIds: readonly string[],
+) {
+    const shippingMethodIds = [...new Set(
+        rawShippingMethodIds.map((id) => id.trim()).filter(Boolean),
+    )];
+    const query = storefrontDb
+        .select({
+            id: shippingMethods.id,
+            fee: shippingMethods.fee,
+            isActive: shippingMethods.isActive,
+            deletedAt: shippingMethods.deletedAt,
+        })
+        .from(shippingMethods);
+    if (shippingMethodIds.length === 0) return query.limit(0);
+    return query.where(
+        and(
+            inArray(shippingMethods.id, shippingMethodIds),
+            eq(shippingMethods.isActive, true),
+            isNull(shippingMethods.deletedAt),
+        ),
+    );
+}
+
+export function resolveStorefrontDeliveryPreflightFromRows(
     data: StorefrontDeliveryPreflightInput,
     cartValidation: Pick<StorefrontCartValidationResult, "hasFreeDeliveryProduct">,
-): Promise<StorefrontDeliveryPreflightResult> {
-    // API callers pass the merchant currency. Direct Core callers retain an
-    // explicit BDT fallback, matching direct cart-validation behavior.
+    locationRows: readonly ActiveDeliveryLocationRow[],
+    shippingMethodRows: readonly StorefrontShippingMethodRow[],
+): StorefrontDeliveryPreflightResult {
     const currencyCode = normalizeSupportedCurrencyCode(data.currencyCode) ?? DEFAULT_CURRENCY.code;
-    const readBatch: unknown[] = [];
-    readBatch.push(selectActiveDeliveryLocationRows(storefrontDb, data));
-
-    if (!cartValidation.hasFreeDeliveryProduct && data.shippingMethodId) {
-        readBatch.push(
-            storefrontDb
-                .select({
-                    fee: shippingMethods.fee,
-                    isActive: shippingMethods.isActive,
-                    deletedAt: shippingMethods.deletedAt,
-                })
-                .from(shippingMethods)
-                .where(
-                    and(
-                        eq(shippingMethods.id, data.shippingMethodId),
-                        eq(shippingMethods.isActive, true),
-                        isNull(shippingMethods.deletedAt),
-                    ),
-                ),
-        );
-    } else {
-        readBatch.push(storefrontDb.select().from(shippingMethods).limit(0));
-    }
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
-    const [locationRows, shippingMethodRows] = await storefrontDb.batch(readBatch as any);
-
-    const locationResults = Array.isArray(locationRows) ? locationRows as ActiveDeliveryLocationRow[] : [];
-    const locationNames = resolveActiveDeliveryLocationNamesFromRows(data, locationResults);
+    const locationNames = resolveActiveDeliveryLocationNamesFromRows(data, [...locationRows]);
 
     let shippingCharge = 0;
     if (!cartValidation.hasFreeDeliveryProduct) {
-        const shippingMethodList = Array.isArray(shippingMethodRows) ? shippingMethodRows as ShippingMethodRow[] : [];
-        const shippingMethod = shippingMethodList[0] ?? null;
+        const shippingMethod = shippingMethodRows[0] ?? null;
         const shippingMethodIsUsable =
-            shippingMethod &&
-            shippingMethod.isActive === true &&
-            shippingMethod.deletedAt == null;
+            shippingMethod
+            && shippingMethod.isActive === true
+            && shippingMethod.deletedAt == null;
 
         if (!shippingMethodIsUsable) {
             throw new ValidationError("A valid active shipping method is required for this order.");
@@ -173,6 +205,27 @@ export async function validateStorefrontDeliveryPreflight(
         zoneName: locationNames.zoneName,
         areaName: locationNames.areaName,
     });
+}
+
+export async function validateStorefrontDeliveryPreflight(
+    storefrontDb: Database,
+    data: StorefrontDeliveryPreflightInput,
+    cartValidation: Pick<StorefrontCartValidationResult, "hasFreeDeliveryProduct">,
+): Promise<StorefrontDeliveryPreflightResult> {
+    const readBatch = [
+        selectActiveDeliveryLocationRows(storefrontDb, data),
+        selectActiveStorefrontShippingMethodRows(storefrontDb, data.shippingMethodId),
+    ];
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
+    const [locationRows, shippingMethodRows] = await storefrontDb.batch(readBatch as any);
+
+    return resolveStorefrontDeliveryPreflightFromRows(
+        data,
+        cartValidation,
+        Array.isArray(locationRows) ? locationRows as ActiveDeliveryLocationRow[] : [],
+        Array.isArray(shippingMethodRows) ? shippingMethodRows as StorefrontShippingMethodRow[] : [],
+    );
 }
 
 /**
@@ -215,6 +268,8 @@ export async function createStorefrontOrder(
         evaluateCode: evaluateStorefrontPromotionCode,
         resolveCustomerIdByPhone: resolvePromotionCustomerIdByPhone,
     },
+    checkoutPolicySnapshot?: StorefrontCheckoutPolicySnapshot,
+    taxAuthoritySnapshot?: StorefrontTaxAuthoritySnapshot,
 ): Promise<CreateStorefrontOrderResult> {
     if (prevalidatedCart && !isTrustedStorefrontCartValidationResult(prevalidatedCart)) {
         throw new ValidationError("Checkout cart validation could not be trusted. Please retry checkout.");
@@ -265,19 +320,28 @@ export async function createStorefrontOrder(
         cartValidation,
     );
 
-    // Drizzle D1 batch() requires specific tuple types
-    const readBatch: unknown[] = [];
+    if (
+        checkoutPolicySnapshot
+        && !isTrustedStorefrontCheckoutPolicySnapshot(checkoutPolicySnapshot)
+    ) {
+        throw new ValidationError("Checkout policy validation could not be trusted. Please retry checkout.");
+    }
 
-    readBatch.push(storefrontDb.select().from(siteSettings).limit(1));
-
-    // Execute Read Batch
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
-    const readResults = await storefrontDb.batch(readBatch as any);
+    let fallbackSettings: Record<string, unknown> | null = null;
+    if (!checkoutPolicySnapshot) {
+        // Compatibility for direct Core callers. The API route supplies its
+        // already-fresh policy snapshot and skips this extra database roundtrip.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
+        const readResults = await storefrontDb.batch([
+            storefrontDb.select().from(siteSettings).limit(1),
+        ] as any);
+        const settingsList = readResults[0] as Record<string, unknown>[];
+        fallbackSettings = settingsList.length > 0
+            ? settingsList[0] as Record<string, unknown>
+            : null;
+    }
 
     const accountOwnerCustomer = customerIdentity ? { id: customerIdentity.customerId } : null;
-
-    const settingsList = readResults[0] as Record<string, unknown>[];
-    const settings = settingsList.length > 0 ? settingsList[0] as Record<string, unknown> : null;
 
     const serverItemTotal = cartValidation.subtotal;
     const validatedItemByIndex = new Map(cartValidation.items.map((item) => [item.index, item]));
@@ -413,7 +477,7 @@ export async function createStorefrontOrder(
             }
         }
     }
-    const taxQuote = await calculateStorefrontTaxQuote(storefrontDb, {
+    const taxQuoteInput = {
         destination: {
             city: data.city,
             zone: data.zone,
@@ -438,14 +502,19 @@ export async function createStorefrontOrder(
             ? buildPromotionTaxAllocation(promotionSnapshot.applied)
             : undefined,
         currency: requestCurrency,
-    });
+    };
+    const taxQuote = taxAuthoritySnapshot
+        ? await calculateStorefrontTaxQuote(storefrontDb, taxQuoteInput, taxAuthoritySnapshot)
+        : await calculateStorefrontTaxQuote(storefrontDb, taxQuoteInput);
     const normalizedDiscountAmount = fromMinorUnits(taxQuote.discountMinor, taxQuote.decimalPlaces);
     const totalAmount = fromMinorUnits(taxQuote.totalMinor, taxQuote.decimalPlaces);
 
     // ------------------------------------------------------------------
     // PARTIAL PAYMENT SECURITY CHECK
     // ------------------------------------------------------------------
-    const isPartialEnabled = (settings?.partialPaymentEnabled as boolean) ?? false;
+    const isPartialEnabled = checkoutPolicySnapshot?.partialPaymentEnabled
+        ?? (fallbackSettings?.partialPaymentEnabled as boolean)
+        ?? false;
     if (isPartialEnabled && data.paymentMethod === PaymentMethod.COD) {
         throw new ValidationError("Advance deposit is required. COD cannot be selected for the full amount directly.");
     }
@@ -458,6 +527,12 @@ export async function createStorefrontOrder(
 
     const commitPayload = {
         checkoutToken,
+        checkoutAuthorityRevision: checkoutPolicySnapshot?.authorityRevision ?? null,
+        checkoutSideEffects: {
+            orderCreatedNotification:
+                checkoutPolicySnapshot?.orderCreatedNotificationEnabled ?? true,
+            metaPurchase: checkoutPolicySnapshot?.metaPurchaseEnabled ?? true,
+        },
         existingCustomer: accountOwnerCustomer,
         orderData: {
             id: orderId,

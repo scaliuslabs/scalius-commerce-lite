@@ -15,7 +15,7 @@ import {
 } from "./turso-upload-bundle";
 
 export const TURSO_UPLOAD_RECEIPT_VERSION =
-  "scalius-turso-upload-receipt/v2" as const;
+  "scalius-turso-upload-receipt/v3" as const;
 export const TURSO_UPLOAD_RECEIPT_FILENAME = "upload-receipt.json";
 
 export interface UploadTursoBundleOptions {
@@ -36,6 +36,7 @@ export interface TursoUploadReceipt {
   databaseHostname: string;
   artifactSha256: string;
   artifactBytes: number;
+  retiredSchemaArchiveSha256: string | null;
   sourceFingerprint: string;
   targetFingerprint: string;
   schemaDigest: string;
@@ -58,6 +59,7 @@ export interface TursoUploadReceiptExpectation {
   databaseHostname: string;
   artifactSha256: string;
   artifactBytes: number;
+  retiredSchemaArchiveSha256: string | null;
   sourceFingerprint: string;
   schemaDigest: string;
   tableCount: number;
@@ -152,6 +154,7 @@ async function verifyRemoteTarget(input: {
   | "databaseHostname"
   | "artifactSha256"
   | "artifactBytes"
+  | "retiredSchemaArchiveSha256"
   | "sourceFingerprint"
   | "uploadDisposition"
   | "uploadHttpStatus"
@@ -253,6 +256,7 @@ export async function readExistingTursoUploadReceipt(
     receipt.databaseHostname !== expected.databaseHostname ||
     receipt.artifactSha256 !== expected.artifactSha256 ||
     receipt.artifactBytes !== expected.artifactBytes ||
+    receipt.retiredSchemaArchiveSha256 !== expected.retiredSchemaArchiveSha256 ||
     receipt.sourceFingerprint !== expected.sourceFingerprint ||
     receipt.targetFingerprint !== receipt.sourceFingerprint ||
     receipt.schemaDigest !== expected.schemaDigest ||
@@ -301,6 +305,8 @@ export async function uploadTursoBundle(
     databaseHostname: target.hostname,
     artifactSha256: bundle.evidence.artifact.sha256,
     artifactBytes: bundle.evidence.artifact.bytes,
+    retiredSchemaArchiveSha256:
+      bundle.evidence.retiredSchemaArchive?.sha256 ?? null,
     sourceFingerprint: bundle.evidence.portabilityManifest.fingerprint,
     schemaDigest: bundle.evidence.portabilityManifest.schemaDigest,
     tableCount: bundle.evidence.portabilityManifest.tables.length,
@@ -351,6 +357,8 @@ export async function uploadTursoBundle(
     databaseHostname: target.hostname,
     artifactSha256: bundle.evidence.artifact.sha256,
     artifactBytes: bundle.evidence.artifact.bytes,
+    retiredSchemaArchiveSha256:
+      bundle.evidence.retiredSchemaArchive?.sha256 ?? null,
     sourceFingerprint: bundle.evidence.portabilityManifest.fingerprint,
     ...verification,
     uploadDisposition,

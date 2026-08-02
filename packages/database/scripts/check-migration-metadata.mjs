@@ -5,7 +5,9 @@ const databaseRoot = resolve(import.meta.dirname, "..");
 const migrationsDir = join(databaseRoot, "migrations");
 const metaDir = join(migrationsDir, "meta");
 
-const allowedMissingSnapshots = new Set();
+// Trigger-only migrations do not alter Drizzle's table/index model and
+// therefore have no meaningful schema snapshot to generate.
+const allowedMissingSnapshots = new Set(["0049"]);
 
 const sqlFiles = readdirSync(migrationsDir)
   .filter((file) => /^\d{4}_.+\.sql$/.test(file))

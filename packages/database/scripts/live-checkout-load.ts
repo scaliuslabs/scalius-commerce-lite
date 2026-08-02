@@ -1,17 +1,24 @@
 import { randomUUID } from "node:crypto";
-import { pathToFileURL } from "node:url";
+import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import {
   createTursoPortabilityExecutor,
   type SqlitePortabilityExecutor,
 } from "../src/portability";
 import {
+  assertDisposableDatabaseTarget,
   assertDisposableLoadTarget,
+  assertTursoLoadBillingIsolation,
   runOpenArrival,
   summarizeTimings,
+  type LoadTargetIdentity,
   type LoadTimingSample,
   type OpenArrivalResult,
 } from "./live-checkout-load-core";
+import { preflightTursoLoadBudget } from "./turso-platform-upload";
 
 interface FixtureVariant {
   productId: string;
@@ -31,9 +38,26 @@ interface LoadFixture {
 }
 
 interface LoadOptions {
+  databaseProvider: "turso" | "d1";
   apiOrigin: string;
   databaseUrl: string;
   databaseToken: string;
+  acknowledgedDatabaseHostname: string;
+  targetId: string;
+  acknowledgedTargetId: string;
+  d1?: {
+    databaseName: string;
+    databaseId: string;
+    configPath: string;
+    binding: string;
+  };
+  tursoBilling?: {
+    organization: string;
+    platformToken: string;
+    rowsReadBudget: number;
+    rowsWrittenBudget: number;
+    allowUsageOverage: boolean;
+  };
   fixture: LoadFixture;
   scenario: "smoke" | "idempotency" | "spread" | "hot" | "all";
   idempotencyRequests: number;
@@ -48,6 +72,7 @@ interface SafeHttpResult {
   status: number;
   orderId: string | null;
   errorCode: string | null;
+  checkoutPhaseMs?: Record<string, number>;
   privateProof?: {
     receiptToken: string;
   };
@@ -63,9 +88,22 @@ interface ScenarioSummary {
   serviceLatencyMs: ReturnType<typeof summarizeTimings>;
   scheduledLatencyMs: ReturnType<typeof summarizeTimings>;
   startLagMs: ReturnType<typeof summarizeTimings>;
+  checkoutPhaseLatencyMs: Record<string, ReturnType<typeof summarizeTimings>>;
   elapsedMs: number;
   achievedPerSecond: number;
   oracle: Record<string, string | number | boolean>;
+}
+
+function parseCheckoutServerTiming(value: string | null): Record<string, number> | undefined {
+  if (!value) return undefined;
+  const phases: Record<string, number> = {};
+  for (const entry of value.split(",")) {
+    const match = /^\s*([a-z_]+)\s*;\s*dur=([0-9]+(?:\.[0-9]+)?)\s*$/.exec(entry);
+    if (!match) continue;
+    const duration = Number(match[2]);
+    if (Number.isFinite(duration) && duration >= 0) phases[match[1]!] = duration;
+  }
+  return Object.keys(phases).length > 0 ? phases : undefined;
 }
 
 interface VariantState {
@@ -73,6 +111,14 @@ interface VariantState {
   reservedStock: number;
   stockVersion: number;
   trackInventory: number;
+}
+
+interface ReservationLaneState {
+  lane: number;
+  capacity: number;
+  reservedQuantity: number;
+  version: number;
+  sourceStockVersion: number;
 }
 
 function requiredEnvironment(name: string): string {
@@ -93,6 +139,42 @@ function parsePositiveInteger(value: string | undefined, fallback: number, name:
   const parsed = parsePositiveNumber(value, fallback, name);
   if (!Number.isSafeInteger(parsed)) throw new Error(`${name} must be an integer.`);
   return parsed;
+}
+
+function readD1TargetOptions(): NonNullable<LoadOptions["d1"]> {
+  const databaseName = requiredEnvironment("LOADTEST_D1_DATABASE_NAME").toLowerCase();
+  const acknowledgedName = requiredEnvironment("LOADTEST_ACK_D1_DATABASE_NAME").toLowerCase();
+  const databaseId = requiredEnvironment("LOADTEST_D1_DATABASE_ID").toLowerCase();
+  const acknowledgedId = requiredEnvironment("LOADTEST_ACK_D1_DATABASE_ID").toLowerCase();
+  const binding = process.env.LOADTEST_D1_BINDING?.trim() || "DB";
+  const configPath = resolve(process.cwd(), requiredEnvironment("LOADTEST_D1_CONFIG"));
+  if (!databaseName.includes("loadtest") || acknowledgedName !== databaseName) {
+    throw new Error("D1 load target name must contain loadtest and match its acknowledgement exactly.");
+  }
+  if (!/^[0-9a-f]{8}-[0-9a-f-]{27,}$/.test(databaseId) || acknowledgedId !== databaseId) {
+    throw new Error("D1 load target id must be a UUID and match its acknowledgement exactly.");
+  }
+
+  const rawConfig = readFileSync(configPath, "utf8");
+  const config = JSON.parse(rawConfig.replace(/(?<!https?:)\/\/[^\n]*/g, "")) as {
+    name?: unknown;
+    d1_databases?: Array<{
+      binding?: unknown;
+      database_name?: unknown;
+      database_id?: unknown;
+    }>;
+  };
+  if (typeof config.name !== "string" || !config.name.toLowerCase().includes("loadtest")) {
+    throw new Error("D1 load target Wrangler config must name a loadtest Worker.");
+  }
+  const configured = config.d1_databases?.find((candidate) => candidate.binding === binding);
+  if (
+    configured?.database_name !== databaseName
+    || configured.database_id?.toLowerCase() !== databaseId
+  ) {
+    throw new Error("D1 load target Wrangler binding does not exactly match the acknowledged database.");
+  }
+  return { databaseName, databaseId, configPath, binding };
 }
 
 function parseArguments(argv: readonly string[]): LoadOptions {
@@ -135,16 +217,65 @@ function parseArguments(argv: readonly string[]): LoadOptions {
     apiUrl,
     requiredEnvironment("LOADTEST_ACK_HOST"),
   ).origin;
-  const databaseUrl = requiredEnvironment("TURSO_DATABASE_URL");
+  const databaseProvider = process.env.LOADTEST_DATABASE_PROVIDER?.trim().toLowerCase() === "d1"
+    ? "d1"
+    : "turso";
+  const d1 = databaseProvider === "d1"
+    ? readD1TargetOptions()
+    : undefined;
+  const tursoBillingIsolation = databaseProvider === "turso"
+    ? assertTursoLoadBillingIsolation({
+        loadOrganization: requiredEnvironment("LOADTEST_TURSO_ORGANIZATION"),
+        acknowledgedLoadOrganization: requiredEnvironment(
+          "LOADTEST_ACK_TURSO_ORGANIZATION",
+        ),
+        productionOrganization: requiredEnvironment(
+          "PRODUCTION_TURSO_ORGANIZATION",
+        ),
+        acknowledgedProductionOrganization: requiredEnvironment(
+          "LOADTEST_ACK_PRODUCTION_TURSO_ORGANIZATION",
+        ),
+      })
+    : undefined;
+  const databaseUrl = databaseProvider === "d1"
+    ? `https://${d1!.databaseName}`
+    : requiredEnvironment("TURSO_DATABASE_URL");
   const parsedDatabaseUrl = new URL(databaseUrl);
   if (parsedDatabaseUrl.username || parsedDatabaseUrl.password) {
     throw new Error("TURSO_DATABASE_URL must not contain credentials.");
   }
 
   return {
+    databaseProvider,
     apiOrigin,
     databaseUrl,
-    databaseToken: requiredEnvironment("TURSO_AUTH_TOKEN"),
+    databaseToken: databaseProvider === "turso"
+      ? requiredEnvironment("TURSO_AUTH_TOKEN")
+      : "",
+    acknowledgedDatabaseHostname: requiredEnvironment(
+      "LOADTEST_ACK_DATABASE_HOST",
+    ),
+    targetId: requiredEnvironment("LOADTEST_TARGET_ID"),
+    acknowledgedTargetId: requiredEnvironment("LOADTEST_ACK_TARGET_ID"),
+    d1,
+    tursoBilling: tursoBillingIsolation
+      ? {
+          organization: tursoBillingIsolation.loadOrganization,
+          platformToken: requiredEnvironment("TURSO_PLATFORM_API_TOKEN"),
+          rowsReadBudget: parsePositiveInteger(
+            process.env.LOADTEST_TURSO_ROWS_READ_BUDGET,
+            0,
+            "LOADTEST_TURSO_ROWS_READ_BUDGET",
+          ),
+          rowsWrittenBudget: parsePositiveInteger(
+            process.env.LOADTEST_TURSO_ROWS_WRITTEN_BUDGET,
+            0,
+            "LOADTEST_TURSO_ROWS_WRITTEN_BUDGET",
+          ),
+          allowUsageOverage:
+            process.env.LOADTEST_ALLOW_TURSO_USAGE_OVERAGE?.trim() === "yes",
+        }
+      : undefined,
     fixture: {
       cityId: requiredEnvironment("LOADTEST_CITY_ID"),
       zoneId: requiredEnvironment("LOADTEST_ZONE_ID"),
@@ -184,6 +315,90 @@ function scalarNumber(rows: readonly Record<string, unknown>[], key: string): nu
   return value;
 }
 
+type LoadQueryParameter = null | string | number | bigint | boolean | Uint8Array;
+
+function sqliteLiteral(value: LoadQueryParameter): string {
+  if (value === null) return "NULL";
+  if (typeof value === "boolean") return value ? "1" : "0";
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) throw new Error("D1 oracle query received a non-finite number.");
+    return String(value);
+  }
+  if (typeof value === "bigint") return value.toString();
+  if (value instanceof Uint8Array) {
+    return `X'${Array.from(value, (byte) => byte.toString(16).padStart(2, "0")).join("")}'`;
+  }
+  return `'${value.replaceAll("'", "''")}'`;
+}
+
+function bindD1OracleQuery(
+  sql: string,
+  params: readonly LoadQueryParameter[],
+): string {
+  let index = 0;
+  const bound = sql.replaceAll("?", () => {
+    const value = params[index++];
+    if (value === undefined) throw new Error("D1 oracle query is missing a bound parameter.");
+    return sqliteLiteral(value);
+  });
+  if (index !== params.length) {
+    throw new Error("D1 oracle query received unused bound parameters.");
+  }
+  return bound;
+}
+
+function createD1CliOracle(options: NonNullable<LoadOptions["d1"]>): SqlitePortabilityExecutor {
+  const repositoryRoot = fileURLToPath(new URL("../../../", import.meta.url));
+  return {
+    async query(sql, params = []) {
+      const command = bindD1OracleQuery(sql, params as readonly LoadQueryParameter[]);
+      const stdout = execFileSync(
+        process.env.SCALIUS_PNPM_BIN || "pnpm",
+        [
+          "--dir",
+          resolve(repositoryRoot, "apps/api"),
+          "exec",
+          "wrangler",
+          "d1",
+          "execute",
+          options.binding,
+          "--remote",
+          "--config",
+          options.configPath,
+          "--command",
+          command,
+          "--json",
+        ],
+        {
+          cwd: repositoryRoot,
+          encoding: "utf8",
+          maxBuffer: 20 * 1024 * 1024,
+          stdio: ["ignore", "pipe", "pipe"],
+        },
+      );
+      const payload = JSON.parse(stdout) as Array<{
+        success?: boolean;
+        results?: Record<string, unknown>[];
+      }>;
+      if (!Array.isArray(payload) || payload.length !== 1 || payload[0]?.success !== true) {
+        throw new Error("D1 oracle query did not return one successful result.");
+      }
+      return payload[0].results ?? [];
+    },
+  };
+}
+
+function createLoadOracle(options: LoadOptions): SqlitePortabilityExecutor {
+  if (options.databaseProvider === "d1") {
+    if (!options.d1) throw new Error("D1 load target options are missing.");
+    return createD1CliOracle(options.d1);
+  }
+  return createTursoPortabilityExecutor({
+    url: options.databaseUrl,
+    authToken: options.databaseToken,
+  });
+}
+
 async function readVariantState(
   oracle: SqlitePortabilityExecutor,
   variantId: string,
@@ -200,6 +415,26 @@ async function readVariantState(
     stockVersion: scalarNumber(rows, "stock_version"),
     trackInventory: scalarNumber(rows, "track_inventory"),
   };
+}
+
+async function readReservationLaneState(
+  oracle: SqlitePortabilityExecutor,
+  variantId: string,
+): Promise<ReservationLaneState[]> {
+  const rows = await oracle.query(
+    `SELECT lane, capacity, reserved_quantity, version, source_stock_version
+       FROM inventory_reservation_lanes
+      WHERE variant_id = ? AND pool = 'regular'
+      ORDER BY lane`,
+    [variantId],
+  );
+  return rows.map((row) => ({
+    lane: Number(row.lane),
+    capacity: Number(row.capacity),
+    reservedQuantity: Number(row.reserved_quantity),
+    version: Number(row.version),
+    sourceStockVersion: Number(row.source_stock_version),
+  }));
 }
 
 async function readRunFacts(
@@ -224,22 +459,142 @@ async function readRunFacts(
   };
 }
 
+async function waitForProjectedRunFacts(
+  oracle: SqlitePortabilityExecutor,
+  notes: string,
+  expected: { orders: number; items: number; attempts: number },
+  timeoutMs: number,
+): Promise<{ facts: Record<string, number>; projectionCatchupMs: number }> {
+  const startedAt = performance.now();
+  let facts = await readRunFacts(oracle, notes);
+  while (
+    (
+      facts.orders !== expected.orders
+      || facts.items !== expected.items
+      || facts.attempts !== expected.attempts
+    )
+    && performance.now() - startedAt < timeoutMs
+  ) {
+    await new Promise<void>((resolve) => setTimeout(resolve, 250));
+    facts = await readRunFacts(oracle, notes);
+  }
+  return {
+    facts,
+    projectionCatchupMs: Math.round(performance.now() - startedAt),
+  };
+}
+
 async function assertDatabaseHealth(
   oracle: SqlitePortabilityExecutor,
+  provider: LoadOptions["databaseProvider"],
 ): Promise<Record<string, string | number>> {
-  const [integrityRows, foreignKeyRows, journalRows] = await Promise.all([
-    oracle.query("PRAGMA integrity_check"),
+  const [integrityRows, foreignKeyRows] = await Promise.all([
+    provider === "turso"
+      ? oracle.query("PRAGMA integrity_check")
+      : oracle.query(
+          "SELECT COUNT(*) AS schema_objects FROM sqlite_master WHERE type IN ('table', 'index', 'trigger', 'view')",
+        ),
     oracle.query("PRAGMA foreign_key_check"),
-    oracle.query("PRAGMA journal_mode"),
   ]);
-  const integrity = String(Object.values(integrityRows[0] ?? {})[0] ?? "").toLowerCase();
-  const journalMode = String(Object.values(journalRows[0] ?? {})[0] ?? "").toLowerCase();
-  if (integrity !== "ok") throw new Error(`Database integrity_check returned ${integrity || "empty"}.`);
+  let integrity = "d1-managed";
+  let schemaObjects = 0;
+  if (provider === "turso") {
+    integrity = String(Object.values(integrityRows[0] ?? {})[0] ?? "").toLowerCase();
+    if (integrity !== "ok") {
+      throw new Error(`Database integrity_check returned ${integrity || "empty"}.`);
+    }
+  } else {
+    schemaObjects = scalarNumber(integrityRows, "schema_objects");
+    if (schemaObjects < 1) throw new Error("D1 load target has no schema objects.");
+  }
   if (foreignKeyRows.length !== 0) {
     throw new Error(`Database has ${foreignKeyRows.length} foreign-key violations.`);
   }
-  if (journalMode !== "mvcc") throw new Error(`Database journal mode is ${journalMode || "empty"}, not mvcc.`);
-  return { integrity, foreignKeyViolations: 0, journalMode };
+  let journalMode = "d1-managed";
+  if (provider === "turso") {
+    const journalRows = await oracle.query("PRAGMA journal_mode");
+    journalMode = String(Object.values(journalRows[0] ?? {})[0] ?? "").toLowerCase();
+    if (journalMode !== "mvcc") {
+      throw new Error(`Database journal mode is ${journalMode || "empty"}, not mvcc.`);
+    }
+  }
+  return {
+    integrity,
+    foreignKeyViolations: 0,
+    journalMode,
+    ...(provider === "d1" ? { schemaObjects } : {}),
+  };
+}
+
+async function assertLoadTargetPreflight(
+  options: LoadOptions,
+  oracle: SqlitePortabilityExecutor,
+): Promise<LoadTargetIdentity> {
+  const sentinelRows = await oracle.query(
+    `SELECT target_id, purpose, database_hostname, fixture_namespace
+       FROM scalius_loadtest_target`,
+  );
+  const identity = assertDisposableDatabaseTarget({
+    databaseUrl: options.databaseUrl,
+    acknowledgedDatabaseHostname: options.acknowledgedDatabaseHostname,
+    expectedTargetId: options.targetId,
+    acknowledgedTargetId: options.acknowledgedTargetId,
+    sentinelRows,
+  });
+
+  const fixtureIds = [
+    options.fixture.spread.productId,
+    options.fixture.hot.productId,
+  ];
+  if (
+    new Set(fixtureIds).size !== fixtureIds.length ||
+    fixtureIds.some((id) => !id.startsWith(`${identity.fixtureNamespace}_`))
+  ) {
+    throw new Error(
+      "Load-test fixture product ids must be distinct and namespaced by the target sentinel.",
+    );
+  }
+
+  const fixtureRows = await oracle.query(
+    `SELECT id, slug, is_active, deleted_at
+       FROM products
+      WHERE id IN (?, ?)
+      ORDER BY id`,
+    fixtureIds,
+  );
+  if (fixtureRows.length !== fixtureIds.length) {
+    throw new Error("Load-test database is missing a target-specific product fixture.");
+  }
+
+  const rowsById = new Map(fixtureRows.map((row) => [String(row.id), row]));
+  for (const productId of fixtureIds) {
+    const row = rowsById.get(productId);
+    const slug = typeof row?.slug === "string" ? row.slug : "";
+    if (
+      !row ||
+      !slug ||
+      Number(row.is_active) !== 1 ||
+      row.deleted_at !== null
+    ) {
+      throw new Error("Load-test product fixture is not active and public.");
+    }
+
+    const apiResult = await requestJson(
+      options,
+      "GET",
+      `/api/v1/products/${encodeURIComponent(slug)}`,
+    );
+    const apiProduct = (
+      apiResult.raw?.data as Record<string, unknown> | undefined
+    )?.product as Record<string, unknown> | undefined;
+    if (apiResult.result.status !== 200 || apiProduct?.id !== productId) {
+      throw new Error(
+        "Load-test Worker does not resolve the target-specific database fixture.",
+      );
+    }
+  }
+
+  return identity;
 }
 
 function buildPayload(
@@ -312,11 +667,15 @@ async function requestJson(
   const data = parsed?.data as Record<string, unknown> | undefined;
   const error = parsed?.error as Record<string, unknown> | undefined;
   const receiptToken = typeof data?.receiptToken === "string" ? data.receiptToken : null;
+  const checkoutPhaseMs = parseCheckoutServerTiming(
+    response.headers.get("Server-Timing"),
+  );
   return {
     result: {
       status: response.status,
       orderId: typeof data?.orderId === "string" ? data.orderId : null,
       errorCode: typeof error?.code === "string" ? error.code : null,
+      ...(checkoutPhaseMs ? { checkoutPhaseMs } : {}),
       ...(receiptToken ? { privateProof: { receiptToken } } : {}),
     },
     raw: parsed,
@@ -339,10 +698,16 @@ function summarizeScenario(
   const statusCounts: Record<string, number> = {};
   const errorCodeCounts: Record<string, number> = {};
   const timings: LoadTimingSample[] = [];
+  const phases = new Map<string, number[]>();
   for (const entry of results) {
     increment(statusCounts, entry.value.status);
     if (entry.value.errorCode) increment(errorCodeCounts, entry.value.errorCode);
     timings.push(entry.timing);
+    for (const [phase, duration] of Object.entries(entry.value.checkoutPhaseMs ?? {})) {
+      const values = phases.get(phase) ?? [];
+      values.push(duration);
+      phases.set(phase, values);
+    }
   }
   return {
     scenario,
@@ -354,6 +719,21 @@ function summarizeScenario(
     serviceLatencyMs: summarizeTimings(timings, "serviceMs"),
     scheduledLatencyMs: summarizeTimings(timings, "scheduledMs"),
     startLagMs: summarizeTimings(timings, "startLagMs"),
+    checkoutPhaseLatencyMs: Object.fromEntries(
+      [...phases.entries()].sort(([left], [right]) => left.localeCompare(right)).map(
+        ([phase, values]) => [
+          phase,
+          summarizeTimings(
+            values.map((value) => ({
+              serviceMs: value,
+              scheduledMs: value,
+              startLagMs: value,
+            })),
+            "serviceMs",
+          ),
+        ],
+      ),
+    ),
     elapsedMs: Math.round(elapsedMs),
     achievedPerSecond: Number((requested / (elapsedMs / 1_000)).toFixed(2)),
     oracle,
@@ -417,7 +797,12 @@ async function runSmoke(
   if (support.result.status !== 201) {
     throw new Error(`Support-request smoke failed with HTTP ${support.result.status}.`);
   }
-  const facts = await readRunFacts(oracle, notes);
+  const { facts, projectionCatchupMs } = await waitForProjectedRunFacts(
+    oracle,
+    notes,
+    { orders: 1, items: 1, attempts: 1 },
+    options.timeoutMs,
+  );
   if (
     facts.orders !== 1 ||
     facts.items !== 1 ||
@@ -437,7 +822,13 @@ async function runSmoke(
     1,
     [{ value: first.result, timing }],
     elapsedMs,
-    { ...facts, ...(await assertDatabaseHealth(oracle)), replay: true, receipt: true },
+    {
+      ...facts,
+      projectionCatchupMs,
+      ...(await assertDatabaseHealth(oracle, options.databaseProvider)),
+      replay: true,
+      receipt: true,
+    },
   );
 }
 
@@ -472,7 +863,12 @@ async function runIdempotency(
     [...results.map(({ value }) => value.orderId), replay.result.orderId].filter(Boolean),
   );
   if (orderIds.size !== 1) throw new Error("Idempotency burst returned more than one order id.");
-  const facts = await readRunFacts(oracle, notes);
+  const { facts, projectionCatchupMs } = await waitForProjectedRunFacts(
+    oracle,
+    notes,
+    { orders: 1, items: 1, attempts: 1 },
+    options.timeoutMs,
+  );
   if (facts.orders !== 1 || facts.items !== 1 || facts.attempts !== 1) {
     throw new Error(`Idempotency database oracle failed: ${JSON.stringify(facts)}.`);
   }
@@ -481,7 +877,12 @@ async function runIdempotency(
     options.idempotencyRequests,
     results,
     loadElapsedMs,
-    { ...facts, uniqueOrderIds: orderIds.size, ...(await assertDatabaseHealth(oracle)) },
+    {
+      ...facts,
+      projectionCatchupMs,
+      uniqueOrderIds: orderIds.size,
+      ...(await assertDatabaseHealth(oracle, options.databaseProvider)),
+    },
   );
 }
 
@@ -519,8 +920,13 @@ async function runSpread(
       `${failures.length} orders returned non-201 statuses ${JSON.stringify(statusCounts)}`,
     );
   }
-  const facts = await readRunFacts(oracle, notes);
   const accepted = options.spreadOrders - failures.length;
+  const { facts, projectionCatchupMs } = await waitForProjectedRunFacts(
+    oracle,
+    notes,
+    { orders: accepted, items: accepted, attempts: accepted },
+    options.timeoutMs,
+  );
   if (
     facts.orders !== accepted ||
     facts.items !== accepted ||
@@ -540,10 +946,12 @@ async function runSpread(
     loadElapsedMs,
     {
       ...facts,
+      projectionCatchupMs,
       accepted,
+      acceptedOrdersPerSecond: Number((accepted / (loadElapsedMs / 1_000)).toFixed(2)),
       failed: failures.length,
       ratePerSecond: options.spreadRate,
-      ...(await assertDatabaseHealth(oracle)),
+      ...(await assertDatabaseHealth(oracle, options.databaseProvider)),
     },
     violations,
   );
@@ -557,8 +965,13 @@ async function runHot(
   const scenario = "hot";
   const notes = `scalius-load:${runId}:${scenario}`;
   const before = await readVariantState(oracle, options.fixture.hot.variantId);
+  const lanesBefore = await readReservationLaneState(oracle, options.fixture.hot.variantId);
   if (before.trackInventory !== 1) throw new Error("Hot-test variant must have inventory tracking enabled.");
-  const available = before.stock - before.reservedStock;
+  const laneReservedBefore = lanesBefore.reduce(
+    (sum, lane) => sum + lane.reservedQuantity,
+    0,
+  );
+  const available = before.stock - before.reservedStock - laneReservedBefore;
   if (available < 1) throw new Error("Hot-test variant has no available regular stock.");
   if (options.hotOrders <= available) {
     throw new Error(`Hot test must submit more than the ${available} available units.`);
@@ -587,38 +1000,101 @@ async function runHot(
     for (const entry of unexpected) increment(statusCounts, entry.value.status);
     violations.push(`unexpected response statuses ${JSON.stringify(statusCounts)}`);
   }
-  const facts = await readRunFacts(oracle, notes);
+  const { facts, projectionCatchupMs } = await waitForProjectedRunFacts(
+    oracle,
+    notes,
+    { orders: accepted, items: accepted, attempts: accepted },
+    options.timeoutMs,
+  );
   const after = await readVariantState(oracle, options.fixture.hot.variantId);
-  const ledgerRows = await oracle.query(
-    `SELECT COUNT(*) AS movement_count,
-            COUNT(DISTINCT im.stock_version_after) AS distinct_versions,
-            COALESCE(SUM(im.reserved_stock_delta), 0) AS reserved_delta,
-            COALESCE(MIN(im.ledger_version), 0) AS min_ledger_version
-       FROM inventory_movements im
-       JOIN orders o ON o.id = im.order_id
-      WHERE o.notes = ?`,
+  const lanesAfter = await readReservationLaneState(oracle, options.fixture.hot.variantId);
+  const edgeRows = await oracle.query(
+    `SELECT
+        CAST(json_extract(edge.value, '$.lane') AS INTEGER) AS lane,
+        COUNT(*) AS edge_count,
+        COUNT(DISTINCT CAST(json_extract(edge.value, '$.reservedBefore') AS INTEGER)) AS distinct_reserved_before,
+        COUNT(DISTINCT CAST(json_extract(edge.value, '$.laneVersionBefore') AS INTEGER)) AS distinct_version_before,
+        COALESCE(SUM(CAST(json_extract(edge.value, '$.quantity') AS INTEGER)), 0) AS quantity,
+        COALESCE(MIN(CAST(json_extract(edge.value, '$.reservedBefore') AS INTEGER)), 0) AS min_reserved_before,
+        COALESCE(MAX(CAST(json_extract(edge.value, '$.reservedAfter') AS INTEGER)), 0) AS max_reserved_after,
+        COALESCE(MIN(CAST(json_extract(edge.value, '$.laneVersionBefore') AS INTEGER)), 0) AS min_version_before,
+        COALESCE(MAX(CAST(json_extract(edge.value, '$.laneVersionAfter') AS INTEGER)), 0) AS max_version_after
+       FROM orders AS checkout_order
+       JOIN json_each(checkout_order.checkout_inventory_edges) AS edge
+      WHERE checkout_order.notes = ?
+        AND checkout_order.inventory_authority = 'checkout_lane_v1'
+        AND checkout_order.inventory_action = 'reserved'
+      GROUP BY CAST(json_extract(edge.value, '$.lane') AS INTEGER)
+      ORDER BY lane`,
     [notes],
   );
-  const ledger = {
-    movements: scalarNumber(ledgerRows, "movement_count"),
-    distinctVersions: scalarNumber(ledgerRows, "distinct_versions"),
-    reservedDelta: scalarNumber(ledgerRows, "reserved_delta"),
-    minLedgerVersion: scalarNumber(ledgerRows, "min_ledger_version"),
-  };
+  const edgeGroups = edgeRows.map((row) => ({
+    lane: Number(row.lane),
+    edgeCount: Number(row.edge_count),
+    distinctReservedBefore: Number(row.distinct_reserved_before),
+    distinctVersionBefore: Number(row.distinct_version_before),
+    quantity: Number(row.quantity),
+    minReservedBefore: Number(row.min_reserved_before),
+    maxReservedAfter: Number(row.max_reserved_after),
+    minVersionBefore: Number(row.min_version_before),
+    maxVersionAfter: Number(row.max_version_after),
+  }));
+  const beforeByLane = new Map(lanesBefore.map((lane) => [lane.lane, lane]));
+  const afterByLane = new Map(lanesAfter.map((lane) => [lane.lane, lane]));
+  const edgeContinuityExact = edgeGroups.every((group) => {
+    const laneBefore = beforeByLane.get(group.lane) ?? {
+      reservedQuantity: 0,
+      version: 0,
+    };
+    const laneAfter = afterByLane.get(group.lane);
+    return Boolean(
+      laneAfter
+      && group.edgeCount === group.quantity
+      && group.distinctReservedBefore === group.edgeCount
+      && group.distinctVersionBefore === group.edgeCount
+      && group.minReservedBefore === laneBefore.reservedQuantity
+      && group.maxReservedAfter === laneAfter.reservedQuantity
+      && group.minVersionBefore === laneBefore.version
+      && group.maxVersionAfter === laneAfter.version
+      && laneAfter.reservedQuantity - laneBefore.reservedQuantity === group.quantity
+      && laneAfter.version - laneBefore.version === group.edgeCount
+    );
+  });
+  const laneReservedAfter = lanesAfter.reduce(
+    (sum, lane) => sum + lane.reservedQuantity,
+    0,
+  );
+  const laneVersionBefore = lanesBefore.reduce((sum, lane) => sum + lane.version, 0);
+  const laneVersionAfter = lanesAfter.reduce((sum, lane) => sum + lane.version, 0);
+  const laneCapacityAfter = lanesAfter.reduce((sum, lane) => sum + lane.capacity, 0);
+  const laneEdgeQuantity = edgeGroups.reduce((sum, group) => sum + group.quantity, 0);
+  const terminalRows = await oracle.query(
+    `SELECT COUNT(*) AS terminal_count
+       FROM checkout_inventory_lane_movements AS movement
+       JOIN orders AS checkout_order ON checkout_order.id = movement.order_id
+      WHERE checkout_order.notes = ?`,
+    [notes],
+  );
+  const terminalMovements = scalarNumber(terminalRows, "terminal_count");
   if (
     accepted !== available ||
     facts.orders !== accepted ||
     facts.items !== accepted ||
+    facts.attempts !== accepted ||
+    facts.movements !== 0 ||
     after.stock !== before.stock ||
-    after.reservedStock - before.reservedStock !== accepted ||
-    after.stockVersion - before.stockVersion !== accepted ||
-    after.reservedStock > after.stock ||
-    ledger.movements !== accepted ||
-    ledger.distinctVersions !== accepted ||
-    ledger.reservedDelta !== accepted ||
-    ledger.minLedgerVersion !== 2
+    after.reservedStock !== before.reservedStock ||
+    after.stockVersion !== before.stockVersion ||
+    lanesAfter.length !== 2 ||
+    lanesAfter.some((lane) => lane.sourceStockVersion !== after.stockVersion) ||
+    laneCapacityAfter !== Math.max(laneReservedAfter, after.stock - after.reservedStock) ||
+    laneReservedAfter - laneReservedBefore !== accepted ||
+    laneVersionAfter - laneVersionBefore !== accepted ||
+    laneEdgeQuantity !== accepted ||
+    !edgeContinuityExact ||
+    terminalMovements !== 0
   ) {
-    violations.push("stock, order, or ledger-v2 invariants did not match accepted orders");
+    violations.push("stock, order, or checkout-lane ledger invariants did not match accepted orders");
   }
   return summarizeScenario(
     scenario,
@@ -627,15 +1103,23 @@ async function runHot(
     loadElapsedMs,
     {
       ...facts,
+      projectionCatchupMs,
       accepted,
+      acceptedOrdersPerSecond: Number((accepted / (loadElapsedMs / 1_000)).toFixed(2)),
       rejected: options.hotOrders - accepted,
       availableBefore: available,
-      reservedAfter: after.reservedStock,
+      laneReservedBefore,
+      laneReservedAfter,
+      laneCapacityAfter,
       stockAfter: after.stock,
       stockVersionDelta: after.stockVersion - before.stockVersion,
-      ledgerV2Movements: ledger.movements,
+      checkoutLaneEdgeQuantity: laneEdgeQuantity,
+      checkoutLaneVersionDelta: laneVersionAfter - laneVersionBefore,
+      legacyLedgerMovements: facts.movements,
+      terminalLaneMovements: terminalMovements,
+      edgeContinuityExact,
       ratePerSecond: options.hotRate,
-      ...(await assertDatabaseHealth(oracle)),
+      ...(await assertDatabaseHealth(oracle, options.databaseProvider)),
     },
     violations,
   );
@@ -644,31 +1128,50 @@ async function runHot(
 export async function runLiveCheckoutLoad(options: LoadOptions): Promise<{
   runId: string;
   targetHostname: string;
+  targetId: string;
+  databaseHostname: string;
   scenarios: ScenarioSummary[];
 }> {
+  if (options.databaseProvider === "turso") {
+    if (!options.tursoBilling) {
+      throw new Error("Turso load-test billing isolation and budgets are required.");
+    }
+    await preflightTursoLoadBudget({
+      organization: options.tursoBilling.organization,
+      platformToken: options.tursoBilling.platformToken,
+      rowsReadBudget: options.tursoBilling.rowsReadBudget,
+      rowsWrittenBudget: options.tursoBilling.rowsWrittenBudget,
+      allowUsageOverage: options.tursoBilling.allowUsageOverage,
+    });
+  }
   const runId = `lt_${Date.now().toString(36)}_${randomUUID().slice(0, 8)}`;
-  const oracle = createTursoPortabilityExecutor({
-    url: options.databaseUrl,
-    authToken: options.databaseToken,
-  });
+  const oracle = createLoadOracle(options);
   const scenarios: ScenarioSummary[] = [];
   try {
-    await assertDatabaseHealth(oracle);
+    await assertDatabaseHealth(oracle, options.databaseProvider);
+    let identity = await assertLoadTargetPreflight(options, oracle);
     if (options.scenario === "smoke" || options.scenario === "all") {
+      identity = await assertLoadTargetPreflight(options, oracle);
       scenarios.push(await runSmoke(options, oracle, runId));
     }
     if (options.scenario === "idempotency" || options.scenario === "all") {
+      identity = await assertLoadTargetPreflight(options, oracle);
       scenarios.push(await runIdempotency(options, oracle, runId));
     }
     if (options.scenario === "spread" || options.scenario === "all") {
+      identity = await assertLoadTargetPreflight(options, oracle);
       scenarios.push(await runSpread(options, oracle, runId));
     }
     if (options.scenario === "hot" || options.scenario === "all") {
+      identity = await assertLoadTargetPreflight(options, oracle);
       scenarios.push(await runHot(options, oracle, runId));
     }
+    identity = await assertLoadTargetPreflight(options, oracle);
     return {
       runId,
       targetHostname: new URL(options.apiOrigin).hostname,
+      targetId: identity.targetId,
+      databaseHostname: identity.databaseHostname,
       scenarios,
     };
   } finally {

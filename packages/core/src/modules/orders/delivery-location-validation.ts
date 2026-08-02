@@ -30,8 +30,11 @@ function deliveryLocationIds(data: DeliveryLocationSelectionInput): string[] {
     );
 }
 
-export function selectActiveDeliveryLocationRows(db: Database, data: DeliveryLocationSelectionInput) {
-    const locationIds = deliveryLocationIds(data);
+export function selectActiveDeliveryLocationRowsByIds(
+    db: Database,
+    rawLocationIds: readonly string[],
+) {
+    const locationIds = [...new Set(rawLocationIds.map((id) => id.trim()).filter(Boolean))];
     const query = db
         .select({
             id: deliveryLocations.id,
@@ -43,9 +46,7 @@ export function selectActiveDeliveryLocationRows(db: Database, data: DeliveryLoc
         })
         .from(deliveryLocations);
 
-    if (locationIds.length === 0) {
-        return query.limit(0);
-    }
+    if (locationIds.length === 0) return query.limit(0);
 
     return query.where(
         and(
@@ -54,6 +55,10 @@ export function selectActiveDeliveryLocationRows(db: Database, data: DeliveryLoc
             isNull(deliveryLocations.deletedAt),
         ),
     );
+}
+
+export function selectActiveDeliveryLocationRows(db: Database, data: DeliveryLocationSelectionInput) {
+    return selectActiveDeliveryLocationRowsByIds(db, deliveryLocationIds(data));
 }
 
 export function resolveActiveDeliveryLocationNamesFromRows(

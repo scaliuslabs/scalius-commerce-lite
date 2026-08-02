@@ -54,6 +54,8 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@scalius/tsconfig": "workspace:*",
+    "@types/pg": "8.20.3",
+    "@types/pg-copy-streams": "1.2.5",
     "country-flag-icons": "1.6.20",
     "domhandler": "6.0.1",
     "drizzle-kit": "^0.31.10",
@@ -63,6 +65,8 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.8.0",
     "htmlparser2": "12.0.0",
+    "pg": "8.22.0",
+    "pg-copy-streams": "7.0.0",
     "turbo": "^2.10.7",
     "typescript": "^6.0.3",
     "typescript-eslint": "8.65.0",

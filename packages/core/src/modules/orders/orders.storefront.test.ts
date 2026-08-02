@@ -2,7 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 import type { Database } from "@scalius/database/client";
 import { InventoryPool, PaymentMethod } from "@scalius/database/schema";
 import { ValidationError } from "@scalius/core/errors";
-import { createStorefrontOrder, validateStorefrontDeliveryPreflight } from "./orders.storefront";
+import {
+  createStorefrontOrder,
+  createTrustedStorefrontCheckoutPolicySnapshot,
+  validateStorefrontDeliveryPreflight,
+} from "./orders.storefront";
 import { validateStorefrontCartItems } from "./cart-validation";
 import { calculateStorefrontTaxQuote } from "../tax";
 import type { CreateStorefrontOrderCustomerIdentity, CreateStorefrontOrderInput } from "./orders.types";
@@ -1433,11 +1437,16 @@ describe("createStorefrontOrder prevalidated input trust", () => {
       undefined,
       cartValidation,
       deliveryPreflight,
+      undefined,
+      undefined,
+      undefined,
+      createTrustedStorefrontCheckoutPolicySnapshot({ partialPaymentEnabled: false }),
     );
 
     expect(result.commitPayload.orderData.cityName).toBe("Dhaka");
     expect(result.commitPayload.orderData.zoneName).toBe("Mirpur");
     expect(result.commitPayload.orderData.areaName).toBe("Section 10");
     expect(result.commitPayload.orderData.shippingCharge).toBe(70);
+    expect(orderDb.batch).not.toHaveBeenCalled();
   });
 });

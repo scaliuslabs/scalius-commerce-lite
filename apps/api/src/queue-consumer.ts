@@ -26,7 +26,10 @@ import {
 import { and, eq } from "drizzle-orm";
 import { processPaymentConfirmed, processPaymentFailed, releaseOrderInventory } from "@scalius/core/modules/payments/process-payment";
 import { processPolarWebhookRefund } from "@scalius/core/modules/payments/polar";
-import { processExistingMetaPurchaseOutboxForOrder } from "@scalius/core/integrations/meta/purchase-outbox";
+import {
+  processExistingMetaPurchaseOutboxForOrder,
+  type MetaPurchaseQueueMessage,
+} from "@scalius/core/integrations/meta/purchase-outbox";
 import { sendOrderNotificationEmail, sendOrderNotification } from "@scalius/core/modules/notifications/notifications.service";
 import type { OrderNotificationQueueMessage, OrderNotificationType } from "@scalius/core/modules/notifications";
 import {
@@ -368,7 +371,7 @@ export type StorefrontCacheQueueMessage = CacheQueueMessage;
  * Each message is processed independently; failures are retried by Cloudflare.
  */
 export async function handleQueueBatch(
-  batch: MessageBatch<PaymentQueueMessage | AuthOtpQueueMessage | OrderNotificationQueueMessage | StorefrontCacheQueueMessage>,
+  batch: MessageBatch<PaymentQueueMessage | AuthOtpQueueMessage | OrderNotificationQueueMessage | MetaPurchaseQueueMessage | StorefrontCacheQueueMessage>,
   env: Env,
   executionCtx?: ExecutionContext,
 ): Promise<void> {
@@ -412,7 +415,7 @@ export async function handleQueueBatch(
     batch.messages,
     QUEUE_BATCH_CONCURRENCY_LIMIT,
     (msg) => processQueueMessage(
-      msg as unknown as Message<PaymentQueueMessage | AuthOtpQueueMessage | OrderNotificationQueueMessage | StorefrontCacheQueueMessage>,
+      msg as unknown as Message<PaymentQueueMessage | AuthOtpQueueMessage | OrderNotificationQueueMessage | MetaPurchaseQueueMessage | StorefrontCacheQueueMessage>,
       db,
       env,
       executionCtx,
@@ -434,7 +437,7 @@ export async function handleQueueBatch(
       console.error(`[Queue] Failed to process message ${msg.id}:`, result.status === "rejected" ? result.reason : "unknown");
       await markPaymentWebhookEventFailedOnTerminalAttempt(
         db,
-        msg as unknown as Message<PaymentQueueMessage | AuthOtpQueueMessage | OrderNotificationQueueMessage | StorefrontCacheQueueMessage>,
+        msg as unknown as Message<PaymentQueueMessage | AuthOtpQueueMessage | OrderNotificationQueueMessage | MetaPurchaseQueueMessage | StorefrontCacheQueueMessage>,
         result.reason,
       );
       msg.retry({ delaySeconds: getQueueRetryDelaySeconds(result.reason) });
@@ -940,7 +943,7 @@ async function archiveAuthOtpDlqMessage(
  * Process a single payment, notification, or OTP queue message.
  */
 async function processQueueMessage(
-  msg: Message<PaymentQueueMessage | AuthOtpQueueMessage | OrderNotificationQueueMessage | StorefrontCacheQueueMessage>,
+  msg: Message<PaymentQueueMessage | AuthOtpQueueMessage | OrderNotificationQueueMessage | MetaPurchaseQueueMessage | StorefrontCacheQueueMessage>,
   db: ReturnType<typeof getDb>,
   env: Env,
   executionCtx?: ExecutionContext,
@@ -968,6 +971,21 @@ async function processQueueMessage(
 
     case "storefront.cache_warm": {
       await processStorefrontCacheWarmQueueMessage(payload, env);
+      break;
+    }
+
+    // ── Durable checkout side effects ─────────────────────────────────────
+
+    case "meta.purchase": {
+      await processExistingMetaPurchaseOutboxForOrder({
+        db,
+        orderId: payload.orderId,
+        source: payload.source,
+        storefrontUrl: env.STOREFRONT_URL,
+        encryptionKey: getCredentialEncryptionKey(
+          env as unknown as Record<string, unknown>,
+        ),
+      });
       break;
     }
 
@@ -1302,7 +1320,7 @@ async function processQueueMessage(
   }
 }
 
-type QueueBody = PaymentQueueMessage | AuthOtpQueueMessage | OrderNotificationQueueMessage | StorefrontCacheQueueMessage;
+type QueueBody = PaymentQueueMessage | AuthOtpQueueMessage | OrderNotificationQueueMessage | MetaPurchaseQueueMessage | StorefrontCacheQueueMessage;
 type PaymentOnlyQueueMessage = Extract<PaymentQueueMessage, { type: `payment.${string}` }>;
 
 function isPaymentQueuePayload(payload: QueueBody): payload is PaymentOnlyQueueMessage {

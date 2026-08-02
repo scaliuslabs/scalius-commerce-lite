@@ -133,6 +133,14 @@ function createCatalogSchema(): void {
         );
         CREATE INDEX product_variants_product_id_idx ON product_variants(product_id);
 
+        CREATE TABLE inventory_reservation_lanes (
+            variant_id TEXT NOT NULL,
+            pool TEXT NOT NULL,
+            lane INTEGER NOT NULL,
+            reserved_quantity INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (variant_id, pool, lane)
+        );
+
         CREATE TABLE product_option_definitions (
             id TEXT PRIMARY KEY,
             product_id TEXT NOT NULL,

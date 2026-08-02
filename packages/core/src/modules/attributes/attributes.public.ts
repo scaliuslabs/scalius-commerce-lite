@@ -88,7 +88,7 @@ export async function resolvePublicAttributeFilters(
             sql`EXISTS (
                 SELECT 1
                 FROM json_each(${requestedJson}) AS requested_filter
-                JOIN json_each(json_extract(requested_filter.value, '$.values')) AS requested_value
+                CROSS JOIN json_each(json_extract(requested_filter.value, '$.values')) AS requested_value
                 WHERE CAST(json_extract(requested_filter.value, '$.slug') AS TEXT) = ${productAttributes.slug}
                   AND CAST(requested_value.value AS TEXT) = ${productAttributeValues.value}
             )`,

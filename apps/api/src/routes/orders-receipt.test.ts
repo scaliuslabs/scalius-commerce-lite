@@ -127,7 +127,7 @@ function createDbMock(options: {
   const inserts: unknown[] = [];
   return {
     __inserts: inserts,
-    select: vi.fn(() => {
+    select: vi.fn((selection?: Record<string, unknown>) => {
       let selectedTable: unknown;
       const query = {
         from: (table: unknown) => {
@@ -146,7 +146,15 @@ function createDbMock(options: {
               : null;
           }
           if (selectedTable === checkoutAttempts) return options.attemptRow ?? null;
-          if (selectedTable === orders) return orderRow;
+          if (selectedTable === orders) {
+            // Receipt proof checks the immutable aggregate authority before
+            // falling back to legacy checkout attempts. This fixture models a
+            // legacy order, so that narrow two-column aggregate lookup misses.
+            if (selection && Object.keys(selection).length === 2 && "orderId" in selection) {
+              return null;
+            }
+            return orderRow;
+          }
           return null;
         },
       };

@@ -111,4 +111,35 @@ describe("logApiError", () => {
     );
     expect(error).not.toHaveBeenCalledWith(expect.any(String), crash);
   });
+
+  it("logs only safe machine metadata for unexpected database failures", () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const databaseError = Object.assign(
+      new Error("HTTP error! status: 503"),
+      { name: "DatabaseError", code: "DATABASE_UNAVAILABLE" },
+    );
+
+    logApiError(databaseError, {
+      method: "POST",
+      path: "/api/v1/orders",
+      requestId: "req_checkout_1234",
+    });
+
+    expect(error).toHaveBeenCalledWith(
+      "[api-ops]",
+      JSON.stringify({
+        event: "api.error",
+        status: 500,
+        code: "INTERNAL_ERROR",
+        message: "Unexpected API error",
+        method: "POST",
+        path: "/api/v1/orders",
+        requestId: "req_checkout_1234",
+        errorName: "DatabaseError",
+        infrastructureCode: "DATABASE_UNAVAILABLE",
+        upstreamStatus: 503,
+      }),
+    );
+    expect(JSON.stringify(error.mock.calls)).not.toContain("HTTP error");
+  });
 });

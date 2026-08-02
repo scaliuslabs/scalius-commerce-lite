@@ -153,6 +153,8 @@ export interface AdminOrderFullEditSource {
     hasRefundHistory: number | boolean;
     hasReturnHistory: number | boolean;
     hasInvoiceHistory: number | boolean;
+    checkoutAggregateVersion?: number | null;
+    checkoutProjectionStatus?: string | null;
 }
 
 const FULL_EDITABLE_ORDER_STATUSES = new Set<string>([
@@ -164,6 +166,15 @@ const FULL_EDITABLE_ORDER_STATUSES = new Set<string>([
 export function buildAdminOrderFullEditReadiness(
     order: AdminOrderFullEditSource,
 ): AdminOrderFullEditReadiness {
+    if (
+        order.checkoutAggregateVersion === 1
+        && order.checkoutProjectionStatus !== "complete"
+    ) {
+        return {
+            allowed: false,
+            reason: "This checkout is still materializing its read models. Retry after projection completes.",
+        };
+    }
     if (!FULL_EDITABLE_ORDER_STATUSES.has(order.status)) {
         return {
             allowed: false,
@@ -247,6 +258,8 @@ export async function getAdminOrderFullEditReadiness(
             fulfillmentStatus: orders.fulfillmentStatus,
             shipmentClaimId: orders.shipmentClaimId,
             shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
+            checkoutAggregateVersion: orders.checkoutAggregateVersion,
+            checkoutProjectionStatus: orders.checkoutProjectionStatus,
             ...adminOrderFullEditEvidenceSelection(),
         })
         .from(orders)

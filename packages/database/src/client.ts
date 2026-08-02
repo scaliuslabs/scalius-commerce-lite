@@ -6,6 +6,10 @@ import {
   type DatabaseProvider,
 } from "./provider";
 import { createTursoDatabase } from "./turso-adapter";
+import {
+  connectNeonPostgres,
+  createPostgresDatabase,
+} from "./postgres-adapter";
 import type { Database } from "./types";
 
 const providerByDatabase = new WeakMap<object, DatabaseProvider>();
@@ -21,6 +25,11 @@ export {
   resolveDatabaseConfiguration,
 } from "./provider";
 export { createTursoDatabase, isTursoConflictError } from "./turso-adapter";
+export {
+  connectNeonPostgres,
+  createPostgresDatabase,
+  isPostgresSerializationError,
+} from "./postgres-adapter";
 
 /**
  * Compose a database client for the current request or Worker event.
@@ -35,8 +44,18 @@ export function getDb(env?: DatabaseEnvironment): Database {
     const database = createTursoDatabase({
       url: config.url,
       authToken: config.authToken,
+    }, {
+      writeBatchMode: config.writeBatchMode,
     });
     providerByDatabase.set(database as object, "turso");
+    return database;
+  }
+
+  if (config.provider === "postgres") {
+    const database = createPostgresDatabase(config.connectionString, {
+      connect: connectNeonPostgres,
+    });
+    providerByDatabase.set(database as object, "postgres");
     return database;
   }
 

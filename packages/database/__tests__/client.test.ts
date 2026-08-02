@@ -24,4 +24,11 @@ describe("database client composition", () => {
   it("fails closed when no complete provider is configured", () => {
     expect(() => getDb()).toThrow(/D1 database binding/);
   });
+
+  it("composes PostgreSQL from one connection-string secret", () => {
+    const db = getDb({
+      POSTGRES_DATABASE_URL: "postgresql://user:secret@example.neon.tech/merchant",
+    });
+    expect(getDatabaseProviderForClient(db)).toBe("postgres");
+  });
 });

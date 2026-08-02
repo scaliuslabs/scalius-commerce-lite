@@ -14,6 +14,8 @@ import type { Database } from "./types";
 const DEFAULT_CONFLICT_ATTEMPTS = 8;
 const CONFLICT_RETRY_BASE_DELAY_MS = 2;
 
+export type TursoWriteBatchMode = "immediate" | "concurrent";
+
 interface TursoBatchResult {
   rows?: unknown[];
   rowsAffected?: number;
@@ -31,6 +33,19 @@ export interface TursoAdapterOptions {
   maxConflictAttempts?: number;
   sleep?: (delayMs: number) => Promise<void>;
   random?: () => number;
+  onConflictRetry?: (retry: { attempt: number; delayMs: number }) => void;
+  /**
+   * Immediate is the stable hosted default. Concurrent remains an explicit
+   * opt-in for a TursoDB target whose own workload benchmark proves it faster.
+   */
+  writeBatchMode?: TursoWriteBatchMode;
+  onOperation?: (operation: {
+    kind: "statement" | "batch";
+    mode: "autocommit" | "read" | TursoWriteBatchMode;
+    statementCount: number;
+    durationMs: number;
+    success: boolean;
+  }) => void;
 }
 
 function tursoErrorDescription(error: unknown): string {
@@ -97,9 +112,10 @@ export function isTursoConflictError(error: unknown): boolean {
 
 async function withTursoConflictRetry<T>(
   operation: () => Promise<T>,
-  options: Required<
-    Pick<TursoAdapterOptions, "maxConflictAttempts" | "sleep" | "random">
-  >,
+  options: Required<Pick<
+    TursoAdapterOptions,
+    "maxConflictAttempts" | "sleep" | "random"
+  >> & Pick<TursoAdapterOptions, "onConflictRetry">,
 ): Promise<T> {
   let lastError: unknown;
 
@@ -114,7 +130,9 @@ async function withTursoConflictRetry<T>(
 
       const exponentialDelay = CONFLICT_RETRY_BASE_DELAY_MS * 2 ** attempt;
       const jitter = Math.floor(options.random() * exponentialDelay);
-      await options.sleep(exponentialDelay + jitter);
+      const delayMs = exponentialDelay + jitter;
+      options.onConflictRetry?.({ attempt: attempt + 1, delayMs });
+      await options.sleep(delayMs);
     }
   }
 
@@ -129,11 +147,21 @@ function requireSingleResult(results: TursoBatchResult[]): TursoBatchResult {
   return result;
 }
 
+function isReadOnlyBatchStatement(sqlText: string): boolean {
+  // Stay deliberately conservative: a Drizzle write with RETURNING is
+  // reported as an `all` method, so callback methods alone cannot distinguish
+  // reads from writes. Unknown forms (including WITH) keep the write-capable
+  // transaction mode rather than risking a write inside a read transaction.
+  return /^\s*(?:select\b|explain(?:\s+query\s+plan)?\s+select\b)/i.test(sqlText);
+}
+
 /**
  * Adapt the stable fetch-only Turso client to Drizzle's stable remote SQLite
- * driver. Single statements stay one HTTP request. Drizzle batches become one
- * atomic BEGIN CONCURRENT request and retry only explicit MVCC busy/conflict
- * failures.
+ * driver. Single statements stay one HTTP request. Read-only Drizzle batches
+ * use one consistent read transaction; write-capable batches use one atomic
+ * request. Hosted targets default to BEGIN IMMEDIATE because it is the stable
+ * low-overhead mode; BEGIN CONCURRENT is available only after target-specific
+ * load proof. Both modes retry only explicit busy/conflict failures.
  */
 export function createTursoDatabase(
   config: TursoConnectionConfig,
@@ -146,6 +174,44 @@ export function createTursoDatabase(
     maxConflictAttempts: options.maxConflictAttempts ?? DEFAULT_CONFLICT_ATTEMPTS,
     sleep: options.sleep ?? defaultSleep,
     random: options.random ?? Math.random,
+    onConflictRetry: options.onConflictRetry,
+  };
+  const writeBatchMode = options.writeBatchMode ?? "immediate";
+
+  const executeRemoteBatch = async (
+    statements: BatchStatement[],
+    batchOptions: { mode?: string; raw?: boolean },
+    kind: "statement" | "batch",
+  ): Promise<TursoBatchResult[]> => {
+    if (!options.onOperation) {
+      return connection.batch(statements, batchOptions);
+    }
+
+    const startedAt = performance.now();
+    let success = false;
+    try {
+      const result = await connection.batch(statements, batchOptions);
+      success = true;
+      return result;
+    } finally {
+      try {
+        options.onOperation({
+          kind,
+          mode: batchOptions.mode === "read"
+            ? "read"
+            : batchOptions.mode === "concurrent"
+              ? "concurrent"
+              : batchOptions.mode === "immediate"
+                ? "immediate"
+                : "autocommit",
+          statementCount: statements.length,
+          durationMs: Math.round(performance.now() - startedAt),
+          success,
+        });
+      } catch {
+        // Diagnostics must never change database behavior.
+      }
+    }
   };
 
   if (!Number.isSafeInteger(retryOptions.maxConflictAttempts) || retryOptions.maxConflictAttempts < 1) {
@@ -155,7 +221,11 @@ export function createTursoDatabase(
   const executeOne: AsyncRemoteCallback = async (sql, params, method) => {
     const result = requireSingleResult(
       await withTursoConflictRetry(
-        () => connection.batch([{ sql, args: params }], { raw: true }),
+        () => executeRemoteBatch(
+          [{ sql, args: params }],
+          { raw: true },
+          "statement",
+        ),
         retryOptions,
       ),
     );
@@ -179,12 +249,16 @@ export function createTursoDatabase(
       sql,
       args: params,
     }));
+    const batchMode = statements.every(({ sql }) => isReadOnlyBatchStatement(sql))
+      ? "read"
+      : writeBatchMode;
     let results: TursoBatchResult[];
     try {
       results = await withTursoConflictRetry(
-        () => connection.batch(
+        () => executeRemoteBatch(
           batchStatements,
-          { mode: "concurrent", raw: true },
+          { mode: batchMode, raw: true },
+          "batch",
         ),
         retryOptions,
       );

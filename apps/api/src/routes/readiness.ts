@@ -117,13 +117,15 @@ async function databaseCheck(env: Env): Promise<CheckResult> {
   try {
     config = resolveDatabaseConfiguration(env);
   } catch (error) {
-    const hasTursoConfiguration = Boolean(
+    const hasRemoteDatabaseConfiguration = Boolean(
       env.DATABASE_PROVIDER === "turso" ||
+      env.DATABASE_PROVIDER === "postgres" ||
       env.TURSO_DATABASE_URL ||
-      env.TURSO_AUTH_TOKEN,
+      env.TURSO_AUTH_TOKEN ||
+      env.POSTGRES_DATABASE_URL,
     );
     return missing(
-      hasTursoConfiguration ? "database" : "d1",
+      hasRemoteDatabaseConfiguration ? "database" : "d1",
       sanitizeError(error),
     );
   }

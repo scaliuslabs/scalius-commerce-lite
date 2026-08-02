@@ -4,6 +4,7 @@ import {
   inventoryOperations,
   productVariants,
 } from "@scalius/database/schema";
+import { effectiveRegularReservedStockSql } from "@scalius/database/inventory-authority";
 import {
   ConflictError,
   NotFoundError,
@@ -53,6 +54,7 @@ type InventoryVariantState = {
   id: string;
   stock: number;
   reservedStock: number;
+  effectiveReservedStock: number;
   preorderStock: number;
   stockVersion: number;
 };
@@ -113,6 +115,15 @@ export async function executeInventoryOperation(
       ? previousStock + normalized.delta
       : normalized.newStock;
     validateAbsoluteStockCount(newStock, "resulting stock");
+    if (
+      normalized.pool === "stock"
+      && newStock < previousStock
+      && newStock < variant.effectiveReservedStock
+    ) {
+      throw new ValidationError(
+        `Resulting stock cannot be lower than ${variant.effectiveReservedStock} reserved units`,
+      );
+    }
     const delta = newStock - previousStock;
     const result: InventoryOperationResult = {
       variantId: normalized.variantId,
@@ -241,6 +252,9 @@ async function commitCounterOperation(
       eq(productVariants.id, input.variantId),
       eq(productVariants.stockVersion, variant.stockVersion),
       isNull(productVariants.deletedAt),
+      input.pool === "stock" && result.newStock < variant.stock
+        ? sql`${effectiveRegularReservedStockSql()} <= ${result.newStock}`
+        : undefined,
     ))
     .returning({ id: productVariants.id });
 
@@ -323,6 +337,7 @@ async function selectInventoryVariant(
       id: productVariants.id,
       stock: productVariants.stock,
       reservedStock: productVariants.reservedStock,
+      effectiveReservedStock: effectiveRegularReservedStockSql(),
       preorderStock: productVariants.preorderStock,
       stockVersion: productVariants.stockVersion,
     })

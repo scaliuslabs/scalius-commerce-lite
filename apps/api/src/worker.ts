@@ -11,6 +11,7 @@ import {
 } from "@scalius/shared/database-migration-freeze";
 
 export type { AppType } from "./app";
+export { CheckoutCoordinator } from "./checkout-coordinator";
 
 export default class ApiWorker extends WorkerEntrypoint<Env> {
   // HTTP: Hono handles all requests

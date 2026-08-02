@@ -4,6 +4,7 @@
 import { productVariants, products } from "@scalius/database/schema";
 import { eq, sql, and, isNull } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
+import { effectiveRegularReservedStockSql } from "@scalius/database/inventory-authority";
 import {
   getBarcodeIdentityKey,
   normalizeBarcodeValue,
@@ -96,7 +97,7 @@ export async function lookupByBarcodeOrSku(
     variantLabel: variantOptionLabelSql(productVariants.id),
     variantPrice: productVariants.price,
     variantStock: productVariants.stock,
-    variantReservedStock: productVariants.reservedStock,
+    variantReservedStock: effectiveRegularReservedStockSql(),
     variantBarcode: productVariants.barcode,
     variantBarcodeType: productVariants.barcodeType,
     variantLowStockThreshold: productVariants.lowStockThreshold,

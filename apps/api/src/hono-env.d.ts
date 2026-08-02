@@ -48,6 +48,9 @@ declare global {
     BUCKET: R2Bucket;
     SHARED_AUTH_CACHE: KVNamespace;
     SEARCH_RATE_LIMITER: RateLimit;
+    ORDER_IP_RATE_LIMITER: RateLimit;
+    ORDER_PHONE_RATE_LIMITER: RateLimit;
+    CHECKOUT_COORDINATOR: DurableObjectNamespace;
     EMAIL?: CloudflareSendEmailBinding;
 
     // Cloudflare Queue bindings
@@ -62,9 +65,10 @@ declare global {
     JWT_SECRET?: string;
     FIREBASE_SERVICE_ACCOUNT_CRED_JSON?: string;
     CREDENTIAL_ENCRYPTION_KEY?: string;
-    DATABASE_PROVIDER?: "d1" | "turso";
+    DATABASE_PROVIDER?: "d1" | "turso" | "postgres";
     TURSO_DATABASE_URL?: string;
     TURSO_AUTH_TOKEN?: string;
+    POSTGRES_DATABASE_URL?: string;
     DATABASE_MIGRATION_FREEZE?: string;
 
     // Variables (set in wrangler.jsonc [vars] or dashboard)

@@ -24,7 +24,9 @@ describe("low-stock policy", () => {
 
     expect(query.sql.toLowerCase()).toContain("low_stock_threshold\" is not null");
     expect(query.sql.toLowerCase()).toContain("low_stock_threshold\" > 0");
-    expect(query.sql.toLowerCase()).not.toContain("coalesce");
+    expect(query.sql.toLowerCase()).not.toMatch(
+      /coalesce\(\s*"product_variants"\."low_stock_threshold"/,
+    );
     expect(query.params).toEqual([]);
   });
 });

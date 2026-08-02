@@ -118,6 +118,17 @@ describe("deploy target wiring", () => {
     expect(command.cwd).toMatch(/apps\/ops-monitor$/);
   });
 
+  it("passes an explicit provider-specific Wrangler config only to the API deploy", () => {
+    const command = getDeployCommandForTarget(
+      "api",
+      "/tmp/scalius loadtest/wrangler.turso.jsonc",
+    );
+
+    expect(command.cmd).toContain("exec wrangler deploy --config");
+    expect(command.cmd).toContain("wrangler.turso.jsonc");
+    expect(command.cwd).toMatch(/apps\/api$/);
+  });
+
   it("keeps typechecking and deployment commands on supported workspaces", () => {
     expect(getTypecheckCommandForTarget("api")).toContain("--filter @scalius/api typecheck");
     expect(getTypecheckCommandForTarget("admin")).toContain("--filter @scalius/admin-v2 typecheck");

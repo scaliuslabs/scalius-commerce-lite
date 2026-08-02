@@ -4,6 +4,7 @@ import {
   access,
   chmod,
   mkdtemp,
+  readFile,
   rename,
   rm,
   writeFile,
@@ -15,10 +16,14 @@ import {
   createProviderSchemaDatabase,
   readApplicationTableNames,
 } from "./sqlite-provider-schema";
+import {
+  isProviderDerivedSourceTable,
+  RETIRED_PRE_CONSOLIDATION_TABLES,
+} from "./normalize-d1-export-core";
 import { sha256File } from "./turso-upload-bundle";
 
 export const D1_PORTABLE_EXPORT_VERSION =
-  "scalius-d1-portable-export/v1" as const;
+  "scalius-d1-portable-export/v2" as const;
 export const D1_PORTABLE_EXPORT_FILENAME = "source.sql";
 export const D1_PORTABLE_EXPORT_EVIDENCE_FILENAME = "export-evidence.json";
 
@@ -45,6 +50,7 @@ export interface D1PortableExportEvidence {
   database: string;
   bookmark: string;
   tables: readonly string[];
+  retiredTables: readonly string[];
   tableSetSha256: string;
   artifact: {
     filename: typeof D1_PORTABLE_EXPORT_FILENAME;
@@ -58,12 +64,30 @@ export interface ExportD1PortableSummary {
   database: string;
   bookmark: string;
   tableCount: number;
+  retiredTableCount: number;
   tableSetSha256: string;
   artifactBytes: number;
   artifactSha256: string;
 }
 
-function requireOpaque(value: string, label: string): string {
+function requireSha256(value: unknown, label: string): string {
+  if (typeof value !== "string" || !/^[a-f0-9]{64}$/.test(value)) {
+    throw new Error(`${label} must be a lowercase SHA-256 digest.`);
+  }
+  return value;
+}
+
+function requireNonNegativeSafeInteger(value: unknown, label: string): number {
+  if (!Number.isSafeInteger(value) || Number(value) < 0) {
+    throw new Error(`${label} must be a non-negative safe integer.`);
+  }
+  return Number(value);
+}
+
+function requireOpaque(value: unknown, label: string): string {
+  if (typeof value !== "string") {
+    throw new Error(`${label} must be a non-empty opaque value.`);
+  }
   const normalized = value.trim();
   if (!normalized || normalized.length > 200 || /[\r\n\0]/.test(normalized)) {
     throw new Error(`${label} must be a non-empty opaque value.`);
@@ -172,6 +196,160 @@ async function readPortableTableNames(): Promise<readonly string[]> {
   }
 }
 
+export function parseD1ExecuteTableNames(stdout: string): readonly string[] {
+  const parsed = JSON.parse(stdout) as unknown;
+  if (!Array.isArray(parsed) || parsed.length !== 1) {
+    throw new Error("Wrangler returned an invalid D1 schema result.");
+  }
+  const result = parsed[0] as {
+    success?: unknown;
+    results?: unknown;
+  };
+  if (result.success !== true || !Array.isArray(result.results)) {
+    throw new Error("Wrangler did not return a successful D1 schema result.");
+  }
+  const names = result.results.map((row) => {
+    const name = (row as { name?: unknown })?.name;
+    if (typeof name !== "string" || !name) {
+      throw new Error("Wrangler returned an invalid D1 table name.");
+    }
+    return name;
+  });
+  if (new Set(names).size !== names.length) {
+    throw new Error("Wrangler returned duplicate D1 table names.");
+  }
+  return names.sort((left, right) => left.localeCompare(right));
+}
+
+async function readRemoteD1TableNames(input: {
+  wranglerEntry: string;
+  wranglerConfig: string;
+  database: string;
+}): Promise<readonly string[]> {
+  const stdout = await runWrangler(input.wranglerEntry, [
+    "d1",
+    "execute",
+    input.database,
+    "--remote",
+    "--json",
+    "--command",
+    "SELECT name FROM sqlite_schema WHERE type = 'table' "
+      + "AND name NOT LIKE 'sqlite_%' ORDER BY name",
+    "--config",
+    input.wranglerConfig,
+  ]);
+  return parseD1ExecuteTableNames(stdout);
+}
+
+export function classifyD1ExportTables(
+  remoteTables: readonly string[],
+  canonicalTables: readonly string[],
+): { tables: readonly string[]; retiredTables: readonly string[] } {
+  const remote = new Set(remoteTables);
+  const canonical = new Set(canonicalTables);
+  if (remote.size !== remoteTables.length || canonical.size !== canonicalTables.length) {
+    throw new Error("D1 export table sets must be unique.");
+  }
+  const missing = canonicalTables.filter((table) => !remote.has(table));
+  if (missing.length > 0) {
+    throw new Error(`D1 source is missing canonical tables: ${missing.join(", ")}.`);
+  }
+  const unknown = remoteTables.filter((table) =>
+    !canonical.has(table)
+    && !RETIRED_PRE_CONSOLIDATION_TABLES.has(table)
+    && !isProviderDerivedSourceTable(table));
+  if (unknown.length > 0) {
+    throw new Error(
+      `D1 source contains unexpected noncanonical tables: ${unknown.join(", ")}.`,
+    );
+  }
+  const retiredTables = remoteTables
+    .filter((table) => RETIRED_PRE_CONSOLIDATION_TABLES.has(table))
+    .sort((left, right) => left.localeCompare(right));
+  return {
+    tables: [...canonicalTables, ...retiredTables]
+      .sort((left, right) => left.localeCompare(right)),
+    retiredTables,
+  };
+}
+
+export async function verifyD1PortableExportBundle(bundlePath: string): Promise<{
+  bundlePath: string;
+  sourcePath: string;
+  evidencePath: string;
+  evidenceSha256: string;
+  evidence: D1PortableExportEvidence;
+}> {
+  const resolvedBundlePath = resolve(bundlePath);
+  const sourcePath = join(resolvedBundlePath, D1_PORTABLE_EXPORT_FILENAME);
+  const evidencePath = join(
+    resolvedBundlePath,
+    D1_PORTABLE_EXPORT_EVIDENCE_FILENAME,
+  );
+  const parsed = JSON.parse(await readFile(evidencePath, "utf8")) as Partial<
+    D1PortableExportEvidence
+  >;
+  if (parsed.version !== D1_PORTABLE_EXPORT_VERSION) {
+    throw new Error(`Unsupported D1 portable export ${String(parsed.version)}.`);
+  }
+  const database = requireOpaque(parsed.database, "database");
+  const bookmark = requireOpaque(parsed.bookmark, "bookmark");
+  if (!Array.isArray(parsed.tables) || !Array.isArray(parsed.retiredTables)) {
+    throw new Error("D1 portable export is missing table-set evidence.");
+  }
+  const tables = parsed.tables.map((table) => requireOpaque(table, "table"));
+  const retiredTables = parsed.retiredTables.map((table) =>
+    requireOpaque(table, "retiredTable"));
+  const canonicalTables = await readPortableTableNames();
+  const classified = classifyD1ExportTables(tables, canonicalTables);
+  if (
+    JSON.stringify(tables) !== JSON.stringify(classified.tables)
+    || JSON.stringify(retiredTables) !== JSON.stringify(classified.retiredTables)
+  ) {
+    throw new Error("D1 portable export table evidence is not canonical and sorted.");
+  }
+  const tableSetSha256 = createHash("sha256")
+    .update(tables.join("\n"))
+    .digest("hex");
+  if (parsed.tableSetSha256 !== tableSetSha256) {
+    throw new Error("D1 portable export table-set digest does not match evidence.");
+  }
+  if (parsed.artifact?.filename !== D1_PORTABLE_EXPORT_FILENAME) {
+    throw new Error("D1 portable export names an unexpected source artifact.");
+  }
+  const expectedBytes = requireNonNegativeSafeInteger(
+    parsed.artifact.bytes,
+    "artifact.bytes",
+  );
+  const expectedSha256 = requireSha256(
+    parsed.artifact.sha256,
+    "artifact.sha256",
+  );
+  const artifact = await sha256File(sourcePath);
+  if (artifact.bytes !== expectedBytes || artifact.sha256 !== expectedSha256) {
+    throw new Error("D1 portable export source artifact does not match its evidence.");
+  }
+  return {
+    bundlePath: resolvedBundlePath,
+    sourcePath,
+    evidencePath,
+    evidenceSha256: (await sha256File(evidencePath)).sha256,
+    evidence: {
+      version: D1_PORTABLE_EXPORT_VERSION,
+      database,
+      bookmark,
+      tables,
+      retiredTables,
+      tableSetSha256,
+      artifact: {
+        filename: D1_PORTABLE_EXPORT_FILENAME,
+        bytes: expectedBytes,
+        sha256: expectedSha256,
+      },
+    },
+  };
+}
+
 export async function exportD1PortableBundle(
   options: ExportD1PortableOptions,
 ): Promise<ExportD1PortableSummary> {
@@ -193,7 +371,7 @@ export async function exportD1PortableBundle(
   let published = false;
 
   try {
-    const tables = await readPortableTableNames();
+    const canonicalTables = await readPortableTableNames();
     const expectedBookmark = requireOpaque(
       options.expectedBookmark,
       "expectedBookmark",
@@ -208,6 +386,15 @@ export async function exportD1PortableBundle(
         "Current D1 bookmark does not match the control-plane write fence.",
       );
     }
+    const remoteTables = await readRemoteD1TableNames({
+      wranglerEntry,
+      wranglerConfig,
+      database,
+    });
+    const { tables, retiredTables } = classifyD1ExportTables(
+      remoteTables,
+      canonicalTables,
+    );
     await runWrangler(wranglerEntry, [
       "d1",
       "export",
@@ -240,6 +427,7 @@ export async function exportD1PortableBundle(
       database,
       bookmark: bookmarkBefore,
       tables,
+      retiredTables,
       tableSetSha256,
       artifact: {
         filename: D1_PORTABLE_EXPORT_FILENAME,
@@ -259,6 +447,7 @@ export async function exportD1PortableBundle(
       database,
       bookmark: bookmarkBefore,
       tableCount: tables.length,
+      retiredTableCount: retiredTables.length,
       tableSetSha256,
       artifactBytes: artifact.bytes,
       artifactSha256: artifact.sha256,

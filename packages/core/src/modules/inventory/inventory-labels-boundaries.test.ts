@@ -15,7 +15,7 @@ describe("inventory barcode label projection boundaries", () => {
   it("projects exact barcode and operational stock facts without mutating inventory", () => {
     expect(source).toContain("barcode: productVariants.barcode");
     expect(source).toContain("barcodeType: productVariants.barcodeType");
-    expect(source).toContain("reservedStock: productVariants.reservedStock");
+    expect(source).toContain("reservedStock: effectiveRegularReservedStockSql()");
     expect(source).toContain("operationalSkuRowPredicate()");
   });
 

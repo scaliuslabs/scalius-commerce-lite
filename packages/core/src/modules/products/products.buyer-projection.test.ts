@@ -63,6 +63,12 @@ describe("buyer catalog pricing projection", () => {
                 discount_amount REAL,
                 deleted_at INTEGER
             );
+            CREATE TABLE inventory_reservation_lanes (
+                variant_id TEXT NOT NULL,
+                pool TEXT NOT NULL,
+                lane INTEGER NOT NULL,
+                reserved_quantity INTEGER NOT NULL DEFAULT 0
+            );
             INSERT INTO products VALUES
                 ('p1', 'percentage', 10, 0),
                 ('p2', 'percentage', 10, 0);
@@ -138,6 +144,12 @@ describe("buyer catalog pricing projection", () => {
                 discount_percentage REAL,
                 discount_amount REAL,
                 deleted_at INTEGER
+            );
+            CREATE TABLE inventory_reservation_lanes (
+                variant_id TEXT NOT NULL,
+                pool TEXT NOT NULL,
+                lane INTEGER NOT NULL,
+                reserved_quantity INTEGER NOT NULL DEFAULT 0
             );
             INSERT INTO products VALUES ('p_gap', NULL, 0, 0), ('p_match', NULL, 0, 0);
             INSERT INTO product_variants VALUES

@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import { describe, expect, it, vi } from "vitest";
 import { safeBatch } from "../src/batch-helper";
+import { checkoutAttempts } from "../src/schema";
 import {
   createTursoDatabase,
   isTursoConflictError,
@@ -35,7 +36,7 @@ describe("Turso SQLite adapter", () => {
     expect(batch.mock.calls[0]?.[1]).toEqual({ raw: true });
   });
 
-  it("maps Drizzle batches to one atomic concurrent Turso batch", async () => {
+  it("maps read-only Drizzle batches to one consistent Turso read transaction", async () => {
     const batch = vi.fn(async (statements: unknown[]) =>
       statements.map(() => ({ rows: [[1]], rowsAffected: 0 })),
     );
@@ -48,6 +49,39 @@ describe("Turso SQLite adapter", () => {
     expect(result).toEqual([{ value: 1 }]);
     expect(batch).toHaveBeenCalledTimes(1);
     expect(batch.mock.calls[0]?.[1]).toEqual({
+      mode: "read",
+      raw: true,
+    });
+  });
+
+  it("keeps write-capable Drizzle batches atomic with the stable immediate mode", async () => {
+    const batch = vi.fn(async (statements: unknown[]) =>
+      statements.map(() => ({ rows: [], rowsAffected: 0 })),
+    );
+    const db = createAdapter(batch);
+
+    await safeBatch(db, [
+      db.delete(checkoutAttempts).where(sql`0`),
+    ] as const);
+
+    expect(batch).toHaveBeenCalledTimes(1);
+    expect(batch.mock.calls[0]?.[1]).toEqual({
+      mode: "immediate",
+      raw: true,
+    });
+  });
+
+  it("allows an explicitly benchmarked target to opt into concurrent mode", async () => {
+    const batch = vi.fn(async (statements: unknown[]) =>
+      statements.map(() => ({ rows: [], rowsAffected: 0 })),
+    );
+    const db = createAdapter(batch, { writeBatchMode: "concurrent" });
+
+    await safeBatch(db, [
+      db.delete(checkoutAttempts).where(sql`0`),
+    ] as const);
+
+    expect(batch.mock.calls[0]?.[1]).toEqual({
       mode: "concurrent",
       raw: true,
     });
@@ -55,13 +89,14 @@ describe("Turso SQLite adapter", () => {
 
   it("retries only explicit MVCC busy/conflict failures", async () => {
     const sleep = vi.fn(async () => undefined);
+    const onConflictRetry = vi.fn();
     const batch = vi
       .fn<TursoConnection["batch"]>()
       .mockRejectedValueOnce(Object.assign(new Error("write conflict"), {
         code: "SQLITE_BUSY_SNAPSHOT",
       }))
       .mockResolvedValueOnce([{ rows: [[1]], rowsAffected: 0 }]);
-    const db = createAdapter(batch, { sleep });
+    const db = createAdapter(batch, { sleep, onConflictRetry });
 
     await expect(safeBatch(db, [
       db.select({ value: sql<number>`1` }).from(sql`(select 1)`),
@@ -69,6 +104,7 @@ describe("Turso SQLite adapter", () => {
 
     expect(batch).toHaveBeenCalledTimes(2);
     expect(sleep).toHaveBeenCalledWith(2);
+    expect(onConflictRetry).toHaveBeenCalledWith({ attempt: 1, delayMs: 2 });
 
     const fatalBatch = vi.fn<TursoConnection["batch"]>()
       .mockRejectedValue(new Error("authentication failed"));
@@ -99,7 +135,7 @@ describe("Turso SQLite adapter", () => {
       db.select({ second: sql<number>`2` }).from(sql`(select 1)`),
     ] as const)).rejects.toThrow(/atomic batch statement 2.*ambiguous column name: id/i);
 
-    expect(batch.mock.calls[0]?.[1]).toEqual({ mode: "concurrent", raw: true });
+    expect(batch.mock.calls[0]?.[1]).toEqual({ mode: "read", raw: true });
     expect(batch.mock.calls[1]?.[0]?.[0]?.sql).toMatch(/^EXPLAIN /);
     expect(batch.mock.calls[2]?.[0]?.[0]?.sql).toMatch(/^EXPLAIN /);
   });
