@@ -19,6 +19,20 @@
       "head_sampling_rate": 0.01
     }
   },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "CHECKOUT_COORDINATOR",
+        "class_name": "CheckoutCoordinator"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "checkout-coordinator-v1",
+      "new_sqlite_classes": ["CheckoutCoordinator"]
+    }
+  ],
   "d1_databases": [
     {
       "binding": "DB",
@@ -43,6 +57,22 @@
       "namespace_id": "95462026",
       "simple": {
         "limit": 60,
+        "period": 60
+      }
+    },
+    {
+      "name": "ORDER_IP_RATE_LIMITER",
+      "namespace_id": "95462027",
+      "simple": {
+        "limit": 60,
+        "period": 60
+      }
+    },
+    {
+      "name": "ORDER_PHONE_RATE_LIMITER",
+      "namespace_id": "95462028",
+      "simple": {
+        "limit": 5,
         "period": 60
       }
     }
@@ -136,6 +166,7 @@
     "crons": ["*/15 * * * *"]
   },
   "vars": {
+    "DATABASE_PROVIDER": "postgres",
     "PUBLIC_API_BASE_URL": "https://api.scalius.com",
     "BETTER_AUTH_URL": "https://dashboard.scalius.com",
     "STOREFRONT_URL": "https://storefront.scalius.com",

@@ -175,6 +175,12 @@ async function readCategory(
   return Object.fromEntries(rows.map((r) => [r.key, r.value]));
 }
 
+export interface GatewaySettingsStoredRow {
+  category: string;
+  key: string;
+  value: string;
+}
+
 // ---------------------------------------------------------------------------
 // Stripe
 // ---------------------------------------------------------------------------
@@ -292,20 +298,8 @@ export async function getStripeSettings(
   await cleanupLegacyCredentialKv(kv, STRIPE_CACHE_KEY);
 
   const values = await readCategory(db, STRIPE_CATEGORY);
-  if (!values.secret_key && !values.publishable_key && !values.webhook_secret && values.enabled === undefined) return null;
-
-  const [secretKey, webhookSecret] = await Promise.all([
-    readStoredCredentialStrict(values.secret_key, encryptionKey, "Stripe secret key"),
-    readStoredCredentialStrict(values.webhook_secret, encryptionKey, "Stripe webhook secret"),
-  ]);
-
-  const stripeSettings: StripeSettings = {
-    secretKey: secretKey.value,
-    publishableKey: values.publishable_key ?? "",
-    webhookSecret: webhookSecret.value,
-    enabled: values.enabled !== "false",
-    credentialErrors: compactErrors([secretKey.error, webhookSecret.error]),
-  };
+  const stripeSettings = await resolveStripeSettingsFromValues(values, encryptionKey);
+  if (!stripeSettings) return null;
 
   // Cache in memory only — never persist decrypted credentials
   if (!options.bypassMemoryCache) {
@@ -313,6 +307,26 @@ export async function getStripeSettings(
   }
 
   return stripeSettings;
+}
+
+async function resolveStripeSettingsFromValues(
+  values: Record<string, string>,
+  encryptionKey?: string,
+): Promise<StripeSettings | null> {
+  if (!values.secret_key && !values.publishable_key && !values.webhook_secret && values.enabled === undefined) return null;
+
+  const [secretKey, webhookSecret] = await Promise.all([
+    readStoredCredentialStrict(values.secret_key, encryptionKey, "Stripe secret key"),
+    readStoredCredentialStrict(values.webhook_secret, encryptionKey, "Stripe webhook secret"),
+  ]);
+
+  return {
+    secretKey: secretKey.value,
+    publishableKey: values.publishable_key ?? "",
+    webhookSecret: webhookSecret.value,
+    enabled: values.enabled !== "false",
+    credentialErrors: compactErrors([secretKey.error, webhookSecret.error]),
+  };
 }
 
 /** Invalidate the Stripe settings cache (call after saving new settings). */
@@ -424,6 +438,21 @@ export async function getSSLCommerzSettings(
   await cleanupLegacyCredentialKv(kv, SSL_CACHE_KEY);
 
   const values = await readCategory(db, SSL_CATEGORY);
+  const sslSettings = await resolveSSLCommerzSettingsFromValues(values, encryptionKey);
+  if (!sslSettings) return null;
+
+  // Cache in memory only — never persist decrypted credentials
+  if (!options.bypassMemoryCache) {
+    setCachedCredential(SSL_CACHE_KEY, sslSettings);
+  }
+
+  return sslSettings;
+}
+
+async function resolveSSLCommerzSettingsFromValues(
+  values: Record<string, string>,
+  encryptionKey?: string,
+): Promise<SSLCommerzSettings | null> {
   if (!values.store_id && !values.store_password && values.sandbox === undefined && values.enabled === undefined) return null;
 
   const storePassword = await readStoredCredentialStrict(
@@ -432,20 +461,13 @@ export async function getSSLCommerzSettings(
     "SSLCommerz store password",
   );
 
-  const sslSettings: SSLCommerzSettings = {
+  return {
     storeId: values.store_id ?? "",
     storePassword: storePassword.value,
     sandbox: values.sandbox !== "false",
     enabled: values.enabled !== "false",
     credentialErrors: compactErrors([storePassword.error]),
   };
-
-  // Cache in memory only — never persist decrypted credentials
-  if (!options.bypassMemoryCache) {
-    setCachedCredential(SSL_CACHE_KEY, sslSettings);
-  }
-
-  return sslSettings;
 }
 
 /** Invalidate the SSLCommerz settings cache. */
@@ -558,21 +580,8 @@ export async function getPolarSettings(
   await cleanupLegacyCredentialKv(kv, POLAR_CACHE_KEY);
 
   const values = await readCategory(db, POLAR_CATEGORY);
-  if (!values.access_token && !values.product_id && !values.webhook_secret && values.sandbox === undefined && values.enabled === undefined) return null;
-
-  const [accessToken, webhookSecret] = await Promise.all([
-    readStoredCredentialStrict(values.access_token, encryptionKey, "Polar access token"),
-    readStoredCredentialStrict(values.webhook_secret, encryptionKey, "Polar webhook secret"),
-  ]);
-
-  const polarSettings: PolarSettings = {
-    accessToken: accessToken.value,
-    webhookSecret: webhookSecret.value,
-    productId: values.product_id ?? "",
-    sandbox: values.sandbox !== "false",
-    enabled: values.enabled !== "false",
-    credentialErrors: compactErrors([accessToken.error, webhookSecret.error]),
-  };
+  const polarSettings = await resolvePolarSettingsFromValues(values, encryptionKey);
+  if (!polarSettings) return null;
 
   // Cache in memory only — never persist decrypted credentials
   if (!options.bypassMemoryCache) {
@@ -580,6 +589,27 @@ export async function getPolarSettings(
   }
 
   return polarSettings;
+}
+
+async function resolvePolarSettingsFromValues(
+  values: Record<string, string>,
+  encryptionKey?: string,
+): Promise<PolarSettings | null> {
+  if (!values.access_token && !values.product_id && !values.webhook_secret && values.sandbox === undefined && values.enabled === undefined) return null;
+
+  const [accessToken, webhookSecret] = await Promise.all([
+    readStoredCredentialStrict(values.access_token, encryptionKey, "Polar access token"),
+    readStoredCredentialStrict(values.webhook_secret, encryptionKey, "Polar webhook secret"),
+  ]);
+
+  return {
+    accessToken: accessToken.value,
+    webhookSecret: webhookSecret.value,
+    productId: values.product_id ?? "",
+    sandbox: values.sandbox !== "false",
+    enabled: values.enabled !== "false",
+    credentialErrors: compactErrors([accessToken.error, webhookSecret.error]),
+  };
 }
 
 /** Invalidate the Polar settings cache. */
@@ -688,6 +718,70 @@ function parsePaymentMethodPreferences(
     enabledMethods,
     defaultMethod,
     hasExplicitEnabledMethods,
+  };
+}
+
+export const STOREFRONT_GATEWAY_SETTING_CATEGORIES = [
+  PAYMENT_METHODS_CATEGORY,
+  STRIPE_CATEGORY,
+  SSL_CATEGORY,
+  POLAR_CATEGORY,
+] as const;
+
+export async function resolveActivePaymentMethodsFromRows(
+  rows: readonly GatewaySettingsStoredRow[],
+  encryptionKey?: string,
+): Promise<PaymentMethodsConfig> {
+  const byCategory = new Map<string, Record<string, string>>();
+  for (const row of rows) {
+    const values = byCategory.get(row.category) ?? {};
+    values[row.key] = row.value;
+    byCategory.set(row.category, values);
+  }
+
+  const {
+    enabledMethods,
+    defaultMethod,
+    hasExplicitEnabledMethods,
+  } = parsePaymentMethodPreferences(byCategory.get(PAYMENT_METHODS_CATEGORY) ?? {});
+  const validMethods: ("stripe" | "sslcommerz" | "polar" | "cod")[] = [];
+
+  for (const method of enabledMethods) {
+    if (method === "cod") {
+      validMethods.push(method);
+      continue;
+    }
+    if (method === "stripe") {
+      const stripe = await resolveStripeSettingsFromValues(
+        byCategory.get(STRIPE_CATEGORY) ?? {},
+        encryptionKey,
+      );
+      if (isStripeCheckoutUsable(stripe)) validMethods.push(method);
+      continue;
+    }
+    if (method === "sslcommerz") {
+      const sslcommerz = await resolveSSLCommerzSettingsFromValues(
+        byCategory.get(SSL_CATEGORY) ?? {},
+        encryptionKey,
+      );
+      if (isSSLCommerzCheckoutUsable(sslcommerz)) validMethods.push(method);
+      continue;
+    }
+    const polar = await resolvePolarSettingsFromValues(
+      byCategory.get(POLAR_CATEGORY) ?? {},
+      encryptionKey,
+    );
+    if (isPolarCheckoutUsable(polar)) validMethods.push(method);
+  }
+
+  if (validMethods.length === 0 && !hasExplicitEnabledMethods) {
+    validMethods.push("cod");
+  }
+  return {
+    enabledMethods: validMethods,
+    defaultMethod: validMethods.includes(defaultMethod)
+      ? defaultMethod
+      : (validMethods[0] ?? "cod"),
   };
 }
 

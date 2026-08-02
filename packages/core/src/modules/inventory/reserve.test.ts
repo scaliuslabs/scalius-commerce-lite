@@ -2,7 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 import type { Database } from "@scalius/database/client";
 import { SQLiteSyncDialect } from "drizzle-orm/sqlite-core";
 import type { SQL } from "drizzle-orm";
-import { prepareStockReservationBatch, reserveStockBatch } from "./reserve";
+import {
+  isInventoryReservationConflictError,
+  prepareStockReservationBatch,
+  reserveStockBatch,
+} from "./reserve";
 
 function createReservationReadDb(rows: unknown[]): Database {
   return {
@@ -63,6 +67,14 @@ function createTrackedReservationPlanDb(row: Record<string, unknown>): {
 }
 
 describe("reserveStockBatch sellability guard", () => {
+  it("recognizes an exhausted provider MVCC conflict for outer transaction retry", () => {
+    const conflict = Object.assign(new Error("write conflict"), {
+      code: "SQLITE_BUSY_SNAPSHOT",
+    });
+
+    expect(isInventoryReservationConflictError(conflict)).toBe(true);
+  });
+
   it("rejects reserving one SKU for multiple orders in a single CAS edge", async () => {
     const db = createReservationReadDb([]);
 
@@ -181,7 +193,9 @@ describe("reserveStockBatch sellability guard", () => {
     expect(guard.sql).toContain('"products"."id" = "product_variants"."product_id"');
     expect(guard.sql).toContain('"product_variants"."id" = ?');
     expect(guard.sql).toContain('"product_variants"."stock_version"');
-    expect(guard.sql).toContain('"product_variants"."stock" - "product_variants"."reserved_stock" >= ?');
+    expect(guard.sql).toContain('"product_variants"."stock" - (');
+    expect(guard.sql).toContain('SUM("inventory_reservation_lanes"."reserved_quantity")');
+    expect(guard.sql).toContain('"inventory_reservation_lanes"."pool" = \'regular\'');
     expect(guard.params).toContain(7);
     expect(guard.params).toContain(2);
     expect(guard.params).toContain("INVENTORY_RESERVATION_CONFLICT");
@@ -191,5 +205,37 @@ describe("reserveStockBatch sellability guard", () => {
       categoryId: "category_a",
     }]);
     expect((db as unknown as { batch?: unknown }).batch).toBeUndefined();
+  });
+
+  it("skips historical generation reads for a transactionally fresh order id", async () => {
+    const { db } = createTrackedReservationPlanDb({
+      id: "variant_fresh",
+      productId: "product_fresh",
+      slug: "product-fresh",
+      categoryId: null,
+      stock: 10,
+      reservedStock: 0,
+      preorderStock: 0,
+      allowPreorder: false,
+      allowBackorder: false,
+      backorderLimit: 0,
+      trackInventory: true,
+      stockVersion: 1,
+    });
+
+    const plan = await prepareStockReservationBatch(
+      db,
+      [{ variantId: "variant_fresh", quantity: 1, orderId: "order_fresh" }],
+      "regular",
+      {
+        reservationKey: "checkout-test",
+        freshOrderIds: new Set(["order_fresh"]),
+      },
+    );
+
+    expect(plan.success).toBe(true);
+    // One variant-state read plus the composable batch guard. There are no
+    // inventory-movement or legacy-release generation reads.
+    expect(db.select).toHaveBeenCalledTimes(2);
   });
 });

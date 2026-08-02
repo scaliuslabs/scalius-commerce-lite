@@ -224,6 +224,13 @@ export interface CreateStorefrontOrderResult {
 /** Prepared, server-authoritative storefront order data committed synchronously by checkout. */
 export interface StorefrontOrderCommitPayload {
     checkoutToken: string;
+    /** Read-to-commit fence for catalog, delivery, tax, and checkout policy facts. */
+    checkoutAuthorityRevision: number | null;
+    /** Buyer-independent async work proven deliverable by the checkout authority snapshot. */
+    checkoutSideEffects?: {
+        orderCreatedNotification: boolean;
+        metaPurchase: boolean;
+    };
     /** Verified storefront account owner. Guest checkout deliberately keeps this null. */
     existingCustomer: { id: string } | null;
     orderData: {

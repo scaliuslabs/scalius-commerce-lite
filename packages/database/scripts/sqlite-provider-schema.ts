@@ -31,10 +31,17 @@ export async function loadSqliteSqlFile(
   inputPath: string,
 ): Promise<SqliteSqlLoadReceipt> {
   const child = spawn(sqliteBinary, ["-bail", databasePath], {
-    stdio: ["pipe", "ignore", "ignore"],
+    stdio: ["pipe", "ignore", "pipe"],
   });
   const hash = createHash("sha256");
   let bytes = 0;
+  let stderr = "";
+  child.stderr.setEncoding("utf8");
+  child.stderr.on("data", (chunk: string) => {
+    // Keep diagnostics bounded. We report only the SQLite error class and
+    // source line below so SQL values from a merchant export never enter logs.
+    if (stderr.length < 4_096) stderr += chunk.slice(0, 4_096 - stderr.length);
+  });
   const meter = new Transform({
     transform(chunk: Buffer, _encoding, callback) {
       bytes += chunk.length;
@@ -46,15 +53,28 @@ export async function loadSqliteSqlFile(
     child.once("error", rejectExit);
     child.once("exit", (code, signal) => {
       if (code === 0) resolveExit();
-      else rejectExit(new Error(
-        `sqlite3 import failed (${signal ? `signal ${signal}` : `exit ${code}`}).`,
-      ));
+      else {
+        const diagnostic = stderr.match(
+          /\b(parse|runtime) error near line (\d+)\b/i,
+        );
+        rejectExit(new Error(
+          `sqlite3 import failed (${signal ? `signal ${signal}` : `exit ${code}`}`
+          + (diagnostic
+            ? `; ${diagnostic[1]!.toLowerCase()} error near line ${diagnostic[2]}`
+            : "")
+          + ").",
+        ));
+      }
     });
   });
-  await Promise.all([
+  const [streamResult, exitResult] = await Promise.allSettled([
     pipeline(createReadStream(inputPath), meter, child.stdin),
     exited,
   ]);
+  // sqlite3 commonly closes stdin as soon as it encounters a bad statement.
+  // Prefer its stable exit diagnostic over the resulting, unhelpful EPIPE.
+  if (exitResult.status === "rejected") throw exitResult.reason;
+  if (streamResult.status === "rejected") throw streamResult.reason;
   return { bytes, sha256: hash.digest("hex") };
 }
 

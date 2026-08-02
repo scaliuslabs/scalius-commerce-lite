@@ -271,6 +271,17 @@ const DEFAULT_NOTIFICATION_CHANNELS: Record<string, string[]> = Object.fromEntri
     ORDER_NOTIFICATION_TYPES.map((type) => [type, defaultCustomerNotificationChannels(type)]),
 );
 
+export function resolveNotificationChannelsFromStoredValue(
+    value: string | null | undefined,
+): Record<string, string[]> {
+    if (!value) return DEFAULT_NOTIFICATION_CHANNELS;
+    try {
+        return normalizeParsedChannels(JSON.parse(value));
+    } catch {
+        return DEFAULT_NOTIFICATION_CHANNELS;
+    }
+}
+
 /**
  * Get notification channel preferences per order status.
  * Returns a map of status -> enabled channels (string arrays).
@@ -290,9 +301,8 @@ export async function getNotificationChannels(
 
     if (!row?.value) return DEFAULT_NOTIFICATION_CHANNELS;
     try {
-        const parsed = JSON.parse(row.value);
-        // Normalize: the UI may have stored boolean maps instead of string arrays
-        return normalizeParsedChannels(parsed);
+        // Normalize: the UI may have stored boolean maps instead of string arrays.
+        return resolveNotificationChannelsFromStoredValue(row.value);
     } catch (e: unknown) {
         console.error("[Settings] Failed to parse notification channels JSON:", e instanceof Error ? e.message : e);
         return DEFAULT_NOTIFICATION_CHANNELS;
@@ -520,6 +530,17 @@ const DEFAULT_ADMIN_CHANNELS: Record<string, string[]> = Object.fromEntries(
     ]),
 );
 
+export function resolveAdminNotificationChannelsFromStoredValue(
+    value: string | null | undefined,
+): Record<string, string[]> {
+    if (!value) return DEFAULT_ADMIN_CHANNELS;
+    try {
+        return normalizeAdminChannels(JSON.parse(value));
+    } catch {
+        return DEFAULT_ADMIN_CHANNELS;
+    }
+}
+
 /**
  * Get admin notification channel preferences per order status.
  * Returns a map of status -> enabled channels (string arrays).
@@ -536,8 +557,7 @@ export async function getAdminNotificationChannels(
 
     if (!row?.value) return DEFAULT_ADMIN_CHANNELS;
     try {
-        const parsed = JSON.parse(row.value);
-        return normalizeAdminChannels(parsed);
+        return resolveAdminNotificationChannelsFromStoredValue(row.value);
     } catch (e: unknown) {
         console.error("[Settings] Failed to parse admin notification channels JSON:", e instanceof Error ? e.message : e);
         return DEFAULT_ADMIN_CHANNELS;

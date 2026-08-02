@@ -11,7 +11,7 @@ describe("option matrix retired-combination restoration boundaries", () => {
         expect(source).toContain("OPTION_MATRIX_RESTORE_CONFLICT");
         expect(source).toContain("${productVariants.version} = ${restored.version}");
         expect(source).toContain("${productVariants.stockVersion} = ${restored.stockVersion}");
-        expect(source).toContain("${productVariants.reservedStock} = 0");
+        expect(source).toContain("${effectiveRegularReservedStockSql()} = 0");
         expect(source).toContain("${productVariants.preorderStock} = 0");
         expect(source).toContain("${productVariants.deletedAt} IS NOT NULL");
         expect(source).toContain("deletedAt: null");

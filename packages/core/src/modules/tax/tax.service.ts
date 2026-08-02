@@ -25,6 +25,108 @@ const DISABLED_TAX_SETTINGS: TaxSettingsDefinition = {
     version: 0,
 };
 
+export interface StorefrontTaxClassAuthorityRow {
+    id: string;
+    name: string;
+    isExempt: boolean;
+}
+
+export interface StorefrontTaxRateAuthorityRow {
+    id: string;
+    taxClassId: string;
+    name: string;
+    rateBps: number;
+    jurisdictionType: "all" | "city" | "zone" | "area";
+    jurisdictionId: string | null;
+    jurisdictionLabel: string | null;
+    priority: number;
+    isCompound: boolean;
+}
+
+export interface StorefrontTaxAuthoritySnapshot {
+    settings: TaxSettingsDefinition;
+    classes: StorefrontTaxClassAuthorityRow[];
+    rates: StorefrontTaxRateAuthorityRow[];
+}
+
+const STOREFRONT_TAX_AUTHORITY_PROOF = Symbol("scalius.storefrontTaxAuthority");
+
+function markTrustedStorefrontTaxAuthority(
+    snapshot: StorefrontTaxAuthoritySnapshot,
+): StorefrontTaxAuthoritySnapshot {
+    Object.defineProperty(snapshot, STOREFRONT_TAX_AUTHORITY_PROOF, {
+        value: true,
+        enumerable: false,
+    });
+    return snapshot;
+}
+
+export function isTrustedStorefrontTaxAuthority(
+    snapshot: StorefrontTaxAuthoritySnapshot | undefined,
+): snapshot is StorefrontTaxAuthoritySnapshot {
+    return Boolean(snapshot && Reflect.get(snapshot, STOREFRONT_TAX_AUTHORITY_PROOF) === true);
+}
+
+export interface StorefrontTaxAuthorityReadPlan {
+    statements: unknown[];
+    resolve(results: readonly unknown[]): StorefrontTaxAuthoritySnapshot;
+}
+
+export function createStorefrontTaxAuthorityReadPlan(
+    db: Database,
+): StorefrontTaxAuthorityReadPlan {
+    return {
+        statements: [
+            db.select().from(taxSettings).where(eq(taxSettings.id, "default")),
+            db.select({
+                id: taxClasses.id,
+                name: taxClasses.name,
+                isExempt: taxClasses.isExempt,
+            }).from(taxClasses).where(isNull(taxClasses.deletedAt)),
+            db.select({
+                id: taxRates.id,
+                taxClassId: taxRates.taxClassId,
+                name: taxRates.name,
+                rateBps: taxRates.rateBps,
+                jurisdictionType: taxRates.jurisdictionType,
+                jurisdictionId: taxRates.jurisdictionId,
+                jurisdictionLabel: taxRates.jurisdictionLabel,
+                priority: taxRates.priority,
+                isCompound: taxRates.isCompound,
+            }).from(taxRates).where(and(
+                eq(taxRates.isActive, true),
+                isNull(taxRates.deletedAt),
+            )).orderBy(asc(taxRates.priority), asc(taxRates.id)),
+        ],
+        resolve(results) {
+            const settingsRows = Array.isArray(results[0])
+                ? results[0] as (typeof taxSettings.$inferSelect)[]
+                : [];
+            const settingsRow = settingsRows[0] ?? null;
+            const settings: TaxSettingsDefinition = settingsRow
+                ? {
+                    enabled: settingsRow.enabled,
+                    pricesIncludeTax: settingsRow.pricesIncludeTax,
+                    taxShipping: settingsRow.taxShipping,
+                    defaultTaxClassId: settingsRow.defaultTaxClassId,
+                    shippingTaxClassId: settingsRow.shippingTaxClassId,
+                    displayLabel: settingsRow.displayLabel,
+                    version: settingsRow.version,
+                }
+                : DISABLED_TAX_SETTINGS;
+            return markTrustedStorefrontTaxAuthority({
+                settings,
+                classes: Array.isArray(results[1])
+                    ? [...results[1] as StorefrontTaxClassAuthorityRow[]]
+                    : [],
+                rates: Array.isArray(results[2])
+                    ? [...results[2] as StorefrontTaxRateAuthorityRow[]]
+                    : [],
+            });
+        },
+    };
+}
+
 export interface StorefrontTaxQuoteLineInput {
     lineId: string;
     productId: string;
@@ -49,6 +151,7 @@ export interface StorefrontTaxQuoteInput {
 export async function calculateStorefrontTaxQuote(
     db: Database,
     input: StorefrontTaxQuoteInput,
+    authoritySnapshot?: StorefrontTaxAuthoritySnapshot,
 ): Promise<TaxQuote> {
     const suppliedCurrencyCode = normalizeSupportedCurrencyCode(input.currency?.code);
     if (
@@ -68,41 +171,19 @@ export async function calculateStorefrontTaxQuote(
             usdExchangeRate: 1,
         })
         : getCurrencyConfig(db);
-    const [currency, settingsRow, classRows, rateRows] = await Promise.all([
+    if (authoritySnapshot && !isTrustedStorefrontTaxAuthority(authoritySnapshot)) {
+        throw new ValidationError("Checkout tax authority could not be trusted. Please retry checkout.");
+    }
+    const authorityPlan = authoritySnapshot
+        ? null
+        : createStorefrontTaxAuthorityReadPlan(db);
+    const [currency, authority] = await Promise.all([
         currencyRead,
-        db.select().from(taxSettings).where(eq(taxSettings.id, "default")).get(),
-        db.select({
-            id: taxClasses.id,
-            name: taxClasses.name,
-            isExempt: taxClasses.isExempt,
-        }).from(taxClasses).where(isNull(taxClasses.deletedAt)),
-        db.select({
-            id: taxRates.id,
-            taxClassId: taxRates.taxClassId,
-            name: taxRates.name,
-            rateBps: taxRates.rateBps,
-            jurisdictionType: taxRates.jurisdictionType,
-            jurisdictionId: taxRates.jurisdictionId,
-            jurisdictionLabel: taxRates.jurisdictionLabel,
-            priority: taxRates.priority,
-            isCompound: taxRates.isCompound,
-        }).from(taxRates).where(and(
-            eq(taxRates.isActive, true),
-            isNull(taxRates.deletedAt),
-        )).orderBy(asc(taxRates.priority), asc(taxRates.id)),
+        authoritySnapshot
+            ? Promise.resolve(authoritySnapshot)
+            : db.batch(authorityPlan!.statements as never)
+                .then((results) => authorityPlan!.resolve(results as unknown[])),
     ]);
-
-    const settings: TaxSettingsDefinition = settingsRow
-        ? {
-            enabled: settingsRow.enabled,
-            pricesIncludeTax: settingsRow.pricesIncludeTax,
-            taxShipping: settingsRow.taxShipping,
-            defaultTaxClassId: settingsRow.defaultTaxClassId,
-            shippingTaxClassId: settingsRow.shippingTaxClassId,
-            displayLabel: settingsRow.displayLabel,
-            version: settingsRow.version,
-        }
-        : DISABLED_TAX_SETTINGS;
     const lines: TaxQuoteLineInput[] = input.lines.map((line) => ({
         lineId: line.lineId,
         productId: line.productId,
@@ -138,9 +219,9 @@ export async function calculateStorefrontTaxQuote(
     return calculateTaxQuote({
         currencyCode: currency.code,
         decimalPlaces: currency.decimalPlaces,
-        settings,
-        classes: classRows,
-        rates: rateRows,
+        settings: authority.settings,
+        classes: authority.classes,
+        rates: authority.rates,
         destination: input.destination,
         lines,
         shippingMinor: toMinorUnits(input.shippingAmount, currency.decimalPlaces),

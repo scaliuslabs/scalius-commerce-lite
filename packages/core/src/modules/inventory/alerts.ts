@@ -4,6 +4,7 @@
 
 import { eq, and, ne, sql } from "drizzle-orm";
 import { productVariants, productLowStockAlerts } from "@scalius/database/schema";
+import { effectiveRegularReservedStockSql } from "@scalius/database/inventory-authority";
 import type { Database } from "@scalius/database/client";
 import { isLowStockThresholdEnabled } from "./low-stock-policy";
 import { operationalSkuRowPredicate } from "../products/products.public-eligibility";
@@ -68,7 +69,7 @@ export async function checkAndAlertLowStock(
       id: productVariants.id,
       productId: productVariants.productId,
       stock: productVariants.stock,
-      reservedStock: productVariants.reservedStock,
+      reservedStock: effectiveRegularReservedStockSql(),
       lowStockThreshold: productVariants.lowStockThreshold,
       trackInventory: productVariants.trackInventory,
     })

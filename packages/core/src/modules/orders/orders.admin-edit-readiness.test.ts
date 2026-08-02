@@ -75,6 +75,15 @@ describe("admin full-order edit readiness", () => {
         expect(result.reason).toContain("immutable tax and line snapshots");
     });
 
+    it("locks an aggregate checkout until normalized read models are complete", () => {
+        const result = buildAdminOrderFullEditReadiness(editableOrder({
+            checkoutAggregateVersion: 1,
+            checkoutProjectionStatus: "pending",
+        }));
+        expect(result.allowed).toBe(false);
+        expect(result.reason).toContain("materializing");
+    });
+
     it.each([{ hasReturnHistory: true }, { hasInvoiceHistory: true }])(
         "locks return and invoice evidence: %o",
         (override) => {

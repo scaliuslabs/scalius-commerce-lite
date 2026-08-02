@@ -499,6 +499,29 @@ describe("handleQueueBatch payment confirmation retries", () => {
     expect(mocks.markWebhookEventProcessed).not.toHaveBeenCalled();
   });
 
+  it("processes a projected Meta purchase message from the shared side-effect queue", async () => {
+    const message = createMessage({
+      type: "meta.purchase" as const,
+      orderId: "order-meta-checkout",
+      source: "storefront-checkout-aggregate",
+    });
+
+    await handleQueueBatch(
+      createBatch([message], "order-notifications-queue"),
+      { STOREFRONT_URL: "https://store.example.test" } as Env,
+    );
+
+    expect(mocks.processExistingMetaPurchaseOutboxForOrder).toHaveBeenCalledWith({
+      db: { id: "db" },
+      orderId: "order-meta-checkout",
+      source: "storefront-checkout-aggregate",
+      storefrontUrl: "https://store.example.test",
+      encryptionKey: "credential-key",
+    });
+    expect(message.ack).toHaveBeenCalledTimes(1);
+    expect(message.retry).not.toHaveBeenCalled();
+  });
+
   it("acks duplicate confirmations without repeating availability, notification, or analytics side effects", async () => {
     mocks.processPaymentConfirmed.mockResolvedValue({
       success: true,

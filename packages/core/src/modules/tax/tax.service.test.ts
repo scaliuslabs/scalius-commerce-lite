@@ -23,6 +23,7 @@ function createTaxDb(): Database {
   };
   return {
     select: () => ({ from: () => chain }),
+    batch: vi.fn(async () => [[], [], []]),
   } as unknown as Database;
 }
 

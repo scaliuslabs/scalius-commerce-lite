@@ -1,4 +1,6 @@
 import { getDb } from "@scalius/database/client";
+import { createCheckoutSqlTransport } from "@scalius/database/checkout-transport";
+import { recoverPendingCheckoutProjections } from "@scalius/database/checkout-projection";
 import { releaseExpiredReservations } from "@scalius/core/modules/inventory";
 import { cleanupStaleAbandonedCheckouts } from "@scalius/core/modules/orders/abandoned-checkout-cleanup";
 import { cleanupExpiredOrderPaymentRecoveryChallenges } from "@scalius/core/modules/orders";
@@ -23,6 +25,7 @@ export const STALE_INCOMPLETE_ORDER_MAX_AGE_MINUTES = 60;
 export const ABANDONED_CHECKOUT_SWEEP_LIMIT = 100;
 export const ABANDONED_CHECKOUT_RETENTION_DAYS = 30;
 export const EMPTY_ABANDONED_CHECKOUT_MAX_AGE_MINUTES = 60;
+export const CHECKOUT_PROJECTION_SWEEP_LIMIT = 25;
 export const ORDER_NOTIFICATION_OUTBOX_SWEEP_LIMIT = 10;
 export const META_PURCHASE_OUTBOX_SWEEP_LIMIT = 10;
 export const CUSTOMER_AUTH_OTP_SWEEP_LIMIT = 200;
@@ -223,6 +226,27 @@ async function runScheduledMaintenanceInner(
         `scannedEmpty=${abandonedCheckoutCleanup.scannedEmpty}, ` +
         `deletedEmpty=${abandonedCheckoutCleanup.deletedEmpty}, ` +
         `limit=${abandonedCheckoutCleanup.limit}, hasMore=${abandonedCheckoutCleanup.hasMore}`,
+    );
+  }
+
+  const checkoutProjection = await timed("checkout_projection_recovery", async () => {
+    const transport = createCheckoutSqlTransport(
+      env as unknown as Parameters<typeof createCheckoutSqlTransport>[0],
+    );
+    try {
+      return await recoverPendingCheckoutProjections(
+        transport,
+        CHECKOUT_PROJECTION_SWEEP_LIMIT,
+      );
+    } finally {
+      transport.close();
+    }
+  });
+  if (checkoutProjection.scanned > 0 || checkoutProjection.hasMore) {
+    console.log(
+      `[scheduled] Checkout projection recovery: scanned=${checkoutProjection.scanned}, ` +
+        `completed=${checkoutProjection.completed}, failed=${checkoutProjection.failed}, ` +
+        `limit=${CHECKOUT_PROJECTION_SWEEP_LIMIT}, hasMore=${checkoutProjection.hasMore}`,
     );
   }
 

@@ -1,258 +1,363 @@
-import { describe, expect, it } from "vitest";
+import { DatabaseSync } from "node:sqlite";
+
 import type { Database } from "@scalius/database/client";
 import * as schema from "@scalius/database/schema";
-import { orderReceipts } from "@scalius/database/schema";
 import { drizzle } from "drizzle-orm/d1";
+import { describe, expect, it } from "vitest";
+
 import { ConflictError } from "@scalius/core/errors";
 import {
   buildCheckoutAttemptIdentity,
   buildCheckoutStatusTokenFromRequestKey,
-  claimCheckoutAttempt,
+  createAtomicCheckoutAttempt,
   getCheckoutAttemptRequestKeyFromStatusToken,
-  markCheckoutAttemptCommitted,
-  markCheckoutAttemptFailed,
-  prepareCheckoutAttemptCommit,
+  prepareAtomicCheckoutAttemptCommit,
   resolveExistingCheckoutAttempt,
 } from "./checkout-attempts";
 import { hashOrderReceiptToken } from "./order-receipts";
 import type { CreateStorefrontOrderInput } from "./orders.types";
 
-type AttemptRow = {
-  id: string;
-  requestKey: string;
-  requestHash: string;
-  checkoutToken: string;
-  orderId: string;
-  status: string;
-  paymentMethod: string | null;
-  totalAmount: number | null;
-  responsePayload: string | null;
-  attempts: number;
-  claimId: string | null;
-  claimExpiresAt: number | null;
-  lastError: string | null;
-  createdAt: number;
-  updatedAt: number;
-};
+type AttemptRow = typeof schema.checkoutAttempts.$inferSelect;
 
-type ReceiptRow = {
-  tokenHash: string;
-  orderId: string;
-  source: string;
-  status: string;
-  expiresAt: number;
-  createdAt: number;
-  updatedAt: number;
-};
+describe("atomic checkout attempts", () => {
+  it("derives stable request and non-receipt status identities", async () => {
+    const first = await buildCheckoutAttemptIdentity(buildInput());
+    const same = await buildCheckoutAttemptIdentity(buildInput());
+    const changed = await buildCheckoutAttemptIdentity(buildInput({ shippingCharge: 60 }));
 
-describe("checkout attempts", () => {
-  it("prepares the claim guard, committed response, and receipt for one outer batch", async () => {
+    expect(first).toEqual(same);
+    expect(first.requestKey).toMatch(/^checkout_submit:v1:[a-f0-9]{64}$/);
+    expect(first.statusToken).toMatch(/^cst_[a-f0-9]{64}$/);
+    expect(first.statusToken).not.toContain("chk_");
+    expect(changed.requestKey).toBe(first.requestKey);
+    expect(changed.requestHash).not.toBe(first.requestHash);
+    expect(getCheckoutAttemptRequestKeyFromStatusToken(first.statusToken)).toBe(first.requestKey);
+    expect(buildCheckoutStatusTokenFromRequestKey(first.requestKey)).toBe(first.statusToken);
+    expect(getCheckoutAttemptRequestKeyFromStatusToken("chk_secret_receipt")).toBeNull();
+  });
+
+  it("creates a memory-only candidate for the authoritative order transaction", async () => {
+    const identity = await buildCheckoutAttemptIdentity(buildInput());
+    const attempt = createAtomicCheckoutAttempt(identity);
+
+    expect(attempt).toMatchObject({
+      commitMode: "atomic",
+      origin: "new",
+      requestKey: identity.requestKey,
+      requestHash: identity.requestHash,
+      statusToken: identity.statusToken,
+    });
+    expect(attempt.id).toMatch(/^coa_/);
+    expect(attempt.checkoutToken).toMatch(/^chk_/);
+    expect(attempt.orderId).toHaveLength(16);
+  });
+
+  it("replays committed rows and exposes active legacy processing rows", async () => {
+    const identity = await buildCheckoutAttemptIdentity(buildInput());
+    const committed = createAttemptRow(identity, {
+      status: "committed",
+      responsePayload: JSON.stringify({ orderId: "order_committed" }),
+    });
+    await expect(resolveExistingCheckoutAttempt<{ orderId: string }>(
+      createResolverDb(committed),
+      identity,
+    )).resolves.toEqual({
+      status: "replay",
+      response: { orderId: "order_committed" },
+    });
+
+    const active = createAttemptRow(identity, {
+      status: "processing",
+      claimExpiresAt: Math.floor(Date.now() / 1_000) + 60,
+    });
+    await expect(resolveExistingCheckoutAttempt(
+      createResolverDb(active),
+      identity,
+    )).resolves.toEqual({
+      status: "processing",
+      orderId: active.orderId,
+      statusToken: identity.statusToken,
+    });
+  });
+
+  it("replays the aggregate authority before its compatibility projection exists", async () => {
+    const identity = await buildCheckoutAttemptIdentity(buildInput());
+    let selectCount = 0;
+    const db = {
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            get: async () => {
+              selectCount += 1;
+              return selectCount === 1
+                ? undefined
+                : {
+                    requestHash: identity.requestHash,
+                    responsePayload: JSON.stringify({ orderId: "aggregate_order" }),
+                  };
+            },
+          }),
+        }),
+      }),
+    } as unknown as Database;
+
+    await expect(resolveExistingCheckoutAttempt<{ orderId: string }>(db, identity))
+      .resolves.toEqual({
+        status: "replay",
+        response: { orderId: "aggregate_order" },
+      });
+  });
+
+  it("reuses failed and stale legacy identities in the new atomic commit", async () => {
+    const identity = await buildCheckoutAttemptIdentity(buildInput());
+    for (const row of [
+      createAttemptRow(identity, { status: "failed", claimExpiresAt: null }),
+      createAttemptRow(identity, {
+        status: "processing",
+        claimExpiresAt: Math.floor(Date.now() / 1_000) - 1,
+      }),
+    ]) {
+      await expect(resolveExistingCheckoutAttempt(
+        createResolverDb(row),
+        identity,
+      )).resolves.toMatchObject({
+        status: "retry",
+        attempt: {
+          commitMode: "atomic",
+          origin: "retry",
+          id: row.id,
+          orderId: row.orderId,
+          checkoutToken: row.checkoutToken,
+        },
+      });
+    }
+  });
+
+  it("rejects reuse of a request id for different checkout facts", async () => {
+    const identity = await buildCheckoutAttemptIdentity(buildInput());
+    const changed = await buildCheckoutAttemptIdentity(buildInput({ shippingCharge: 60 }));
+    const row = createAttemptRow(identity);
+
+    await expect(resolveExistingCheckoutAttempt(
+      createResolverDb(row),
+      changed,
+    )).rejects.toBeInstanceOf(ConflictError);
+  });
+
+  it("prepares candidate arbitration and receipt around one order commit", async () => {
     const db = drizzle({} as D1Database, { schema }) as unknown as Database;
-    const plan = await prepareCheckoutAttemptCommit(
+    const plan = await prepareAtomicCheckoutAttemptCommit(
       db,
       {
-        id: "attempt_1",
-        requestKey: "checkout_submit:v1:key",
-        requestHash: "request_hash",
-        claimId: "claim_1",
-        orderId: "order_1",
-        checkoutToken: "chk_receipt_secret",
-        statusToken: "cst_status",
+        commitMode: "atomic",
+        origin: "new",
+        id: "attempt_atomic_1",
+        requestKey: "checkout_submit:v1:atomic_key",
+        requestHash: "atomic_request_hash",
+        orderId: "order_atomic_1",
+        checkoutToken: "chk_atomic_receipt_secret",
+        statusToken: "cst_atomic_status",
       },
       {
         paymentMethod: "cod",
         totalAmount: 125,
-        response: { orderId: "order_1", message: "Order created" },
+        response: { orderId: "order_atomic_1", message: "Order created" },
       },
     );
 
-    const compile = (statement: unknown) =>
-      (statement as { toSQL(): { sql: string; params: unknown[] } }).toSQL();
-    const guard = compile(plan.guard);
-    const attemptWrite = compile(plan.writes[0]);
-    const receiptWrite = compile(plan.writes[1]);
+    const attemptWrite = compile(plan.writesBeforeOrder[0]);
+    const guard = compile(plan.writesBeforeOrder[1]);
+    const receiptWrite = compile(plan.writesAfterOrder[0]);
 
-    expect(plan.writes).toHaveLength(2);
-    expect(guard.sql).toContain("checkout_attempts");
-    expect(guard.params).toContain("CHECKOUT_ATTEMPT_COMMIT_CONFLICT");
-    expect(guard.params).toContain("claim_1");
-    expect(attemptWrite.sql.toLowerCase()).toContain('update "checkout_attempts"');
+    expect(plan.writesBeforeOrder).toHaveLength(2);
+    expect(plan.writesAfterOrder).toHaveLength(1);
+    expect(attemptWrite.sql.toLowerCase()).toContain('insert into "checkout_attempts"');
+    expect(attemptWrite.sql.toLowerCase()).toContain("on conflict");
     expect(attemptWrite.params).toContain(JSON.stringify({
-      orderId: "order_1",
+      orderId: "order_atomic_1",
       message: "Order created",
     }));
+    expect(guard.params).toContain("CHECKOUT_ATTEMPT_ATOMIC_COMMIT_CONFLICT");
     expect(receiptWrite.sql.toLowerCase()).toContain('insert into "order_receipts"');
-    expect(receiptWrite.params).toContain(await hashOrderReceiptToken("chk_receipt_secret"));
+    expect(receiptWrite.params).toContain(await hashOrderReceiptToken("chk_atomic_receipt_secret"));
   });
 
-  it("replays a committed checkout submit without creating another claim", async () => {
-    const fake = createFakeCheckoutAttemptDb();
-    const identity = await buildCheckoutAttemptIdentity(buildInput());
+  it("rolls back a losing duplicate or any later order failure", async () => {
+    const sqlite = createAtomicCheckoutTestDatabase();
+    const db = drizzle({} as D1Database, { schema }) as unknown as Database;
+    try {
+      const winner = {
+        commitMode: "atomic" as const,
+        origin: "new" as const,
+        id: "attempt_winner",
+        requestKey: "checkout_submit:v1:shared_key",
+        requestHash: "shared_hash",
+        orderId: "order_winner",
+        checkoutToken: "chk_winner_secret",
+        statusToken: "cst_shared",
+      };
+      const winnerPlan = await prepareAtomicCheckoutAttemptCommit(db, winner, {
+        paymentMethod: "cod",
+        totalAmount: 125,
+        response: { orderId: winner.orderId },
+      });
+      executeAtomicCheckoutTestTransaction(sqlite, winnerPlan, winner.orderId);
 
-    const first = await claimCheckoutAttempt<{ orderId: string }>(fake.db, identity);
-    expect(first.status).toBe("claimed");
-    if (first.status !== "claimed") throw new Error("expected first claim");
+      const loser = {
+        ...winner,
+        id: "attempt_loser",
+        orderId: "order_loser",
+        checkoutToken: "chk_loser_secret",
+      };
+      const loserPlan = await prepareAtomicCheckoutAttemptCommit(db, loser, {
+        paymentMethod: "cod",
+        totalAmount: 125,
+        response: { orderId: loser.orderId },
+      });
+      expect(() => executeAtomicCheckoutTestTransaction(sqlite, loserPlan, loser.orderId))
+        .toThrow(/CHECKOUT_ATTEMPT_ATOMIC_COMMIT_CONFLICT/);
 
-    await markCheckoutAttemptCommitted(fake.db, first.attempt, {
-      paymentMethod: "cod",
-      totalAmount: 120,
-      response: { orderId: first.attempt.orderId },
-    });
+      const laterFailure = {
+        ...winner,
+        id: "attempt_later_failure",
+        requestKey: "checkout_submit:v1:later_failure",
+        orderId: "order_later_failure",
+        checkoutToken: "chk_later_failure_secret",
+      };
+      const laterFailurePlan = await prepareAtomicCheckoutAttemptCommit(db, laterFailure, {
+        paymentMethod: "cod",
+        totalAmount: 125,
+        response: { orderId: laterFailure.orderId },
+      });
+      expect(() => executeAtomicCheckoutTestTransaction(sqlite, laterFailurePlan, null))
+        .toThrow(/NOT NULL constraint failed: orders\.id/);
 
-    const second = await claimCheckoutAttempt<{ orderId: string }>(fake.db, identity);
-
-    expect(second).toEqual({
-      status: "replay",
-      response: { orderId: first.attempt.orderId },
-    });
-    expect(fake.rows).toHaveLength(1);
-    expect(fake.rows[0]?.attempts).toBe(1);
-  });
-
-  it("records a hash-backed order receipt proof when a checkout attempt commits", async () => {
-    const fake = createFakeCheckoutAttemptDb();
-    const identity = await buildCheckoutAttemptIdentity(buildInput());
-
-    const claim = await claimCheckoutAttempt<{ orderId: string }>(fake.db, identity);
-    if (claim.status !== "claimed") throw new Error("expected claim");
-
-    await markCheckoutAttemptCommitted(fake.db, claim.attempt, {
-      paymentMethod: "sslcommerz",
-      totalAmount: 120,
-      response: { orderId: claim.attempt.orderId },
-    });
-
-    expect(fake.receipts).toHaveLength(1);
-    expect(fake.receipts[0]).toMatchObject({
-      tokenHash: await hashOrderReceiptToken(claim.attempt.checkoutToken),
-      orderId: claim.attempt.orderId,
-      source: "checkout_attempt",
-      status: "active",
-    });
-    expect(JSON.stringify(fake.receipts[0])).not.toContain(claim.attempt.checkoutToken);
-  });
-
-  it("resolves a committed checkout submit through the read-only precheck", async () => {
-    const fake = createFakeCheckoutAttemptDb();
-    const identity = await buildCheckoutAttemptIdentity(buildInput());
-
-    const first = await claimCheckoutAttempt<{ orderId: string }>(fake.db, identity);
-    if (first.status !== "claimed") throw new Error("expected first claim");
-
-    await markCheckoutAttemptCommitted(fake.db, first.attempt, {
-      paymentMethod: "cod",
-      totalAmount: 120,
-      response: { orderId: first.attempt.orderId },
-    });
-
-    await expect(resolveExistingCheckoutAttempt<{ orderId: string }>(fake.db, identity)).resolves.toEqual({
-      status: "replay",
-      response: { orderId: first.attempt.orderId },
-    });
-    expect(fake.rows).toHaveLength(1);
-    expect(fake.rows[0]?.attempts).toBe(1);
-  });
-
-  it("returns the existing processing attempt while the first claim is active", async () => {
-    const fake = createFakeCheckoutAttemptDb();
-    const identity = await buildCheckoutAttemptIdentity(buildInput());
-
-    const first = await claimCheckoutAttempt(fake.db, identity);
-    if (first.status !== "claimed") throw new Error("expected first claim");
-
-    fake.stats.selects = 0;
-    fake.stats.updates = 0;
-    const second = await claimCheckoutAttempt(fake.db, identity);
-
-    expect(second).toEqual({
-      status: "processing",
-      orderId: first.attempt.orderId,
-      statusToken: identity.statusToken,
-    });
-    expect(second.status === "processing" ? second.statusToken : "").toMatch(/^cst_[a-f0-9]{64}$/);
-    expect(second.status === "processing" ? second.statusToken : "").not.toBe(first.attempt.checkoutToken);
-    expect(fake.rows).toHaveLength(1);
-    expect(fake.rows[0]?.attempts).toBe(1);
-    expect(fake.stats.selects).toBe(1);
-    expect(fake.stats.updates).toBe(0);
-  });
-
-  it("resolves an active processing checkout submit through the read-only precheck", async () => {
-    const fake = createFakeCheckoutAttemptDb();
-    const identity = await buildCheckoutAttemptIdentity(buildInput());
-
-    const first = await claimCheckoutAttempt(fake.db, identity);
-    if (first.status !== "claimed") throw new Error("expected first claim");
-
-    await expect(resolveExistingCheckoutAttempt(fake.db, identity)).resolves.toEqual({
-      status: "processing",
-      orderId: first.attempt.orderId,
-      statusToken: identity.statusToken,
-    });
-    expect(fake.rows).toHaveLength(1);
-    expect(fake.rows[0]?.attempts).toBe(1);
-  });
-
-  it("does not resolve failed or stale processing attempts through the read-only precheck", async () => {
-    const fake = createFakeCheckoutAttemptDb();
-    const identity = await buildCheckoutAttemptIdentity(buildInput());
-
-    const first = await claimCheckoutAttempt(fake.db, identity);
-    if (first.status !== "claimed") throw new Error("expected first claim");
-
-    await markCheckoutAttemptFailed(fake.db, first.attempt, new Error("commit failed"));
-    await expect(resolveExistingCheckoutAttempt(fake.db, identity)).resolves.toBeNull();
-
-    fake.rows[0]!.status = "processing";
-    fake.rows[0]!.claimId = "coac_stale";
-    fake.rows[0]!.claimExpiresAt = Math.floor(Date.now() / 1000) - 1;
-
-    await expect(resolveExistingCheckoutAttempt(fake.db, identity)).resolves.toBeNull();
-  });
-
-  it("reclaims a failed checkout submit while keeping the original order id and receipt token", async () => {
-    const fake = createFakeCheckoutAttemptDb();
-    const identity = await buildCheckoutAttemptIdentity(buildInput());
-
-    const first = await claimCheckoutAttempt(fake.db, identity);
-    if (first.status !== "claimed") throw new Error("expected first claim");
-    const originalOrderId = first.attempt.orderId;
-    const originalCheckoutToken = first.attempt.checkoutToken;
-
-    await markCheckoutAttemptFailed(fake.db, first.attempt, new Error("commit failed"));
-
-    const second = await claimCheckoutAttempt(fake.db, identity);
-
-    expect(second.status).toBe("claimed");
-    if (second.status !== "claimed") throw new Error("expected second claim");
-    expect(second.attempt.orderId).toBe(originalOrderId);
-    expect(second.attempt.checkoutToken).toBe(originalCheckoutToken);
-    expect(fake.rows[0]?.attempts).toBe(2);
-    expect(fake.rows[0]?.lastError).toBeNull();
-  });
-
-  it("does not reuse a checkout request id for different checkout details", async () => {
-    const fake = createFakeCheckoutAttemptDb();
-    const identity = await buildCheckoutAttemptIdentity(buildInput());
-    await claimCheckoutAttempt(fake.db, identity);
-
-    const changedIdentity = await buildCheckoutAttemptIdentity(buildInput({ shippingCharge: 60 }));
-
-    await expect(claimCheckoutAttempt(fake.db, changedIdentity)).rejects.toBeInstanceOf(ConflictError);
-    await expect(resolveExistingCheckoutAttempt(fake.db, changedIdentity)).rejects.toBeInstanceOf(ConflictError);
-    expect(fake.rows).toHaveLength(1);
-  });
-
-  it("derives a non-receipt status token from the request key", async () => {
-    const identity = await buildCheckoutAttemptIdentity(buildInput());
-
-    expect(identity.statusToken).toMatch(/^cst_[a-f0-9]{64}$/);
-    expect(identity.statusToken).not.toContain("chk_");
-    expect(getCheckoutAttemptRequestKeyFromStatusToken(identity.statusToken)).toBe(identity.requestKey);
-    expect(buildCheckoutStatusTokenFromRequestKey(identity.requestKey)).toBe(identity.statusToken);
-    expect(getCheckoutAttemptRequestKeyFromStatusToken("chk_secret_receipt")).toBeNull();
+      expect(sqlite.prepare("SELECT id FROM orders ORDER BY id").all()).toEqual([
+        { id: "order_winner" },
+      ]);
+      expect(sqlite.prepare(
+        "SELECT id, order_id AS orderId, status FROM checkout_attempts ORDER BY id",
+      ).all()).toEqual([{
+        id: "attempt_winner",
+        orderId: "order_winner",
+        status: "committed",
+      }]);
+      expect(sqlite.prepare("SELECT order_id AS orderId FROM order_receipts").all()).toEqual([
+        { orderId: "order_winner" },
+      ]);
+    } finally {
+      sqlite.close();
+    }
   });
 });
+
+function createAttemptRow(
+  identity: Awaited<ReturnType<typeof buildCheckoutAttemptIdentity>>,
+  overrides: Partial<AttemptRow> = {},
+): AttemptRow {
+  return {
+    id: "attempt_existing",
+    requestKey: identity.requestKey,
+    requestHash: identity.requestHash,
+    checkoutToken: "chk_existing_secret",
+    orderId: "order_existing",
+    status: "processing",
+    paymentMethod: null,
+    totalAmount: null,
+    responsePayload: null,
+    attempts: 1,
+    claimId: "legacy_claim",
+    claimExpiresAt: Math.floor(Date.now() / 1_000) + 60,
+    lastError: null,
+    createdAt: 1_700_000_000,
+    updatedAt: 1_700_000_000,
+    ...overrides,
+  };
+}
+
+function createResolverDb(row: AttemptRow | undefined): Database {
+  return {
+    select: () => ({
+      from: () => ({
+        where: () => ({ get: async () => row }),
+      }),
+    }),
+  } as unknown as Database;
+}
+
+function compile(statement: unknown): { sql: string; params: unknown[] } {
+  return (statement as { toSQL(): { sql: string; params: unknown[] } }).toSQL();
+}
+
+function createAtomicCheckoutTestDatabase(): DatabaseSync {
+  const sqlite = new DatabaseSync(":memory:");
+  sqlite.exec(`
+    PRAGMA foreign_keys = ON;
+    CREATE TABLE checkout_attempts (
+      id TEXT PRIMARY KEY NOT NULL,
+      request_key TEXT NOT NULL,
+      request_hash TEXT NOT NULL,
+      checkout_token TEXT NOT NULL,
+      order_id TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'processing',
+      payment_method TEXT,
+      total_amount REAL,
+      response_payload TEXT,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      claim_id TEXT,
+      claim_expires_at INTEGER,
+      last_error TEXT,
+      created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+      updated_at INTEGER NOT NULL DEFAULT (unixepoch())
+    );
+    CREATE UNIQUE INDEX checkout_attempts_request_key_unique
+      ON checkout_attempts(request_key);
+    CREATE UNIQUE INDEX checkout_attempts_checkout_token_unique
+      ON checkout_attempts(checkout_token);
+    CREATE TABLE orders (id TEXT PRIMARY KEY NOT NULL);
+    CREATE TABLE order_receipts (
+      token_hash TEXT PRIMARY KEY NOT NULL,
+      order_id TEXT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+      source TEXT NOT NULL,
+      status TEXT NOT NULL,
+      expires_at INTEGER NOT NULL,
+      created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+      updated_at INTEGER NOT NULL DEFAULT (unixepoch())
+    );
+  `);
+  return sqlite;
+}
+
+function executeCompiledStatement(sqlite: DatabaseSync, statement: unknown): void {
+  const compiled = compile(statement);
+  const prepared = sqlite.prepare(compiled.sql);
+  if (/^\s*select\b/i.test(compiled.sql)) {
+    prepared.all(...compiled.params as never[]);
+  } else {
+    prepared.run(...compiled.params as never[]);
+  }
+}
+
+function executeAtomicCheckoutTestTransaction(
+  sqlite: DatabaseSync,
+  plan: Awaited<ReturnType<typeof prepareAtomicCheckoutAttemptCommit>>,
+  orderId: string | null,
+): void {
+  sqlite.exec("BEGIN IMMEDIATE");
+  try {
+    for (const statement of plan.writesBeforeOrder) {
+      executeCompiledStatement(sqlite, statement);
+    }
+    sqlite.prepare("INSERT INTO orders (id) VALUES (?)").run(orderId);
+    for (const statement of plan.writesAfterOrder) {
+      executeCompiledStatement(sqlite, statement);
+    }
+    sqlite.exec("COMMIT");
+  } catch (error) {
+    sqlite.exec("ROLLBACK");
+    throw error;
+  }
+}
 
 function buildInput(overrides: Partial<CreateStorefrontOrderInput> = {}): CreateStorefrontOrderInput {
   return {
@@ -268,16 +373,14 @@ function buildInput(overrides: Partial<CreateStorefrontOrderInput> = {}): Create
     zoneName: "Mirpur",
     areaName: null,
     notes: null,
-    items: [
-      {
-        productId: "product_1",
-        variantId: "variant_1",
-        quantity: 1,
-        price: 100,
-        productName: "Product 1",
-        variantLabel: null,
-      },
-    ],
+    items: [{
+      productId: "product_1",
+      variantId: "variant_1",
+      quantity: 1,
+      price: 100,
+      productName: "Product 1",
+      variantLabel: null,
+    }],
     discountAmount: null,
     discountCode: null,
     shippingCharge: 20,
@@ -286,127 +389,4 @@ function buildInput(overrides: Partial<CreateStorefrontOrderInput> = {}): Create
     inventoryPool: "regular",
     ...overrides,
   };
-}
-
-function createFakeCheckoutAttemptDb(): {
-  db: Database;
-  rows: AttemptRow[];
-  receipts: ReceiptRow[];
-  stats: { selects: number; updates: number };
-} {
-  const rows: AttemptRow[] = [];
-  const receipts: ReceiptRow[] = [];
-  const now = () => Math.floor(Date.now() / 1000);
-  const stats = { selects: 0, updates: 0 };
-
-  const db = {
-    insert: (table: unknown) => ({
-      values: (values: Record<string, unknown>) => ({
-        onConflictDoUpdate: async () => {
-          if (table !== orderReceipts) return;
-          const current = now();
-          const row: ReceiptRow = {
-            tokenHash: String(values.tokenHash),
-            orderId: String(values.orderId),
-            source: String(values.source),
-            status: String(values.status),
-            expiresAt: Number(values.expiresAt),
-            createdAt: current,
-            updatedAt: current,
-          };
-          const index = receipts.findIndex((receipt) => receipt.tokenHash === row.tokenHash);
-          if (index >= 0) {
-            receipts[index] = { ...receipts[index]!, ...row, createdAt: receipts[index]!.createdAt };
-          } else {
-            receipts.push(row);
-          }
-        },
-        onConflictDoNothing: () => ({
-          returning: async () => {
-            if (rows.some((row) => row.requestKey === values.requestKey)) return [];
-            const createdAt = now();
-            const row: AttemptRow = {
-              id: String(values.id),
-              requestKey: String(values.requestKey),
-              requestHash: String(values.requestHash),
-              checkoutToken: String(values.checkoutToken),
-              orderId: String(values.orderId),
-              status: String(values.status),
-              paymentMethod: (values.paymentMethod as string | null | undefined) ?? null,
-              totalAmount: (values.totalAmount as number | null | undefined) ?? null,
-              responsePayload: (values.responsePayload as string | null | undefined) ?? null,
-              attempts: Number(values.attempts ?? 0),
-              claimId: (values.claimId as string | null | undefined) ?? null,
-              claimExpiresAt: createdAt + 300,
-              lastError: (values.lastError as string | null | undefined) ?? null,
-              createdAt,
-              updatedAt: createdAt,
-            };
-            rows.push(row);
-            return [{
-              id: row.id,
-              requestKey: row.requestKey,
-              requestHash: row.requestHash,
-              orderId: row.orderId,
-              checkoutToken: row.checkoutToken,
-            }];
-          },
-        }),
-      }),
-    }),
-    select: () => ({
-      from: () => ({
-        where: () => ({
-          get: async () => {
-            stats.selects += 1;
-            return rows[0];
-          },
-        }),
-      }),
-    }),
-    update: () => ({
-      set: (values: Record<string, unknown>) => ({
-        where: () => {
-          const applyUpdate = () => {
-            stats.updates += 1;
-            const row = rows[0];
-            if (!row) return [];
-            if (values.status === "processing" && row.status === "processing" && (row.claimExpiresAt ?? 0) > now()) {
-              return [];
-            }
-            Object.assign(row, materializeUpdate(values, row));
-            return [{
-              id: row.id,
-              requestKey: row.requestKey,
-              requestHash: row.requestHash,
-              orderId: row.orderId,
-              checkoutToken: row.checkoutToken,
-            }];
-          };
-          return {
-            returning: async () => applyUpdate(),
-            then: (resolve: (value: unknown) => void) => resolve(applyUpdate()),
-          };
-        },
-      }),
-    }),
-  } as unknown as Database;
-
-  return { db, rows, receipts, stats };
-}
-
-function materializeUpdate(values: Record<string, unknown>, row: AttemptRow): Partial<AttemptRow> {
-  const next: Partial<AttemptRow> = {};
-  for (const [key, value] of Object.entries(values)) {
-    if (key === "attempts") {
-      next.attempts = row.attempts + 1;
-    } else if (key === "claimExpiresAt") {
-      next.claimExpiresAt = value === null ? null : Math.floor(Date.now() / 1000) + 300;
-    } else if (key === "updatedAt") {
-      next.updatedAt = Math.floor(Date.now() / 1000);
-    } else {
-      (next as Record<string, unknown>)[key] = value;
-    }
-  }
-  return next;
 }

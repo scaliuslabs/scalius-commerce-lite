@@ -1,5 +1,5 @@
 import type { Database } from "@scalius/database/client";
-import { checkoutAttempts, orderReceipts } from "@scalius/database/schema";
+import { checkoutAttempts, orderReceipts, orders } from "@scalius/database/schema";
 import { and, eq, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 
@@ -7,7 +7,7 @@ export const ORDER_RECEIPT_TOKEN_PREFIX = "order_receipt:";
 export const ORDER_RECEIPT_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 7;
 
 export type OrderReceiptValidationResult = {
-  source: "order_receipts" | "checkout_attempts";
+  source: "order_receipts" | "checkout_attempts" | "checkout_aggregate";
   orderId: string;
   tokenHash: string;
   shouldRepairKv: boolean;
@@ -104,6 +104,33 @@ export async function validateOrderReceiptProof(
     return {
       source: "order_receipts",
       orderId: receipt.orderId,
+      tokenHash,
+      shouldRepairKv: true,
+    };
+  }
+
+  const aggregate = await db
+    .select({
+      orderId: orders.id,
+      createdAt: orders.createdAt,
+    })
+    .from(orders)
+    .where(
+      and(
+        eq(orders.id, input.orderId),
+        eq(orders.checkoutReceiptHash, tokenHash),
+        eq(orders.checkoutAggregateVersion, 1),
+      ),
+    )
+    .get();
+  if (
+    aggregate
+    && Math.floor(aggregate.createdAt.getTime() / 1_000)
+      + ORDER_RECEIPT_TOKEN_TTL_SECONDS > nowSeconds
+  ) {
+    return {
+      source: "checkout_aggregate",
+      orderId: aggregate.orderId,
       tokenHash,
       shouldRepairKv: true,
     };

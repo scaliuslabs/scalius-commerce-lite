@@ -15,6 +15,7 @@ import {
   invalidatePolarCache,
   invalidateSSLCommerzCache,
   invalidateStripeCache,
+  resolveActivePaymentMethodsFromRows,
   upsertEncryptedSetting,
 } from "./gateway-settings";
 import { getStripeCredentialEnvironment } from "@scalius/shared/payment-gateway-environment";
@@ -657,6 +658,29 @@ describe("payment gateway settings cache cleanup", () => {
       }),
     ).resolves.toEqual({
       enabledMethods: ["stripe"],
+      defaultMethod: "stripe",
+    });
+  });
+
+  it("resolves the same strict gateway allowlist from one preloaded settings snapshot", async () => {
+    const rows = [
+      { category: "payment_methods", key: "enabled_methods", value: JSON.stringify(["cod", "stripe", "sslcommerz", "polar"]) },
+      { category: "payment_methods", key: "default_method", value: "stripe" },
+      { category: "stripe", key: "secret_key", value: "sk_live_snapshot_secret" },
+      { category: "stripe", key: "publishable_key", value: "pk_live_snapshot_public" },
+      { category: "stripe", key: "webhook_secret", value: "whsec_snapshot" },
+      { category: "stripe", key: "enabled", value: "true" },
+      { category: "sslcommerz", key: "store_id", value: "sslcz_snapshot_store_123" },
+      { category: "sslcommerz", key: "store_password", value: "sslcz_snapshot_password_123" },
+      { category: "sslcommerz", key: "enabled", value: "true" },
+      { category: "polar", key: "access_token", value: "polar_oat_snapshot_real" },
+      { category: "polar", key: "product_id", value: "prod_snapshot_real" },
+      { category: "polar", key: "webhook_secret", value: "polar_whsec_snapshot_real" },
+      { category: "polar", key: "enabled", value: "true" },
+    ];
+
+    await expect(resolveActivePaymentMethodsFromRows(rows)).resolves.toEqual({
+      enabledMethods: ["cod", "stripe", "sslcommerz", "polar"],
       defaultMethod: "stripe",
     });
   });

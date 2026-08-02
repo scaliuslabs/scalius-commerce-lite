@@ -6,6 +6,12 @@
   "exports": {
     "./schema": "./src/schema/index.ts",
     "./client": "./src/client.ts",
+    "./checkout-commit": "./src/checkout-commit.ts",
+    "./checkout-transport": "./src/checkout-transport.ts",
+    "./checkout-projection": "./src/checkout-projection.ts",
+    "./postgres-adapter": "./src/postgres-adapter.ts",
+    "./postgres-checkout": "./src/postgres-checkout.ts",
+    "./inventory-authority": "./src/inventory-authority.ts",
     "./migration-control": "./src/migration-control.ts",
     "./migration-artifacts": "./src/migration-artifacts.ts",
     "./portability": "./src/portability.ts",
@@ -13,8 +19,14 @@
   },
   "scripts": {
     "compile:data-export": "tsx scripts/compile-sqlite-data-export.ts",
+    "add:checkout-load-hot-fixture": "tsx scripts/add-live-checkout-hot-fixture.ts",
     "export:d1-portable": "tsx scripts/export-d1-portable.ts",
+    "export:turso-portable": "tsx scripts/export-turso-portable.ts",
     "load:checkout-live": "tsx scripts/live-checkout-load.ts",
+    "migrate:sqlite-to-postgres": "tsx scripts/migrate-sqlite-to-postgres.ts",
+    "prepare:checkout-load-target": "tsx scripts/prepare-live-checkout-target.ts",
+    "seed:checkout-load-target": "tsx scripts/seed-live-checkout-target.ts",
+    "probe:turso-concurrency": "tsx scripts/turso-concurrency-probe.ts",
     "rehearse:near-limit": "tsx scripts/near-limit-migration-rehearsal.ts",
     "normalize:d1-export": "tsx scripts/normalize-d1-export.ts",
     "prepare:turso-upload": "tsx scripts/prepare-turso-upload.ts",
@@ -27,8 +39,10 @@
     "verify:portability-export": "tsx scripts/verify-sqlite-export.ts"
   },
   "dependencies": {
+    "@neondatabase/serverless": "1.1.0",
     "@tursodatabase/database": "^0.7.2",
     "@tursodatabase/serverless": "^1.4.0",
+    "@tursodatabase/sync": "0.7.2",
     "drizzle-orm": "^0.45.2"
   },
   "devDependencies": {

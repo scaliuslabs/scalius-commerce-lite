@@ -343,13 +343,9 @@ export async function isCurrencyCodeLocked(db: Database): Promise<boolean> {
   return Boolean(productRows?.length || orderRows?.length);
 }
 
-export async function getCurrencySettings(db: Database): Promise<CurrencySettings> {
-  const rows = await db
-    .select({ key: settings.key, value: settings.value })
-    .from(settings)
-    .where(eq(settings.category, "currency"))
-    .all();
-
+export function resolveCurrencySettingsFromRows(
+  rows: readonly { key: string; value: string }[],
+): CurrencySettings {
   const map = Object.fromEntries(rows.map((r) => [r.key, r.value]));
   const currencyCode = normalizeSupportedCurrencyCode(map["currency_code"]);
 
@@ -366,6 +362,16 @@ export async function getCurrencySettings(db: Database): Promise<CurrencySetting
     currencySymbol: map["currency_symbol"] ?? "\u09F3",
     usdExchangeRate: map["usd_exchange_rate"] ?? "1",
   };
+}
+
+export async function getCurrencySettings(db: Database): Promise<CurrencySettings> {
+  const rows = await db
+    .select({ key: settings.key, value: settings.value })
+    .from(settings)
+    .where(eq(settings.category, "currency"))
+    .all();
+
+  return resolveCurrencySettingsFromRows(rows);
 }
 
 export async function saveCurrencySettings(
@@ -1417,18 +1423,10 @@ export async function saveStorefrontUrl(db: Database, url: string) {
 // Allowed Countries
 // ─────────────────────────────────────────
 
-export async function getAllowedCountries(db: Database) {
-  const row = await db
-    .select({ value: settings.value })
-    .from(settings)
-    .where(
-      and(
-        eq(settings.category, "phone"),
-        eq(settings.key, "allowed_countries"),
-      ),
-    )
-    .get();
-
+export function resolveAllowedCountriesFromRows(
+  rows: readonly { key?: string; value: string }[],
+) {
+  const row = rows.find((candidate) => candidate.key === undefined || candidate.key === "allowed_countries");
   let allowedCountries: string[] = [];
   let allowedCountriesMode: "include" | "exclude" = "include";
   if (row?.value) {
@@ -1449,6 +1447,21 @@ export async function getAllowedCountries(db: Database) {
     }
   }
   return { allowedCountries, allowedCountriesMode };
+}
+
+export async function getAllowedCountries(db: Database) {
+  const row = await db
+    .select({ value: settings.value })
+    .from(settings)
+    .where(
+      and(
+        eq(settings.category, "phone"),
+        eq(settings.key, "allowed_countries"),
+      ),
+    )
+    .get();
+
+  return resolveAllowedCountriesFromRows(row ? [row] : []);
 }
 
 export async function saveAllowedCountries(

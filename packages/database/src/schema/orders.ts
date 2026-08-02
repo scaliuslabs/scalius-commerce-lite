@@ -62,6 +62,15 @@ export const orders = sqliteTable("orders", {
     /** Valid: regular | preorder | backorder (see InventoryPool enum) */
     inventoryPool: text("inventory_pool").notNull().default(InventoryPool.REGULAR),
     inventoryAction: text("inventory_action").notNull().default("none"),
+    /**
+     * Reservation implementation for this order lineage. Existing/admin
+     * orders use the legacy product-variant counter. Coordinated storefront
+     * orders retain their exact lane authority until a terminal transition;
+     * a later reactivation deliberately switches the lineage to legacy.
+     */
+    inventoryAuthority: text("inventory_authority", {
+        enum: ["legacy_counter", "checkout_lane_v1"],
+    }).notNull().default("legacy_counter"),
     shipmentClaimId: text("shipment_claim_id"),
     shipmentClaimExpiresAt: integer("shipment_claim_expires_at", { mode: "timestamp" }),
     expectedDelivery: text("expected_delivery"),
@@ -80,6 +89,23 @@ export const orders = sqliteTable("orders", {
     /** Legacy lifecycle cleanup marker used by abandoned/incomplete-order cleanup. */
     deletedAt: integer("deleted_at", { mode: "timestamp" }),
     invoiceNumber: integer("invoice_number"),
+    /**
+     * Provider-neutral checkout commit authority. Legacy/admin orders keep
+     * these fields null; coordinated storefront commits write all fields in
+     * the same transaction as their reservation-lane edges.
+     */
+    checkoutRequestKey: text("checkout_request_key"),
+    checkoutRequestHash: text("checkout_request_hash"),
+    checkoutReceiptHash: text("checkout_receipt_hash"),
+    checkoutAggregateVersion: integer("checkout_aggregate_version"),
+    checkoutAggregatePayload: text("checkout_aggregate_payload"),
+    checkoutInventoryEdges: text("checkout_inventory_edges"),
+    checkoutResponsePayload: text("checkout_response_payload"),
+    /** Null for legacy orders; coordinated commits advance pending -> complete. */
+    checkoutProjectionStatus: text("checkout_projection_status", {
+        enum: ["pending", "projecting", "complete", "failed"],
+    }),
+    checkoutProjectionAttempts: integer("checkout_projection_attempts").notNull().default(0),
 }, (table) => [
     index("orders_status_idx").on(table.status),
     index("orders_payment_status_idx").on(table.paymentStatus),
@@ -124,6 +150,38 @@ export const orders = sqliteTable("orders", {
     index("orders_dashboard_agg_idx").on(table.deletedAt, table.createdAt, table.status),
     index("orders_customer_phone_idx").on(table.customerPhone),
     index("orders_shipment_claim_idx").on(table.shipmentClaimId, table.shipmentClaimExpiresAt),
+    uniqueIndex("orders_checkout_request_key_unique")
+        .on(table.checkoutRequestKey)
+        .where(sql`${table.checkoutRequestKey} IS NOT NULL`),
+    uniqueIndex("orders_checkout_receipt_hash_unique")
+        .on(table.checkoutReceiptHash)
+        .where(sql`${table.checkoutReceiptHash} IS NOT NULL`),
+    index("orders_checkout_projection_idx")
+        .on(table.checkoutProjectionStatus, table.createdAt)
+        .where(sql`${table.checkoutProjectionStatus} IS NOT NULL AND ${table.checkoutProjectionStatus} <> 'complete'`),
+]);
+
+/**
+ * One durable relay claim per coordinated checkout microbatch. `orderIds` is
+ * JSON so checkout cost is O(batches), not O(orders), while every referenced
+ * order remains independently recoverable from `orders`.
+ */
+export const checkoutBatchOutbox = sqliteTable("checkout_batch_outbox", {
+    id: text("id").primaryKey(),
+    orderIds: text("order_ids").notNull(),
+    status: text("status", {
+        enum: ["pending", "projecting", "complete", "failed"],
+    }).notNull().default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    claimId: text("claim_id"),
+    claimExpiresAt: integer("claim_expires_at"),
+    lastError: text("last_error"),
+    createdAt: integer("created_at").notNull().default(UNIX_NOW),
+    updatedAt: integer("updated_at").notNull().default(UNIX_NOW),
+    completedAt: integer("completed_at"),
+}, (table) => [
+    index("checkout_batch_outbox_pending_idx")
+        .on(table.status, table.claimExpiresAt, table.createdAt),
 ]);
 
 export const checkoutAttempts = sqliteTable("checkout_attempts", {

@@ -49,11 +49,9 @@ import {
     type AppliedPromotion,
 } from "../promotions";
 import {
-    isCheckoutAttemptClaimCurrent,
+    prepareAtomicCheckoutAttemptCommit,
     isCheckoutAttemptCommitConflictError,
-    prepareCheckoutAttemptCommit,
-    type ClaimedCheckoutAttempt,
-    type PreparedCheckoutAttemptCommit,
+    type AtomicCheckoutAttempt,
 } from "./checkout-attempts";
 
 type ReservationPool = "regular" | "preorder" | "backorder";
@@ -74,7 +72,7 @@ export interface StorefrontOrderCommitResult {
 }
 
 export interface StorefrontOrderCheckoutCommit<TResponse = unknown> {
-    attempt: ClaimedCheckoutAttempt;
+    attempt: AtomicCheckoutAttempt;
     response: TResponse;
 }
 
@@ -300,6 +298,7 @@ function buildReservationItemIssues(
 async function prepareOrderInventory(
     db: Database,
     payload: StorefrontOrderCommitPayload,
+    freshOrder = false,
 ): Promise<PreparedStockReservationBatch> {
     const entries = getReservationEntries(payload);
     const result = await prepareStockReservationBatch(
@@ -310,7 +309,12 @@ async function prepareOrderInventory(
             orderId: entry.orderId,
         })),
         payload.orderData.inventoryPool as ReservationPool,
-        { reservationKey: CHECKOUT_RESERVATION_KEY },
+        {
+            reservationKey: CHECKOUT_RESERVATION_KEY,
+            freshOrderIds: freshOrder
+                ? new Set([payload.orderData.id])
+                : undefined,
+        },
     );
 
     if (!result.success) {
@@ -725,7 +729,12 @@ export async function commitStorefrontOrderPayload(
     let inventoryConflictCount = 0;
 
     while (true) {
-        const existing = await loadExistingCommittedOrder(db, payload.orderData.id);
+        // A brand-new atomic candidate cannot already own an order. Retried
+        // legacy identities retain the read so an uncertain historical commit
+        // can still converge without creating a duplicate.
+        const existing = checkoutCommit?.attempt.origin === "new"
+            ? undefined
+            : await loadExistingCommittedOrder(db, payload.orderData.id);
         if (existing) {
             await finalizeCheckoutAttemptForExistingOrder(db, payload, checkoutCommit);
             return {
@@ -737,7 +746,14 @@ export async function commitStorefrontOrderPayload(
             };
         }
 
-        const customer = await resolveCustomerForOrder(db, payload);
+        const [customer, inventoryPlan] = await Promise.all([
+            resolveCustomerForOrder(db, payload),
+            prepareOrderInventory(
+                db,
+                payload,
+                checkoutCommit?.attempt.origin === "new",
+            ),
+        ]);
         if (payload.discountUsage && payload.promotion) {
             throw new ValidationError("An order cannot combine legacy and typed discount authorities.");
         }
@@ -746,9 +762,8 @@ export async function commitStorefrontOrderPayload(
             : null;
         await assertDiscountUsageStillAvailable(db, payload);
 
-        const inventoryPlan = await prepareOrderInventory(db, payload);
         const checkoutAttemptPlan = checkoutCommit
-            ? await prepareCheckoutAttemptCommit(db, checkoutCommit.attempt, {
+            ? await prepareAtomicCheckoutAttemptCommit(db, checkoutCommit.attempt, {
                 paymentMethod: payload.orderData.paymentMethod,
                 totalAmount: payload.orderData.totalAmount,
                 response: checkoutCommit.response,
@@ -756,14 +771,24 @@ export async function commitStorefrontOrderPayload(
             : null;
         const orderWrites = buildOrderWriteBatch(db, payload, customer, appliedPromotion);
         const atomicWrites: SQLiteBatchItem[] = [
-            ...(checkoutAttemptPlan ? [checkoutAttemptPlan.guard] : []),
+            ...(checkoutAttemptPlan?.writesBeforeOrder ?? []),
             ...inventoryPlan.statements,
             ...orderWrites,
-            ...(checkoutAttemptPlan?.writes ?? []),
+            ...(checkoutAttemptPlan?.writesAfterOrder ?? []),
         ];
+        let committedAvailabilitySubjects = inventoryPlan.availabilityChangedSubjects;
 
         try {
-            await safeBatch(db, atomicWrites);
+            const batchResults = await safeBatch(db, atomicWrites);
+            if (inventoryPlan.resolveCommittedAvailabilitySubjects) {
+                const inventoryOffset = checkoutAttemptPlan?.writesBeforeOrder.length ?? 0;
+                const inventoryResults = (batchResults as readonly unknown[]).slice(
+                    inventoryOffset,
+                    inventoryOffset + inventoryPlan.statements.length,
+                );
+                committedAvailabilitySubjects =
+                    inventoryPlan.resolveCommittedAvailabilitySubjects(inventoryResults);
+            }
         } catch (error) {
             const committedAfterError = await loadExistingCommittedOrder(db, payload.orderData.id)
                 .catch(() => undefined);
@@ -773,7 +798,9 @@ export async function commitStorefrontOrderPayload(
                     customerId: committedAfterError.customerId,
                     accountOwnerCustomerId: committedAfterError.accountOwnerCustomerId,
                     alreadyCommitted: true,
-                    availabilityChangedSubjects: [],
+                    // The commit result was uncertain, so invalidate every
+                    // potentially changed tracked product conservatively.
+                    availabilityChangedSubjects: inventoryPlan.availabilityChangedSubjects,
                 };
             }
 
@@ -794,21 +821,12 @@ export async function commitStorefrontOrderPayload(
                 throw new ConflictError("Checkout attempt changed before the order could be committed. Please retry.");
             }
 
-            if (checkoutAttemptPlan && isMalformedJsonBatchGuardError(error)) {
-                const claimIsCurrent = await isCheckoutAttemptClaimCurrent(db, checkoutCommit!.attempt)
-                    .catch(() => null);
-                if (claimIsCurrent === false) {
-                    throw new ConflictError("Checkout attempt changed before the order could be committed. Please retry.");
-                }
-                if (claimIsCurrent === null) throw error;
-            }
-
             const idempotentReservation = await inventoryPlan.resolveIdempotentReplay(error);
             if (idempotentReservation?.success) {
                 await safeBatch(db, [
-                    ...(checkoutAttemptPlan ? [checkoutAttemptPlan.guard] : []),
+                    ...(checkoutAttemptPlan?.writesBeforeOrder ?? []),
                     ...orderWrites,
-                    ...(checkoutAttemptPlan?.writes ?? []),
+                    ...(checkoutAttemptPlan?.writesAfterOrder ?? []),
                 ] as SQLiteBatchItem[]);
                 return {
                     orderId: payload.orderData.id,
@@ -846,21 +864,9 @@ export async function commitStorefrontOrderPayload(
             customerId: customer.id,
             accountOwnerCustomerId: customer.accountOwnerCustomerId,
             alreadyCommitted: false,
-            availabilityChangedSubjects: inventoryPlan.availabilityChangedSubjects,
+            availabilityChangedSubjects: committedAvailabilitySubjects,
         };
     }
-}
-
-function isMalformedJsonBatchGuardError(error: unknown): boolean {
-    let current = error;
-    for (let depth = 0; depth < 5 && current; depth += 1) {
-        const message = current instanceof Error ? current.message : String(current);
-        if (/malformed json/i.test(message)) return true;
-        current = current instanceof Error
-            ? (current as Error & { cause?: unknown }).cause
-            : null;
-    }
-    return false;
 }
 
 async function finalizeCheckoutAttemptForExistingOrder(
@@ -870,25 +876,20 @@ async function finalizeCheckoutAttemptForExistingOrder(
 ): Promise<void> {
     if (!checkoutCommit) return;
 
-    const plan: PreparedCheckoutAttemptCommit = await prepareCheckoutAttemptCommit(
-        db,
-        checkoutCommit.attempt,
-        {
-            paymentMethod: payload.orderData.paymentMethod,
-            totalAmount: payload.orderData.totalAmount,
-            response: checkoutCommit.response,
-        },
-    );
+    const plan = await prepareAtomicCheckoutAttemptCommit(db, checkoutCommit.attempt, {
+        paymentMethod: payload.orderData.paymentMethod,
+        totalAmount: payload.orderData.totalAmount,
+        response: checkoutCommit.response,
+    });
     try {
-        await safeBatch(db, [plan.guard, ...plan.writes] as SQLiteBatchItem[]);
+        await safeBatch(db, [
+            ...plan.writesBeforeOrder,
+            ...plan.writesAfterOrder,
+        ] as SQLiteBatchItem[]);
     } catch (error) {
         // A committed matching attempt is already durable after an uncertain
-        // response. With no other guards in this repair batch, malformed JSON
-        // also means the processing claim is no longer current.
-        if (
-            isCheckoutAttemptCommitConflictError(error)
-            || isMalformedJsonBatchGuardError(error)
-        ) {
+        // response; a different winner owns the replay payload.
+        if (isCheckoutAttemptCommitConflictError(error)) {
             return;
         }
         throw error;

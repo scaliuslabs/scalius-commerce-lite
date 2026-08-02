@@ -2,6 +2,7 @@
 // Variant-specific queries and mutations + barcode lookup.
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import { buildBatchGuard } from "@scalius/database/client";
+import { effectiveRegularReservedStockSql } from "@scalius/database/inventory-authority";
 import * as schema from "@scalius/database/schema";
 import {
     orders,
@@ -344,7 +345,7 @@ export async function lookupByBarcode(db: DrizzleD1Database<typeof schema>, barc
             variantWeight: productVariants.weight,
             variantPrice: productVariants.price,
             variantStock: productVariants.stock,
-            variantReservedStock: productVariants.reservedStock,
+            variantReservedStock: effectiveRegularReservedStockSql(),
             variantBarcode: productVariants.barcode,
             variantBarcodeType: productVariants.barcodeType,
             variantIsDefault: productVariants.isDefault,
@@ -435,7 +436,7 @@ export async function createVariant(
             isDefault: productVariants.isDefault,
             optionCombinationKey: productVariants.optionCombinationKey,
             stock: productVariants.stock,
-            reservedStock: productVariants.reservedStock,
+            reservedStock: effectiveRegularReservedStockSql(),
             preorderStock: productVariants.preorderStock,
             trackInventory: productVariants.trackInventory,
         })
@@ -563,6 +564,7 @@ export async function updateVariant(
             imageId: productVariants.imageId,
             stock: productVariants.stock,
             reservedStock: productVariants.reservedStock,
+            effectiveReservedStock: effectiveRegularReservedStockSql(),
             preorderStock: productVariants.preorderStock,
             stockVersion: productVariants.stockVersion,
             trackInventory: productVariants.trackInventory,
@@ -668,6 +670,18 @@ export async function updateVariant(
             ),
         ];
 
+    if (
+        existingVariant.effectiveReservedStock > 0
+        && (
+            data.stock < existingVariant.effectiveReservedStock
+            || updateValues.trackInventory === false
+        )
+    ) {
+        throw new ConflictError(
+            "Release reserved stock before lowering this SKU below its reservations or disabling inventory tracking.",
+        );
+    }
+
     if (data.stock !== existingVariant.stock) {
         const delta = data.stock - existingVariant.stock;
         const movementInsert = buildStockMovementClaim(db, {
@@ -701,6 +715,7 @@ export async function updateVariant(
                 eq(productVariants.id, variantId),
                 eq(productVariants.productId, productId),
                 eq(productVariants.stockVersion, existingVariant.stockVersion),
+                sql`${effectiveRegularReservedStockSql()} <= ${data.stock}`,
                 isNull(productVariants.deletedAt),
             ))
             .returning();
@@ -710,6 +725,7 @@ export async function updateVariant(
                 WHERE ${productVariants.id} = ${variantId}
                   AND ${productVariants.productId} = ${productId}
                   AND ${productVariants.stockVersion} = ${existingVariant.stockVersion}
+                  AND ${effectiveRegularReservedStockSql()} <= ${data.stock}
                   AND ${productVariants.deletedAt} IS NULL
             ) THEN 1 ELSE json_extract('VARIANT_EDIT_CONFLICT', '$') END
         `);
@@ -748,6 +764,9 @@ export async function updateVariant(
         .where(and(
             eq(productVariants.id, variantId),
             eq(productVariants.productId, productId),
+            ...(updateValues.trackInventory === false
+                ? [eq(effectiveRegularReservedStockSql(), 0)]
+                : []),
             isNull(productVariants.deletedAt),
         ))
         .returning();
@@ -772,7 +791,7 @@ export async function deleteVariant(
         .select({
             id: productVariants.id,
             isDefault: productVariants.isDefault,
-            reservedStock: productVariants.reservedStock,
+            reservedStock: effectiveRegularReservedStockSql(),
         })
         .from(productVariants)
         .where(sql`${productVariants.id} = ${variantId} AND ${productVariants.productId} = ${productId} AND ${productVariants.deletedAt} IS NULL`)
@@ -817,7 +836,7 @@ export async function deleteVariant(
         eq(productVariants.id, variantId),
         eq(productVariants.productId, productId),
         isNull(productVariants.deletedAt),
-        eq(productVariants.reservedStock, 0),
+        eq(effectiveRegularReservedStockSql(), 0),
     );
 
     const transactionalDeleteGuard = buildBatchGuard(db, sql`
@@ -826,7 +845,7 @@ export async function deleteVariant(
             WHERE ${productVariants.id} = ${variantId}
               AND ${productVariants.productId} = ${productId}
               AND ${productVariants.isDefault} = 0
-              AND ${productVariants.reservedStock} = 0
+              AND ${effectiveRegularReservedStockSql()} = 0
               AND ${productVariants.deletedAt} IS NULL
         ) AND NOT EXISTS (
             SELECT 1 FROM ${orderItems}

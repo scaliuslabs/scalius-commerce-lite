@@ -25,6 +25,22 @@ export const settings = sqliteTable(
 );
 
 /**
+ * Monotonic fence for every fact that can change checkout economics or buyer
+ * eligibility. Coordinated checkout reads it with the authority snapshot and
+ * validates the same revision inside the atomic order commit.
+ */
+export const checkoutAuthority = sqliteTable("checkout_authority", {
+    id: text("id").primaryKey().default("default"),
+    revision: integer("revision").notNull().default(1),
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+        .notNull()
+        .default(UNIX_NOW),
+}, (table) => [
+    check("checkout_authority_singleton", sql`${table.id} = 'default'`),
+    check("checkout_authority_revision_positive", sql`${table.revision} >= 1`),
+]);
+
+/**
  * Published storefront theme document.
  *
  * Presentation settings affect every buyer-facing route, so they need an explicit

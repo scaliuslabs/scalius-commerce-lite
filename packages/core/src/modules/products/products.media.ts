@@ -1,7 +1,7 @@
 import { media, productMedia, products } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import { getCurrentPublicMediaUrl } from "../../integrations/storage";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 
 export const MAX_PRODUCT_MEDIA_ASSOCIATIONS = 250;
@@ -26,6 +26,28 @@ export type ProductMediaProjection = {
     sortOrder: number;
     status: "ready" | "trashed";
 };
+
+export interface ProductMediaProjectionRow {
+    productId: string;
+    productName: string;
+    id: string;
+    mediaId: string;
+    kind: "image" | "video";
+    objectKey: string;
+    mediaAltText: string | null;
+    contextualAltText: string | null;
+    caption: string | null;
+    width: number | null;
+    height: number | null;
+    durationMs: number | null;
+    posterMediaId: string | null;
+    posterObjectKey: string | null;
+    posterKind: "image" | "video" | null;
+    posterStatus: "uploading" | "processing" | "ready" | "failed" | "deleting" | "trashed" | null;
+    isPrimary: boolean;
+    sortOrder: number;
+    status: "uploading" | "processing" | "ready" | "failed" | "deleting" | "trashed";
+}
 
 export type ProductImageRepresentation = {
     productMediaId: string;
@@ -127,6 +149,178 @@ export function resolveSkuImageRepresentation(
     return resolveProductImageRepresentation(items);
 }
 
+export function selectProductMediaProjectionRows(
+    db: Database,
+    productIds: readonly string[],
+) {
+    const uniqueIds = [...new Set(productIds.map((id) => id.trim()).filter(Boolean))];
+    const productIdSet = JSON.stringify(uniqueIds);
+    const poster = alias(media, "product_media_poster");
+    return db
+        .select({
+            productId: productMedia.productId,
+            productName: products.name,
+            id: productMedia.id,
+            mediaId: productMedia.mediaId,
+            kind: media.kind,
+            objectKey: media.objectKey,
+            mediaAltText: media.altText,
+            contextualAltText: productMedia.altText,
+            caption: media.caption,
+            width: media.width,
+            height: media.height,
+            durationMs: media.durationMs,
+            posterMediaId: poster.id,
+            posterObjectKey: poster.objectKey,
+            posterKind: poster.kind,
+            posterStatus: poster.status,
+            isPrimary: productMedia.isPrimary,
+            sortOrder: productMedia.sortOrder,
+            status: media.status,
+        })
+        .from(productMedia)
+        .innerJoin(products, eq(products.id, productMedia.productId))
+        .innerJoin(media, eq(media.id, productMedia.mediaId))
+        .leftJoin(poster, eq(poster.id, media.posterMediaId))
+        .where(and(
+            sql`${productMedia.productId} IN (
+                SELECT CAST(value AS TEXT) FROM json_each(${productIdSet})
+            )`,
+            inArray(media.status, ["ready", "trashed"]),
+        ))
+        .orderBy(asc(productMedia.productId), asc(productMedia.sortOrder), asc(productMedia.id));
+}
+
+/**
+ * Checkout needs one exact SKU image plus the deterministic product fallback,
+ * not every gallery association. These correlated candidates preserve the
+ * shared resolver's precedence while bounding the result independently of a
+ * merchant's gallery size.
+ */
+export function selectCheckoutProductMediaProjectionRows(
+    db: Database,
+    productIds: readonly string[],
+    variantIds: readonly string[],
+) {
+    const uniqueProductIds = [...new Set(productIds.map((id) => id.trim()).filter(Boolean))];
+    const uniqueVariantIds = [...new Set(variantIds.map((id) => id.trim()).filter(Boolean))];
+    const productIdSet = JSON.stringify(uniqueProductIds);
+    const variantIdSet = JSON.stringify(uniqueVariantIds);
+    const poster = alias(media, "product_media_poster");
+    return db
+        .select({
+            productId: productMedia.productId,
+            productName: products.name,
+            id: productMedia.id,
+            mediaId: productMedia.mediaId,
+            kind: media.kind,
+            objectKey: media.objectKey,
+            mediaAltText: media.altText,
+            contextualAltText: productMedia.altText,
+            caption: media.caption,
+            width: media.width,
+            height: media.height,
+            durationMs: media.durationMs,
+            posterMediaId: poster.id,
+            posterObjectKey: poster.objectKey,
+            posterKind: poster.kind,
+            posterStatus: poster.status,
+            isPrimary: productMedia.isPrimary,
+            sortOrder: productMedia.sortOrder,
+            status: media.status,
+        })
+        .from(productMedia)
+        .innerJoin(products, eq(products.id, productMedia.productId))
+        .innerJoin(media, eq(media.id, productMedia.mediaId))
+        .leftJoin(poster, eq(poster.id, media.posterMediaId))
+        .where(and(
+            sql`${productMedia.productId} IN (
+                SELECT CAST(value AS TEXT) FROM json_each(${productIdSet})
+            )`,
+            inArray(media.status, ["ready", "trashed"]),
+            sql`(
+                ${productMedia.id} IN (
+                    SELECT pv.image_id
+                    FROM product_variants AS pv
+                    WHERE pv.id IN (
+                        SELECT CAST(value AS TEXT) FROM json_each(${variantIdSet})
+                    )
+                      AND pv.deleted_at IS NULL
+                      AND pv.image_id IS NOT NULL
+                )
+                OR ${productMedia.isPrimary} = 1
+                OR ${productMedia.id} = (
+                    SELECT pm_first.id
+                    FROM product_media AS pm_first
+                    INNER JOIN media AS m_first ON m_first.id = pm_first.media_id
+                    WHERE pm_first.product_id = ${productMedia.productId}
+                      AND m_first.status IN ('ready', 'trashed')
+                    ORDER BY pm_first.sort_order, pm_first.id
+                    LIMIT 1
+                )
+                OR ${productMedia.id} = (
+                    SELECT pm_image.id
+                    FROM product_media AS pm_image
+                    INNER JOIN media AS m_image ON m_image.id = pm_image.media_id
+                    WHERE pm_image.product_id = ${productMedia.productId}
+                      AND m_image.status IN ('ready', 'trashed')
+                      AND m_image.kind = 'image'
+                    ORDER BY pm_image.sort_order, pm_image.id
+                    LIMIT 1
+                )
+                OR ${productMedia.id} = (
+                    SELECT pm_video.id
+                    FROM product_media AS pm_video
+                    INNER JOIN media AS m_video ON m_video.id = pm_video.media_id
+                    INNER JOIN media AS poster_video ON poster_video.id = m_video.poster_media_id
+                    WHERE pm_video.product_id = ${productMedia.productId}
+                      AND m_video.status IN ('ready', 'trashed')
+                      AND m_video.kind = 'video'
+                      AND poster_video.kind = 'image'
+                      AND poster_video.status IN ('ready', 'trashed')
+                    ORDER BY pm_video.sort_order, pm_video.id
+                    LIMIT 1
+                )
+            )`,
+        ))
+        .orderBy(asc(productMedia.productId), asc(productMedia.sortOrder), asc(productMedia.id));
+}
+
+export function resolveProductMediaProjectionRows(
+    rows: readonly ProductMediaProjectionRow[],
+): Map<string, ProductMediaProjection[]> {
+    const result = new Map<string, ProductMediaProjection[]>();
+    for (const row of rows) {
+        const posterIsUsable = row.posterMediaId
+            && row.posterKind === "image"
+            && (row.posterStatus === "ready" || row.posterStatus === "trashed")
+            && row.posterObjectKey;
+        const projection: ProductMediaProjection = {
+            id: row.id,
+            mediaId: row.mediaId,
+            kind: row.kind,
+            url: getCurrentPublicMediaUrl(row.objectKey),
+            posterMediaId: posterIsUsable ? row.posterMediaId : null,
+            posterUrl: posterIsUsable
+                ? getCurrentPublicMediaUrl(row.posterObjectKey!)
+                : null,
+            contextualAltText: row.contextualAltText,
+            altText: row.contextualAltText ?? row.mediaAltText ?? row.productName,
+            caption: row.caption,
+            width: row.width,
+            height: row.height,
+            durationMs: row.durationMs,
+            isPrimary: row.isPrimary,
+            sortOrder: row.sortOrder,
+            status: row.status as "ready" | "trashed",
+        };
+        const current = result.get(row.productId) ?? [];
+        current.push(projection);
+        result.set(row.productId, current);
+    }
+    return result;
+}
+
 /**
  * Loads ordered product associations and poster assets in bounded sequential
  * waves. Existing ready or trashed references remain usable; deleting/deleted
@@ -138,69 +332,14 @@ export async function loadProductMediaProjections(
 ): Promise<Map<string, ProductMediaProjection[]>> {
     const uniqueIds = [...new Set(productIds.map((id) => id.trim()).filter(Boolean))];
     const result = new Map<string, ProductMediaProjection[]>();
-    const poster = alias(media, "product_media_poster");
 
     for (let index = 0; index < uniqueIds.length; index += PRODUCT_MEDIA_QUERY_CHUNK) {
         const chunk = uniqueIds.slice(index, index + PRODUCT_MEDIA_QUERY_CHUNK);
-        const rows = await db
-            .select({
-                productId: productMedia.productId,
-                productName: products.name,
-                id: productMedia.id,
-                mediaId: productMedia.mediaId,
-                kind: media.kind,
-                objectKey: media.objectKey,
-                mediaAltText: media.altText,
-                contextualAltText: productMedia.altText,
-                caption: media.caption,
-                width: media.width,
-                height: media.height,
-                durationMs: media.durationMs,
-                posterMediaId: poster.id,
-                posterObjectKey: poster.objectKey,
-                posterKind: poster.kind,
-                posterStatus: poster.status,
-                isPrimary: productMedia.isPrimary,
-                sortOrder: productMedia.sortOrder,
-                status: media.status,
-            })
-            .from(productMedia)
-            .innerJoin(products, eq(products.id, productMedia.productId))
-            .innerJoin(media, eq(media.id, productMedia.mediaId))
-            .leftJoin(poster, eq(poster.id, media.posterMediaId))
-            .where(and(
-                inArray(productMedia.productId, chunk),
-                inArray(media.status, ["ready", "trashed"]),
-            ))
-            .orderBy(asc(productMedia.productId), asc(productMedia.sortOrder), asc(productMedia.id));
-
-        for (const row of rows) {
-            const posterIsUsable = row.posterMediaId
-                && row.posterKind === "image"
-                && (row.posterStatus === "ready" || row.posterStatus === "trashed")
-                && row.posterObjectKey;
-            const projection: ProductMediaProjection = {
-                id: row.id,
-                mediaId: row.mediaId,
-                kind: row.kind,
-                url: getCurrentPublicMediaUrl(row.objectKey),
-                posterMediaId: posterIsUsable ? row.posterMediaId : null,
-                posterUrl: posterIsUsable
-                    ? getCurrentPublicMediaUrl(row.posterObjectKey!)
-                    : null,
-                contextualAltText: row.contextualAltText,
-                altText: row.contextualAltText ?? row.mediaAltText ?? row.productName,
-                caption: row.caption,
-                width: row.width,
-                height: row.height,
-                durationMs: row.durationMs,
-                isPrimary: row.isPrimary,
-                sortOrder: row.sortOrder,
-                status: row.status as "ready" | "trashed",
-            };
-            const current = result.get(row.productId) ?? [];
-            current.push(projection);
-            result.set(row.productId, current);
+        const chunkResult = resolveProductMediaProjectionRows(
+            await selectProductMediaProjectionRows(db, chunk) as ProductMediaProjectionRow[],
+        );
+        for (const [productId, projections] of chunkResult) {
+            result.set(productId, [...(result.get(productId) ?? []), ...projections]);
         }
     }
     return result;

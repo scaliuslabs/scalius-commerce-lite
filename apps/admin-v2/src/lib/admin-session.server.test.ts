@@ -167,8 +167,10 @@ describe("admin session direct D1 lookup", () => {
       db.get.mock.calls[0]?.[0] as SQL,
     );
     expect(query.params).toEqual(["session_token"]);
+    expect(query.sql).toContain('FROM "session" s');
+    expect(query.sql).toContain('INNER JOIN "user" u');
     expect(query.sql).toContain("s.expires_at > unixepoch()");
-    expect(query.sql).toContain("u.banned = 0");
+    expect(query.sql).toContain("COALESCE(u.banned, 0) = 0");
     expect(query.sql).toContain("u.must_change_password");
     expect(query.sql).toContain("u.must_enroll_two_factor");
   });

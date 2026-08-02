@@ -25,7 +25,7 @@ import {
 export const TURSO_PROVISION_RECEIPT_VERSION =
   "scalius-turso-provision-receipt/v2" as const;
 export const TURSO_PLATFORM_UPLOAD_RECEIPT_VERSION =
-  "scalius-turso-platform-upload-receipt/v2" as const;
+  "scalius-turso-platform-upload-receipt/v3" as const;
 export const TURSO_PROVISION_RECEIPT_FILENAME = "provision-receipt.json";
 export const TURSO_PLATFORM_UPLOAD_RECEIPT_FILENAME =
   "platform-upload-receipt.json";
@@ -49,6 +49,7 @@ export interface TursoPlatformUploadReceipt {
   databaseName: string;
   hostname: string;
   artifactSha256: string;
+  retiredSchemaArchiveSha256: string | null;
   sourceFingerprint: string;
   targetFingerprint: string;
   provisionReceiptSha256: string;
@@ -156,6 +157,8 @@ function expectedUploadReceipt(
     databaseHostname,
     artifactSha256: bundle.evidence.artifact.sha256,
     artifactBytes: bundle.evidence.artifact.bytes,
+    retiredSchemaArchiveSha256:
+      bundle.evidence.retiredSchemaArchive?.sha256 ?? null,
     sourceFingerprint: bundle.evidence.portabilityManifest.fingerprint,
     schemaDigest: bundle.evidence.portabilityManifest.schemaDigest,
     tableCount: bundle.evidence.portabilityManifest.tables.length,
@@ -186,6 +189,7 @@ async function readFinalReceipt(
     databaseName: string;
     artifactBytes: number;
     artifactSha256: string;
+    retiredSchemaArchiveSha256: string | null;
     sourceFingerprint: string;
   },
 ): Promise<TursoPlatformUploadReceipt | undefined> {
@@ -200,6 +204,7 @@ async function readFinalReceipt(
     receipt.group !== expected.group ||
     receipt.databaseName !== expected.databaseName ||
     receipt.artifactSha256 !== expected.artifactSha256 ||
+    receipt.retiredSchemaArchiveSha256 !== expected.retiredSchemaArchiveSha256 ||
     receipt.sourceFingerprint !== expected.sourceFingerprint ||
     receipt.targetFingerprint !== expected.sourceFingerprint ||
     receipt.uploadTokensInvalidated !== true ||
@@ -273,6 +278,8 @@ export async function provisionAndUploadTursoBundle(
     databaseName,
     artifactBytes: bundle.evidence.artifact.bytes,
     artifactSha256: bundle.evidence.artifact.sha256,
+    retiredSchemaArchiveSha256:
+      bundle.evidence.retiredSchemaArchive?.sha256 ?? null,
     sourceFingerprint: bundle.evidence.portabilityManifest.fingerprint,
   };
   const provisionReceiptPath = resolve(
@@ -415,6 +422,7 @@ export async function provisionAndUploadTursoBundle(
     databaseName,
     hostname: provision.hostname,
     artifactSha256: expected.artifactSha256,
+    retiredSchemaArchiveSha256: expected.retiredSchemaArchiveSha256,
     sourceFingerprint: expected.sourceFingerprint,
     targetFingerprint: upload.targetFingerprint,
     provisionReceiptSha256,

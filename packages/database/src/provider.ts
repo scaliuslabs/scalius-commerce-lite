@@ -1,10 +1,10 @@
-export type DatabaseProvider = "d1" | "turso";
+export type DatabaseProvider = "d1" | "turso" | "postgres";
 
 export interface DatabaseProviderCapabilities {
   concurrentWrites: boolean;
   fts5: boolean;
   recursiveCte: boolean;
-  sqliteDialect: true;
+  sqliteDialect: boolean;
   withoutRowid: boolean;
 }
 
@@ -26,6 +26,13 @@ const DATABASE_PROVIDER_CAPABILITIES: Record<
     sqliteDialect: true,
     withoutRowid: false,
   },
+  postgres: {
+    concurrentWrites: true,
+    fts5: false,
+    recursiveCte: true,
+    sqliteDialect: false,
+    withoutRowid: false,
+  },
 };
 
 export function getDatabaseProviderCapabilities(
@@ -39,6 +46,7 @@ export interface DatabaseEnvironment extends Record<string, unknown> {
   DATABASE_PROVIDER?: unknown;
   TURSO_DATABASE_URL?: unknown;
   TURSO_AUTH_TOKEN?: unknown;
+  POSTGRES_DATABASE_URL?: unknown;
 }
 
 export type DatabaseConfiguration =
@@ -50,6 +58,11 @@ export type DatabaseConfiguration =
       provider: "turso";
       url: string;
       authToken: string;
+      writeBatchMode: "immediate" | "concurrent";
+    }
+  | {
+      provider: "postgres";
+      connectionString: string;
     };
 
 function optionalString(value: unknown): string | undefined {
@@ -94,7 +107,46 @@ function requireTursoConfiguration(
     );
   }
 
-  return { provider: "turso", url, authToken };
+  return {
+    provider: "turso",
+    url,
+    authToken,
+    // Turso Cloud gives the Rust/TursoDB engine a `turso://` endpoint and
+    // legacy libSQL databases a `libsql://` endpoint. Keep the compatibility
+    // path conservative while activating MVCC without another deployment
+    // setting for every control-plane-provisioned TursoDB database.
+    writeBatchMode: parsed.protocol === "turso:" ? "concurrent" : "immediate",
+  };
+}
+
+function requirePostgresConfiguration(
+  connectionStringValue: unknown,
+): Extract<DatabaseConfiguration, { provider: "postgres" }> {
+  const connectionString = optionalString(connectionStringValue);
+  if (!connectionString) {
+    throw new Error(
+      "PostgreSQL database configuration is incomplete: POSTGRES_DATABASE_URL is required.",
+    );
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(connectionString);
+  } catch {
+    throw new Error(
+      "PostgreSQL database configuration is invalid: POSTGRES_DATABASE_URL must be a valid PostgreSQL connection string.",
+    );
+  }
+  if (
+    (parsed.protocol !== "postgres:" && parsed.protocol !== "postgresql:")
+    || !parsed.hostname
+    || !parsed.pathname
+    || parsed.pathname === "/"
+  ) {
+    throw new Error(
+      "PostgreSQL database configuration is invalid: POSTGRES_DATABASE_URL must use postgres:// or postgresql:// and name a database.",
+    );
+  }
+  return { provider: "postgres", connectionString };
 }
 
 /**
@@ -110,9 +162,14 @@ export function resolveDatabaseConfiguration(
 ): DatabaseConfiguration {
   const explicitProvider = optionalString(env.DATABASE_PROVIDER)?.toLowerCase();
 
-  if (explicitProvider && explicitProvider !== "d1" && explicitProvider !== "turso") {
+  if (
+    explicitProvider
+    && explicitProvider !== "d1"
+    && explicitProvider !== "turso"
+    && explicitProvider !== "postgres"
+  ) {
     throw new Error(
-      `Unsupported DATABASE_PROVIDER ${JSON.stringify(explicitProvider)}. Expected "d1" or "turso".`,
+      `Unsupported DATABASE_PROVIDER ${JSON.stringify(explicitProvider)}. Expected "d1", "turso", or "postgres".`,
     );
   }
 
@@ -123,7 +180,27 @@ export function resolveDatabaseConfiguration(
     );
   }
 
-  if (explicitProvider !== "d1" && (env.TURSO_DATABASE_URL || env.TURSO_AUTH_TOKEN)) {
+  if (explicitProvider === "postgres") {
+    return requirePostgresConfiguration(env.POSTGRES_DATABASE_URL);
+  }
+
+  const hasTursoConfiguration = Boolean(env.TURSO_DATABASE_URL || env.TURSO_AUTH_TOKEN);
+  const hasPostgresConfiguration = Boolean(env.POSTGRES_DATABASE_URL);
+  if (
+    explicitProvider !== "d1"
+    && hasTursoConfiguration
+    && hasPostgresConfiguration
+  ) {
+    throw new Error(
+      "Database configuration is ambiguous: Turso and PostgreSQL credentials are both installed. Set DATABASE_PROVIDER explicitly.",
+    );
+  }
+
+  if (explicitProvider !== "d1" && hasPostgresConfiguration) {
+    return requirePostgresConfiguration(env.POSTGRES_DATABASE_URL);
+  }
+
+  if (explicitProvider !== "d1" && hasTursoConfiguration) {
     return requireTursoConfiguration(
       env.TURSO_DATABASE_URL,
       env.TURSO_AUTH_TOKEN,

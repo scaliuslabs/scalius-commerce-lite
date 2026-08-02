@@ -14,19 +14,22 @@ import { pathToFileURL } from "node:url";
 
 import { connect } from "@tursodatabase/database";
 
+import { verifyD1PortableExportBundle } from "./export-d1-portable";
 import { normalizeD1ExportToTursoDatabase } from "./normalize-d1-export-core";
 import {
   sha256File,
   TURSO_UPLOAD_BUNDLE_VERSION,
   TURSO_UPLOAD_DATABASE_FILENAME,
   TURSO_UPLOAD_EVIDENCE_FILENAME,
+  TURSO_UPLOAD_RETIRED_SCHEMA_ARCHIVE_FILENAME,
   type TursoUploadBundleEvidence,
 } from "./turso-upload-bundle";
 
 const GIBIBYTE = 1024n * 1024n * 1024n;
 
 export interface PrepareTursoUploadOptions {
-  input: string;
+  input?: string;
+  exportBundle?: string;
   outputDirectory: string;
   sqliteBinary: string;
 }
@@ -45,25 +48,33 @@ export interface PrepareTursoUploadSummary {
   integrity: "ok";
   foreignKeyViolations: 0;
   journalMode: "mvcc";
+  retiredTableCount: number;
+  retiredRowCount: number;
+  sourceExportReceiptSha256: string | null;
 }
 
 function parseArguments(argv: readonly string[]): PrepareTursoUploadOptions {
   let input: string | undefined;
+  let exportBundle: string | undefined;
   let outputDirectory: string | undefined;
   let sqliteBinary = process.env.SQLITE3_BIN?.trim() || "sqlite3";
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
     if (argument === "--") continue;
     if (argument === "--input") input = argv[++index];
+    else if (argument === "--export-bundle") exportBundle = argv[++index];
     else if (argument === "--out") outputDirectory = argv[++index];
     else if (argument === "--sqlite-binary") sqliteBinary = argv[++index] ?? "";
     else throw new Error(`Unknown argument ${JSON.stringify(argument)}.`);
   }
-  if (!input?.trim()) throw new Error("--input is required.");
+  if (Boolean(input?.trim()) === Boolean(exportBundle?.trim())) {
+    throw new Error("Exactly one of --export-bundle or --input is required.");
+  }
   if (!outputDirectory?.trim()) throw new Error("--out is required.");
   if (!sqliteBinary.trim()) throw new Error("--sqlite-binary must not be empty.");
   return {
-    input: resolve(input),
+    input: input ? resolve(input) : undefined,
+    exportBundle: exportBundle ? resolve(exportBundle) : undefined,
     outputDirectory: resolve(outputDirectory),
     sqliteBinary,
   };
@@ -89,9 +100,10 @@ async function preflightDisk(input: string, outputParent: string): Promise<{
   const filesystem = await statfs(outputParent, { bigint: true });
   const availableBytes = filesystem.bavail * filesystem.bsize;
   // The input already occupies disk. Preparation additionally creates one
-  // source SQLite file and one canonical target file. Two input-sized copies
+  // source SQLite file, one canonical target file, and in the worst case one
+  // retired-table archive. Three input-sized copies
   // plus 2 GiB protects page/index overhead without guessing from JS memory.
-  const requiredBytes = BigInt(inputStats.size) * 2n + 2n * GIBIBYTE;
+  const requiredBytes = BigInt(inputStats.size) * 3n + 2n * GIBIBYTE;
   if (availableBytes < requiredBytes) {
     throw new Error(
       `Insufficient free disk for migration bundle: ${availableBytes} bytes available, ${requiredBytes} required.`,
@@ -203,10 +215,17 @@ async function syncFile(path: string): Promise<void> {
 export async function prepareTursoUploadBundle(
   options: PrepareTursoUploadOptions,
 ): Promise<PrepareTursoUploadSummary> {
+  if (Boolean(options.input) === Boolean(options.exportBundle)) {
+    throw new Error("Exactly one D1 export artifact or export bundle is required.");
+  }
+  const portableExport = options.exportBundle
+    ? await verifyD1PortableExportBundle(options.exportBundle)
+    : null;
+  const input = portableExport?.sourcePath ?? resolve(options.input!);
   await assertDoesNotExist(options.outputDirectory);
   const outputParent = dirname(options.outputDirectory);
   await access(outputParent);
-  const disk = await preflightDisk(options.input, outputParent);
+  const disk = await preflightDisk(input, outputParent);
   const temporaryBundle = await mkdtemp(
     join(outputParent, ".scalius-turso-upload-"),
   );
@@ -218,22 +237,46 @@ export async function prepareTursoUploadBundle(
     temporaryBundle,
     TURSO_UPLOAD_EVIDENCE_FILENAME,
   );
+  const retiredSchemaArchivePath = join(
+    temporaryBundle,
+    TURSO_UPLOAD_RETIRED_SCHEMA_ARCHIVE_FILENAME,
+  );
   let published = false;
 
   try {
     const normalization = await normalizeD1ExportToTursoDatabase({
-      input: options.input,
+      input,
       targetDatabasePath: databasePath,
       sqliteBinary: options.sqliteBinary,
+      retiredSchemaArchivePath,
     });
+    if (
+      portableExport
+      && (
+        normalization.sourceBytes !== portableExport.evidence.artifact.bytes
+        || normalization.sourceSha256 !== portableExport.evidence.artifact.sha256
+      )
+    ) {
+      throw new Error(
+        "D1 export artifact changed between evidence verification and normalization.",
+      );
+    }
     const uploadPragmas = await convertToTursoMvccArtifact(databasePath);
     const artifact = await sha256File(databasePath);
     const evidence: TursoUploadBundleEvidence = {
       version: TURSO_UPLOAD_BUNDLE_VERSION,
       source: {
-        filename: basename(options.input),
+        filename: basename(input),
         bytes: normalization.sourceBytes,
         sha256: normalization.sourceSha256,
+        portableExport: portableExport
+          ? {
+              version: portableExport.evidence.version,
+              database: portableExport.evidence.database,
+              snapshotRef: portableExport.evidence.bookmark,
+              evidenceSha256: portableExport.evidenceSha256,
+            }
+          : null,
       },
       artifact: {
         engine: "turso-mvcc",
@@ -251,6 +294,7 @@ export async function prepareTursoUploadBundle(
         foreignKeyViolations: normalization.foreignKeyViolations,
         integrity: normalization.integrity,
       },
+      retiredSchemaArchive: normalization.retiredSchemaArchive,
       portabilityManifest: normalization.portabilityManifest,
     };
     await writeFile(
@@ -258,7 +302,13 @@ export async function prepareTursoUploadBundle(
       `${JSON.stringify(evidence, null, 2)}\n`,
       { flag: "wx", mode: 0o600 },
     );
-    await Promise.all([syncFile(databasePath), syncFile(evidencePath)]);
+    await Promise.all([
+      syncFile(databasePath),
+      syncFile(evidencePath),
+      ...(normalization.retiredSchemaArchive
+        ? [syncFile(retiredSchemaArchivePath)]
+        : []),
+    ]);
     await rename(temporaryBundle, options.outputDirectory);
     published = true;
 
@@ -276,6 +326,9 @@ export async function prepareTursoUploadBundle(
       integrity: normalization.integrity,
       foreignKeyViolations: normalization.foreignKeyViolations,
       journalMode: "mvcc",
+      retiredTableCount: normalization.retiredSchemaArchive?.tableCount ?? 0,
+      retiredRowCount: normalization.retiredSchemaArchive?.rowCount ?? 0,
+      sourceExportReceiptSha256: portableExport?.evidenceSha256 ?? null,
     };
   } finally {
     if (!published) {

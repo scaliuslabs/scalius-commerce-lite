@@ -18,7 +18,7 @@ Browser (Customer/Admin)
 │  API Worker (Hono) :8787                             │
 │  ├─ Routes (thin HTTP layer)                         │
 │  ├─ Middleware (auth, RBAC, cache, CSP)              │
-│  ├─ Queue Consumer (payment, notification, ingest)   │
+│  ├─ Queue Consumer (payment, notification, OTP/cache)│
 │  └─ Cron (reservation expiry)                        │
 └──────────────────────┬──────────────────────────────┘
                        │
@@ -70,14 +70,14 @@ Everything in the platform revolves around orders. Here's the complete lifecycle
 ### Entry Points
 
 ```
-STOREFRONT CHECKOUT                ADMIN DASHBOARD
-├─ POST /orders/create             ├─ POST /admin/orders
-│  └─ Async via ORDER_INGEST_QUEUE │  └─ Synchronous (reserve + deduct immediately)
-│     └─ 4-phase batch processing  │
-│        1. Build statements       │
-│        2. Reserve inventory      │
-│        3. Atomic DB write        │
-│        4. Init COD tracking      │
+STOREFRONT CHECKOUT                 ADMIN DASHBOARD
+├─ POST /orders                     ├─ POST /admin/orders
+│  └─ Synchronous atomic commit     │  └─ Synchronous manual-order workflow
+│     1. Read-only validation       │     with its own idempotency authority
+│     2. Build immutable plan       │
+│     3. One attempt + inventory    │
+│        + order + receipt batch    │
+│     4. Relay durable side effects │
 ```
 
 ### Status Transitions & Side Effects

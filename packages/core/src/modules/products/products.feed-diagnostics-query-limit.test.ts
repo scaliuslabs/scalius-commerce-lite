@@ -65,6 +65,13 @@ function createSchema(sqlite: DatabaseSync): void {
             discount_amount REAL,
             deleted_at INTEGER
         );
+        CREATE TABLE inventory_reservation_lanes (
+            variant_id TEXT NOT NULL,
+            pool TEXT NOT NULL,
+            lane INTEGER NOT NULL,
+            reserved_quantity INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (variant_id, pool, lane)
+        );
     `);
 }
 
@@ -121,9 +128,9 @@ describe("product feed diagnostic D1 query limits", () => {
         createSchema(sqlite);
         seedSimpleProducts(sqlite, 205);
 
-        const boundParameterCounts: number[] = [];
+        const observedQueries: Array<{ query: string; params: unknown[] }> = [];
         const proxy = drizzle(async (query, params, method) => {
-            boundParameterCounts.push(params.length);
+            observedQueries.push({ query, params });
             if (params.length > 100) {
                 throw new Error(`D1 bound-parameter limit exceeded: ${params.length}`);
             }
@@ -166,11 +173,26 @@ describe("product feed diagnostic D1 query limits", () => {
             productsWithIssues: 0,
             skippedRows: 0,
         });
+        const boundParameterCounts = observedQueries.map(({ params }) => params.length);
         expect(Math.max(...boundParameterCounts)).toBeLessThanOrEqual(100);
         expect(
             boundParameterCounts
                 .filter((count) => count >= 20)
                 .sort((left, right) => left - right),
-        ).toEqual([20, 22, 90, 90, 92, 92]);
+        ).toEqual([20, 90, 90]);
+
+        const mediaQueries = observedQueries.filter(({ query }) =>
+            query.includes('from "product_media"'),
+        );
+        expect(mediaQueries).toHaveLength(3);
+        expect(mediaQueries.every(({ query }) => query.includes("json_each"))).toBe(true);
+        expect(mediaQueries.map(({ params }) => {
+            const encodedIds = params.find((parameter) =>
+                typeof parameter === "string" && parameter.startsWith('["prod_'),
+            );
+            return Array.isArray(JSON.parse(String(encodedIds)))
+                ? JSON.parse(String(encodedIds)).length as number
+                : 0;
+        }).sort((left, right) => left - right)).toEqual([20, 90, 90]);
     });
 });

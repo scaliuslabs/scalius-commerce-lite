@@ -269,7 +269,7 @@ describe("storefront product query boundaries", () => {
         expect(variantHelper).toContain("barcodeType: productVariants.barcodeType");
         expect(variantHelper).toContain("price: productVariants.price");
         expect(variantHelper).toContain("stock: productVariants.stock");
-        expect(variantHelper).toContain("reservedStock: productVariants.reservedStock");
+        expect(variantHelper).toContain("reservedStock: effectiveRegularReservedStockSql()");
         expect(variantHelper).toContain("isDefault: productVariants.isDefault");
         expect(variantHelper).toContain("trackInventory: productVariants.trackInventory");
         expect(variantHelper).toContain("discountType: productVariants.discountType");

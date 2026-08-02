@@ -197,13 +197,12 @@ export async function getAdminSessionFromCookieHeader(
           u.must_change_password as mustChangePassword,
           u.must_enroll_two_factor as mustEnrollTwoFactor,
           u.is_super_admin as isSuperAdmin
-        FROM session s
-        INNER JOIN user u ON u.id = s.user_id
+        FROM "session" s
+        INNER JOIN "user" u ON u.id = s.user_id
         WHERE s.token = ${token}
           AND s.expires_at > unixepoch()
           AND (
-            u.banned = 0
-            OR u.banned IS NULL
+            COALESCE(u.banned, 0) = 0
             OR (u.ban_expires IS NOT NULL AND u.ban_expires <= unixepoch())
           )
         LIMIT 1`),

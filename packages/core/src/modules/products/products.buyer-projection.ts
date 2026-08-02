@@ -1,4 +1,5 @@
 import { products, productVariants } from "@scalius/database/schema";
+import { availableRegularStockSql } from "@scalius/database/inventory-authority";
 import type { Database } from "@scalius/database/client";
 import { and, eq, isNull, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
@@ -21,10 +22,15 @@ import { alias } from "drizzle-orm/sqlite-core";
 export function buildBuyerCatalogPricingProjection(db: Database) {
     const pricingProduct = alias(products, "buyer_pricing_product");
     const pricingSku = alias(productVariants, "buyer_pricing_sku");
+    const availableStock = availableRegularStockSql({
+        variantId: pricingSku.id,
+        stock: pricingSku.stock,
+        legacyReservedStock: pricingSku.reservedStock,
+    });
 
     const skuAvailable = sql<number>`CASE
         WHEN ${pricingSku.trackInventory} = 0
-          OR (${pricingSku.stock} - ${pricingSku.reservedStock}) > 0
+          OR ${availableStock} > 0
         THEN 1 ELSE 0
     END`;
     const skuHasDiscount = sql<number>`CASE
@@ -151,9 +157,19 @@ export function buyerCatalogHasSkuInPriceRange(
     minPrice?: number,
     maxPrice?: number,
 ): SQL {
+    const buyerFilterAvailable = availableRegularStockSql({
+        variantId: sql.raw("buyer_filter_sku.id"),
+        stock: sql.raw("buyer_filter_sku.stock"),
+        legacyReservedStock: sql.raw("buyer_filter_sku.reserved_stock"),
+    });
+    const buyerAvailableSkuAvailable = availableRegularStockSql({
+        variantId: sql.raw("buyer_filter_available_sku.id"),
+        stock: sql.raw("buyer_filter_available_sku.stock"),
+        legacyReservedStock: sql.raw("buyer_filter_available_sku.reserved_stock"),
+    });
     const available = sql`(
         buyer_filter_sku.track_inventory = 0
-        OR (buyer_filter_sku.stock - buyer_filter_sku.reserved_stock) > 0
+        OR ${buyerFilterAvailable} > 0
     )`;
     const effectivePrice = sql`CASE
         WHEN buyer_filter_sku.discount_type = 'flat' AND buyer_filter_sku.discount_amount > 0
@@ -209,7 +225,7 @@ export function buyerCatalogHasSkuInPriceRange(
                     )
                     AND (
                         buyer_filter_available_sku.track_inventory = 0
-                        OR (buyer_filter_available_sku.stock - buyer_filter_available_sku.reserved_stock) > 0
+                        OR ${buyerAvailableSkuAvailable} > 0
                     )
               )
           )

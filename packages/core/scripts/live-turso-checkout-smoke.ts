@@ -1,7 +1,9 @@
 import {
+  createTursoDatabase,
   getDatabaseProviderForClient,
   getDb,
 } from "@scalius/database/client";
+import { createTursoPortabilityExecutor } from "@scalius/database/portability";
 import {
   checkoutAttempts,
   codTracking,
@@ -16,9 +18,10 @@ import {
   productVariants,
 } from "@scalius/database/schema";
 import {
-  claimCheckoutAttempt,
   commitStorefrontOrderPayload,
-  type ClaimedCheckoutAttempt,
+  createAtomicCheckoutAttempt,
+  resolveExistingCheckoutAttempt,
+  type AtomicCheckoutAttempt,
   type StorefrontOrderCommitPayload,
 } from "@scalius/core/modules/orders";
 import {
@@ -29,27 +32,30 @@ import {
 } from "@scalius/core/modules/navigation";
 import { ftsMatch } from "@scalius/core/search";
 import { and, eq, sql } from "drizzle-orm";
+import { pathToFileURL } from "node:url";
+import { assertDisposableDatabaseTarget } from "../../database/scripts/live-checkout-load-core";
 
-const CHECKOUT_CONCURRENCY = 12;
+const CHECKOUT_CONCURRENCY = parseCheckoutConcurrency(
+  process.env.SCALIUS_TEST_CHECKOUT_CONCURRENCY,
+);
+
+function parseCheckoutConcurrency(value: string | undefined): number {
+  const parsed = value === undefined ? 12 : Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > 200) {
+    throw new Error("SCALIUS_TEST_CHECKOUT_CONCURRENCY must be an integer from 1 to 200.");
+  }
+  return parsed;
+}
+
+function percentile(values: readonly number[], ratio: number): number {
+  const sorted = [...values].sort((left, right) => left - right);
+  return sorted[Math.max(0, Math.ceil(sorted.length * ratio) - 1)] ?? 0;
+}
 
 function requiredEnvironment(name: string): string {
   const value = process.env[name]?.trim();
   if (!value) throw new Error(`${name} is required.`);
   return value;
-}
-
-function assertDisposableTarget(databaseUrl: string, expectedName: string): void {
-  const hostname = new URL(databaseUrl).hostname.toLowerCase();
-  const normalizedName = expectedName.trim().toLowerCase();
-  if (
-    !normalizedName.startsWith("scalius-") ||
-    !normalizedName.includes("test") ||
-    !hostname.startsWith(`${normalizedName}-`)
-  ) {
-    throw new Error(
-      "Refusing live checkout smoke: expected a disposable scalius-*test* Turso database hostname.",
-    );
-  }
 }
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -71,8 +77,8 @@ function randomDigits(length: number): string {
   return Array.from(bytes, (byte) => String(byte % 10)).join("");
 }
 
-function createPayload(
-  attempt: ClaimedCheckoutAttempt,
+export function createPayload(
+  attempt: AtomicCheckoutAttempt,
   productId: string,
   variantId: string,
   phone: string,
@@ -197,8 +203,29 @@ function createPayload(
 async function main(): Promise<void> {
   const databaseUrl = requiredEnvironment("TURSO_DATABASE_URL");
   const authToken = requiredEnvironment("TURSO_AUTH_TOKEN");
-  const expectedDatabaseName = requiredEnvironment("SCALIUS_TEST_DATABASE_NAME");
-  assertDisposableTarget(databaseUrl, expectedDatabaseName);
+  const acknowledgedDatabaseHostname = requiredEnvironment(
+    "LOADTEST_ACK_DATABASE_HOST",
+  );
+  const targetId = requiredEnvironment("LOADTEST_TARGET_ID");
+  const acknowledgedTargetId = requiredEnvironment("LOADTEST_ACK_TARGET_ID");
+  const targetOracle = createTursoPortabilityExecutor({
+    url: databaseUrl,
+    authToken,
+  });
+  try {
+    assertDisposableDatabaseTarget({
+      databaseUrl,
+      acknowledgedDatabaseHostname,
+      expectedTargetId: targetId,
+      acknowledgedTargetId,
+      sentinelRows: await targetOracle.query(
+        `SELECT target_id, purpose, database_hostname, fixture_namespace
+           FROM scalius_loadtest_target`,
+      ),
+    });
+  } finally {
+    await targetOracle.close?.();
+  }
 
   const db = getDb({
     DATABASE_PROVIDER: "turso",
@@ -206,6 +233,32 @@ async function main(): Promise<void> {
     TURSO_AUTH_TOKEN: authToken,
   });
   assert(getDatabaseProviderForClient(db) === "turso", "Expected the Turso adapter.");
+  let conflictRetries = 0;
+  let highestConflictAttempt = 0;
+  const operationDurations: Record<
+    "statement" | "read" | "immediate" | "concurrent",
+    number[]
+  > = {
+    statement: [],
+    read: [],
+    immediate: [],
+    concurrent: [],
+  };
+  const createObservedCheckoutDb = () => createTursoDatabase(
+      { url: databaseUrl, authToken },
+      {
+        onConflictRetry({ attempt }) {
+          conflictRetries += 1;
+          highestConflictAttempt = Math.max(highestConflictAttempt, attempt);
+        },
+        onOperation(operation) {
+          const key = operation.kind === "statement" ? "statement" : operation.mode;
+          if (operation.success && key in operationDurations) {
+            operationDurations[key as keyof typeof operationDurations].push(operation.durationMs);
+          }
+        },
+      },
+    );
 
   const runId = crypto.randomUUID().replaceAll("-", "").slice(0, 16);
   const cases = Array.from({ length: CHECKOUT_CONCURRENCY }, (_, index) => {
@@ -241,45 +294,56 @@ async function main(): Promise<void> {
     stockVersion: 1,
   })));
 
-  const claims = await Promise.all(cases.map(async (testCase, index) => {
+  const attemptCases = await Promise.all(cases.map(async (testCase, index) => {
     const seed = `${runId}:${index}:${testCase.variantId}`;
     const requestHash = await sha256Hex(`payload:${seed}`);
     const requestKeyHash = await sha256Hex(`key:${seed}`);
-    const claim = await claimCheckoutAttempt(db, {
+    const identity = {
       requestKey: `checkout_submit:v1:${requestKeyHash}`,
       requestHash,
       checkoutRequestId: `live_${seed}`,
       statusToken: `cst_${requestKeyHash}`,
-    });
-    assert(claim.status === "claimed", "A unique live checkout attempt was not claimed.");
-    return claim.attempt;
+    };
+    return {
+      identity,
+      attempt: createAtomicCheckoutAttempt(identity),
+    };
   }));
+  const attempts = attemptCases.map(({ attempt }) => attempt);
+  // Workers create a request-local database client, so use one independent
+  // serverless connection per simulated checkout rather than serializing all
+  // transactions through one client stream.
+  const checkoutDbs = attempts.map(() => createObservedCheckoutDb());
 
-  const payloads = claims.map((attempt, index) => createPayload(
+  const payloads = attempts.map((attempt, index) => createPayload(
     attempt,
     cases[index]!.productId,
     cases[index]!.variantId,
     cases[index]!.phone,
   ));
   const startedAt = performance.now();
-  const results = await Promise.all(payloads.map((payload, index) =>
-    commitStorefrontOrderPayload(db, payload, {
-      attempt: claims[index]!,
+  const timedResults = await Promise.all(payloads.map(async (payload, index) => {
+    const orderStartedAt = performance.now();
+    const result = await commitStorefrontOrderPayload(checkoutDbs[index]!, payload, {
+      attempt: attempts[index]!,
       response: {
         success: true,
-        orderId: claims[index]!.orderId,
-        statusToken: claims[index]!.statusToken,
+        orderId: attempts[index]!.orderId,
+        statusToken: attempts[index]!.statusToken,
       },
-    }),
-  ));
+    });
+    return { result, durationMs: Math.round(performance.now() - orderStartedAt) };
+  }));
+  const results = timedResults.map(({ result }) => result);
+  const durations = timedResults.map(({ durationMs }) => durationMs);
   const elapsedMs = Math.round(performance.now() - startedAt);
 
   assert(results.every((result) => !result.alreadyCommitted), "A first commit replayed unexpectedly.");
-  const orderIds = new Set(claims.map((attempt) => attempt.orderId));
+  const orderIds = new Set(attempts.map((attempt) => attempt.orderId));
 
   for (let index = 0; index < cases.length; index += 1) {
     const testCase = cases[index]!;
-    const attempt = claims[index]!;
+    const attempt = attempts[index]!;
     const [variant, movement, checkout, order, item, lineTax, orderTax, receipt, cod, customer] =
       await Promise.all([
         db.select().from(productVariants).where(eq(productVariants.id, testCase.variantId)).get(),
@@ -311,7 +375,7 @@ async function main(): Promise<void> {
       movement.stockVersionAfter === 2,
       "Inventory ledger-v2 edge is incomplete.",
     );
-    assert(checkout?.status === "committed" && checkout.claimId === null, "Checkout claim was not committed.");
+    assert(checkout?.status === "committed" && checkout.claimId === null, "Checkout attempt was not committed.");
     assert(receipt?.orderId === attempt.orderId, "Durable receipt was not committed.");
   }
 
@@ -320,32 +384,29 @@ async function main(): Promise<void> {
     .from(inventoryMovements)
     .where(sql`${inventoryMovements.orderId} IN (${sql.join([...orderIds].map((id) => sql`${id}`), sql`, `)})`)
     .get();
-  const replayResults = await Promise.all(payloads.map((payload, index) =>
-    commitStorefrontOrderPayload(db, payload, {
-      attempt: claims[index]!,
-      response: { success: true, orderId: claims[index]!.orderId },
-    }),
+  const replayResults = await Promise.all(attemptCases.map(({ identity }) =>
+    resolveExistingCheckoutAttempt<{ success: boolean; orderId: string }>(db, identity)
   ));
   const afterReplay = await db
     .select({ count: sql<number>`COUNT(*)` })
     .from(inventoryMovements)
     .where(sql`${inventoryMovements.orderId} IN (${sql.join([...orderIds].map((id) => sql`${id}`), sql`, `)})`)
     .get();
-  assert(replayResults.every((result) => result.alreadyCommitted), "Committed checkout did not replay.");
+  assert(replayResults.every((result) => result?.status === "replay"), "Committed checkout did not replay.");
   assert(beforeReplay?.count === cases.length, "Unexpected reservation movement count before replay.");
   assert(afterReplay?.count === beforeReplay.count, "Replay reserved stock more than once.");
 
   const failureCase = cases[0]!;
   const failureKeyHash = await sha256Hex(`failure-key:${runId}`);
-  const failedClaimResult = await claimCheckoutAttempt(db, {
+  const failedIdentity = {
     requestKey: `checkout_submit:v1:${failureKeyHash}`,
     requestHash: await sha256Hex(`failure-payload:${runId}`),
     checkoutRequestId: `failure_${runId}`,
     statusToken: `cst_${failureKeyHash}`,
-  });
-  assert(failedClaimResult.status === "claimed", "Failure-case attempt was not claimed.");
+  };
+  const failedAttempt = createAtomicCheckoutAttempt(failedIdentity);
   const failedPayload = createPayload(
-    failedClaimResult.attempt,
+    failedAttempt,
     failureCase.productId,
     failureCase.variantId,
     `+8801${randomDigits(10)}`,
@@ -353,22 +414,22 @@ async function main(): Promise<void> {
   );
   let failedAsExpected = false;
   try {
-    await commitStorefrontOrderPayload(db, failedPayload, {
-      attempt: failedClaimResult.attempt,
-      response: { success: true, orderId: failedClaimResult.attempt.orderId },
+    await commitStorefrontOrderPayload(createObservedCheckoutDb(), failedPayload, {
+      attempt: failedAttempt,
+      response: { success: true, orderId: failedAttempt.orderId },
     });
   } catch {
     failedAsExpected = true;
   }
   assert(failedAsExpected, "Insufficient-stock checkout unexpectedly committed.");
-  const [failedOrder, failedReceipt, failedAttempt, unchangedVariant] = await Promise.all([
-    db.select().from(orders).where(eq(orders.id, failedClaimResult.attempt.orderId)).get(),
-    db.select().from(orderReceipts).where(eq(orderReceipts.orderId, failedClaimResult.attempt.orderId)).get(),
-    db.select().from(checkoutAttempts).where(eq(checkoutAttempts.id, failedClaimResult.attempt.id)).get(),
+  const [failedOrder, failedReceipt, failedAttemptRow, unchangedVariant] = await Promise.all([
+    db.select().from(orders).where(eq(orders.id, failedAttempt.orderId)).get(),
+    db.select().from(orderReceipts).where(eq(orderReceipts.orderId, failedAttempt.orderId)).get(),
+    db.select().from(checkoutAttempts).where(eq(checkoutAttempts.id, failedAttempt.id)).get(),
     db.select().from(productVariants).where(eq(productVariants.id, failureCase.variantId)).get(),
   ]);
   assert(!failedOrder && !failedReceipt, "Failed checkout leaked order or receipt state.");
-  assert(failedAttempt?.status === "processing", "Failed checkout mutated its claim inside a rolled-back batch.");
+  assert(!failedAttemptRow, "Failed checkout leaked an idempotency row.");
   assert(unchangedVariant?.reservedStock === 2, "Failed checkout leaked an inventory reservation.");
 
   const searchCondition = ftsMatch(
@@ -433,6 +494,24 @@ async function main(): Promise<void> {
     concurrentCheckouts: cases.length,
     committedOrders: results.length,
     elapsedMs,
+    throughputPerSecond: Number((results.length * 1_000 / elapsedMs).toFixed(2)),
+    latencyMs: {
+      p50: percentile(durations, 0.5),
+      p95: percentile(durations, 0.95),
+      p99: percentile(durations, 0.99),
+      max: Math.max(...durations),
+    },
+    conflictRetries,
+    highestConflictAttempt,
+    operations: Object.fromEntries(Object.entries(operationDurations).map(([kind, values]) => [
+      kind,
+      {
+        count: values.length,
+        p50Ms: percentile(values, 0.5),
+        p95Ms: percentile(values, 0.95),
+        maxMs: Math.max(0, ...values),
+      },
+    ])),
     idempotentReplays: replayResults.length,
     rollbackVerified: true,
     fallbackSearchMatches: searchRows.length,
@@ -440,4 +519,9 @@ async function main(): Promise<void> {
   })}\n`);
 }
 
-await main();
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+) {
+  await main();
+}

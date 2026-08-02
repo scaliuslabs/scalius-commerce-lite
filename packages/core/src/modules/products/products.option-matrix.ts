@@ -13,7 +13,7 @@ import {
     productVariants,
     products,
 } from "@scalius/database/schema";
-import { and, eq, inArray, isNull, not, sql } from "drizzle-orm";
+import { and, eq, getTableColumns, inArray, isNull, not, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import {
     MAX_PRODUCT_OPTION_AXES,
@@ -30,6 +30,7 @@ import {
 } from "./products.variants";
 import { executeProductAggregateMutationBatch } from "./products.aggregate-revision";
 import { buildStockMovementClaim } from "../inventory/stock-movement-claims";
+import { effectiveRegularReservedStockSql } from "@scalius/database/inventory-authority";
 
 const optionValueInputSchema = z.object({
     id: z.string().trim().min(1),
@@ -454,7 +455,11 @@ export async function saveProductOptionMatrix(
                 eq(productOptionDefinitions.id, productOptionValues.optionDefinitionId),
             )
             .where(eq(productOptionDefinitions.productId, productId)),
-        db.select().from(productVariants).where(eq(productVariants.productId, productId)),
+        db.select({
+            ...getTableColumns(productVariants),
+            legacyReservedStock: productVariants.reservedStock,
+            reservedStock: effectiveRegularReservedStockSql(),
+        }).from(productVariants).where(eq(productVariants.productId, productId)),
         db.select({ id: productMedia.id, status: media.status })
             .from(productMedia)
             .innerJoin(media, eq(media.id, productMedia.mediaId))
@@ -561,6 +566,16 @@ export async function saveProductOptionMatrix(
         ...activeVariantById,
         ...restoredVariantById,
     ]);
+
+    for (const variant of normalizedVariants) {
+        const existing = variantById.get(variant.id);
+        if (!existing || existing.reservedStock === 0) continue;
+        if (!variant.trackInventory || variant.stock < existing.reservedStock) {
+            throw new ConflictError(
+                "Release reserved stock before lowering a SKU below its reservations or disabling inventory tracking.",
+            );
+        }
+    }
 
     await assertUniqueVariantBarcodes(db, normalizedVariants.map((variant) => ({
         id: variantById.has(variant.id) ? variant.id : undefined,
@@ -752,6 +767,7 @@ export async function saveProductOptionMatrix(
                 WHERE ${productVariants.id} = ${variant.id}
                   AND ${productVariants.productId} = ${productId}
                   AND ${productVariants.stockVersion} = ${existing.stockVersion}
+                  AND ${effectiveRegularReservedStockSql()} <= ${variant.stock}
                   AND ${productVariants.deletedAt} IS NULL
             ) THEN 1 ELSE json_extract('OPTION_MATRIX_STOCK_CONFLICT', '$') END
         `));
@@ -764,7 +780,7 @@ export async function saveProductOptionMatrix(
                   AND ${productVariants.productId} = ${productId}
                   AND ${productVariants.version} = ${restored.version}
                   AND ${productVariants.stockVersion} = ${restored.stockVersion}
-                  AND ${productVariants.reservedStock} = 0
+                  AND ${effectiveRegularReservedStockSql()} = 0
                   AND ${productVariants.preorderStock} = 0
                   AND ${productVariants.deletedAt} IS NOT NULL
             ) THEN 1 ELSE json_extract('OPTION_MATRIX_RESTORE_CONFLICT', '$') END
@@ -780,7 +796,7 @@ export async function saveProductOptionMatrix(
                 )
                   AND ${productVariants.productId} = ${productId}
                   AND ${productVariants.isDefault} = 0
-                  AND ${productVariants.reservedStock} = 0
+                  AND ${effectiveRegularReservedStockSql()} = 0
                   AND ${productVariants.preorderStock} = 0
                   AND ${productVariants.deletedAt} IS NULL
             ) = ${retiringVariants.length} AND NOT EXISTS (
@@ -803,7 +819,7 @@ export async function saveProductOptionMatrix(
                   AND ${productVariants.productId} = ${productId}
                   AND ${productVariants.version} = ${defaultSku.version}
                   AND ${productVariants.stockVersion} = ${defaultSku.stockVersion}
-                  AND ${productVariants.reservedStock} = 0
+                  AND ${effectiveRegularReservedStockSql()} = 0
                   AND ${productVariants.preorderStock} = 0
                   AND ${productVariants.deletedAt} IS NULL
             ) THEN 1 ELSE json_extract('OPTION_MATRIX_DEFAULT_RETIRE_CONFLICT', '$') END
@@ -872,8 +888,8 @@ export async function saveProductOptionMatrix(
             if (variant.stock !== existing.stock) {
                 statements.push(buildStockMovementClaim(db, {
                     movementId: crypto.randomUUID(), variantId: variant.id, pool: "regular", quantity: variant.stock - existing.stock,
-                    before: { stock: existing.stock, reservedStock: existing.reservedStock, preorderStock: existing.preorderStock, stockVersion: existing.stockVersion },
-                    after: { stock: variant.stock, reservedStock: existing.reservedStock, preorderStock: existing.preorderStock, stockVersion: existing.stockVersion + 1 },
+                    before: { stock: existing.stock, reservedStock: existing.legacyReservedStock, preorderStock: existing.preorderStock, stockVersion: existing.stockVersion },
+                    after: { stock: variant.stock, reservedStock: existing.legacyReservedStock, preorderStock: existing.preorderStock, stockVersion: existing.stockVersion + 1 },
                     notes: "Stocktake: Option matrix edit", adminUserId,
                 }));
                 changedStockVariantIds.push(variant.id);
@@ -891,6 +907,12 @@ export async function saveProductOptionMatrix(
                 eq(productVariants.version, existing.version),
                 ...(variant.stock !== existing.stock || existing.deletedAt !== null
                     ? [eq(productVariants.stockVersion, existing.stockVersion)]
+                    : []),
+                ...(variant.trackInventory === false
+                    ? [eq(effectiveRegularReservedStockSql(), 0)]
+                    : []),
+                ...(variant.stock !== existing.stock
+                    ? [sql`${effectiveRegularReservedStockSql()} <= ${variant.stock}`]
                     : []),
                 existing.deletedAt === null
                     ? isNull(productVariants.deletedAt)
@@ -913,8 +935,8 @@ export async function saveProductOptionMatrix(
     if (wasSimple && defaultSku && defaultSku.stock > 0) {
         statements.push(buildStockMovementClaim(db, {
             movementId: crypto.randomUUID(), variantId: defaultSku.id, pool: "regular", quantity: -defaultSku.stock,
-            before: { stock: defaultSku.stock, reservedStock: defaultSku.reservedStock, preorderStock: defaultSku.preorderStock, stockVersion: defaultSku.stockVersion },
-            after: { stock: 0, reservedStock: defaultSku.reservedStock, preorderStock: defaultSku.preorderStock, stockVersion: defaultSku.stockVersion + 1 },
+            before: { stock: defaultSku.stock, reservedStock: defaultSku.legacyReservedStock, preorderStock: defaultSku.preorderStock, stockVersion: defaultSku.stockVersion },
+            after: { stock: 0, reservedStock: defaultSku.legacyReservedStock, preorderStock: defaultSku.preorderStock, stockVersion: defaultSku.stockVersion + 1 },
             notes: "Stocktake: Allocated default SKU stock to option matrix", adminUserId,
         }));
         statements.push(db.update(productVariants)

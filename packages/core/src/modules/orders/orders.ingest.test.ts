@@ -7,8 +7,7 @@ const mocks = vi.hoisted(() => ({
   safeBatch: vi.fn(),
   prepareStockReservationBatch: vi.fn(),
   isInventoryReservationConflictError: vi.fn(() => false),
-  prepareCheckoutAttemptCommit: vi.fn(),
-  isCheckoutAttemptClaimCurrent: vi.fn(async () => true),
+  prepareAtomicCheckoutAttemptCommit: vi.fn(),
   isCheckoutAttemptCommitConflictError: vi.fn(() => false),
   verifyPromotionCheckoutSnapshot: vi.fn(),
 }));
@@ -30,8 +29,7 @@ vi.mock("../promotions", async (importOriginal) => ({
 
 vi.mock("./checkout-attempts", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./checkout-attempts")>()),
-  prepareCheckoutAttemptCommit: mocks.prepareCheckoutAttemptCommit,
-  isCheckoutAttemptClaimCurrent: mocks.isCheckoutAttemptClaimCurrent,
+  prepareAtomicCheckoutAttemptCommit: mocks.prepareAtomicCheckoutAttemptCommit,
   isCheckoutAttemptCommitConflictError: mocks.isCheckoutAttemptCommitConflictError,
 }));
 
@@ -40,6 +38,7 @@ import { commitStorefrontOrderPayload } from "./orders.ingest";
 function createPayload(overrides: Partial<StorefrontOrderCommitPayload> = {}): StorefrontOrderCommitPayload {
   return {
     checkoutToken: "chk_order_discount",
+    checkoutAuthorityRevision: null,
     existingCustomer: { id: "cust_existing" },
     orderData: {
       id: "order_discount",
@@ -222,14 +221,13 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
       resolveIdempotentReplay: vi.fn(async () => null),
     }));
     mocks.isInventoryReservationConflictError.mockReturnValue(false);
-    mocks.prepareCheckoutAttemptCommit.mockResolvedValue({
-      guard: { kind: "checkout-attempt-guard" },
-      writes: [
-        { kind: "checkout-attempt-commit" },
-        { kind: "checkout-receipt" },
+    mocks.prepareAtomicCheckoutAttemptCommit.mockResolvedValue({
+      writesBeforeOrder: [
+        { kind: "checkout-attempt-insert" },
+        { kind: "checkout-attempt-guard" },
       ],
+      writesAfterOrder: [{ kind: "checkout-receipt" }],
     });
-    mocks.isCheckoutAttemptClaimCurrent.mockResolvedValue(true);
     mocks.isCheckoutAttemptCommitConflictError.mockReturnValue(false);
     mocks.verifyPromotionCheckoutSnapshot.mockReset();
   });
@@ -377,7 +375,7 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
     expect(JSON.stringify(db.conflictIgnoredInserts)).not.toContain("+8801712345678");
   });
 
-  it("rejects authenticated checkout payloads when the customer account is no longer active", async () => {
+  it("rejects an inactive authenticated customer without executing the prepared inventory writes", async () => {
     const db = createDbMock({ activeCustomer: null });
 
     await expect(commitStorefrontOrderPayload(db, createPayload()))
@@ -386,7 +384,7 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
         message: "Customer account is no longer active. Please sign in again.",
       });
 
-    expect(mocks.prepareStockReservationBatch).not.toHaveBeenCalled();
+    expect(mocks.prepareStockReservationBatch).toHaveBeenCalledOnce();
     expect(mocks.safeBatch).not.toHaveBeenCalled();
   });
 
@@ -560,6 +558,20 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
     expect(mocks.safeBatch).toHaveBeenCalledOnce();
   });
 
+  it("re-prepares checkout state after an exhausted provider write conflict", async () => {
+    const db = createDbMock();
+    mocks.isInventoryReservationConflictError.mockReturnValue(true);
+    mocks.safeBatch.mockRejectedValue(Object.assign(new Error("write conflict"), {
+      code: "SQLITE_BUSY_SNAPSHOT",
+    }));
+
+    await expect(commitStorefrontOrderPayload(db, createPayload()))
+      .rejects.toThrow("Inventory is changing quickly. Please retry checkout.");
+
+    expect(mocks.safeBatch).toHaveBeenCalledTimes(3);
+    expect(mocks.prepareStockReservationBatch).toHaveBeenCalledTimes(3);
+  });
+
   it("composes inventory and order writes into one batch with no cleanup batch", async () => {
     const db = createDbMock();
     const inventoryStatement = { kind: "inventory-guard-ledger-and-cas" };
@@ -580,11 +592,11 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
     expect(statements.length).toBeGreaterThan(1);
   });
 
-  it("atomically commits the checkout claim, inventory, order, outbox, and receipt", async () => {
+  it("commits a new idempotency candidate with the order and skips the impossible existing-order read", async () => {
     const db = createDbMock();
+    const attemptWrite = { kind: "checkout-attempt-insert" };
+    const attemptGuard = { kind: "checkout-attempt-atomic-guard" };
     const inventoryStatement = { kind: "inventory-guard-ledger-and-cas" };
-    const attemptGuard = { kind: "checkout-attempt-guard" };
-    const attemptWrite = { kind: "checkout-attempt-commit" };
     const receiptWrite = { kind: "checkout-receipt" };
     mocks.prepareStockReservationBatch.mockResolvedValue({
       success: true,
@@ -593,18 +605,19 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
       availabilityChangedSubjects: [],
       resolveIdempotentReplay: vi.fn(async () => null),
     });
-    mocks.prepareCheckoutAttemptCommit.mockResolvedValue({
-      guard: attemptGuard,
-      writes: [attemptWrite, receiptWrite],
+    mocks.prepareAtomicCheckoutAttemptCommit.mockResolvedValue({
+      writesBeforeOrder: [attemptWrite, attemptGuard],
+      writesAfterOrder: [receiptWrite],
     });
     mocks.safeBatch.mockResolvedValue([]);
 
     await commitStorefrontOrderPayload(db, createPayload(), {
       attempt: {
-        id: "attempt_1",
+        commitMode: "atomic",
+        origin: "new",
+        id: "attempt_atomic_1",
         requestKey: "checkout_submit:v1:key",
         requestHash: "request_hash",
-        claimId: "claim_1",
         orderId: "order_discount",
         checkoutToken: "chk_order_discount",
         statusToken: "cst_status",
@@ -612,12 +625,109 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
       response: { orderId: "order_discount", message: "Order created" },
     });
 
-    expect(mocks.safeBatch).toHaveBeenCalledOnce();
+    expect(mocks.prepareAtomicCheckoutAttemptCommit).toHaveBeenCalledOnce();
     const statements = mocks.safeBatch.mock.calls[0]?.[1] as unknown[];
-    expect(statements[0]).toBe(attemptGuard);
-    expect(statements[1]).toBe(inventoryStatement);
-    expect(statements.at(-2)).toBe(attemptWrite);
+    expect(statements[0]).toBe(attemptWrite);
+    expect(statements[1]).toBe(attemptGuard);
+    expect(statements[2]).toBe(inventoryStatement);
     expect(statements.at(-1)).toBe(receiptWrite);
+    expect(db.select).not.toHaveBeenCalledWith(expect.objectContaining({
+      accountOwnerCustomerId: expect.anything(),
+    }));
+  });
+
+  it("uses only the inventory statement results to resolve an exact availability transition", async () => {
+    const db = createDbMock();
+    const inventoryStatement = { kind: "fresh-inventory-write" };
+    const resolveCommittedAvailabilitySubjects = vi.fn(() => [{
+      productId: "prod_1",
+      slug: "product-one",
+      categoryId: "cat_1",
+    }]);
+    mocks.prepareStockReservationBatch.mockResolvedValue({
+      success: true,
+      results: [],
+      statements: [inventoryStatement],
+      availabilityChangedSubjects: [{
+        productId: "prod_1",
+        slug: "product-one",
+        categoryId: "cat_1",
+      }],
+      resolveCommittedAvailabilitySubjects,
+      resolveIdempotentReplay: vi.fn(async () => null),
+    });
+    mocks.safeBatch.mockResolvedValue([
+      [{ attempt: true }],
+      [{ attemptGuard: true }],
+      [{ stock: 1, reservedStock: 1 }],
+    ]);
+
+    const result = await commitStorefrontOrderPayload(db, createPayload(), {
+      attempt: {
+        commitMode: "atomic",
+        origin: "new",
+        id: "attempt_atomic_exact_availability",
+        requestKey: "checkout_submit:v1:exact_availability",
+        requestHash: "request_hash",
+        orderId: "order_discount",
+        checkoutToken: "chk_order_discount",
+        statusToken: "cst_exact_availability",
+      },
+      response: { orderId: "order_discount", message: "Order created" },
+    });
+
+    expect(resolveCommittedAvailabilitySubjects).toHaveBeenCalledWith([
+      [{ stock: 1, reservedStock: 1 }],
+    ]);
+    expect(result.availabilityChangedSubjects).toEqual([{
+      productId: "prod_1",
+      slug: "product-one",
+      categoryId: "cat_1",
+    }]);
+  });
+
+  it("invalidates potential availability subjects after an uncertain successful commit", async () => {
+    const db = createDbMock({
+      existingOrder: {
+        id: "order_discount",
+        customerId: "cust_existing",
+        accountOwnerCustomerId: "cust_existing",
+      },
+    });
+    const potentialSubjects = [{
+      productId: "prod_1",
+      slug: "product-one",
+      categoryId: "cat_1",
+    }];
+    mocks.prepareStockReservationBatch.mockResolvedValue({
+      success: true,
+      results: [],
+      statements: [{ kind: "fresh-inventory-write" }],
+      availabilityChangedSubjects: potentialSubjects,
+      resolveCommittedAvailabilitySubjects: vi.fn(() => []),
+      resolveIdempotentReplay: vi.fn(async () => null),
+    });
+    mocks.safeBatch.mockRejectedValue(new Error("response lost after commit"));
+
+    const result = await commitStorefrontOrderPayload(db, createPayload(), {
+      attempt: {
+        commitMode: "atomic",
+        origin: "new",
+        id: "attempt_atomic_uncertain",
+        requestKey: "checkout_submit:v1:uncertain",
+        requestHash: "request_hash",
+        orderId: "order_discount",
+        checkoutToken: "chk_order_discount",
+        statusToken: "cst_uncertain",
+      },
+      response: { orderId: "order_discount", message: "Order created" },
+    });
+
+    expect(result).toMatchObject({
+      orderId: "order_discount",
+      alreadyCommitted: true,
+      availabilityChangedSubjects: potentialSubjects,
+    });
   });
 
   it("maps reservation failures to structured cart item issues", async () => {

@@ -2,9 +2,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => {
   const db = { id: "db" };
+  const checkoutTransport = {
+    provider: "d1",
+    all: vi.fn(),
+    get: vi.fn(),
+    atomic: vi.fn(),
+    close: vi.fn(),
+  };
   return {
     db,
+    checkoutTransport,
     getDb: vi.fn(() => db),
+    createCheckoutSqlTransport: vi.fn(() => checkoutTransport),
+    recoverPendingCheckoutProjections: vi.fn(),
     releaseExpiredReservations: vi.fn(),
     cleanupStaleAbandonedCheckouts: vi.fn(),
     cleanupExpiredOrderPaymentRecoveryChallenges: vi.fn(),
@@ -25,6 +35,14 @@ const mocks = vi.hoisted(() => {
 
 vi.mock("@scalius/database/client", () => ({
   getDb: mocks.getDb,
+}));
+
+vi.mock("@scalius/database/checkout-transport", () => ({
+  createCheckoutSqlTransport: mocks.createCheckoutSqlTransport,
+}));
+
+vi.mock("@scalius/database/checkout-projection", () => ({
+  recoverPendingCheckoutProjections: mocks.recoverPendingCheckoutProjections,
 }));
 
 vi.mock("@scalius/core/modules/inventory", () => ({
@@ -81,6 +99,7 @@ vi.mock("./utils/webhook-idempotency", () => ({
 import {
   ABANDONED_CHECKOUT_RETENTION_DAYS,
   ABANDONED_CHECKOUT_SWEEP_LIMIT,
+  CHECKOUT_PROJECTION_SWEEP_LIMIT,
   EMPTY_ABANDONED_CHECKOUT_MAX_AGE_MINUTES,
   INVENTORY_EXPIRY_SWEEP_LIMIT,
   CUSTOMER_AUTH_OTP_SWEEP_LIMIT,
@@ -144,6 +163,12 @@ describe("runScheduledMaintenance", () => {
       scannedEmpty: 0,
       deletedEmpty: 0,
       limit: ABANDONED_CHECKOUT_SWEEP_LIMIT,
+      hasMore: false,
+    });
+    mocks.recoverPendingCheckoutProjections.mockResolvedValue({
+      scanned: 0,
+      completed: 0,
+      failed: 0,
       hasMore: false,
     });
     mocks.flushPendingOrderNotificationOutbox.mockResolvedValue({
@@ -367,6 +392,12 @@ describe("runScheduledMaintenance", () => {
         limit: ABANDONED_CHECKOUT_SWEEP_LIMIT,
       },
     );
+    expect(mocks.createCheckoutSqlTransport).toHaveBeenCalledWith(env);
+    expect(mocks.recoverPendingCheckoutProjections).toHaveBeenCalledWith(
+      mocks.checkoutTransport,
+      CHECKOUT_PROJECTION_SWEEP_LIMIT,
+    );
+    expect(mocks.checkoutTransport.close).toHaveBeenCalledOnce();
     expect(mocks.invalidateProductAvailabilityCaches).toHaveBeenNthCalledWith(
       1,
       mocks.db,

@@ -1,6 +1,10 @@
 import { productVariants, products, inventoryMovements, productLowStockAlerts, user as adminUsers } from "@scalius/database/schema";
 import { eq, sql, and, isNull, desc, asc, or, like } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
+import {
+    availableRegularStockSql,
+    effectiveRegularReservedStockSql,
+} from "@scalius/database/inventory-authority";
 import type { SQL } from "drizzle-orm";
 import { ValidationError } from "@scalius/core/errors";
 import { calculateDiscountedPrice } from "@scalius/shared/price-utils";
@@ -278,8 +282,8 @@ export async function getInventoryLabelVariants(
             productDiscountPercentage: products.discountPercentage,
             productDiscountAmount: products.discountAmount,
             stock: productVariants.stock,
-            reservedStock: productVariants.reservedStock,
-            available: sql<number>`(${productVariants.stock} - ${productVariants.reservedStock})`,
+            reservedStock: effectiveRegularReservedStockSql(),
+            available: availableRegularStockSql(),
             barcode: productVariants.barcode,
             barcodeType: productVariants.barcodeType,
             trackInventory: productVariants.trackInventory,
@@ -388,9 +392,9 @@ export async function getInventoryOverview(db: Database, params: {
         if (status === "low") {
             conditions.push(buildInventoryLowStockCondition());
         } else if (status === "out") {
-            conditions.push(sql`(${productVariants.stock} - ${productVariants.reservedStock}) <= 0`);
+            conditions.push(sql`${availableRegularStockSql()} <= 0`);
         } else if (status === "reserved") {
-            conditions.push(sql`${productVariants.reservedStock} > 0`);
+            conditions.push(sql`${effectiveRegularReservedStockSql()} > 0`);
         }
 
         if (search) {
@@ -401,7 +405,7 @@ export async function getInventoryOverview(db: Database, params: {
             ));
         }
 
-        const availableSql = sql<number>`(${productVariants.stock} - ${productVariants.reservedStock})`;
+        const availableSql = availableRegularStockSql();
         const sortDirection = order === "desc" ? "desc" : "asc";
         const orderBy =
             sort === "productName"
@@ -421,7 +425,7 @@ export async function getInventoryOverview(db: Database, params: {
                 optionLabel: variantOptionLabelSql(productVariants.id),
                 price: productVariants.price,
                 stock: productVariants.stock,
-                reservedStock: productVariants.reservedStock,
+                reservedStock: effectiveRegularReservedStockSql(),
                 available: availableSql,
                 lowStockThreshold: productVariants.lowStockThreshold,
                 version: productVariants.version,
@@ -445,9 +449,9 @@ export async function getInventoryOverview(db: Database, params: {
             .select({
                 totalVariants: sql<number>`count(*)`,
                 totalOnHand: sql<number>`COALESCE(SUM(${productVariants.stock}), 0)`,
-                totalReserved: sql<number>`COALESCE(SUM(${productVariants.reservedStock}), 0)`,
-                totalAvailable: sql<number>`COALESCE(SUM(${productVariants.stock} - ${productVariants.reservedStock}), 0)`,
-                outOfStockCount: sql<number>`SUM(CASE WHEN (${productVariants.stock} - ${productVariants.reservedStock}) <= 0 THEN 1 ELSE 0 END)`,
+                totalReserved: sql<number>`COALESCE(SUM(${effectiveRegularReservedStockSql()}), 0)`,
+                totalAvailable: sql<number>`COALESCE(SUM(${availableRegularStockSql()}), 0)`,
+                outOfStockCount: sql<number>`SUM(CASE WHEN ${availableRegularStockSql()} <= 0 THEN 1 ELSE 0 END)`,
                 lowStockCount: sql<number>`SUM(CASE WHEN ${buildInventoryLowStockCondition()} THEN 1 ELSE 0 END)`,
             })
             .from(productVariants)

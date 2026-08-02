@@ -1,11 +1,13 @@
 import type { Database } from "@scalius/database/client";
+import { effectiveRegularReservedStockSql } from "@scalius/database/inventory-authority";
 import { products, productVariants } from "@scalius/database/schema";
 import { DEFAULT_CURRENCY, normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
 import { roundPrice } from "@scalius/shared/price-utils";
-import { and, eq, inArray, isNull, or } from "drizzle-orm";
+import { and, eq, isNull, or, sql } from "drizzle-orm";
 import { variantOptionLabelSql } from "../products/products.option-model";
 import {
     loadProductMediaProjections,
+    type ProductMediaProjection,
     resolveSkuImageRepresentation,
 } from "../products/products.media";
 
@@ -96,7 +98,7 @@ export function isTrustedStorefrontCartValidationResult(
 
 type InventoryPool = "regular" | "preorder" | "backorder";
 
-interface ProductRow {
+export interface StorefrontCartProductRow {
     id: string;
     name: string;
     isActive: boolean;
@@ -108,7 +110,7 @@ interface ProductRow {
     taxClassId: string | null;
 }
 
-interface VariantRow {
+export interface StorefrontCartVariantRow {
     id: string;
     productId: string;
     optionCombinationKey: string | null;
@@ -129,16 +131,16 @@ interface VariantRow {
     imageId: string | null;
 }
 
-function variantLabel(variant: Pick<VariantRow, "isDefault" | "optionLabel"> | undefined): string | null {
+function variantLabel(variant: Pick<StorefrontCartVariantRow, "isDefault" | "optionLabel"> | undefined): string | null {
     if (!variant || variant.isDefault) return null;
     return variant.optionLabel;
 }
 
-function hasCustomerOption(variant: Pick<VariantRow, "optionCombinationKey">): boolean {
+function hasCustomerOption(variant: Pick<StorefrontCartVariantRow, "optionCombinationKey">): boolean {
     return Boolean(variant.optionCombinationKey?.trim());
 }
 
-function isSimpleDefaultSku(variant: Pick<VariantRow, "isDefault">): boolean {
+function isSimpleDefaultSku(variant: Pick<StorefrontCartVariantRow, "isDefault">): boolean {
     return variant.isDefault === true;
 }
 
@@ -146,18 +148,18 @@ function isPersistedVariantId(value: unknown): value is string {
     return typeof value === "string" && value.trim() !== "" && value.trim() !== "default";
 }
 
-function displayProductName(item: StorefrontCartValidationItem, product?: ProductRow): string | null {
+function displayProductName(item: StorefrontCartValidationItem, product?: StorefrontCartProductRow): string | null {
     return product?.name ?? item.productName ?? null;
 }
 
-function displayVariantLabel(item: StorefrontCartValidationItem, variant?: VariantRow): string | null {
+function displayVariantLabel(item: StorefrontCartValidationItem, variant?: StorefrontCartVariantRow): string | null {
     if (variant?.isDefault) return null;
     return variantLabel(variant) ?? item.variantLabel ?? null;
 }
 
 function calculateUnitPrice(
-    product: ProductRow,
-    variant: VariantRow | null,
+    product: StorefrontCartProductRow,
+    variant: StorefrontCartVariantRow | null,
     currencyCode: string,
 ): number {
     let unitPrice = variant?.price ?? product.price;
@@ -183,7 +185,7 @@ function calculateUnitPrice(
     return roundPrice(unitPrice, currencyCode);
 }
 
-function availableForVariant(variant: VariantRow, pool: InventoryPool): number {
+function availableForVariant(variant: StorefrontCartVariantRow, pool: InventoryPool): number {
     if (!variant.trackInventory) {
         return Number.POSITIVE_INFINITY;
     }
@@ -218,11 +220,93 @@ function addIssue(
     });
 }
 
-export async function validateStorefrontCartItems(
+export function selectStorefrontCartProductRows(
     db: Database,
+    productIds: readonly string[],
+) {
+    const productIdSet = JSON.stringify([...new Set(productIds)]);
+    return db
+        .select({
+            id: products.id,
+            name: products.name,
+            isActive: products.isActive,
+            price: products.price,
+            discountPercentage: products.discountPercentage,
+            discountType: products.discountType,
+            discountAmount: products.discountAmount,
+            freeDelivery: products.freeDelivery,
+            taxClassId: products.taxClassId,
+        })
+        .from(products)
+        .where(
+            and(
+                sql`${products.id} IN (
+                    SELECT CAST(value AS TEXT) FROM json_each(${productIdSet})
+                )`,
+                eq(products.isActive, true),
+                isNull(products.deletedAt),
+            ),
+        );
+}
+
+export function selectStorefrontCartVariantRows(
+    db: Database,
+    productIds: readonly string[],
+    variantIds: readonly string[],
+) {
+    const productIdSet = JSON.stringify([...new Set(productIds)]);
+    const variantIdSet = JSON.stringify([...new Set(variantIds)]);
+    return db
+        .select({
+            id: productVariants.id,
+            productId: productVariants.productId,
+            optionCombinationKey: productVariants.optionCombinationKey,
+            optionLabel: variantOptionLabelSql(productVariants.id),
+            stock: productVariants.stock,
+            reservedStock: effectiveRegularReservedStockSql(),
+            preorderStock: productVariants.preorderStock,
+            isDefault: productVariants.isDefault,
+            trackInventory: productVariants.trackInventory,
+            allowPreorder: productVariants.allowPreorder,
+            allowBackorder: productVariants.allowBackorder,
+            backorderLimit: productVariants.backorderLimit,
+            price: productVariants.price,
+            discountPercentage: productVariants.discountPercentage,
+            discountType: productVariants.discountType,
+            discountAmount: productVariants.discountAmount,
+            taxClassId: productVariants.taxClassId,
+            imageId: productVariants.imageId,
+        })
+        .from(productVariants)
+        .where(and(
+            or(
+                sql`${productVariants.productId} IN (
+                    SELECT CAST(value AS TEXT) FROM json_each(${productIdSet})
+                )`,
+                sql`${productVariants.id} IN (
+                    SELECT CAST(value AS TEXT) FROM json_each(${variantIdSet})
+                )`,
+            ),
+            isNull(productVariants.deletedAt),
+        ));
+}
+
+export function resolveStorefrontCartValidationFromRows(
     items: StorefrontCartValidationItem[],
-    options: { inventoryPool?: string | null; currencyCode?: string | null } = {},
-): Promise<StorefrontCartValidationResult> {
+    options: {
+        inventoryPool?: string | null;
+        currencyCode?: string | null;
+        /**
+         * The checkout coordinator performs the exact regular-stock guard in
+         * its commit transaction. Its catalog snapshot therefore validates
+         * identity and price without duplicating a stale availability check.
+         */
+        deferRegularInventoryAuthority?: boolean;
+    },
+    productRows: readonly StorefrontCartProductRow[],
+    variantRows: readonly StorefrontCartVariantRow[],
+    mediaByProduct: ReadonlyMap<string, ProductMediaProjection[]>,
+): StorefrontCartValidationResult {
     // API callers pass the normalized merchant setting. Direct Core callers
     // intentionally retain the historical BDT checkout authority fallback.
     const currencyCode = normalizeSupportedCurrencyCode(options.currencyCode) ?? DEFAULT_CURRENCY.code;
@@ -259,71 +343,14 @@ export async function validateStorefrontCartItems(
         });
     }
 
-    const productIds = [...new Set(items.map((item) => item.productId))];
-    const variantIds = [...new Set(items.map((item) => item.variantId))];
     const pool = options.inventoryPool === "preorder" || options.inventoryPool === "backorder"
         ? options.inventoryPool
         : "regular";
 
-    const [productRows, variantRows] = await Promise.all([
-        db
-            .select({
-                id: products.id,
-                name: products.name,
-                isActive: products.isActive,
-                price: products.price,
-                discountPercentage: products.discountPercentage,
-                discountType: products.discountType,
-                discountAmount: products.discountAmount,
-                freeDelivery: products.freeDelivery,
-                taxClassId: products.taxClassId,
-            })
-            .from(products)
-            .where(
-                and(
-                    inArray(products.id, productIds),
-                    eq(products.isActive, true),
-                    isNull(products.deletedAt),
-                ),
-            ),
-        db
-            .select({
-                id: productVariants.id,
-                productId: productVariants.productId,
-                optionCombinationKey: productVariants.optionCombinationKey,
-                optionLabel: variantOptionLabelSql(productVariants.id),
-                stock: productVariants.stock,
-                reservedStock: productVariants.reservedStock,
-                preorderStock: productVariants.preorderStock,
-                isDefault: productVariants.isDefault,
-                trackInventory: productVariants.trackInventory,
-                allowPreorder: productVariants.allowPreorder,
-                allowBackorder: productVariants.allowBackorder,
-                backorderLimit: productVariants.backorderLimit,
-                price: productVariants.price,
-                discountPercentage: productVariants.discountPercentage,
-                discountType: productVariants.discountType,
-                discountAmount: productVariants.discountAmount,
-                taxClassId: productVariants.taxClassId,
-                imageId: productVariants.imageId,
-            })
-            .from(productVariants)
-            .where(and(
-                or(
-                    inArray(productVariants.productId, productIds),
-                    inArray(productVariants.id, variantIds),
-                ),
-                isNull(productVariants.deletedAt),
-            )),
-    ]);
-
-    const productMap = new Map((productRows as ProductRow[]).map((product) => [product.id, product]));
-    // Product-media enrichment is intentionally a bounded sequential read after
-    // the catalog authority query. It does not participate in price/stock truth.
-    const mediaByProduct = await loadProductMediaProjections(db, productIds);
-    const variantsByProduct = new Map<string, VariantRow[]>();
-    const variantMap = new Map<string, VariantRow>();
-    const persistedVariantRows = (variantRows as VariantRow[])
+    const productMap = new Map(productRows.map((product) => [product.id, product]));
+    const variantsByProduct = new Map<string, StorefrontCartVariantRow[]>();
+    const variantMap = new Map<string, StorefrontCartVariantRow>();
+    const persistedVariantRows = variantRows
         .filter((variant) => isPersistedVariantId(variant.id));
     for (const variant of persistedVariantRows) {
         variantMap.set(variant.id, variant);
@@ -406,7 +433,9 @@ export async function validateStorefrontCartItems(
         }
 
         const variant = requestedVariant;
-        const availableQuantity = availableForVariant(variant, pool);
+        const availableQuantity = options.deferRegularInventoryAuthority && pool === "regular"
+            ? Number.POSITIVE_INFINITY
+            : availableForVariant(variant, pool);
         if (availableQuantity < item.quantity) {
             addIssue(issues, item, index, {
                 code: "QUANTITY_UNAVAILABLE",
@@ -470,4 +499,32 @@ export async function validateStorefrontCartItems(
         subtotal: roundPrice(subtotal, currencyCode),
         hasFreeDeliveryProduct,
     });
+}
+
+export async function validateStorefrontCartItems(
+    db: Database,
+    items: StorefrontCartValidationItem[],
+    options: { inventoryPool?: string | null; currencyCode?: string | null } = {},
+): Promise<StorefrontCartValidationResult> {
+    if (items.length === 0 || items.some((item) => !isPersistedVariantId(item.variantId))) {
+        return resolveStorefrontCartValidationFromRows(items, options, [], [], new Map());
+    }
+
+    const productIds = [...new Set(items.map((item) => item.productId))];
+    const variantIds = [...new Set(items.map((item) => item.variantId))];
+    const [productRows, variantRows] = await Promise.all([
+        selectStorefrontCartProductRows(db, productIds),
+        selectStorefrontCartVariantRows(db, productIds, variantIds),
+    ]);
+    // Media is presentation snapshot data, so keep it outside catalog authority
+    // checks while still persisting the exact image asset chosen at checkout.
+    const mediaByProduct = await loadProductMediaProjections(db, productIds);
+
+    return resolveStorefrontCartValidationFromRows(
+        items,
+        options,
+        productRows as StorefrontCartProductRow[],
+        variantRows as StorefrontCartVariantRow[],
+        mediaByProduct,
+    );
 }
