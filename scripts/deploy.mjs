@@ -11,12 +11,14 @@
  *   node scripts/deploy.mjs --only api --dry-run # typecheck + build + dist checks only
  *   node scripts/deploy.mjs --only api --wrangler-config path/to/wrangler.jsonc
  *     --health-only # isolated custom config: verify deployment + /health, not production bindings
- *   node scripts/deploy.mjs --migrate-only   # apply migrations to remote D1 only
- *   node scripts/deploy.mjs --migrate-only --local  # apply migrations to local D1 only
+ *   node scripts/deploy.mjs --migrate-only   # apply remote D1 migrations
+ *   node scripts/deploy.mjs --migrate-only --local  # apply local D1 migrations only
+ *   # External provider upgrades are an explicit frozen control-plane step:
+ *   pnpm --filter @scalius/database upgrade:schema --provider <provider> ...
  *
  * Runs in order (full deploy):
  *   1. turbo build       — builds all workspaces
- *   2. wrangler d1 migrations apply --remote  — applies pending migrations to D1
+ *   2. D1 migration, or read-only external schema compatibility preflight
  *   3. wrangler deploy   — deploys the API, Admin, Storefront, and Ops Monitor Workers
  *
  * The database name is read from apps/api/wrangler.jsonc (API worker owns D1).
@@ -42,6 +44,10 @@ const wranglerConfigArgIndex = args.indexOf("--wrangler-config");
 const customWranglerConfigPath = wranglerConfigArgIndex === -1
   ? null
   : resolve(root, args[wranglerConfigArgIndex + 1] || "");
+const databaseTargetHostArgIndex = args.indexOf("--database-target-host");
+const databaseTargetHost = databaseTargetHostArgIndex === -1
+  ? null
+  : args[databaseTargetHostArgIndex + 1] || null;
 const localPersistPath = process.env.SCALIUS_WRANGLER_STATE || "../../.wrangler/state";
 const deployTargets = ["api", "admin", "storefront", "ops-monitor"];
 const selectableDeployTargets = deployTargets;
@@ -174,6 +180,34 @@ export function getTypecheckCommandForTarget(target) {
 
 export function getSequentialWorkspaceCommand(task) {
   return `${pnpm} exec turbo run ${task} --concurrency=1`;
+}
+
+export function resolveDeploymentDatabaseProvider(config) {
+  const explicit = typeof config?.vars?.DATABASE_PROVIDER === "string"
+    ? config.vars.DATABASE_PROVIDER.trim().toLowerCase()
+    : "";
+  if (explicit) {
+    if (!["d1", "turso", "postgres"].includes(explicit)) {
+      throw new Error(`Unsupported DATABASE_PROVIDER ${JSON.stringify(explicit)}.`);
+    }
+    return explicit;
+  }
+  if (config?.d1_databases?.[0]) return "d1";
+  throw new Error(
+    "API Wrangler config must select DATABASE_PROVIDER or contain a D1 binding.",
+  );
+}
+
+export function getExternalSchemaPreflightCommand(provider, targetHost) {
+  if (provider !== "turso" && provider !== "postgres") {
+    throw new Error("External schema upgrades require turso or postgres.");
+  }
+  if (typeof targetHost !== "string" || !targetHost.trim()) {
+    throw new Error("External schema upgrades require --database-target-host.");
+  }
+  return `${pnpm} --filter @scalius/database upgrade:schema --provider ${provider}`
+    + ` --acknowledge-target-host ${shellQuote(targetHost.trim())}`
+    + " --dry-run --require-current";
 }
 
 export function getDeployCommandForTarget(target, apiWranglerConfigPath = null) {
@@ -699,6 +733,13 @@ export async function main() {
     console.error("✗ --wrangler-config requires a path.");
     process.exit(1);
   }
+  if (
+    databaseTargetHostArgIndex !== -1
+    && (!databaseTargetHost || databaseTargetHost.startsWith("--"))
+  ) {
+    console.error("✗ --database-target-host requires an exact hostname.");
+    process.exit(1);
+  }
   let config;
   try {
     config = readWranglerConfig(customWranglerConfigPath ?? undefined);
@@ -707,8 +748,18 @@ export async function main() {
     process.exit(1);
   }
 
+  let databaseProvider;
+  try {
+    databaseProvider = resolveDeploymentDatabaseProvider(config);
+  } catch (error) {
+    console.error(`✗ ${error.message}`);
+    process.exit(1);
+  }
   const d1 = config.d1_databases?.[0];
-  if (!d1?.database_name && !customWranglerConfigPath) {
+  if (
+    (!d1?.database_name && migrateOnly)
+    || (databaseProvider === "d1" && !d1?.database_name && !customWranglerConfigPath)
+  ) {
     console.error(
       "✗ No d1_databases[0].database_name found in apps/api/wrangler.jsonc.\n" +
       "  Add a D1 database binding before deploying."
@@ -728,20 +779,55 @@ export async function main() {
     console.error("✗ --health-only is allowed only with an explicit --wrangler-config API deploy.");
     process.exit(1);
   }
+  if (
+    !dryRun
+    && databaseProvider !== "d1"
+    && !databaseTargetHost
+    && !migrateOnly
+    && (requestedTarget === null || requestedTarget === "api")
+  ) {
+    console.error(
+      `✗ ${databaseProvider} deploys require --database-target-host so the `
+      + "selected database can pass a read-only schema preflight.",
+    );
+    process.exit(1);
+  }
+
+  const prepareSelectedProviderSchema = () => {
+    if (databaseProvider === "d1") {
+      const migrationTarget = customWranglerConfigPath ? "DB" : dbName;
+      const migrationConfigFlag = customWranglerConfigPath
+        ? ` --config ${shellQuote(customWranglerConfigPath)}`
+        : "";
+      runWithRetry(
+        `${pnpm} exec wrangler d1 migrations apply ${migrationTarget} --${target}`
+          + `${persistFlag}${migrationConfigFlag}`,
+        `Apply D1 migrations → ${dbName ?? migrationTarget} (${target})`,
+        apiDir,
+      );
+      return;
+    }
+    runWithRetry(
+      getExternalSchemaPreflightCommand(databaseProvider, databaseTargetHost),
+      `Verify current ${databaseProvider} schema → ${databaseTargetHost}`,
+      root,
+    );
+  };
 
   if (migrateOnly) {
-    console.log(`\n🗄  Applying D1 migrations → "${dbName}" (${target})\n`);
+    console.log(`\n🗄  Applying D1 schema migrations → "${dbName}" (${target})\n`);
     if (dryRun) {
-      console.log(`DRY RUN: would apply D1 migrations to ${dbName} (${target}).`);
+      console.log("DRY RUN: would apply D1 schema migrations.");
       console.log("\n✓ Migration dry run complete.");
       return;
     }
 
     try {
+      const migrationTarget = dbName;
       runWithRetry(
-        `${pnpm} exec wrangler d1 migrations apply ${dbName} --${target}${persistFlag}`,
-        `Apply migrations → ${dbName} (${target})`,
-        apiDir
+        `${pnpm} exec wrangler d1 migrations apply ${migrationTarget} --${target}${persistFlag}`,
+        `Apply D1 migrations → ${migrationTarget} (${target})`,
+        apiDir,
       );
       console.log("\n✓ Migrations applied.");
     } catch {
@@ -753,7 +839,7 @@ export async function main() {
 
   console.log(
     `\n🚀 ${dryRun ? "Validating deploy for" : "Deploying"} "${config.name}"${requestedTarget ? ` (${requestedTarget} only)` : ""}`
-    + (dbName ? ` → D1: "${dbName}"` : " → external database bindings")
+    + (databaseProvider === "d1" ? ` → D1: "${dbName}"` : ` → ${databaseProvider}`)
     + "\n",
   );
   console.log("=".repeat(60));
@@ -772,22 +858,12 @@ export async function main() {
       checkDistEnvFiles([requestedTarget]);
 
       if (dryRun) {
-        console.log("\nDRY RUN: skipping D1 migrations and Worker deploy.");
+        console.log("\nDRY RUN: skipping database migrations and Worker deploy.");
         console.log(`\n✓ Deploy dry run complete (${requestedTarget}).`);
         return;
       }
 
-      if (requestedTarget === "api" && dbName) {
-        const migrationTarget = customWranglerConfigPath ? "DB" : dbName;
-        const migrationConfigFlag = customWranglerConfigPath
-          ? ` --config ${shellQuote(customWranglerConfigPath)}`
-          : "";
-        runWithRetry(
-          `${pnpm} exec wrangler d1 migrations apply ${migrationTarget} --remote${migrationConfigFlag}`,
-          `Apply D1 migrations → ${dbName}`,
-          apiDir
-        );
-      }
+      if (requestedTarget === "api") prepareSelectedProviderSchema();
 
       deployTarget(requestedTarget, customWranglerConfigPath);
       await verifyPostDeployTarget(requestedTarget, config, customWranglerConfigPath, { healthOnly });
@@ -800,17 +876,15 @@ export async function main() {
     checkDistEnvFiles(deployTargets);
 
     if (dryRun) {
-      console.log("\nDRY RUN: skipping D1 migrations and Worker deploys.");
+      console.log("\nDRY RUN: skipping database migrations and Worker deploys.");
       console.log(`\n✓ Deploy dry run complete (${deployTargets.join(" + ")}).`);
       return;
     }
 
-    // 3. Apply all pending D1 migrations (no-op if schema is up to date)
-    runWithRetry(
-      `${pnpm} exec wrangler d1 migrations apply ${dbName} --remote`,
-      `Apply D1 migrations → ${dbName}`,
-      apiDir
-    );
+    // 3. D1 is upgraded locally by Wrangler. External authorities are upgraded
+    // only by the frozen control-plane workflow; ordinary deploys prove they
+    // are already current without mutating them.
+    prepareSelectedProviderSchema();
 
     // 4. Deploy all workers (admin-v2 replaces the old Astro admin)
     for (const targetName of deployTargets) {

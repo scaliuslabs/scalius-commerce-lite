@@ -446,6 +446,20 @@ export async function listSqlitePortableSchemaObjects(
   );
 }
 
+export async function fingerprintSqlitePortableSchemaObjects(
+  objects: readonly SqlitePortableSchemaObject[],
+): Promise<{ objects: number; sha256: string }> {
+  const ordered = [...objects].sort((left, right) =>
+    left.type.localeCompare(right.type) || left.name.localeCompare(right.name),
+  );
+  const value = ordered
+    .map((object) =>
+      JSON.stringify([object.type, object.name, object.tableName, object.sql]),
+    )
+    .join("\n");
+  return { objects: ordered.length, sha256: await sha256Hex(value) };
+}
+
 async function readTableColumns(
   executor: SqlitePortabilityExecutor,
   table: string,
@@ -585,13 +599,9 @@ export async function createSqlitePortabilityManifest(
   throwIfAborted(options.signal);
 
   const schemaObjects = await readSchemaObjects(executor, ignoredTables);
-  const schemaDigest = await sha256Hex(
-    schemaObjects
-      .map((object) =>
-        JSON.stringify([object.type, object.name, object.tableName, object.sql]),
-      )
-      .join("\n"),
-  );
+  const schemaDigest = (
+    await fingerprintSqlitePortableSchemaObjects(schemaObjects)
+  ).sha256;
   const tableNames = schemaObjects
     .filter((object) => object.type === "table")
     .map((object) => object.name)

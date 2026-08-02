@@ -1,5 +1,8 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  CURRENT_DATABASE_SCHEMA_MIGRATIONS,
+} from "@scalius/database/schema-contract";
 
 import { readinessRoutes } from "./readiness";
 import { requestCorrelationMiddleware } from "../utils/http-correlation";
@@ -20,24 +23,45 @@ function createDb(options: {
   delayMs?: number;
   fail?: boolean;
   transientFailures?: number;
+  schemaVersion?: number;
+  schemaName?: string;
+  schemaSha256?: string;
+  schemaRows?: readonly {
+    version: number;
+    name: string;
+    sourceSha256: string;
+  }[];
 } = {}) {
   let attempts = 0;
   return {
-    prepare: vi.fn(() => ({
-      first: vi.fn(async () => {
-        if (options.delayMs) {
-          await new Promise((resolve) => setTimeout(resolve, options.delayMs));
-        }
-        attempts += 1;
-        if (options.transientFailures && attempts <= options.transientFailures) {
-          throw new Error("D1_ERROR: D1 DB is overloaded. Requests queued for too long.");
-        }
-        if (options.fail) {
-          throw new Error("D1 unavailable");
-        }
-        return { ok: 1 };
-      }),
-    })),
+    prepare: vi.fn(() => {
+      const statement = {
+        bind: vi.fn(() => statement),
+        all: vi.fn(async () => {
+          if (options.delayMs) {
+            await new Promise((resolve) => setTimeout(resolve, options.delayMs));
+          }
+          attempts += 1;
+          if (options.transientFailures && attempts <= options.transientFailures) {
+            throw new Error("D1_ERROR: D1 DB is overloaded. Requests queued for too long.");
+          }
+          if (options.fail) {
+            throw new Error("D1 unavailable");
+          }
+          return {
+            success: true,
+            meta: {},
+            results: options.schemaRows ?? [{
+              version: options.schemaVersion ?? 50,
+              name: options.schemaName ?? "0050_schema_release_contract",
+              sourceSha256: options.schemaSha256
+                ?? CURRENT_DATABASE_SCHEMA_MIGRATIONS[0].sourceSha256,
+            }],
+          };
+        }),
+      };
+      return statement;
+    }),
   } as unknown as D1Database;
 }
 
@@ -210,7 +234,7 @@ describe("API readiness route", () => {
       expect(json.status).toBe("ready");
       expect(json.checks?.d1).toMatchObject({
         status: "ok",
-        detail: "SELECT 1",
+        detail: "schema 50/0050_schema_release_contract",
       });
       expect(db.prepare).toHaveBeenCalledTimes(3);
     } finally {
@@ -238,11 +262,63 @@ describe("API readiness route", () => {
       expect(json.status).toBe("ready");
       expect(json.checks?.d1).toMatchObject({
         status: "ok",
-        detail: "SELECT 1",
+        detail: "schema 50/0050_schema_release_contract",
       });
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("fails closed when the reachable database schema is outdated", async () => {
+    const app = createApp();
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const env = createEnv({
+      DB: createDb({
+        schemaVersion: 49,
+        schemaName: "0049_checkout_side_effect_authority_fence",
+      }),
+    });
+
+    const response = await app.request("/api/v1/readyz", {}, env);
+    const json = await response.json() as {
+      success?: boolean;
+      checks?: Record<string, { status?: string; detail?: string }>;
+    };
+
+    expect(response.status).toBe(503);
+    expect(json.success).toBe(false);
+    expect(json.checks?.d1).toMatchObject({
+      status: "error",
+      detail: expect.stringContaining("diverges at version 50"),
+    });
+  });
+
+  it.each([
+    ["missing", []],
+    ["extra lower", [
+      { version: 49, name: "0049_legacy", sourceSha256: "a".repeat(64) },
+      ...CURRENT_DATABASE_SCHEMA_MIGRATIONS,
+    ]],
+    ["future", [
+      ...CURRENT_DATABASE_SCHEMA_MIGRATIONS,
+      { version: 51, name: "0051_future", sourceSha256: "b".repeat(64) },
+    ]],
+    ["bad digest", [{
+      ...CURRENT_DATABASE_SCHEMA_MIGRATIONS[0],
+      sourceSha256: "c".repeat(64),
+    }]],
+  ])("fails closed for a %s D1 schema ledger", async (_label, schemaRows) => {
+    const app = createApp();
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const response = await app.request("/api/v1/readyz", {}, createEnv({
+      DB: createDb({ schemaRows }),
+    }));
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({
+      success: false,
+      checks: { d1: { status: "error" } },
+    });
   });
 
   it("allows remote KV variance within the remote-storage readiness budget", async () => {

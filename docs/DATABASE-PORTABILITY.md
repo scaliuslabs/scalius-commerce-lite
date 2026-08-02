@@ -40,6 +40,29 @@ an explicit source/rollback pin while target credentials are staged. A
 connection string does not move data and must never trigger an implicit
 request-path migration.
 
+Database release compatibility is exact, not a connectivity probe. Migration
+`0050_schema_release_contract` starts one ordered ledger shared by D1, TursoDB,
+and PostgreSQL. Each release row includes the canonical source digest, and API
+`/readyz` rejects missing, extra, renamed, future, or digest-mismatched rows.
+Historical migrations are an installed-system contract and must not be deleted
+or squashed after release.
+
+D1 continues to use Wrangler's normal migration application. Existing TursoDB
+and PostgreSQL databases use the explicit `upgrade:schema` runner. Every
+provider-neutral migration has canonical SQLite SQL plus a transaction-safe
+PostgreSQL sidecar with the same identity and source digest. TursoDB proves the
+semantic legacy baseline before its first ledger release and applies one
+migration per immediate transaction. PostgreSQL reuses the initial import's
+receipt and advisory-lock identity and applies one sidecar per serializable
+transaction. Replays after a committed-but-lost response are safe.
+
+Ordinary deploys never upgrade an external database. They run a read-only
+`--dry-run --require-current` preflight; an external control-plane operation
+must first activate `DATABASE_MIGRATION_FREEZE`, prove the freeze, run the
+explicit mutation with that proof digest, and only then deploy the release.
+This separation prevents an ordinary redeploy from racing checkout, queue, or
+scheduled writes.
+
 Provider capability differences stay behind shared helpers. D1 keeps FTS5,
 recursive CTE, and `WITHOUT ROWID` support. TursoDB and PostgreSQL omit or
 translate unsupported physical artifacts, while bounded provider-aware

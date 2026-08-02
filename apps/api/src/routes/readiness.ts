@@ -4,7 +4,10 @@ import {
   getDb,
   resolveDatabaseConfiguration,
 } from "@scalius/database/client";
-import { sql } from "drizzle-orm";
+import {
+  assertDatabaseSchemaCompatible,
+  readDatabaseSchemaState,
+} from "@scalius/database/schema-contract";
 import { getRequestCorrelation } from "../utils/http-correlation";
 import { logOpsEvent } from "../utils/ops-log";
 
@@ -131,19 +134,24 @@ async function databaseCheck(env: Env): Promise<CheckResult> {
   }
 
   return runProbe(config.provider, true, async () => {
-    const row = config.provider === "d1"
+    const state = config.provider === "d1"
       ? await retryTransientD1(
-          () => config.binding.prepare("SELECT 1 AS ok").first<{ ok: number }>(),
+          async () => {
+            const result = await config.binding.prepare(`
+              SELECT version, name, source_sha256 AS sourceSha256
+              FROM scalius_schema_migrations
+              ORDER BY version
+            `).all<{
+              version: number;
+              name: string;
+              sourceSha256: string;
+            }>();
+            return assertDatabaseSchemaCompatible(result.results);
+          },
           { delaysMs: READINESS_D1_RETRY_DELAYS_MS },
         )
-      : await getDb(env)
-          .select({ ok: sql<number>`1` })
-          .from(sql`(SELECT 1)`)
-          .get();
-    if (row?.ok !== 1) {
-      throw new Error(`unexpected ${config.provider} probe result`);
-    }
-    return "SELECT 1";
+      : await readDatabaseSchemaState(getDb(env));
+    return `schema ${state.version}/${state.name}`;
   }, READINESS_REMOTE_PROBE_TIMEOUT_MS);
 }
 

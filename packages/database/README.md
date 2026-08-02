@@ -20,6 +20,7 @@ or incomplete configurations fail closed.
   "./inventory-authority": "./src/inventory-authority.ts",
   "./migration-control": "./src/migration-control.ts",
   "./migration-artifacts": "./src/migration-artifacts.ts",
+  "./schema-contract": "./src/schema-contract.ts",
   "./portability": "./src/portability.ts",
   "./types":  "./src/types.ts"
 }
@@ -37,6 +38,7 @@ import type { Database } from "@scalius/database/client";
 // Control-plane migration building blocks
 import { advanceDatabaseMigrationCheckpoint } from "@scalius/database/migration-control";
 import { compileSqliteMigrationForProvider } from "@scalius/database/migration-artifacts";
+import { readDatabaseSchemaState } from "@scalius/database/schema-contract";
 import { createSqlitePortabilityManifest } from "@scalius/database/portability";
 
 // Database type alias
@@ -342,6 +344,48 @@ Validate migration metadata after schema or migration edits:
 ```bash
 pnpm --filter @scalius/database check:migrations
 ```
+
+Migration `0050_schema_release_contract` starts the provider-neutral release
+ledger. Every migration from 0050 onward must:
+
+- keep its canonical SQLite/D1/Turso SQL in `migrations/`;
+- have a transaction-safe PostgreSQL sidecar with the same filename in
+  `migrations/postgres/`;
+- end both files with the same exact version, name, and non-self-referential
+  source SHA-256 ledger row; and
+- be listed in the runtime release manifest used by `/readyz`.
+
+Do not delete or squash historical migrations after a release. Existing D1
+installations depend on Wrangler's migration history, while existing Turso and
+PostgreSQL installations depend on the provider-neutral ledger.
+
+D1 remains upgraded by Wrangler. Existing external databases use the explicit
+schema runner; an ordinary Worker deploy performs only a read-only current-
+schema preflight and never mutates the external authority:
+
+```bash
+# Read-only preflight used before a Turso/PostgreSQL deploy
+POSTGRES_DATABASE_URL='<target-url>' \
+pnpm --filter @scalius/database upgrade:schema \
+  --provider postgres \
+  --acknowledge-target-host '<expected-target-host>' \
+  --dry-run --require-current
+
+# Explicit mutation after the control plane has activated and verified its
+# write freeze. Turso uses TURSO_DATABASE_URL and TURSO_AUTH_TOKEN instead.
+POSTGRES_DATABASE_URL='<target-url>' \
+pnpm --filter @scalius/database upgrade:schema \
+  --provider postgres \
+  --acknowledge-target-host '<expected-target-host>' \
+  --freeze-proof-sha256 '<verified-freeze-proof>'
+```
+
+The Turso runner proves the semantic 0049 baseline, fences a schema race under
+`BEGIN IMMEDIATE`, and applies each release atomically. The PostgreSQL runner
+reuses the initial import's control receipt and advisory-lock identity, applies
+each sidecar in one serializable transaction, and treats a lost successful
+response as an idempotent replay. API readiness reads the entire ledger and
+fails closed for missing, extra, renamed, future, or digest-mismatched rows.
 
 Compile an immutable provider-specific migration bundle into an empty directory:
 
