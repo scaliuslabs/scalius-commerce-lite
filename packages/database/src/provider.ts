@@ -152,10 +152,9 @@ function requirePostgresConfiguration(
 /**
  * Resolve exactly one database provider from immutable deployment bindings.
  *
- * D1 is the zero-configuration default. Installing both Turso secrets selects
- * Turso automatically, so a hosted cutover only needs secret installation and
- * a Worker version rollout. DATABASE_PROVIDER remains an explicit rollback or
- * fail-closed override.
+ * D1 is the zero-configuration default. Complete Turso or PostgreSQL
+ * credentials select that external provider when the configuration is
+ * unambiguous. DATABASE_PROVIDER remains an explicit cutover/rollback pin.
  */
 export function resolveDatabaseConfiguration(
   env: DatabaseEnvironment = {},
@@ -209,7 +208,7 @@ export function resolveDatabaseConfiguration(
 
   if (!env.DB) {
     throw new Error(
-      "D1 database binding (env.DB) is not available. Configure the DB binding or install both Turso database secrets.",
+      "D1 database binding (env.DB) is not available. Configure DB or install one complete external database configuration.",
     );
   }
 

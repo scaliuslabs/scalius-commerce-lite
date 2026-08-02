@@ -28,7 +28,7 @@ Browser (Customer/Admin)
 └──────────────────────┬──────────────────────────────┘
                        │
 ┌──────────────────────┴──────────────────────────────┐
-│  @scalius/database (Drizzle + SQLite providers)       │
+│  @scalius/database (Drizzle + relational providers)   │
 │  Canonical schema, migrations, and atomic invariants  │
 └─────────────────────────────────────────────────────┘
 ```
@@ -48,18 +48,30 @@ does not certify a clean tree by itself.
 
 ## Database Provider Boundary
 
-D1 remains the zero-configuration starter database. Turso is the supported
-concurrent-writer SQLite tier, but selecting it is not by itself a throughput
-guarantee. Routes and domain services receive the same `@scalius/database`
-surface; provider selection, transport adaptation, capability fallbacks,
-atomic batches, and conflict retry stay inside the database/core boundaries.
-Do not add provider branches throughout domain code.
+D1 remains the zero-configuration starter database. TursoDB is the
+concurrent-writer SQLite tier, and PostgreSQL/Neon is the proven high-throughput
+tier; selecting any provider is not by itself an orders-per-second guarantee.
+Routes and domain services receive the same `@scalius/database` surface;
+provider selection, transport adaptation, capability fallbacks, atomic writes,
+and conflict retry stay inside the database/core boundaries. Do not add
+provider branches throughout domain code.
 
-Provisioning and migration belong to the external control plane, not Worker
-request paths. A provider switch is valid only after a write freeze, one
-bookmark-bound canonical source export, canonical normalization, native target
-import, foreign-key/integrity checks, and exact logical schema/data
-fingerprints. See [Database portability and cutover](DATABASE-PORTABILITY.md).
+This repository is the per-merchant data plane. Provisioning, desired state,
+deployments, domains, migration orchestration, monitoring, rollback retention,
+and resource retirement belong to the separately hosted control plane, not
+Worker request paths. A provider switch is valid only after a write freeze, a
+revision-fenced canonical source snapshot, canonical normalization, verified
+target import, and exact logical schema/data fingerprints. See
+[Database portability and cutover](DATABASE-PORTABILITY.md).
+
+The current root deploy command is a single-merchant operational deployment,
+not the future hosted-platform package: it deploys API, admin, storefront, and a
+supplemental Cloudflare ops-monitor Worker from fixed Wrangler configuration.
+The hosted platform still needs a versioned merchant resource manifest and
+idempotent Workers for Platforms reconcilers that render isolated bindings,
+domains, secrets, resource identities, and release digests. Its independently
+hosted monitor remains authoritative during a Cloudflare outage; the optional
+Cloudflare monitor provides inside-provider telemetry only.
 
 ---
 

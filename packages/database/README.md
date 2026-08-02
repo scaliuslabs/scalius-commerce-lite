@@ -1,9 +1,10 @@
 # @scalius/database
 
-Drizzle ORM schema, request-safe client composition, and SQLite migrations for
-Cloudflare D1 and Turso. D1 is the zero-configuration default. Installing both
-`TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` selects the stable fetch-only Turso
-adapter; `DATABASE_PROVIDER=d1` is an explicit rollback override.
+Drizzle ORM schema, request-safe client composition, atomic checkout transports,
+and deterministic migration tools for Cloudflare D1, TursoDB, and
+PostgreSQL/Neon. D1 is the zero-configuration default. External providers are
+selected by complete credentials or an explicit `DATABASE_PROVIDER`; ambiguous
+or incomplete configurations fail closed.
 
 ## Export Map
 
@@ -11,6 +12,12 @@ adapter; `DATABASE_PROVIDER=d1` is an explicit rollback override.
 {
   "./schema": "./src/schema/index.ts",
   "./client": "./src/client.ts",
+  "./checkout-commit": "./src/checkout-commit.ts",
+  "./checkout-transport": "./src/checkout-transport.ts",
+  "./checkout-projection": "./src/checkout-projection.ts",
+  "./postgres-adapter": "./src/postgres-adapter.ts",
+  "./postgres-checkout": "./src/postgres-checkout.ts",
+  "./inventory-authority": "./src/inventory-authority.ts",
   "./migration-control": "./src/migration-control.ts",
   "./migration-artifacts": "./src/migration-artifacts.ts",
   "./portability": "./src/portability.ts",
@@ -38,21 +45,25 @@ import type { Database } from "@scalius/database/types";
 
 ## Client Factory
 
-`getDb(env)` composes a fresh lightweight Drizzle client for the current request
-or Worker event. It never stores the active binding or merchant in mutable
-isolate-global state. D1 uses `drizzle-orm/d1`. Turso uses the official stable
-`@tursodatabase/serverless` transport through Drizzle's stable remote SQLite
-driver; dynamic batches execute as one atomic `BEGIN CONCURRENT` request and
-retry only explicit MVCC busy/conflict failures.
+`getDb(env)` composes a fresh lightweight client for the current request or
+Worker event. It never stores the active binding or merchant in mutable
+isolate-global state. D1 uses `drizzle-orm/d1`; Turso uses the fetch-only
+`@tursodatabase/serverless` transport; PostgreSQL uses
+`@neondatabase/serverless` through the compatibility adapter. A `turso://`
+endpoint selects concurrent atomic batches, while legacy `libsql://`/HTTPS
+endpoints keep immediate transactions.
 
 Provider selection is fail-closed:
 
-- no Turso secrets: require `env.DB` and use D1;
+- no external provider secrets: require `env.DB` and use D1;
 - both Turso secrets: use Turso;
 - only one Turso secret: reject the deployment configuration;
+- `POSTGRES_DATABASE_URL`: use PostgreSQL when Turso credentials are absent;
+- Turso and PostgreSQL credentials together: require an explicit provider;
 - `DATABASE_PROVIDER=d1`: require/use D1 even while Turso secrets are retained
   for a controlled rollback;
-- `DATABASE_PROVIDER=turso`: require/use both Turso secrets.
+- `DATABASE_PROVIDER=turso`: require/use both Turso secrets;
+- `DATABASE_PROVIDER=postgres`: require/use `POSTGRES_DATABASE_URL`.
 
 Migration/copy/cutover orchestration does not run in this package or on request
 paths. It belongs to the external control plane and repo-owned migration tools.
@@ -64,11 +75,12 @@ canonical export to the frozen source's unchanged D1 Time Travel bookmark and
 verifying the native target fingerprint before switching provider secrets.
 
 The capability matrix is deliberately small. D1 supports FTS5, recursive CTEs,
-and `WITHOUT ROWID`, but serializes writes inside one database. Turso supports
-concurrent writers and does not currently support those three SQLite features.
-Provider-aware core helpers supply bounded search/navigation alternatives, and
-the migration compiler removes only the unsupported physical artifacts. Do not
-spread provider checks through domain services.
+and `WITHOUT ROWID`, but serializes writes inside one database. TursoDB supports
+concurrent writers and omits those three SQLite features. PostgreSQL supports
+concurrent writers and recursive CTEs but not SQLite physical artifacts.
+Provider-aware core helpers supply bounded alternatives and the adapters keep
+dialect translation at the boundary. Do not spread provider checks through
+domain services.
 
 ## Schema Files
 
@@ -341,6 +353,25 @@ pnpm --filter @scalius/database compile:migrations \
 The manifest records the canonical and compiled SHA-256 for every file plus one
 bundle digest. D1 output is byte-identical to the canonical migration chain.
 
+Frozen D1 and TursoDB sources converge on one canonical SQLite artifact. D1
+exports are fenced by an unchanged Time Travel bookmark; TursoDB exports are
+fenced by an unchanged remote revision and checkpointed through Turso Sync. An
+empty PostgreSQL/Neon target is then populated with the resumable migrator:
+
+```bash
+POSTGRES_DATABASE_URL='<target-url>' \
+pnpm --filter @scalius/database migrate:sqlite-to-postgres \
+  --sqlite /path/to/canonical.sqlite \
+  --checkpoint /path/to/create-only-checkpoint.json \
+  --ack-target-host '<expected-target-host>'
+```
+
+The migrator holds an advisory lock, streams per-table `COPY`, persists target
+receipts in a private control schema, reconciles interrupted local state from
+the target, and requires exact source/target row and content fingerprints before
+completion. Provisioning, freeze/cutover, secret installation, deployed smokes,
+rollback retention, and resource deletion remain external control-plane work.
+
 Normalize a trusted full D1 SQL export onto the current portable schema, then
 compile the normalized data-only artifact for Turso:
 
@@ -393,7 +424,10 @@ Drizzle config (`drizzle.config.ts`):
 
 | Package | Purpose |
 |---------|---------|
+| `@neondatabase/serverless` 1.1.0 | Fetch-only PostgreSQL/Neon transport |
+| `@tursodatabase/database` ^0.7.2 | Local TursoDB migration artifact handling |
 | `@tursodatabase/serverless` ^1.4.0 | Fetch-only Turso transport and concurrent atomic batches |
+| `@tursodatabase/sync` 0.7.2 | Revision-fenced TursoDB source snapshots |
 | `drizzle-orm` ^0.45.2 | ORM, schema definitions, query builder |
 | `drizzle-kit` (dev) ^0.31.10 | Migration generation |
 | `@cloudflare/workers-types` (dev) | `D1Database` type |

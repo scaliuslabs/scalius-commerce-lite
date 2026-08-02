@@ -34,8 +34,8 @@ export {
 /**
  * Compose a database client for the current request or Worker event.
  *
- * D1 remains the default. Installing both Turso secrets selects the Turso
- * adapter unless DATABASE_PROVIDER explicitly pins D1 for rollback.
+ * D1 remains the default. Complete Turso or PostgreSQL credentials select the
+ * corresponding adapter unless DATABASE_PROVIDER explicitly pins one provider.
  */
 export function getDb(env?: DatabaseEnvironment): Database {
   const config = resolveDatabaseConfiguration(env);

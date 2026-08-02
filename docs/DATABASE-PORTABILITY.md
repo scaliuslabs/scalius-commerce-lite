@@ -1,17 +1,19 @@
 # Database Portability and Cutover
 
-Scalius uses one canonical SQLite domain model with two operational tiers:
+Scalius exposes one provider-neutral commerce model through three operational
+database tiers:
 
 - Cloudflare D1 is the default starter. It has the lowest provisioning and
   operational complexity and remains suitable for most merchants for a long
   time.
-- Turso is the supported concurrent-writer SQLite tier. It uses the same domain
-  schema and application services through the `@scalius/database` adapter, but
-  the provider choice alone is not an orders-per-second guarantee.
-- PostgreSQL/Neon is a future provider adapter, not a collection of conditionals
-  spread through commerce services. Its different dialect and transaction
-  semantics require its own migration compiler and verification suite before it
-  can become a selectable production provider.
+- TursoDB is the supported concurrent-writer SQLite tier. A `turso://` endpoint
+  selects concurrent atomic batches; legacy `libsql://`/HTTPS endpoints retain
+  conservative immediate transactions. It uses the same domain schema and
+  services, but provider selection alone is not a throughput guarantee.
+- PostgreSQL/Neon is the proven high-throughput tier. Its adapter translates the
+  canonical SQLite-shaped application surface, while its checkout commit uses
+  native PostgreSQL transactions and conflict handling. Dialect differences do
+  not leak into routes or commerce services.
 
 The application does not provision databases or move data. A hosted Scalius
 control plane owns provider accounts, database creation, migration state,
@@ -21,23 +23,29 @@ source retirement. Per-merchant Workers and resources remain isolated.
 ## Runtime contract
 
 `@scalius/database` is the only runtime provider boundary. D1 is selected when
-no Turso secrets are present. A Turso deployment requires all three secrets on
-both API and admin Workers:
+no external database credentials are present. A Turso deployment requires:
 
 - `DATABASE_PROVIDER=turso`
 - `TURSO_DATABASE_URL`
 - `TURSO_AUTH_TOKEN`
 
-An incomplete pair fails closed. `DATABASE_PROVIDER=d1` is an explicit rollback
-pin while Turso secrets are retained. Adding a connection string does not move
-data and must never trigger an implicit request-path migration.
+A PostgreSQL deployment requires:
+
+- `DATABASE_PROVIDER=postgres`
+- `POSTGRES_DATABASE_URL`
+
+An incomplete configuration fails closed. When Turso and PostgreSQL credentials
+are both installed, `DATABASE_PROVIDER` is mandatory; `DATABASE_PROVIDER=d1` is
+an explicit source/rollback pin while target credentials are staged. A
+connection string does not move data and must never trigger an implicit
+request-path migration.
 
 Provider capability differences stay behind shared helpers. D1 keeps FTS5,
-recursive CTE, and `WITHOUT ROWID` support. The Turso migration compiler omits
-unsupported physical artifacts, while bounded provider-aware search/navigation
-helpers preserve the public contract. Atomic domain writes use `safeBatch()`;
-the Turso adapter sends one `BEGIN CONCURRENT` batch and retries only explicit
-MVCC conflict/busy failures.
+recursive CTE, and `WITHOUT ROWID` support. TursoDB and PostgreSQL omit or
+translate unsupported physical artifacts, while bounded provider-aware
+search/navigation helpers preserve the public contract. Atomic domain writes
+use the shared commit/transport boundary: TursoDB retries only explicit MVCC
+conflicts, and PostgreSQL retries only serialization/deadlock conflicts.
 
 ## Deterministic D1 to Turso protocol
 
@@ -90,6 +98,41 @@ the final traffic switch. A connection string alone cannot safely perform the
 export, data movement, verification, token rotation, deployment, or rollback
 retention.
 
+## Deterministic D1 or TursoDB to PostgreSQL protocol
+
+The control plane uses the same frozen canonical SQLite artifact for both
+sources and persists every phase as machine-readable evidence:
+
+1. Pin the current provider, activate `DATABASE_MIGRATION_FREEZE` on API and
+   admin, and prove ordinary writes are unavailable while health/readiness stay
+   observable.
+2. For D1, run `export:d1-portable` against the exact unchanged Time Travel
+   bookmark. For TursoDB, run `export:turso-portable`; it fences the remote
+   revision, checkpoints a Sync copy, rejects sidecar residue, and verifies that
+   the source revision did not move during export.
+3. Normalize the snapshot to the current canonical application-table and column
+   set. Reject schema/nullability drift, row-count drift, non-canonical source
+   state, foreign-key violations, or integrity failures before target work.
+4. Provision an empty PostgreSQL/Neon database and run
+   `migrate:sqlite-to-postgres` with its create-only local checkpoint. The
+   migrator takes a PostgreSQL advisory lock, installs the compatibility schema,
+   streams each table through `COPY`, and atomically records per-table row/hash
+   receipts in a locked control schema.
+5. Re-running after termination reconciles the local checkpoint from the target
+   receipts, verifies every completed table, and resumes at the first missing
+   table. Completion requires exact per-table and whole-database content
+   fingerprints, expected schema objects, clean constraints, and the completed
+   target receipt.
+6. Install `POSTGRES_DATABASE_URL`, keep `DATABASE_PROVIDER` explicit while old
+   credentials remain, deploy the immutable release, require repeated
+   `postgres` readiness, and run release, authenticated dashboard, storefront,
+   checkout/idempotency, inventory-ledger, and cancellation smokes before
+   unfreezing.
+7. Retain the frozen source for the configured rollback window. After the first
+   PostgreSQL write, switching credentials back is not rollback; it requires a
+   verified reverse migration/reconciliation or an explicit restore-to-snapshot
+   data-loss decision.
+
 ## Rollback rule
 
 Before the first target write, rollback is a provider pin and redeploy. After
@@ -99,11 +142,11 @@ merchant facts. The control plane must either migrate the Turso delta/full state
 back into a verified D1 target or present rollback as a deliberate restore to
 the cutover snapshot with an explicit data-loss decision.
 
-## Verified live cutover — 2026-08-01
+## Historical verified D1 to TursoDB cutover — 2026-08-01
 
-The production Scalius demo domains were migrated in place from D1 to Turso and
-left live on Turso for merchant testing. The retained D1 database was not
-modified or destroyed.
+The production Scalius demo domains were migrated in place from D1 to TursoDB
+for merchant testing. That target later became the frozen source for the
+PostgreSQL cutover below; the original D1 database was not modified or destroyed.
 
 - Two settled 6,253,644-byte source snapshots matched at SHA-256
   `ee63f0344521c43c960a2c18fa92254bdaa81ee3ca7646fcf8ba8c1cca61484e`.
@@ -192,3 +235,27 @@ single-writer ceiling, but the current checkout still performs enough
 synchronous reads/writes and touches enough shared SQLite pages that conflicts
 dominate far earlier. Raising retry counts would increase latency rather than
 solve that architecture.
+
+## Verified live TursoDB to PostgreSQL cutover — 2026-08-03
+
+The production demo was frozen, revision-exported from TursoDB, migrated into a
+permanent Neon/PostgreSQL database, redeployed, and left live on PostgreSQL with
+the existing merchant data, login, dashboard, storefront, and API domains.
+
+- The canonical snapshot contained 109 application tables and 20,258 rows.
+- The source artifact SHA-256 was
+  `19b4d1a92c7a9509cf2454832bbcc7e522783bc5dc7e46d8c619d7a183ff9e95`;
+  the provider-neutral content fingerprint was
+  `6f6c0040dd9c0246a1692eb60882ae099384bf89312847eaf7ee177197153b0a`.
+- Migration id
+  `a211eb3d0522b3bf5485f172dfece81c4cd1461a98efb9b9043ba2e597469835`
+  completed with exact table receipts and an exact second invocation resolved
+  from persisted target state.
+- PostgreSQL readiness, the retained authenticated dashboard session, the
+  storefront catalog, API release checks, and production checkout/inventory
+  invariants passed after cutover.
+- A disposable production-limit Worker committed 5,000 exact PostgreSQL
+  checkout transactions at 1,161–1,426 orders/second in the measured runs with
+  no duplicate order or oversell. This is backend-path evidence, not a promise
+  that gateways, notifications, arbitrary carts, or every merchant workload
+  sustain the same rate.
