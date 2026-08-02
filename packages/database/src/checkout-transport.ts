@@ -144,7 +144,7 @@ export function createCheckoutSqlTransport(
         const checkoutCommit = readPostgresCheckoutCommitArguments(statements);
         if (checkoutCommit) {
           await retryPostgresCheckout(async () => {
-            await connection.query(
+            const results = await connection.transaction([connection.query(
               `SELECT ${POSTGRES_CHECKOUT_COMMIT_FUNCTION}($1::jsonb, $2, $3::jsonb, $4, $5)`,
               normalizePostgresParameters([
                 checkoutCommit.edgePayload,
@@ -153,7 +153,15 @@ export function createCheckoutSqlTransport(
                 checkoutCommit.outboxId,
                 checkoutCommit.orderIds,
               ]),
-            );
+            )], {
+              arrayMode: true,
+              fullResults: true,
+              isolationLevel: "Serializable",
+              readOnly: false,
+            });
+            if (results.length !== 1) {
+              throw new Error("PostgreSQL returned an unexpected checkout result count.");
+            }
           });
           return;
         }

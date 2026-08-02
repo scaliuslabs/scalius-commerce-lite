@@ -136,10 +136,12 @@ describe("checkout SQL transport", () => {
     });
   });
 
-  it("collapses tagged PostgreSQL checkout authority into one function call", async () => {
+  it("runs the collapsed PostgreSQL checkout authority in one serializable transaction", async () => {
     const emptyResult: PostgresFullResult = { rows: [], fields: [] };
     const query = vi.fn(() => Promise.resolve(emptyResult));
-    const transaction = vi.fn(async () => []);
+    const transaction = vi.fn(async (queries: PromiseLike<PostgresFullResult>[]) =>
+      await Promise.all(queries)
+    );
     const transport = createCheckoutSqlTransport({
       POSTGRES_DATABASE_URL: "postgresql://user:secret@example.neon.tech/merchant",
     }, {
@@ -179,6 +181,12 @@ describe("checkout SQL transport", () => {
       "SELECT scalius_compat.checkout_commit_v1($1::jsonb, $2, $3::jsonb, $4, $5)",
       [edgePayload, 1, "orders", "outbox", "order-ids"],
     );
-    expect(transaction).not.toHaveBeenCalled();
+    expect(transaction).toHaveBeenCalledOnce();
+    expect(transaction).toHaveBeenCalledWith(expect.any(Array), {
+      arrayMode: true,
+      fullResults: true,
+      isolationLevel: "Serializable",
+      readOnly: false,
+    });
   });
 });
