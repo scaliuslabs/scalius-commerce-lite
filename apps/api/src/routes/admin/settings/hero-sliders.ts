@@ -24,9 +24,13 @@ type AppRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>
 
 async function invalidateHomepageCaches(c: { env: Env; executionCtx?: WaitUntilExecutionContext }): Promise<void> {
     const executionCtx = getOptionalExecutionContext(c);
-    await invalidateGroups([...HOMEPAGE_CACHE_GROUPS], c.env?.CACHE, {
-        ...(executionCtx ? { cleanupExecutionCtx: executionCtx } : {}),
-    });
+    if (executionCtx) {
+        await invalidateGroups([...HOMEPAGE_CACHE_GROUPS], c.env?.CACHE, {
+            cleanupExecutionCtx: executionCtx,
+        });
+    } else {
+        await invalidateGroups([...HOMEPAGE_CACHE_GROUPS], c.env?.CACHE);
+    }
     triggerStorefrontPurgeForGroups([...HOMEPAGE_CACHE_GROUPS], c.env, executionCtx);
 }
 

@@ -47,7 +47,9 @@ describe("merchant create and edit save workflows", () => {
       "const expectedVersion = values.version || defaultValues?.version",
     );
     expect(source).toContain("version: result.version");
-    expect(source).toContain('toast.success("Collection saved")');
+    expect(source).toContain(
+      'toast.success(isEdit ? "Collection saved" : "Collection created")',
+    );
     expect(source).not.toContain('navigate({ to: "/admin/collections" })');
     expect(source).toContain('to: "/admin/collections/$collectionId/edit"');
   });

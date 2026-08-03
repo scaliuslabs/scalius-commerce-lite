@@ -53,6 +53,6 @@ describe("general settings read failures", () => {
     expect(source).toContain("setHasLoaded(false)");
     expect(source).toContain("!hasLoaded || loadError");
     expect(source).toContain("saving || !hasLoaded || !isDirty");
-    expect(source).toContain("setSavedSelected(selected)");
+    expect(source).toContain("setSavedSelected(nextSelected)");
   });
 });
