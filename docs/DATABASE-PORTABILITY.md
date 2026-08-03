@@ -282,6 +282,47 @@ synchronous reads/writes and touches enough shared SQLite pages that conflicts
 dominate far earlier. Raising retry counts would increase latency rather than
 solve that architecture.
 
+## Checkout coordinator v2 architecture — 2026-08-03
+
+The live results above measured the earlier one-request/one-checkout path and
+must not be used to characterize coordinator v2. Cloudflare documents a soft
+limit of 1,000 requests/second for one Durable Object and approximately
+200–500 requests/second for complex work. A single per-merchant checkout object
+therefore could not be the ingress for an honest thousands-of-orders/second
+claim regardless of database capacity. Coordinator v2 removes that structural
+ceiling without moving money, inventory, or idempotency authority out of the
+selected relational database:
+
+- D1 keeps one deterministic ingress object and one commit object. The commit
+  engine remains single-writer and may use both reservation lanes serially.
+- TursoDB and PostgreSQL use 16 deterministic ingress objects. The checkout
+  request key selects the ingress object, so concurrent duplicates and changed
+  payloads for one idempotency key still meet at the same coordinator.
+- Each ingress object holds a bounded 25-ms microbatch window, performs one
+  shared authority read for that batch, prepares immutable order commands, and
+  groups them by the two existing reservation lanes.
+- One commit object owns each concurrent-provider lane. It combines incoming
+  microbatches, submits exactly one bounded atomic database transaction at a
+  time for that lane, and relies on database authority revision, lane-version
+  CAS, unique checkout identity, and durable aggregate/outbox rows for recovery.
+- An overloaded Durable Object is not retried at the coordinator boundary;
+  retry amplification would worsen overload. The API performs its existing
+  database replay lookup before returning an uncertain failure.
+- Sold-out availability transitions are assigned to exactly the order that
+  crosses the inventory boundary, rather than copied to every order in its
+  commit batch. Cache invalidation still runs when durable projection owns the
+  notification/Meta side effects.
+
+This topology has local end-to-end D1 authority/projection coverage and focused
+routing, lane grouping, response-order, overload, replay, and sold-out
+invalidation tests. It is an architectural prerequisite, not a capacity claim.
+Full disposable-Worker D1, current TursoDB concurrent-writer, and Neon tests must
+still establish sustainable arrival rate, p95/p99 latency, overload rate,
+projection lag, exact order/idempotency counts, and inventory invariants before
+publishing provider throughput. See Cloudflare's current
+[Durable Object limits](https://developers.cloudflare.com/durable-objects/platform/limits/)
+and Turso's [concurrent-write contract](https://docs.turso.tech/tursodb/concurrent-writes/).
+
 ## Verified live TursoDB to PostgreSQL cutover — 2026-08-03
 
 The production demo was frozen, revision-exported from TursoDB, migrated into a

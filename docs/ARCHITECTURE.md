@@ -17,6 +17,7 @@ Browser (Customer/Admin)
 ┌─────────────────────────────────────────────────────┐
 │  API Worker (Hono) :8787                             │
 │  ├─ Routes (thin HTTP layer)                         │
+│  ├─ Checkout DOs (sharded ingress + bounded commit)  │
 │  ├─ Middleware (auth, RBAC, cache, CSP)              │
 │  ├─ Queue Consumer (payment, notification, OTP/cache)│
 │  └─ Cron (reservation expiry)                        │
@@ -85,12 +86,23 @@ Everything in the platform revolves around orders. Here's the complete lifecycle
 STOREFRONT CHECKOUT                 ADMIN DASHBOARD
 ├─ POST /orders                     ├─ POST /admin/orders
 │  └─ Synchronous atomic commit     │  └─ Synchronous manual-order workflow
-│     1. Read-only validation       │     with its own idempotency authority
-│     2. Build immutable plan       │
-│     3. One attempt + inventory    │
-│        + order + receipt batch    │
-│     4. Relay durable side effects │
+│     1. Batched authority reads    │     with its own idempotency authority
+│        on deterministic ingress   │
+│     2. Build immutable command    │
+│     3. Commit aggregate + stock   │
+│        lane CAS + durable outbox  │
+│     4. Deterministic projection   │
+│     5. Relay queued side effects  │
 ```
+
+The common guest COD/regular-stock path uses checkout coordinator v2. D1 has
+one ingress and one single-writer commit object; TursoDB/PostgreSQL have 16
+deterministic ingress objects feeding two lane-bound commit objects. The
+database remains authority for checkout identity, settings revision, inventory,
+and recovery. Unsupported coordinator-v2 flows use the older complete atomic
+domain transaction rather than weakening their semantics. Capacity evidence
+and the no-claim rule are recorded in
+[Database portability and cutover](DATABASE-PORTABILITY.md#checkout-coordinator-v2-architecture--2026-08-03).
 
 ### Status Transitions & Side Effects
 

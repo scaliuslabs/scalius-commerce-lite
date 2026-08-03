@@ -1,6 +1,7 @@
 import {
   CHECKOUT_COMMIT_MAX_JSON_BYTES,
   CHECKOUT_COMMIT_MAX_ORDERS,
+  CHECKOUT_COMMIT_HARD_MAX_ORDERS,
   CHECKOUT_RESERVATION_LANE_COUNT,
   buildCheckoutCommitStatements,
   buildCheckoutReservationLaneSnapshotStatement,
@@ -23,7 +24,11 @@ import {
   CHECKOUT_PROJECTION_MAX_OUTBOXES,
   buildCheckoutProjectionBatchStatements,
 } from "@scalius/database/checkout-projection";
-import { getDb, type Database } from "@scalius/database/client";
+import {
+  getDb,
+  type Database,
+  type DatabaseProvider,
+} from "@scalius/database/client";
 import {
   assertGuestStorefrontCheckoutPolicy,
   createStorefrontCheckoutAuthorityBatchReadPlan,
@@ -41,10 +46,13 @@ import { fromMinorUnits } from "@scalius/core/modules/tax";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { getCredentialEncryptionKey } from "./utils/encryption-key";
 
-const COORDINATOR_BUILD = "checkout-coordinator-v1";
-const COORDINATOR_NAME = "storefront-checkout-v1";
+const COORDINATOR_BUILD = "checkout-coordinator-v2";
+const COORDINATOR_INGRESS_PREFIX = "storefront-checkout-v2-ingress";
+const COORDINATOR_COMMIT_PREFIX = "storefront-checkout-v2-commit";
 const IDLE_FLUSH_MS = 2;
+const INGRESS_BATCH_WINDOW_MS = 25;
 const INGRESS_QUIET_FLUSH_MS = 50;
+const CONCURRENT_PROVIDER_INGRESS_SHARDS = 16;
 const TARGET_BATCH_ORDERS = CHECKOUT_COMMIT_MAX_ORDERS;
 const TARGET_BATCH_JSON_BYTES = 1_300_000;
 const MAX_RECOVERY_ATTEMPTS = 1;
@@ -110,6 +118,7 @@ interface PendingCheckout {
   command: Command;
   resolvers: Array<(result: CheckoutCoordinatorResult) => void>;
   recoveryAttempts: number;
+  requiredLane: number | null;
 }
 
 interface ReservationLaneState {
@@ -130,11 +139,11 @@ interface PreparedLaneBatch {
   pending: PendingCheckout[];
   commits: PreparedCheckoutCommit<JsonObject, JsonObject>[];
   finalStates: Map<string, ReservationLaneState>;
-  availabilityChangedSubjects: Array<{
+  availabilityChangedSubjectsByRequestKey: Map<string, Array<{
     productId: string;
     slug: string | null;
     categoryId: string | null;
-  }>;
+  }>>;
 }
 
 interface PendingCheckoutProjection {
@@ -158,6 +167,13 @@ interface CheckoutSideEffectQueue {
 interface CheckoutAuthorityCacheEntry {
   expiresAt: number;
   results: readonly unknown[];
+}
+
+interface CheckoutCommitGateway {
+  readonly ingressBatchLimits: { targetOrders: number; targetJsonBytes: number };
+  submitBatch(commands: readonly Command[]): Promise<CheckoutCoordinatorResult[]>;
+  flushPendingProjections?(): Promise<void>;
+  shouldFlushPendingProjections?(now?: number): boolean;
 }
 
 function laneStateKey(variantId: string, lane: number): string {
@@ -209,12 +225,55 @@ function isCheckoutCommand(value: unknown): value is Command {
   );
 }
 
-function preferredLane(requestHash: string): number {
+function checkoutRoutingHash(value: string): number {
   let hash = 0;
-  for (let index = 0; index < requestHash.length; index += 1) {
-    hash = ((hash * 33) ^ requestHash.charCodeAt(index)) >>> 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = ((hash * 33) ^ value.charCodeAt(index)) >>> 0;
   }
-  return hash % CHECKOUT_RESERVATION_LANE_COUNT;
+  return hash;
+}
+
+function preferredLane(requestHash: string): number {
+  return checkoutRoutingHash(requestHash) % CHECKOUT_RESERVATION_LANE_COUNT;
+}
+
+export function getCheckoutCoordinatorTopology(provider: DatabaseProvider): {
+  ingressShards: number;
+  commitLanes: number;
+} {
+  return provider === "d1"
+    ? { ingressShards: 1, commitLanes: 1 }
+    : {
+        ingressShards: CONCURRENT_PROVIDER_INGRESS_SHARDS,
+        commitLanes: CHECKOUT_RESERVATION_LANE_COUNT,
+      };
+}
+
+export function getCheckoutIngressCoordinatorName(
+  provider: DatabaseProvider,
+  requestKey: string,
+): string {
+  const { ingressShards } = getCheckoutCoordinatorTopology(provider);
+  return `${COORDINATOR_INGRESS_PREFIX}-${checkoutRoutingHash(requestKey) % ingressShards}`;
+}
+
+export function getCheckoutCommitLane(
+  provider: DatabaseProvider,
+  requestHash: string,
+): number {
+  const { commitLanes } = getCheckoutCoordinatorTopology(provider);
+  return checkoutRoutingHash(requestHash) % commitLanes;
+}
+
+export function getCheckoutCommitCoordinatorName(lane: number): string {
+  if (
+    !Number.isSafeInteger(lane)
+    || lane < 0
+    || lane >= CHECKOUT_RESERVATION_LANE_COUNT
+  ) {
+    throw new Error("Checkout commit coordinator lane is outside the configured range.");
+  }
+  return `${COORDINATOR_COMMIT_PREFIX}-${lane}`;
 }
 
 function cloneLaneState(state: ReservationLaneState): ReservationLaneState {
@@ -280,8 +339,19 @@ export class CheckoutCoordinatorEngine {
 
   submit<TPayload extends JsonObject, TResponse extends JsonObject>(
     command: CheckoutCommitCommand<TPayload, TResponse>,
+    requiredLane: number | null = null,
   ): Promise<CheckoutCoordinatorResult> {
-    if (!isCheckoutCommand(command)) {
+    if (
+      !isCheckoutCommand(command)
+      || (
+        requiredLane !== null
+        && (
+          !Number.isSafeInteger(requiredLane)
+          || requiredLane < 0
+          || requiredLane >= CHECKOUT_RESERVATION_LANE_COUNT
+        )
+      )
+    ) {
       return Promise.resolve({ ok: false, code: "CHECKOUT_COMMIT_UNAVAILABLE" });
     }
 
@@ -304,6 +374,9 @@ export class CheckoutCoordinatorEngine {
       if (active.command.requestHash !== command.requestHash) {
         return Promise.resolve({ ok: false, code: "CHECKOUT_IDEMPOTENCY_CONFLICT" });
       }
+      if (active.requiredLane !== requiredLane) {
+        return Promise.resolve({ ok: false, code: "CHECKOUT_COMMIT_UNAVAILABLE" });
+      }
       return new Promise((resolve) => active.resolvers.push(resolve));
     }
 
@@ -312,11 +385,19 @@ export class CheckoutCoordinatorEngine {
         command: command as unknown as Command,
         resolvers: [resolve],
         recoveryAttempts: 0,
+        requiredLane,
       };
       this.pending.push(pending);
       this.activeByRequestKey.set(command.requestKey, pending);
       this.scheduleFlush();
     });
+  }
+
+  submitBatch(
+    commands: readonly Command[],
+    requiredLane: number | null = null,
+  ): Promise<CheckoutCoordinatorResult[]> {
+    return Promise.all(commands.map((command) => this.submit(command, requiredLane)));
   }
 
   private get maxInFlight(): number {
@@ -424,10 +505,10 @@ export class CheckoutCoordinatorEngine {
   private async ensureLaneStatesForPending(force = false): Promise<void> {
     const variantIds = [...new Set(this.pending.flatMap((pending) =>
       pending.command.reservations.map((reservation) => reservation.variantId)
-    ))].filter((variantId) => force || (
-      !this.laneStates.has(laneStateKey(variantId, 0))
-      || !this.laneStates.has(laneStateKey(variantId, 1))
-    ));
+    ))].filter((variantId) => force || Array.from(
+      { length: CHECKOUT_RESERVATION_LANE_COUNT },
+      (_, lane) => lane,
+    ).some((lane) => !this.laneStates.has(laneStateKey(variantId, lane))));
     if (variantIds.length === 0) return;
 
     for (const ids of chunk(variantIds, VARIANT_READ_CHUNK)) {
@@ -534,28 +615,41 @@ export class CheckoutCoordinatorEngine {
 
   private canFitAcrossLanes(command: Command): boolean {
     return command.reservations.every((reservation) => {
-      const lane0 = this.laneStates.get(laneStateKey(reservation.variantId, 0));
-      const lane1 = this.laneStates.get(laneStateKey(reservation.variantId, 1));
-      return Boolean(
-        lane0
-        && lane1
-        && (lane0.capacity - lane0.reservedQuantity)
-          + (lane1.capacity - lane1.reservedQuantity) >= reservation.quantity,
+      const states = Array.from(
+        { length: CHECKOUT_RESERVATION_LANE_COUNT },
+        (_, lane) => this.laneStates.get(laneStateKey(reservation.variantId, lane)),
       );
+      return states.every(Boolean)
+        && states.reduce(
+          (sum, state) => sum + state!.capacity - state!.reservedQuantity,
+          0,
+        ) >= reservation.quantity;
     });
+  }
+
+  private candidateLanes(pending: PendingCheckout): number[] {
+    return pending.requiredLane === null
+      ? Array.from({ length: CHECKOUT_RESERVATION_LANE_COUNT }, (_, lane) => lane)
+      : [pending.requiredLane];
+  }
+
+  private canFitAnyAllowedLane(pending: PendingCheckout): boolean {
+    return this.candidateLanes(pending).some((lane) =>
+      this.canFit(pending.command, lane)
+    );
   }
 
   private async rebalanceOneBlockedPending(): Promise<boolean> {
     for (const pending of this.pending) {
       if (
-        this.canFit(pending.command, 0)
-        || this.canFit(pending.command, 1)
+        this.canFitAnyAllowedLane(pending)
         || !this.canFitAcrossLanes(pending.command)
       ) {
         continue;
       }
 
-      const targetLane = preferredLane(pending.command.requestHash);
+      const targetLane = pending.requiredLane
+        ?? preferredLane(pending.command.requestHash);
       const quantities = new Map<string, number>();
       for (const reservation of pending.command.reservations) {
         quantities.set(
@@ -613,6 +707,7 @@ export class CheckoutCoordinatorEngine {
 
     for (const [index, pending] of this.pending.entries()) {
       if (selected.length >= this.batchLimits.maxOrders) break;
+      if (pending.requiredLane !== null && pending.requiredLane !== lane) continue;
       const preferred = preferredLane(pending.command.requestHash);
       const fitsLane = this.canFit(pending.command, lane, localStates);
       if (!fitsLane) continue;
@@ -689,34 +784,42 @@ export class CheckoutCoordinatorEngine {
       this.pending.splice(selectedIndexes[offset]!, 1);
     }
 
-    const availabilityChangedSubjects = new Map<string, {
+    const availabilityChangedSubjectsByRequestKey = new Map<string, Array<{
       productId: string;
       slug: string | null;
       categoryId: string | null;
-    }>();
+    }>>();
     for (const commit of commits) {
+      const subjects = new Map<string, {
+        productId: string;
+        slug: string | null;
+        categoryId: string | null;
+      }>();
       for (const edge of commit.edges) {
         const beforeLane = this.laneStates.get(laneStateKey(edge.variantId, lane))!;
         const beforeReserved = Array.from(
           { length: CHECKOUT_RESERVATION_LANE_COUNT },
-          (_, candidateLane) => this.laneStates.get(
-            laneStateKey(edge.variantId, candidateLane),
-          )?.reservedQuantity ?? 0,
+          (_, candidateLane) => candidateLane === lane
+            ? edge.reservedBefore
+            : this.laneStates.get(
+                laneStateKey(edge.variantId, candidateLane),
+              )?.reservedQuantity ?? 0,
         ).reduce((sum, value) => sum + value, 0);
-        const afterReserved = Array.from(
-          { length: CHECKOUT_RESERVATION_LANE_COUNT },
-          (_, candidateLane) => localStates.get(
-            laneStateKey(edge.variantId, candidateLane),
-          )?.reservedQuantity ?? 0,
-        ).reduce((sum, value) => sum + value, 0);
+        const afterReserved = beforeReserved + edge.quantity;
         const sellableCapacity = Math.max(0, beforeLane.stock - beforeLane.legacyReservedStock);
         if (beforeReserved < sellableCapacity && afterReserved >= sellableCapacity) {
-          availabilityChangedSubjects.set(beforeLane.productId, {
+          subjects.set(beforeLane.productId, {
             productId: beforeLane.productId,
             slug: beforeLane.productSlug,
             categoryId: beforeLane.categoryId,
           });
         }
+      }
+      if (subjects.size > 0) {
+        availabilityChangedSubjectsByRequestKey.set(
+          commit.requestKey,
+          [...subjects.values()],
+        );
       }
     }
 
@@ -731,7 +834,7 @@ export class CheckoutCoordinatorEngine {
       pending: selected,
       commits,
       finalStates,
-      availabilityChangedSubjects: [...availabilityChangedSubjects.values()],
+      availabilityChangedSubjectsByRequestKey,
     };
   }
 
@@ -783,7 +886,9 @@ export class CheckoutCoordinatorEngine {
           pending,
           pending.command.response,
           false,
-          batch.availabilityChangedSubjects,
+          batch.availabilityChangedSubjectsByRequestKey.get(
+            pending.command.requestKey,
+          ) ?? [],
         );
       }
     } catch (error) {
@@ -1003,10 +1108,7 @@ export class CheckoutCoordinatorEngine {
     }
 
     for (const pending of [...this.pending]) {
-      if (
-        this.canFit(pending.command, 0)
-        || this.canFit(pending.command, 1)
-      ) {
+      if (this.canFitAnyAllowedLane(pending)) {
         continue;
       }
       this.removePending(pending);
@@ -1344,7 +1446,7 @@ export class CheckoutIntentCoordinatorEngine {
   constructor(
     private readonly db: Database,
     private readonly credentialEncryptionKey: string | undefined,
-    private readonly commitEngine: CheckoutCoordinatorEngine,
+    private readonly commitEngine: CheckoutCommitGateway,
     private readonly waitUntil: (task: Promise<unknown>) => void = (task) => {
       void task;
     },
@@ -1383,7 +1485,7 @@ export class CheckoutIntentCoordinatorEngine {
     this.flushTimer = setTimeout(() => {
       this.flushTimer = null;
       this.waitUntil(this.drain());
-    }, IDLE_FLUSH_MS);
+    }, INGRESS_BATCH_WINDOW_MS);
   }
 
   private takeBatch(): PendingCheckoutIntent[] {
@@ -1428,7 +1530,9 @@ export class CheckoutIntentCoordinatorEngine {
     } finally {
       this.drainRunning = false;
       if (this.pending.length > 0) this.scheduleFlush();
-      else this.waitUntil(this.commitEngine.flushPendingProjections());
+      else if (this.commitEngine.flushPendingProjections) {
+        this.waitUntil(this.commitEngine.flushPendingProjections());
+      }
     }
   }
 
@@ -1477,8 +1581,8 @@ export class CheckoutIntentCoordinatorEngine {
         )
       ));
       const committable = prepared.filter((candidate) => candidate.ok);
-      const commitResults = await Promise.all(
-        committable.map((candidate) => this.commitEngine.submit(candidate.command)),
+      const commitResults = await this.commitEngine.submitBatch(
+        committable.map((candidate) => candidate.command),
       );
       if (commitResults.some((result) =>
         !result.ok && result.code === "CHECKOUT_AUTHORITY_CHANGED"
@@ -1504,6 +1608,9 @@ export class CheckoutIntentCoordinatorEngine {
       // Drain it only after this ingress burst goes quiet (the drain finally
       // block below), so compatibility/read-model work cannot steal writer
       // capacity from buyer acknowledgements during a sustained spike.
+      if (this.commitEngine.shouldFlushPendingProjections?.()) {
+        this.waitUntil(this.commitEngine.flushPendingProjections?.() ?? Promise.resolve());
+      }
     } catch (error) {
       this.onInternalError?.("batch", error);
       for (const pending of batch) {
@@ -1531,25 +1638,68 @@ function coordinatorResponse(body: unknown, status: number): Response {
 export class CheckoutCoordinator {
   private readonly engine: CheckoutCoordinatorEngine;
   private readonly intentEngine: CheckoutIntentCoordinatorEngine;
+  private readonly provider: DatabaseProvider;
+  private readonly waitUntil: (task: Promise<unknown>) => void;
+  private projectionSchedule: Promise<void> | null = null;
+  private lastCommitAt = 0;
 
   constructor(state: DurableObjectState, env: Env) {
-    const waitUntil = (task: Promise<unknown>) => state.waitUntil(task);
+    this.waitUntil = (task) => state.waitUntil(task);
+    const transport = createCheckoutSqlTransport(env);
+    this.provider = transport.provider;
     this.engine = new CheckoutCoordinatorEngine(
-      createCheckoutSqlTransport(env),
-      waitUntil,
+      transport,
+      this.waitUntil,
       env.ORDER_NOTIFICATIONS_QUEUE as unknown as CheckoutSideEffectQueue,
     );
     this.intentEngine = new CheckoutIntentCoordinatorEngine(
       getDb(env),
       getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
-      this.engine,
-      waitUntil,
+      createRemoteCheckoutCommitGateway(
+        env.CHECKOUT_COORDINATOR,
+        this.provider,
+        this.engine.ingressBatchLimits,
+      ),
+      this.waitUntil,
     );
+  }
+
+  private scheduleProjectionFlush(): void {
+    if (this.projectionSchedule) return;
+    const task = (async () => {
+      while (!this.engine.shouldFlushPendingProjections()) {
+        const observedCommitAt = this.lastCommitAt;
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, INGRESS_QUIET_FLUSH_MS);
+        });
+        if (observedCommitAt === this.lastCommitAt) break;
+      }
+      await this.engine.flushPendingProjections();
+    })().finally(() => {
+      this.projectionSchedule = null;
+      if (
+        this.engine.shouldFlushPendingProjections(
+          Date.now() + CHECKOUT_PROJECTION_MAX_DEFER_MS,
+        )
+      ) {
+        this.scheduleProjectionFlush();
+      }
+    });
+    this.projectionSchedule = task;
+    this.waitUntil(task);
   }
 
   async fetch(request: Request): Promise<Response> {
     const pathname = new URL(request.url).pathname;
-    if (request.method !== "POST" || (pathname !== "/commit" && pathname !== "/checkout-intent")) {
+    const commitBatchMatch = /^\/commit-batch\/(\d+)$/.exec(pathname);
+    if (
+      request.method !== "POST"
+      || (
+        pathname !== "/commit"
+        && pathname !== "/checkout-intent"
+        && !commitBatchMatch
+      )
+    ) {
       return coordinatorResponse({ ok: false, build: COORDINATOR_BUILD }, 404);
     }
     let command: unknown;
@@ -1574,11 +1724,45 @@ export class CheckoutCoordinator {
               : 409,
       );
     }
+    if (commitBatchMatch) {
+      const lane = Number(commitBatchMatch[1]);
+      const commitLanes = getCheckoutCoordinatorTopology(this.provider).commitLanes;
+      const commands = isJsonObject(command) && Array.isArray(command.commands)
+        ? command.commands
+        : null;
+      if (
+        !Number.isSafeInteger(lane)
+        || lane < 0
+        || lane >= commitLanes
+        || !commands
+        || commands.length < 1
+        || commands.length > CHECKOUT_COMMIT_HARD_MAX_ORDERS
+        || !commands.every((candidate) =>
+          isCheckoutCommand(candidate)
+          && getCheckoutCommitLane(this.provider, candidate.requestHash) === lane
+        )
+      ) {
+        return coordinatorResponse({ ok: false, build: COORDINATOR_BUILD }, 400);
+      }
+      const results = await this.engine.submitBatch(
+        commands,
+        this.provider === "d1" ? null : lane,
+      );
+      this.lastCommitAt = Date.now();
+      this.scheduleProjectionFlush();
+      return coordinatorResponse({ ok: true, results, build: COORDINATOR_BUILD }, 200);
+    }
     if (!isCheckoutCommand(command)) {
       return coordinatorResponse({ ok: false, build: COORDINATOR_BUILD }, 400);
     }
-    const result = await this.engine.submit(command);
-    this.engine.flushPendingProjections().catch(() => undefined);
+    const result = await this.engine.submit(
+      command,
+      this.provider === "d1"
+        ? null
+        : getCheckoutCommitLane(this.provider, command.requestHash),
+    );
+    this.lastCommitAt = Date.now();
+    this.scheduleProjectionFlush();
     return coordinatorResponse(
       { ...result, build: COORDINATOR_BUILD },
       result.ok
@@ -1605,67 +1789,167 @@ function parseAvailabilityChangedSubjects(value: unknown): Array<{
   );
 }
 
-export async function submitCheckoutCommitToCoordinator<
-  TPayload,
-  TResponse,
->(
-  namespace: DurableObjectNamespace,
-  command: CheckoutCommitCommand<TPayload, TResponse>,
-): Promise<CheckoutCoordinatorResult> {
-  const id = namespace.idFromName(COORDINATOR_NAME);
-  const response = await namespace.get(id).fetch("https://checkout-coordinator.internal/commit", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(command),
-  });
-  const body = await response.json() as unknown;
-  if (!isJsonObject(body) || typeof body.ok !== "boolean") {
+function parseCheckoutCoordinatorResult(value: unknown): CheckoutCoordinatorResult {
+  if (!isJsonObject(value) || typeof value.ok !== "boolean") {
     return { ok: false, code: "CHECKOUT_COMMIT_UNAVAILABLE" };
   }
-  if (body.ok === true) {
+  if (value.ok === true) {
     if (
-      typeof body.orderId !== "string"
-      || !isJsonObject(body.response)
-      || typeof body.replay !== "boolean"
-      || !Array.isArray(body.availabilityChangedSubjects)
+      typeof value.orderId !== "string"
+      || !isJsonObject(value.response)
+      || typeof value.replay !== "boolean"
+      || !Array.isArray(value.availabilityChangedSubjects)
     ) {
       return { ok: false, code: "CHECKOUT_COMMIT_UNAVAILABLE" };
     }
     return {
       ok: true,
-      orderId: body.orderId,
-      response: body.response,
-      replay: body.replay,
+      orderId: value.orderId,
+      response: value.response,
+      replay: value.replay,
       availabilityChangedSubjects: parseAvailabilityChangedSubjects(
-        body.availabilityChangedSubjects,
+        value.availabilityChangedSubjects,
       ),
     };
   }
   if (
-    body.code === "CHECKOUT_IDEMPOTENCY_CONFLICT"
-    || body.code === "CHECKOUT_AUTHORITY_CHANGED"
-    || body.code === "CHECKOUT_INVENTORY_UNAVAILABLE"
-    || body.code === "CHECKOUT_COMMIT_UNAVAILABLE"
+    value.code === "CHECKOUT_IDEMPOTENCY_CONFLICT"
+    || value.code === "CHECKOUT_AUTHORITY_CHANGED"
+    || value.code === "CHECKOUT_INVENTORY_UNAVAILABLE"
+    || value.code === "CHECKOUT_COMMIT_UNAVAILABLE"
   ) {
-    return { ok: false, code: body.code };
+    return { ok: false, code: value.code };
   }
   return { ok: false, code: "CHECKOUT_COMMIT_UNAVAILABLE" };
 }
 
+async function fetchCheckoutCommitBatch(
+  namespace: DurableObjectNamespace,
+  provider: DatabaseProvider,
+  lane: number,
+  commands: readonly Command[],
+): Promise<CheckoutCoordinatorResult[]> {
+  const unavailable = () => commands.map<CheckoutCoordinatorResult>(() => ({
+    ok: false,
+    code: "CHECKOUT_COMMIT_UNAVAILABLE",
+  }));
+  if (
+    commands.length < 1
+    || commands.length > CHECKOUT_COMMIT_HARD_MAX_ORDERS
+    || commands.some((command) =>
+      getCheckoutCommitLane(provider, command.requestHash) !== lane
+    )
+  ) {
+    return unavailable();
+  }
+  try {
+    const id = namespace.idFromName(getCheckoutCommitCoordinatorName(lane));
+    const response = await namespace.get(id).fetch(
+      `https://checkout-coordinator.internal/commit-batch/${lane}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ commands }),
+      },
+    );
+    const body = await response.json() as unknown;
+    if (
+      !response.ok
+      || !isJsonObject(body)
+      || body.ok !== true
+      || !Array.isArray(body.results)
+      || body.results.length !== commands.length
+    ) {
+      return unavailable();
+    }
+    return body.results.map(parseCheckoutCoordinatorResult);
+  } catch {
+    // Cloudflare marks overloaded Durable Object errors as non-retryable at
+    // this boundary. Retrying here would amplify overload; the route performs
+    // the normal database replay lookup before returning an uncertain failure.
+    return unavailable();
+  }
+}
+
+export function createRemoteCheckoutCommitGateway(
+  namespace: DurableObjectNamespace,
+  provider: DatabaseProvider,
+  ingressBatchLimits: CheckoutCommitGateway["ingressBatchLimits"],
+): CheckoutCommitGateway {
+  return {
+    ingressBatchLimits,
+    async submitBatch(commands) {
+      const results = new Array<CheckoutCoordinatorResult>(commands.length);
+      const groups = new Map<number, Array<{ command: Command; index: number }>>();
+      for (const [index, command] of commands.entries()) {
+        const lane = getCheckoutCommitLane(provider, command.requestHash);
+        const group = groups.get(lane) ?? [];
+        group.push({ command, index });
+        groups.set(lane, group);
+      }
+      await Promise.all([...groups.entries()].map(async ([lane, group]) => {
+        const laneResults = await fetchCheckoutCommitBatch(
+          namespace,
+          provider,
+          lane,
+          group.map((candidate) => candidate.command),
+        );
+        for (const [resultIndex, candidate] of group.entries()) {
+          results[candidate.index] = laneResults[resultIndex]
+            ?? { ok: false, code: "CHECKOUT_COMMIT_UNAVAILABLE" };
+        }
+      }));
+      return results;
+    },
+  };
+}
+
+export async function submitCheckoutCommitToCoordinator<
+  TPayload,
+  TResponse,
+>(
+  namespace: DurableObjectNamespace,
+  provider: DatabaseProvider,
+  command: CheckoutCommitCommand<TPayload, TResponse>,
+): Promise<CheckoutCoordinatorResult> {
+  if (!isCheckoutCommand(command)) {
+    return { ok: false, code: "CHECKOUT_COMMIT_UNAVAILABLE" };
+  }
+  const lane = getCheckoutCommitLane(provider, command.requestHash);
+  return (await fetchCheckoutCommitBatch(
+    namespace,
+    provider,
+    lane,
+    [command as unknown as Command],
+  ))[0] ?? { ok: false, code: "CHECKOUT_COMMIT_UNAVAILABLE" };
+}
+
 export async function submitCheckoutIntentToCoordinator(
   namespace: DurableObjectNamespace,
+  provider: DatabaseProvider,
   command: CheckoutIntentCommand,
 ): Promise<CheckoutIntentCoordinatorResult> {
-  const id = namespace.idFromName(COORDINATOR_NAME);
-  const response = await namespace.get(id).fetch(
-    "https://checkout-coordinator.internal/checkout-intent",
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(command),
-    },
-  );
-  const body = await response.json() as unknown;
+  let body: unknown;
+  try {
+    const id = namespace.idFromName(getCheckoutIngressCoordinatorName(
+      provider,
+      command.attempt.requestKey,
+    ));
+    const response = await namespace.get(id).fetch(
+      "https://checkout-coordinator.internal/checkout-intent",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(command),
+      },
+    );
+    body = await response.json() as unknown;
+    if (!response.ok && response.status >= 500) {
+      return { ok: false, code: "CHECKOUT_COMMIT_UNAVAILABLE" };
+    }
+  } catch {
+    return { ok: false, code: "CHECKOUT_COMMIT_UNAVAILABLE" };
+  }
   if (!isJsonObject(body) || typeof body.ok !== "boolean") {
     return { ok: false, code: "CHECKOUT_COMMIT_UNAVAILABLE" };
   }

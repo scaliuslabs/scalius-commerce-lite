@@ -1309,7 +1309,7 @@ describe("create order currency parity", () => {
 });
 
 describe("create order commit/KV ordering", () => {
-  it("routes eligible checkouts through the coordinator and preserves post-commit work", async () => {
+  it("invalidates a coordinated sold-out transition when projection owns side effects", async () => {
     const commitPayload = { orderData: { id: "order_1" }, marker: "coordinated" };
     const coordinatedResponse = {
       checkoutToken: "chk_order_1",
@@ -1348,7 +1348,7 @@ describe("create order commit/KV ordering", () => {
       orderId: "order_1",
       response: coordinatedResponse,
       availabilityChangedSubjects,
-      postCommitPayload: commitPayload,
+      postCommitPayload: null,
     });
 
     const { app, kv } = createTestApp();
@@ -1369,6 +1369,7 @@ describe("create order commit/KV ordering", () => {
     });
     expect(mocks.submitCheckoutIntentToCoordinator).toHaveBeenCalledWith(
       coordinatorBinding,
+      "d1",
       expect.objectContaining({
         attempt: expect.objectContaining({ orderId: "order_1" }),
         data: expect.objectContaining({ paymentMethod: "cod" }),
@@ -1376,11 +1377,7 @@ describe("create order commit/KV ordering", () => {
     );
     expect(mocks.submitCheckoutCommitToCoordinator).not.toHaveBeenCalled();
     expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
-    expect(mocks.runStorefrontOrderPostCommitSideEffects).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ CHECKOUT_COORDINATOR: coordinatorBinding }),
-      commitPayload,
-    );
+    expect(mocks.runStorefrontOrderPostCommitSideEffects).not.toHaveBeenCalled();
     expect(mocks.invalidateProductAvailabilityCacheSubjects).toHaveBeenCalledWith(
       availabilityChangedSubjects,
       expect.anything(),

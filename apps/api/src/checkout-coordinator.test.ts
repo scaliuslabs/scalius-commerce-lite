@@ -25,8 +25,16 @@ import type { OrderNotificationQueueMessage } from "@scalius/core/modules/notifi
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  CheckoutCoordinator,
   CheckoutCoordinatorEngine,
   CheckoutIntentCoordinatorEngine,
+  createRemoteCheckoutCommitGateway,
+  getCheckoutCommitCoordinatorName,
+  getCheckoutCommitLane,
+  getCheckoutCoordinatorTopology,
+  getCheckoutIngressCoordinatorName,
+  submitCheckoutCommitToCoordinator,
+  submitCheckoutIntentToCoordinator,
   type CheckoutIntentCommand,
 } from "./checkout-coordinator";
 
@@ -234,8 +242,8 @@ function sqliteD1Statement(
   };
 }
 
-function drizzleDatabase(database: DatabaseSync): Database {
-  const binding = {
+function sqliteD1Binding(database: DatabaseSync): D1Database {
+  return {
     prepare: (query: string) => sqliteD1Statement(database, query),
     async batch(statements: SqliteD1Statement[]) {
       database.exec("BEGIN");
@@ -248,8 +256,11 @@ function drizzleDatabase(database: DatabaseSync): Database {
         throw error;
       }
     },
-  };
-  return drizzle(binding as unknown as D1Database, { schema }) as unknown as Database;
+  } as unknown as D1Database;
+}
+
+function drizzleDatabase(database: DatabaseSync): Database {
+  return drizzle(sqliteD1Binding(database), { schema }) as unknown as Database;
 }
 
 function order(id: string, inventoryAction = "reserved"): CheckoutCommittedOrderRow {
@@ -430,6 +441,162 @@ async function settleWaitUntilTasks(tasks: Promise<unknown>[]): Promise<void> {
   }
 }
 
+function fakeCoordinatorNamespace(
+  fetcher: (name: string, input: RequestInfo | URL, init?: RequestInit) => Promise<Response>,
+): { namespace: DurableObjectNamespace; names: string[] } {
+  const names: string[] = [];
+  const namespace = {
+    idFromName(name: string) {
+      names.push(name);
+      return name;
+    },
+    get(id: string) {
+      return {
+        fetch(input: RequestInfo | URL, init?: RequestInit) {
+          return fetcher(id, input, init);
+        },
+      };
+    },
+  } as unknown as DurableObjectNamespace;
+  return { namespace, names };
+}
+
+describe("checkout coordinator topology", () => {
+  it("keeps D1 serialized and horizontally shards concurrent providers deterministically", () => {
+    expect(getCheckoutCoordinatorTopology("d1")).toEqual({
+      ingressShards: 1,
+      commitLanes: 1,
+    });
+    expect(getCheckoutCoordinatorTopology("turso")).toEqual({
+      ingressShards: 16,
+      commitLanes: 2,
+    });
+    expect(getCheckoutCoordinatorTopology("postgres")).toEqual({
+      ingressShards: 16,
+      commitLanes: 2,
+    });
+
+    const names = new Set(Array.from({ length: 1_024 }, (_, index) =>
+      getCheckoutIngressCoordinatorName("postgres", `checkout_submit:v1:${index}`)
+    ));
+    expect(names.size).toBe(16);
+    expect(getCheckoutIngressCoordinatorName("postgres", "stable-key"))
+      .toBe(getCheckoutIngressCoordinatorName("postgres", "stable-key"));
+    expect(getCheckoutIngressCoordinatorName("d1", "first"))
+      .toBe(getCheckoutIngressCoordinatorName("d1", "second"));
+    expect(getCheckoutCommitCoordinatorName(0)).not.toBe(
+      getCheckoutCommitCoordinatorName(1),
+    );
+  });
+
+  it("routes intent by idempotency key and direct commits by provider lane", async () => {
+    const intentCommand = intent(900);
+    const intentHarness = fakeCoordinatorNamespace(async () => Response.json({
+      ok: true,
+      orderId: intentCommand.attempt.orderId,
+      response: { orderId: intentCommand.attempt.orderId },
+      replay: false,
+      availabilityChangedSubjects: [],
+      postCommitPayload: null,
+    }, { status: 201 }));
+    await expect(submitCheckoutIntentToCoordinator(
+      intentHarness.namespace,
+      "postgres",
+      intentCommand,
+    )).resolves.toMatchObject({ ok: true, replay: false });
+    expect(intentHarness.names).toEqual([
+      getCheckoutIngressCoordinatorName(
+        "postgres",
+        intentCommand.attempt.requestKey,
+      ),
+    ]);
+
+    const checkoutCommand = command("order_routed");
+    const commitHarness = fakeCoordinatorNamespace(async (_name, _input, init) => {
+      const body = JSON.parse(String(init?.body)) as {
+        commands: CheckoutCommitCommand<JsonObject, JsonObject>[];
+      };
+      return Response.json({
+        ok: true,
+        results: body.commands.map((candidate) => ({
+          ok: true,
+          orderId: candidate.order.id,
+          response: candidate.response,
+          replay: false,
+          availabilityChangedSubjects: [],
+        })),
+      });
+    });
+    await expect(submitCheckoutCommitToCoordinator(
+      commitHarness.namespace,
+      "postgres",
+      checkoutCommand,
+    )).resolves.toMatchObject({ ok: true, orderId: "order_routed" });
+    expect(commitHarness.names).toEqual([
+      getCheckoutCommitCoordinatorName(
+        getCheckoutCommitLane("postgres", checkoutCommand.requestHash),
+      ),
+    ]);
+  });
+
+  it("fails closed without retrying an overloaded commit coordinator", async () => {
+    let calls = 0;
+    const harness = fakeCoordinatorNamespace(async () => {
+      calls += 1;
+      throw Object.assign(new Error("Durable Object is overloaded"), {
+        overloaded: true,
+      });
+    });
+    await expect(submitCheckoutCommitToCoordinator(
+      harness.namespace,
+      "postgres",
+      command("order_overloaded"),
+    )).resolves.toEqual({ ok: false, code: "CHECKOUT_COMMIT_UNAVAILABLE" });
+    expect(calls).toBe(1);
+  });
+
+  it("microbatches concurrent-provider commits by lane and restores result order", async () => {
+    const calls: Array<{ name: string; orderIds: string[] }> = [];
+    const harness = fakeCoordinatorNamespace(async (name, _input, init) => {
+      const body = JSON.parse(String(init?.body)) as {
+        commands: CheckoutCommitCommand<JsonObject, JsonObject>[];
+      };
+      calls.push({ name, orderIds: body.commands.map((candidate) => candidate.order.id) });
+      return Response.json({
+        ok: true,
+        results: body.commands.map((candidate) => ({
+          ok: true,
+          orderId: candidate.order.id,
+          response: candidate.response,
+          replay: false,
+          availabilityChangedSubjects: [],
+        })),
+      });
+    });
+    const commands = Array.from({ length: 20 }, (_, index) =>
+      command(`order_gateway_${String(index).padStart(2, "0")}`)
+    );
+    expect(new Set(commands.map((candidate) =>
+      getCheckoutCommitLane("postgres", candidate.requestHash)
+    ))).toEqual(new Set([0, 1]));
+
+    const gateway = createRemoteCheckoutCommitGateway(
+      harness.namespace,
+      "postgres",
+      { targetOrders: 500, targetJsonBytes: 5_000_000 },
+    );
+    const results = await gateway.submitBatch(commands);
+
+    expect(calls).toHaveLength(2);
+    expect(new Set(calls.map((call) => call.name))).toEqual(new Set([
+      getCheckoutCommitCoordinatorName(0),
+      getCheckoutCommitCoordinatorName(1),
+    ]));
+    expect(results.map((result) => result.ok ? result.orderId : null))
+      .toEqual(commands.map((candidate) => candidate.order.id));
+  });
+});
+
 describe("production checkout coordinator engine", () => {
   let database: DatabaseSync;
 
@@ -467,6 +634,104 @@ describe("production checkout coordinator engine", () => {
     `).get()).toEqual({ reserved: 1 });
     expect(database.prepare("SELECT COUNT(*) AS count FROM checkout_batch_outbox").get())
       .toEqual({ count: 1 });
+  });
+
+  it("accepts a bound D1 commit microbatch and keeps projection recoverable", async () => {
+    const waitUntilTasks: Promise<unknown>[] = [];
+    const state = {
+      waitUntil(task: Promise<unknown>) {
+        waitUntilTasks.push(task);
+      },
+    } as unknown as DurableObjectState;
+    const namespace = fakeCoordinatorNamespace(async () => {
+      throw new Error("The D1 commit endpoint must not make a nested coordinator call.");
+    }).namespace;
+    const coordinator = new CheckoutCoordinator(state, {
+      DB: sqliteD1Binding(database),
+      CHECKOUT_COORDINATOR: namespace,
+    } as unknown as Env);
+    const input = command("order_commit_endpoint");
+    const response = await coordinator.fetch(new Request(
+      "https://checkout-coordinator.internal/commit-batch/0",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ commands: [input] }),
+      },
+    ));
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(await response.json()).toMatchObject({
+      ok: true,
+      results: [{ ok: true, orderId: "order_commit_endpoint", replay: false }],
+      build: "checkout-coordinator-v2",
+    });
+    await settleWaitUntilTasks(waitUntilTasks);
+    expect(database.prepare(`
+      SELECT
+        checkout_projection_status AS projectionStatus,
+        (SELECT status FROM checkout_batch_outbox LIMIT 1) AS batchStatus
+      FROM orders
+      WHERE id = 'order_commit_endpoint'
+    `).get()).toEqual({ projectionStatus: "pending", batchStatus: "pending" });
+  });
+
+  it("runs the sharded intent and commit objects end to end on D1 authority", async () => {
+    installIntentCheckoutFixtures(database);
+    const waitUntilTasks: Promise<unknown>[] = [];
+    const instances = new Map<string, CheckoutCoordinator>();
+    const namespace = {
+      idFromName(name: string) {
+        return name;
+      },
+      get(id: string) {
+        return {
+          async fetch(input: RequestInfo | URL, init?: RequestInit) {
+            let instance = instances.get(id);
+            if (!instance) {
+              instance = new CheckoutCoordinator({
+                waitUntil(task: Promise<unknown>) {
+                  waitUntilTasks.push(task);
+                },
+              } as unknown as DurableObjectState, env);
+              instances.set(id, instance);
+            }
+            return instance.fetch(new Request(input, init));
+          },
+        };
+      },
+    } as unknown as DurableObjectNamespace;
+    const env = {
+      DB: sqliteD1Binding(database),
+      CHECKOUT_COORDINATOR: namespace,
+    } as unknown as Env;
+
+    const input = intent(950);
+    await expect(submitCheckoutIntentToCoordinator(namespace, "d1", input))
+      .resolves.toMatchObject({
+        ok: true,
+        orderId: input.attempt.orderId,
+        replay: false,
+      });
+    await settleWaitUntilTasks(waitUntilTasks);
+
+    expect([...instances.keys()].sort()).toEqual([
+      getCheckoutCommitCoordinatorName(0),
+      getCheckoutIngressCoordinatorName("d1", input.attempt.requestKey),
+    ].sort());
+    expect(database.prepare(`
+      SELECT
+        checkout_projection_status AS projectionStatus,
+        (SELECT status FROM checkout_batch_outbox LIMIT 1) AS batchStatus,
+        (SELECT COUNT(*) FROM checkout_attempts) AS attempts,
+        (SELECT COUNT(*) FROM order_items) AS items
+      FROM orders
+      WHERE id = ?
+    `).get(input.attempt.orderId)).toEqual({
+      projectionStatus: "complete",
+      batchStatus: "complete",
+      attempts: 1,
+      items: 1,
+    });
   });
 
   it("prepares a checkout burst from one shared authority read before atomic commits", async () => {
@@ -775,6 +1040,27 @@ describe("production checkout coordinator engine", () => {
               WHERE variant_id = 'variant_hot') AS reserved
       FROM orders
     `).get()).toEqual({ orders: 300, reserved: 300 });
+  });
+
+  it("assigns the sold-out cache transition to exactly one committed order", async () => {
+    const engine = new CheckoutCoordinatorEngine(sqliteTransport(database));
+    const results = await Promise.all(Array.from({ length: 20 }, (_, index) =>
+      engine.submit(command(`order_sold_out_${String(index).padStart(2, "0")}`))
+    ));
+
+    expect(results.every((result) => result.ok)).toBe(true);
+    const invalidatingResults = results.filter((result) =>
+      result.ok && result.availabilityChangedSubjects.length > 0
+    );
+    expect(invalidatingResults).toHaveLength(1);
+    expect(invalidatingResults[0]).toMatchObject({
+      ok: true,
+      availabilityChangedSubjects: [{
+        productId: "product_hot",
+        slug: "hot-product",
+        categoryId: null,
+      }],
+    });
   });
 
   it("moves only free capacity to avoid false out-of-stock from lane fragmentation", async () => {
