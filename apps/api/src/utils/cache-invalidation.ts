@@ -188,7 +188,11 @@ export const INVALIDATION_GROUPS: Record<string, InvalidationGroupDef> = {
   pages: {
     label: "Pages",
     description: "Static pages and articles",
-    kvPrefixes: ["api:pages:", "api:storefront:page:"],
+    kvPrefixes: [
+      "api:pages:",
+      "api:pages:articles:",
+      "api:storefront:page:",
+    ],
     bumpsHtml: false,
     storefrontPrefixes: [
       "page_slug_",
@@ -235,7 +239,12 @@ export const INVALIDATION_GROUPS: Record<string, InvalidationGroupDef> = {
   homepage: {
     label: "Homepage",
     description: "Hero sliders and SEO settings",
-    kvPrefixes: ["api:hero:", "api:seo:", "api:storefront:homepage:"],
+    kvPrefixes: [
+      "api:hero:",
+      "api:seo:",
+      "api:seo:v4:",
+      "api:storefront:homepage:",
+    ],
     bumpsHtml: true,
     storefrontPrefixes: [
       "homepage_hero_sliders",
@@ -246,7 +255,7 @@ export const INVALIDATION_GROUPS: Record<string, InvalidationGroupDef> = {
   discovery: {
     label: "Discovery",
     description: "SEO policy, robots, sitemap XML, and product feed XML",
-    kvPrefixes: ["api:seo:"],
+    kvPrefixes: ["api:seo:", "api:seo:v4:"],
     bumpsHtml: true,
     storefrontPrefixes: [
       "global_seo_settings",
@@ -1144,7 +1153,10 @@ export async function invalidateApiAndScheduleStorefrontGroups(
   options: { htmlPaths?: readonly string[] } = {},
 ): Promise<void> {
   const normalizedGroups = [...groups];
-  await invalidateGroups(normalizedGroups, c.env?.CACHE);
+  const executionCtx = getOptionalExecutionContext(c);
+  await invalidateGroups(normalizedGroups, c.env?.CACHE, {
+    ...(executionCtx ? { cleanupExecutionCtx: executionCtx } : {}),
+  });
   const body = buildStorefrontPrefixPurgeBody(
     getStorefrontPrefixesForGroups(normalizedGroups),
     {
@@ -1153,7 +1165,6 @@ export async function invalidateApiAndScheduleStorefrontGroups(
       htmlPaths: options.htmlPaths,
     },
   );
-  const executionCtx = getOptionalExecutionContext(c);
   if (!body || !hasStorefrontPurgeConfig(c.env)) return;
 
   await enqueueStorefrontCachePurgeOrFallback(
@@ -1229,8 +1240,19 @@ export async function invalidateGroups(
 
   await bumpApiCacheFences(uniquePrefixes, kv);
 
+  // Nested scopes need their own fence because readers capture the exact
+  // middleware namespace. A broader physical prefix scan already covers the
+  // same stored keys, so avoid listing an overlapping KV range twice.
+  const physicalCleanupPrefixes = uniquePrefixes.filter(
+    (prefix) =>
+      !uniquePrefixes.some(
+        (candidate) => candidate !== prefix && prefix.startsWith(candidate),
+      ),
+  );
   const cleanup = Promise.all(
-    uniquePrefixes.map((prefix) => deleteCacheByPattern(`${prefix}*`, kv)),
+    physicalCleanupPrefixes.map((prefix) =>
+      deleteCacheByPattern(`${prefix}*`, kv),
+    ),
   );
   if (options.cleanupExecutionCtx) {
     options.cleanupExecutionCtx.waitUntil(cleanup);
@@ -1770,7 +1792,10 @@ export async function invalidateCatalogCaches(
   options: CatalogCacheInvalidationOptions = {},
 ): Promise<void> {
   const groups = [...CATALOG_CACHE_GROUPS[domain]];
-  await invalidateGroups(groups, c.env?.CACHE);
+  const executionCtx = getOptionalExecutionContext(c);
+  await invalidateGroups(groups, c.env?.CACHE, {
+    ...(executionCtx ? { cleanupExecutionCtx: executionCtx } : {}),
+  });
   const body = buildStorefrontPrefixPurgeBody(
     getStorefrontPrefixesForGroups(groups),
     {
@@ -1779,7 +1804,6 @@ export async function invalidateCatalogCaches(
       htmlPaths: getCatalogStorefrontHtmlPaths(domain, options.htmlPaths),
     },
   );
-  const executionCtx = getOptionalExecutionContext(c);
   if (!body || !hasStorefrontPurgeConfig(c.env)) return;
 
   await enqueueStorefrontCachePurgeOrFallback(

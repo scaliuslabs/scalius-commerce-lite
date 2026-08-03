@@ -720,8 +720,45 @@ describe("triggerStorefrontPurgeForGroups", () => {
       cleanupExecutionCtx: { waitUntil },
     });
 
-    expect(kv.put).toHaveBeenCalledTimes(2);
+    expect(kv.put).toHaveBeenCalledTimes(3);
+    expect(kv.put).toHaveBeenCalledWith(
+      "sc:_api_cache_fence:api%3Apages%3Aarticles%3A",
+      expect.any(String),
+      { expirationTtl: 86400 * 30 },
+    );
     expect(kv.list).toHaveBeenCalledTimes(2);
+    expect(kv.list).not.toHaveBeenCalledWith({
+      prefix: "sc:api:pages:articles:",
+    });
+    expect(waitUntil).toHaveBeenCalledTimes(1);
+
+    finishList({ keys: [], list_complete: true });
+    await (waitUntil.mock.calls[0]?.[0] as Promise<unknown>);
+  });
+
+  it("advances the exact SEO payload fence before deferred cleanup", async () => {
+    let finishList!: (value: { keys: []; list_complete: true }) => void;
+    const listPromise = new Promise<{ keys: []; list_complete: true }>(
+      (resolve) => {
+        finishList = resolve;
+      },
+    );
+    const waitUntil = vi.fn();
+    const kv = {
+      put: vi.fn().mockResolvedValue(undefined),
+      list: vi.fn(() => listPromise),
+      delete: vi.fn(),
+    };
+
+    await invalidateGroups(["discovery"], kv as unknown as KVNamespace, {
+      cleanupExecutionCtx: { waitUntil },
+    });
+
+    expect(kv.put).toHaveBeenCalledWith(
+      "sc:_api_cache_fence:api%3Aseo%3Av4%3A",
+      expect.any(String),
+      { expirationTtl: 86400 * 30 },
+    );
     expect(waitUntil).toHaveBeenCalledTimes(1);
 
     finishList({ keys: [], list_complete: true });
@@ -752,9 +789,9 @@ describe("triggerStorefrontPurgeForGroups", () => {
     expect(kv.list).toHaveBeenCalledWith({ prefix: "sc:api:header:" });
     expect(kv.list).toHaveBeenCalledWith({ prefix: "sc:api:footer:" });
     expect(kv.list).toHaveBeenCalledWith({ prefix: "sc:api:navigation:" });
-    expect(waitUntil).toHaveBeenCalledTimes(1);
+    expect(waitUntil).toHaveBeenCalledTimes(2);
 
-    const purgePromise = waitUntil.mock.calls[0]?.[0] as Promise<unknown>;
+    const purgePromise = waitUntil.mock.calls[1]?.[0] as Promise<unknown>;
     await purgePromise;
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -797,7 +834,7 @@ describe("triggerStorefrontPurgeForGroups", () => {
     );
 
     expect(queueSend).toHaveBeenCalledTimes(1);
-    expect(waitUntil).not.toHaveBeenCalled();
+    expect(waitUntil).toHaveBeenCalledTimes(1);
     expect(fetchMock).not.toHaveBeenCalled();
     expect(queueSend.mock.calls[0]?.[0]).toMatchObject({
       type: "storefront.cache_purge",
@@ -849,9 +886,9 @@ describe("triggerStorefrontPurgeForGroups", () => {
       "[Cache] Failed to enqueue storefront cache purge:",
       expect.any(Error),
     );
-    expect(waitUntil).toHaveBeenCalledTimes(1);
+    expect(waitUntil).toHaveBeenCalledTimes(2);
 
-    const purgePromise = waitUntil.mock.calls[0]?.[0] as Promise<unknown>;
+    const purgePromise = waitUntil.mock.calls[1]?.[0] as Promise<unknown>;
     await purgePromise;
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -889,8 +926,8 @@ describe("triggerStorefrontPurgeForGroups", () => {
       }),
     ).resolves.toBeUndefined();
 
-    expect(waitUntil).toHaveBeenCalledTimes(1);
-    const purgePromise = waitUntil.mock.calls[0]?.[0] as Promise<unknown>;
+    expect(waitUntil).toHaveBeenCalledTimes(2);
+    const purgePromise = waitUntil.mock.calls[1]?.[0] as Promise<unknown>;
     await expect(purgePromise).resolves.toBeUndefined();
     expect(consoleError).toHaveBeenCalledWith(
       "[Cache] Storefront prefix purge failed:",
@@ -1069,7 +1106,7 @@ describe("triggerStorefrontPurgeForGroups", () => {
     expect(kv.list).toHaveBeenCalledWith({
       prefix: "sc:api:attributes:category",
     });
-    expect(kv.list).toHaveBeenCalledWith({
+    expect(kv.list).not.toHaveBeenCalledWith({
       prefix: "sc:api:attributes:category-slug",
     });
     expect(kv.list).toHaveBeenCalledWith({
@@ -1077,8 +1114,8 @@ describe("triggerStorefrontPurgeForGroups", () => {
     });
     expect(kv.list).toHaveBeenCalledWith({ prefix: "sc:api:categories:" });
 
-    expect(waitUntil).toHaveBeenCalledTimes(1);
-    const purgePromise = waitUntil.mock.calls[0]?.[0] as Promise<unknown>;
+    expect(waitUntil).toHaveBeenCalledTimes(2);
+    const purgePromise = waitUntil.mock.calls[1]?.[0] as Promise<unknown>;
     await purgePromise;
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -1155,8 +1192,8 @@ describe("triggerStorefrontPurgeForGroups", () => {
       },
     );
 
-    expect(waitUntil).toHaveBeenCalledTimes(1);
-    const purgePromise = waitUntil.mock.calls[0]?.[0] as Promise<unknown>;
+    expect(waitUntil).toHaveBeenCalledTimes(2);
+    const purgePromise = waitUntil.mock.calls[1]?.[0] as Promise<unknown>;
     await purgePromise;
 
     const [, init] = fetchMock.mock.calls[0]!;
@@ -1188,8 +1225,8 @@ describe("triggerStorefrontPurgeForGroups", () => {
       }),
     ).resolves.toBeUndefined();
 
-    expect(waitUntil).toHaveBeenCalledTimes(1);
-    const purgePromise = waitUntil.mock.calls[0]?.[0] as Promise<unknown>;
+    expect(waitUntil).toHaveBeenCalledTimes(2);
+    const purgePromise = waitUntil.mock.calls[1]?.[0] as Promise<unknown>;
     await expect(purgePromise).resolves.toBeUndefined();
     expect(consoleError).toHaveBeenCalledWith(
       "[Cache] Storefront prefix purge failed:",

@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  deleteCacheByPattern: vi.fn(async () => undefined),
   getCache: vi.fn(),
   setCache: vi.fn(),
   getCacheType: vi.fn(() => "kv"),
@@ -9,6 +10,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("../utils/kv-cache", () => ({
   deleteCache: vi.fn(),
+  deleteCacheByPattern: mocks.deleteCacheByPattern,
   getCache: mocks.getCache,
   setCache: mocks.setCache,
   getCacheType: mocks.getCacheType,
@@ -16,6 +18,7 @@ vi.mock("../utils/kv-cache", () => ({
 }));
 
 import { cacheMiddleware, canonicalizeCacheQueryString } from "./cache";
+import { invalidateGroups } from "../utils/cache-invalidation";
 import { PRODUCT_API_CACHE_NAMESPACE } from "../utils/product-api-cache";
 
 function withoutFenceToken(cacheKey: string): string {
@@ -87,6 +90,9 @@ describe("cacheMiddleware", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("X-Cache")).toBe("MISS");
+    expect(response.headers.get("Cache-Control")).toBe(
+      "public, max-age=0, no-cache, must-revalidate",
+    );
     expect(executionCtx.waitUntil).toHaveBeenCalledTimes(1);
     expect(executionCtx.waitUntil.mock.calls[0]?.[0]).toBeInstanceOf(Promise);
 
@@ -112,6 +118,33 @@ describe("cacheMiddleware", () => {
     expect(withoutFenceToken(writeKey)).toBe("api:products:/products");
     expect(readKey).toMatch(/^api:products:\/products#f:[0-9a-f]+$/);
     expect(writeKey).toBe(readKey);
+  });
+
+  it("requires browser revalidation for cached public JSON hits", async () => {
+    mocks.getCache.mockResolvedValue({
+      status: 200,
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ products: [] }),
+    });
+
+    const app = new Hono<{ Bindings: Env }>();
+    app.use("*", cacheMiddleware({ ttl: 60, keyPrefix: "api:products:" }));
+    app.get("/products", (c) => c.json({ products: ["handler"] }));
+
+    const response = await app.request("/products", {}, {
+      CACHE: { id: "api-cache-kv" },
+    } as unknown as Env);
+
+    expect(response.headers.get("X-Cache")).toBe("HIT");
+    expect(response.headers.get("Cache-Control")).toBe(
+      "public, max-age=0, no-cache, must-revalidate",
+    );
+    expect(response.headers.get("Cache-Control")).not.toContain(
+      "stale-while-revalidate",
+    );
+    expect(response.headers.get("Cache-Control")).not.toContain(
+      "stale-if-error",
+    );
   });
 
   it("cannot read an incompatible response from the retired product namespace", async () => {
@@ -186,6 +219,53 @@ describe("cacheMiddleware", () => {
     await executionCtx.waitUntil.mock.calls[0]?.[0];
     expect(mocks.setCache).not.toHaveBeenCalled();
   });
+
+  it.each([
+    {
+      group: "discovery",
+      keyPrefix: "api:seo:v4:",
+      path: "/api/v1/seo",
+    },
+    {
+      group: "pages",
+      keyPrefix: "api:pages:articles:",
+      path: "/api/v1/articles",
+    },
+  ])(
+    "rejects a delayed $keyPrefix miss write after its group is invalidated",
+    async ({ group, keyPrefix, path }) => {
+      mocks.getCache.mockResolvedValue(null);
+      mocks.setCache.mockResolvedValue(undefined);
+
+      const app = new Hono<{ Bindings: Env }>();
+      app.use("*", cacheMiddleware({ ttl: 60, keyPrefix }));
+      app.get(path, (c) => c.json({ value: "before-mutation" }));
+
+      const { kv } = createFenceKvStore();
+      const responseExecutionCtx = {
+        waitUntil: vi.fn(),
+        passThroughOnException: vi.fn(),
+      };
+
+      const response = await app.request(
+        path,
+        {},
+        { CACHE: kv } as unknown as Env,
+        responseExecutionCtx as never,
+      );
+      expect(response.status).toBe(200);
+      expect(responseExecutionCtx.waitUntil).toHaveBeenCalledTimes(1);
+
+      const cleanupExecutionCtx = { waitUntil: vi.fn() };
+      await invalidateGroups([group], kv as unknown as KVNamespace, {
+        cleanupExecutionCtx,
+      });
+      await responseExecutionCtx.waitUntil.mock.calls[0]?.[0];
+
+      expect(mocks.setCache).not.toHaveBeenCalled();
+      expect(cleanupExecutionCtx.waitUntil).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it("canonicalizes query order before reading and writing cache keys", async () => {
     mocks.getCache.mockResolvedValue(null);

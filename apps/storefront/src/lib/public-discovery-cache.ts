@@ -1,10 +1,9 @@
 const HTML_BROWSER_CACHE_CONTROL = "no-cache, no-store, must-revalidate";
-const SITEMAP_BROWSER_CACHE_CONTROL =
-  "public, max-age=3600, stale-while-revalidate=86400";
-const FEED_BROWSER_CACHE_CONTROL =
-  "public, max-age=3600, stale-while-revalidate=43200";
-const XSL_BROWSER_CACHE_CONTROL =
-  "public, max-age=86400, stale-while-revalidate=604800";
+// Discovery responses are stored in the Worker Cache API under versioned and
+// exact-generation keys. Browser copies must revalidate so a crawler or
+// merchant does not retain an invalidated XML/text response for hours.
+const DISCOVERY_BROWSER_CACHE_CONTROL =
+  "public, max-age=0, no-cache, must-revalidate";
 const PUBLIC_DISCOVERY_CONTENT_TYPES = [
   "application/xml",
   "text/xml",
@@ -19,11 +18,11 @@ export function getPublicDiscoveryCacheControl(
     pathname === "/api/product-feed.xml" ||
     pathname === "/api/facebook-feed.xml"
   ) {
-    return FEED_BROWSER_CACHE_CONTROL;
+    return DISCOVERY_BROWSER_CACHE_CONTROL;
   }
 
   if (pathname === "/sitemap.xsl") {
-    return XSL_BROWSER_CACHE_CONTROL;
+    return DISCOVERY_BROWSER_CACHE_CONTROL;
   }
 
   if (
@@ -31,7 +30,7 @@ export function getPublicDiscoveryCacheControl(
     pathname === "/sitemap.xml" ||
     /^\/sitemap-.*\.xml$/.test(pathname)
   ) {
-    return SITEMAP_BROWSER_CACHE_CONTROL;
+    return DISCOVERY_BROWSER_CACHE_CONTROL;
   }
 
   return null;

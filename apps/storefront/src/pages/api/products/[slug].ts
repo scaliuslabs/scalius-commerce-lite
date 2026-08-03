@@ -33,9 +33,9 @@ export const GET: APIRoute = async ({ params }) => {
         status: 200,
         headers: {
           "Content-Type": "application/json",
-          // Align with Hono API: browser revalidates so users see changes after KV invalidation
-          "Cache-Control":
-            "public, max-age=0, stale-while-revalidate=120, stale-if-error=300",
+          // Shared caches remain available upstream, while browsers must
+          // revalidate mutation-sensitive product data on every reuse.
+          "Cache-Control": "public, max-age=0, no-cache, must-revalidate",
         },
       },
     );
