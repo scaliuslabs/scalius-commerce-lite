@@ -15,7 +15,6 @@ import {
 import { cleanupExpiredScannerTokenClaims } from "@scalius/core/auth";
 import { reconcileDueRefundAttempts, reconcileStripeExternalRefundWebhooks } from "@scalius/core/modules/payments";
 import { getCredentialEncryptionKey } from "./utils/encryption-key";
-import { invalidateProductAvailabilityCaches } from "./utils/cache-invalidation";
 import { failStaleQueuedPaymentWebhookEvents } from "./utils/webhook-idempotency";
 import { enqueueOrderRefundNotificationForOrder } from "./utils/order-notification-queue";
 
@@ -163,15 +162,6 @@ async function runScheduledMaintenanceInner(
       limit: INVENTORY_EXPIRY_SWEEP_LIMIT,
     }),
   );
-  if (result.releasedVariantIds.length > 0) {
-    await timed("inventory_expiry_availability_invalidation", () =>
-      invalidateProductAvailabilityCaches(
-        db,
-        { variantIds: result.releasedVariantIds },
-        { env, executionCtx },
-      ),
-    );
-  }
 
   const staleIncompleteCutoff = Math.floor(Date.now() / 1000) - STALE_INCOMPLETE_ORDER_MAX_AGE_MINUTES * 60;
   const staleIncompleteOrders = await timed("stale_incomplete_order_cleanup", () =>
@@ -179,15 +169,6 @@ async function runScheduledMaintenanceInner(
       limit: STALE_INCOMPLETE_ORDER_SWEEP_LIMIT,
     }),
   );
-  if (staleIncompleteOrders.archivedOrderIds.length > 0) {
-    await timed("stale_incomplete_order_availability_invalidation", () =>
-      invalidateProductAvailabilityCaches(
-        db,
-        { orderIds: staleIncompleteOrders.archivedOrderIds },
-        { env, executionCtx },
-      ),
-    );
-  }
   if (
     staleIncompleteOrders.found > 0 ||
     staleIncompleteOrders.failed > 0 ||
@@ -296,15 +277,6 @@ async function runScheduledMaintenanceInner(
       limit: REFUND_ATTEMPT_RECONCILIATION_LIMIT,
     }),
   );
-  if (refundReconciliation.finalizedOrderIds.length > 0) {
-    await timed("refund_reconciliation_availability_invalidation", () =>
-      invalidateProductAvailabilityCaches(
-        db,
-        { orderIds: refundReconciliation.finalizedOrderIds },
-        { env, executionCtx },
-      ),
-    );
-  }
   if (refundReconciliation.refundNotifications.length > 0) {
     await timed("refund_reconciliation_notification_enqueue", () =>
       enqueueReconciledRefundNotifications(db, env, refundReconciliation.refundNotifications),
@@ -332,15 +304,6 @@ async function runScheduledMaintenanceInner(
       limit: STRIPE_EXTERNAL_REFUND_RECONCILIATION_LIMIT,
     }),
   );
-  if (stripeExternalRefunds.finalizedOrderIds.length > 0) {
-    await timed("stripe_external_refund_availability_invalidation", () =>
-      invalidateProductAvailabilityCaches(
-        db,
-        { orderIds: stripeExternalRefunds.finalizedOrderIds },
-        { env, executionCtx },
-      ),
-    );
-  }
   if (stripeExternalRefunds.refundNotifications.length > 0) {
     await timed("stripe_external_refund_notification_enqueue", () =>
       enqueueReconciledRefundNotifications(db, env, stripeExternalRefunds.refundNotifications),

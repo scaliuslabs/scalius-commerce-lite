@@ -257,7 +257,7 @@ describe("runScheduledMaintenance", () => {
     vi.restoreAllMocks();
   });
 
-  it("runs inventory expiry, stale hosted-payment cleanup, cache invalidation, and outbox flush", async () => {
+  it("runs inventory expiry, stale hosted-payment cleanup, and outbox flush without cache purges", async () => {
     const now = new Date("2026-06-20T12:00:00.000Z");
     vi.setSystemTime(now);
     const env = createEnv();
@@ -398,24 +398,7 @@ describe("runScheduledMaintenance", () => {
       CHECKOUT_PROJECTION_SWEEP_LIMIT,
     );
     expect(mocks.checkoutTransport.close).toHaveBeenCalledOnce();
-    expect(mocks.invalidateProductAvailabilityCaches).toHaveBeenNthCalledWith(
-      1,
-      mocks.db,
-      { variantIds: ["variant_1"] },
-      { env, executionCtx },
-    );
-    expect(mocks.invalidateProductAvailabilityCaches).toHaveBeenNthCalledWith(
-      2,
-      mocks.db,
-      { orderIds: ["order_1"] },
-      { env, executionCtx },
-    );
-    expect(mocks.invalidateProductAvailabilityCaches).toHaveBeenNthCalledWith(
-      3,
-      mocks.db,
-      { orderIds: ["order_refunded"] },
-      { env, executionCtx },
-    );
+    expect(mocks.invalidateProductAvailabilityCaches).not.toHaveBeenCalled();
     expect(mocks.flushPendingOrderNotificationOutbox).toHaveBeenCalledWith({
       db: mocks.db,
       queue: env.ORDER_NOTIFICATIONS_QUEUE,
@@ -536,11 +519,7 @@ describe("runScheduledMaintenance", () => {
 
     await runScheduledMaintenance(env, executionCtx);
 
-    expect(mocks.invalidateProductAvailabilityCaches).toHaveBeenCalledWith(
-      mocks.db,
-      { orderIds: ["order_stripe_refunded"] },
-      { env, executionCtx },
-    );
+    expect(mocks.invalidateProductAvailabilityCaches).not.toHaveBeenCalled();
     expect(mocks.enqueueOrderRefundNotificationForOrder).toHaveBeenCalledWith({
       db: mocks.db,
       queue: env.ORDER_NOTIFICATIONS_QUEUE,

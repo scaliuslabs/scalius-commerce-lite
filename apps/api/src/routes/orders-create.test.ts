@@ -1306,7 +1306,7 @@ describe("create order currency parity", () => {
 });
 
 describe("create order commit/KV ordering", () => {
-  it("invalidates a coordinated sold-out transition when projection owns side effects", async () => {
+  it("does not couple coordinated checkout throughput to cache purges", async () => {
     const commitPayload = { orderData: { id: "order_1" }, marker: "coordinated" };
     const coordinatedResponse = {
       checkoutToken: "chk_order_1",
@@ -1375,11 +1375,7 @@ describe("create order commit/KV ordering", () => {
     expect(mocks.submitCheckoutCommitToCoordinator).not.toHaveBeenCalled();
     expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
     expect(mocks.runStorefrontOrderPostCommitSideEffects).not.toHaveBeenCalled();
-    expect(mocks.invalidateProductAvailabilityCacheSubjects).toHaveBeenCalledWith(
-      availabilityChangedSubjects,
-      expect.anything(),
-      expect.anything(),
-    );
+    expect(mocks.invalidateProductAvailabilityCacheSubjects).not.toHaveBeenCalled();
   });
 
   it("commits the order before scheduling checkout recovery hints and side effects", async () => {
@@ -1413,10 +1409,6 @@ describe("create order commit/KV ordering", () => {
     mocks.runStorefrontOrderPostCommitSideEffects.mockImplementation(async () => {
       calls.push("side-effects");
     });
-    mocks.invalidateProductAvailabilityCacheSubjects.mockImplementation(async () => {
-      calls.push("availability");
-    });
-
     try {
       const response = await app.request(
         "/api/v1/orders",
@@ -1443,7 +1435,7 @@ describe("create order commit/KV ordering", () => {
       expect(calls).toContain(`kv:${statusKey}`);
       expect(calls).toContain(`kv:${receiptKey}`);
       expect(calls).toContain("side-effects");
-      expect(calls).toContain("availability");
+      expect(mocks.invalidateProductAvailabilityCacheSubjects).not.toHaveBeenCalled();
       expect(kvKeys).toEqual(expect.arrayContaining([statusKey, receiptKey]));
       expect(statusKey).not.toContain("chk_order_1");
       expect(statusKey).not.toContain(DEFAULT_STATUS_TOKEN);
@@ -1496,18 +1488,7 @@ describe("create order commit/KV ordering", () => {
         expect.objectContaining({ partialPaymentEnabled: false }),
         expect.objectContaining({ classes: [], rates: [] }),
       );
-      expect(mocks.invalidateProductAvailabilityCacheSubjects).toHaveBeenCalledWith(
-        [{
-          productId: "product_1",
-          slug: "queue-product",
-          categoryId: "category_1",
-        }],
-        expect.objectContaining({
-          env: expect.objectContaining({ CACHE: kv }),
-          executionCtx,
-        }),
-        expect.anything(),
-      );
+      expect(mocks.invalidateProductAvailabilityCacheSubjects).not.toHaveBeenCalled();
     } finally {
       consoleError.mockRestore();
     }
@@ -1845,7 +1826,7 @@ describe("create order commit/KV ordering", () => {
     expect(kv.put).not.toHaveBeenCalled();
   });
 
-  it("keeps a committed order successful when product availability cache invalidation fails", async () => {
+  it("does not schedule write-coupled availability purges after commit", async () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
     try {
       mocks.createStorefrontOrder.mockResolvedValue({
@@ -1863,7 +1844,6 @@ describe("create order commit/KV ordering", () => {
           categoryId: null,
         }],
       });
-      mocks.invalidateProductAvailabilityCacheSubjects.mockRejectedValue(new Error("cache unavailable"));
       const { app, kv } = createTestApp();
 
       const response = await app.request(
@@ -1880,18 +1860,9 @@ describe("create order commit/KV ordering", () => {
       expect(response.status, responseText).toBe(201);
       expect(mocks.commitStorefrontOrderPayload).toHaveBeenCalledOnce();
       expect(mocks.runStorefrontOrderPostCommitSideEffects).toHaveBeenCalledOnce();
-      expect(mocks.invalidateProductAvailabilityCacheSubjects).toHaveBeenCalledWith(
-        [{
-          productId: "product_cache_failure",
-          slug: "cache-failure",
-          categoryId: null,
-        }],
-        expect.any(Object),
-        expect.anything(),
-      );
-      expect(consoleError).toHaveBeenCalledWith(
-        "[Orders] Failed to invalidate product availability caches after order commit:",
-        expect.objectContaining({ productCount: 1 }),
+      expect(mocks.invalidateProductAvailabilityCacheSubjects).not.toHaveBeenCalled();
+      expect(JSON.stringify(consoleError.mock.calls)).not.toContain(
+        "availability caches",
       );
     } finally {
       consoleError.mockRestore();

@@ -181,11 +181,7 @@ describe("Steadfast webhook idempotency keys", () => {
       "steadfast:delivery_status:delivery_wh:steadfast:123:delivery_status:delivered",
       expect.objectContaining({ rawStatus: "delivered", normalizedStatus: "delivered" }),
     );
-    expect(mocks.invalidateProductAvailabilityCaches).toHaveBeenCalledWith(
-      db,
-      { orderIds: ["order_1"] },
-      expect.anything(),
-    );
+    expect(mocks.invalidateProductAvailabilityCaches).not.toHaveBeenCalled();
     expect(mocks.enqueueOrderStatusChangeNotification).toHaveBeenCalledWith({
       db,
       queue: undefined,

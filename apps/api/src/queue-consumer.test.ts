@@ -475,11 +475,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
 
     expect(message.ack).toHaveBeenCalledTimes(1);
     expect(message.retry).not.toHaveBeenCalled();
-    expect(mocks.invalidateProductAvailabilityCaches).toHaveBeenCalledWith(
-      { id: "db" },
-      { orderIds: ["order-stripe"] },
-      { env: { ORDER_NOTIFICATIONS_QUEUE: notificationQueue }, executionCtx: undefined },
-    );
+    expect(mocks.invalidateProductAvailabilityCaches).not.toHaveBeenCalled();
     expect(mocks.enqueueOrderCreatedNotificationForOrder).toHaveBeenCalledWith(
       expect.objectContaining({
         db: { id: "db" },
@@ -714,11 +710,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
         polarStatus: "refunded",
       },
     );
-    expect(mocks.invalidateProductAvailabilityCaches).toHaveBeenCalledWith(
-      { id: "db" },
-      { orderIds: ["order-polar"] },
-      { env: { ORDER_NOTIFICATIONS_QUEUE: notificationQueue }, executionCtx: undefined },
-    );
+    expect(mocks.invalidateProductAvailabilityCaches).not.toHaveBeenCalled();
     expect(mocks.enqueueOrderRefundNotificationForOrder).toHaveBeenCalledWith({
       db: { id: "db" },
       queue: notificationQueue,
@@ -1133,11 +1125,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
     await handleQueueBatch(createBatch([message]), {} as Env);
 
     expect(mocks.processPaymentConfirmed).toHaveBeenCalledTimes(1);
-    expect(mocks.invalidateProductAvailabilityCaches).toHaveBeenCalledWith(
-      { id: "db" },
-      { orderIds: ["order-ssl"] },
-      { env: {}, executionCtx: undefined },
-    );
+    expect(mocks.invalidateProductAvailabilityCaches).not.toHaveBeenCalled();
     expect(mocks.enqueueOrderCreatedNotificationForOrder).toHaveBeenCalledWith(
       expect.objectContaining({
         orderId: "order-ssl",
