@@ -78,21 +78,6 @@ class InMemoryCache {
 const memCache = new InMemoryCache();
 
 // ---------------------------------------------------------------------------
-// Module-level KV binding – initialised once per isolate from middleware
-// ---------------------------------------------------------------------------
-let _kv: KVNamespace | undefined;
-
-/** Called by middleware to register the KV binding for this isolate. */
-export function initKv(kv: KVNamespace): void {
-  _kv = kv;
-}
-
-/** Returns the registered KV binding (may be undefined in local dev). */
-export function getKv(): KVNamespace | undefined {
-  return _kv;
-}
-
-// ---------------------------------------------------------------------------
 // Key helpers
 // ---------------------------------------------------------------------------
 export function toProjectCacheKey(key: string): string {
@@ -114,7 +99,7 @@ function patternToPrefix(pattern: string): string {
  * @param key    Cache key (will be automatically prefixed)
  * @param value  JSON-serialisable value
  * @param ttl    TTL in seconds (default 1 h; min 60 s for KV)
- * @param kv     Optional KV binding override; falls back to module-level binding
+ * @param kv     Request-scoped KV binding. Omit only in local development.
  */
 export async function setCache(
   key: string,
@@ -122,7 +107,7 @@ export async function setCache(
   ttl: number = DEFAULT_CACHE_TTL,
   kv?: KVNamespace,
 ): Promise<void> {
-  const ns = kv ?? _kv;
+  const ns = kv;
   const fullKey = toProjectCacheKey(key);
 
   if (ns) {
@@ -131,7 +116,6 @@ export async function setCache(
       await ns.put(fullKey, JSON.stringify(value), { expirationTtl });
     } catch (err: unknown) {
       console.error(`[KV] setCache error for key "${fullKey}":`, err);
-      memCache.set(fullKey, value, ttl);
     }
   } else {
     memCache.set(fullKey, value, ttl);
@@ -146,7 +130,7 @@ export async function getCache<T>(
   key: string,
   kv?: KVNamespace,
 ): Promise<T | null> {
-  const ns = kv ?? _kv;
+  const ns = kv;
   const fullKey = toProjectCacheKey(key);
 
   if (ns) {
@@ -156,7 +140,7 @@ export async function getCache<T>(
       return JSON.parse(raw) as T;
     } catch (err: unknown) {
       console.error(`[KV] getCache error for key "${fullKey}":`, err);
-      return memCache.get(fullKey) as T | null;
+      return null;
     }
   } else {
     return memCache.get(fullKey) as T | null;
@@ -170,7 +154,7 @@ export async function deleteCache(
   key: string,
   kv?: KVNamespace,
 ): Promise<void> {
-  const ns = kv ?? _kv;
+  const ns = kv;
   const fullKey = toProjectCacheKey(key);
 
   if (ns) {
@@ -178,7 +162,6 @@ export async function deleteCache(
       await ns.delete(fullKey);
     } catch (err: unknown) {
       console.error(`[KV] deleteCache error for key "${fullKey}":`, err);
-      memCache.delete(fullKey);
     }
   } else {
     memCache.delete(fullKey);
@@ -196,7 +179,7 @@ export async function deleteCacheByPattern(
   pattern: string,
   kv?: KVNamespace,
 ): Promise<void> {
-  const ns = kv ?? _kv;
+  const ns = kv;
   const prefix = patternToPrefix(pattern);
 
   if (ns) {
@@ -227,7 +210,6 @@ export async function deleteCacheByPattern(
         `[KV] deleteCacheByPattern error for prefix "${prefix}":`,
         err,
       );
-      memCache.deleteByPrefix(prefix);
     }
   } else {
     memCache.deleteByPrefix(prefix);
@@ -244,7 +226,7 @@ export async function getCacheStats(kv?: KVNamespace): Promise<{
   uptime: string;
   cacheType: "kv" | "memory";
 }> {
-  const ns = kv ?? _kv;
+  const ns = kv;
 
   if (ns) {
     return {
@@ -261,7 +243,7 @@ export async function getCacheStats(kv?: KVNamespace): Promise<{
 
 /** Returns whether a KV namespace is available. */
 export function isKvAvailable(kv?: KVNamespace): boolean {
-  return !!(kv ?? _kv);
+  return Boolean(kv);
 }
 
 /** Returns the cache backend type currently in use. */

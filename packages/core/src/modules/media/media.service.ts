@@ -133,6 +133,7 @@ function isExpired(value: Date): boolean {
 async function expireMediaUploadSession(
     db: Database,
     initial: typeof mediaUploadSessions.$inferSelect,
+    bucket: R2Bucket,
 ) {
     let session = initial;
     if (session.uploadId && session.state !== "aborting") {
@@ -152,6 +153,7 @@ async function expireMediaUploadSession(
         await abortMediaMultipartUpload({
             objectKey: session.objectKey,
             uploadId: session.uploadId,
+            bucket,
         });
     }
     await db.update(mediaUploadSessions).set({
@@ -265,7 +267,11 @@ export async function listMediaFiles(db: Database, input: {
     };
 }
 
-export async function initiateMediaUpload(db: Database, input: InitiateMediaUploadInput) {
+export async function initiateMediaUpload(
+    db: Database,
+    input: InitiateMediaUploadInput,
+    bucket: R2Bucket,
+) {
     const validation = validateMediaFileMetadata(input);
     if (!validation.ok) throw new ValidationError(validation.error);
     await assertActiveFolder(db, input.folderId);
@@ -296,7 +302,7 @@ export async function initiateMediaUpload(db: Database, input: InitiateMediaUplo
             mimeType: file.mimeType,
             size: file.size,
             customMetadata: { mediaId, sessionId },
-        });
+        }, bucket);
         const session = await db.update(mediaUploadSessions).set({
             uploadId: handle.uploadId,
             state: "initiated",
@@ -308,7 +314,7 @@ export async function initiateMediaUpload(db: Database, input: InitiateMediaUplo
             eq(mediaUploadSessions.version, claim.version),
         )).returning().get();
         if (!session) {
-            try { await abortMediaMultipartUpload({ objectKey, uploadId: handle.uploadId }); } catch { /* expires */ }
+            try { await abortMediaMultipartUpload({ objectKey, uploadId: handle.uploadId, bucket }); } catch { /* expires */ }
             throw new ConflictError("Media upload initialization changed. Start a new upload.");
         }
         return {
@@ -369,7 +375,7 @@ export async function uploadMediaPart(db: Database, input: {
     size: number;
     value: ArrayBuffer;
     signatureBytes?: ArrayBuffer;
-}) {
+}, bucket: R2Bucket) {
     const session = await db.select().from(mediaUploadSessions)
         .where(eq(mediaUploadSessions.id, input.sessionId)).get();
     if (!session) throw new NotFoundError("Media upload session not found.");
@@ -378,7 +384,7 @@ export async function uploadMediaPart(db: Database, input: {
         throw new ConflictError("This media upload no longer accepts parts.");
     }
     if (isExpired(session.expiresAt)) {
-        await expireMediaUploadSession(db, session);
+        await expireMediaUploadSession(db, session, bucket);
         throw new ConflictError("This media upload session has expired.");
     }
     if (!Number.isInteger(input.partNumber) || input.partNumber < 1 || input.partNumber > session.expectedParts) {
@@ -402,6 +408,7 @@ export async function uploadMediaPart(db: Database, input: {
         size: input.size,
         isFinal: input.partNumber === session.expectedParts,
         value: input.value,
+        bucket,
     });
     await safeBatch(db, [
         db.insert(mediaUploadParts).values({
@@ -472,7 +479,11 @@ async function commitCompletedUpload(db: Database, session: typeof mediaUploadSe
     return row;
 }
 
-export async function completeMediaUpload(db: Database, sessionId: string) {
+export async function completeMediaUpload(
+    db: Database,
+    sessionId: string,
+    bucket: R2Bucket,
+) {
     let session = await db.select().from(mediaUploadSessions)
         .where(eq(mediaUploadSessions.id, sessionId)).get();
     if (!session) throw new NotFoundError("Media upload session not found.");
@@ -487,7 +498,7 @@ export async function completeMediaUpload(db: Database, sessionId: string) {
         throw new ConflictError("This media upload cannot be completed.");
     }
     if (isExpired(session.expiresAt) && session.state !== "completing") {
-        await expireMediaUploadSession(db, session);
+        await expireMediaUploadSession(db, session, bucket);
         throw new ConflictError("This media upload session has expired.");
     }
     const parts = await db.select().from(mediaUploadParts)
@@ -521,16 +532,17 @@ export async function completeMediaUpload(db: Database, sessionId: string) {
     }
     if (!session.uploadId) throw new ConflictError("This media upload was not initialized.");
 
-    let object = await headMediaObject(session.objectKey);
+    let object = await headMediaObject(session.objectKey, bucket);
     if (!object) {
         try {
             object = await completeMediaMultipartUpload({
                 objectKey: session.objectKey,
                 uploadId: session.uploadId,
                 parts: parts.map(({ partNumber, etag }) => ({ partNumber, etag })),
+                bucket,
             });
         } catch (error) {
-            object = await headMediaObject(session.objectKey);
+            object = await headMediaObject(session.objectKey, bucket);
             if (!object) throw error;
         }
     }
@@ -540,7 +552,11 @@ export async function completeMediaUpload(db: Database, sessionId: string) {
     return commitCompletedUpload(db, session);
 }
 
-export async function abortMediaUpload(db: Database, sessionId: string) {
+export async function abortMediaUpload(
+    db: Database,
+    sessionId: string,
+    bucket: R2Bucket,
+) {
     let session = await db.select().from(mediaUploadSessions)
         .where(eq(mediaUploadSessions.id, sessionId)).get();
     if (!session) throw new NotFoundError("Media upload session not found.");
@@ -567,7 +583,7 @@ export async function abortMediaUpload(db: Database, sessionId: string) {
         if (!claimed) throw new ConflictError("Media upload changed. Reload and try again.");
         session = claimed;
     }
-    await abortMediaMultipartUpload({ objectKey: session.objectKey, uploadId });
+    await abortMediaMultipartUpload({ objectKey: session.objectKey, uploadId, bucket });
     await db.update(mediaUploadSessions).set({
         state: "aborted",
         version: sql`${mediaUploadSessions.version} + 1`,
@@ -575,7 +591,11 @@ export async function abortMediaUpload(db: Database, sessionId: string) {
     }).where(and(eq(mediaUploadSessions.id, session.id), eq(mediaUploadSessions.state, "aborting")));
 }
 
-export async function reconcileExpiredMediaUploads(db: Database, limit = 25) {
+export async function reconcileExpiredMediaUploads(
+    db: Database,
+    bucket: R2Bucket,
+    limit = 25,
+) {
     const boundedLimit = Math.min(50, Math.max(1, Math.trunc(limit)));
     const sessions = await db.select().from(mediaUploadSessions).where(and(
         inArray(mediaUploadSessions.state, ["initializing", "initiated", "uploading", "aborting", "failed"]),
@@ -586,7 +606,7 @@ export async function reconcileExpiredMediaUploads(db: Database, limit = 25) {
     const retrySessionIds: string[] = [];
     for (const session of sessions) {
         try {
-            await expireMediaUploadSession(db, session);
+            await expireMediaUploadSession(db, session, bucket);
             expired += 1;
         } catch {
             retrySessionIds.push(session.id);
@@ -730,7 +750,12 @@ function hasMediaDeleteDependencies(details: MediaDependencyConflictDetails): bo
         || details.orderReferences.count > 0;
 }
 
-export async function permanentlyDeleteMediaFile(db: Database, id: string, expectedVersion: number) {
+export async function permanentlyDeleteMediaFile(
+    db: Database,
+    id: string,
+    expectedVersion: number,
+    bucket: R2Bucket,
+) {
     let current = await db.select().from(media).where(eq(media.id, id)).get();
     if (!current) throw new NotFoundError("Media file not found");
     if (current.status === "deleted") return;
@@ -776,7 +801,7 @@ export async function permanentlyDeleteMediaFile(db: Database, id: string, expec
     )) {
         throw new ConflictError("Move current media to trash before deleting it permanently.");
     }
-    await deleteFile(current.objectKey);
+    await deleteFile(current.objectKey, bucket);
     const finalized = await db.update(media).set({
         status: "deleted",
         deletedAt: sql`(unixepoch())`,

@@ -6,7 +6,6 @@ import { DEFAULT_STOREFRONT_THEME_SETTINGS } from "@scalius/shared/storefront-th
 import { errorResponseFromError } from "../../../utils/api-response";
 
 const mocks = vi.hoisted(() => ({
-  getKv: vi.fn(),
   invalidateSiteSettingsCache: vi.fn(),
   invalidateStorefrontUrlCache: vi.fn(),
   invalidateApiAndScheduleStorefrontGroups: vi.fn(),
@@ -37,10 +36,6 @@ const mocks = vi.hoisted(() => ({
   saveHomepagePresentationSettings: vi.fn(),
   getAllowedCountries: vi.fn(),
   saveAllowedCountries: vi.fn(),
-}));
-
-vi.mock("../../../utils/kv-cache", () => ({
-  getKv: mocks.getKv,
 }));
 
 vi.mock("@scalius/core/modules/settings", () => ({
@@ -105,14 +100,13 @@ function createTestApp() {
   const db = { id: "db" };
   const kv = { delete: vi.fn() };
   const env = {
-    CACHE: { id: "api-cache-kv" },
+    CACHE: kv,
     PURGE_URL: "https://storefront.example.com/api/purge-cache",
     PURGE_TOKEN: "secret-token",
     STOREFRONT_URL: "https://storefront.example.com",
   } as unknown as Env;
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
 
-  mocks.getKv.mockReturnValue(kv);
   mocks.invalidateSiteSettingsCache.mockResolvedValue(undefined);
   mocks.invalidateStorefrontUrlCache.mockResolvedValue(undefined);
   mocks.invalidateApiAndScheduleStorefrontGroups.mockResolvedValue(undefined);

@@ -4,8 +4,7 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import { swaggerUI } from "@hono/swagger-ui";
 import { cors } from "hono/cors";
 import { getDb } from "@scalius/database/client";
-import { initKv } from "./utils/kv-cache";
-import { initStorage } from "@scalius/core/integrations/storage";
+import { initPublicMediaUrl } from "@scalius/core/integrations/storage";
 import { productRoutes } from "./routes/products";
 import authRoutes from "./routes/auth";
 import { categoryRoutes } from "./routes/categories";
@@ -127,16 +126,13 @@ app.onError((err, c) => {
 // compression at the edge automatically. Application-level compression
 // breaks the cache middleware (compressed body stored as garbled text).
 
-// Per-request initialisation: DB, KV cache, R2 storage
+// Per-request initialisation: DB and public media presentation
 app.use("*", requestCorrelationMiddleware);
 
 app.use("*", async (c, next) => {
   const db = getDb(c.env);
   c.set("db", db);
-  if (c.env.CACHE) initKv(c.env.CACHE);
-  if (c.env.BUCKET) {
-    initStorage(c.env.BUCKET, getR2PublicUrl(c.env, c.req.url));
-  }
+  initPublicMediaUrl(getR2PublicUrl(c.env, c.req.url));
   await next();
 });
 

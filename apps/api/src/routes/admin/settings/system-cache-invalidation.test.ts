@@ -5,7 +5,6 @@ import { ValidationError } from "../../../utils/api-error";
 import { errorResponseFromError } from "../../../utils/api-response";
 
 const mocks = vi.hoisted(() => ({
-  getKv: vi.fn(),
   invalidateSiteSettingsCache: vi.fn(),
   invalidateApiAndScheduleStorefrontGroups: vi.fn(),
   getEmailProviderReadiness: vi.fn(),
@@ -32,10 +31,6 @@ const mocks = vi.hoisted(() => ({
   upsertEncryptedSetting: vi.fn(),
   upsertSetting: vi.fn(),
   clearNotificationProviderBlocks: vi.fn(),
-}));
-
-vi.mock("../../../utils/kv-cache", () => ({
-  getKv: mocks.getKv,
 }));
 
 vi.mock("@scalius/core/modules/settings", () => ({
@@ -123,12 +118,13 @@ function createDb() {
 }
 
 function createTestApp() {
-  const kv = { delete: vi.fn() };
+  const kv = {
+    id: "api-cache-kv",
+    delete: vi.fn(),
+    put: vi.fn(async () => undefined),
+  };
   const env = {
-    CACHE: {
-      id: "api-cache-kv",
-      put: vi.fn(async () => undefined),
-    },
+    CACHE: kv,
     PURGE_URL: "https://storefront.example.com/api/purge-cache",
     PURGE_TOKEN: "secret-token",
     CREDENTIAL_ENCRYPTION_KEY: "credential-key",
@@ -139,7 +135,6 @@ function createTestApp() {
   };
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
 
-  mocks.getKv.mockReturnValue(kv);
   mocks.invalidateSiteSettingsCache.mockResolvedValue(undefined);
   mocks.invalidateApiAndScheduleStorefrontGroups.mockResolvedValue(undefined);
   mocks.upsertEncryptedSetting.mockResolvedValue(undefined);

@@ -1,5 +1,4 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { getKv } from "../../../utils/kv-cache";
 import {
   invalidateSiteSettingsCache,
   invalidateStorefrontUrlCache,
@@ -196,7 +195,7 @@ app.openapi(saveCurrencyRoute, async (c) => {
   const body = c.req.valid("json");
   await saveCurrencySettings(db, body);
 
-  const kv = getKv();
+  const kv = c.env.CACHE;
   await deleteLegacyCurrencyGatewayCache(kv);
   await invalidateApiAndScheduleStorefrontGroups(CURRENCY_CACHE_GROUPS, c);
 
@@ -321,7 +320,7 @@ app.openapi(saveHeaderRoute, async (c) => {
     validatedConfig as unknown as Record<string, unknown>,
     expectedRevision,
   );
-  await invalidateSiteSettingsCache(getKv());
+  await invalidateSiteSettingsCache(c.env.CACHE);
   await invalidateApiAndScheduleStorefrontGroups(LAYOUT_CACHE_GROUPS, c);
   return ok(c, saved);
 });
@@ -375,7 +374,7 @@ app.openapi(saveFooterRoute, async (c) => {
     validatedConfig as unknown as Record<string, unknown>,
     expectedRevision,
   );
-  await invalidateSiteSettingsCache(getKv());
+  await invalidateSiteSettingsCache(c.env.CACHE);
   await invalidateApiAndScheduleStorefrontGroups(LAYOUT_CACHE_GROUPS, c);
   return ok(c, saved);
 });
@@ -1092,7 +1091,7 @@ app.openapi(saveSeoRoute, async (c) => {
   const db = c.get("db");
   const data = c.req.valid("json");
   await saveSeoSettings(db, data);
-  await invalidateSiteSettingsCache(getKv());
+  await invalidateSiteSettingsCache(c.env.CACHE);
   await invalidateApiAndScheduleStorefrontGroups(
     [
       ...HOMEPAGE_CACHE_GROUPS,
@@ -1168,7 +1167,7 @@ app.openapi(saveStorefrontUrlRoute, async (c) => {
   const { storefrontUrl } = c.req.valid("json");
   await saveStorefrontUrl(db, storefrontUrl);
   layoutCache.invalidate(CACHE_KEYS.STOREFRONT_URL);
-  const kv = getKv();
+  const kv = c.env.CACHE;
   await Promise.all([
     invalidateSiteSettingsCache(kv),
     invalidateStorefrontUrlCache(kv),
@@ -1262,7 +1261,7 @@ app.openapi(saveHomepagePresentationRoute, async (c) => {
     config,
     expectedRevision,
   );
-  await invalidateSiteSettingsCache(getKv());
+  await invalidateSiteSettingsCache(c.env.CACHE);
   await invalidateApiAndScheduleStorefrontGroups(HOMEPAGE_CACHE_GROUPS, c);
   return ok(c, saved);
 });

@@ -186,20 +186,6 @@ function createCustomerRow(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function createKv(initialValues: Record<string, string> = {}) {
-  const store = new Map(Object.entries(initialValues));
-  return {
-    get: vi.fn(async (key: string) => store.get(key) ?? null),
-    put: vi.fn(async (key: string, value: string) => {
-      store.set(key, value);
-    }),
-    delete: vi.fn(async (key: string) => {
-      store.delete(key);
-    }),
-    store,
-  };
-}
-
 describe("customer auth service intent handling", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -232,9 +218,8 @@ describe("customer auth service intent handling", () => {
       { get: null },
       { all: readyEmailSettings },
     ]);
-    const kv = createKv();
 
-    const result = await sendOtp(db as never, kv as never, {
+    const result = await sendOtp(db as never, {
       intent: "sign_up",
       method: "email",
       channel: "email",
@@ -277,8 +262,6 @@ describe("customer auth service intent handling", () => {
     expect(JSON.stringify(result.queuePayload)).not.toContain("new@example.com");
     expect(JSON.stringify(result.queuePayload)).not.toContain("+8801712345678");
     expect(JSON.stringify(result.queuePayload)).not.toContain("New Customer");
-    expect(kv.get).not.toHaveBeenCalled();
-    expect(kv.put).not.toHaveBeenCalled();
     expect(rateLimitMocks.enforceCustomerAuthOtpIpRateLimit).toHaveBeenCalledWith(
       db,
       expect.objectContaining({
@@ -298,9 +281,8 @@ describe("customer auth service intent handling", () => {
       { get: null },
       { all: readyEmailSettings },
     ]);
-    const kv = createKv();
 
-    const result = await sendOtp(db as never, kv as never, {
+    const result = await sendOtp(db as never, {
       intent: "sign_in",
       method: "email",
       channel: "email",
@@ -331,7 +313,6 @@ describe("customer auth service intent handling", () => {
         intent: "sign_in",
       }),
     );
-    expect(kv.put).not.toHaveBeenCalled();
   });
 
   it("rejects rate-limited OTP sends before mutating challenge state", async () => {
@@ -340,12 +321,11 @@ describe("customer auth service intent handling", () => {
       { get: null },
       { all: readyEmailSettings },
     ]);
-    const kv = createKv();
     rateLimitMocks.enforceCustomerAuthOtpIpRateLimit.mockRejectedValueOnce(
       new Error("Too many requests from this IP. Please try again later."),
     );
 
-    await expect(sendOtp(db as never, kv as never, {
+    await expect(sendOtp(db as never, {
       intent: "sign_in",
       method: "email",
       channel: "email",
@@ -364,8 +344,6 @@ describe("customer auth service intent handling", () => {
         hashKey: otpInputSecrets.encryptionKey,
       }),
     );
-    expect(kv.get).not.toHaveBeenCalled();
-    expect(kv.put).not.toHaveBeenCalled();
   });
 
   it("stores phone OTP challenges under channel-scoped keys", async () => {
@@ -383,9 +361,8 @@ describe("customer auth service intent handling", () => {
       },
       { all: readySmsSettings },
     ]);
-    const kv = createKv();
 
-    const result = await sendOtp(db as never, kv as never, {
+    const result = await sendOtp(db as never, {
       intent: "sign_in",
       method: "phone",
       channel: "sms",
@@ -415,8 +392,6 @@ describe("customer auth service intent handling", () => {
     );
     const persistInput = challengeMocks.persistCustomerAuthOtpChallenge.mock.calls.at(-1)?.[1] as { otpKey: string };
     expect(persistInput.otpKey).not.toContain("+8801712345678");
-    expect(kv.get).not.toHaveBeenCalled();
-    expect(kv.put).not.toHaveBeenCalled();
   });
 
   it("rejects disallowed primary phone OTP sends before rate limits or challenge mutation", async () => {
@@ -426,9 +401,8 @@ describe("customer auth service intent handling", () => {
       { get: { value: JSON.stringify({ countries: ["BD"], mode: "include" }) } },
       { all: readySmsSettings },
     ]);
-    const kv = createKv();
 
-    await expect(sendOtp(db as never, kv as never, {
+    await expect(sendOtp(db as never, {
       intent: "sign_in",
       method: "phone",
       channel: "sms",
@@ -440,8 +414,6 @@ describe("customer auth service intent handling", () => {
 
     expect(rateLimitMocks.enforceCustomerAuthOtpIpRateLimit).not.toHaveBeenCalled();
     expect(challengeMocks.persistCustomerAuthOtpChallenge).not.toHaveBeenCalled();
-    expect(kv.get).not.toHaveBeenCalled();
-    expect(kv.put).not.toHaveBeenCalled();
   });
 
   it("rejects disallowed secondary signup phones before email OTP challenge mutation", async () => {
@@ -451,9 +423,8 @@ describe("customer auth service intent handling", () => {
       { get: { value: JSON.stringify({ countries: ["BD"], mode: "include" }) } },
       { all: readyEmailSettings },
     ]);
-    const kv = createKv();
 
-    await expect(sendOtp(db as never, kv as never, {
+    await expect(sendOtp(db as never, {
       intent: "sign_up",
       method: "email",
       channel: "email",
@@ -467,8 +438,6 @@ describe("customer auth service intent handling", () => {
 
     expect(rateLimitMocks.enforceCustomerAuthOtpIpRateLimit).not.toHaveBeenCalled();
     expect(challengeMocks.persistCustomerAuthOtpChallenge).not.toHaveBeenCalled();
-    expect(kv.get).not.toHaveBeenCalled();
-    expect(kv.put).not.toHaveBeenCalled();
   });
 
   it("pins the account creation contact fields accepted when the OTP is issued", async () => {
@@ -477,9 +446,8 @@ describe("customer auth service intent handling", () => {
       { get: null },
       { all: readySmsSettings },
     ]);
-    const kv = createKv();
 
-    await sendOtp(db as never, kv as never, {
+    await sendOtp(db as never, {
       intent: "sign_up",
       method: "phone",
       channel: "sms",
@@ -511,9 +479,8 @@ describe("customer auth service intent handling", () => {
       { get: null },
       { all: [] },
     ]);
-    const kv = createKv();
 
-    await expect(sendOtp(db as never, kv as never, {
+    await expect(sendOtp(db as never, {
       intent: "sign_in",
       method: "phone",
       channel: "sms",
@@ -525,8 +492,6 @@ describe("customer auth service intent handling", () => {
 
     expect(challengeMocks.persistCustomerAuthOtpChallenge).not.toHaveBeenCalled();
     expect(rateLimitMocks.enforceCustomerAuthOtpIpRateLimit).not.toHaveBeenCalled();
-    expect(kv.get).not.toHaveBeenCalled();
-    expect(kv.put).not.toHaveBeenCalled();
   });
 
   it("rejects email OTP when no email provider is ready before mutating OTP challenge or rate-limit state", async () => {
@@ -535,9 +500,8 @@ describe("customer auth service intent handling", () => {
       { get: null },
       { all: [] },
     ]);
-    const kv = createKv();
 
-    await expect(sendOtp(db as never, kv as never, {
+    await expect(sendOtp(db as never, {
       intent: "sign_in",
       method: "email",
       channel: "email",
@@ -548,8 +512,6 @@ describe("customer auth service intent handling", () => {
     })).rejects.toThrow("Email verification is currently unavailable. Contact store support.");
 
     expect(challengeMocks.persistCustomerAuthOtpChallenge).not.toHaveBeenCalled();
-    expect(kv.get).not.toHaveBeenCalled();
-    expect(kv.put).not.toHaveBeenCalled();
   });
 
   it("rejects ambiguous email sign-in after OTP proof without creating a session", async () => {
@@ -561,7 +523,6 @@ describe("customer auth service intent handling", () => {
         createCustomerRow({ id: "cust_2", phone: "+8801722222222" }),
       ] },
     ]);
-    const kv = createKv();
     challengeMocks.claimCustomerAuthOtpChallenge.mockResolvedValueOnce({
       otpKey: "cust_otp:email:buyer@example.com",
       method: "email",
@@ -574,7 +535,7 @@ describe("customer auth service intent handling", () => {
       maxAttempts: 5,
     });
 
-    await expect(verifyOtp(db as never, kv as never, {
+    await expect(verifyOtp(db as never, {
       intent: "sign_in",
       method: "email",
       channel: "email",
@@ -586,7 +547,6 @@ describe("customer auth service intent handling", () => {
     })).rejects.toThrow("Multiple accounts use this email. Please use phone verification or contact store support.");
 
     expect(db.insertValues).not.toHaveBeenCalled();
-    expect(kv.put).not.toHaveBeenCalled();
   });
 
   it("rejects sign-in when no active email customer matches", async () => {
@@ -595,7 +555,6 @@ describe("customer auth service intent handling", () => {
       { get: null },
       { all: [] },
     ]);
-    const kv = createKv();
     challengeMocks.claimCustomerAuthOtpChallenge.mockResolvedValueOnce({
       otpKey: "cust_otp:email:deleted@example.com",
       method: "email",
@@ -608,7 +567,7 @@ describe("customer auth service intent handling", () => {
       maxAttempts: 5,
     });
 
-    await expect(verifyOtp(db as never, kv as never, {
+    await expect(verifyOtp(db as never, {
       intent: "sign_in",
       method: "email",
       channel: "email",
@@ -620,7 +579,6 @@ describe("customer auth service intent handling", () => {
     })).rejects.toThrow("No account was found for this email. Create an account instead.");
 
     expect(db.insertValues).not.toHaveBeenCalled();
-    expect(kv.put).not.toHaveBeenCalled();
   });
 
   it("returns restore-support guidance for soft-deleted email sign-in after OTP proof", async () => {
@@ -630,7 +588,6 @@ describe("customer auth service intent handling", () => {
       { all: [] },
       { get: { id: "cust_deleted" } },
     ]);
-    const kv = createKv();
     challengeMocks.claimCustomerAuthOtpChallenge.mockResolvedValueOnce({
       otpKey: "cust_otp:email:deleted@example.com",
       method: "email",
@@ -643,7 +600,7 @@ describe("customer auth service intent handling", () => {
       maxAttempts: 5,
     });
 
-    await expect(verifyOtp(db as never, kv as never, {
+    await expect(verifyOtp(db as never, {
       intent: "sign_in",
       method: "email",
       channel: "email",
@@ -655,7 +612,6 @@ describe("customer auth service intent handling", () => {
     })).rejects.toThrow("This email belongs to a deleted customer account. Contact store support to restore access.");
 
     expect(db.insertValues).not.toHaveBeenCalled();
-    expect(kv.put).not.toHaveBeenCalled();
   });
 
   it("signs in the single active email customer while ignoring deleted duplicates", async () => {
@@ -672,7 +628,6 @@ describe("customer auth service intent handling", () => {
       { get: null },
       { all: [activeCustomer] },
     ]);
-    const kv = createKv();
     challengeMocks.claimCustomerAuthOtpChallenge.mockResolvedValueOnce({
       otpKey: "cust_otp:email:buyer@example.com",
       method: "email",
@@ -685,7 +640,7 @@ describe("customer auth service intent handling", () => {
       maxAttempts: 5,
     });
 
-    const result = await verifyOtp(db as never, kv as never, {
+    const result = await verifyOtp(db as never, {
       intent: "sign_in",
       method: "email",
       channel: "email",
@@ -714,7 +669,6 @@ describe("customer auth service intent handling", () => {
     });
     expect(db.updateCalls[0]?.values as Record<string, unknown>).not.toHaveProperty("phoneVerifiedAt");
     expect(db.batch).toHaveBeenCalledTimes(1);
-    expect(kv.put).not.toHaveBeenCalled();
   });
 
   it("rejects phone sign-in when no active phone customer matches", async () => {
@@ -723,7 +677,6 @@ describe("customer auth service intent handling", () => {
       { get: null },
       { get: null },
     ]);
-    const kv = createKv();
     challengeMocks.claimCustomerAuthOtpChallenge.mockResolvedValueOnce({
       otpKey: "cust_otp:sms:+8801712345678",
       method: "phone",
@@ -736,7 +689,7 @@ describe("customer auth service intent handling", () => {
       maxAttempts: 5,
     });
 
-    await expect(verifyOtp(db as never, kv as never, {
+    await expect(verifyOtp(db as never, {
       intent: "sign_in",
       method: "phone",
       channel: "sms",
@@ -748,7 +701,6 @@ describe("customer auth service intent handling", () => {
     })).rejects.toThrow("No account was found for this phone number. Create an account instead.");
 
     expect(db.insertValues).not.toHaveBeenCalled();
-    expect(kv.put).not.toHaveBeenCalled();
   });
 
   it("returns restore-support guidance for soft-deleted phone sign-in after OTP proof", async () => {
@@ -759,7 +711,6 @@ describe("customer auth service intent handling", () => {
       { get: null },
       { get: { id: "cust_deleted" } },
     ]);
-    const kv = createKv();
     challengeMocks.claimCustomerAuthOtpChallenge.mockResolvedValueOnce({
       otpKey: "cust_otp:sms:+8801712345678",
       method: "phone",
@@ -772,7 +723,7 @@ describe("customer auth service intent handling", () => {
       maxAttempts: 5,
     });
 
-    await expect(verifyOtp(db as never, kv as never, {
+    await expect(verifyOtp(db as never, {
       intent: "sign_in",
       method: "phone",
       channel: "sms",
@@ -784,7 +735,6 @@ describe("customer auth service intent handling", () => {
     })).rejects.toThrow("This phone number belongs to a deleted customer account. Contact store support to restore access.");
 
     expect(db.insertValues).not.toHaveBeenCalled();
-    expect(kv.put).not.toHaveBeenCalled();
   });
 
   it("uses pinned OTP contact fields instead of tampered verify payload fields", async () => {
@@ -795,9 +745,8 @@ describe("customer auth service intent handling", () => {
       { get: null },
       { get: null },
     ]);
-    const kv = createKv();
 
-    const result = await verifyOtp(db as never, kv as never, {
+    const result = await verifyOtp(db as never, {
       intent: "sign_up",
       method: "phone",
       channel: "sms",
@@ -831,7 +780,6 @@ describe("customer auth service intent handling", () => {
     expect((sessionInsert?.values as { tokenHash?: string }).tokenHash).toMatch(/^[a-f0-9]{64}$/);
     expect(JSON.stringify(sessionInsert?.values)).not.toContain(result.session?.token);
     expect(db.batch).toHaveBeenCalledTimes(1);
-    expect(kv.put).not.toHaveBeenCalled();
   });
 
   it("claims an existing unclaimed guest CRM profile after phone sign-up proof", async () => {
@@ -848,9 +796,8 @@ describe("customer auth service intent handling", () => {
       { get: null },
       { get: guestProfile },
     ]);
-    const kv = createKv();
 
-    const result = await verifyOtp(db as never, kv as never, {
+    const result = await verifyOtp(db as never, {
       intent: "sign_up",
       method: "phone",
       channel: "sms",
@@ -885,7 +832,6 @@ describe("customer auth service intent handling", () => {
       { get: createCustomerRow({ accountClaimedAt: null }) },
       { get: null },
     ]);
-    const kv = createKv();
     challengeMocks.claimCustomerAuthOtpChallenge.mockResolvedValueOnce({
       otpKey: "cust_otp:sms:+8801712345678",
       method: "phone",
@@ -898,7 +844,7 @@ describe("customer auth service intent handling", () => {
       maxAttempts: 5,
     });
 
-    await expect(verifyOtp(db as never, kv as never, {
+    await expect(verifyOtp(db as never, {
       intent: "sign_in",
       method: "phone",
       channel: "sms",
@@ -921,7 +867,6 @@ describe("customer auth service intent handling", () => {
       { get: null },
       { get: null },
     ]);
-    const kv = createKv();
     challengeMocks.claimCustomerAuthOtpChallenge.mockResolvedValueOnce({
       otpKey: "cust_otp:email:buyer@example.com",
       method: "email",
@@ -935,7 +880,7 @@ describe("customer auth service intent handling", () => {
       maxAttempts: 5,
     });
 
-    await expect(verifyOtp(db as never, kv as never, {
+    await expect(verifyOtp(db as never, {
       intent: "sign_up",
       method: "email",
       channel: "email",
@@ -958,7 +903,6 @@ describe("customer auth service intent handling", () => {
       lastAuthenticatedAt: expect.anything(),
     }));
     expect(db.batch).toHaveBeenCalledTimes(1);
-    expect(kv.put).not.toHaveBeenCalled();
   });
 
   it("does not persist a sign-up customer outside the account/session batch when session persistence fails", async () => {
@@ -970,9 +914,8 @@ describe("customer auth service intent handling", () => {
       { get: null },
     ]);
     db.batch.mockRejectedValueOnce(new Error("session insert failed"));
-    const kv = createKv();
 
-    await expect(verifyOtp(db as never, kv as never, {
+    await expect(verifyOtp(db as never, {
       intent: "sign_up",
       method: "phone",
       channel: "sms",
@@ -986,7 +929,6 @@ describe("customer auth service intent handling", () => {
     expect(db.batch).toHaveBeenCalledTimes(1);
     expect(db.batch.mock.calls[0]?.[0]).toHaveLength(2);
     expect(db.insertValues).not.toHaveBeenCalled();
-    expect(kv.put).not.toHaveBeenCalled();
   });
 
   it("rejects a now-disallowed pinned OTP phone before customer or session creation", async () => {
@@ -995,7 +937,6 @@ describe("customer auth service intent handling", () => {
       { get: null },
       { get: { value: JSON.stringify({ countries: ["BD"], mode: "include" }) } },
     ]);
-    const kv = createKv();
     challengeMocks.claimCustomerAuthOtpChallenge.mockResolvedValueOnce({
       otpKey: "cust_otp:email:buyer@example.com",
       method: "email",
@@ -1009,7 +950,7 @@ describe("customer auth service intent handling", () => {
       maxAttempts: 5,
     });
 
-    await expect(verifyOtp(db as never, kv as never, {
+    await expect(verifyOtp(db as never, {
       intent: "sign_up",
       method: "email",
       channel: "email",
@@ -1022,14 +963,12 @@ describe("customer auth service intent handling", () => {
 
     expect(challengeMocks.claimCustomerAuthOtpChallenge).toHaveBeenCalledOnce();
     expect(db.insertValues).not.toHaveBeenCalled();
-    expect(kv.put).not.toHaveBeenCalled();
   });
 
   it("rejects verify payloads that try to reinterpret a phone OTP as email verification", async () => {
     const db = createDb([]);
-    const kv = createKv();
 
-    await expect(verifyOtp(db as never, kv as never, {
+    await expect(verifyOtp(db as never, {
       intent: "sign_up",
       method: "email",
       channel: "sms",
@@ -1039,7 +978,6 @@ describe("customer auth service intent handling", () => {
       phone: "+8801712345678",
     })).rejects.toThrow("Valid email address required");
 
-    expect(kv.delete).not.toHaveBeenCalled();
     expect(db.insertValues).not.toHaveBeenCalled();
     expect(challengeMocks.claimCustomerAuthOtpChallenge).not.toHaveBeenCalled();
   });
@@ -1049,12 +987,11 @@ describe("customer auth service intent handling", () => {
       { limit: [baseSiteSettings] },
       { get: null },
     ]);
-    const kv = createKv();
     challengeMocks.claimCustomerAuthOtpChallenge.mockRejectedValueOnce(
       new Error("Verification code does not match the requested contact. Please request a new code."),
     );
 
-    await expect(verifyOtp(db as never, kv as never, {
+    await expect(verifyOtp(db as never, {
       intent: "sign_up",
       method: "email",
       channel: "email",
@@ -1064,7 +1001,6 @@ describe("customer auth service intent handling", () => {
       phone: "+8801712345678",
     })).rejects.toThrow("Verification code does not match the requested contact. Please request a new code.");
 
-    expect(kv.delete).not.toHaveBeenCalled();
     expect(db.insertValues).not.toHaveBeenCalled();
   });
 
@@ -1073,12 +1009,11 @@ describe("customer auth service intent handling", () => {
       { limit: [baseSiteSettings] },
       { get: null },
     ]);
-    const kv = createKv();
     challengeMocks.claimCustomerAuthOtpChallenge.mockRejectedValueOnce(
       new Error("No verification code found. Please request a new one."),
     );
 
-    await expect(verifyOtp(db as never, kv as never, {
+    await expect(verifyOtp(db as never, {
       intent: "sign_up",
       method: "email",
       channel: "email",
@@ -1089,8 +1024,6 @@ describe("customer auth service intent handling", () => {
       encryptionKey: "test-key",
     })).rejects.toThrow("No verification code found. Please request a new one.");
 
-    expect(kv.get).not.toHaveBeenCalled();
-    expect(kv.delete).not.toHaveBeenCalled();
     expect(db.insertValues).not.toHaveBeenCalled();
   });
 
@@ -1110,7 +1043,6 @@ describe("customer auth service intent handling", () => {
         },
       },
     ]);
-    const kv = createKv();
     challengeMocks.claimCustomerAuthOtpChallenge.mockResolvedValueOnce({
       otpKey: "cust_otp:sms:+8801712345678",
       method: "phone",
@@ -1123,7 +1055,7 @@ describe("customer auth service intent handling", () => {
       maxAttempts: 5,
     });
 
-    await expect(verifyOtp(db as never, kv as never, {
+    await expect(verifyOtp(db as never, {
       intent: "sign_up",
       method: "phone",
       channel: "sms",
@@ -1133,7 +1065,6 @@ describe("customer auth service intent handling", () => {
     })).rejects.toThrow("Email address is required to create an account.");
 
     expect(db.insertValues).not.toHaveBeenCalled();
-    expect(kv.put).not.toHaveBeenCalled();
   });
 });
 

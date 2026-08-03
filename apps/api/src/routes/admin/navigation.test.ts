@@ -29,7 +29,6 @@ const mocks = vi.hoisted(() => ({
     trashNavigationMenu: vi.fn(),
     updateNavigationMenuItem: vi.fn(),
     updateNavigationMenuMetadata: vi.fn(),
-    getKv: vi.fn(),
     invalidateSiteSettingsCache: vi.fn(),
     invalidateApiAndScheduleStorefrontGroups: vi.fn(),
 }));
@@ -65,10 +64,6 @@ vi.mock("@scalius/core/modules/settings", () => ({
     invalidateSiteSettingsCache: mocks.invalidateSiteSettingsCache,
 }));
 
-vi.mock("../../utils/kv-cache", () => ({
-    getKv: mocks.getKv,
-}));
-
 vi.mock("../../utils/cache-invalidation", () => ({
     invalidateApiAndScheduleStorefrontGroups: mocks.invalidateApiAndScheduleStorefrontGroups,
 }));
@@ -83,7 +78,6 @@ function createTestApp() {
         PURGE_TOKEN: "secret-token",
     } as unknown as Env;
     const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
-    mocks.getKv.mockReturnValue({ id: "kv" });
     mocks.invalidateSiteSettingsCache.mockResolvedValue(undefined);
     mocks.invalidateApiAndScheduleStorefrontGroups.mockResolvedValue(undefined);
     app.onError((error, c) => {

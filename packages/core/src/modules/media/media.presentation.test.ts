@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { initStorage } from "../../integrations/storage";
+import { initPublicMediaUrl } from "../../integrations/storage";
 import { presentMediaProjection } from "./media.presentation";
 
 function row(overrides: Partial<Parameters<typeof presentMediaProjection>[0]> = {}) {
@@ -16,7 +16,7 @@ function row(overrides: Partial<Parameters<typeof presentMediaProjection>[0]> = 
 
 describe("presentMediaProjection", () => {
     beforeEach(() => {
-        initStorage({} as R2Bucket, "https://media.example.com");
+        initPublicMediaUrl("https://media.example.com");
     });
 
     it("derives the video and retained image poster URLs without exposing join fields", () => {
@@ -41,7 +41,7 @@ describe("presentMediaProjection", () => {
     });
 
     it("never presents a raw poster object key as a URL", () => {
-        initStorage({} as R2Bucket, "");
+        initPublicMediaUrl("");
         expect(presentMediaProjection(row()).posterUrl).toBeNull();
     });
 });

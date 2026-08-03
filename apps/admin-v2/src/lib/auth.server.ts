@@ -9,8 +9,7 @@ import { createAuth } from "@scalius/core/auth";
 import { isTransientD1Error, retryTransientD1, wait } from "@scalius/core/utils/transient-d1";
 import { getDb } from "@scalius/database/client";
 import { session as sessionTable } from "@scalius/database/schema";
-import { initKv } from "@scalius/core/utils/kv-cache";
-import { initStorage } from "@scalius/core/integrations/storage";
+import { initPublicMediaUrl } from "@scalius/core/integrations/storage";
 import { env as cfEnv } from "cloudflare:workers";
 import { and, eq } from "drizzle-orm";
 
@@ -33,13 +32,7 @@ export function initBindings(): Env {
   // Initialize DB
   getDb(env);
 
-  // Initialize KV cache if available
-  if (env.CACHE) initKv(env.CACHE);
-
-  // Initialize R2 storage if available
-  if (env.BUCKET) {
-    initStorage(env.BUCKET, (env.R2_PUBLIC_URL as string) || "");
-  }
+  initPublicMediaUrl((env.R2_PUBLIC_URL as string) || "");
 
   return env;
 }

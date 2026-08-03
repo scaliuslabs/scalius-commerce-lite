@@ -176,7 +176,7 @@ app.openapi(revokeRoute, async (c) => {
   }
 
   const token = authHeader.substring(7);
-  await revokeToken(token);
+  await revokeToken(token, c.env.CACHE);
 
   return ok(c, {
     message: "Token revoked successfully"

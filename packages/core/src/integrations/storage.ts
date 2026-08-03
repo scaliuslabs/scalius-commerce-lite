@@ -24,20 +24,13 @@ const MULTIPART_UPLOAD_ID_MAX_LENGTH = 512;
 const MULTIPART_ETAG_MAX_LENGTH = 256;
 
 // ---------------------------------------------------------------------------
-// Module-level R2 state – set once per isolate from middleware / route handler
+// Public media URL presentation state. R2 bindings are always request-scoped.
 // ---------------------------------------------------------------------------
-let _bucket: R2Bucket | undefined;
 let _publicUrl: string = "";
 
-/** Register the R2 binding and public URL for this isolate. */
-export function initStorage(bucket: R2Bucket, publicUrl: string): void {
-  _bucket = bucket;
+/** Register the public media URL for response projection in this isolate. */
+export function initPublicMediaUrl(publicUrl: string): void {
   _publicUrl = publicUrl.replace(/\/$/, ""); // strip trailing slash
-}
-
-/** Returns the registered R2 bucket (may be undefined before initStorage). */
-export function getBucket(): R2Bucket | undefined {
-  return _bucket;
 }
 
 export function getPublicMediaUrl(baseUrl: string, key: string): string {
@@ -190,11 +183,10 @@ function validateMultipartUploadId(value: string): string {
 }
 
 function requireBucket(bucket?: R2Bucket): R2Bucket {
-  const r2 = bucket ?? _bucket;
-  if (!r2) {
+  if (!bucket) {
     throw new ServiceUnavailableError("Media storage is temporarily unavailable.");
   }
-  return r2;
+  return bucket;
 }
 
 function objectMetadata(input: {
@@ -261,8 +253,8 @@ function r2ObjectSha256(object: R2Object): ArrayBuffer | undefined {
  * Upload a file to Cloudflare R2.
  *
  * @param file    The file to upload (from FormData)
- * @param bucket  R2Bucket binding override; falls back to the module-level binding
- * @param publicUrl  Public base URL override; falls back to the module-level value
+ * @param bucket  Request-scoped R2 bucket binding
+ * @param publicUrl  Public base URL override; falls back to the presentation URL
  */
 export async function uploadFile(
   file: File,
@@ -278,7 +270,7 @@ export async function uploadFile(
 
   const r2 = requireBucket(bucket);
 
-  // Use the R2_PUBLIC_URL configured via initStorage() in middleware.
+  // Use the R2_PUBLIC_URL configured via initPublicMediaUrl() in middleware.
   // If not set, the URL field in the result will just be the bare key.
   const baseUrl = (publicUrl ?? _publicUrl) || "";
   const key = validatedObjectKey(
@@ -566,10 +558,7 @@ export async function deleteFile(
   key: string,
   bucket?: R2Bucket,
 ): Promise<void> {
-  const r2 = bucket ?? _bucket;
-  if (!r2) {
-    throw new ServiceUnavailableError("R2 bucket binding is not available.");
-  }
+  const r2 = requireBucket(bucket);
 
   try {
     await r2.delete(key);

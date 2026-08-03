@@ -1,6 +1,6 @@
 // src/server/utils/jwt.ts
 import jwt from "jsonwebtoken";
-import { setCache, getCache, getKv } from "./kv-cache";
+import { setCache, getCache } from "./kv-cache";
 
 // Default JWT expiration time (1 hour)
 const DEFAULT_EXPIRATION = "1h";
@@ -26,6 +26,7 @@ async function hashToken(token: string): Promise<string> {
 
 interface JwtEnv {
   JWT_SECRET?: string;
+  CACHE?: KVNamespace;
   [key: string]: unknown;
 }
 
@@ -70,7 +71,7 @@ export async function verifyToken(
   env?: JwtEnv,
 ): Promise<jwt.JwtPayload | string> {
   try {
-    if (await isTokenBlacklisted(token)) {
+    if (await isTokenBlacklisted(token, env?.CACHE)) {
       throw new Error("Token has been revoked");
     }
 
@@ -138,7 +139,10 @@ export async function refreshTokenIfNeeded(
 /**
  * Revoke a token by storing it in the KV blacklist.
  */
-export async function revokeToken(token: string): Promise<void> {
+export async function revokeToken(
+  token: string,
+  kv?: KVNamespace,
+): Promise<void> {
   try {
     const decoded = jwt.decode(token) as { exp?: number };
     if (!decoded?.exp) throw new Error("Invalid token format");
@@ -150,7 +154,6 @@ export async function revokeToken(token: string): Promise<void> {
     );
 
     const tokenHash = await hashToken(token);
-    const kv = getKv();
     await setCache(
       `${BLACKLIST_KEY_PREFIX}${tokenHash}`,
       { revoked: true },
@@ -170,10 +173,12 @@ export async function revokeToken(token: string): Promise<void> {
 /**
  * Check if a token is in the KV blacklist.
  */
-export async function isTokenBlacklisted(token: string): Promise<boolean> {
+export async function isTokenBlacklisted(
+  token: string,
+  kv?: KVNamespace,
+): Promise<boolean> {
   try {
     const tokenHash = await hashToken(token);
-    const kv = getKv();
     const result = await getCache<{ revoked: boolean }>(
       `${BLACKLIST_KEY_PREFIX}${tokenHash}`,
       kv,
