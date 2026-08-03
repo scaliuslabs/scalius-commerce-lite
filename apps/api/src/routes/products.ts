@@ -82,7 +82,7 @@ function isStorefrontSitemapProductsCacheable(url: string): boolean {
 app.use(
   "*",
   cacheMiddleware({
-    ttl: CACHE_TTLS.STANDARD,
+    ttl: CACHE_TTLS.AVAILABILITY,
     keyPrefix: PRODUCT_API_CACHE_NAMESPACE,
     varyByQuery: true,
     queryDefaults: (c) => {

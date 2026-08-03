@@ -41,9 +41,31 @@ function isHeroRequestEligible(url: URL): boolean {
 }
 
 const PUBLIC_API_ROUTE_POLICIES: readonly PublicApiRoutePolicy[] = [
-  // Availability-bearing product, collection-detail, category-product, and
-  // homepage projections stay off this lane until availability invalidation
-  // is coalesced. Per-order global tag purges would erase the cache benefit.
+  {
+    path: "/api/v1/products",
+    edgeTtlSeconds: CACHE_TTLS.AVAILABILITY,
+    tags: ["products", "search", "discovery"],
+  },
+  {
+    path: "/api/v1/categories",
+    edgeTtlSeconds: CACHE_TTLS.AVAILABILITY,
+    tags: ["categories", "products", "search"],
+    isEligible: (url) =>
+      url.pathname.replace(/\/$/, "").endsWith("/products"),
+  },
+  {
+    path: "/api/v1/collections",
+    edgeTtlSeconds: CACHE_TTLS.AVAILABILITY,
+    tags: ["collections", "products", "search"],
+    isEligible: (url) =>
+      url.pathname.replace(/\/$/, "") !== "/api/v1/collections",
+  },
+  {
+    path: "/api/v1/storefront/homepage",
+    exact: true,
+    edgeTtlSeconds: CACHE_TTLS.AVAILABILITY,
+    tags: ["homepage", "products", "categories", "collections"],
+  },
   {
     path: "/api/v1/checkout/config",
     exact: true,
@@ -177,10 +199,12 @@ export function getPublicApiCachePolicy(
   const url = new URL(request.url);
   if (!hasBoundedPublicQuery(url)) return null;
   const pathname = url.pathname.replace(/\/$/, "") || "/";
-  const policy = PUBLIC_API_ROUTE_POLICIES.find((candidate) =>
-    routeMatches(pathname, candidate),
+  const policy = PUBLIC_API_ROUTE_POLICIES.find(
+    (candidate) =>
+      routeMatches(pathname, candidate) &&
+      (!candidate.isEligible || candidate.isEligible(url)),
   );
-  if (!policy || (policy.isEligible && !policy.isEligible(url))) return null;
+  if (!policy) return null;
 
   return {
     cacheKey: buildPublicApiCacheKey(url),

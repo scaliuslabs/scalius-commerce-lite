@@ -151,7 +151,7 @@ export async function getCollectionByIdResult(
         return null;
       }
     },
-    { ttlSeconds: CACHE_TTL.LONG },
+    { ttlSeconds: CACHE_TTL.AVAILABILITY },
   );
 
   return result ?? { state: "unavailable" };

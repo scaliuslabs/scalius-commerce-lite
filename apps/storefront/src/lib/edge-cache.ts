@@ -19,7 +19,7 @@ import {
   shouldUseExactCacheGeneration,
 } from "./cache-generations";
 
-const DEFAULT_TTL_SECONDS = 8640000; // 24 hours - purge-cache handles invalidation
+const DEFAULT_TTL_SECONDS = 86400; // 24 hours for stable data
 
 // Timeout for L2 cache operations to prevent hanging (per CF best practices)
 const L2_CACHE_TIMEOUT_MS = 500;
@@ -376,6 +376,7 @@ export function clearL1ByPrefixes(prefixes: string[]): void {
 }
 
 export const CACHE_TTL = {
+  AVAILABILITY: 5, // bounded staleness for buyer-visible price and stock
   LONG: 86400,   // 24h - static data (layout, categories, etc.)
   MEDIUM: 3600,  // 1h  - semi-dynamic (product listings)
   SHORT: 300,    // 5m  - dynamic (CSP settings, checkout config)

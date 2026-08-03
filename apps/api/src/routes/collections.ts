@@ -27,7 +27,10 @@ const app = new OpenAPIHono<{ Bindings: Env }>();
 app.use(
   "*",
   cacheMiddleware({
-    ttl: CACHE_TTLS.STANDARD,
+    ttl: (c) =>
+      c.req.path.replace(/\/$/, "") === "/api/v1/collections"
+        ? CACHE_TTLS.STANDARD
+        : CACHE_TTLS.AVAILABILITY,
     keyPrefix: "api:collections:",
     varyByQuery: true,
     queryDefaults: (c) =>

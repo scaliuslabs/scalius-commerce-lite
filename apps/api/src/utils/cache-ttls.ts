@@ -6,6 +6,9 @@
  * auditable and adjustable from a single location.
  */
 export const CACHE_TTLS = {
+  /** 5 seconds — bounded staleness for buyer-visible price and availability projections. */
+  AVAILABILITY: 5,
+
   /** 1 hour — standard for content that changes occasionally (products, categories, pages, collections) */
   STANDARD: 3600,
 

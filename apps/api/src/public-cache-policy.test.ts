@@ -8,6 +8,11 @@ import {
 
 describe("public API cache gateway policy", () => {
   it.each([
+    ["/api/v1/products", ["products", "search", "discovery"]],
+    ["/api/v1/products/fresh-hilsa", ["products", "search", "discovery"]],
+    ["/api/v1/categories/example/products", ["categories", "products", "search"]],
+    ["/api/v1/collections/featured", ["collections", "products", "search"]],
+    ["/api/v1/storefront/homepage", ["homepage", "products", "categories", "collections"]],
     ["/api/v1/categories", ["categories"]],
     ["/api/v1/categories/example", ["categories"]],
     ["/api/v1/storefront/pages/slug/about", ["pages", "layout"]],
@@ -27,10 +32,6 @@ describe("public API cache gateway policy", () => {
     ["GET", "/api/v1/orders/status/status-token", {}],
     ["GET", "/api/v1/admin/products", {}],
     ["GET", "/api/v1/checkout/validate-cart", {}],
-    ["GET", "/api/v1/products", {}],
-    ["GET", "/api/v1/categories/example/products", {}],
-    ["GET", "/api/v1/collections/featured", {}],
-    ["GET", "/api/v1/storefront/homepage", {}],
     ["GET", "/api/v1/products", { Cookie: "cs_tok=secret" }],
     ["GET", "/api/v1/products", { Authorization: "Bearer secret" }],
     ["GET", "/api/v1/products", { "X-API-Token": "secret" }],
@@ -50,6 +51,20 @@ describe("public API cache gateway policy", () => {
         new Request("https://api.example.com/api/v1/hero/sliders?type=mobile"),
       )?.tags,
     ).toEqual(["homepage"]);
+  });
+
+  it.each([
+    "/api/v1/products",
+    "/api/v1/products/fresh-hilsa",
+    "/api/v1/categories/fish/products",
+    "/api/v1/collections/featured",
+    "/api/v1/storefront/homepage",
+  ])("bounds availability-bearing %s responses to five seconds", (path) => {
+    expect(
+      getPublicApiCachePolicy(
+        new Request(`https://api.example.com${path}`),
+      )?.edgeTtlSeconds,
+    ).toBe(5);
   });
 
   it("rejects unbounded query-cardinality inputs", () => {

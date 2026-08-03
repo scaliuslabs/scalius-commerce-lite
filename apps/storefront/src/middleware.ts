@@ -33,6 +33,7 @@ const CACHE_MATCH_TIMEOUT_MS = 500;
 
 const CACHE_VERSION_KEY_PREFIX = "v_";
 const GENERATION_LOOKUP_TIMEOUT_MS = 500;
+const PUBLIC_HTML_EDGE_TTL_SECONDS = 5;
 
 type CloudflareCacheStorage = CacheStorage & {
   default: Cache;
@@ -257,8 +258,8 @@ const cachingMiddleware = defineMiddleware(async (context, next) => {
       if (cachedResponse) {
         const response = new Response(cachedResponse.body, cachedResponse);
         // Override the stored Cache-Control with browser-safe headers.
-        // The stored response has `public, max-age=31536000, immutable` for edge storage
-        // but HTML browsers must always revalidate after deployments. Public discovery
+        // The stored response has a short edge-only TTL, but HTML browsers must
+        // always revalidate after deployments. Public discovery
         // XML/text keeps its route TTL so crawlers and feed fetchers can cache sanely.
         applyBrowserCachePolicyForPublicResponse(response, url.pathname);
         const generationSuffix = htmlGeneration.generation !== null
@@ -285,12 +286,11 @@ const cachingMiddleware = defineMiddleware(async (context, next) => {
         await setPageCspHeader(response, env ?? undefined);
 
         const responseToCache = response.clone();
-        // CRITICAL FIX: Override Cache-Control for the internal Cache API storage
-        // We want the Edge to hold this "forever" (controlled by KV version invalidation)
-        // even though we tell the browser max-age=0.
+        // Keep public HTML fast while bounding buyer-visible price/availability
+        // staleness even if a targeted invalidation is delayed or missed.
         responseToCache.headers.set(
           "Cache-Control",
-          "public, max-age=31536000, immutable",
+          `public, max-age=${PUBLIC_HTML_EDGE_TTL_SECONDS}, must-revalidate`,
         );
 
         locals.cfContext.waitUntil(cfCache.put(cacheKey, responseToCache));

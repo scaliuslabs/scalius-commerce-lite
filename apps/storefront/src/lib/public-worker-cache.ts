@@ -1,4 +1,12 @@
-const CMS_EDGE_TTL_SECONDS = 60 * 60;
+import {
+  canonicalizeStorefrontHtmlCachePath,
+  hasStorefrontProductVariantSelectionParams,
+} from "@scalius/shared/storefront-cache-path";
+
+const STOREFRONT_EDGE_TTL_SECONDS = 5;
+const MAX_PUBLIC_QUERY_ENTRIES = 30;
+const MAX_PUBLIC_QUERY_KEY_LENGTH = 64;
+const MAX_PUBLIC_QUERY_VALUE_LENGTH = 512;
 
 const RESERVED_TOP_LEVEL_PATHS = new Set([
   "account",
@@ -21,7 +29,15 @@ const RESERVED_TOP_LEVEL_PATHS = new Set([
   "ucp",
 ]);
 
-const PUBLIC_STOREFRONT_CACHE_TAGS = new Set(["layout", "pages"]);
+const PUBLIC_STOREFRONT_CACHE_TAGS = new Set([
+  "categories",
+  "collections",
+  "homepage",
+  "layout",
+  "pages",
+  "products",
+  "search",
+]);
 
 export interface PublicStorefrontCachePolicy {
   cacheKey: string;
@@ -46,16 +62,32 @@ function isCmsPagePath(pathname: string): boolean {
   );
 }
 
-function buildCacheKey(url: URL): string {
-  const pathname = url.pathname.replace(/\/$/, "") || "/";
-  const params = new URLSearchParams(
-    [...url.searchParams.entries()].sort(
-      ([leftKey, leftValue], [rightKey, rightValue]) =>
-        leftKey.localeCompare(rightKey) || leftValue.localeCompare(rightValue),
-    ),
+function resolvePublicPathTags(pathname: string): readonly string[] | null {
+  if (pathname === "/") return ["homepage", "layout", "products"];
+  if (/^\/products\/[^/]+\/?$/.test(pathname)) {
+    return ["products", "layout"];
+  }
+  if (/^\/categories\/[^/]+\/?$/.test(pathname)) {
+    return ["categories", "products", "layout"];
+  }
+  if (/^\/collections\/[^/]+\/?$/.test(pathname)) {
+    return ["collections", "products", "layout"];
+  }
+  if (/^\/search\/?$/.test(pathname)) return ["search", "products", "layout"];
+  if (isCmsPagePath(pathname)) return ["pages", "layout"];
+  return null;
+}
+
+function hasBoundedPublicQuery(url: URL): boolean {
+  const entries = [...url.searchParams.entries()];
+  return (
+    entries.length <= MAX_PUBLIC_QUERY_ENTRIES &&
+    entries.every(
+      ([key, value]) =>
+        key.length <= MAX_PUBLIC_QUERY_KEY_LENGTH &&
+        value.length <= MAX_PUBLIC_QUERY_VALUE_LENGTH,
+    )
   );
-  const query = params.toString();
-  return query ? `${pathname}?${query}` : pathname;
 }
 
 export function getPublicStorefrontCachePolicy(
@@ -65,12 +97,20 @@ export function getPublicStorefrontCachePolicy(
   if (hasPrivateRequestSignals(request)) return null;
 
   const url = new URL(request.url);
-  if (!isCmsPagePath(url.pathname)) return null;
+  if (!hasBoundedPublicQuery(url)) return null;
+  if (hasStorefrontProductVariantSelectionParams(url)) return null;
+  const tags = resolvePublicPathTags(url.pathname);
+  if (!tags) return null;
+  const normalizedPathname = url.pathname.replace(/\/$/, "") || "/";
+  const cacheKey = canonicalizeStorefrontHtmlCachePath(
+    `${normalizedPathname}${url.search}`,
+  );
+  if (!cacheKey) return null;
 
   return {
-    cacheKey: buildCacheKey(url),
-    edgeTtlSeconds: CMS_EDGE_TTL_SECONDS,
-    tags: ["pages", "layout"],
+    cacheKey,
+    edgeTtlSeconds: STOREFRONT_EDGE_TTL_SECONDS,
+    tags,
   };
 }
 

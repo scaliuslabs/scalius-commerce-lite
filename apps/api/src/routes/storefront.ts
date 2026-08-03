@@ -66,7 +66,7 @@ const homepageRoute = createRoute({
 app.use(
   "/homepage",
   cacheMiddleware({
-    ttl: CACHE_TTLS.STANDARD,
+    ttl: CACHE_TTLS.AVAILABILITY,
     keyPrefix: "api:storefront:homepage:",
     varyByQuery: false,
     methods: ["GET"],
