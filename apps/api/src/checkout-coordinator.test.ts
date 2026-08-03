@@ -846,6 +846,55 @@ describe("production checkout coordinator engine", () => {
     ]);
   });
 
+  it("retries a transient projection failure without waiting for scheduled recovery", async () => {
+    installIntentCheckoutFixtures(database);
+    const waitUntilTasks: Promise<unknown>[] = [];
+    const baseTransport = sqliteTransport(database);
+    let projectionAttempts = 0;
+    const transport: CheckoutSqlTransport = {
+      ...baseTransport,
+      async atomic(statements, slot) {
+        const isProjection = statements.some((statement) =>
+          statement.sql.includes("checkout_projection_status = 'complete'")
+        );
+        if (isProjection && projectionAttempts++ === 0) {
+          throw new Error("transient projection failure");
+        }
+        await baseTransport.atomic(statements, slot);
+      },
+    };
+    const waitUntil = (task: Promise<unknown>) => waitUntilTasks.push(task);
+    const commitEngine = new CheckoutCoordinatorEngine(transport, waitUntil);
+    const ingress = new CheckoutIntentCoordinatorEngine(
+      drizzleDatabase(database),
+      undefined,
+      commitEngine,
+      waitUntil,
+    );
+
+    await expect(ingress.submit(intent(150))).resolves.toMatchObject({
+      ok: true,
+      replay: false,
+    });
+    await settleWaitUntilTasks(waitUntilTasks);
+
+    expect(projectionAttempts).toBe(2);
+    expect(database.prepare(`
+      SELECT
+        checkout_projection_status AS projectionStatus,
+        (SELECT status FROM checkout_batch_outbox LIMIT 1) AS batchStatus,
+        (SELECT COUNT(*) FROM checkout_attempts) AS attempts,
+        (SELECT COUNT(*) FROM order_items) AS items
+      FROM orders
+      LIMIT 1
+    `).get()).toEqual({
+      projectionStatus: "complete",
+      batchStatus: "complete",
+      attempts: 1,
+      items: 1,
+    });
+  });
+
   it("keeps checkout successful and durable outboxes pending when queue relay fails", async () => {
     installIntentCheckoutFixtures(database);
     enableMetaPurchaseFixture(database);
