@@ -6,7 +6,7 @@ import type { CheckoutSqlTransport } from "./checkout-transport";
 
 const ORDER_RECEIPT_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 7;
 export const CHECKOUT_PROJECTION_MAX_OUTBOXES = 25;
-export const CHECKOUT_PROJECTION_MAX_ORDERS = 5_000;
+export const CHECKOUT_PROJECTION_MAX_ORDERS = 500;
 
 const TARGET_ORDERS_CTE = `target_outboxes AS MATERIALIZED (
     SELECT batch_outbox.*
@@ -611,6 +611,43 @@ export interface CheckoutProjectionRecoveryResult {
   hasMore: boolean;
 }
 
+export interface CheckoutProjectionAttemptResult {
+  completedIds: string[];
+  failedIds: string[];
+}
+
+/**
+ * Project one bounded outbox group, isolating individual outboxes only when
+ * the efficient grouped transaction fails. Live and scheduled recovery share
+ * this policy so a large transient group never needs manual intervention.
+ */
+export async function projectCheckoutOutboxes(
+  transport: Pick<CheckoutSqlTransport, "atomic">,
+  outboxIds: readonly string[],
+): Promise<CheckoutProjectionAttemptResult> {
+  const groupedStatements = buildCheckoutProjectionBatchStatements(outboxIds);
+  try {
+    await transport.atomic(groupedStatements);
+    return { completedIds: [...outboxIds], failedIds: [] };
+  } catch {
+    if (outboxIds.length === 1) {
+      return { completedIds: [], failedIds: [...outboxIds] };
+    }
+  }
+
+  const completedIds: string[] = [];
+  const failedIds: string[] = [];
+  for (const outboxId of outboxIds) {
+    try {
+      await transport.atomic(buildCheckoutProjectionStatements(outboxId));
+      completedIds.push(outboxId);
+    } catch {
+      failedIds.push(outboxId);
+    }
+  }
+  return { completedIds, failedIds };
+}
+
 /**
  * Recover committed checkout aggregates whose normalized read-model
  * projection was interrupted. Healthy outboxes share the same bounded
@@ -665,23 +702,12 @@ export async function recoverPendingCheckoutProjections(
   if (group.length > 0) groups.push(group);
 
   for (const candidates of groups) {
-    try {
-      await transport.atomic(buildCheckoutProjectionBatchStatements(
-        candidates.map((candidate) => candidate.id),
-      ));
-      completed += candidates.length;
-    } catch {
-      for (const candidate of candidates) {
-        try {
-          await transport.atomic(buildCheckoutProjectionStatements(candidate.id));
-          completed += 1;
-        } catch {
-          // The authoritative order and lane reservations are already
-          // committed. Leave only the bad outbox retryable and continue.
-          failed += 1;
-        }
-      }
-    }
+    const result = await projectCheckoutOutboxes(
+      transport,
+      candidates.map((candidate) => candidate.id),
+    );
+    completed += result.completedIds.length;
+    failed += result.failedIds.length;
   }
 
   return {

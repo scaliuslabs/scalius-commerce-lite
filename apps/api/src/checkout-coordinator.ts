@@ -22,7 +22,7 @@ import {
 import {
   CHECKOUT_PROJECTION_MAX_ORDERS,
   CHECKOUT_PROJECTION_MAX_OUTBOXES,
-  buildCheckoutProjectionBatchStatements,
+  projectCheckoutOutboxes,
 } from "@scalius/database/checkout-projection";
 import {
   getDb,
@@ -64,6 +64,8 @@ const CHECKOUT_SIDE_EFFECT_QUEUE_BATCH_SIZE = 100;
 const CHECKOUT_SIDE_EFFECT_QUEUE_DELAY_SECONDS = 5;
 const CHECKOUT_PROJECTION_MAX_DEFERRED_ORDERS = 1_000;
 const CHECKOUT_PROJECTION_MAX_DEFER_MS = 5_000;
+const CHECKOUT_PROJECTION_RETRY_ATTEMPTS = 3;
+const CHECKOUT_PROJECTION_RETRY_BASE_MS = 25;
 
 type JsonObject = Record<string, unknown>;
 type Command = CheckoutCommitCommand<JsonObject, JsonObject>;
@@ -958,20 +960,39 @@ export class CheckoutCoordinatorEngine {
   }
 
   private async drainPendingProjections(): Promise<void> {
+    let consecutiveFailures = 0;
     while (this.pendingProjections.length > 0) {
       const selected = this.takeProjectionBatch();
       if (selected.length === 0) return;
-      try {
-        await this.transport.atomic(
-          buildCheckoutProjectionBatchStatements(
-            selected.map((candidate) => candidate.outboxId),
-          ),
-        );
-      } catch {
-        continue;
+      const projection = await projectCheckoutOutboxes(
+        this.transport,
+        selected.map((candidate) => candidate.outboxId),
+      );
+      const completedIds = new Set(projection.completedIds);
+      const completed = selected.filter((candidate) =>
+        completedIds.has(candidate.outboxId)
+      );
+      const failed = selected.filter((candidate) =>
+        !completedIds.has(candidate.outboxId)
+      );
+
+      if (failed.length > 0) {
+        consecutiveFailures += 1;
+        if (consecutiveFailures < CHECKOUT_PROJECTION_RETRY_ATTEMPTS) {
+          this.pendingProjections.unshift(...failed);
+          await new Promise((resolve) => setTimeout(
+            resolve,
+            CHECKOUT_PROJECTION_RETRY_BASE_MS * 2 ** (consecutiveFailures - 1),
+          ));
+        }
+        // After the bounded live retry, leave the durable outboxes pending for
+        // the scheduled recovery sweep. Do not hold buyer commits behind a
+        // persistently malformed or unavailable projection transaction.
+      } else {
+        consecutiveFailures = 0;
       }
 
-      await this.relayProjectionSideEffects(selected).catch(() => {
+      await this.relayProjectionSideEffects(completed).catch(() => {
         // Projection committed both durable outboxes. A queue outage therefore
         // leaves retryable database authority for the scheduled sweep without
         // changing the already-acknowledged checkout result.

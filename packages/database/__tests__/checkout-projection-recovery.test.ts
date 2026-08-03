@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   buildCheckoutProjectionBatchStatements,
+  projectCheckoutOutboxes,
   recoverPendingCheckoutProjections,
 } from "../src/checkout-projection";
 
@@ -50,6 +51,30 @@ describe("checkout projection recovery", () => {
     expect(completedIds).toEqual(["outbox_1", "outbox_2"]);
     expect(transport.atomic).toHaveBeenCalledTimes(4);
     expect(transport.all).toHaveBeenCalledWith(expect.objectContaining({ args: [3] }));
+  });
+
+  it("isolates outboxes after a grouped transaction failure", async () => {
+    const completedIds: string[] = [];
+    const transport = {
+      atomic: vi.fn(async (statements: readonly { args: readonly unknown[] }[]) => {
+        const outboxIds = JSON.parse(String(statements[0]?.args[0])) as string[];
+        if (outboxIds.length > 1 || outboxIds.includes("outbox_broken")) {
+          throw new Error("projection failed");
+        }
+        completedIds.push(...outboxIds);
+      }),
+    };
+
+    await expect(projectCheckoutOutboxes(transport, [
+      "outbox_1",
+      "outbox_broken",
+      "outbox_2",
+    ])).resolves.toEqual({
+      completedIds: ["outbox_1", "outbox_2"],
+      failedIds: ["outbox_broken"],
+    });
+    expect(completedIds).toEqual(["outbox_1", "outbox_2"]);
+    expect(transport.atomic).toHaveBeenCalledTimes(4);
   });
 
   it("rejects malformed scan rows without invoking a transaction", async () => {
