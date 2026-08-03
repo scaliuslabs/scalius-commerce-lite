@@ -14,21 +14,25 @@ import type { Database } from "./types";
 
 const providerByDatabase = new WeakMap<object, DatabaseProvider>();
 
+type D1SessionFactory = (
+  constraintOrBookmark?: string,
+) => Pick<D1Database, "prepare" | "batch">;
+
 function createD1RequestClient(binding: D1Database): D1Database {
-  if (typeof binding.withSession !== "function") return binding;
+  const candidate = Reflect.get(binding, "withSession") as unknown;
+  if (typeof candidate !== "function") return binding;
+  const withSession = candidate as D1SessionFactory;
 
   // The first operation observes the primary. Later reads in the same request
   // may use a replica without losing sequential consistency.
-  const session = binding.withSession("first-primary");
-  return {
-    prepare: (query) => session.prepare(query),
-    batch: <T = unknown>(statements: D1PreparedStatement[]) =>
-      session.batch<T>(statements),
-    exec: (query) => binding.exec(query),
-    withSession: (constraintOrBookmark) =>
-      binding.withSession(constraintOrBookmark),
-    dump: () => binding.dump(),
-  };
+  const session = withSession.call(binding, "first-primary");
+  return new Proxy(binding, {
+    get(target, property, receiver) {
+      if (property === "prepare") return session.prepare.bind(session);
+      if (property === "batch") return session.batch.bind(session);
+      return Reflect.get(target, property, receiver);
+    },
+  });
 }
 
 export type { Database } from "./types";
