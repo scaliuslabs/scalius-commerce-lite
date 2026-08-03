@@ -606,33 +606,23 @@ function hasHeaderToken(value, token) {
 
 function evaluatePublicStorefrontCacheHeaders(headers, { label }) {
   const cacheControl = normalizeHeaderValue(headers, "cache-control");
-  const edgeCacheControl = normalizeHeaderValue(
-    headers,
-    "cloudflare-cdn-cache-control",
-  );
+  const cloudflareCacheStatus = normalizeHeaderValue(headers, "cf-cache-status");
   const cacheStatus = normalizeHeaderValue(headers, "x-cache-status");
-  const cacheTags = normalizeHeaderValue(headers, "cache-tag");
   const errors = [];
 
   if (!hasHeaderToken(cacheStatus.toLowerCase(), "native")) {
     errors.push(`${label} X-Cache-Status must report NATIVE.`);
   }
-  if (!edgeCacheControl || !hasPositiveCacheTtl(edgeCacheControl)) {
-    errors.push(
-      `${label} Cloudflare-CDN-Cache-Control must include a positive edge TTL.`,
-    );
-  }
-  if (!cacheTags.trim()) {
-    errors.push(`${label} must include at least one Cache-Tag.`);
+  if (!/^(?:HIT|MISS|EXPIRED|REVALIDATED|UPDATING)$/i.test(cloudflareCacheStatus)) {
+    errors.push(`${label} CF-Cache-Status must prove an active native cache lookup.`);
   }
 
   return {
     ok: errors.length === 0,
     errors,
     cacheControl: cacheControl || null,
-    edgeCacheControl: edgeCacheControl || null,
+    cloudflareCacheStatus: cloudflareCacheStatus || null,
     cacheStatus: cacheStatus || null,
-    cacheTags: cacheTags || null,
   };
 }
 
@@ -678,9 +668,8 @@ function evaluateProductFeedCacheHeaders(headers) {
     ok: errors.length === 0,
     errors,
     cacheControl: discoveryCache.cacheControl,
-    edgeCacheControl: nativeCache.edgeCacheControl,
+    cloudflareCacheStatus: nativeCache.cloudflareCacheStatus,
     cacheStatus: nativeCache.cacheStatus,
-    cacheTags: nativeCache.cacheTags,
   };
 }
 
@@ -726,8 +715,17 @@ export function evaluateDiscoveryCacheHeaders(headers, { label = "discovery resp
     if (!/\bpublic\b/.test(normalized)) {
       errors.push(`${label} Cache-Control must include public cacheability.`);
     }
-    if (!hasPositiveCacheTtl(cacheControl)) {
-      errors.push(`${label} Cache-Control must include a positive max-age or s-maxage.`);
+    if (
+      !hasPositiveCacheTtl(cacheControl)
+      && !(
+        /\bmax-age=0\b/.test(normalized)
+        && /\bno-cache\b/.test(normalized)
+        && /\bmust-revalidate\b/.test(normalized)
+      )
+    ) {
+      errors.push(
+        `${label} Cache-Control must use a positive TTL or explicit max-age=0 revalidation.`,
+      );
     }
   }
 
@@ -1892,6 +1890,7 @@ async function checkStorefrontCacheHeaders(options, { fetchImpl, logger }) {
       fetchImpl,
       timeoutMs: options.timeoutMs,
       accept: "text/html, */*;q=0.8",
+      bypassCache: false,
     });
     requireStatus(response, `Storefront cache headers ${path}`, (status) =>
       status >= 200 && status < 300);
@@ -1906,6 +1905,7 @@ async function checkStorefrontCacheHeaders(options, { fetchImpl, logger }) {
       statusCode: response.statusCode,
       durationMs: response.durationMs,
       cacheControl: cache.cacheControl,
+      cloudflareCacheStatus: cache.cloudflareCacheStatus,
       cacheStatus: cache.cacheStatus,
     });
   }
@@ -1939,7 +1939,7 @@ async function checkStorefrontCacheHeaders(options, { fetchImpl, logger }) {
     throw new Error(
       `Storefront /api/product-feed.xml cache headers failed: ${productFeed.errors.join("; ")} ` +
       `(X-Cache-Status=${JSON.stringify(productFeed.cacheStatus)}, ` +
-      `Cache-Tag=${JSON.stringify(productFeed.cacheTags)})`,
+      `CF-Cache-Status=${JSON.stringify(productFeed.cloudflareCacheStatus)})`,
     );
   }
 
@@ -1972,9 +1972,8 @@ async function checkStorefrontCacheHeaders(options, { fetchImpl, logger }) {
       statusCode: productFeedResponse.statusCode,
       durationMs: productFeedResponse.durationMs,
       cacheControl: productFeed.cacheControl,
-      edgeCacheControl: productFeed.edgeCacheControl,
+      cloudflareCacheStatus: productFeed.cloudflareCacheStatus,
       cacheStatus: productFeed.cacheStatus,
-      cacheTags: productFeed.cacheTags,
     },
     purgeGet: {
       path: "/api/purge-cache",
