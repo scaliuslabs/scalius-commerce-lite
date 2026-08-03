@@ -199,11 +199,6 @@ describe("reserveStockBatch sellability guard", () => {
     expect(guard.params).toContain(7);
     expect(guard.params).toContain(2);
     expect(guard.sql).toContain("INVENTORY_RESERVATION_CONFLICT");
-    expect(plan.availabilityChangedSubjects).toEqual([{
-      productId: "product_a",
-      slug: "product-a",
-      categoryId: "category_a",
-    }]);
     expect((db as unknown as { batch?: unknown }).batch).toBeUndefined();
   });
 

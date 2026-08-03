@@ -217,7 +217,6 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
       success: true,
       results: [],
       statements: items.length > 0 ? [{ kind: "inventory-guard-and-write" }] : [],
-      availabilityChangedSubjects: [],
       resolveIdempotentReplay: vi.fn(async () => null),
     }));
     mocks.isInventoryReservationConflictError.mockReturnValue(false);
@@ -530,7 +529,6 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
       customerId: "cust_existing",
       accountOwnerCustomerId: "cust_existing",
       alreadyCommitted: true,
-      availabilityChangedSubjects: [],
     });
     expect(mocks.verifyPromotionCheckoutSnapshot).not.toHaveBeenCalled();
     expect(mocks.prepareStockReservationBatch).not.toHaveBeenCalled();
@@ -579,7 +577,6 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
       success: true,
       results: [],
       statements: [inventoryStatement],
-      availabilityChangedSubjects: [],
       resolveIdempotentReplay: vi.fn(async () => null),
     });
     mocks.safeBatch.mockResolvedValue([]);
@@ -602,7 +599,6 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
       success: true,
       results: [],
       statements: [inventoryStatement],
-      availabilityChangedSubjects: [],
       resolveIdempotentReplay: vi.fn(async () => null),
     });
     mocks.prepareAtomicCheckoutAttemptCommit.mockResolvedValue({
@@ -636,57 +632,7 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
     }));
   });
 
-  it("uses only the inventory statement results to resolve an exact availability transition", async () => {
-    const db = createDbMock();
-    const inventoryStatement = { kind: "fresh-inventory-write" };
-    const resolveCommittedAvailabilitySubjects = vi.fn(() => [{
-      productId: "prod_1",
-      slug: "product-one",
-      categoryId: "cat_1",
-    }]);
-    mocks.prepareStockReservationBatch.mockResolvedValue({
-      success: true,
-      results: [],
-      statements: [inventoryStatement],
-      availabilityChangedSubjects: [{
-        productId: "prod_1",
-        slug: "product-one",
-        categoryId: "cat_1",
-      }],
-      resolveCommittedAvailabilitySubjects,
-      resolveIdempotentReplay: vi.fn(async () => null),
-    });
-    mocks.safeBatch.mockResolvedValue([
-      [{ attempt: true }],
-      [{ attemptGuard: true }],
-      [{ stock: 1, reservedStock: 1 }],
-    ]);
-
-    const result = await commitStorefrontOrderPayload(db, createPayload(), {
-      attempt: {
-        commitMode: "atomic",
-        origin: "new",
-        id: "attempt_atomic_exact_availability",
-        requestKey: "checkout_submit:v1:exact_availability",
-        requestHash: "request_hash",
-        orderId: "order_discount",
-        checkoutToken: "chk_order_discount",
-        statusToken: "cst_exact_availability",
-      },
-      response: { orderId: "order_discount", message: "Order created" },
-    });
-
-    expect(resolveCommittedAvailabilitySubjects).toHaveBeenCalledWith([
-      [{ stock: 1, reservedStock: 1 }],
-    ]);
-    expect(result.availabilityChangedSubjects).toEqual([{
-      productId: "prod_1",
-      slug: "product-one",
-      categoryId: "cat_1",
-    }]);
-  });
-
-  it("invalidates potential availability subjects after an uncertain successful commit", async () => {
+  it("returns the committed order after an uncertain successful commit", async () => {
     const db = createDbMock({
       existingOrder: {
         id: "order_discount",
@@ -694,17 +640,10 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
         accountOwnerCustomerId: "cust_existing",
       },
     });
-    const potentialSubjects = [{
-      productId: "prod_1",
-      slug: "product-one",
-      categoryId: "cat_1",
-    }];
     mocks.prepareStockReservationBatch.mockResolvedValue({
       success: true,
       results: [],
       statements: [{ kind: "fresh-inventory-write" }],
-      availabilityChangedSubjects: potentialSubjects,
-      resolveCommittedAvailabilitySubjects: vi.fn(() => []),
       resolveIdempotentReplay: vi.fn(async () => null),
     });
     mocks.safeBatch.mockRejectedValue(new Error("response lost after commit"));
@@ -726,7 +665,6 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
     expect(result).toMatchObject({
       orderId: "order_discount",
       alreadyCommitted: true,
-      availabilityChangedSubjects: potentialSubjects,
     });
   });
 
@@ -745,7 +683,6 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
         },
       ],
       statements: [],
-      availabilityChangedSubjects: [],
       resolveIdempotentReplay: vi.fn(async () => null),
     });
 

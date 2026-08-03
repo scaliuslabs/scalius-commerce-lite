@@ -83,7 +83,6 @@ beforeEach(() => {
         success: true,
         results: [],
         statements: [{ kind: "inventory-guard" }, { kind: "inventory-movement" }, { kind: "inventory-update" }],
-        availabilityChangedSubjects: [],
         resolveIdempotentReplay: vi.fn(async () => null),
     });
     inventoryMocks.reserveStockBatch.mockResolvedValue({ success: true, results: [] });

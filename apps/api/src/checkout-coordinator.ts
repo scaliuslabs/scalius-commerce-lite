@@ -76,11 +76,6 @@ export type CheckoutCoordinatorResult =
       orderId: string;
       response: JsonObject;
       replay: boolean;
-      availabilityChangedSubjects: Array<{
-        productId: string;
-        slug: string | null;
-        categoryId: string | null;
-      }>;
     }
   | {
       ok: false;
@@ -125,27 +120,17 @@ interface PendingCheckout {
 
 interface ReservationLaneState {
   variantId: string;
-  productId: string;
-  productSlug: string | null;
-  categoryId: string | null;
   lane: number;
   capacity: number;
   reservedQuantity: number;
   laneVersion: number;
   sourceStockVersion: number;
-  stock: number;
-  legacyReservedStock: number;
 }
 
 interface PreparedLaneBatch {
   pending: PendingCheckout[];
   commits: PreparedCheckoutCommit<JsonObject, JsonObject>[];
   finalStates: Map<string, ReservationLaneState>;
-  availabilityChangedSubjectsByRequestKey: Map<string, Array<{
-    productId: string;
-    slug: string | null;
-    categoryId: string | null;
-  }>>;
 }
 
 interface PendingCheckoutProjection {
@@ -367,7 +352,6 @@ export class CheckoutCoordinatorEngine {
         orderId: recent.orderId,
         response: recent.response,
         replay: true,
-        availabilityChangedSubjects: [],
       });
     }
 
@@ -586,16 +570,11 @@ export class CheckoutCoordinatorEngine {
         const lane = Number(row.lane);
         this.laneStates.set(laneStateKey(variantId, lane), {
           variantId,
-          productId: row.productId,
-          productSlug: row.productSlug,
-          categoryId: row.categoryId,
           lane,
           capacity: Number(row.capacity),
           reservedQuantity: Number(row.reservedQuantity),
           laneVersion: Number(row.laneVersion),
           sourceStockVersion: Number(row.sourceStockVersion),
-          stock,
-          legacyReservedStock,
         });
       }
     }
@@ -786,45 +765,6 @@ export class CheckoutCoordinatorEngine {
       this.pending.splice(selectedIndexes[offset]!, 1);
     }
 
-    const availabilityChangedSubjectsByRequestKey = new Map<string, Array<{
-      productId: string;
-      slug: string | null;
-      categoryId: string | null;
-    }>>();
-    for (const commit of commits) {
-      const subjects = new Map<string, {
-        productId: string;
-        slug: string | null;
-        categoryId: string | null;
-      }>();
-      for (const edge of commit.edges) {
-        const beforeLane = this.laneStates.get(laneStateKey(edge.variantId, lane))!;
-        const beforeReserved = Array.from(
-          { length: CHECKOUT_RESERVATION_LANE_COUNT },
-          (_, candidateLane) => candidateLane === lane
-            ? edge.reservedBefore
-            : this.laneStates.get(
-                laneStateKey(edge.variantId, candidateLane),
-              )?.reservedQuantity ?? 0,
-        ).reduce((sum, value) => sum + value, 0);
-        const afterReserved = beforeReserved + edge.quantity;
-        const sellableCapacity = Math.max(0, beforeLane.stock - beforeLane.legacyReservedStock);
-        if (beforeReserved < sellableCapacity && afterReserved >= sellableCapacity) {
-          subjects.set(beforeLane.productId, {
-            productId: beforeLane.productId,
-            slug: beforeLane.productSlug,
-            categoryId: beforeLane.categoryId,
-          });
-        }
-      }
-      if (subjects.size > 0) {
-        availabilityChangedSubjectsByRequestKey.set(
-          commit.requestKey,
-          [...subjects.values()],
-        );
-      }
-    }
-
     const finalStates = new Map<string, ReservationLaneState>();
     for (const commit of commits) {
       for (const edge of commit.edges) {
@@ -836,7 +776,6 @@ export class CheckoutCoordinatorEngine {
       pending: selected,
       commits,
       finalStates,
-      availabilityChangedSubjectsByRequestKey,
     };
   }
 
@@ -888,9 +827,6 @@ export class CheckoutCoordinatorEngine {
           pending,
           pending.command.response,
           false,
-          batch.availabilityChangedSubjectsByRequestKey.get(
-            pending.command.requestKey,
-          ) ?? [],
         );
       }
     } catch (error) {
@@ -1039,7 +975,7 @@ export class CheckoutCoordinatorEngine {
         this.resolveFailure(pending);
         continue;
       }
-      this.resolveSuccess(pending, response, true, [], row.orderId);
+      this.resolveSuccess(pending, response, true, row.orderId);
     }
 
     const affectedVariantIds = [...new Set(batch.commits.flatMap((commit) =>
@@ -1099,7 +1035,7 @@ export class CheckoutCoordinatorEngine {
         this.resolveConflict(pending);
       } else {
         const response = parseResponsePayload(row.responsePayload);
-        if (response) this.resolveSuccess(pending, response, true, [], row.orderId);
+        if (response) this.resolveSuccess(pending, response, true, row.orderId);
         else this.resolveFailure(pending);
       }
     }
@@ -1156,7 +1092,7 @@ export class CheckoutCoordinatorEngine {
           continue;
         }
         const response = parseResponsePayload(row.responsePayload);
-        if (response) this.resolveSuccess(candidate, response, true, [], row.orderId);
+        if (response) this.resolveSuccess(candidate, response, true, row.orderId);
         else this.resolveFailure(candidate);
       }
     } catch {
@@ -1186,11 +1122,6 @@ export class CheckoutCoordinatorEngine {
     pending: PendingCheckout,
     response: JsonObject,
     replay: boolean,
-    availabilityChangedSubjects: Array<{
-      productId: string;
-      slug: string | null;
-      categoryId: string | null;
-    }>,
     orderId = pending.command.order.id,
   ): void {
     this.activeByRequestKey.delete(pending.command.requestKey);
@@ -1200,7 +1131,6 @@ export class CheckoutCoordinatorEngine {
       orderId,
       response,
       replay,
-      availabilityChangedSubjects,
     };
     for (const resolve of pending.resolvers) resolve(result);
   }
@@ -1795,21 +1725,6 @@ export class CheckoutCoordinator {
   }
 }
 
-function parseAvailabilityChangedSubjects(value: unknown): Array<{
-  productId: string;
-  slug: string | null;
-  categoryId: string | null;
-}> {
-  if (!Array.isArray(value)) return [];
-  return value.filter(
-    (subject): subject is { productId: string; slug: string | null; categoryId: string | null } =>
-      isJsonObject(subject)
-      && typeof subject.productId === "string"
-      && (subject.slug === null || typeof subject.slug === "string")
-      && (subject.categoryId === null || typeof subject.categoryId === "string"),
-  );
-}
-
 function parseCheckoutCoordinatorResult(value: unknown): CheckoutCoordinatorResult {
   if (!isJsonObject(value) || typeof value.ok !== "boolean") {
     return { ok: false, code: "CHECKOUT_COMMIT_UNAVAILABLE" };
@@ -1819,7 +1734,6 @@ function parseCheckoutCoordinatorResult(value: unknown): CheckoutCoordinatorResu
       typeof value.orderId !== "string"
       || !isJsonObject(value.response)
       || typeof value.replay !== "boolean"
-      || !Array.isArray(value.availabilityChangedSubjects)
     ) {
       return { ok: false, code: "CHECKOUT_COMMIT_UNAVAILABLE" };
     }
@@ -1828,9 +1742,6 @@ function parseCheckoutCoordinatorResult(value: unknown): CheckoutCoordinatorResu
       orderId: value.orderId,
       response: value.response,
       replay: value.replay,
-      availabilityChangedSubjects: parseAvailabilityChangedSubjects(
-        value.availabilityChangedSubjects,
-      ),
     };
   }
   if (
@@ -1979,7 +1890,6 @@ export async function submitCheckoutIntentToCoordinator(
       typeof body.orderId !== "string"
       || !isJsonObject(body.response)
       || typeof body.replay !== "boolean"
-      || !Array.isArray(body.availabilityChangedSubjects)
       || (body.postCommitPayload !== null && !isJsonObject(body.postCommitPayload))
     ) {
       return { ok: false, code: "CHECKOUT_COMMIT_UNAVAILABLE" };
@@ -1989,9 +1899,6 @@ export async function submitCheckoutIntentToCoordinator(
       orderId: body.orderId,
       response: body.response,
       replay: body.replay,
-      availabilityChangedSubjects: parseAvailabilityChangedSubjects(
-        body.availabilityChangedSubjects,
-      ),
       postCommitPayload: body.postCommitPayload as StorefrontOrderCommitPayload | null,
     };
   }

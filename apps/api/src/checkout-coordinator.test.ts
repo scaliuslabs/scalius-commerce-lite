@@ -496,7 +496,6 @@ describe("checkout coordinator topology", () => {
       orderId: intentCommand.attempt.orderId,
       response: { orderId: intentCommand.attempt.orderId },
       replay: false,
-      availabilityChangedSubjects: [],
       postCommitPayload: null,
     }, { status: 201 }));
     await expect(submitCheckoutIntentToCoordinator(
@@ -523,7 +522,6 @@ describe("checkout coordinator topology", () => {
           orderId: candidate.order.id,
           response: candidate.response,
           replay: false,
-          availabilityChangedSubjects: [],
         })),
       });
     });
@@ -569,7 +567,6 @@ describe("checkout coordinator topology", () => {
           orderId: candidate.order.id,
           response: candidate.response,
           replay: false,
-          availabilityChangedSubjects: [],
         })),
       });
     });
@@ -1091,25 +1088,20 @@ describe("production checkout coordinator engine", () => {
     `).get()).toEqual({ orders: 300, reserved: 300 });
   });
 
-  it("assigns the sold-out cache transition to exactly one committed order", async () => {
+  it("commits exact stock capacity without a cache side-channel", async () => {
     const engine = new CheckoutCoordinatorEngine(sqliteTransport(database));
     const results = await Promise.all(Array.from({ length: 20 }, (_, index) =>
       engine.submit(command(`order_sold_out_${String(index).padStart(2, "0")}`))
     ));
 
     expect(results.every((result) => result.ok)).toBe(true);
-    const invalidatingResults = results.filter((result) =>
-      result.ok && result.availabilityChangedSubjects.length > 0
-    );
-    expect(invalidatingResults).toHaveLength(1);
-    expect(invalidatingResults[0]).toMatchObject({
-      ok: true,
-      availabilityChangedSubjects: [{
-        productId: "product_hot",
-        slug: "hot-product",
-        categoryId: null,
-      }],
-    });
+    expect(database.prepare(`
+      SELECT SUM(reserved_quantity) AS reserved
+      FROM inventory_reservation_lanes
+      WHERE variant_id = 'variant_hot'
+    `).get()).toEqual({ reserved: 20 });
+    expect(results.every((result) => !("availabilityChangedSubjects" in result)))
+      .toBe(true);
   });
 
   it("moves only free capacity to avoid false out-of-stock from lane fragmentation", async () => {
