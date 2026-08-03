@@ -1,14 +1,15 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const source = readFileSync(join(__dirname, "customers.ts"), "utf8");
 const customerSchema = readFileSync(
-  join(process.cwd(), "packages/database/src/schema/customers.ts"),
+  fileURLToPath(new URL("../../../../../packages/database/src/schema/customers.ts", import.meta.url)),
   "utf8",
 );
 const orderSchema = readFileSync(
-  join(process.cwd(), "packages/database/src/schema/orders.ts"),
+  fileURLToPath(new URL("../../../../../packages/database/src/schema/orders.ts", import.meta.url)),
   "utf8",
 );
 
