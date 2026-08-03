@@ -17,7 +17,7 @@ describe("public storefront Worker cache policy", () => {
 
     expect(left).toMatchObject({
       cacheKey: "/about?campaign=sale",
-      tags: ["pages", "layout"],
+      tags: ["pages", "products", "layout"],
     });
     expect(right?.cacheKey).toBe(left?.cacheKey);
   });
@@ -87,7 +87,7 @@ describe("public storefront Worker cache policy", () => {
     expect(response.headers.get("Cloudflare-CDN-Cache-Control")).toBe(
       "public, max-age=5, must-revalidate",
     );
-    expect(response.headers.get("Cache-Tag")).toBe("pages,layout");
+    expect(response.headers.get("Cache-Tag")).toBe("pages,products,layout");
   });
 
   it("does not cache a no-store response that failed the inner public gate", () => {

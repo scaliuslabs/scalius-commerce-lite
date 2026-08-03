@@ -21,10 +21,6 @@ vi.mock("@scalius/core/modules/navigation", () => ({
   listPublishedNavigationMenuItems: mocks.listPublishedNavigationMenuItems,
 }));
 
-vi.mock("../middleware/cache", () => ({
-  cacheMiddleware: () => async (_c: unknown, next: () => Promise<void>) => next(),
-}));
-
 import { navigationRoutes } from "./navigation";
 
 function createTestApp() {

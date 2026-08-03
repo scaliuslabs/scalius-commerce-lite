@@ -2,23 +2,10 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 
 import { deliveryLocations } from "@scalius/database/schema";
 import { eq, and, isNull, asc } from "drizzle-orm";
-import { cacheMiddleware } from "../middleware/cache";
 import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";
 import { deliveryLocationSchema } from "../schemas/entities";
-import { CACHE_TTLS } from "../utils/cache-ttls";
 const app = new OpenAPIHono<{ Bindings: Env }>();
-
-// Apply cache middleware - locations change infrequently
-app.use(
-  "*",
-  cacheMiddleware({
-    ttl: CACHE_TTLS.MEDIUM,
-    keyPrefix: "api:locations:",
-    varyByQuery: true,
-    methods: ["GET"]
-  }),
-);
 
 // Helper function to format location data
 const formatLocation = (location: { id: string; name: string; type: string; parentId: string | null; isActive: boolean; sortOrder: number }) => ({

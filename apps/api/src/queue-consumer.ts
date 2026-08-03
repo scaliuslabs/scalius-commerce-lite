@@ -13,7 +13,6 @@
 //   payment.*        → src/modules/payments/process-payment.ts   (via switch below)
 //   order.notif      → src/modules/notifications/notifications.service.ts
 //   auth.send_otp    → inline below (WhatsApp + email; SMS providers TBD)
-//   storefront.cache → src/utils/cache-invalidation.ts
 //
 // TODO: When 5-6 SMS providers are implemented, extract auth.send_otp to
 //       src/modules/notifications/otp.handler.ts
@@ -69,16 +68,6 @@ import {
 import { escapeHtml } from "@scalius/shared/html-escape";
 import { readStoredCredentialStrict } from "@scalius/core/utils/credential-encryption";
 import { getCredentialEncryptionKey, getEncryptionKey } from "./utils/encryption-key";
-import {
-  createStorefrontCacheWarmMessageForPurge,
-  enqueueStorefrontCacheWarm,
-  purgeStorefrontForPrefixes,
-  warmStorefrontHtmlPaths,
-  type StorefrontCachePurgeQueueMessage,
-  type StorefrontCacheQueueMessage as CacheQueueMessage,
-  type StorefrontCacheWarmQueueMessage,
-} from "./utils/cache-invalidation";
-import { archiveStorefrontCacheQueueFailure } from "./utils/storefront-cache-queue-failures";
 import {
   markWebhookEventFailed,
   markWebhookEventManualReconciliation,
@@ -361,8 +350,6 @@ export type AuthOtpQueueMessage =
     name?: string;
   };
 
-export type StorefrontCacheQueueMessage = CacheQueueMessage;
-
 // ── Queue batch handler ────────────────────────────────────────────────────
 
 /**
@@ -370,7 +357,7 @@ export type StorefrontCacheQueueMessage = CacheQueueMessage;
  * Each message is processed independently; failures are retried by Cloudflare.
  */
 export async function handleQueueBatch(
-  batch: MessageBatch<PaymentQueueMessage | AuthOtpQueueMessage | OrderNotificationQueueMessage | MetaPurchaseQueueMessage | StorefrontCacheQueueMessage>,
+  batch: MessageBatch<PaymentQueueMessage | AuthOtpQueueMessage | OrderNotificationQueueMessage | MetaPurchaseQueueMessage>,
   env: Env,
   executionCtx?: ExecutionContext,
 ): Promise<void> {
@@ -378,14 +365,6 @@ export async function handleQueueBatch(
 
   if (batch.queue === "payment-events-dlq") {
     await handlePaymentEventsDlqBatch(batch as unknown as MessageBatch<QueueBody>, db);
-    return;
-  }
-
-  if (batch.queue === "storefront-cache-dlq") {
-    await handleStorefrontCacheDlqBatch(
-      batch as unknown as MessageBatch<StorefrontCacheQueueMessage>,
-      db,
-    );
     return;
   }
 
@@ -414,7 +393,7 @@ export async function handleQueueBatch(
     batch.messages,
     QUEUE_BATCH_CONCURRENCY_LIMIT,
     (msg) => processQueueMessage(
-      msg as unknown as Message<PaymentQueueMessage | AuthOtpQueueMessage | OrderNotificationQueueMessage | MetaPurchaseQueueMessage | StorefrontCacheQueueMessage>,
+      msg as unknown as Message<PaymentQueueMessage | AuthOtpQueueMessage | OrderNotificationQueueMessage | MetaPurchaseQueueMessage>,
       db,
       env,
       executionCtx,
@@ -436,7 +415,7 @@ export async function handleQueueBatch(
       console.error(`[Queue] Failed to process message ${msg.id}:`, result.status === "rejected" ? result.reason : "unknown");
       await markPaymentWebhookEventFailedOnTerminalAttempt(
         db,
-        msg as unknown as Message<PaymentQueueMessage | AuthOtpQueueMessage | OrderNotificationQueueMessage | MetaPurchaseQueueMessage | StorefrontCacheQueueMessage>,
+        msg as unknown as Message<PaymentQueueMessage | AuthOtpQueueMessage | OrderNotificationQueueMessage | MetaPurchaseQueueMessage>,
         result.reason,
       );
       msg.retry({ delaySeconds: getQueueRetryDelaySeconds(result.reason) });
@@ -510,43 +489,6 @@ async function handlePaymentEventsDlqBatch(
       acked += 1;
     } else {
       console.error(`[Queue] Failed to archive payment DLQ message ${msg.id}:`, result.reason);
-      msg.retry({ delaySeconds: 300 });
-      retried += 1;
-    }
-  }
-
-  logQueueBatchCompleted(batchContext, acked, retried);
-}
-
-async function handleStorefrontCacheDlqBatch(
-  batch: MessageBatch<StorefrontCacheQueueMessage>,
-  db: ReturnType<typeof getDb>,
-): Promise<void> {
-  const batchContext = createQueueBatchLogContext(batch, DLQ_BATCH_CONCURRENCY_LIMIT);
-  logQueueBatchStarted(batchContext);
-  logQueueBatchConcurrency(batchContext);
-
-  const results = await runSettledWithConcurrency(
-    batch.messages,
-    DLQ_BATCH_CONCURRENCY_LIMIT,
-    (msg) => archiveStorefrontCacheQueueFailure(db, msg, batch.queue),
-  );
-
-  let acked = 0;
-  let retried = 0;
-
-  for (let i = 0; i < batch.messages.length; i++) {
-    const result = results[i];
-    const msg = batch.messages[i];
-    if (!result || !msg) continue;
-    if (result.status === "fulfilled") {
-      console.warn(
-        `[Queue] Archived storefront cache DLQ message ${msg.id} as ${result.value.id}`,
-      );
-      msg.ack();
-      acked += 1;
-    } else {
-      console.error(`[Queue] Failed to archive storefront cache DLQ message ${msg.id}:`, result.reason);
       msg.retry({ delaySeconds: 300 });
       retried += 1;
     }
@@ -942,7 +884,7 @@ async function archiveAuthOtpDlqMessage(
  * Process a single payment, notification, or OTP queue message.
  */
 async function processQueueMessage(
-  msg: Message<PaymentQueueMessage | AuthOtpQueueMessage | OrderNotificationQueueMessage | MetaPurchaseQueueMessage | StorefrontCacheQueueMessage>,
+  msg: Message<PaymentQueueMessage | AuthOtpQueueMessage | OrderNotificationQueueMessage | MetaPurchaseQueueMessage>,
   db: ReturnType<typeof getDb>,
   env: Env,
   executionCtx?: ExecutionContext,
@@ -958,18 +900,6 @@ async function processQueueMessage(
     //       to src/modules/notifications/otp.handler.ts
     case "auth.send_otp": {
       await processAuthOtpQueueMessage(payload, msg.id, db, env);
-      break;
-    }
-
-    // ── Storefront cache purge/rewarm coordination ─────────────────────────
-
-    case "storefront.cache_purge": {
-      await processStorefrontCachePurgeQueueMessage(payload, env, executionCtx);
-      break;
-    }
-
-    case "storefront.cache_warm": {
-      await processStorefrontCacheWarmQueueMessage(payload, env);
       break;
     }
 
@@ -1314,7 +1244,7 @@ async function processQueueMessage(
   }
 }
 
-type QueueBody = PaymentQueueMessage | AuthOtpQueueMessage | OrderNotificationQueueMessage | MetaPurchaseQueueMessage | StorefrontCacheQueueMessage;
+type QueueBody = PaymentQueueMessage | AuthOtpQueueMessage | OrderNotificationQueueMessage | MetaPurchaseQueueMessage;
 type PaymentOnlyQueueMessage = Extract<PaymentQueueMessage, { type: `payment.${string}` }>;
 
 function isPaymentQueuePayload(payload: QueueBody): payload is PaymentOnlyQueueMessage {
@@ -1323,117 +1253,6 @@ function isPaymentQueuePayload(payload: QueueBody): payload is PaymentOnlyQueueM
 
 function isOrderNotificationQueuePayload(payload: QueueBody): payload is OrderNotificationQueueMessage {
   return payload.type === "order.notification";
-}
-
-async function processStorefrontCachePurgeQueueMessage(
-  payload: StorefrontCachePurgeQueueMessage,
-  env: Env,
-  executionCtx?: ExecutionContext,
-): Promise<void> {
-  const result = await purgeStorefrontForPrefixes(payload.prefixes, env, {
-    groups: payload.groups,
-    bumpVersion: payload.bumpVersion,
-    exactKeys: payload.exactKeys,
-    htmlPaths: payload.htmlPaths,
-    operationId: payload.operationId,
-    warm: false,
-  });
-
-  if (!result.attempted) {
-    if (result.skippedReason === "no-prefixes" || result.skippedReason === "no-valid-groups") {
-      console.warn(
-        `[Queue] Ignoring empty storefront cache purge message from ${payload.source}`,
-      );
-      return;
-    }
-    throw new Error(`Storefront cache purge skipped: ${result.skippedReason ?? "unknown"}`);
-  }
-
-  if (!result.ok) {
-    throw new Error(`Storefront cache purge failed with status ${result.status ?? "unknown"}`);
-  }
-
-  console.log(
-    `[Queue] Storefront cache purge ${payload.operationId} completed from ${payload.source}`,
-  );
-
-  const warmMessage = createStorefrontCacheWarmMessageForPurge(payload);
-  if (!warmMessage) return;
-
-  try {
-    const enqueueResult = await enqueueStorefrontCacheWarm(warmMessage, env);
-    if (enqueueResult.enqueued) {
-      console.log(
-        `[Queue] Storefront cache warm ${warmMessage.operationId} enqueued for ${warmMessage.paths.length} path(s)`,
-      );
-      return;
-    }
-
-    console.warn(
-      `[Queue] Storefront cache warm queue unavailable (${enqueueResult.skippedReason}); falling back to direct warm.`,
-    );
-  } catch (error: unknown) {
-    console.error("[Queue] Failed to enqueue storefront cache warm:", error);
-  }
-
-  scheduleStorefrontWarmFallback(warmMessage, env, executionCtx);
-}
-
-function scheduleStorefrontWarmFallback(
-  payload: StorefrontCacheWarmQueueMessage,
-  env: Env,
-  executionCtx?: ExecutionContext,
-): void {
-  const warmPromise = warmStorefrontHtmlPaths(payload.paths, env)
-    .then((result) => {
-      if (!result.ok) {
-        console.warn(
-          `[Queue] Storefront cache warm ${payload.operationId} fallback had retryable failures: ${result.retryableFailures.join(", ")}`,
-        );
-      }
-    })
-    .catch((error: unknown) => {
-      console.error(`[Queue] Storefront cache warm ${payload.operationId} fallback failed:`, error);
-    });
-
-  if (executionCtx && typeof executionCtx.waitUntil === "function") {
-    executionCtx.waitUntil(warmPromise);
-  } else {
-    void warmPromise;
-  }
-}
-
-async function processStorefrontCacheWarmQueueMessage(
-  payload: StorefrontCacheWarmQueueMessage,
-  env: Env,
-): Promise<void> {
-  const result = await warmStorefrontHtmlPaths(payload.paths, env);
-
-  if (!result.attempted) {
-    if (result.skippedReason === "no-paths") {
-      console.warn(
-        `[Queue] Ignoring empty storefront cache warm message from ${payload.source}`,
-      );
-      return;
-    }
-    throw new Error(`Storefront cache warm skipped: ${result.skippedReason ?? "unknown"}`);
-  }
-
-  if (!result.ok) {
-    throw new Error(
-      `Storefront cache warm failed for ${result.retryableFailures.join(", ")}`,
-    );
-  }
-
-  if (result.skippedFailures.length > 0) {
-    console.warn(
-      `[Queue] Storefront cache warm ${payload.operationId} skipped non-retryable path(s): ${result.skippedFailures.join(", ")}`,
-    );
-  }
-
-  console.log(
-    `[Queue] Storefront cache warm ${payload.operationId} completed from ${payload.source}: ${result.successful}/${result.paths.length} path(s) warmed`,
-  );
 }
 
 function getPaymentWebhookEventId(payload: QueueBody): string | undefined {

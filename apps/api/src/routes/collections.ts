@@ -1,56 +1,21 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { collections } from "@scalius/database/schema";
 import { eq, isNull, and } from "drizzle-orm";
-import { cacheMiddleware } from "../middleware/cache";
 import { NotFoundError } from "../utils/api-error";
 import { successEnvelope, errorResponses } from "../schemas/responses";
 import { paginationSchema } from "../schemas/responses";
 import { ok } from "../utils/api-response";
-import { CACHE_TTLS } from "../utils/cache-ttls";
 import { getPublicCollectionCatalog } from "@scalius/core/modules/collections/collections.service";
 import { publicCollectionConfig } from "@scalius/core/modules/collections/collection-config";
 import { resolvePublicAttributeFilters } from "@scalius/core/modules/attributes/attributes.public";
 import { toIsoTimestamp } from "../utils/timestamps";
 import {
-  isPublicProductListCacheable,
-  normalizePublicFtsSearchCacheValue,
-  normalizePublicIntegerCacheValue,
   normalizePublicListingSearchParam,
-  normalizePublicNumberCacheValue,
   readRepeatedPublicQueryValues,
 } from "../utils/public-search-query";
 
 // Create an OpenAPIHono app for collection routes
 const app = new OpenAPIHono<{ Bindings: Env }>();
-
-// Apply cache middleware to all routes
-app.use(
-  "*",
-  cacheMiddleware({
-    ttl: (c) =>
-      c.req.path.replace(/\/$/, "") === "/api/v1/collections"
-        ? CACHE_TTLS.STANDARD
-        : CACHE_TTLS.AVAILABILITY,
-    keyPrefix: "api:collections:",
-    varyByQuery: true,
-    queryDefaults: (c) =>
-      c.req.path.replace(/\/$/, "") === "/api/v1/collections"
-        ? {}
-        : { page: 1, limit: 20 },
-    queryNormalizers: {
-      search: normalizePublicFtsSearchCacheValue,
-      page: normalizePublicIntegerCacheValue,
-      limit: normalizePublicIntegerCacheValue,
-      minPrice: normalizePublicNumberCacheValue,
-      maxPrice: normalizePublicNumberCacheValue,
-    },
-    cacheCondition: (c) =>
-      c.req.path.replace(/\/$/, "") === "/api/v1/collections"
-        ? true
-        : isPublicProductListCacheable(c.req.url),
-    methods: ["GET"]
-  }),
-);
 
 // Helper to safely format timestamp
 const formatTimestamp = (

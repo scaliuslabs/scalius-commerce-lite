@@ -2,23 +2,10 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 
 import { shippingMethods as shippingMethodsTable } from "@scalius/database/schema";
 import { eq, isNull, asc, and } from "drizzle-orm";
-import { cacheMiddleware } from "../middleware/cache";
 
 import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";
-import { CACHE_TTLS } from "../utils/cache-ttls";
 const app = new OpenAPIHono<{ Bindings: Env }>();
-
-// Apply cache middleware
-app.use(
-  "*",
-  cacheMiddleware({
-    ttl: CACHE_TTLS.SHORT,
-    keyPrefix: "api:shipping-methods:",
-    varyByQuery: false,
-    methods: ["GET"]
-  }),
-);
 
 // GET /shipping-methods — list all active shipping methods
 const listShippingMethodsRoute = createRoute({

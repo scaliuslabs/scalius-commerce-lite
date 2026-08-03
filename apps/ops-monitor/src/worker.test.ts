@@ -90,8 +90,6 @@ function createEnv(overrides: Partial<OpsMonitorEnv> = {}): OpsMonitorEnv {
     ORDER_NOTIFICATIONS_DLQ: empty,
     AUTH_OTP_QUEUE: empty,
     AUTH_OTP_DLQ: empty,
-    STOREFRONT_CACHE_QUEUE: empty,
-    STOREFRONT_CACHE_DLQ: empty,
     ...overrides,
   };
 }
@@ -278,14 +276,14 @@ describe("queue issue detection", () => {
         failedChecks: ["metrics:timeout"],
       }),
     ]);
-    expect(checks.summaries).toHaveLength(8);
+    expect(checks.summaries).toHaveLength(6);
     expect(checks.summaries.find((summary) => summary.queueName === "auth-otp")).toMatchObject({
       queueName: "auth-otp",
       status: "error",
       backlogCount: null,
       oldestMessageAgeMs: null,
     });
-    expect(checks.summaries.filter((summary) => summary.status === "ok")).toHaveLength(7);
+    expect(checks.summaries.filter((summary) => summary.status === "ok")).toHaveLength(5);
   });
 
   it("returns safe summaries for every queue even when there are no issues", async () => {
@@ -293,7 +291,7 @@ describe("queue issue detection", () => {
     const checks = await collectQueueChecks(createEnv(), config, now);
 
     expect(checks.issues).toEqual([]);
-    expect(checks.summaries).toHaveLength(8);
+    expect(checks.summaries).toHaveLength(6);
     expect(checks.summaries[0]).toMatchObject({
       queueName: "payment-events",
       kind: "normal",
@@ -699,7 +697,7 @@ describe("streak and cooldown alerting", () => {
         failedChecks: ["fetch:timeout"],
       },
     });
-    expect(payload.queues).toHaveLength(8);
+    expect(payload.queues).toHaveLength(6);
     expect(JSON.stringify(payload)).not.toContain("provider payload");
   });
 
@@ -776,7 +774,7 @@ describe("streak and cooldown alerting", () => {
         failedChecks: [],
       },
     });
-    expect(payload.queues).toHaveLength(8);
+    expect(payload.queues).toHaveLength(6);
     expect(payload.queues[0]).toMatchObject({
       queueName: "payment-events",
       kind: "normal",

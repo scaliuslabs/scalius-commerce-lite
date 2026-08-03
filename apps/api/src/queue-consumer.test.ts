@@ -19,11 +19,6 @@ const mocks = vi.hoisted(() => ({
   markNotificationProviderBlocked: vi.fn(),
   getEncryptionKey: vi.fn(() => "test-key"),
   getCredentialEncryptionKey: vi.fn(() => "credential-key"),
-  invalidateProductAvailabilityCaches: vi.fn(),
-  purgeStorefrontForPrefixes: vi.fn(),
-  createStorefrontCacheWarmMessageForPurge: vi.fn(),
-  enqueueStorefrontCacheWarm: vi.fn(),
-  warmStorefrontHtmlPaths: vi.fn(),
   enqueueOrderBalancePaidNotificationForOrder: vi.fn(),
   enqueueOrderCreatedNotificationForOrder: vi.fn(),
   enqueueOrderRefundNotificationForOrder: vi.fn(),
@@ -45,7 +40,6 @@ const mocks = vi.hoisted(() => ({
   markWebhookEventFailed: vi.fn(),
   markWebhookEventManualReconciliation: vi.fn(),
   recordPaymentWebhookDlqEvidence: vi.fn(),
-  archiveStorefrontCacheQueueFailure: vi.fn(),
 }));
 
 vi.mock("@scalius/database/client", () => ({
@@ -118,14 +112,6 @@ vi.mock("./utils/encryption-key", () => ({
   getCredentialEncryptionKey: mocks.getCredentialEncryptionKey,
 }));
 
-vi.mock("./utils/cache-invalidation", () => ({
-  invalidateProductAvailabilityCaches: mocks.invalidateProductAvailabilityCaches,
-  purgeStorefrontForPrefixes: mocks.purgeStorefrontForPrefixes,
-  createStorefrontCacheWarmMessageForPurge: mocks.createStorefrontCacheWarmMessageForPurge,
-  enqueueStorefrontCacheWarm: mocks.enqueueStorefrontCacheWarm,
-  warmStorefrontHtmlPaths: mocks.warmStorefrontHtmlPaths,
-}));
-
 vi.mock("./utils/order-notification-queue", () => ({
   enqueueOrderBalancePaidNotificationForOrder: mocks.enqueueOrderBalancePaidNotificationForOrder,
   enqueueOrderCreatedNotificationForOrder: mocks.enqueueOrderCreatedNotificationForOrder,
@@ -149,14 +135,9 @@ vi.mock("./utils/webhook-idempotency", () => ({
   recordPaymentWebhookDlqEvidence: mocks.recordPaymentWebhookDlqEvidence,
 }));
 
-vi.mock("./utils/storefront-cache-queue-failures", () => ({
-  archiveStorefrontCacheQueueFailure: mocks.archiveStorefrontCacheQueueFailure,
-}));
-
 import {
   handleQueueBatch,
   type PaymentQueueMessage,
-  type StorefrontCacheQueueMessage,
 } from "./queue-consumer";
 import { deriveCustomerAuthOtpDeliveryCode } from "@scalius/core/modules/customers/customer-auth.service";
 import { encodeEncryptedCredential, encryptCredentials } from "@scalius/core/utils/credential-encryption";
@@ -235,22 +216,6 @@ describe("handleQueueBatch payment confirmation retries", () => {
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
     mocks.sendOrderNotificationEmail.mockResolvedValue(undefined);
     mocks.sendOrderNotification.mockResolvedValue(undefined);
-    mocks.purgeStorefrontForPrefixes.mockResolvedValue({
-      attempted: true,
-      ok: true,
-      status: 200,
-    });
-    mocks.createStorefrontCacheWarmMessageForPurge.mockReturnValue(null);
-    mocks.enqueueStorefrontCacheWarm.mockResolvedValue({ enqueued: true });
-    mocks.warmStorefrontHtmlPaths.mockResolvedValue({
-      attempted: true,
-      ok: true,
-      paths: ["/"],
-      successful: 1,
-      skipped: 0,
-      retryableFailures: [],
-      skippedFailures: [],
-    });
     mocks.sendEmail.mockResolvedValue({
       success: true,
       provider: "cloudflare",
@@ -339,9 +304,6 @@ describe("handleQueueBatch payment confirmation retries", () => {
       id: "stripe:payment_intent.succeeded:evt_dlq",
       status: "failed",
       inserted: false,
-    });
-    mocks.archiveStorefrontCacheQueueFailure.mockResolvedValue({
-      id: "scqf_1",
     });
     mocks.processExistingMetaPurchaseOutboxForOrder.mockResolvedValue({
       outboxId: "mcap_order_1",
@@ -475,7 +437,6 @@ describe("handleQueueBatch payment confirmation retries", () => {
 
     expect(message.ack).toHaveBeenCalledTimes(1);
     expect(message.retry).not.toHaveBeenCalled();
-    expect(mocks.invalidateProductAvailabilityCaches).not.toHaveBeenCalled();
     expect(mocks.enqueueOrderCreatedNotificationForOrder).toHaveBeenCalledWith(
       expect.objectContaining({
         db: { id: "db" },
@@ -535,7 +496,6 @@ describe("handleQueueBatch payment confirmation retries", () => {
 
     expect(message.ack).toHaveBeenCalledTimes(1);
     expect(message.retry).not.toHaveBeenCalled();
-    expect(mocks.invalidateProductAvailabilityCaches).not.toHaveBeenCalled();
     expect(mocks.enqueueOrderCreatedNotificationForOrder).not.toHaveBeenCalled();
     expect(mocks.enqueueOrderBalancePaidNotificationForOrder).not.toHaveBeenCalled();
     expect(mocks.processExistingMetaPurchaseOutboxForOrder).not.toHaveBeenCalled();
@@ -710,7 +670,6 @@ describe("handleQueueBatch payment confirmation retries", () => {
         polarStatus: "refunded",
       },
     );
-    expect(mocks.invalidateProductAvailabilityCaches).not.toHaveBeenCalled();
     expect(mocks.enqueueOrderRefundNotificationForOrder).toHaveBeenCalledWith({
       db: { id: "db" },
       queue: notificationQueue,
@@ -760,7 +719,6 @@ describe("handleQueueBatch payment confirmation retries", () => {
 
     expect(message.ack).not.toHaveBeenCalled();
     expect(message.retry).toHaveBeenCalledWith({ delaySeconds: 30 });
-    expect(mocks.invalidateProductAvailabilityCaches).not.toHaveBeenCalled();
     expect(mocks.enqueueOrderRefundNotificationForOrder).not.toHaveBeenCalled();
     expect(mocks.markWebhookEventProcessed).not.toHaveBeenCalled();
   });
@@ -785,7 +743,6 @@ describe("handleQueueBatch payment confirmation retries", () => {
     await handleQueueBatch(createBatch([message]), {} as Env);
 
     expect(message.ack).toHaveBeenCalledTimes(1);
-    expect(mocks.invalidateProductAvailabilityCaches).not.toHaveBeenCalled();
     expect(mocks.enqueueOrderRefundNotificationForOrder).not.toHaveBeenCalled();
     expect(mocks.markWebhookEventProcessed).not.toHaveBeenCalled();
     expect(mocks.markWebhookEventManualReconciliation).toHaveBeenCalledWith(
@@ -1063,51 +1020,6 @@ describe("handleQueueBatch payment confirmation retries", () => {
     );
   });
 
-  it("archives storefront cache DLQ messages without replaying cache side effects", async () => {
-    const message = createMessage<StorefrontCacheQueueMessage>({
-      type: "storefront.cache_purge",
-      operationId: "purge_dlq_1",
-      groups: ["products"],
-      prefixes: ["product_slug_fish"],
-      exactKeys: ["product_variants_prod_1"],
-      htmlPaths: ["/products/fish"],
-      bumpVersion: false,
-      source: "catalog:products",
-      requestedAt: 1_790_000_000_000,
-    }, 6);
-
-    await handleQueueBatch(createBatch([message], "storefront-cache-dlq"), {} as Env);
-
-    expect(mocks.archiveStorefrontCacheQueueFailure).toHaveBeenCalledWith(
-      { id: "db" },
-      message,
-      "storefront-cache-dlq",
-    );
-    expect(mocks.purgeStorefrontForPrefixes).not.toHaveBeenCalled();
-    expect(mocks.warmStorefrontHtmlPaths).not.toHaveBeenCalled();
-    expect(mocks.enqueueStorefrontCacheWarm).not.toHaveBeenCalled();
-    expect(message.ack).toHaveBeenCalledTimes(1);
-    expect(message.retry).not.toHaveBeenCalled();
-  });
-
-  it("retries storefront cache DLQ messages when evidence persistence fails", async () => {
-    mocks.archiveStorefrontCacheQueueFailure.mockRejectedValueOnce(new Error("D1 unavailable"));
-    const message = createMessage<StorefrontCacheQueueMessage>({
-      type: "storefront.cache_warm",
-      operationId: "warm_dlq_1",
-      paths: ["/products/fish"],
-      source: "catalog:products:warm",
-      requestedAt: 1_790_000_000_000,
-    }, 6);
-
-    await handleQueueBatch(createBatch([message], "storefront-cache-dlq"), {} as Env);
-
-    expect(mocks.archiveStorefrontCacheQueueFailure).toHaveBeenCalledTimes(1);
-    expect(mocks.warmStorefrontHtmlPaths).not.toHaveBeenCalled();
-    expect(message.ack).not.toHaveBeenCalled();
-    expect(message.retry).toHaveBeenCalledWith({ delaySeconds: 300 });
-  });
-
   it("retries confirmed payment messages when order-created notification enqueue fails", async () => {
     mocks.processPaymentConfirmed.mockResolvedValue({ success: true });
     mocks.enqueueOrderCreatedNotificationForOrder.mockRejectedValue(new Error("queue unavailable"));
@@ -1125,7 +1037,6 @@ describe("handleQueueBatch payment confirmation retries", () => {
     await handleQueueBatch(createBatch([message]), {} as Env);
 
     expect(mocks.processPaymentConfirmed).toHaveBeenCalledTimes(1);
-    expect(mocks.invalidateProductAvailabilityCaches).not.toHaveBeenCalled();
     expect(mocks.enqueueOrderCreatedNotificationForOrder).toHaveBeenCalledWith(
       expect.objectContaining({
         orderId: "order-ssl",
@@ -1198,135 +1109,6 @@ describe("handleQueueBatch payment confirmation retries", () => {
     expect(mocks.processPaymentConfirmed).toHaveBeenCalledTimes(1);
     expect(payment.ack).toHaveBeenCalledTimes(1);
     expect(staleOrderIngest.ack).toHaveBeenCalledTimes(1);
-  });
-
-  it("acks storefront cache purge messages after the purge endpoint succeeds", async () => {
-    mocks.createStorefrontCacheWarmMessageForPurge.mockReturnValue({
-      type: "storefront.cache_warm",
-      operationId: "purge_op_1",
-      paths: ["/products/fish"],
-      source: "catalog:products:warm",
-      requestedAt: 1_790_000_000_001,
-    });
-    const message = createMessage<StorefrontCacheQueueMessage>({
-      type: "storefront.cache_purge",
-      operationId: "purge_op_1",
-      groups: ["products"],
-      prefixes: ["product_slug_fish"],
-      exactKeys: ["product_variants_prod_1"],
-      htmlPaths: ["/products/fish"],
-      bumpVersion: false,
-      source: "catalog:products",
-      requestedAt: 1_790_000_000_000,
-    });
-
-    await handleQueueBatch(createBatch([message], "storefront-cache"), {
-      PURGE_URL: "https://storefront.example.test/api/purge-cache",
-      PURGE_TOKEN: "secret",
-    } as Env);
-
-    expect(mocks.purgeStorefrontForPrefixes).toHaveBeenCalledWith(
-      ["product_slug_fish"],
-      expect.objectContaining({
-        PURGE_URL: "https://storefront.example.test/api/purge-cache",
-        PURGE_TOKEN: "secret",
-      }),
-      {
-        groups: ["products"],
-        bumpVersion: false,
-        exactKeys: ["product_variants_prod_1"],
-        htmlPaths: ["/products/fish"],
-        operationId: "purge_op_1",
-        warm: false,
-      },
-    );
-    expect(mocks.enqueueStorefrontCacheWarm).toHaveBeenCalledWith(
-      {
-        type: "storefront.cache_warm",
-        operationId: "purge_op_1",
-        paths: ["/products/fish"],
-        source: "catalog:products:warm",
-        requestedAt: 1_790_000_000_001,
-      },
-      expect.objectContaining({
-        PURGE_URL: "https://storefront.example.test/api/purge-cache",
-        PURGE_TOKEN: "secret",
-      }),
-    );
-    expect(message.ack).toHaveBeenCalledTimes(1);
-    expect(message.retry).not.toHaveBeenCalled();
-  });
-
-  it("acks storefront cache warm messages after warm paths succeed", async () => {
-    const message = createMessage<StorefrontCacheQueueMessage>({
-      type: "storefront.cache_warm",
-      operationId: "purge_op_3",
-      paths: ["/", "/products/fish"],
-      source: "catalog:products:warm",
-      requestedAt: 1_790_000_000_000,
-    });
-
-    await handleQueueBatch(createBatch([message], "storefront-cache"), {
-      PURGE_URL: "https://storefront.example.test/api/purge-cache",
-      PURGE_TOKEN: "secret",
-    } as Env);
-
-    expect(mocks.warmStorefrontHtmlPaths).toHaveBeenCalledWith(
-      ["/", "/products/fish"],
-      expect.objectContaining({
-        PURGE_URL: "https://storefront.example.test/api/purge-cache",
-        PURGE_TOKEN: "secret",
-      }),
-    );
-    expect(message.ack).toHaveBeenCalledTimes(1);
-    expect(message.retry).not.toHaveBeenCalled();
-  });
-
-  it("retries only storefront cache warm messages when warm paths have retryable failures", async () => {
-    mocks.warmStorefrontHtmlPaths.mockResolvedValue({
-      attempted: true,
-      ok: false,
-      paths: ["/products/fish"],
-      successful: 0,
-      skipped: 0,
-      retryableFailures: ["/products/fish (503)"],
-      skippedFailures: [],
-    });
-    const message = createMessage<StorefrontCacheQueueMessage>({
-      type: "storefront.cache_warm",
-      operationId: "purge_op_4",
-      paths: ["/products/fish"],
-      source: "catalog:products:warm",
-      requestedAt: 1_790_000_000_000,
-    });
-
-    await handleQueueBatch(createBatch([message], "storefront-cache"), {} as Env);
-
-    expect(mocks.purgeStorefrontForPrefixes).not.toHaveBeenCalled();
-    expect(message.ack).not.toHaveBeenCalled();
-    expect(message.retry).toHaveBeenCalledWith({ delaySeconds: 30 });
-  });
-
-  it("retries storefront cache purge messages when the purge endpoint fails", async () => {
-    mocks.purgeStorefrontForPrefixes.mockResolvedValue({
-      attempted: true,
-      ok: false,
-      status: 503,
-    });
-    const message = createMessage<StorefrontCacheQueueMessage>({
-      type: "storefront.cache_purge",
-      operationId: "purge_op_2",
-      groups: ["checkout"],
-      prefixes: ["checkout_config"],
-      bumpVersion: false,
-      source: "api-groups",
-      requestedAt: 1_790_000_000_000,
-    });
-
-    await handleQueueBatch(createBatch([message], "storefront-cache"), {} as Env);
-
-    expect(message.ack).not.toHaveBeenCalled();
-    expect(message.retry).toHaveBeenCalledWith({ delaySeconds: 30 });
   });
 
   it("dispatches order notifications without requiring customer email and passes encryption key", async () => {

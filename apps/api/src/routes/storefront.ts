@@ -5,8 +5,6 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { settings } from "@scalius/database/schema";
 import { eq, and } from "drizzle-orm";
-import { cacheMiddleware } from "../middleware/cache";
-import { CACHE_TTLS } from "../utils/cache-ttls";
 import {
   getHomepageData,
   getLayoutData,
@@ -63,16 +61,6 @@ const homepageRoute = createRoute({
   }
 });
 
-app.use(
-  "/homepage",
-  cacheMiddleware({
-    ttl: CACHE_TTLS.AVAILABILITY,
-    keyPrefix: "api:storefront:homepage:",
-    varyByQuery: false,
-    methods: ["GET"],
-  }),
-);
-
 app.openapi(homepageRoute, async (c) => {
   const db = c.get("db");
   const data = await getHomepageData(db) as unknown as HomepageData;
@@ -102,16 +90,6 @@ const pageBySlugRoute = createRoute({
   }
 });
 
-app.use(
-  "/pages/slug/:slug",
-  cacheMiddleware({
-    ttl: CACHE_TTLS.STANDARD,
-    keyPrefix: "api:storefront:page:",
-    varyByQuery: false,
-    methods: ["GET"],
-  }),
-);
-
 app.openapi(pageBySlugRoute, async (c) => {
   const db = c.get("db");
   const { slug } = c.req.valid("param");
@@ -134,11 +112,6 @@ const layoutRoute = createRoute({
     500: errorResponses[500],
   }
 });
-
-app.use(
-  "/layout",
-  cacheMiddleware({ ttl: CACHE_TTLS.STANDARD, keyPrefix: "api:storefront:layout:", varyByQuery: false, methods: ["GET"] }),
-);
 
 app.openapi(layoutRoute, async (c) => {
   const db = c.get("db");
@@ -203,11 +176,6 @@ const cspRoute = createRoute({
     500: errorResponses[500],
   }
 });
-
-app.use(
-  "/csp",
-  cacheMiddleware({ ttl: CACHE_TTLS.STANDARD, keyPrefix: "api:storefront:csp:", varyByQuery: false, methods: ["GET"] }),
-);
 
 app.openapi(cspRoute, async (c) => {
   const db = c.get("db");

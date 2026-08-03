@@ -67,8 +67,6 @@ export interface OpsMonitorEnv {
   ORDER_NOTIFICATIONS_DLQ: QueueMetricsBinding;
   AUTH_OTP_QUEUE: QueueMetricsBinding;
   AUTH_OTP_DLQ: QueueMetricsBinding;
-  STOREFRONT_CACHE_QUEUE: QueueMetricsBinding;
-  STOREFRONT_CACHE_DLQ: QueueMetricsBinding;
 }
 
 export interface MonitorConfig {
@@ -91,8 +89,6 @@ export interface MonitoredQueue {
     | "ORDER_NOTIFICATIONS_DLQ"
     | "AUTH_OTP_QUEUE"
     | "AUTH_OTP_DLQ"
-    | "STOREFRONT_CACHE_QUEUE"
-    | "STOREFRONT_CACHE_DLQ"
   >;
   name: string;
   kind: QueueKind;
@@ -178,8 +174,6 @@ export const MONITORED_QUEUES: MonitoredQueue[] = [
   { binding: "ORDER_NOTIFICATIONS_DLQ", name: "order-notifications-dlq", kind: "dlq" },
   { binding: "AUTH_OTP_QUEUE", name: "auth-otp", kind: "normal" },
   { binding: "AUTH_OTP_DLQ", name: "auth-otp-dlq", kind: "dlq" },
-  { binding: "STOREFRONT_CACHE_QUEUE", name: "storefront-cache", kind: "normal" },
-  { binding: "STOREFRONT_CACHE_DLQ", name: "storefront-cache-dlq", kind: "dlq" },
 ];
 
 function isRecord(value: unknown): value is Record<string, unknown> {

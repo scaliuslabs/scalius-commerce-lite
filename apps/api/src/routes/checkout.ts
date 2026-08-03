@@ -5,14 +5,11 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 // Side-effect import: registers all gateway metadata in the registry
 import "@scalius/core/modules/payments/gateway-settings";
 import { getCheckoutConfig } from "@scalius/core/modules/settings/checkout-config.service";
-import { cacheMiddleware } from "../middleware/cache";
 import { successEnvelope, errorResponses, errorResponseSchema } from "../schemas/responses";
 
 import { ok } from "../utils/api-response";
 import { getCredentialEncryptionKey } from "../utils/encryption-key";
-import { CACHE_TTLS } from "../utils/cache-ttls";
 const app = new OpenAPIHono<{ Bindings: Env }>();
-const CHECKOUT_CONFIG_CACHE_PREFIX = "api:checkout:config:v3:";
 
 // ─── GET /config ─────────────────────────────────────────────────────────────
 
@@ -33,16 +30,6 @@ const getCheckoutConfigRoute = createRoute({
     500: errorResponses[500],
   }
 });
-
-app.use(
-  "/config",
-  cacheMiddleware({
-    ttl: CACHE_TTLS.CHECKOUT_CONFIG,
-    keyPrefix: CHECKOUT_CONFIG_CACHE_PREFIX,
-    varyByQuery: false,
-    methods: ["GET"]
-  }),
-);
 
 app.openapi(getCheckoutConfigRoute, async (c) => {
   try {

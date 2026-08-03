@@ -101,7 +101,7 @@ function databaseBytes(database: DatabaseSync): number {
 
 function fixtureRows(database: DatabaseSync): number {
   return Number(database.prepare(
-    "SELECT COUNT(*) AS count FROM storefront_cache_queue_failures",
+    "SELECT COUNT(*) AS count FROM webhook_events WHERE provider = 'near-limit'",
   ).get()?.count ?? 0);
 }
 
@@ -115,14 +115,10 @@ async function generateSourceDatabase(
     database.exec("PRAGMA foreign_keys=OFF; PRAGMA journal_mode=DELETE; PRAGMA synchronous=OFF;");
     const payload = "x".repeat(payloadBytes);
     database.prepare(`
-      INSERT INTO storefront_cache_queue_failures (
-        id, queue_name, queue_message_id, message_type, operation_id, source,
-        payload, attempts, status, last_error, replay_count, message_timestamp,
-        failed_at, replayed_at, replayed_by, ignored_at, ignored_by, created_at,
-        updated_at
-      ) VALUES (?, 'near-limit', ?, 'fixture', NULL, 'migration-rehearsal', ?,
-        0, 'ignored', NULL, 0, 0, 1, NULL, NULL, 1, 'rehearsal', 1, 1)
-    `).run("near_000000000", "near_message_000000000", payload);
+      INSERT INTO webhook_events (
+        id, provider, event_type, order_id, status, result, processed_at
+      ) VALUES (?, 'near-limit', 'migration-rehearsal', NULL, 'processed', ?, 1)
+    `).run("near_000000000", payload);
 
     let round = 0;
     while (databaseBytes(database) < targetBytes) {
@@ -138,20 +134,15 @@ async function generateSourceDatabase(
       database.exec("BEGIN IMMEDIATE;");
       try {
         database.prepare(`
-          INSERT INTO storefront_cache_queue_failures (
-            id, queue_name, queue_message_id, message_type, operation_id, source,
-            payload, attempts, status, last_error, replay_count, message_timestamp,
-            failed_at, replayed_at, replayed_by, ignored_at, ignored_by, created_at,
-            updated_at
+          INSERT INTO webhook_events (
+            id, provider, event_type, order_id, status, result, processed_at
           )
-          SELECT ? || id, queue_name, ? || queue_message_id, message_type,
-                 operation_id, source, payload, attempts, status, last_error,
-                 replay_count, message_timestamp, failed_at, replayed_at,
-                 replayed_by, ignored_at, ignored_by, created_at, updated_at
-            FROM storefront_cache_queue_failures
+          SELECT ? || id, provider, event_type, order_id, status, result, processed_at
+            FROM webhook_events
+           WHERE provider = 'near-limit'
            ORDER BY id
            LIMIT ?
-        `).run(prefix, prefix, insertRows);
+        `).run(prefix, insertRows);
         database.exec("COMMIT;");
       } catch (error) {
         database.exec("ROLLBACK;");

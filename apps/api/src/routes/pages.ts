@@ -1,25 +1,12 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { getPublicPages, getPublicPageById, getPublicPageBySlug } from "@scalius/core/modules/pages/pages.service";
-import { cacheMiddleware } from "../middleware/cache";
 import { NotFoundError } from "../utils/api-error";
 
 import { ok } from "../utils/api-response";
 import { successEnvelope, paginationSchema, errorResponses } from "../schemas/responses";
 import { pageSchema } from "../schemas/entities";
-import { CACHE_TTLS } from "../utils/cache-ttls";
 // Create an OpenAPIHono app for pages routes
 const app = new OpenAPIHono<{ Bindings: Env }>();
-
-// Apply cache middleware to all routes
-app.use(
-  "*",
-  cacheMiddleware({
-    ttl: CACHE_TTLS.STANDARD,
-    keyPrefix: "api:pages:",
-    varyByQuery: true,
-    methods: ["GET"]
-  }),
-);
 
 // Page data interface
 export interface PageData {

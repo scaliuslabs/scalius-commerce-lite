@@ -222,6 +222,7 @@ export function decoratePublicApiResponse(
   }
 
   const headers = new Headers(response.headers);
+  headers.set("Cache-Control", "public, max-age=0, no-cache, must-revalidate");
   headers.set(
     "Cloudflare-CDN-Cache-Control",
     `public, max-age=${policy.edgeTtlSeconds}, must-revalidate`,

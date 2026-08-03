@@ -271,8 +271,6 @@ export const queryKeys = {
   // ── Cache ────────────────────────────────────────────────────────
   cache: {
     all: ["cache"] as const,
-    stats: () => ["cache", "stats"] as const,
-    lastCleared: () => ["cache", "last-cleared"] as const,
     groups: () => ["cache", "groups"] as const,
   },
 

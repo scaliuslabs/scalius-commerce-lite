@@ -54,10 +54,7 @@ import { adminOrdersSupportRequestRoutes } from "./orders-support-requests";
 import { adminOrdersReturnRoutes } from "./orders-returns";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import {
-    invalidateProductAvailabilityCacheSubjects,
     invalidateProductAvailabilityCaches,
-    resolveProductAvailabilityCacheSubjects,
-    tryResolveProductAvailabilityCacheSubjects,
 } from "../../utils/cache-invalidation";
 import { parseBangladeshDateOnlyBoundary } from "./order-date-filter";
 import { enqueueOrderNotificationsForStatus } from "../../utils/order-notification-queue";
@@ -890,22 +887,12 @@ app.openapi(updateOrderRoute, async (c) => {
     const db = c.get("db");
     const orderId = c.req.valid("param").id;
     const data = c.req.valid("json");
-    const beforeSubjects = await resolveProductAvailabilityCacheSubjects(db, {
-        orderIds: [orderId],
-    });
     const result = await OrdersService.updateOrder(db, orderId, {
         ...data,
         areaName: data.areaName ?? undefined,
         discountAmount: data.discountAmount ?? 0,
     });
-    const afterSubjects = await tryResolveProductAvailabilityCacheSubjects(db, {
-        orderIds: [orderId],
-    });
-    await invalidateProductAvailabilityCacheSubjects(
-        [...beforeSubjects, ...afterSubjects],
-        c,
-        db,
-    );
+    await invalidateProductAvailabilityCaches(db, { orderIds: [orderId] }, c);
     return ok(c, result);
 });
 

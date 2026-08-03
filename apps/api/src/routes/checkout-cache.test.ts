@@ -69,8 +69,8 @@ describe("checkout config API caching", () => {
     expect(second.status).toBe(503);
     expect(first.headers.get("Cache-Control")).toContain("no-store");
     expect(second.headers.get("Cache-Control")).toContain("no-store");
-    expect(first.headers.get("X-Cache")).toBe("MISS");
-    expect(second.headers.get("X-Cache")).toBe("MISS");
+    expect(first.headers.get("X-Cache")).toBeNull();
+    expect(second.headers.get("X-Cache")).toBeNull();
     expect(mocks.getCheckoutConfig).toHaveBeenCalledTimes(2);
     await expect(first.json()).resolves.toMatchObject({
       success: false,

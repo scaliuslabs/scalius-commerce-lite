@@ -5,8 +5,6 @@ import {
   getPublishedNavigationMenuTree,
   listPublishedNavigationMenuItems,
 } from "@scalius/core/modules/navigation";
-import { cacheMiddleware } from "../middleware/cache";
-import { CACHE_TTLS } from "../utils/cache-ttls";
 import { NotFoundError } from "../utils/api-error";
 
 import { ok } from "../utils/api-response";
@@ -26,17 +24,6 @@ const publicNavigationChildSchema = publicNavigationLeafSchema.extend({
 const publicNavigationItemSchema = publicNavigationLeafSchema.extend({
   subMenu: z.array(publicNavigationChildSchema).optional(),
 });
-
-// Apply cache middleware to all routes
-app.use(
-  "*",
-  cacheMiddleware({
-    ttl: CACHE_TTLS.STANDARD,
-    keyPrefix: "api:navigation:",
-    varyByQuery: true,
-    methods: ["GET"]
-  }),
-);
 
 // GET /navigation — get navigation menu items
 const getNavigationRoute = createRoute({

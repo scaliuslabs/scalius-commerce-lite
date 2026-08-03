@@ -2,52 +2,17 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { getPublicCategories, getPublicCategoryBySlug } from "@scalius/core/modules/categories/categories.storefront";
 import { resolvePublicAttributeFilters } from "@scalius/core/modules/attributes/attributes.public";
 import { getStorefrontCategoryProducts } from "@scalius/core/modules/products/products.storefront";
-import { cacheMiddleware } from "../middleware/cache";
 import { NotFoundError } from "../utils/api-error";
 import { successEnvelope, paginationSchema, errorResponses } from "../schemas/responses";
 
 import { ok } from "../utils/api-response";
-import { CACHE_TTLS } from "../utils/cache-ttls";
 import {
-  isPublicProductListCacheable,
-  normalizePublicFtsSearchCacheValue,
   normalizePublicFtsSearchQuery,
-  normalizePublicIntegerCacheValue,
   normalizePublicListingSearchParam,
-  normalizePublicNumberCacheValue,
   readRepeatedPublicQueryValues,
 } from "../utils/public-search-query";
 // Create an OpenAPIHono app for category routes
 const app = new OpenAPIHono<{ Bindings: Env }>();
-
-// Apply cache middleware to all routes
-app.use(
-  "*",
-  cacheMiddleware({
-    ttl: (c) =>
-      c.req.path.replace(/\/$/, "").endsWith("/products")
-        ? CACHE_TTLS.AVAILABILITY
-        : CACHE_TTLS.STANDARD,
-    keyPrefix: "api:categories:",
-    varyByQuery: true,
-    queryDefaults: (c) =>
-      c.req.path.replace(/\/$/, "").endsWith("/products")
-        ? { page: 1, limit: 20, sort: "newest" }
-        : {},
-    queryNormalizers: {
-      search: normalizePublicFtsSearchCacheValue,
-      page: normalizePublicIntegerCacheValue,
-      limit: normalizePublicIntegerCacheValue,
-      minPrice: normalizePublicNumberCacheValue,
-      maxPrice: normalizePublicNumberCacheValue,
-    },
-    cacheCondition: (c) =>
-      c.req.path.replace(/\/$/, "").endsWith("/products")
-        ? isPublicProductListCacheable(c.req.url)
-        : true,
-    methods: ["GET"]
-  }),
-);
 
 // Schema for category product filtering
 const categoryProductFilterSchema = z.object({

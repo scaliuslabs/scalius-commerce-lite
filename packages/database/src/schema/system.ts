@@ -287,36 +287,9 @@ export const checkoutLanguages = sqliteTable("checkout_languages", {
     index("checkout_languages_deleted_at_idx").on(table.deletedAt),
 ]);
 
-export const storefrontCacheQueueFailures = sqliteTable("storefront_cache_queue_failures", {
-    id: text("id").primaryKey(),
-    queueName: text("queue_name").notNull(),
-    queueMessageId: text("queue_message_id").notNull(),
-    messageType: text("message_type").notNull(),
-    operationId: text("operation_id"),
-    source: text("source"),
-    payload: text("payload").notNull(),
-    attempts: integer("attempts").notNull().default(0),
-    status: text("status").notNull().default("pending"),
-    lastError: text("last_error"),
-    replayCount: integer("replay_count").notNull().default(0),
-    messageTimestamp: integer("message_timestamp"),
-    failedAt: integer("failed_at").notNull().default(UNIX_NOW),
-    replayedAt: integer("replayed_at"),
-    replayedBy: text("replayed_by"),
-    ignoredAt: integer("ignored_at"),
-    ignoredBy: text("ignored_by"),
-    createdAt: integer("created_at").notNull().default(UNIX_NOW),
-    updatedAt: integer("updated_at").notNull().default(UNIX_NOW),
-}, (table) => [
-    uniqueIndex("storefront_cache_queue_failures_message_unique").on(table.queueMessageId),
-    index("storefront_cache_queue_failures_status_failed_idx").on(table.status, table.failedAt),
-    index("storefront_cache_queue_failures_operation_idx").on(table.operationId),
-]);
-
 export type Setting = InferSelectModel<typeof settings>;
 export type SiteSettings = InferSelectModel<typeof siteSettings>;
 export type Analytics = InferSelectModel<typeof analytics>;
 export type AdminFcmToken = InferSelectModel<typeof adminFcmTokens>;
 export type ShippingMethod = InferSelectModel<typeof shippingMethods>;
 export type CheckoutLanguage = InferSelectModel<typeof checkoutLanguages>;
-export type StorefrontCacheQueueFailure = InferSelectModel<typeof storefrontCacheQueueFailures>;

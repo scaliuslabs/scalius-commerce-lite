@@ -57,7 +57,6 @@ declare global {
     PAYMENT_EVENTS_QUEUE: Queue;
     ORDER_NOTIFICATIONS_QUEUE: Queue;
     AUTH_OTP_QUEUE: Queue;
-    STOREFRONT_CACHE_QUEUE: Queue;
 
     // Secrets
     BETTER_AUTH_SECRET: string;

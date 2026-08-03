@@ -55,15 +55,11 @@ describe("category route query boundaries", () => {
     expect(source.slice(categoryForProductsIndex, productHelperIndex)).toContain("content: category.content");
   });
 
-  it("bounds public category-product limits and normalizes search cache keys", () => {
+  it("bounds public category-product limits and normalizes search input", () => {
     const source = readFileSync(`${ROUTES_DIR}/categories.ts`, "utf8");
 
     expect(source).toContain("page: z.coerce.number().int().min(1).max(1000).optional().default(1)");
     expect(source).toContain("limit: z.coerce.number().int().min(1).max(100).optional().default(20)");
-    expect(source).toContain("queryNormalizers: {");
-    expect(source).toContain("search: normalizePublicFtsSearchCacheValue");
-    expect(source).toContain("limit: normalizePublicIntegerCacheValue");
-    expect(source).toContain("isPublicProductListCacheable(c.req.url)");
     expect(source).toContain("const normalizedSearch = normalizePublicFtsSearchQuery(params.search);");
     expect(source).toContain("const search = normalizePublicListingSearchParam(params.search);");
     expect(source).toContain("search,");

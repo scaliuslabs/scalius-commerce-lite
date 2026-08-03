@@ -1,5 +1,4 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { cacheMiddleware } from "../middleware/cache";
 import { getSeoSettings } from "@scalius/core/modules/settings/site-settings.service";
 import {
   SEO_RETURN_POLICY_CATEGORIES,
@@ -9,21 +8,8 @@ import {
 
 import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";
-import { CACHE_TTLS } from "../utils/cache-ttls";
 // Create an OpenAPIHono app for SEO routes
 const app = new OpenAPIHono<{ Bindings: Env }>();
-
-// Apply cache middleware
-app.use(
-  "*",
-  cacheMiddleware({
-    ttl: CACHE_TTLS.STANDARD,
-    // Bump the nested namespace when the public SEO payload shape changes.
-    // The broader api:seo: invalidation group still clears versioned entries.
-    keyPrefix: "api:seo:v4:",
-    methods: ["GET"],
-  }),
-);
 
 export interface SeoSettingsData {
   siteTitle: string | null;

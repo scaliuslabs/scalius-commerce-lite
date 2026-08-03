@@ -66,7 +66,5 @@ describe("ops/settings OpenAPI mutation responses", () => {
 
     expectResponses(spec, "/api/v1/admin/search", "get", ["200", "400", "401", "403", "503"]);
 
-    expectResponses(spec, "/api/v1/cache/storefront-dlq/{id}/replay", "post", ["200", "400", "401", "403", "404", "409", "503"]);
-    expectResponses(spec, "/api/v1/cache/storefront-dlq/{id}/ignore", "post", ["200", "400", "401", "403", "409"]);
   });
 });
