@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { PortableSqlStatement } from "../src/checkout-commit";
 import { createCheckoutSqlTransport } from "../src/checkout-transport";
+import { TURSO_DEFAULT_QUERY_TIMEOUT_MS } from "../src/turso-adapter";
 import type {
   PostgresFullResult,
   PostgresHttpConnection,
@@ -69,6 +70,9 @@ describe("checkout SQL transport", () => {
 
     expect(transport.provider).toBe("turso");
     expect(connectTurso).toHaveBeenCalledTimes(2);
+    expect(connectTurso).toHaveBeenCalledWith(expect.objectContaining({
+      defaultQueryTimeout: TURSO_DEFAULT_QUERY_TIMEOUT_MS,
+    }));
     expect(connections[0]!.batch).toHaveBeenCalledWith([
       { sql: "SELECT ?1", args: [1] },
       { sql: "UPDATE example SET value = ?1", args: [2] },
@@ -101,6 +105,39 @@ describe("checkout SQL transport", () => {
     expect(connections[0]?.batch).toHaveBeenCalledWith([
       { sql: "INSERT INTO orders (id) VALUES (?)", args: ["order_1"] },
     ], { mode: "immediate", raw: true });
+  });
+
+  it("retries a conflicted Turso checkout transaction as one whole batch", async () => {
+    const conflict = Object.assign(new Error("transaction conflict"), {
+      code: "SQLITE_BUSY_SNAPSHOT",
+    });
+    const batch = vi.fn()
+      .mockRejectedValueOnce(conflict)
+      .mockResolvedValueOnce([]);
+    const transport = createCheckoutSqlTransport({
+      DATABASE_PROVIDER: "turso",
+      TURSO_DATABASE_URL: "turso://merchant.turso.io",
+      TURSO_AUTH_TOKEN: "token",
+    }, {
+      connectTurso: (() => ({
+        all: vi.fn(),
+        get: vi.fn(),
+        batch,
+        close: vi.fn(),
+      })) as never,
+    });
+
+    await transport.atomic(statements);
+
+    expect(batch).toHaveBeenCalledTimes(2);
+    expect(batch).toHaveBeenNthCalledWith(1, [
+      { sql: "SELECT ?1", args: [1] },
+      { sql: "UPDATE example SET value = ?1", args: [2] },
+    ], { mode: "concurrent", raw: true });
+    expect(batch).toHaveBeenNthCalledWith(2, expect.any(Array), {
+      mode: "concurrent",
+      raw: true,
+    });
   });
 
   it("uses one read-committed Neon HTTP transaction with provider-owned limits", async () => {

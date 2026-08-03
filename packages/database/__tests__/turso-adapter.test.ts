@@ -14,6 +14,7 @@ import {
 import {
   createTursoDatabase,
   isTursoConflictError,
+  TURSO_DEFAULT_QUERY_TIMEOUT_MS,
   type TursoConnection,
 } from "../src/turso-adapter";
 import { createProviderSchemaDatabase } from "../scripts/sqlite-provider-schema";
@@ -77,6 +78,30 @@ function createStatefulConnection(
 }
 
 describe("Turso SQLite adapter", () => {
+  it("bounds remote queries and preserves an explicit tighter timeout", () => {
+    const connect = vi.fn(() => ({ batch: vi.fn() }));
+
+    createTursoDatabase(
+      { url: "https://merchant.turso.io", authToken: "token" },
+      { connect },
+    );
+    createTursoDatabase(
+      {
+        url: "https://merchant.turso.io",
+        authToken: "token",
+        defaultQueryTimeout: 2_000,
+      },
+      { connect },
+    );
+
+    expect(connect).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      defaultQueryTimeout: TURSO_DEFAULT_QUERY_TIMEOUT_MS,
+    }));
+    expect(connect).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      defaultQueryTimeout: 2_000,
+    }));
+  });
+
   it("maps one remote raw-row request through stable Drizzle", async () => {
     const batch = vi.fn(async () => [{ rows: [[42]], rowsAffected: 0 }]);
     const db = createAdapter(batch);

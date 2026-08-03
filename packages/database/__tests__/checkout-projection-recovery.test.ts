@@ -1,10 +1,22 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  buildCheckoutProjectionBatchStatements,
   recoverPendingCheckoutProjections,
 } from "../src/checkout-projection";
 
 describe("checkout projection recovery", () => {
+  it("avoids target-table aliases in updates for TursoDB compatibility", () => {
+    const updateStatements = buildCheckoutProjectionBatchStatements(["outbox_1"])
+      .map((statement) => statement.sql)
+      .filter((sql) => /\bUPDATE\b/i.test(sql));
+
+    expect(updateStatements).not.toHaveLength(0);
+    for (const sql of updateStatements) {
+      expect(sql).not.toMatch(/\bUPDATE\s+(?:orders|customers)\s+AS\b/i);
+    }
+  });
+
   it("projects a bounded page sequentially and continues after one failure", async () => {
     let active = 0;
     let maximumActive = 0;

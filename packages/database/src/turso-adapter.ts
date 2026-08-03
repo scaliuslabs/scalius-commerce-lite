@@ -13,6 +13,7 @@ import type { Database } from "./types";
 
 const DEFAULT_CONFLICT_ATTEMPTS = 8;
 const CONFLICT_RETRY_BASE_DELAY_MS = 2;
+export const TURSO_DEFAULT_QUERY_TIMEOUT_MS = 15_000;
 
 export type TursoWriteBatchMode = "immediate" | "concurrent";
 
@@ -46,6 +47,13 @@ export interface TursoAdapterOptions {
     durationMs: number;
     success: boolean;
   }) => void;
+}
+
+export interface TursoConflictRetryOptions {
+  maxConflictAttempts?: number;
+  sleep?: (delayMs: number) => Promise<void>;
+  random?: () => number;
+  onConflictRetry?: (retry: { attempt: number; delayMs: number }) => void;
 }
 
 function tursoErrorDescription(error: unknown): string {
@@ -110,29 +118,33 @@ export function isTursoConflictError(error: unknown): boolean {
   return candidate.cause !== undefined && isTursoConflictError(candidate.cause);
 }
 
-async function withTursoConflictRetry<T>(
+export async function retryTursoConflicts<T>(
   operation: () => Promise<T>,
-  options: Required<Pick<
-    TursoAdapterOptions,
-    "maxConflictAttempts" | "sleep" | "random"
-  >> & Pick<TursoAdapterOptions, "onConflictRetry">,
+  options: TursoConflictRetryOptions = {},
 ): Promise<T> {
+  const maxConflictAttempts = options.maxConflictAttempts
+    ?? DEFAULT_CONFLICT_ATTEMPTS;
+  if (!Number.isSafeInteger(maxConflictAttempts) || maxConflictAttempts < 1) {
+    throw new Error("Turso maxConflictAttempts must be a positive safe integer.");
+  }
+  const sleep = options.sleep ?? defaultSleep;
+  const random = options.random ?? Math.random;
   let lastError: unknown;
 
-  for (let attempt = 0; attempt < options.maxConflictAttempts; attempt += 1) {
+  for (let attempt = 0; attempt < maxConflictAttempts; attempt += 1) {
     try {
       return await operation();
     } catch (error) {
       lastError = error;
-      if (!isTursoConflictError(error) || attempt + 1 >= options.maxConflictAttempts) {
+      if (!isTursoConflictError(error) || attempt + 1 >= maxConflictAttempts) {
         throw error;
       }
 
       const exponentialDelay = CONFLICT_RETRY_BASE_DELAY_MS * 2 ** attempt;
-      const jitter = Math.floor(options.random() * exponentialDelay);
+      const jitter = Math.floor(random() * exponentialDelay);
       const delayMs = exponentialDelay + jitter;
       options.onConflictRetry?.({ attempt: attempt + 1, delayMs });
-      await options.sleep(delayMs);
+      await sleep(delayMs);
     }
   }
 
@@ -169,7 +181,11 @@ export function createTursoDatabase(
 ): Database {
   const connectToTurso: (config: TursoConnectionConfig) => TursoConnection =
     options.connect ?? connect;
-  const connection: TursoConnection = connectToTurso(config);
+  const connection: TursoConnection = connectToTurso({
+    ...config,
+    defaultQueryTimeout: config.defaultQueryTimeout
+      ?? TURSO_DEFAULT_QUERY_TIMEOUT_MS,
+  });
   const retryOptions = {
     maxConflictAttempts: options.maxConflictAttempts ?? DEFAULT_CONFLICT_ATTEMPTS,
     sleep: options.sleep ?? defaultSleep,
@@ -220,7 +236,7 @@ export function createTursoDatabase(
 
   const executeOne: AsyncRemoteCallback = async (sql, params, method) => {
     const result = requireSingleResult(
-      await withTursoConflictRetry(
+      await retryTursoConflicts(
         () => executeRemoteBatch(
           [{ sql, args: params }],
           { raw: true },
@@ -254,7 +270,7 @@ export function createTursoDatabase(
       : writeBatchMode;
     let results: TursoBatchResult[];
     try {
-      results = await withTursoConflictRetry(
+      results = await retryTursoConflicts(
         () => executeRemoteBatch(
           batchStatements,
           { mode: batchMode, raw: true },

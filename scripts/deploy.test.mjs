@@ -6,6 +6,7 @@ import {
   getDeployCommandForTarget,
   getSequentialWorkspaceCommand,
   getTypecheckCommandForTarget,
+  parseJsoncText,
   parseOnlyTarget,
   parseStorefrontBuildId,
   sampleApiReadiness,
@@ -98,6 +99,22 @@ describe("deploy API readiness sampling", () => {
 });
 
 describe("deploy target wiring", () => {
+  it("parses JSONC comments without truncating provider URLs", () => {
+    expect(parseJsoncText(`{
+      // provider selection
+      "turso": "turso://database.example.turso.io",
+      "libsql": "libsql://legacy.example.turso.io",
+      "https": "https://api.example.test/path//segment",
+      /* generated platform metadata */
+      "escaped": "quote: \\" // still inside the string"
+    }`)).toEqual({
+      turso: "turso://database.example.turso.io",
+      libsql: "libsql://legacy.example.turso.io",
+      https: "https://api.example.test/path//segment",
+      escaped: 'quote: " // still inside the string',
+    });
+  });
+
   it("accepts only the platform Workers that remain", () => {
     for (const target of ["api", "admin", "storefront", "ops-monitor"]) {
       expect(parseOnlyTarget(["--only", target])).toEqual({ ok: true, target });
