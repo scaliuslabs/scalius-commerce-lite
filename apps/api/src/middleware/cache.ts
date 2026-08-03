@@ -14,13 +14,12 @@ const DEFAULT_CACHE_TTL = 3600;
 
 /**
  * Default Cache-Control for storefront API responses.
- * - max-age=0: Browser revalidates on revisit so users see changes after KV invalidation.
- * - stale-while-revalidate=120: Serve stale for 2 min while revalidating (Cloudflare async SWR, browsers).
- * - stale-if-error=300: Serve stale for 5 min on origin errors (resilience).
- * @see https://developers.cloudflare.com/changelog/post/2026-02-26-async-stale-while-revalidate/
+ * KV remains the shared edge cache. Browsers may store the response, but must
+ * revalidate it so a mutation cannot remain hidden behind a browser stale
+ * window after the matching KV fence advances.
  */
 const DEFAULT_CACHE_CONTROL =
-  "public, max-age=0, stale-while-revalidate=120, stale-if-error=300";
+  "public, max-age=0, no-cache, must-revalidate";
 
 type CacheQueryDefaultValue = string | number | boolean | undefined;
 type CacheQueryDefaults =

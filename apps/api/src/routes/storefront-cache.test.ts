@@ -105,7 +105,7 @@ describe("storefront consolidated route caching", () => {
     expect(first.headers.get("X-Cache")).toBe("MISS");
     expect(second.headers.get("X-Cache")).toBe("HIT");
     expect(first.headers.get("Cache-Control")).toBe(
-      "public, max-age=0, stale-while-revalidate=120, stale-if-error=300",
+      "public, max-age=0, no-cache, must-revalidate",
     );
     expect(first.headers.get("Cache-Control")).not.toContain("no-store");
     expect(secondBody).toEqual(firstBody);

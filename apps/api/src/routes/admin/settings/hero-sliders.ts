@@ -23,8 +23,11 @@ const HOMEPAGE_CACHE_GROUPS = ["homepage"] as const;
 type AppRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>;
 
 async function invalidateHomepageCaches(c: { env: Env; executionCtx?: WaitUntilExecutionContext }): Promise<void> {
-    await invalidateGroups([...HOMEPAGE_CACHE_GROUPS], c.env?.CACHE);
-    triggerStorefrontPurgeForGroups([...HOMEPAGE_CACHE_GROUPS], c.env, getOptionalExecutionContext(c));
+    const executionCtx = getOptionalExecutionContext(c);
+    await invalidateGroups([...HOMEPAGE_CACHE_GROUPS], c.env?.CACHE, {
+        ...(executionCtx ? { cleanupExecutionCtx: executionCtx } : {}),
+    });
+    triggerStorefrontPurgeForGroups([...HOMEPAGE_CACHE_GROUPS], c.env, executionCtx);
 }
 
 const sliderImageSchema = z.object({

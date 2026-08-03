@@ -7,24 +7,24 @@ import {
 } from "./public-discovery-cache";
 
 describe("public discovery cache policy", () => {
-  it("preserves public browser caching for generated discovery assets", () => {
+  it("requires browser revalidation for generated discovery assets", () => {
     expect(getPublicDiscoveryCacheControl("/robots.txt")).toBe(
-      "public, max-age=3600, stale-while-revalidate=86400",
+      "public, max-age=0, no-cache, must-revalidate",
     );
     expect(getPublicDiscoveryCacheControl("/sitemap.xml")).toBe(
-      "public, max-age=3600, stale-while-revalidate=86400",
+      "public, max-age=0, no-cache, must-revalidate",
     );
     expect(getPublicDiscoveryCacheControl("/sitemap-products.xml")).toBe(
-      "public, max-age=3600, stale-while-revalidate=86400",
+      "public, max-age=0, no-cache, must-revalidate",
     );
     expect(getPublicDiscoveryCacheControl("/api/product-feed.xml")).toBe(
-      "public, max-age=3600, stale-while-revalidate=43200",
+      "public, max-age=0, no-cache, must-revalidate",
     );
     expect(getPublicDiscoveryCacheControl("/api/facebook-feed.xml")).toBe(
-      "public, max-age=3600, stale-while-revalidate=43200",
+      "public, max-age=0, no-cache, must-revalidate",
     );
     expect(getPublicDiscoveryCacheControl("/sitemap.xsl")).toBe(
-      "public, max-age=86400, stale-while-revalidate=604800",
+      "public, max-age=0, no-cache, must-revalidate",
     );
   });
 
@@ -48,7 +48,7 @@ describe("public discovery cache policy", () => {
     );
 
     expect(discoveryResponse.headers.get("Cache-Control")).toBe(
-      "public, max-age=3600, stale-while-revalidate=86400",
+      "public, max-age=0, no-cache, must-revalidate",
     );
     expect(discoveryResponse.headers.has("Pragma")).toBe(false);
     expect(discoveryResponse.headers.has("Expires")).toBe(false);
@@ -85,7 +85,7 @@ describe("public discovery cache policy", () => {
 
     applyBrowserCachePolicyForPublicResponse(sitemapResponse, "/sitemap-products.xml");
     expect(sitemapResponse.headers.get("Cache-Control")).toBe(
-      "public, max-age=3600, stale-while-revalidate=86400",
+      "public, max-age=0, no-cache, must-revalidate",
     );
     expect(sitemapResponse.headers.has("Set-Cookie")).toBe(false);
   });
