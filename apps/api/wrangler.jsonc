@@ -10,6 +10,13 @@
   "limits": {
     "cpu_ms": 300000
   },
+  "cache": {
+    "enabled": false
+  },
+  "exports": {
+    "default": { "type": "worker", "cache": { "enabled": false } },
+    "PublicApi": { "type": "worker", "cache": { "enabled": false } }
+  },
   // workers_dev: false — Workers only accessible via custom domains, not *.workers.dev
   "workers_dev": false,
   "observability": {
