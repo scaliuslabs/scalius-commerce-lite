@@ -1,4 +1,8 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQueryClient,
+  type QueryClient,
+} from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   approveOrderReturn,
@@ -50,6 +54,25 @@ import {
   invalidateDashboardQueries,
   queryKeys,
 } from "./shared";
+
+const ORDER_CATALOG_PRODUCTS_QUERY_PREFIX = [
+  "orders",
+  "catalog-products",
+] as const;
+
+/**
+ * Stock changes are visible in three admin projections: the inventory
+ * workspace, product reads (including SKU variants), and the manual-order
+ * catalog. Most lifecycle commands only carry an order id, so the affected
+ * product ids are not available to narrow this further.
+ */
+function invalidateOrderInventoryQueries(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.inventory.list() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.products.all });
+  queryClient.invalidateQueries({
+    queryKey: ORDER_CATALOG_PRODUCTS_QUERY_PREFIX,
+  });
+}
 
 function invalidateBulkShipOrderQueries(
   queryClient: ReturnType<typeof useQueryClient>,
@@ -104,6 +127,7 @@ export function useCreateOrder() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
       invalidateDashboardQueries(queryClient);
+      invalidateOrderInventoryQueries(queryClient);
       toast.success("Confirmed order created");
     },
     onError: (err) =>
@@ -121,10 +145,16 @@ export function useUpdateOrder() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.orders.detail(variables.id),
       });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.orders.formData(variables.id),
+      });
+      invalidateOrderInventoryQueries(queryClient);
       toast.success("Order updated");
     },
-    onError: (err) =>
-      toast.error(getServerFnError(err, "Failed to update order")),
+    onError: (err) => {
+      invalidateOrderInventoryQueries(queryClient);
+      toast.error(getServerFnError(err, "Failed to update order"));
+    },
   });
 }
 
@@ -132,12 +162,13 @@ export function useUpdateOrderStatus() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (data: UpdateOrderStatusInput) => updateOrderStatus({ data }),
-    onSuccess: (result, variables) => {
+    onSuccess: (_result, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
       invalidateDashboardQueries(queryClient);
       queryClient.invalidateQueries({
         queryKey: queryKeys.orders.detail(variables.orderId),
       });
+      invalidateOrderInventoryQueries(queryClient);
       toast.success(`Order status updated to ${variables.status}`);
     },
     onError: (err) =>
@@ -159,6 +190,7 @@ export function useCreateOrderShipment() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.orders.shipments(variables.orderId),
       });
+      invalidateOrderInventoryQueries(queryClient);
       toast.success("Shipment created");
     },
     onError: (err, variables) => {
@@ -169,6 +201,7 @@ export function useCreateOrderShipment() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.orders.shipments(variables.orderId),
       });
+      invalidateOrderInventoryQueries(queryClient);
       toast.error(getServerFnError(err, "Failed to create shipment"));
     },
   });
@@ -186,10 +219,12 @@ export function useBulkShipOrders() {
         ]),
       ];
       invalidateBulkShipOrderQueries(queryClient, touchedOrderIds);
+      invalidateOrderInventoryQueries(queryClient);
       toastBulkShipResult(result);
     },
     onError: (err, variables) => {
       invalidateBulkShipOrderQueries(queryClient, variables.orderIds);
+      invalidateOrderInventoryQueries(queryClient);
       toast.error(getServerFnError(err, "Failed to create shipments"));
     },
   });
@@ -209,12 +244,15 @@ export function useCreateFulfillmentShipment() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.orders.shipments(variables.orderId),
       });
+      invalidateOrderInventoryQueries(queryClient);
       toast.success("Fulfillment shipment created");
     },
-    onError: (err) =>
+    onError: (err) => {
+      invalidateOrderInventoryQueries(queryClient);
       toast.error(
         getServerFnError(err, "Failed to create fulfillment shipment"),
-      ),
+      );
+    },
   });
 }
 
@@ -231,6 +269,9 @@ export function useRefundOrder() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.orders.payments(variables.orderId),
       });
+      if (result.isFullRefund) {
+        invalidateOrderInventoryQueries(queryClient);
+      }
       toast.success("Refund processed");
       if (result.sideEffectErrors > 0) {
         toast.warning("Refund saved; follow-up needs attention", {
@@ -277,6 +318,9 @@ export function useReconcileRefundAttempt() {
         queryKey: queryKeys.orders.payments(variables.orderId),
       });
       if (result.status === "finalized") {
+        invalidateOrderInventoryQueries(queryClient);
+      }
+      if (result.status === "finalized") {
         toast.success("Refund recovery finalized");
       } else if (result.status === "failed") {
         toast.warning("Refund attempt marked failed");
@@ -311,12 +355,15 @@ export function useReconcileShipment() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.orders.shipments(variables.orderId),
       });
+      invalidateOrderInventoryQueries(queryClient);
       toast.success("Shipment recovery repaired", {
         description: result.message,
       });
     },
-    onError: (err) =>
-      toast.error(getServerFnError(err, "Failed to repair shipment recovery")),
+    onError: (err) => {
+      invalidateOrderInventoryQueries(queryClient);
+      toast.error(getServerFnError(err, "Failed to repair shipment recovery"));
+    },
   });
 }
 
@@ -339,10 +386,17 @@ export function useUpdateOrderCod() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.orders.shipments(variables.orderId),
       });
+      if (variables.action === "collected") {
+        invalidateOrderInventoryQueries(queryClient);
+      }
       toast.success("COD action recorded");
     },
-    onError: (err) =>
-      toast.error(getServerFnError(err, "Failed to record COD action")),
+    onError: (err, variables) => {
+      if (variables.action === "collected") {
+        invalidateOrderInventoryQueries(queryClient);
+      }
+      toast.error(getServerFnError(err, "Failed to record COD action"));
+    },
   });
 }
 
@@ -466,10 +520,16 @@ export function useReceiveOrderReturn() {
     mutationFn: (data: ReceiveOrderReturnInput) => receiveOrderReturn({ data }),
     onSuccess: (result, variables) => {
       invalidateOrderReturnQueries(queryClient, variables.orderId);
+      if (variables.lines.some((line) => line.restockQuantity > 0)) {
+        invalidateOrderInventoryQueries(queryClient);
+      }
       toast.success(result.status === "completed" ? "Return received" : "Receipt recorded");
     },
     onError: (err, variables) => {
       invalidateOrderReturnQueries(queryClient, variables.orderId);
+      if (variables.lines.some((line) => line.restockQuantity > 0)) {
+        invalidateOrderInventoryQueries(queryClient);
+      }
       toast.error(getServerFnError(err, "Failed to record receipt"));
     },
   });
@@ -497,10 +557,12 @@ export function useReconcileOrderReturn() {
       reconcileOrderReturn({ data }),
     onSuccess: (_result, variables) => {
       invalidateOrderReturnQueries(queryClient, variables.orderId);
+      invalidateOrderInventoryQueries(queryClient);
       toast.success("Receipt recovery completed");
     },
     onError: (err, variables) => {
       invalidateOrderReturnQueries(queryClient, variables.orderId);
+      invalidateOrderInventoryQueries(queryClient);
       toast.error(getServerFnError(err, "Failed to recover receipt"));
     },
   });

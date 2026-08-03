@@ -62,14 +62,20 @@ import {
 } from "../api-functions/orders";
 import {
   useBulkShipOrders,
+  useCreateFulfillmentShipment,
+  useCreateOrder,
   useCreateOrderReturn,
   useIssueOrderPaymentRecoveryLink,
+  useReceiveOrderReturn,
+  useReconcileOrderReturn,
   useResolveOrderSupportRequest,
   useRefundOrder,
   useReconcileRefundAttempt,
   useResendOrderNotification,
   useRetryOrderNotification,
+  useUpdateOrder,
   useUpdateOrderCod,
+  useUpdateOrderStatus,
 } from "./orders";
 
 type MutationOptions = {
@@ -82,11 +88,86 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
+function expectInventoryProjectionInvalidations() {
+  expect(reactQueryMocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
+    queryKey: queryKeys.inventory.list(),
+  });
+  expect(reactQueryMocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
+    queryKey: queryKeys.products.all,
+  });
+  expect(reactQueryMocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
+    queryKey: ["orders", "catalog-products"],
+  });
+}
+
+function expectNoInventoryProjectionInvalidations() {
+  expect(reactQueryMocks.queryClient.invalidateQueries).not.toHaveBeenCalledWith({
+    queryKey: queryKeys.inventory.list(),
+  });
+  expect(reactQueryMocks.queryClient.invalidateQueries).not.toHaveBeenCalledWith({
+    queryKey: queryKeys.products.all,
+  });
+  expect(reactQueryMocks.queryClient.invalidateQueries).not.toHaveBeenCalledWith({
+    queryKey: ["orders", "catalog-products"],
+  });
+}
+
+describe("order inventory projection freshness", () => {
+  it("refreshes the permanent order-editor snapshot after an update", () => {
+    const mutation = useUpdateOrder() as MutationOptions;
+
+    mutation.onSuccess?.({}, { id: "ord_123" });
+
+    expect(reactQueryMocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.formData("ord_123"),
+    });
+    expectInventoryProjectionInvalidations();
+  });
+
+  it("refreshes inventory, product, and manual-order catalog reads after reserving an order", () => {
+    const mutation = useCreateOrder() as MutationOptions;
+
+    mutation.onSuccess?.({ id: "ord_123" }, {});
+
+    expectInventoryProjectionInvalidations();
+  });
+
+  it("refreshes stock projections after a lifecycle status transition", () => {
+    const mutation = useUpdateOrderStatus() as MutationOptions;
+
+    mutation.onSuccess?.(
+      { message: "updated" },
+      { orderId: "ord_123", status: "cancelled" },
+    );
+
+    expectInventoryProjectionInvalidations();
+  });
+
+  it("refreshes stock projections after fulfillment can deduct reservations", () => {
+    const mutation = useCreateFulfillmentShipment() as MutationOptions;
+
+    mutation.onSuccess?.(
+      { shipmentId: "shp_1" },
+      { orderId: "ord_123", itemIds: ["item_1"] },
+    );
+
+    expectInventoryProjectionInvalidations();
+  });
+});
+
 describe("order COD mutations", () => {
   it("invalidates every order projection changed by a successful COD action", () => {
     const mutation = useUpdateOrderCod() as MutationOptions;
 
-    mutation.onSuccess?.({}, { orderId: "ord_123" });
+    mutation.onSuccess?.(
+      {},
+      {
+        orderId: "ord_123",
+        action: "collected",
+        collectedBy: "Courier",
+        collectedAmount: 100,
+      },
+    );
 
     expect(reactQueryMocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.orders.list(),
@@ -103,6 +184,18 @@ describe("order COD mutations", () => {
     expect(reactQueryMocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.orders.shipments("ord_123"),
     });
+    expectInventoryProjectionInvalidations();
+  });
+
+  it("does not refresh stock projections for a failed-delivery note", () => {
+    const mutation = useUpdateOrderCod() as MutationOptions;
+
+    mutation.onSuccess?.(
+      {},
+      { orderId: "ord_123", action: "failed", reason: "not_home" },
+    );
+
+    expectNoInventoryProjectionInvalidations();
   });
 });
 
@@ -142,6 +235,7 @@ describe("bulk ship order mutations", () => {
         queryKey: queryKeys.orders.shipments(orderId),
       });
     }
+    expectInventoryProjectionInvalidations();
     expect(toastMocks.success).toHaveBeenCalledWith(
       "2 shipments created successfully.",
     );
@@ -279,6 +373,7 @@ describe("order refund recovery mutations", () => {
     expect(reactQueryMocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.orders.payments("ord_123"),
     });
+    expectInventoryProjectionInvalidations();
     expect(toastMocks.success).toHaveBeenCalledWith("Refund processed");
     expect(toastMocks.warning).toHaveBeenCalledWith(
       "Refund saved; follow-up needs attention",
@@ -287,6 +382,25 @@ describe("order refund recovery mutations", () => {
           "The financial refund is complete, but cache refresh or customer notification should be checked.",
       },
     );
+  });
+
+  it("does not refresh stock projections for a partial refund", () => {
+    const mutation = useRefundOrder() as MutationOptions;
+
+    mutation.onSuccess?.(
+      {
+        success: true,
+        gateway: "stripe",
+        refundId: "refund_provider_1",
+        amount: 25,
+        isFullRefund: false,
+        notificationCount: 0,
+        sideEffectErrors: 0,
+      },
+      { orderId: "ord_123" },
+    );
+
+    expectNoInventoryProjectionInvalidations();
   });
 
   it("invalidates order state and payments after a manual recovery check", () => {
@@ -309,7 +423,19 @@ describe("order refund recovery mutations", () => {
     expect(reactQueryMocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.orders.payments("ord_123"),
     });
+    expectInventoryProjectionInvalidations();
     expect(toastMocks.success).toHaveBeenCalledWith("Refund recovery finalized");
+  });
+
+  it("does not refresh stock projections while refund recovery is deferred", () => {
+    const mutation = useReconcileRefundAttempt() as MutationOptions;
+
+    mutation.onSuccess?.(
+      { status: "deferred", sideEffectErrors: 0 },
+      { orderId: "ord_123", attemptId: "rfa_1" },
+    );
+
+    expectNoInventoryProjectionInvalidations();
   });
 });
 
@@ -387,6 +513,42 @@ describe("item-level return mutations", () => {
     expect(reactQueryMocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.orders.detail("ord_123"),
     });
+  });
+
+  it("refreshes stock projections only when a receipt restocks sellable units", () => {
+    const mutation = useReceiveOrderReturn() as MutationOptions;
+    const variables = {
+      orderId: "ord_123",
+      returnId: "ret_1",
+      commandKey: "return:receive:request-1",
+      expectedVersion: 2,
+      lines: [{ lineId: "line_1", receivedQuantity: 1, restockQuantity: 1 }],
+    };
+
+    mutation.onSuccess?.({ status: "completed" }, variables);
+    expectInventoryProjectionInvalidations();
+
+    reactQueryMocks.queryClient.invalidateQueries.mockClear();
+    mutation.onSuccess?.(
+      { status: "completed" },
+      {
+        ...variables,
+        commandKey: "return:receive:request-2",
+        lines: [{ lineId: "line_1", receivedQuantity: 1, restockQuantity: 0 }],
+      },
+    );
+    expectNoInventoryProjectionInvalidations();
+  });
+
+  it("refreshes stock projections after receipt reconciliation", () => {
+    const mutation = useReconcileOrderReturn() as MutationOptions;
+
+    mutation.onSuccess?.(
+      { status: "completed" },
+      { orderId: "ord_123", returnId: "ret_1" },
+    );
+
+    expectInventoryProjectionInvalidations();
   });
 });
 
