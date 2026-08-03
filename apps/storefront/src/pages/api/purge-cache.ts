@@ -412,6 +412,11 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
   const exactGenerationKeys = collectExactGenerationKeys(exactKeys, htmlPaths, prefixes);
 
   try {
+    const nativePurger = locals.cfContext.exports?.PublicStorefront;
+    if (nativePurger) {
+      await nativePurger.purgeGroups(groups);
+    }
+
     let newVersion: number | null = null;
     let currentVersionForExactDeletes: string | null = null;
     let currentExactGenerations = new Map<string, string>();
@@ -493,6 +498,7 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
         details: {
           operationId: operationId ?? null,
           groups,
+          nativeGroupsPurged: Boolean(nativePurger),
           cacheVersionBumped: shouldBumpCacheVersion,
           htmlVersionBumped: shouldBumpCacheVersion,
           newVersion,
