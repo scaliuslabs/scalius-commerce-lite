@@ -317,11 +317,11 @@ selected relational database:
 This topology has local end-to-end D1 authority/projection coverage and focused
 routing, lane grouping, response-order, overload, replay, and sold-out
 invalidation tests. It is an architectural prerequisite, not by itself a
-capacity claim. The disposable D1 evidence below now covers that provider;
-current TursoDB concurrent-writer and full Worker-to-Neon tests must still
-establish the same sustainable arrival rate, p95/p99 latency, overload rate,
-projection lag, exact order/idempotency counts, and inventory invariants before
-publishing their provider throughput. See Cloudflare's current
+capacity claim. The disposable D1 and full Worker-to-Neon evidence below cover
+those provider shapes; current TursoDB concurrent-writer capacity still needs
+the same sustainable arrival-rate, p95/p99 latency, overload, projection-lag,
+exact order/idempotency, and inventory proof before publishing its throughput.
+See Cloudflare's current
 [Durable Object limits](https://developers.cloudflare.com/durable-objects/platform/limits/)
 and Turso's [concurrent-write contract](https://docs.turso.tech/tursodb/concurrent-writes/).
 
@@ -387,3 +387,41 @@ the existing merchant data, login, dashboard, storefront, and API domains.
   no duplicate order or oversell. This is backend-path evidence, not a promise
   that gateways, notifications, arbitrary carts, or every merchant workload
   sustain the same rate.
+
+## Verified full Worker-to-Neon checkout load — 2026-08-03
+
+A sentinel-protected Worker and disposable database on the demo project's
+smallest fixed 0.25-CU Neon compute exercised the complete public checkout
+route, coordinator, native PostgreSQL commit, durable projection, and direct
+database oracle. External gateways and notification consumers remained outside
+the measured path.
+
+- Three independent migrations from the same immutable canonical SQLite source
+  into three fresh PostgreSQL databases produced identical schema, source, and
+  logical-content fingerprints across 110 application tables.
+- Idempotency, receipt, support, exact projection, constraint, and tracked-SKU
+  concurrency scenarios passed. A 60-request hot-SKU run accepted exactly the
+  50 available units, rejected ten as unavailable, and preserved exact lane
+  versions/quantities without oversell or legacy inventory movements.
+- An initial 2,000-order run exposed a real recovery flaw: every authoritative
+  order committed, but a failed oversized projection group could remain pending
+  until the scheduled sweep. The live coordinator now shares the scheduled
+  recovery policy, bounds groups to 500 orders, isolates failed groups by
+  durable outbox, and retries transient single-outbox failures. The pre-fix
+  backlog then recovered 35/35 outboxes with zero failed facts.
+- After the fix, one 2,000-order spread run at 1,000 scheduled arrivals/second
+  returned 2,000/2,000 HTTP 201 responses in 6.080 seconds: 328.95 accepted
+  orders/second, p95/p99 service latency 4.784/5.353 seconds, and automatic
+  projection catch-up in 5.601 seconds. The oracle found exactly 2,000 orders,
+  2,000 items, and 2,000 attempts, no legacy movements, clean PostgreSQL
+  constraints, and no violation.
+- The database and API suites passed 244 tests (one skipped) and 998 tests
+  respectively after the change. Commits `988f25044` and `6296b6843` contain
+  the recovery policy and provider-neutral load tooling.
+
+The native backend commit has crossed 1,000 orders/second, while the complete
+0.25-CU Worker path has currently proved 329 orders/second. Therefore Scalius
+must not publish “PostgreSQL supports 1,000+ complete orders/second” until the
+same full-route oracle passes on sized compute or a proven horizontally scaled
+merchant topology. Database-tier throughput is a tested deployment profile,
+not a universal product adjective such as “enterprise-grade.”
