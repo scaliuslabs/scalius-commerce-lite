@@ -21,6 +21,19 @@ describe("database client composition", () => {
     expect(getDatabaseProviderForClient(firstDb)).toBe("d1");
   });
 
+  it("uses a primary-anchored D1 session for request consistency and replicas", () => {
+    const session = { prepare: vi.fn(), batch: vi.fn() };
+    const binding = {
+      prepare: vi.fn(),
+      withSession: vi.fn(() => session),
+    } as unknown as D1Database;
+
+    const db = getDb({ DB: binding });
+
+    expect(binding.withSession).toHaveBeenCalledWith("first-primary");
+    expect((db as unknown as { $client: object }).$client).toBe(session);
+  });
+
   it("fails closed when no complete provider is configured", () => {
     expect(() => getDb()).toThrow(/D1 database binding/);
   });

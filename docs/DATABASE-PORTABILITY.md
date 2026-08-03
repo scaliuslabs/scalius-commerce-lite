@@ -57,6 +57,10 @@ migration per immediate transaction. PostgreSQL reuses the initial import's
 receipt and advisory-lock identity and applies one sidecar per serializable
 transaction. Replays after a committed-but-lost response are safe.
 
+Each D1 request uses one `first-primary` session. Its first operation observes
+the primary and later reads may use a consistent replica; routes and services
+do not carry provider-specific consistency branches.
+
 Ordinary deploys never upgrade an external database. They run a read-only
 `--dry-run --require-current` preflight; an external control-plane operation
 must first activate `DATABASE_MIGRATION_FREEZE`, prove the freeze, run the

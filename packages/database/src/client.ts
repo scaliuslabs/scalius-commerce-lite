@@ -14,6 +14,14 @@ import type { Database } from "./types";
 
 const providerByDatabase = new WeakMap<object, DatabaseProvider>();
 
+function createD1RequestClient(binding: D1Database): D1Database {
+  if (typeof binding.withSession !== "function") return binding;
+
+  // The first operation observes the primary. Later reads in the same request
+  // may use a replica without losing sequential consistency.
+  return binding.withSession("first-primary") as unknown as D1Database;
+}
+
 export type { Database } from "./types";
 export type {
   DatabaseConfiguration,
@@ -61,7 +69,7 @@ export function getDb(env?: DatabaseEnvironment): Database {
 
   // Drizzle construction is local and cheap. Avoiding mutable isolate-global
   // state prevents one binding/provider from leaking into another request.
-  const database = drizzle(config.binding, { schema });
+  const database = drizzle(createD1RequestClient(config.binding), { schema });
   providerByDatabase.set(database as object, "d1");
   return database;
 }
