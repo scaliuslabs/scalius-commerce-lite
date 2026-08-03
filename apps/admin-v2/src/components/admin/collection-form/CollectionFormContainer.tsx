@@ -19,6 +19,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { getServerFnError } from "~/lib/api-helpers";
 import { useCatalogActionPermissions } from "~/hooks/use-catalog-action-permissions";
 import { createCollection, updateCollection } from "~/lib/api-functions/collections";
+import { queryKeys } from "~/lib/query-keys";
 import { ProductSelectionSection } from "./ProductSelectionSection";
 import { LayoutSettingsSection } from "./LayoutSettingsSection";
 import { CollectionContentSection } from "./CollectionContentSection";
@@ -137,6 +138,7 @@ export function CollectionForm({
           featuredProductId: values.config.featuredProductId || "",
         },
       };
+      let savedCollectionId: string;
       if (isEdit) {
         const entityId = defaultValues?.id || values.id;
         if (!entityId) throw new Error("Collection ID is required for update");
@@ -150,8 +152,7 @@ export function CollectionForm({
           id: result.id,
           version: result.version,
         });
-        queryClient.invalidateQueries({ queryKey: ["collections", "detail", entityId] });
-        toast.success("Collection saved");
+        savedCollectionId = entityId;
       } else {
         const result = await createCollection({ data: submission });
         form.reset({
@@ -159,17 +160,32 @@ export function CollectionForm({
           id: result.id,
           version: result.version,
         });
-        toast.success("Collection created");
+        savedCollectionId = result.id;
+      }
+
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.collections.list() }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.collections.byIds() }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.collections.formOptions(),
+        }),
+        ...(isEdit
+          ? [
+              queryClient.invalidateQueries({
+                queryKey: queryKeys.collections.detail(savedCollectionId),
+              }),
+            ]
+          : []),
+      ]);
+
+      toast.success(isEdit ? "Collection saved" : "Collection created");
+      if (!isEdit) {
         void navigate({
           to: "/admin/collections/$collectionId/edit",
-          params: { collectionId: result.id },
+          params: { collectionId: savedCollectionId },
           replace: true,
         });
       }
-
-      // Invalidate queries so list page shows fresh data
-      queryClient.invalidateQueries({ queryKey: ["collections", "list"] });
-      queryClient.invalidateQueries({ queryKey: ["collections", "form-options"] });
 
     } catch (error: unknown) {
       console.error("Error submitting form:", error);

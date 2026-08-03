@@ -78,4 +78,11 @@ describe("category admin workflow boundaries", () => {
     expect(formSource).toContain('to: "/admin/categories/$categoryId/edit"');
     expect(formSource).toContain("if (!isEdit && mutation.id)");
   });
+
+  it("refreshes category consumers after a save", () => {
+    expect(formSource).toContain("queryKeys.categories.list()");
+    expect(formSource).toContain("queryKeys.categories.formOptions()");
+    expect(formSource).toContain("queryKeys.collections.categoryOptions()");
+    expect(formSource).toContain("queryKeys.products.stats()");
+  });
 });

@@ -15,6 +15,7 @@ import {
   type ProductRevisionConflict,
 } from "~/lib/admin-api-error";
 import type { ProductOptionMatrixInput } from "~/lib/api-functions/products";
+import { queryKeys } from "~/lib/query-keys";
 
 interface UseProductSubmitOptions {
   isEdit: boolean;
@@ -93,14 +94,9 @@ export function useProductSubmit({
         },
       });
     },
-    onSuccess: (result, { values }) => {
+    onSuccess: async (result, { values }) => {
       setMediaRemovalConflict(null);
       setPendingValues(null);
-      toast.success("Success", {
-        description: isEdit
-          ? "Product updated successfully."
-          : "Product created successfully.",
-      });
 
       // Reset form dirty state after successful save
       if (isEdit) {
@@ -109,16 +105,41 @@ export function useProductSubmit({
         onProductSaved?.(values, result.aggregateRevision);
       }
 
-      // Invalidate product queries so lists/details refetch
-      queryClient.invalidateQueries({ queryKey: ["products"] });
-      queryClient.invalidateQueries({ queryKey: ["categories", "form-options"] });
+      const savedProductId = isEdit
+        ? productId || values.id
+        : "id" in result && typeof result.id === "string"
+          ? result.id
+          : null;
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.products.list() }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.products.byIds() }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.products.collectionOptions(),
+        }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.products.stats() }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.inventory.list() }),
+        ...(savedProductId
+          ? [
+              queryClient.invalidateQueries({
+                queryKey: queryKeys.products.detail(savedProductId),
+              }),
+              queryClient.invalidateQueries({
+                queryKey: queryKeys.products.variants(savedProductId),
+              }),
+            ]
+          : []),
+      ]);
+      toast.success("Success", {
+        description: isEdit
+          ? "Product updated successfully."
+          : "Product created successfully.",
+      });
 
       if (onSuccess) {
         onSuccess();
       } else if (!isEdit) {
-        const createdProductId =
-          "id" in result && typeof result.id === "string" ? result.id : null;
-        if (!createdProductId) {
+        if (!savedProductId) {
           toast.error("Error", {
             description: "Product was created but no product ID was returned.",
           });
@@ -126,7 +147,7 @@ export function useProductSubmit({
         }
         void navigate({
           to: "/admin/products/$productId/edit",
-          params: { productId: createdProductId },
+          params: { productId: savedProductId },
         });
       }
     },

@@ -15,6 +15,7 @@ import {
 
 import { CollectionForm } from "./CollectionFormContainer";
 import type { Category, CollectionFormValues, Product } from "./types";
+import { queryKeys } from "~/lib/query-keys";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -277,6 +278,7 @@ describe("CollectionForm edit product labels", () => {
     await act(async () => {
       moveSecondaryUp?.click();
     });
+    const invalidateQueries = vi.spyOn(queryClient, "invalidateQueries");
 
     await act(async () => {
       getButton(host, "Save Collection").dispatchEvent(
@@ -307,6 +309,12 @@ describe("CollectionForm edit product labels", () => {
     );
     expect(typeof payload.config.featuredProductId).toBe("string");
     expect(collectionApi.createCollection).not.toHaveBeenCalled();
+    expect(invalidateQueries.mock.calls.map(([filters]) => filters?.queryKey)).toEqual([
+      queryKeys.collections.list(),
+      queryKeys.collections.byIds(),
+      queryKeys.collections.formOptions(),
+      queryKeys.collections.detail("col_late_labels"),
+    ]);
   });
 
   it("renders the editor read-only when collection edit permission is absent", async () => {

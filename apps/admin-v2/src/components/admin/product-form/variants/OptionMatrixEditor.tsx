@@ -28,6 +28,7 @@ import { MAX_PRODUCT_OPTION_AXES, MAX_PRODUCT_OPTION_COMBINATIONS } from "@scali
 import { saveProductOptionMatrix, type ProductOptionMatrixInput } from "@/lib/api-functions/products";
 import { getServerFnError } from "@/lib/api-helpers";
 import { readProductRevisionConflict, type ProductRevisionConflict } from "@/lib/admin-api-error";
+import { queryKeys } from "@/lib/query-keys";
 import type {
   ProductSkuImageChoice,
   ProductOptionDefinition,
@@ -233,14 +234,28 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
         matrix: { options, variants, expectedAggregateRevision: revisionOverride ?? aggregateRevision! },
       },
     }),
-    onSuccess: (result) => {
+    onSuccess: async (result) => {
       onAggregateRevisionChange?.(result.aggregateRevision);
       setDirty(false);
       setCombinationsPending(false);
       setTopologyChanged(false);
       setOmittedVariantsByKey(new Map());
-      void queryClient.invalidateQueries({ queryKey: ["products", productId] });
-      void queryClient.invalidateQueries({ queryKey: ["products"] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.products.list() }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.products.byIds() }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.products.collectionOptions(),
+        }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.products.stats() }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.inventory.list() }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.products.detail(productId!),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.products.variants(productId!),
+        }),
+      ]);
       toast.success("Options and SKUs saved");
       onSaved?.();
     },
