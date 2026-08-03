@@ -1,5 +1,8 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import type { Database } from "@scalius/database/client";
+import {
+  getDatabaseProviderForClient,
+  type Database,
+} from "@scalius/database/client";
 
 import {
   orders,
@@ -1746,6 +1749,7 @@ app.openapi(createOrderRoute, async (c) => {
       const checkoutAttempt = createAtomicCheckoutAttempt(attemptIdentity);
       const coordinated = await submitCheckoutIntentToCoordinator(
         c.env.CHECKOUT_COORDINATOR,
+        getDatabaseProviderForClient(db),
         {
           attempt: checkoutAttempt,
           data,
@@ -1822,20 +1826,24 @@ app.openapi(createOrderRoute, async (c) => {
         executionCtx,
       );
 
+      const sideEffectTasks: Promise<unknown>[] = [];
       if (coordinated.postCommitPayload) {
-        const sideEffects = Promise.all([
-          runStorefrontOrderPostCommitSideEffects(
-            db,
-            c.env,
-            coordinated.postCommitPayload,
-          ),
-          invalidateStorefrontOrderAvailabilityCaches(
-            db,
-            c.env,
-            coordinated.availabilityChangedSubjects,
-            executionCtx,
-          ),
-        ]).then(() => undefined);
+        sideEffectTasks.push(runStorefrontOrderPostCommitSideEffects(
+          db,
+          c.env,
+          coordinated.postCommitPayload,
+        ));
+      }
+      if (coordinated.availabilityChangedSubjects.length > 0) {
+        sideEffectTasks.push(invalidateStorefrontOrderAvailabilityCaches(
+          db,
+          c.env,
+          coordinated.availabilityChangedSubjects,
+          executionCtx,
+        ));
+      }
+      if (sideEffectTasks.length > 0) {
+        const sideEffects = Promise.all(sideEffectTasks).then(() => undefined);
         if (executionCtx && typeof executionCtx.waitUntil === "function") {
           executionCtx.waitUntil(sideEffects);
         } else {
@@ -2009,6 +2017,7 @@ app.openapi(createOrderRoute, async (c) => {
         );
         const coordinated = await submitCheckoutCommitToCoordinator(
           c.env.CHECKOUT_COORDINATOR,
+          getDatabaseProviderForClient(db),
           command,
         );
         if (!coordinated.ok) {
