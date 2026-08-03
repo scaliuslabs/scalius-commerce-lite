@@ -13,7 +13,7 @@ import { successEnvelope, messageResponse, errorResponses, serviceUnavailableRes
 import {
     upsertSetting,
     upsertEncryptedSetting,
-    getPaymentMethodPreferences,
+    getPaymentGatewaySettingsSnapshot,
     getActivePaymentMethods,
     getStripeSettings,
     getStripeCheckoutReadiness,
@@ -27,10 +27,6 @@ import {
     isStripeCheckoutUsable,
     isSSLCommerzCheckoutUsable,
     isPolarCheckoutUsable,
-    invalidatePaymentMethodsCache,
-    invalidateStripeCache,
-    invalidateSSLCommerzCache,
-    invalidatePolarCache
 } from "@scalius/core/modules/payments/gateway-settings";
 import {
     getCheckoutFlowValidationIssues,
@@ -74,9 +70,7 @@ async function assertDisablingGatewayKeepsCheckoutFlow(
 
     const activePaymentMethods = await getActivePaymentMethods(
         db,
-        env.CACHE,
         getCredentialEncryptionKey(env as Record<string, unknown>),
-        { bypassMemoryCache: true },
     );
     const nextPaymentMethods = activePaymentMethods.enabledMethods.filter((method) => method !== gatewayId);
     const checkoutFlowIssues = getCheckoutFlowValidationIssues({
@@ -319,39 +313,27 @@ const getPaymentMethodsRoute = createRoute({
 
 app.openapi(getPaymentMethodsRoute, async (c) => {
     const db = c.get("db");
-        const kv = c.env.CACHE;
-        const encKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
-        const readOptions = { bypassMemoryCache: true };
-        const [rawConfig, activeConfig] = await Promise.all([
-            getPaymentMethodPreferences(db),
-            getActivePaymentMethods(db, kv, encKey, readOptions),
-        ]);
+    const encKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
+    const gatewaySnapshot = await getPaymentGatewaySettingsSnapshot(db, encKey);
+    const rawConfig = gatewaySnapshot.preferences;
+    const activeConfig = gatewaySnapshot.activePaymentMethods;
+    const { stripe: stripeSettings, sslcommerz: sslSettings, polar: polarSettings } =
+        gatewaySnapshot.settings;
 
-        const [
-            stripeSettings,
-            sslSettings,
-            polarSettings,
-            stripeMap,
-            sslMap,
-            polarMap,
-            checkoutSettings,
-        ] = await Promise.all([
-            getStripeSettings(db, kv, encKey, readOptions),
-            getSSLCommerzSettings(db, kv, encKey, readOptions),
-            getPolarSettings(db, kv, encKey, readOptions),
-            readStripeSettingsMap(db),
-            readSSLCommerzSettingsMap(db),
-            readPolarSettingsMap(db),
-            db
-                .select({
-                    checkoutMode: siteSettings.checkoutMode,
-                    partialPaymentEnabled: siteSettings.partialPaymentEnabled,
-                    partialPaymentAmount: siteSettings.partialPaymentAmount,
-                })
-                .from(siteSettings)
-                .limit(1)
-                .then((rows) => rows[0]),
-        ]);
+    const [stripeMap, sslMap, polarMap, checkoutSettings] = await Promise.all([
+        readStripeSettingsMap(db),
+        readSSLCommerzSettingsMap(db),
+        readPolarSettingsMap(db),
+        db
+            .select({
+                checkoutMode: siteSettings.checkoutMode,
+                partialPaymentEnabled: siteSettings.partialPaymentEnabled,
+                partialPaymentAmount: siteSettings.partialPaymentAmount,
+            })
+            .from(siteSettings)
+            .limit(1)
+            .then((rows) => rows[0]),
+    ]);
         const stripeReadiness = getStripeCheckoutReadiness(
             stripeSettings ?? getEffectiveStripeCheckoutSettings(stripeMap, {}),
         );
@@ -450,13 +432,11 @@ app.openapi(savePaymentMethodsRoute, async (c) => {
         throw new ValidationError("Default method must be one of the enabled methods");
     }
 
-    const kv = c.env.CACHE;
     const encKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
-    const readOptions = { bypassMemoryCache: true };
     const [stripeSettings, sslSettings, polarSettings] = await Promise.all([
-        getStripeSettings(db, kv, encKey, readOptions),
-        getSSLCommerzSettings(db, kv, encKey, readOptions),
-        getPolarSettings(db, kv, encKey, readOptions),
+        getStripeSettings(db, encKey),
+        getSSLCommerzSettings(db, encKey),
+        getPolarSettings(db, encKey),
     ]);
     const stripeReadiness = getStripeCheckoutReadiness(stripeSettings);
     if (data.enabledMethods.includes("stripe") && !stripeReadiness.usable) {
@@ -509,10 +489,7 @@ app.openapi(savePaymentMethodsRoute, async (c) => {
         buildUpsertSettingStatement(db, "payment_methods", "default_method", data.defaultMethod),
     ]);
 
-    await Promise.all([
-        invalidatePaymentMethodsCache(kv),
-        invalidateCheckoutCaches(c),
-    ]);
+    await invalidateCheckoutCaches(c);
 
     return ok(c, { message: "Payment methods updated" });
 });
@@ -571,11 +548,10 @@ app.openapi(saveStripeRoute, async (c) => {
     const db = c.get("db");
         const body = c.req.valid("json");
         const ops: Promise<void>[] = [];
-        const kv = c.env.CACHE;
         const configuredEncryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
         const [existingMap, storedSettings] = await Promise.all([
             readStripeSettingsMap(db),
-            getStripeSettings(db, kv, configuredEncryptionKey, { bypassMemoryCache: true }),
+            getStripeSettings(db, configuredEncryptionKey),
         ]);
         const effectiveSettings = getEffectiveStripeCheckoutSettings(existingMap, body, storedSettings);
         const stripeReadiness = getStripeCheckoutReadiness(effectiveSettings);
@@ -601,11 +577,7 @@ app.openapi(saveStripeRoute, async (c) => {
 
         await Promise.all(ops);
 
-        await Promise.all([
-            invalidateStripeCache(kv),
-            invalidatePaymentMethodsCache(kv),
-            invalidateCheckoutCaches(c),
-        ]);
+        await invalidateCheckoutCaches(c);
 
         return ok(c, { message: "Stripe settings saved successfully" });
 });
@@ -663,12 +635,9 @@ app.openapi(saveSSLCommerzRoute, async (c) => {
         const body = c.req.valid("json");
         const ops: Promise<void>[] = [];
         const existingMap = await readSSLCommerzSettingsMap(db);
-        const kv = c.env.CACHE;
         const storedSettings = await getSSLCommerzSettings(
             db,
-            kv,
             getCredentialEncryptionKey(c.env as Record<string, unknown>),
-            { bypassMemoryCache: true },
         );
         const effectiveSettings = getEffectiveSSLCommerzCheckoutSettings(existingMap, body, storedSettings);
         const sslReadiness = getSSLCommerzCheckoutReadiness(effectiveSettings);
@@ -691,11 +660,7 @@ app.openapi(saveSSLCommerzRoute, async (c) => {
 
         await Promise.all(ops);
 
-        await Promise.all([
-            invalidateSSLCommerzCache(kv),
-            invalidatePaymentMethodsCache(kv),
-            invalidateCheckoutCaches(c),
-        ]);
+        await invalidateCheckoutCaches(c);
 
         return ok(c, { message: "SSLCommerz settings saved successfully" });
 });
@@ -780,12 +745,7 @@ app.openapi(savePolarRoute, async (c) => {
 
         await Promise.all(ops);
 
-        const kv = c.env.CACHE;
-        await Promise.all([
-            invalidatePolarCache(kv),
-            invalidatePaymentMethodsCache(kv),
-            invalidateCheckoutCaches(c),
-        ]);
+        await invalidateCheckoutCaches(c);
 
         return ok(c, { message: "Polar settings saved successfully" });
 });

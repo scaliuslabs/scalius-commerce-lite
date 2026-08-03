@@ -38,7 +38,6 @@ vi.mock("@scalius/core/modules/payments/polar", () => ({
 
 vi.mock("@scalius/core/modules/payments/gateway-settings", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@scalius/core/modules/payments/gateway-settings")>()),
-  FRESH_GATEWAY_SETTINGS_READ_OPTIONS: { bypassMemoryCache: true },
   getActivePaymentMethods: mocks.getActivePaymentMethods,
   getPaymentMethodPreferences: mocks.getPaymentMethodPreferences,
   getStripeSettings: mocks.getStripeSettings,
@@ -848,9 +847,7 @@ describe("payment session receipt-token proof", () => {
     expect(mocks.getPaymentMethodPreferences).toHaveBeenCalledWith(db);
     expect(mocks.getStripeSettings).toHaveBeenCalledWith(
       db,
-      kv,
       undefined,
-      expect.objectContaining({ bypassMemoryCache: true }),
     );
     expect(mocks.getSSLCommerzSettings).not.toHaveBeenCalled();
     expect(mocks.getPolarSettings).not.toHaveBeenCalled();
@@ -1341,9 +1338,7 @@ describe("payment session receipt-token proof", () => {
     expect(mocks.getStripeSettings).not.toHaveBeenCalled();
     expect(mocks.getSSLCommerzSettings).toHaveBeenCalledWith(
       db,
-      kv,
       undefined,
-      expect.objectContaining({ bypassMemoryCache: true }),
     );
     expect(mocks.getPolarSettings).not.toHaveBeenCalled();
     expect(mocks.initSSLCommerzSession).toHaveBeenCalledWith(
@@ -1411,9 +1406,7 @@ describe("payment session receipt-token proof", () => {
     expect(mocks.getSSLCommerzSettings).toHaveBeenCalledTimes(1);
     expect(mocks.getSSLCommerzSettings).toHaveBeenCalledWith(
       db,
-      kv,
       undefined,
-      expect.objectContaining({ bypassMemoryCache: true }),
     );
     expect(mocks.getPolarSettings).not.toHaveBeenCalled();
     expect(mocks.initSSLCommerzSession).toHaveBeenCalledTimes(1);
@@ -1663,9 +1656,7 @@ describe("payment session receipt-token proof", () => {
     expect(mocks.getSSLCommerzSettings).not.toHaveBeenCalled();
     expect(mocks.getPolarSettings).toHaveBeenCalledWith(
       db,
-      kv,
       undefined,
-      expect.objectContaining({ bypassMemoryCache: true }),
     );
     expect(mocks.createPolarCheckout).toHaveBeenCalledWith(
       expect.objectContaining({ productId: "polar_product" }),
@@ -2630,9 +2621,7 @@ describe("payment session receipt-token proof", () => {
     expect(settings).toHaveBeenCalledTimes(1);
     expect(settings).toHaveBeenCalledWith(
       db,
-      kv,
       undefined,
-      expect.objectContaining({ bypassMemoryCache: true }),
     );
     for (const otherSetting of otherSettings) {
       expect(otherSetting).not.toHaveBeenCalled();

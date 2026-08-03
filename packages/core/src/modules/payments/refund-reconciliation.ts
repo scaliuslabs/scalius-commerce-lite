@@ -21,7 +21,6 @@ import {
   resolveStripeRefundProviderMoney,
 } from "./refund-provider-money";
 import {
-  FRESH_GATEWAY_SETTINGS_READ_OPTIONS,
   getPolarSettings,
   getSSLCommerzSettings,
   getStripeSettings,
@@ -419,12 +418,11 @@ function mapStripeStatus(status: string | null | undefined): "accepted" | "proce
 
 async function probeStripeRefund(
   db: Database,
-  kv: KVNamespace | undefined,
   attempt: RefundAttemptProbeRow,
   context: RefundProviderReconciliationContext,
   encryptionKey?: string,
 ): Promise<ProviderProbeOutcome> {
-  const settings = await getStripeSettings(db, kv, encryptionKey, FRESH_GATEWAY_SETTINGS_READ_OPTIONS);
+  const settings = await getStripeSettings(db, encryptionKey);
   if (!settings?.secretKey) {
     return { outcome: "unknown", error: "Stripe is not configured for refund reconciliation", manualReview: true };
   }
@@ -518,11 +516,10 @@ async function probeStripeRefund(
 
 async function probeSSLCommerzRefund(
   db: Database,
-  kv: KVNamespace | undefined,
   attempt: RefundAttemptProbeRow,
   encryptionKey?: string,
 ): Promise<ProviderProbeOutcome> {
-  const settings = await getSSLCommerzSettings(db, kv, encryptionKey, FRESH_GATEWAY_SETTINGS_READ_OPTIONS);
+  const settings = await getSSLCommerzSettings(db, encryptionKey);
   if (!settings?.storeId || !settings.storePassword) {
     return { outcome: "unknown", error: "SSLCommerz is not configured for refund reconciliation", manualReview: true };
   }
@@ -562,12 +559,11 @@ async function probeSSLCommerzRefund(
 
 async function probePolarRefund(
   db: Database,
-  kv: KVNamespace | undefined,
   attempt: RefundAttemptProbeRow,
   context: RefundProviderReconciliationContext,
   encryptionKey?: string,
 ): Promise<ProviderProbeOutcome> {
-  const settings = await getPolarSettings(db, kv, encryptionKey, FRESH_GATEWAY_SETTINGS_READ_OPTIONS);
+  const settings = await getPolarSettings(db, encryptionKey);
   if (!settings?.accessToken) {
     return { outcome: "unknown", error: "Polar is not configured for refund reconciliation", manualReview: true };
   }
@@ -669,11 +665,11 @@ async function probeProviderRefund(
 ): Promise<ProviderProbeOutcome> {
   switch (attempt.gateway) {
     case "stripe":
-      return probeStripeRefund(db, kv, attempt, context, encryptionKey);
+      return probeStripeRefund(db, attempt, context, encryptionKey);
     case "sslcommerz":
-      return probeSSLCommerzRefund(db, kv, attempt, encryptionKey);
+      return probeSSLCommerzRefund(db, attempt, encryptionKey);
     case "polar":
-      return probePolarRefund(db, kv, attempt, context, encryptionKey);
+      return probePolarRefund(db, attempt, context, encryptionKey);
     case "cod":
       return { outcome: "accepted", providerRefundId: attempt.providerRefundId, providerStatus: "accepted" };
     default:
@@ -902,7 +898,7 @@ async function reconcileStripeExternalRefundWebhookEvent(
     return { imported: 0, finalized: 0, skipped: 0, deferred: 1, finalizedOrderIds: [], refundNotifications: [] };
   }
 
-  const settings = await getStripeSettings(db, kv, options.encryptionKey, FRESH_GATEWAY_SETTINGS_READ_OPTIONS);
+  const settings = await getStripeSettings(db, options.encryptionKey);
   if (!settings?.secretKey) {
     await markStripeExternalRefundWebhook(db, row.id, "manual_reconciliation", row.result, {
       outcome: "deferred",

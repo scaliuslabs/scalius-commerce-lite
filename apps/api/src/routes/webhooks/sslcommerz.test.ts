@@ -13,7 +13,6 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@scalius/core/modules/payments/gateway-settings", () => ({
-  FRESH_GATEWAY_SETTINGS_READ_OPTIONS: { bypassMemoryCache: true },
   getSSLCommerzSettings: mocks.getSSLCommerzSettings,
 }));
 
@@ -159,9 +158,7 @@ describe("SSLCommerz webhook route", () => {
     expect(await response.text()).toBe("OK");
     expect(mocks.getSSLCommerzSettings).toHaveBeenCalledWith(
       db,
-      kv,
       "test-key",
-      expect.objectContaining({ bypassMemoryCache: true }),
     );
     expect(mocks.validateSSLCommerzIPN).toHaveBeenCalledWith(
       "store_test",

@@ -15,7 +15,6 @@ import {
 } from "@scalius/database/schema";
 import { createPaymentProvider } from "./factory";
 import {
-    FRESH_GATEWAY_SETTINGS_READ_OPTIONS,
     getStripeSettings,
     getSSLCommerzSettings,
     getPolarSettings,
@@ -933,7 +932,6 @@ function getTransactionId(
 
 async function resolveProvider(
     db: Database,
-    kv: KVNamespace | undefined,
     gateway: PaymentGateway,
     encryptionKey?: string,
 ) {
@@ -941,9 +939,7 @@ async function resolveProvider(
         case "stripe": {
             const settings = await getStripeSettings(
                 db,
-                kv,
                 encryptionKey,
-                FRESH_GATEWAY_SETTINGS_READ_OPTIONS,
             );
             if (!settings) throw new ServiceUnavailableError("Stripe is not configured");
             return createPaymentProvider({ type: "stripe", settings });
@@ -951,9 +947,7 @@ async function resolveProvider(
         case "sslcommerz": {
             const settings = await getSSLCommerzSettings(
                 db,
-                kv,
                 encryptionKey,
-                FRESH_GATEWAY_SETTINGS_READ_OPTIONS,
             );
             if (!settings) throw new ServiceUnavailableError("SSLCommerz is not configured");
             return createPaymentProvider({ type: "sslcommerz", settings });
@@ -961,9 +955,7 @@ async function resolveProvider(
         case "polar": {
             const settings = await getPolarSettings(
                 db,
-                kv,
                 encryptionKey,
-                FRESH_GATEWAY_SETTINGS_READ_OPTIONS,
             );
             if (!settings) throw new ServiceUnavailableError("Polar is not configured");
             return createPaymentProvider({ type: "polar", settings });
@@ -1000,7 +992,7 @@ async function dispatchRefund(
     encryptionKey?: string,
 ): Promise<string | undefined> {
     const transactionId = getTransactionId(gateway, payment);
-    const provider = await resolveProvider(db, kv, gateway, encryptionKey);
+    const provider = await resolveProvider(db, gateway, encryptionKey);
 
     // Determine the correct amount for each gateway's convention:
     // Stripe: smallest currency unit, always explicit for allocation safety

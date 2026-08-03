@@ -13,7 +13,6 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("./gateway-settings", () => ({
-  FRESH_GATEWAY_SETTINGS_READ_OPTIONS: { bypassMemoryCache: true },
   getStripeSettings: mocks.getStripeSettings,
   getSSLCommerzSettings: mocks.getSSLCommerzSettings,
   getPolarSettings: mocks.getPolarSettings,
@@ -218,7 +217,7 @@ describe("refund attempt reconciliation", () => {
       failed: 0,
       deferred: 1,
     });
-    expect(mocks.getStripeSettings).toHaveBeenCalledWith(db, undefined, "cred_key", { bypassMemoryCache: true });
+    expect(mocks.getStripeSettings).toHaveBeenCalledWith(db, "cred_key");
     expect(mocks.retrieveStripeRefund).toHaveBeenCalledWith("sk_test", "re_1");
     expect(mocks.finalizeAcceptedRefundAttemptIds).not.toHaveBeenCalled();
     expect(updateSets.at(-1)).toMatchObject({
@@ -626,7 +625,7 @@ describe("refund attempt reconciliation", () => {
       limit: 5,
     });
 
-    expect(mocks.getStripeSettings).toHaveBeenCalledWith(db, undefined, "cred_key", { bypassMemoryCache: true });
+    expect(mocks.getStripeSettings).toHaveBeenCalledWith(db, "cred_key");
     expect(mocks.listStripeRefundsForCharge).toHaveBeenCalledWith("sk_test", "ch_1", 100);
     expect(rawDb.batch).toHaveBeenCalledTimes(1);
     expect(insertValues[0]).toMatchObject({

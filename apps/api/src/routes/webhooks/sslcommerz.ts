@@ -4,10 +4,7 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { eq } from "drizzle-orm";
 import { parseSSLCommerzTranId, validateSSLCommerzIPN } from "@scalius/core/modules/payments/sslcommerz";
-import {
-  FRESH_GATEWAY_SETTINGS_READ_OPTIONS,
-  getSSLCommerzSettings,
-} from "@scalius/core/modules/payments/gateway-settings";
+import { getSSLCommerzSettings } from "@scalius/core/modules/payments/gateway-settings";
 import type { PaymentType, SSLCommerzIPNPayload, SSLCommerzValidationResult } from "@scalius/core/modules/payments/types";
 import { orders, paymentPlans, PaymentMethod, PaymentStatus } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
@@ -153,9 +150,7 @@ app.post("/", async (c) => {
   try {
     ssl = await getSSLCommerzSettings(
       db,
-      c.env.CACHE,
       encryptionKey,
-      FRESH_GATEWAY_SETTINGS_READ_OPTIONS,
     );
   } catch (error) {
     console.error(

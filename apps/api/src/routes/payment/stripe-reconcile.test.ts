@@ -17,7 +17,6 @@ vi.mock("../../utils/order-receipt-token", () => ({
 }));
 
 vi.mock("@scalius/core/modules/payments/gateway-settings", () => ({
-  FRESH_GATEWAY_SETTINGS_READ_OPTIONS: { bypassMemoryCache: true },
   getStripeSettings: mocks.getStripeSettings,
 }));
 

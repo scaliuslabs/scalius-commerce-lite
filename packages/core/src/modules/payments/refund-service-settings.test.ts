@@ -12,7 +12,6 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("./gateway-settings", () => ({
-  FRESH_GATEWAY_SETTINGS_READ_OPTIONS: { bypassMemoryCache: true },
   getStripeSettings: mocks.getStripeSettings,
   getSSLCommerzSettings: mocks.getSSLCommerzSettings,
   getPolarSettings: mocks.getPolarSettings,
@@ -215,9 +214,7 @@ describe("refund gateway settings freshness", () => {
 
     expect(settingsReader).toHaveBeenCalledWith(
       db,
-      kv,
       "enc-key",
-      expect.objectContaining({ bypassMemoryCache: true }),
     );
     expect(mocks.createPaymentProvider).toHaveBeenCalledWith(expect.objectContaining({
       type: gateway,
@@ -246,9 +243,7 @@ describe("refund gateway settings freshness", () => {
 
     expect(mocks.getStripeSettings).toHaveBeenCalledWith(
       db,
-      kv,
       "enc-key",
-      expect.objectContaining({ bypassMemoryCache: true }),
     );
     expect(db.batch).toHaveBeenCalledTimes(2);
     expect(db.updateSets).toContainEqual(expect.objectContaining({

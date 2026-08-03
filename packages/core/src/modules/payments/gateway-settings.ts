@@ -1,83 +1,18 @@
 // src/modules/payments/gateway-settings.ts
-// Reads payment gateway credentials from the `settings` DB table.
-// Results are cached in-memory (per isolate) for 5 minutes.
-//
-// SECURITY: Decrypted credentials are NEVER written to KV or any persistent
-// store. In-memory cache is scoped to the Worker isolate lifetime and is
-// automatically cleared on cold start — this is the correct behavior.
-//
-// Settings are set by the admin dashboard (not environment variables).
+// Reads payment gateway configuration from the authoritative `settings` table.
+// Request paths may load one relational snapshot, but decrypted credentials are
+// never retained in Worker-global memory or written to KV.
 
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { settings } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import { getStripeCredentialEnvironment } from "@scalius/shared/payment-gateway-environment";
-import type { GatewaySettingsReadOptions } from "./gateway-registry";
 import { registerGateway } from "./gateway-registry";
 import {
   encodeEncryptedCredential,
   encryptCredentials,
   readStoredCredentialStrict,
 } from "@scalius/core/utils/credential-encryption";
-
-// ---------------------------------------------------------------------------
-// In-memory credential cache (per-isolate, lost on cold start)
-// ---------------------------------------------------------------------------
-
-export const FRESH_GATEWAY_SETTINGS_READ_OPTIONS = {
-  bypassMemoryCache: true,
-} as const satisfies GatewaySettingsReadOptions;
-
-const credentialCache = new Map<string, { data: unknown; expiry: number }>();
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
-
-function getCachedCredential<T>(key: string): T | null {
-  const entry = credentialCache.get(key);
-  if (entry && Date.now() < entry.expiry) return entry.data as T;
-  credentialCache.delete(key);
-  return null;
-}
-
-function setCachedCredential(key: string, data: unknown): void {
-  credentialCache.set(key, { data, expiry: Date.now() + CACHE_TTL_MS });
-}
-
-function invalidateCachedCredential(key: string): void {
-  credentialCache.delete(key);
-}
-
-async function deleteLegacyCredentialKv(
-  kv: KVNamespace | undefined,
-  key: string,
-): Promise<void> {
-  if (!kv) return;
-  try {
-    await kv.delete(key);
-  } catch (error: unknown) {
-    console.warn(
-      `[Payments] Legacy KV credential cache delete failed for ${key}:`,
-      error instanceof Error ? error.message : error,
-    );
-  }
-}
-
-async function cleanupLegacyCredentialKv(
-  kv: KVNamespace | undefined,
-  key: string,
-): Promise<void> {
-  if (!kv) return;
-  try {
-    const kvEntry = await kv.get(key);
-    if (kvEntry) {
-      await deleteLegacyCredentialKv(kv, key);
-    }
-  } catch (error: unknown) {
-    console.warn(
-      `[Payments] Legacy KV credential cache lookup failed for ${key}:`,
-      error instanceof Error ? error.message : error,
-    );
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -186,7 +121,6 @@ export interface GatewaySettingsStoredRow {
 // ---------------------------------------------------------------------------
 
 const STRIPE_CATEGORY = "stripe";
-const STRIPE_CACHE_KEY = "gw:stripe";
 const STRIPE_PLACEHOLDER_VALUES = new Set([
   "dummy",
   "placeholder",
@@ -284,29 +218,10 @@ export function isStripeCheckoutUsable(
 
 export async function getStripeSettings(
   db: Database,
-  kv?: KVNamespace,
   encryptionKey?: string,
-  options: GatewaySettingsReadOptions = {},
 ): Promise<StripeSettings | null> {
-  // Try in-memory cache first
-  if (!options.bypassMemoryCache) {
-    const cached = getCachedCredential<StripeSettings>(STRIPE_CACHE_KEY);
-    if (cached) return cached;
-  }
-
-  // Migration path: if KV has a stale entry from before this fix, delete it.
-  await cleanupLegacyCredentialKv(kv, STRIPE_CACHE_KEY);
-
   const values = await readCategory(db, STRIPE_CATEGORY);
-  const stripeSettings = await resolveStripeSettingsFromValues(values, encryptionKey);
-  if (!stripeSettings) return null;
-
-  // Cache in memory only — never persist decrypted credentials
-  if (!options.bypassMemoryCache) {
-    setCachedCredential(STRIPE_CACHE_KEY, stripeSettings);
-  }
-
-  return stripeSettings;
+  return resolveStripeSettingsFromValues(values, encryptionKey);
 }
 
 async function resolveStripeSettingsFromValues(
@@ -329,19 +244,11 @@ async function resolveStripeSettingsFromValues(
   };
 }
 
-/** Invalidate the Stripe settings cache (call after saving new settings). */
-export async function invalidateStripeCache(kv?: KVNamespace): Promise<void> {
-  invalidateCachedCredential(STRIPE_CACHE_KEY);
-  // Also clean up any legacy KV entries
-  await deleteLegacyCredentialKv(kv, STRIPE_CACHE_KEY);
-}
-
 // ---------------------------------------------------------------------------
 // SSLCommerz
 // ---------------------------------------------------------------------------
 
 const SSL_CATEGORY = "sslcommerz";
-const SSL_CACHE_KEY = "gw:sslcommerz";
 const SSLCOMMERZ_STORED_SECRET_MARKER = "__stored__";
 const SSLCOMMERZ_PLACEHOLDER_VALUES = new Set([
   "dummy",
@@ -424,29 +331,10 @@ export function isSSLCommerzCheckoutUsable(
 
 export async function getSSLCommerzSettings(
   db: Database,
-  kv?: KVNamespace,
   encryptionKey?: string,
-  options: GatewaySettingsReadOptions = {},
 ): Promise<SSLCommerzSettings | null> {
-  // Try in-memory cache first
-  if (!options.bypassMemoryCache) {
-    const cached = getCachedCredential<SSLCommerzSettings>(SSL_CACHE_KEY);
-    if (cached) return cached;
-  }
-
-  // Migration path: clean up stale KV entries.
-  await cleanupLegacyCredentialKv(kv, SSL_CACHE_KEY);
-
   const values = await readCategory(db, SSL_CATEGORY);
-  const sslSettings = await resolveSSLCommerzSettingsFromValues(values, encryptionKey);
-  if (!sslSettings) return null;
-
-  // Cache in memory only — never persist decrypted credentials
-  if (!options.bypassMemoryCache) {
-    setCachedCredential(SSL_CACHE_KEY, sslSettings);
-  }
-
-  return sslSettings;
+  return resolveSSLCommerzSettingsFromValues(values, encryptionKey);
 }
 
 async function resolveSSLCommerzSettingsFromValues(
@@ -470,19 +358,11 @@ async function resolveSSLCommerzSettingsFromValues(
   };
 }
 
-/** Invalidate the SSLCommerz settings cache. */
-export async function invalidateSSLCommerzCache(kv?: KVNamespace): Promise<void> {
-  invalidateCachedCredential(SSL_CACHE_KEY);
-  // Also clean up any legacy KV entries
-  await deleteLegacyCredentialKv(kv, SSL_CACHE_KEY);
-}
-
 // ---------------------------------------------------------------------------
 // Polar
 // ---------------------------------------------------------------------------
 
 const POLAR_CATEGORY = "polar";
-const POLAR_CACHE_KEY = "gw:polar";
 const POLAR_PLACEHOLDER_VALUES = new Set([
   "dummy",
   "placeholder",
@@ -566,29 +446,10 @@ export function isPolarCheckoutUsable(
 
 export async function getPolarSettings(
   db: Database,
-  kv?: KVNamespace,
   encryptionKey?: string,
-  options: GatewaySettingsReadOptions = {},
 ): Promise<PolarSettings | null> {
-  // Try in-memory cache first
-  if (!options.bypassMemoryCache) {
-    const cached = getCachedCredential<PolarSettings>(POLAR_CACHE_KEY);
-    if (cached) return cached;
-  }
-
-  // Migration path: clean up stale KV entries.
-  await cleanupLegacyCredentialKv(kv, POLAR_CACHE_KEY);
-
   const values = await readCategory(db, POLAR_CATEGORY);
-  const polarSettings = await resolvePolarSettingsFromValues(values, encryptionKey);
-  if (!polarSettings) return null;
-
-  // Cache in memory only — never persist decrypted credentials
-  if (!options.bypassMemoryCache) {
-    setCachedCredential(POLAR_CACHE_KEY, polarSettings);
-  }
-
-  return polarSettings;
+  return resolvePolarSettingsFromValues(values, encryptionKey);
 }
 
 async function resolvePolarSettingsFromValues(
@@ -610,13 +471,6 @@ async function resolvePolarSettingsFromValues(
     enabled: values.enabled !== "false",
     credentialErrors: compactErrors([accessToken.error, webhookSecret.error]),
   };
-}
-
-/** Invalidate the Polar settings cache. */
-export async function invalidatePolarCache(kv?: KVNamespace): Promise<void> {
-  invalidateCachedCredential(POLAR_CACHE_KEY);
-  // Also clean up any legacy KV entries
-  await deleteLegacyCredentialKv(kv, POLAR_CACHE_KEY);
 }
 
 // ---------------------------------------------------------------------------
@@ -665,7 +519,6 @@ export async function upsertEncryptedSetting(
 // ---------------------------------------------------------------------------
 
 const PAYMENT_METHODS_CATEGORY = "payment_methods";
-const PAYMENT_METHODS_CACHE_KEY = "gw:payment_methods";
 
 export interface PaymentMethodsConfig {
   /** Which payment methods are enabled for the storefront */
@@ -728,61 +581,112 @@ export const STOREFRONT_GATEWAY_SETTING_CATEGORIES = [
   POLAR_CATEGORY,
 ] as const;
 
-export async function resolveActivePaymentMethodsFromRows(
+export interface PaymentGatewaySettingsSnapshot {
+  preferences: PaymentMethodPreferences;
+  activePaymentMethods: PaymentMethodsConfig;
+  settings: {
+    stripe: StripeSettings | null;
+    sslcommerz: SSLCommerzSettings | null;
+    polar: PolarSettings | null;
+    cod: { enabled: true };
+  };
+}
+
+type ResolvedGatewaySettings = PaymentGatewaySettingsSnapshot["settings"];
+
+function groupGatewaySettingsRows(
   rows: readonly GatewaySettingsStoredRow[],
-  encryptionKey?: string,
-): Promise<PaymentMethodsConfig> {
+): Map<string, Record<string, string>> {
   const byCategory = new Map<string, Record<string, string>>();
   for (const row of rows) {
     const values = byCategory.get(row.category) ?? {};
     values[row.key] = row.value;
     byCategory.set(row.category, values);
   }
+  return byCategory;
+}
 
-  const {
-    enabledMethods,
-    defaultMethod,
-    hasExplicitEnabledMethods,
-  } = parsePaymentMethodPreferences(byCategory.get(PAYMENT_METHODS_CATEGORY) ?? {});
+function buildActivePaymentMethods(
+  preferences: PaymentMethodPreferences,
+  resolved: ResolvedGatewaySettings,
+): PaymentMethodsConfig {
   const validMethods: ("stripe" | "sslcommerz" | "polar" | "cod")[] = [];
-
-  for (const method of enabledMethods) {
-    if (method === "cod") {
-      validMethods.push(method);
-      continue;
-    }
-    if (method === "stripe") {
-      const stripe = await resolveStripeSettingsFromValues(
-        byCategory.get(STRIPE_CATEGORY) ?? {},
-        encryptionKey,
-      );
-      if (isStripeCheckoutUsable(stripe)) validMethods.push(method);
-      continue;
-    }
-    if (method === "sslcommerz") {
-      const sslcommerz = await resolveSSLCommerzSettingsFromValues(
-        byCategory.get(SSL_CATEGORY) ?? {},
-        encryptionKey,
-      );
-      if (isSSLCommerzCheckoutUsable(sslcommerz)) validMethods.push(method);
-      continue;
-    }
-    const polar = await resolvePolarSettingsFromValues(
-      byCategory.get(POLAR_CATEGORY) ?? {},
-      encryptionKey,
-    );
-    if (isPolarCheckoutUsable(polar)) validMethods.push(method);
+  for (const method of preferences.enabledMethods) {
+    if (method === "cod") validMethods.push(method);
+    else if (method === "stripe" && isStripeCheckoutUsable(resolved.stripe)) validMethods.push(method);
+    else if (method === "sslcommerz" && isSSLCommerzCheckoutUsable(resolved.sslcommerz)) validMethods.push(method);
+    else if (method === "polar" && isPolarCheckoutUsable(resolved.polar)) validMethods.push(method);
   }
-
-  if (validMethods.length === 0 && !hasExplicitEnabledMethods) {
+  if (validMethods.length === 0 && !preferences.hasExplicitEnabledMethods) {
     validMethods.push("cod");
   }
   return {
     enabledMethods: validMethods,
-    defaultMethod: validMethods.includes(defaultMethod)
-      ? defaultMethod
+    defaultMethod: validMethods.includes(preferences.defaultMethod)
+      ? preferences.defaultMethod
       : (validMethods[0] ?? "cod"),
   };
+}
+
+async function resolvePaymentGatewaySettingsSnapshotFromRows(
+  rows: readonly GatewaySettingsStoredRow[],
+  encryptionKey?: string,
+): Promise<PaymentGatewaySettingsSnapshot> {
+  const byCategory = groupGatewaySettingsRows(rows);
+  const preferences = parsePaymentMethodPreferences(
+    byCategory.get(PAYMENT_METHODS_CATEGORY) ?? {},
+  );
+  const [stripe, sslcommerz, polar] = await Promise.all([
+    resolveStripeSettingsFromValues(byCategory.get(STRIPE_CATEGORY) ?? {}, encryptionKey),
+    resolveSSLCommerzSettingsFromValues(byCategory.get(SSL_CATEGORY) ?? {}, encryptionKey),
+    resolvePolarSettingsFromValues(byCategory.get(POLAR_CATEGORY) ?? {}, encryptionKey),
+  ]);
+  const resolved = { stripe, sslcommerz, polar, cod: { enabled: true as const } };
+  return {
+    preferences,
+    activePaymentMethods: buildActivePaymentMethods(preferences, resolved),
+    settings: resolved,
+  };
+}
+
+export async function resolveActivePaymentMethodsFromRows(
+  rows: readonly GatewaySettingsStoredRow[],
+  encryptionKey?: string,
+): Promise<PaymentMethodsConfig> {
+  const byCategory = groupGatewaySettingsRows(rows);
+  const preferences = parsePaymentMethodPreferences(
+    byCategory.get(PAYMENT_METHODS_CATEGORY) ?? {},
+  );
+  const enabled = new Set(preferences.enabledMethods);
+  const [stripe, sslcommerz, polar] = await Promise.all([
+    enabled.has("stripe")
+      ? resolveStripeSettingsFromValues(byCategory.get(STRIPE_CATEGORY) ?? {}, encryptionKey)
+      : null,
+    enabled.has("sslcommerz")
+      ? resolveSSLCommerzSettingsFromValues(byCategory.get(SSL_CATEGORY) ?? {}, encryptionKey)
+      : null,
+    enabled.has("polar")
+      ? resolvePolarSettingsFromValues(byCategory.get(POLAR_CATEGORY) ?? {}, encryptionKey)
+      : null,
+  ]);
+  return buildActivePaymentMethods(preferences, {
+    stripe,
+    sslcommerz,
+    polar,
+    cod: { enabled: true },
+  });
+}
+
+export async function getPaymentGatewaySettingsSnapshot(
+  db: Database,
+  encryptionKey?: string,
+): Promise<PaymentGatewaySettingsSnapshot> {
+  const rows = await db
+    .select({ category: settings.category, key: settings.key, value: settings.value })
+    .from(settings)
+    .where(inArray(settings.category, [...STOREFRONT_GATEWAY_SETTING_CATEGORIES]))
+    .all();
+  return resolvePaymentGatewaySettingsSnapshotFromRows(rows, encryptionKey);
 }
 
 export async function getPaymentMethodPreferences(
@@ -800,80 +704,14 @@ export async function getPaymentMethodPreferences(
  */
 export async function getActivePaymentMethods(
   db: Database,
-  kv?: KVNamespace,
   encryptionKey?: string,
-  options: GatewaySettingsReadOptions = {},
 ): Promise<PaymentMethodsConfig> {
-  // Try in-memory cache first
-  if (!options.bypassMemoryCache) {
-    const cached = getCachedCredential<PaymentMethodsConfig>(PAYMENT_METHODS_CACHE_KEY);
-    if (cached) return cached;
-  }
-
-  // Migration path: clean up stale KV entries
-  if (kv) {
-    const kvEntry = await kv.get(PAYMENT_METHODS_CACHE_KEY);
-    if (kvEntry) await kv.delete(PAYMENT_METHODS_CACHE_KEY);
-  }
-
-  const {
-    enabledMethods,
-    defaultMethod,
-    hasExplicitEnabledMethods,
-  } = await getPaymentMethodPreferences(db);
-
-  // Cross-check: only include methods with valid credentials
-  const validMethods: ("stripe" | "sslcommerz" | "polar" | "cod")[] = [];
-
-  for (const method of enabledMethods) {
-    if (method === "cod") {
-      validMethods.push("cod");
-      continue;
-    }
-    if (method === "stripe") {
-      const stripe = await getStripeSettings(db, kv, encryptionKey, options);
-      if (isStripeCheckoutUsable(stripe)) {
-        validMethods.push("stripe");
-      }
-    }
-    if (method === "sslcommerz") {
-      const ssl = await getSSLCommerzSettings(db, kv, encryptionKey, options);
-      if (isSSLCommerzCheckoutUsable(ssl)) {
-        validMethods.push("sslcommerz");
-      }
-    }
-    if (method === "polar") {
-      const polar = await getPolarSettings(db, kv, encryptionKey, options);
-      if (isPolarCheckoutUsable(polar)) {
-        validMethods.push("polar");
-      }
-    }
-  }
-
-  // Legacy/default stores get COD, but explicit merchant allowlists fail closed
-  // when no selected method is actually usable.
-  if (validMethods.length === 0 && !hasExplicitEnabledMethods) {
-    validMethods.push("cod");
-  }
-
-  const config: PaymentMethodsConfig = {
-    enabledMethods: validMethods,
-    defaultMethod: validMethods.includes(defaultMethod) ? defaultMethod : (validMethods[0] ?? "cod"),
-  };
-
-  // Cache in memory only
-  if (!options.bypassMemoryCache) {
-    setCachedCredential(PAYMENT_METHODS_CACHE_KEY, config);
-  }
-
-  return config;
-}
-
-/** Invalidate payment methods cache (call when admin saves changes). */
-export async function invalidatePaymentMethodsCache(kv?: KVNamespace): Promise<void> {
-  invalidateCachedCredential(PAYMENT_METHODS_CACHE_KEY);
-  // Also clean up any legacy KV entries
-  await deleteLegacyCredentialKv(kv, PAYMENT_METHODS_CACHE_KEY);
+  const rows = await db
+    .select({ category: settings.category, key: settings.key, value: settings.value })
+    .from(settings)
+    .where(inArray(settings.category, [...STOREFRONT_GATEWAY_SETTING_CATEGORIES]))
+    .all();
+  return resolveActivePaymentMethodsFromRows(rows, encryptionKey);
 }
 
 // ---------------------------------------------------------------------------
@@ -884,10 +722,6 @@ registerGateway({
   id: "stripe",
   name: "Card Payment",
   settingsCategory: STRIPE_CATEGORY,
-  getSettings: async (db, kv, encryptionKey, options) => {
-    const s = await getStripeSettings(db, kv, encryptionKey, options);
-    return isStripeCheckoutUsable(s) ? { ...s, enabled: true } : null;
-  },
   getPublicConfig: (s) => ({
     publishableKey: typeof s.publishableKey === "string" ? s.publishableKey.trim() : "",
     testMode: getStripeCredentialEnvironment(s) === "test",
@@ -899,10 +733,6 @@ registerGateway({
   id: "sslcommerz",
   name: "Online Payment",
   settingsCategory: SSL_CATEGORY,
-  getSettings: async (db, kv, encryptionKey, options) => {
-    const s = await getSSLCommerzSettings(db, kv, encryptionKey, options);
-    return isSSLCommerzCheckoutUsable(s) ? { ...s, enabled: true } : null;
-  },
   getPublicConfig: (s) => ({
     sandbox: s.sandbox,
     testMode: s.sandbox === true,
@@ -914,10 +744,6 @@ registerGateway({
   id: "polar",
   name: "Polar",
   settingsCategory: POLAR_CATEGORY,
-  getSettings: async (db, kv, encryptionKey, options) => {
-    const s = await getPolarSettings(db, kv, encryptionKey, options);
-    return isPolarCheckoutUsable(s) ? { ...s, enabled: true } : null;
-  },
   getPublicConfig: (s) => ({
     sandbox: s.sandbox,
     testMode: s.sandbox === true,
@@ -929,6 +755,5 @@ registerGateway({
   id: "cod",
   name: "Cash on Delivery",
   settingsCategory: "cod",
-  getSettings: async () => ({ enabled: true }),
   getCurrencies: (localCurrency) => [localCurrency],
 });

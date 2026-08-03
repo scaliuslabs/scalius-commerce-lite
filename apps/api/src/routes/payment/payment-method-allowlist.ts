@@ -1,7 +1,6 @@
 import type { Database } from "@scalius/database/client";
 import { siteSettings } from "@scalius/database/schema";
 import {
-  FRESH_GATEWAY_SETTINGS_READ_OPTIONS,
   getPaymentMethodPreferences,
   getPolarCheckoutReadiness,
   getPolarSettings,
@@ -123,46 +122,41 @@ export function assertGatewayCheckoutSettings(
 
 export function loadCheckoutGatewaySettings(
   db: Database,
-  kv: KVNamespace | undefined,
   encryptionKey: string | undefined,
   method: "stripe",
 ): Promise<StripeSettings>;
 export function loadCheckoutGatewaySettings(
   db: Database,
-  kv: KVNamespace | undefined,
   encryptionKey: string | undefined,
   method: "sslcommerz",
 ): Promise<SSLCommerzSettings>;
 export function loadCheckoutGatewaySettings(
   db: Database,
-  kv: KVNamespace | undefined,
   encryptionKey: string | undefined,
   method: "polar",
 ): Promise<PolarSettings>;
 export function loadCheckoutGatewaySettings(
   db: Database,
-  kv: KVNamespace | undefined,
   encryptionKey: string | undefined,
   method: StorefrontPaymentMethod,
 ): Promise<GatewaySettingsByMethod[StorefrontPaymentMethod]>;
 export async function loadCheckoutGatewaySettings(
   db: Database,
-  kv: KVNamespace | undefined,
   encryptionKey: string | undefined,
   method: StorefrontPaymentMethod,
 ): Promise<GatewaySettingsByMethod[StorefrontPaymentMethod]> {
   if (method === "stripe") {
-    const settings = await getStripeSettings(db, kv, encryptionKey, FRESH_GATEWAY_SETTINGS_READ_OPTIONS);
+    const settings = await getStripeSettings(db, encryptionKey);
     assertGatewayCheckoutSettings(method, settings);
     return settings;
   }
   if (method === "sslcommerz") {
-    const settings = await getSSLCommerzSettings(db, kv, encryptionKey, FRESH_GATEWAY_SETTINGS_READ_OPTIONS);
+    const settings = await getSSLCommerzSettings(db, encryptionKey);
     assertGatewayCheckoutSettings(method, settings);
     return settings;
   }
 
-  const settings = await getPolarSettings(db, kv, encryptionKey, FRESH_GATEWAY_SETTINGS_READ_OPTIONS);
+  const settings = await getPolarSettings(db, encryptionKey);
   assertGatewayCheckoutSettings(method, settings);
   return settings;
 }

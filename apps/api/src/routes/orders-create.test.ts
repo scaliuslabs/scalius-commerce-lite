@@ -95,7 +95,6 @@ vi.mock("@scalius/core/modules/customers/customer-auth.service", () => ({
 
 vi.mock("@scalius/core/modules/payments/gateway-settings", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@scalius/core/modules/payments/gateway-settings")>()),
-  FRESH_GATEWAY_SETTINGS_READ_OPTIONS: { bypassMemoryCache: true },
   getActivePaymentMethods: mocks.getActivePaymentMethods,
 }));
 
@@ -320,9 +319,7 @@ function createTestApp(options: {
     }, cartValidation);
     const activePaymentMethods = await mocks.getActivePaymentMethods(
       database,
-      kv,
       encryptionKey,
-      { bypassMemoryCache: true },
     );
     return {
       authorityRevision: 1,
@@ -2402,9 +2399,7 @@ describe("create order commit/KV ordering", () => {
     });
     expect(mocks.getActivePaymentMethods).toHaveBeenCalledWith(
       db,
-      kv,
       undefined,
-      expect.objectContaining({ bypassMemoryCache: true }),
     );
     expect(mocks.rateLimit).not.toHaveBeenCalled();
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();

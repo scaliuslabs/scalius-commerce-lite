@@ -308,7 +308,6 @@ async function createStripePaymentSessionForOrder(
 
   const stripe = await loadCheckoutGatewaySettings(
     db,
-    c.env.CACHE,
     encryptionKey,
     "stripe",
   );
@@ -459,7 +458,7 @@ export async function resolveCustomerPaymentSessionRecovery(
       orderCurrency,
       currentCurrency.getCode,
     );
-    await loadCheckoutGatewaySettings(db, c.env.CACHE, encryptionKey, gateway);
+    await loadCheckoutGatewaySettings(db, encryptionKey, gateway);
 
     return activeRecovery(gateway, policy);
   } catch (error: unknown) {
@@ -508,7 +507,6 @@ async function createSSLCommerzPaymentSessionForOrder(
 
   const ssl = await loadCheckoutGatewaySettings(
     db,
-    c.env.CACHE,
     encryptionKey,
     "sslcommerz",
   );
@@ -645,7 +643,6 @@ async function createPolarPaymentSessionForOrder(
   order: PaymentSessionOrderRow,
 ): Promise<(CreatedCustomerPaymentSession & { gateway: "polar" }) | PaymentSessionProcessingResponse> {
   const db = c.get("db");
-  const kv = c.env.CACHE;
   assertOrderCanReachGatewayReadinessCheck(order, PaymentMethod.POLAR, "Polar");
   const orderCurrency = resolveAuthoritativeOrderCurrency(order);
   const currentCurrency = createCurrentCurrencyReader(db);
@@ -658,7 +655,6 @@ async function createPolarPaymentSessionForOrder(
   }, checkoutFlowSettings, orderCurrency, currentCurrency.getCode);
   const polarSettings = await loadCheckoutGatewaySettings(
     db,
-    kv,
     encryptionKey,
     "polar",
   );
