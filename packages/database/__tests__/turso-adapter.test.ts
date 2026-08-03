@@ -1,12 +1,22 @@
-import { sql } from "drizzle-orm";
+import {
+  DatabaseSync,
+  type SQLInputValue,
+  type SQLOutputValue,
+} from "node:sqlite";
+import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import { describe, expect, it, vi } from "vitest";
 import { safeBatch } from "../src/batch-helper";
-import { checkoutAttempts } from "../src/schema";
+import {
+  checkoutAttempts,
+  customers,
+  customerSessions,
+} from "../src/schema";
 import {
   createTursoDatabase,
   isTursoConflictError,
   type TursoConnection,
 } from "../src/turso-adapter";
+import { createProviderSchemaDatabase } from "../scripts/sqlite-provider-schema";
 
 function createAdapter(
   batch: TursoConnection["batch"],
@@ -21,6 +31,49 @@ function createAdapter(
       ...overrides,
     },
   );
+}
+
+function createStatefulConnection(
+  database: DatabaseSync,
+  requestedModes: Array<string | undefined>,
+): TursoConnection {
+  return {
+    async batch(statements, options) {
+      requestedModes.push(options?.mode);
+      const transactional = options?.mode !== undefined;
+      if (transactional) {
+        database.exec(options?.mode === "read" ? "BEGIN" : "BEGIN IMMEDIATE");
+      }
+      try {
+        const results = statements.map((statement) => {
+          const sqlText = typeof statement === "string" ? statement : statement.sql;
+          const args = typeof statement === "string" || statement.args === undefined
+            ? []
+            : statement.args;
+          if (!Array.isArray(args)) {
+            throw new Error("Stateful Turso test connection accepts positional arguments only.");
+          }
+          const prepared = database.prepare(sqlText);
+          if (prepared.columns().length === 0) {
+            const result = prepared.run(...args as SQLInputValue[]);
+            return { rows: [], rowsAffected: Number(result.changes) };
+          }
+          prepared.setReturnArrays(true);
+          return {
+            rows: prepared.all(
+              ...args as SQLInputValue[],
+            ) as unknown as SQLOutputValue[][],
+            rowsAffected: 0,
+          };
+        });
+        if (transactional) database.exec("COMMIT");
+        return results;
+      } catch (error) {
+        if (transactional && database.isTransaction) database.exec("ROLLBACK");
+        throw error;
+      }
+    },
+  };
 }
 
 describe("Turso SQLite adapter", () => {
@@ -138,5 +191,101 @@ describe("Turso SQLite adapter", () => {
     expect(batch.mock.calls[0]?.[1]).toEqual({ mode: "read", raw: true });
     expect(batch.mock.calls[1]?.[0]?.[0]?.sql).toMatch(/^EXPLAIN /);
     expect(batch.mock.calls[2]?.[0]?.[0]?.sql).toMatch(/^EXPLAIN /);
+  });
+
+  it("persists, revokes, expires, and rolls back sessions through the stateful adapter", async () => {
+    const database = await createProviderSchemaDatabase("turso");
+    database.exec("PRAGMA foreign_keys = ON");
+    const requestedModes: Array<string | undefined> = [];
+    const db = createTursoDatabase(
+      { url: "turso://stateful-conformance.turso.io", authToken: "token" },
+      {
+        connect: () => createStatefulConnection(database, requestedModes),
+        writeBatchMode: "concurrent",
+      },
+    );
+    const nowSeconds = 1_900_000_000;
+
+    try {
+      await safeBatch(db, [
+        db.insert(customers).values({
+          id: "customer_stateful",
+          name: "Stateful Buyer",
+          email: "stateful@example.test",
+          phone: "+8801700000001",
+        }),
+        db.insert(customerSessions).values({
+          tokenHash: "a".repeat(64),
+          customerId: "customer_stateful",
+          expiresAt: nowSeconds + 3_600,
+        }),
+      ] as const);
+
+      const [activeRows] = await safeBatch(db, [
+        db.select({
+          customerId: customerSessions.customerId,
+          name: customers.name,
+        })
+          .from(customerSessions)
+          .innerJoin(customers, eq(customerSessions.customerId, customers.id))
+          .where(and(
+            eq(customerSessions.tokenHash, "a".repeat(64)),
+            isNull(customerSessions.revokedAt),
+            gt(customerSessions.expiresAt, nowSeconds),
+          )),
+      ] as const);
+      expect(activeRows).toEqual([{
+        customerId: "customer_stateful",
+        name: "Stateful Buyer",
+      }]);
+
+      await db.update(customerSessions)
+        .set({ revokedAt: nowSeconds, updatedAt: nowSeconds })
+        .where(eq(customerSessions.tokenHash, "a".repeat(64)));
+      await expect(db.select({ tokenHash: customerSessions.tokenHash })
+        .from(customerSessions)
+        .where(and(
+          eq(customerSessions.tokenHash, "a".repeat(64)),
+          isNull(customerSessions.revokedAt),
+          gt(customerSessions.expiresAt, nowSeconds),
+        ))
+        .get()).resolves.toBeUndefined();
+
+      await db.insert(customerSessions).values({
+        tokenHash: "b".repeat(64),
+        customerId: "customer_stateful",
+        expiresAt: nowSeconds - 1,
+      });
+      await expect(db.select({ tokenHash: customerSessions.tokenHash })
+        .from(customerSessions)
+        .where(and(
+          eq(customerSessions.tokenHash, "b".repeat(64)),
+          isNull(customerSessions.revokedAt),
+          gt(customerSessions.expiresAt, nowSeconds),
+        ))
+        .get()).resolves.toBeUndefined();
+
+      await expect(safeBatch(db, [
+        db.insert(customers).values({
+          id: "customer_rollback",
+          name: "Rollback Buyer",
+          phone: "+8801700000002",
+        }),
+        db.insert(customerSessions).values({
+          tokenHash: "c".repeat(64),
+          customerId: "missing_customer",
+          expiresAt: nowSeconds + 3_600,
+        }),
+      ] as const)).rejects.toThrow(/foreign key/i);
+      await expect(db.select({ id: customers.id })
+        .from(customers)
+        .where(eq(customers.id, "customer_rollback"))
+        .get()).resolves.toBeUndefined();
+
+      expect(requestedModes).toContain("concurrent");
+      expect(requestedModes).toContain("read");
+    } finally {
+      database.close();
+    }
   });
 });
