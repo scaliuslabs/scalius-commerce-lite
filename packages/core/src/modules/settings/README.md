@@ -199,7 +199,7 @@ All under `/api/v1/admin/settings/` -- split across multiple route files:
 | GET | `/email` | Get transactional email provider settings: Cloudflare binding status, Resend key status, selected provider, and sender |
 | POST | `/email` | Save selected email provider + sender. Skips masked Resend key values and encrypts new Resend keys |
 | GET | `/firebase` | Get Firebase settings (masks service account) |
-| POST | `/firebase` | Save Firebase service account + public config. Service-account saves validate required fields, require `CREDENTIAL_ENCRYPTION_KEY`, store encrypted `enc:` values, and invalidate `FIREBASE_CONFIG` layout cache |
+| POST | `/firebase` | Save Firebase service account + public config. Service-account saves validate required fields, require `CREDENTIAL_ENCRYPTION_KEY`, and store encrypted `enc:` values |
 
 ### `payments.ts` -- Payment gateway settings
 | Method | Path | Description |
@@ -207,11 +207,11 @@ All under `/api/v1/admin/settings/` -- split across multiple route files:
 | GET | `/payment-methods` | Get raw merchant-selected methods/default, effective active methods/default, and gateway readiness (`configured`, `providerEnabled`, `checkoutSelected`, `checkoutVisible`, `usable`, `missingFields`, `blockedReason`) |
 | POST | `/payment-methods` | Atomically save enabled methods + default. Validates default is in enabled list, selected gateways are checkout-usable, and the current checkout flow still has a compatible method. Invalidates checkout config/cache |
 | GET | `/stripe` | Get Stripe keys (masks secret + webhook) |
-| POST | `/stripe` | Save Stripe keys/provider enabled state. Rejects enabled saves until secret key, publishable key, and webhook secret are effectively present and not exact placeholder/demo values. Invalidates stripe, payment methods, and checkout config/cache |
+| POST | `/stripe` | Save Stripe keys/provider enabled state. Rejects enabled saves until secret key, publishable key, and webhook secret are effectively present and not exact placeholder/demo values. Invalidates checkout projections |
 | GET | `/sslcommerz` | Get SSLCommerz credentials (masks password) |
-| POST | `/sslcommerz` | Save SSLCommerz credentials/provider enabled state. Rejects enabled saves until store ID and store password are effectively present. Invalidates sslcommerz, payment methods, and checkout config/cache |
+| POST | `/sslcommerz` | Save SSLCommerz credentials/provider enabled state. Rejects enabled saves until store ID and store password are effectively present. Invalidates checkout projections |
 | GET | `/polar` | Get Polar credentials (masks token + webhook) |
-| POST | `/polar` | Save Polar credentials/provider enabled state. Rejects enabled saves until access token, product ID, and webhook secret are effectively present and not exact placeholder/demo values. Invalidates polar, payment methods, and checkout config/cache |
+| POST | `/polar` | Save Polar credentials/provider enabled state. Rejects enabled saves until access token, product ID, and webhook secret are effectively present and not exact placeholder/demo values. Invalidates checkout projections |
 
 Payment gateway secret saves for Stripe, SSLCommerz, and Polar require the dedicated `CREDENTIAL_ENCRYPTION_KEY` and fail closed before settings writes or checkout-cache invalidation when that secret is missing. Runtime/readiness reads use the dedicated credential key and fail closed on missing/wrong-key ciphertext; legacy plaintext and old bare AES-GCM rows remain readable only when they do not require JWT fallback.
 
@@ -256,8 +256,7 @@ Storefront order creation must enforce the same effective checkout policy server
 - `@scalius/database` -- `siteSettings`, `settings` tables
 - `@scalius/shared/storefront-url` -- URL path builder
 - `@scalius/shared/currency` -- `getDecimalPlaces()` for ISO 4217 lookup
-- `@scalius/shared/layout-cache` -- in-memory layout cache
-- `@scalius/core/modules/payments/gateway-settings` -- `upsertSetting()`, gateway-specific getters/invalidators
+- `@scalius/core/modules/payments/gateway-settings` -- authoritative request-scoped gateway snapshots, gateway-specific getters, and encrypted upserts
 - `@scalius/core/modules/payments/gateway-registry` -- `getRegisteredGateways()` for dynamic checkout config
 - Cloudflare KV -- optional caching layer (300s TTL for currency, storefront URL, site settings)
 

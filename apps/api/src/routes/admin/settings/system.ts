@@ -217,9 +217,7 @@ app.openapi(saveCheckoutFlowRoute, async (c) => {
     }
     const activePaymentMethods = await getActivePaymentMethods(
         db,
-        c.env.CACHE,
         credentialEncryptionKey,
-        { bypassMemoryCache: true },
     );
     const saved = await saveCheckoutFlowSettingsDocument(db, {
         ...body,
@@ -709,9 +707,6 @@ app.openapi(saveFirebaseRoute, async (c) => {
         if (typeof serviceAccount === "string" && serviceAccount !== MASKED) {
             await clearNotificationProviderBlocks(db, { channel: "push" });
         }
-
-        const { layoutCache, CACHE_KEYS } = await import("@scalius/shared/layout-cache");
-        layoutCache.invalidate(CACHE_KEYS.FIREBASE_CONFIG);
 
         return ok(c, { message: "Settings saved successfully" });
 });
