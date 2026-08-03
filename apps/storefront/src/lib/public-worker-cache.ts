@@ -32,9 +32,12 @@ const RESERVED_TOP_LEVEL_PATHS = new Set([
 const PUBLIC_STOREFRONT_CACHE_TAGS = new Set([
   "categories",
   "collections",
+  "discovery",
   "homepage",
   "layout",
+  "media",
   "pages",
+  "product-schema",
   "products",
   "search",
 ]);
@@ -63,20 +66,54 @@ function isCmsPagePath(pathname: string): boolean {
 }
 
 function resolvePublicPathTags(pathname: string): readonly string[] | null {
-  if (pathname === "/") return ["homepage", "layout", "products"];
+  if (pathname === "/") return ["homepage", "layout", "media", "products"];
   if (/^\/products\/[^/]+\/?$/.test(pathname)) {
-    return ["products", "layout"];
+    return ["products", "product-schema", "layout", "media"];
   }
   if (/^\/categories\/[^/]+\/?$/.test(pathname)) {
-    return ["categories", "products", "layout"];
+    return ["categories", "products", "layout", "media"];
   }
   if (/^\/collections\/[^/]+\/?$/.test(pathname)) {
-    return ["collections", "products", "layout"];
+    return ["collections", "products", "layout", "media"];
   }
-  if (/^\/search\/?$/.test(pathname)) return ["search", "products", "layout"];
+  if (/^\/search\/?$/.test(pathname)) {
+    return ["search", "products", "layout", "media"];
+  }
+  if (/^\/blog(?:\/[^/]+)?\/?$/.test(pathname)) {
+    return ["pages", "products", "layout", "media"];
+  }
+  if (pathname === "/blog/feed.xml") {
+    return ["pages", "products", "discovery"];
+  }
+  if (
+    pathname === "/robots.txt" ||
+    pathname === "/sitemap.xml" ||
+    pathname === "/sitemap.xsl" ||
+    /^\/sitemap-.*\.xml$/.test(pathname)
+  ) {
+    return [
+      "discovery",
+      "products",
+      "categories",
+      "collections",
+      "pages",
+      "layout",
+    ];
+  }
+  if (
+    pathname === "/api/product-feed.xml" ||
+    pathname === "/api/facebook-feed.xml"
+  ) {
+    return ["discovery", "products", "layout", "media"];
+  }
+  if (pathname === "/.well-known/ucp") {
+    return ["discovery", "products", "layout"];
+  }
   // CMS content can embed product shortcodes, so a low-frequency merchant
   // product edit purges this bounded lane without per-page dependency scans.
-  if (isCmsPagePath(pathname)) return ["pages", "products", "layout"];
+  if (isCmsPagePath(pathname)) {
+    return ["pages", "products", "layout", "media"];
+  }
   return null;
 }
 
@@ -130,10 +167,8 @@ export function decoratePublicStorefrontResponse(
   response: Response,
   policy: PublicStorefrontCachePolicy,
 ): Response {
-  const legacyCacheStatus = response.headers.get("X-Cache-Status") ?? "";
-  const passedPublicResponseGate = /^(HIT|MISS)(?:;|$)/.test(
-    legacyCacheStatus,
-  );
+  const cacheStatus = response.headers.get("X-Cache-Status") ?? "";
+  const passedPublicResponseGate = /^(?:HIT|MISS|NATIVE)(?:;|$)/.test(cacheStatus);
   const isNoStore = response.headers.get("Cache-Control")?.includes("no-store");
   if (!response.ok || (isNoStore && !passedPublicResponseGate)) {
     return response;

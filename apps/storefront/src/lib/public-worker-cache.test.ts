@@ -17,7 +17,7 @@ describe("public storefront Worker cache policy", () => {
 
     expect(left).toMatchObject({
       cacheKey: "/about?campaign=sale",
-      tags: ["pages", "products", "layout"],
+      tags: ["pages", "products", "layout", "media"],
     });
     expect(right?.cacheKey).toBe(left?.cacheKey);
   });
@@ -48,11 +48,13 @@ describe("public storefront Worker cache policy", () => {
   });
 
   it.each([
-    ["/", ["homepage", "layout", "products"]],
-    ["/products/fish", ["products", "layout"]],
-    ["/categories/fish", ["categories", "products", "layout"]],
-    ["/collections/featured", ["collections", "products", "layout"]],
-    ["/search?q=fish", ["search", "products", "layout"]],
+    ["/", ["homepage", "layout", "media", "products"]],
+    ["/products/fish", ["products", "product-schema", "layout", "media"]],
+    ["/categories/fish", ["categories", "products", "layout", "media"]],
+    ["/collections/featured", ["collections", "products", "layout", "media"]],
+    ["/search?q=fish", ["search", "products", "layout", "media"]],
+    ["/blog/news", ["pages", "products", "layout", "media"]],
+    ["/api/product-feed.xml", ["discovery", "products", "layout", "media"]],
   ])("caches anonymous public route %s for five seconds", (path, tags) => {
     const policy = getPublicStorefrontCachePolicy(
       new Request(`https://shop.example${path}`),
@@ -77,7 +79,7 @@ describe("public storefront Worker cache policy", () => {
       new Response("page", {
         headers: {
           "Cache-Control": "no-cache, no-store, must-revalidate",
-          "X-Cache-Status": "MISS; v=1; build=test",
+          "X-Cache-Status": "NATIVE",
         },
       }),
       policy,
@@ -87,7 +89,9 @@ describe("public storefront Worker cache policy", () => {
     expect(response.headers.get("Cloudflare-CDN-Cache-Control")).toBe(
       "public, max-age=5, must-revalidate",
     );
-    expect(response.headers.get("Cache-Tag")).toBe("pages,products,layout");
+    expect(response.headers.get("Cache-Tag")).toBe(
+      "pages,products,layout,media",
+    );
   });
 
   it("does not cache a no-store response that failed the inner public gate", () => {

@@ -99,7 +99,6 @@ interface Env {
   ASSETS: Fetcher;
 
   // Cloudflare KV namespace for cache-busting control
-  CACHE_CONTROL: KVNamespace;
 
   // Astro session storage for storefront SSR
   SESSION: KVNamespace;

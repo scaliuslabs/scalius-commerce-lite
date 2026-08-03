@@ -31,10 +31,9 @@ src/
     api/             # API client modules (per-domain fetch functions + typed unwrap)
     cart/            # Cart utility functions
     checkout/        # Checkout page logic + gateway handlers
-    edge-cache.ts    # L2 edge caching (Cache API + KV versioning/generations + ALS)
-    cache-generations.ts # Per-key product cache generation helpers
-    cache-namespace.ts # Canonical KV namespace resolver for version/generation keys
-    smart-cache.ts   # In-memory LRU cache (L1)
+    edge-cache.ts    # Concurrent SSR read coalescing (no retained values)
+    canonical-query.ts # Canonical public query-string handling
+    public-worker-cache.ts # Native cache eligibility, keys, tags, and TTL
     middleware-helper/ # CSP handler
     tracking/        # Analytics tracking
   pages/             # File-based routing
@@ -53,7 +52,7 @@ src/
     account.astro    # Customer account page
     account/orders/[id].astro # Private order detail, timeline, shipment/payment history, and owned payment recovery
   store/             # Global state (cart.ts, toast)
-  middleware.ts      # Edge caching + API context injection
+  middleware.ts      # Public/private response policy + API context injection
 ```
 
 ## Middleware (`src/middleware.ts`)
@@ -71,26 +70,19 @@ Injects Cloudflare Worker runtime bindings into AsyncLocalStorage for the reques
 - `STOREFRONT_URL` -- This storefront's URL (sitemaps and catalog feeds)
 - `API_TOKEN` -- Token for protected API operations
 
-### 2. Caching Middleware (`cachingMiddleware`)
+### 2. Response Policy Middleware (`responsePolicyMiddleware`)
 
-Implements a two-layer edge caching strategy for HTML pages:
+The default Worker entrypoint is an uncached safety gateway. It delegates only
+allowlisted anonymous `GET`/`HEAD` requests to the native `PublicStorefront`
+entrypoint. The public entrypoint owns cache keys, a five-second edge TTL, and
+semantic tags. Browser HTML is `no-store`; discovery XML/text is public but
+must revalidate. Requests with authorization, cookies, variant-selection
+parameters, cart, checkout, account, recovery, or other buyer state stay
+private and never reach the shared cache.
 
-**Cacheable paths** (regex-matched):
-- Homepage (`/`)
-- Product pages (`/products/{slug}`)
-- Category pages (`/categories/{slug}`)
-- Search (`/search`)
-- Discovery assets (`/robots.txt`, `/sitemap.xml`, `/sitemap-*.xml`, `/sitemap.xsl`, `/api/product-feed.xml`, `/api/facebook-feed.xml`); XML generation requires an absolute `STOREFRONT_URL` and returns non-cacheable `503` instead of relative/empty discovery URLs when it is missing. Successful discovery XML/text keeps public browser cache headers even when exact edge-cache generation lookup is bypassed. Feed XML cache keys use the `feed_products_` generation family and product sitemap XML uses `sitemap_products_`, so stock/availability and product discovery-exclusion invalidation reach rendered public XML. Sitemap index entries intentionally omit `lastmod` until a truthful child-sitemap modified timestamp is available, while child URL sitemaps emit only absolute `loc` plus truthful `lastmod`.
-- Generic pages (any path not matching excluded prefixes)
-
-**Non-cacheable paths**: `/api` routes except documented public discovery/proxy routes, `/cart`, `/checkout`, `/buy`, `/order-success`, `/account`, `/health`
-
-**Cache key construction**:
-- Strips tracking parameters (fbclid, gclid, UTM params, ref)
-- Strips product variant selection params (size, color) on product pages
-- Appends `cache_v={kvVersion}-{BUILD_ID}` to ensure deployments never serve stale HTML
-- Appends `cache_gen={generation}` on product pages. Exact product purges bump this per-product KV generation, so product HTML moves globally without bumping the whole storefront version.
-- KV version and generation lookups use a canonical namespace: `CACHE_NAMESPACE`, then `STOREFRONT_URL` hostname, then the request hostname. Cache API key URLs still use the actual request hostname/origin so preview, staging, and localhost caches stay isolated.
+Public keys canonicalize safe query strings by sorting parameters, collapsing
+search text, and dropping tracking parameters. The request host remains part of
+the key, so custom domains and preview hosts do not share rendered responses.
 
 **Generated browser assets**:
 - Astro emits generated JS/CSS beneath `/_astro/{BUILD_ID}/...`. Do not flatten
@@ -102,67 +94,41 @@ Implements a two-layer edge caching strategy for HTML pages:
   uses it. Cloudflare may deduplicate identical file bodies internally; the
   public URL still remains build-scoped.
 
-**Cache flow**:
-1. Check Cloudflare Cache API for cached HTML (with 500ms timeout)
-2. On HIT: return cached response with browser no-cache headers for HTML, or the route's public TTL for generated discovery XML/text
-3. On MISS: render page, store in Cache API (with `waitUntil`), return with browser no-cache headers for HTML or public discovery TTLs for generated XML/text
-4. Browser HTML always gets `Cache-Control: no-cache, no-store, must-revalidate` (edge cache is internal only)
-5. Edge-stored responses use `Cache-Control: public, max-age=31536000, immutable` (invalidation via KV version bump)
-
-**Cache context**: Wraps all downstream processing in `cacheContextAls.run()` so `withEdgeCache()` calls in API functions read per-request context instead of module-level state.
-
 ## Caching Architecture
 
-### L1: In-Memory LRU Cache (`src/lib/smart-cache.ts`)
-
-- Capped at 1000 entries with LRU eviction
-- TTL-based expiry per entry
-- Persists across warm Worker starts, dies on cold start
-- Provides `deleteByPrefix()` and `deleteByPrefixes()` for targeted invalidation
-
-### L2: Cloudflare Cache API + KV Versioning (`src/lib/edge-cache.ts`)
-
-- Uses AsyncLocalStorage for per-request cache context (prevents cross-request state contamination)
-- Cache keys include KV version and BUILD_ID: `https://{hostname}/_api-cache/{key}?v={version}&build={BUILD_ID}`
-- The `{version}` and exact product generations come from the canonical cache namespace, not necessarily `{hostname}`. This prevents alternate production hostnames from reading stale KV version/generation lanes.
-- Exact product keys (`product_slug_*`, `product_variants_*`) also include `g={generation}` from `CACHE_CONTROL` KV. If that generation lookup fails, the exact key bypasses L1/L2 instead of risking a stale product response.
-- 500ms timeout on L2 cache operations to prevent hanging
-- In-flight request deduplication prevents duplicate API calls when multiple components request the same data simultaneously
-
-### `withEdgeCache(key, fetcher, options)` -- The Main Caching Function
-
-1. Check L1 (in-memory) -- versioned key `{key}:v{kvVersion}`
-2. Check in-flight deduplication map
-3. Check L2 (Cache API) -- populate L1 from L2 on hit
-4. Execute fetcher -- store in both L1 and L2
+- `StorefrontGateway` classifies public requests before cache lookup.
+- `PublicStorefront` renders eligible responses and attaches `Cache-Tag` plus
+  `Cloudflare-CDN-Cache-Control: public, max-age=5, must-revalidate`.
+- The API calls authenticated `POST /api/purge-cache` with bounded domain groups
+  after a merchant write. That endpoint awaits the owning entrypoint's native
+  tag purge; there is no KV version, prefix scan, warm queue, or abandoned key.
+- `withEdgeCache()` only shares an in-flight Promise between identical reads in
+  the same isolate. It removes the Promise immediately after settlement and is
+  not a persistent cache layer.
 
 ### Cache Key Canonicalization
 
-- `src/lib/cache-key.ts` owns canonical query-string handling for HTML Cache API keys and product-list L2 keys.
-- HTML keys sort surviving query params, trim/collapse search text (`q` / `search`), drop empty/tracking params (`utm_*`, `fbclid`, `gclid`, `gbraid`, `wbraid`, `msclkid`, `ttclid`, etc.), and strip client-side product selection params (`size`, `color`) before `cache_v` / `cache_gen` are added.
-- Product/category listing L2 keys use sorted query strings with normalized search text so equivalent filter objects do not create separate `all_products_` / `category_products_` entries.
-- Middleware and `/api/purge-cache` exact HTML deletion must stay aligned on the same helper so deletes and reads target the same key.
+- `src/lib/canonical-query.ts` owns canonical query handling for API read keys.
+- `@scalius/shared/storefront-cache-path` owns rendered public-path canonicalization.
+- Equivalent filter objects and tracking-decorated URLs map to one key; product
+  variant-selection parameters bypass public caching entirely.
 
 ### Cache Invalidation
 
-When the API triggers `/api/purge-cache` with `Authorization: Bearer PURGE_TOKEN`:
-- HTML-affecting or prefix purges bump the KV version -- all versioned HTML/L2 keys change. Direct purge callers warm critical pages through `waitUntil`; queue-driven purges pass `warm:false` and let the API enqueue a separate retryable `storefront.cache_warm` message.
-- Catalog purges may also include exact listing `htmlPaths` such as `/search` and `/categories/{slug}` while bumping the global version. Old HTML/L2 entries are abandoned by the new `cache_v`; the supplied paths are canonicalized and capped so the queue warm pass can refill only affected pages.
-- Exact product purges read the old per-key generation, write a new generation for `product_slug_*` / `product_variants_*`, delete old-generation local Cache API entries as a best-effort cleanup, and warm touched product paths without bumping the global storefront version. Exact `htmlPaths` must be relative paths; the purge endpoint dedupes them, caps them at `20`, and direct callers warm them in batches of `4`.
-- L1 in-memory cache can be cleared via `clearMemoryCache()` or selectively via `clearL1ByPrefixes()`
-- L2 entries with old version or product-generation keys are never matched
-
-Admin/API cache clear-all must follow the same durable path as scoped invalidation: the API invalidates `api:*`, then enqueues one `storefront.cache_purge` message for every storefront group/prefix. Direct `/api/purge-cache` fallback is allowed only when the queue binding is missing or broken, and it must strip any purge token query parameter before sending the token in the Authorization header. Pending purge/warm DLQ rows should be visible from `/admin/settings/cache` so operators can replay or ignore failures without re-running blind global purges.
-
-Cloudflare Workers Cache is intentionally not enabled globally for the storefront release path yet. A Workers Cache hit can bypass Worker middleware, while this app currently depends on middleware for private-route bypass, session-cookie detection, canonical cache keys, KV version/generation checks, and response headers. Pilot it only after host/tenant keying and purge semantics are designed to preserve the current Cache API plus KV-generation freshness contract.
+When the API triggers `/api/purge-cache` with `Authorization: Bearer
+PURGE_TOKEN`, the storefront validates and deduplicates at most 30 known domain
+groups, then awaits `PublicStorefront.purgeGroups()`. Unknown groups are ignored
+by the cache owner. `GET` and query-string tokens are rejected. A failed purge
+is observable but never rolls back an already committed database mutation; the
+five-second TTL is the correctness backstop.
 
 ### Cache TTL Constants
 
 | Constant | Seconds | Purpose |
 |----------|---------|---------|
-| `CACHE_TTL.LONG` | 86400 (24h) | Static data (layout, categories) |
-| `CACHE_TTL.MEDIUM` | 3600 (1h) | Semi-dynamic (product listings) |
-| `CACHE_TTL.SHORT` | 300 (5m) | Dynamic (CSP settings, checkout config) |
+The legacy `CACHE_TTL` names remain as call-site hints while `withEdgeCache()`
+is request-only deduplication. Persistent public TTL is centrally fixed at five
+seconds in `public-worker-cache.ts`.
 
 ## Page Data Loading
 
@@ -304,16 +270,8 @@ All data access goes through the API worker via the configured SDK clients, serv
 
 | Binding | Type | Purpose |
 |---------|------|---------|
-| `CACHE_CONTROL` | KV | Cache version for L2 invalidation |
 | `BACKEND_API` | Service | Service binding to API worker (0ms latency) |
 | `ASSETS` | Fetcher | Static asset serving |
-
-Runtime vars that affect cache identity:
-
-| Var | Purpose |
-|-----|---------|
-| `CACHE_NAMESPACE` | Optional canonical cache version/generation namespace override |
-| `STOREFRONT_URL` | Canonical storefront URL used for cache namespace fallback |
 
 ## Key Files
 
@@ -321,14 +279,15 @@ Runtime vars that affect cache identity:
 |------|---------|
 | `wrangler.jsonc` | Source Cloudflare binding/vars/routes config consumed by the Astro adapter |
 | `dist/server/wrangler.json` | Generated deploy config produced by `astro build`; deploy this file, not the source config |
-| `src/middleware.ts` | Cache + API context middleware |
-| `src/lib/edge-cache.ts` | L1+L2 caching with ALS, deduplication, KV versioning |
-| `src/lib/cache-namespace.ts` | Canonical KV namespace resolution for cache version/generation keys |
-| `src/lib/smart-cache.ts` | In-memory LRU cache (1000 entries max) |
+| `src/worker.ts` | Uncached gateway and native cached public entrypoint |
+| `src/middleware.ts` | Public/private response policy and API context |
+| `src/lib/public-worker-cache.ts` | Public eligibility, canonical keys, tags, and TTL |
+| `src/lib/edge-cache.ts` | Request-only duplicate-read coalescing |
+| `src/lib/canonical-query.ts` | Canonical API query strings |
 | `src/lib/api/context.ts` | AsyncLocalStorage for per-request Cloudflare bindings |
 | `src/lib/api/runtime-env.ts` | Runtime env accessors with fallback chains |
 | `src/lib/api/unwrap.ts` | Typed envelope unwrap helpers |
 | `src/lib/api/client.ts` | API URL builder and fetch client |
 | `src/lib/checkout/index.ts` | Checkout page logic + gateway orchestration |
 | `src/store/cart.ts` | Nano Stores cart state (localStorage-persisted) |
-| `src/config/build-id.ts` | Build ID for cache key versioning |
+| `src/config/build-id.ts` | Build-scoped generated asset paths |

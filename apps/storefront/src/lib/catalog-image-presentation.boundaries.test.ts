@@ -1,34 +1,35 @@
 import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const buyerProductImageSurfaces = [
-  "../components/CartFlyout.tsx",
-  "./cart/client.ts",
-  "../pages/account.astro",
-  "../pages/account/orders/[id].astro",
+  "components/CartFlyout.tsx",
+  "lib/cart/client.ts",
+  "pages/account.astro",
+  "pages/account/orders/[id].astro",
 ].map((path) => ({
   path,
-  source: readFileSync(new URL(path, import.meta.url), "utf8"),
+  source: readFileSync(resolve(process.cwd(), "src", path), "utf8"),
 }));
 
 const productGallerySource = readFileSync(
-  new URL("../components/product/ProductGallery.astro", import.meta.url),
+  resolve(process.cwd(), "src/components/product/ProductGallery.astro"),
   "utf8",
 );
 const categoryRailSource = readFileSync(
-  new URL("../components/homepage/HomepageCategoryRail.astro", import.meta.url),
+  resolve(process.cwd(), "src/components/homepage/HomepageCategoryRail.astro"),
   "utf8",
 );
 const productPageSource = readFileSync(
-  new URL("../pages/products/[slug].astro", import.meta.url),
+  resolve(process.cwd(), "src/pages/products/[slug].astro"),
   "utf8",
 );
 const collectionPageSource = readFileSync(
-  new URL("../pages/collections/[id].astro", import.meta.url),
+  resolve(process.cwd(), "src/pages/collections/[id].astro"),
   "utf8",
 );
 const categoryPageSource = readFileSync(
-  new URL("../pages/categories/[slug].astro", import.meta.url),
+  resolve(process.cwd(), "src/pages/categories/[slug].astro"),
   "utf8",
 );
 

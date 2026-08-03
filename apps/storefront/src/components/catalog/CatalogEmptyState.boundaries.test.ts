@@ -1,8 +1,9 @@
 import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const source = readFileSync(
-  new URL("./CatalogEmptyState.astro", import.meta.url),
+  resolve(process.cwd(), "src/components/catalog/CatalogEmptyState.astro"),
   "utf8",
 );
 

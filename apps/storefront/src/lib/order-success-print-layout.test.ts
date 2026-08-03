@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
-const storefrontSrc = fileURLToPath(new URL("..", import.meta.url));
+const storefrontSrc = resolve(process.cwd(), "src");
 
 describe("order-success print layout", () => {
   it("uses a compact A4 receipt grid without truncating order items", () => {

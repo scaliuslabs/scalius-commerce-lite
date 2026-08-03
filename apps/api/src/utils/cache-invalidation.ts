@@ -487,16 +487,6 @@ export async function invalidateApiAndScheduleStorefrontGroups(
   });
 }
 
-export function triggerStorefrontPurgeForGroups(
-  groups: string[],
-  env?: Env,
-  executionCtx?: WaitUntilExecutionContext,
-): void {
-  const task = purgeStorefrontForGroups(groups, env).then(() => undefined);
-  if (executionCtx?.waitUntil) executionCtx.waitUntil(task);
-  else void task;
-}
-
 export async function invalidateProductAvailabilityCacheSubjects(
   subjects: readonly ProductAvailabilityCacheSubject[],
   c: { env?: Env; executionCtx?: WaitUntilExecutionContext },

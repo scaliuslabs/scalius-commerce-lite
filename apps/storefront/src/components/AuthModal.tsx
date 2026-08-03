@@ -33,9 +33,8 @@ import {
 
 /**
  * Lightweight client-side fetch for checkout config.
- * Avoids importing the full getCheckoutConfig() which pulls in edge-cache.ts,
- * smart-cache.ts, and build-id.ts — SSR-only modules that bloat the client bundle
- * and add unnecessary chunks to the critical request chain.
+ * Avoids importing the full SSR checkout module and its generated SDK/runtime
+ * dependencies into the client bundle's critical request chain.
  */
 async function fetchCheckoutConfigClient(): Promise<CheckoutConfig | null> {
   try {

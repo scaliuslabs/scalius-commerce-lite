@@ -1,5 +1,3 @@
-// src/middleware.ts
-
 import { defineMiddleware, sequence } from "astro:middleware";
 import { env as cfEnv } from "cloudflare:workers";
 import { hasStorefrontProductVariantSelectionParams } from "@scalius/shared/storefront-cache-path";
@@ -7,396 +5,116 @@ import {
   applyBaselineSecurityHeaders,
   redirectPlaintextRequest,
 } from "@scalius/shared/http-security";
+
 import { apiContext } from "@/lib/api/context";
+import { requestHasPrivateSession } from "@/lib/cache-policy";
 import { setPageCspHeader } from "@/lib/middleware-helper/csp-handler";
-import { setEdgeCacheContext, cacheContextAls } from "@/lib/edge-cache";
-import { BUILD_ID } from "@/config/build-id";
-import {
-  isCacheablePublicResponse,
-  requestHasPrivateSession,
-} from "@/lib/cache-policy";
-import { resolveStorefrontCacheVersion } from "@/lib/cache-version";
-import {
-  htmlPathCacheKeyFromUrl,
-  resolveExactCacheGeneration,
-} from "./lib/cache-generations";
-import { resolveCacheNamespace } from "./lib/cache-namespace";
-import { buildHtmlCacheBaseUrl } from "./lib/cache-key";
 import {
   applyBrowserCachePolicyForPublicResponse,
   isSuccessfulPublicDiscoveryResponse,
-} from "./lib/public-discovery-cache";
+} from "@/lib/public-discovery-cache";
+import { getPublicStorefrontCachePolicy } from "@/lib/public-worker-cache";
 
-// Timeout constants to prevent hanging on slow/unavailable services
-const KV_TIMEOUT_MS = 1000;
-const CACHE_MATCH_TIMEOUT_MS = 500;
-
-const CACHE_VERSION_KEY_PREFIX = "v_";
-const GENERATION_LOOKUP_TIMEOUT_MS = 500;
-const PUBLIC_HTML_EDGE_TTL_SECONDS = 5;
-
-type CloudflareCacheStorage = CacheStorage & {
-  default: Cache;
-};
-
-const CACHEABLE_PATHS = [
-  /^\/$/,
-  /^\/products\/[^/]+$/,
-  /^\/categories\/[^/]+$/,
-  /^\/collections\/[^/]+$/,
-  /^\/search\/?$/,
-  /^\/robots\.txt$/,
-  /^\/sitemap\.xml$/,
-  /^\/sitemap-.*\.xml$/,
-  /^\/sitemap\.xsl$/,
-  /^\/api\/product-feed\.xml$/,
-  /^\/api\/facebook-feed\.xml$/,
-  /^\/(?!api|cart|checkout|buy|order-success|account|health|robots\.txt)[^/.]*$/,
-];
-
-const FAST_PASS_THROUGH_PATHS = [
-  /^\/health\/?$/,
-];
-
-function isFastPassThroughPath(pathname: string): boolean {
-  return FAST_PASS_THROUGH_PATHS.some((regex) => regex.test(pathname));
-}
-
-// Check if we're running in Cloudflare Workers environment
-const isCloudflareEnvironment = () => {
-  return typeof caches !== "undefined";
-};
-
-async function resolveHtmlCacheGeneration({
-  cacheUrl,
-  kvBinding,
-  cacheNamespace,
-}: {
-  cacheUrl: URL;
-  kvBinding: KVNamespace;
-  cacheNamespace: string;
-}): Promise<
-  | { cacheEnabled: true; generation: string | null }
-  | { cacheEnabled: false; reason: string }
-> {
-  const logicalKey = htmlPathCacheKeyFromUrl(cacheUrl);
-  if (!logicalKey) {
-    return { cacheEnabled: true, generation: null };
-  }
-
-  const generation = await resolveExactCacheGeneration({
-    store: kvBinding,
-    hostname: cacheNamespace,
-    logicalKey,
-    timeoutMs: GENERATION_LOOKUP_TIMEOUT_MS,
-  });
-
-  if (generation.status === "unavailable") {
-    return { cacheEnabled: false, reason: generation.reason };
-  }
-
-  return { cacheEnabled: true, generation: generation.generation };
-}
-
-// Resolve Cloudflare env — in production `cfEnv` is populated by the adapter;
-// in local dev (wrangler) it may be empty, so fall back gracefully.
-//
-// IMPORTANT: Do NOT use Object.keys(cfEnv) to check for population.
-// In some Cloudflare Workers runtimes, env is a Proxy where Object.keys()
-// returns [] even though property access works. Instead, probe a known
-// binding (ASSETS is always present for Astro CF adapter).
 function getEnv(): Env | null {
   try {
     const env = cfEnv as Partial<Env> | null | undefined;
-    if (env != null && (env.ASSETS || env.CDN_DOMAIN_URL || env.PUBLIC_API_URL)) {
+    if (env && (env.ASSETS || env.CDN_DOMAIN_URL || env.PUBLIC_API_URL)) {
       return cfEnv as unknown as Env;
     }
   } catch {
-    // cfEnv not available (e.g. `astro dev` without wrangler)
+    // Local Astro development can run without Wrangler bindings.
   }
   return null;
 }
 
-const cachingMiddleware = defineMiddleware(async (context, next) => {
-  const { request, url, locals } = context;
-  const hostname = url.hostname;
-
-  if (isFastPassThroughPath(url.pathname)) {
-    const response = await next();
-    response.headers.set("X-Cache-Status", "BYPASS_FAST");
-    return response;
-  }
-
-  const isCacheablePath = CACHEABLE_PATHS.some((regex) =>
-    regex.test(url.pathname),
+function setPrivateResponse(response: Response, status: string): void {
+  response.headers.set(
+    "Cache-Control",
+    "private, no-cache, no-store, must-revalidate",
   );
-  const isGetRequest = request.method === "GET";
-  const hasPrivateSession = requestHasPrivateSession(request.headers);
-  const hasProductVariantSelection =
-    hasStorefrontProductVariantSelectionParams(url);
+  response.headers.set("Pragma", "no-cache");
+  response.headers.set("Expires", "0");
+  response.headers.set("X-Cache-Status", status);
+}
 
-  // Only enable caching if we're in Cloudflare environment and have KV binding
-  const isCloudflareEnv = isCloudflareEnvironment();
-  const env = getEnv();
-  const kvBinding = env?.CACHE_CONTROL;
-  const cacheNamespace = resolveCacheNamespace(env, hostname);
-
-  // Store cache version for reuse (avoid duplicate KV lookups)
-  let resolvedCacheVersion: string | null = null;
-  let cfCache: Cache | null = null;
-
-  // Initialize edge cache context for ALL requests (not just cacheable paths)
-  // This enables L2 caching for API functions on every page
-  if (isCloudflareEnv && kvBinding) {
-    try {
-      cfCache = (caches as CloudflareCacheStorage).default;
-      const projectCacheVersionKey = `${CACHE_VERSION_KEY_PREFIX}${cacheNamespace}`;
-
-      const cacheVersionResult = await resolveStorefrontCacheVersion({
-        store: kvBinding,
-        key: projectCacheVersionKey,
-        timeoutMs: KV_TIMEOUT_MS,
-        waitUntil: (promise) => locals.cfContext.waitUntil(promise),
-      });
-
-      if (cacheVersionResult.status === "unavailable") {
-        console.warn("KV lookup timed out or failed:", cacheVersionResult.reason);
-        cfCache = null;
-      } else {
-        resolvedCacheVersion = cacheVersionResult.version;
-
-        // Set context for API functions (L2 caching) — both ALS and fallback
-        const waitUntilFn = (promise: Promise<unknown>) => locals.cfContext.waitUntil(promise);
-        setEdgeCacheContext(
-          cfCache,
-          cacheVersionResult.version,
-          hostname,
-          waitUntilFn,
-          kvBinding,
-          cacheNamespace,
-        );
-      }
-    } catch (error: unknown) {
-      console.warn("Failed to initialize edge cache context:", error);
-      cfCache = null;
-      // Continue without L2 caching - L1 still works
-    }
-  }
-
-  // Wrap remainder in cacheContextAls.run() so all downstream withEdgeCache
-  // calls read per-request context instead of module-level state.
-  const cacheCtx = {
-    cache: resolvedCacheVersion ? cfCache : null,
-    kvStore: kvBinding ?? null,
-    kvVersion: resolvedCacheVersion,
-    hostname,
-    cacheNamespace,
-    waitUntil: isCloudflareEnv ? ((promise: Promise<unknown>) => locals.cfContext.waitUntil(promise)) : null,
-  };
-
-  return cacheContextAls.run(cacheCtx, async () => {
-
-  // Public response caching (HTML plus explicit generated XML/text assets)
-  if (
-    isGetRequest &&
-    isCacheablePath &&
-    !hasProductVariantSelection &&
-    !hasPrivateSession &&
-    kvBinding &&
-    isCloudflareEnv &&
-    cfCache &&
-    resolvedCacheVersion
-  ) {
-    try {
-      // Reuse cache version from above (no duplicate KV lookup)
-      const cacheVersion = resolvedCacheVersion;
-
-      const cacheUrl = buildHtmlCacheBaseUrl(new URL(request.url));
-      const htmlGeneration = await resolveHtmlCacheGeneration({
-        cacheUrl,
-        kvBinding,
-        cacheNamespace,
-      });
-      if (!htmlGeneration.cacheEnabled) {
-        const response = await next();
-        response.headers.set("X-Cache-Status", "BYPASS_GENERATION");
-        if (
-          isCacheablePublicResponse(response) ||
-          isSuccessfulPublicDiscoveryResponse(response, url.pathname)
-        ) {
-          applyBrowserCachePolicyForPublicResponse(response, url.pathname);
-        } else {
-          response.headers.set(
-            "Cache-Control",
-            "no-cache, no-store, must-revalidate",
-          );
-          response.headers.set("Pragma", "no-cache");
-          response.headers.set("Expires", "0");
-        }
-        console.warn(
-          `Bypassing exact HTML cache for ${url.pathname}: ${htmlGeneration.reason}`,
-        );
-        return await setPageCspHeader(response, env ?? undefined);
-      }
-
-      // IMPORTANT: include BUILD_ID so new deployments never serve stale HTML
-      // that references removed JS/CSS bundles from previous builds.
-      cacheUrl.searchParams.set("cache_v", `${cacheVersion}-${BUILD_ID}`);
-      if (htmlGeneration.generation !== null) {
-        cacheUrl.searchParams.set("cache_gen", htmlGeneration.generation);
-      }
-      const cacheKey = new Request(cacheUrl.toString(), request);
-
-      // Add timeout to cache.match to prevent hanging (per CF best practices)
-      const cachedResponse = await Promise.race([
-        cfCache.match(cacheKey),
-        new Promise<Response | undefined>((resolve) =>
-          setTimeout(() => resolve(undefined), CACHE_MATCH_TIMEOUT_MS),
-        ),
-      ]);
-
-      if (cachedResponse) {
-        const response = new Response(cachedResponse.body, cachedResponse);
-        // Override the stored Cache-Control with browser-safe headers.
-        // The stored response has a short edge-only TTL, but HTML browsers must
-        // always revalidate after deployments. Public discovery
-        // XML/text keeps its route TTL so crawlers and feed fetchers can cache sanely.
-        applyBrowserCachePolicyForPublicResponse(response, url.pathname);
-        const generationSuffix = htmlGeneration.generation !== null
-          ? `; gen=${htmlGeneration.generation}`
-          : "";
-        const cacheStatus = `HIT; v=${cacheVersion}; build=${BUILD_ID}${generationSuffix}; project=${hostname}`;
-        response.headers.set("X-Cache-Status", cacheStatus);
-        return await setPageCspHeader(response, env ?? undefined);
-      }
-
-      const response = await next();
-
-      if (isCacheablePublicResponse(response)) {
-        // Force browsers to ALWAYS revalidate HTML with server.
-        // Discovery XML/text keeps public route TTLs; those responses are still
-        // edge-invalidated through the same KV version/build-id cache key.
-        applyBrowserCachePolicyForPublicResponse(response, url.pathname);
-        response.headers.set(
-          "X-Cache-Status",
-          `MISS; v=${cacheVersion}; build=${BUILD_ID}${
-            htmlGeneration.generation !== null ? `; gen=${htmlGeneration.generation}` : ""
-          }; project=${hostname}`,
-        );
-        await setPageCspHeader(response, env ?? undefined);
-
-        const responseToCache = response.clone();
-        // Keep public HTML fast while bounding buyer-visible price/availability
-        // staleness even if a targeted invalidation is delayed or missed.
-        responseToCache.headers.set(
-          "Cache-Control",
-          `public, max-age=${PUBLIC_HTML_EDGE_TTL_SECONDS}, must-revalidate`,
-        );
-
-        locals.cfContext.waitUntil(cfCache.put(cacheKey, responseToCache));
-      } else {
-        response.headers.set("X-Cache-Status", "SKIP");
-      }
-
-      return response;
-    } catch (error: unknown) {
-      console.warn("Cache error in production:", error);
-      // Fallback to regular response if caching fails
-      const response = await next();
-      response.headers.set("X-Cache-Status", "ERROR");
-      return await setPageCspHeader(response, env ?? undefined);
-    }
-  }
-
-  // Development or non-cacheable request
+const responsePolicyMiddleware = defineMiddleware(async (context, next) => {
+  const { request, url } = context;
   const response = await next();
+  const isGet = request.method === "GET" || request.method === "HEAD";
+  const hasVariantSelection = hasStorefrontProductVariantSelectionParams(url);
+  const hasPrivateSession = requestHasPrivateSession(request.headers);
+  const explicitlyPrivatePath = /^\/(?:account|buy|cart|checkout|order-success|payment-recovery|theme-preview)(?:\/|$)/.test(
+    url.pathname,
+  );
 
-  // Pages that must NEVER be cached (contain user-specific or payment-sensitive data)
-  const isNoCachePage = /^\/(cart|checkout)\/?$/.test(url.pathname);
-
-  if (hasProductVariantSelection && isGetRequest) {
-    // Product selection params affect SSR output. Never let one selected SKU's
-    // HTML become a shared Cache API response for another request.
-    response.headers.set(
-      "Cache-Control",
-      "private, no-cache, no-store, must-revalidate",
-    );
-    response.headers.set("Pragma", "no-cache");
-    response.headers.set("Expires", "0");
-    response.headers.set("X-Cache-Status", "BYPASS_VARIANT_SELECTION");
-  } else if (isNoCachePage || (hasPrivateSession && isGetRequest && isCacheablePath)) {
-    // Force no-store unconditionally — override any existing Cache-Control
-    response.headers.set(
-      "Cache-Control",
-      "private, no-cache, no-store, must-revalidate",
-    );
-    response.headers.set("Pragma", "no-cache");
-    response.headers.set("Expires", "0");
-    response.headers.set("X-Cache-Status", isNoCachePage ? "NO_CACHE" : "BYPASS_AUTH");
-  } else if (isCloudflareEnv) {
-    response.headers.set("X-Cache-Status", "BYPASS");
-    if (!response.headers.has("Cache-Control")) {
-      response.headers.set(
-        "Cache-Control",
-        "private, no-cache, no-store, must-revalidate",
-      );
-    }
+  if (isGet && hasVariantSelection) {
+    setPrivateResponse(response, "BYPASS_VARIANT_SELECTION");
+  } else if (isGet && (hasPrivateSession || explicitlyPrivatePath)) {
+    setPrivateResponse(response, hasPrivateSession ? "BYPASS_AUTH" : "NO_CACHE");
   } else {
-    response.headers.set("X-Cache-Status", "DEV_MODE");
-    if (!response.headers.has("Cache-Control")) {
-      response.headers.set(
-        "Cache-Control",
-        "private, no-cache, no-store, must-revalidate",
-      );
+    const publicPolicy = getPublicStorefrontCachePolicy(request);
+    const publicResponse =
+      response.status === 200 &&
+      !response.headers.has("Set-Cookie") &&
+      !response.headers.has("set-cookie") &&
+      (response.headers.get("Content-Type")?.toLowerCase().includes("text/html") ||
+        isSuccessfulPublicDiscoveryResponse(response, url.pathname) ||
+        (url.pathname === "/.well-known/ucp" &&
+          response.headers.get("Content-Type")?.toLowerCase().includes("application/json")));
+
+    if (publicPolicy && publicResponse) {
+      applyBrowserCachePolicyForPublicResponse(response, url.pathname);
+      response.headers.set("X-Cache-Status", "NATIVE");
+    } else if (!response.headers.has("Cache-Control")) {
+      setPrivateResponse(response, "BYPASS");
     }
   }
-  return await setPageCspHeader(response, env ?? undefined);
 
-  }); // end cacheContextAls.run()
+  return setPageCspHeader(response, getEnv() ?? undefined);
 });
 
 const apiContextMiddleware = defineMiddleware((_context, next) => {
   const env = getEnv();
-
-  // Read CDN domain with direct cfEnv fallback in case getEnv() returned null
-  // but cfEnv property access still works (proxy object edge case).
   let cdnDomain = env?.CDN_DOMAIN_URL as string | undefined;
   if (!cdnDomain) {
     try {
       cdnDomain = (cfEnv as Partial<Env> | null | undefined)?.CDN_DOMAIN_URL;
     } catch {
-      // cfEnv proxy access can throw in local dev before Wrangler bindings exist.
+      // Wrangler bindings are unavailable in local Astro development.
     }
   }
 
-  // Set on globalThis as a last-resort fallback for media-url.ts
-  // (in case the module-level store is somehow stale/empty during SSR rendering)
   if (cdnDomain) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- globalThis assignment for SSR cross-module access
-    (globalThis as any).__SCALIUS_CDN_DOMAIN__ = cdnDomain;
+    (globalThis as typeof globalThis & { __SCALIUS_CDN_DOMAIN__?: string })
+      .__SCALIUS_CDN_DOMAIN__ = cdnDomain;
   }
-  return apiContext.run({
-    BACKEND_API: env?.BACKEND_API as Fetcher | undefined,
-    PUBLIC_API_URL: env?.PUBLIC_API_URL as string | undefined,
-    PUBLIC_API_BASE_URL: env?.PUBLIC_API_BASE_URL as string | undefined,
-    CDN_DOMAIN_URL: cdnDomain,
-    STOREFRONT_URL: env?.STOREFRONT_URL as string | undefined,
-    API_TOKEN: env?.API_TOKEN as string | undefined,
-  }, next);
+
+  return apiContext.run(
+    {
+      BACKEND_API: env?.BACKEND_API as Fetcher | undefined,
+      PUBLIC_API_URL: env?.PUBLIC_API_URL as string | undefined,
+      PUBLIC_API_BASE_URL: env?.PUBLIC_API_BASE_URL as string | undefined,
+      CDN_DOMAIN_URL: cdnDomain,
+      STOREFRONT_URL: env?.STOREFRONT_URL as string | undefined,
+      API_TOKEN: env?.API_TOKEN as string | undefined,
+    },
+    next,
+  );
 });
 
-const transportSecurityMiddleware = defineMiddleware(async ({ request }, next) => {
-  const redirect = redirectPlaintextRequest(request);
-  if (redirect) return redirect;
+const transportSecurityMiddleware = defineMiddleware(
+  async ({ request }, next) => {
+    const redirect = redirectPlaintextRequest(request);
+    if (redirect) return redirect;
 
-  const response = await next();
-  return applyBaselineSecurityHeaders(request, response, {
-    frameProtection: "same-origin",
-  });
-});
+    return applyBaselineSecurityHeaders(request, await next(), {
+      frameProtection: "same-origin",
+    });
+  },
+);
 
 export const onRequest = sequence(
   transportSecurityMiddleware,
   apiContextMiddleware,
-  cachingMiddleware,
+  responsePolicyMiddleware,
 );

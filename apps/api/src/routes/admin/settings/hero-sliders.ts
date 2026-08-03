@@ -14,8 +14,7 @@ import { successEnvelope, errorResponses, conflictResponse } from "../../../sche
 import { nullableTimestampSchema } from "../../../schemas/timestamps";
 import {
     getOptionalExecutionContext,
-    invalidateGroups,
-    triggerStorefrontPurgeForGroups,
+    invalidateApiAndStorefrontGroups,
     type WaitUntilExecutionContext,
 } from "../../../utils/cache-invalidation";
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -24,14 +23,9 @@ type AppRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>
 
 async function invalidateHomepageCaches(c: { env: Env; executionCtx?: WaitUntilExecutionContext }): Promise<void> {
     const executionCtx = getOptionalExecutionContext(c);
-    if (executionCtx) {
-        await invalidateGroups([...HOMEPAGE_CACHE_GROUPS], c.env?.CACHE, {
-            cleanupExecutionCtx: executionCtx,
-        });
-    } else {
-        await invalidateGroups([...HOMEPAGE_CACHE_GROUPS], c.env?.CACHE);
-    }
-    triggerStorefrontPurgeForGroups([...HOMEPAGE_CACHE_GROUPS], c.env, executionCtx);
+    await invalidateApiAndStorefrontGroups([...HOMEPAGE_CACHE_GROUPS], c.env, {
+        cleanupExecutionCtx: executionCtx,
+    });
 }
 
 const sliderImageSchema = z.object({

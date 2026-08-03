@@ -606,32 +606,33 @@ function hasHeaderToken(value, token) {
 
 function evaluatePublicStorefrontCacheHeaders(headers, { label }) {
   const cacheControl = normalizeHeaderValue(headers, "cache-control");
+  const edgeCacheControl = normalizeHeaderValue(
+    headers,
+    "cloudflare-cdn-cache-control",
+  );
   const cacheStatus = normalizeHeaderValue(headers, "x-cache-status");
-  const normalizedCacheStatus = cacheStatus.toLowerCase();
+  const cacheTags = normalizeHeaderValue(headers, "cache-tag");
   const errors = [];
 
-  if (!cacheStatus) {
-    errors.push(`${label} must include X-Cache-Status.`);
-  } else {
-    if (hasHeaderToken(normalizedCacheStatus, "no_cache")) {
-      errors.push(`${label} must not report NO_CACHE.`);
-    }
-    if (!/^[A-Z][A-Z0-9_ -]*(?:;|$)/.test(cacheStatus)) {
-      errors.push(`${label} X-Cache-Status must start with a cache state.`);
-    }
-    if (!/\bv=[^;,\s]+/i.test(cacheStatus)) {
-      errors.push(`${label} X-Cache-Status must include a cache version marker.`);
-    }
-    if (!/\bbuild=[^;,\s]+/i.test(cacheStatus)) {
-      errors.push(`${label} X-Cache-Status must include a build marker.`);
-    }
+  if (!hasHeaderToken(cacheStatus.toLowerCase(), "native")) {
+    errors.push(`${label} X-Cache-Status must report NATIVE.`);
+  }
+  if (!edgeCacheControl || !hasPositiveCacheTtl(edgeCacheControl)) {
+    errors.push(
+      `${label} Cloudflare-CDN-Cache-Control must include a positive edge TTL.`,
+    );
+  }
+  if (!cacheTags.trim()) {
+    errors.push(`${label} must include at least one Cache-Tag.`);
   }
 
   return {
     ok: errors.length === 0,
     errors,
     cacheControl: cacheControl || null,
+    edgeCacheControl: edgeCacheControl || null,
     cacheStatus: cacheStatus || null,
+    cacheTags: cacheTags || null,
   };
 }
 
@@ -666,37 +667,21 @@ function evaluateCheckoutCacheHeaders(headers) {
   };
 }
 
-function evaluateFeedGenerationCacheHeaders(headers) {
-  const cacheControl = normalizeHeaderValue(headers, "cache-control");
-  const cacheStatus = normalizeHeaderValue(headers, "x-cache-status");
-  const generationHeader =
-    normalizeHeaderValue(headers, "x-cache-generation") ||
-    normalizeHeaderValue(headers, "x-storefront-cache-generation");
+function evaluateProductFeedCacheHeaders(headers) {
   const discoveryCache = evaluateDiscoveryCacheHeaders(headers, { label: "product feed" });
-  const errors = [...discoveryCache.errors];
-  const hasGenerationMarker =
-    /\bgen(?:eration)?=[^;,\s]+/i.test(cacheStatus) ||
-    generationHeader.trim().length > 0;
-
-  if (!cacheStatus && !generationHeader) {
-    errors.push("product feed must include X-Cache-Status or an explicit cache generation header.");
-  }
-  if (!hasGenerationMarker) {
-    errors.push("product feed cache headers must include a generation marker.");
-  }
+  const nativeCache = evaluatePublicStorefrontCacheHeaders(headers, {
+    label: "product feed",
+  });
+  const errors = [...discoveryCache.errors, ...nativeCache.errors];
 
   return {
     ok: errors.length === 0,
     errors,
-    cacheControl: cacheControl || null,
-    cacheStatus: cacheStatus || null,
-    generationHeader: generationHeader || null,
+    cacheControl: discoveryCache.cacheControl,
+    edgeCacheControl: nativeCache.edgeCacheControl,
+    cacheStatus: nativeCache.cacheStatus,
+    cacheTags: nativeCache.cacheTags,
   };
-}
-
-export function shouldRetryFeedGeneration(result) {
-  return result?.ok === false &&
-    /\bBYPASS_GENERATION\b/i.test(result.cacheStatus ?? "");
 }
 
 function evaluatePurgeGetHeaders(headers) {
@@ -1941,29 +1926,20 @@ async function checkStorefrontCacheHeaders(options, { fetchImpl, logger }) {
     options.storefrontUrl,
     "/api/product-feed.xml?limit=5",
   );
-  let productFeedResponse;
-  let productFeed;
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    productFeedResponse = await fetchText(productFeedUrl, {
-      fetchImpl,
-      timeoutMs: options.timeoutMs,
-      accept: "application/xml, text/xml, */*;q=0.8",
-      // This assertion measures the normal generated-cache contract. Sending
-      // no-cache deliberately produces BYPASS_GENERATION on a cold edge.
-      bypassCache: false,
-    });
-    requireStatus(productFeedResponse, "Storefront /api/product-feed.xml cache headers", (status) =>
-      status >= 200 && status < 300);
-    productFeed = evaluateFeedGenerationCacheHeaders(productFeedResponse.headers);
-    if (!shouldRetryFeedGeneration(productFeed)) {
-      break;
-    }
-  }
+  const productFeedResponse = await fetchText(productFeedUrl, {
+    fetchImpl,
+    timeoutMs: options.timeoutMs,
+    accept: "application/xml, text/xml, */*;q=0.8",
+    bypassCache: false,
+  });
+  requireStatus(productFeedResponse, "Storefront /api/product-feed.xml cache headers", (status) =>
+    status >= 200 && status < 300);
+  const productFeed = evaluateProductFeedCacheHeaders(productFeedResponse.headers);
   if (!productFeed.ok) {
     throw new Error(
       `Storefront /api/product-feed.xml cache headers failed: ${productFeed.errors.join("; ")} ` +
       `(X-Cache-Status=${JSON.stringify(productFeed.cacheStatus)}, ` +
-      `generation=${JSON.stringify(productFeed.generationHeader)})`,
+      `Cache-Tag=${JSON.stringify(productFeed.cacheTags)})`,
     );
   }
 
@@ -1979,7 +1955,7 @@ async function checkStorefrontCacheHeaders(options, { fetchImpl, logger }) {
   }
 
   logger?.log(
-    "PASS storefront cache headers: public pages report cache version/build, checkout is no-store, feed is generation-tagged, and purge GET is non-mutating.",
+    "PASS storefront cache headers: public pages and feed use native tag caching, checkout is no-store, and purge GET is non-mutating.",
   );
   return {
     paths: [...STOREFRONT_CACHE_HEADER_PATHS],
@@ -1996,8 +1972,9 @@ async function checkStorefrontCacheHeaders(options, { fetchImpl, logger }) {
       statusCode: productFeedResponse.statusCode,
       durationMs: productFeedResponse.durationMs,
       cacheControl: productFeed.cacheControl,
+      edgeCacheControl: productFeed.edgeCacheControl,
       cacheStatus: productFeed.cacheStatus,
-      generationHeader: productFeed.generationHeader,
+      cacheTags: productFeed.cacheTags,
     },
     purgeGet: {
       path: "/api/purge-cache",

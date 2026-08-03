@@ -15,7 +15,7 @@ import {
   getApiV1Collections,
   getApiV1CollectionsById,
 } from "@scalius/api-client/sdk";
-import { buildCanonicalQueryString } from "@/lib/cache-key";
+import { buildCanonicalQueryString } from "@/lib/canonical-query";
 
 export type CollectionByIdResult =
   | { state: "found"; data: CollectionWithProducts }
