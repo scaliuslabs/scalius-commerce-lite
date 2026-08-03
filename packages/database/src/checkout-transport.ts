@@ -24,6 +24,10 @@ import {
   type DatabaseEnvironment,
   type DatabaseProvider,
 } from "./provider";
+import {
+  retryTursoConflicts,
+  TURSO_DEFAULT_QUERY_TIMEOUT_MS,
+} from "./turso-adapter";
 
 export interface CheckoutSqlTransport {
   readonly provider: DatabaseProvider;
@@ -191,6 +195,7 @@ export function createCheckoutSqlTransport(
     connections[slot] ??= connectTurso({
       url: configuration.url,
       authToken: configuration.authToken,
+      defaultQueryTimeout: TURSO_DEFAULT_QUERY_TIMEOUT_MS,
     });
     return connections[slot]!;
   };
@@ -216,12 +221,16 @@ export function createCheckoutSqlTransport(
       ) as T | null;
     },
     async atomic(statements: readonly PortableSqlStatement[], slot = 0) {
-      await connectionFor(slot).batch(
-        statements.map((statement) => ({
-          sql: statement.sql,
-          args: [...statement.args],
-        })),
-        { mode: configuration.writeBatchMode, raw: true },
+      const connection = connectionFor(slot);
+      const batch = statements.map((statement) => ({
+        sql: statement.sql,
+        args: [...statement.args],
+      }));
+      await retryTursoConflicts(
+        () => connection.batch(
+          batch,
+          { mode: configuration.writeBatchMode, raw: true },
+        ),
       );
     },
     close() {

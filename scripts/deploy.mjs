@@ -78,11 +78,54 @@ const pnpm = shellQuote(pnpmExecutable);
 // Suppress punycode deprecation warnings which corrupt Wrangler's STDOUT API payloads on Node >= 21
 process.env.NODE_OPTIONS = (process.env.NODE_OPTIONS || "") + " --no-warnings=DEP0040";
 
-function readJsoncFile(path) {
-  const raw = readFileSync(path, "utf8");
-  // Strip single-line // comments to turn JSONC into valid JSON, ignoring http:// and https://
-  const stripped = raw.replace(/(?<!https?:)\/\/[^\n]*/g, "");
+export function parseJsoncText(raw) {
+  let stripped = "";
+  let inString = false;
+  let escaped = false;
+
+  for (let index = 0; index < raw.length; index += 1) {
+    const character = raw[index];
+    const next = raw[index + 1];
+
+    if (inString) {
+      stripped += character;
+      if (escaped) escaped = false;
+      else if (character === "\\") escaped = true;
+      else if (character === '"') inString = false;
+      continue;
+    }
+
+    if (character === '"') {
+      inString = true;
+      stripped += character;
+      continue;
+    }
+    if (character === "/" && next === "/") {
+      index += 2;
+      while (index < raw.length && raw[index] !== "\n") index += 1;
+      if (raw[index] === "\n") stripped += "\n";
+      continue;
+    }
+    if (character === "/" && next === "*") {
+      index += 2;
+      while (index < raw.length) {
+        if (raw[index] === "\n") stripped += "\n";
+        if (raw[index] === "*" && raw[index + 1] === "/") {
+          index += 1;
+          break;
+        }
+        index += 1;
+      }
+      continue;
+    }
+    stripped += character;
+  }
+
   return JSON.parse(stripped);
+}
+
+function readJsoncFile(path) {
+  return parseJsoncText(readFileSync(path, "utf8"));
 }
 
 // ── Read wrangler.jsonc from apps/api/ (strip // comments so JSON.parse works)

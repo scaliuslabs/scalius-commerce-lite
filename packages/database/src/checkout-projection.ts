@@ -126,15 +126,15 @@ export function buildCheckoutProjectionBatchStatements(
     args,
   }, {
     sql: `WITH ${TARGET_ORDERS_CTE}
-      UPDATE orders AS checkout_order
+      UPDATE orders
       SET customer_id = COALESCE(
-        checkout_order.account_owner_customer_id,
+        orders.account_owner_customer_id,
         (SELECT customer.id
          FROM customers AS customer
-         WHERE customer.phone = checkout_order.customer_phone
+         WHERE customer.phone = orders.customer_phone
          LIMIT 1)
       )
-      WHERE checkout_order.id IN (SELECT id FROM target_orders)`,
+      WHERE orders.id IN (SELECT id FROM target_orders)`,
     args,
   }, {
     sql: `WITH ${TARGET_ORDERS_CTE},
@@ -147,67 +147,67 @@ export function buildCheckoutProjectionBatchStatements(
           AND checkout_order.customer_id IS NOT NULL
         GROUP BY checkout_order.customer_id
       )
-      UPDATE customers AS customer
+      UPDATE customers
       SET
         name = COALESCE((
           SELECT checkout_order.customer_name
           FROM target_orders AS checkout_order
           JOIN latest_guest_profile AS profile
             ON profile.representative_order_id = checkout_order.id
-          WHERE profile.customer_id = customer.id
-        ), customer.name),
+          WHERE profile.customer_id = customers.id
+        ), customers.name),
         email = COALESCE((
           SELECT checkout_order.customer_email
           FROM target_orders AS checkout_order
           JOIN latest_guest_profile AS profile
             ON profile.representative_order_id = checkout_order.id
-          WHERE profile.customer_id = customer.id
-        ), customer.email),
+          WHERE profile.customer_id = customers.id
+        ), customers.email),
         address = COALESCE((
           SELECT checkout_order.shipping_address
           FROM target_orders AS checkout_order
           JOIN latest_guest_profile AS profile
             ON profile.representative_order_id = checkout_order.id
-          WHERE profile.customer_id = customer.id
-        ), customer.address),
+          WHERE profile.customer_id = customers.id
+        ), customers.address),
         city = COALESCE((
           SELECT checkout_order.city
           FROM target_orders AS checkout_order
           JOIN latest_guest_profile AS profile
             ON profile.representative_order_id = checkout_order.id
-          WHERE profile.customer_id = customer.id
-        ), customer.city),
+          WHERE profile.customer_id = customers.id
+        ), customers.city),
         zone = COALESCE((
           SELECT checkout_order.zone
           FROM target_orders AS checkout_order
           JOIN latest_guest_profile AS profile
             ON profile.representative_order_id = checkout_order.id
-          WHERE profile.customer_id = customer.id
-        ), customer.zone),
+          WHERE profile.customer_id = customers.id
+        ), customers.zone),
         area = (SELECT checkout_order.area
           FROM target_orders AS checkout_order
           JOIN latest_guest_profile AS profile
             ON profile.representative_order_id = checkout_order.id
-          WHERE profile.customer_id = customer.id),
+          WHERE profile.customer_id = customers.id),
         city_name = (SELECT checkout_order.city_name
           FROM target_orders AS checkout_order
           JOIN latest_guest_profile AS profile
             ON profile.representative_order_id = checkout_order.id
-          WHERE profile.customer_id = customer.id),
+          WHERE profile.customer_id = customers.id),
         zone_name = (SELECT checkout_order.zone_name
           FROM target_orders AS checkout_order
           JOIN latest_guest_profile AS profile
             ON profile.representative_order_id = checkout_order.id
-          WHERE profile.customer_id = customer.id),
+          WHERE profile.customer_id = customers.id),
         area_name = (SELECT checkout_order.area_name
           FROM target_orders AS checkout_order
           JOIN latest_guest_profile AS profile
             ON profile.representative_order_id = checkout_order.id
-          WHERE profile.customer_id = customer.id),
+          WHERE profile.customer_id = customers.id),
         updated_at = unixepoch(),
         deleted_at = NULL
-      WHERE customer.account_claimed_at IS NULL
-        AND customer.id IN (SELECT customer_id FROM latest_guest_profile)`,
+      WHERE customers.account_claimed_at IS NULL
+        AND customers.id IN (SELECT customer_id FROM latest_guest_profile)`,
     args,
   }, {
     sql: `WITH ${TARGET_ORDERS_CTE},
@@ -226,26 +226,26 @@ export function buildCheckoutProjectionBatchStatements(
         WHERE customer_id IS NOT NULL
         GROUP BY customer_id
       )
-      UPDATE customers AS customer
+      UPDATE customers
       SET
-        total_orders = customer.total_orders + COALESCE((
+        total_orders = customers.total_orders + COALESCE((
           SELECT contribution.order_count
           FROM contributions AS contribution
-          WHERE contribution.customer_id = customer.id
+          WHERE contribution.customer_id = customers.id
         ), 0),
-        total_spent = customer.total_spent + COALESCE((
+        total_spent = customers.total_spent + COALESCE((
           SELECT contribution.spent
           FROM contributions AS contribution
-          WHERE contribution.customer_id = customer.id
+          WHERE contribution.customer_id = customers.id
         ), 0),
-        last_order_at = MAX(COALESCE(customer.last_order_at, 0), COALESCE((
+        last_order_at = MAX(COALESCE(customers.last_order_at, 0), COALESCE((
           SELECT contribution.last_order_at
           FROM contributions AS contribution
-          WHERE contribution.customer_id = customer.id
+          WHERE contribution.customer_id = customers.id
         ), 0)),
         updated_at = unixepoch(),
         deleted_at = NULL
-      WHERE customer.id IN (SELECT customer_id FROM contributions)`,
+      WHERE customers.id IN (SELECT customer_id FROM contributions)`,
     args,
   }, {
     sql: `WITH ${TARGET_ORDERS_CTE}

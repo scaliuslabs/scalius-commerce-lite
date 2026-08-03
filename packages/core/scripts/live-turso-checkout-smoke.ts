@@ -247,6 +247,9 @@ async function main(): Promise<void> {
   const createObservedCheckoutDb = () => createTursoDatabase(
       { url: databaseUrl, authToken },
       {
+        writeBatchMode: new URL(databaseUrl).protocol === "turso:"
+          ? "concurrent"
+          : "immediate",
         onConflictRetry({ attempt }) {
           conflictRetries += 1;
           highestConflictAttempt = Math.max(highestConflictAttempt, attempt);
