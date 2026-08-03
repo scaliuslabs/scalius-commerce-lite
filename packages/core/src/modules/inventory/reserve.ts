@@ -301,12 +301,6 @@ export type ReserveStockBatchResult = {
   manualReconciliationRequired?: boolean;
 };
 
-export interface StockReservationAvailabilitySubject {
-  productId: string;
-  slug: string | null;
-  categoryId: string | null;
-}
-
 /**
  * A validated reservation plan whose statements can be composed into a larger
  * atomic checkout batch. Preparing performs reads only; callers decide when to
@@ -314,16 +308,6 @@ export interface StockReservationAvailabilitySubject {
  */
 export interface PreparedStockReservationBatch extends ReserveStockBatchResult {
   statements: SQLiteBatchItem[];
-  /** Products whose public in-stock boolean changes if this plan commits. */
-  availabilityChangedSubjects: StockReservationAvailabilitySubject[];
-  /**
-   * Resolve the exact availability transition from this plan's own batch
-   * results. Fresh checkout plans use the transaction's post-update counters;
-   * callers fall back to availabilityChangedSubjects after uncertain commits.
-   */
-  resolveCommittedAvailabilitySubjects?(
-    batchResults: readonly unknown[],
-  ): StockReservationAvailabilitySubject[];
   resolveIdempotentReplay(error: unknown): Promise<ReserveStockBatchResult | null>;
 }
 
@@ -357,7 +341,6 @@ export async function prepareStockReservationBatch(
       success: true,
       results: [],
       statements: [],
-      availabilityChangedSubjects: [],
       resolveIdempotentReplay: async () => null,
     };
   }
@@ -380,7 +363,6 @@ export async function prepareStockReservationBatch(
       error: `Variant ${multiOrderVariant} cannot be reserved for multiple orders in one counter mutation`,
       manualReconciliationRequired: true,
       statements: [],
-      availabilityChangedSubjects: [],
       resolveIdempotentReplay: async () => null,
     };
   }
@@ -390,7 +372,6 @@ export async function prepareStockReservationBatch(
     return {
       ...variantLoad,
       statements: [],
-      availabilityChangedSubjects: [],
       resolveIdempotentReplay: async () => null,
     };
   }
@@ -403,7 +384,6 @@ export async function prepareStockReservationBatch(
       results: validationErrors,
       error: validationErrors[0]?.error,
       statements: [],
-      availabilityChangedSubjects: [],
       resolveIdempotentReplay: async () => null,
     };
   }
@@ -416,7 +396,6 @@ export async function prepareStockReservationBatch(
       success: true,
       results,
       statements: [],
-      availabilityChangedSubjects: [],
       resolveIdempotentReplay: async () => null,
     };
   }
@@ -444,11 +423,6 @@ export async function prepareStockReservationBatch(
       buildFreshReservationFinalGuard(db, claim)
     );
 
-    const possibleAvailabilitySubjects = buildReservationSubjects(
-      trackedEntries,
-      variants,
-    );
-
     return {
       success: true,
       results,
@@ -457,17 +431,6 @@ export async function prepareStockReservationBatch(
         ...updateQueries,
         ...finalGuards,
       ] as SQLiteBatchItem[],
-      // A missing/uncertain batch result must invalidate conservatively. The
-      // normal success path narrows this to the exact zero-crossing below.
-      availabilityChangedSubjects: possibleAvailabilitySubjects,
-      resolveCommittedAvailabilitySubjects: (batchResults) =>
-        resolveFreshReservationAvailabilitySubjects({
-          batchResults,
-          movementCount: movementQueries.length,
-          movementClaims,
-          variants,
-          fallback: possibleAvailabilitySubjects,
-        }),
       resolveIdempotentReplay: (error) => resolveDuplicateReservationBatch(
         db,
         movementClaims,
@@ -515,10 +478,6 @@ export async function prepareStockReservationBatch(
     success: true,
     results,
     statements: [...guardQueries, ...movementQueries, ...updateQueries] as SQLiteBatchItem[],
-    availabilityChangedSubjects: buildReservationAvailabilityChangedSubjects(
-      trackedEntries,
-      variants,
-    ),
     resolveIdempotentReplay: (error) => resolveDuplicateReservationBatch(
       db,
       movementClaims,
@@ -591,9 +550,6 @@ export async function reserveStockBatch(
 
 type ReservationVariantState = {
   id: string;
-  productId: string;
-  slug: string | null;
-  categoryId: string | null;
   stock: number;
   legacyReservedStock?: number;
   reservedStock: number;
@@ -604,83 +560,6 @@ type ReservationVariantState = {
   trackInventory: boolean;
   stockVersion: number;
 };
-
-function buildReservationAvailabilityChangedSubjects(
-  entries: ReservationBatchItem[],
-  variants: Map<string, ReservationVariantState>,
-): StockReservationAvailabilitySubject[] {
-  const subjects = new Map<string, StockReservationAvailabilitySubject>();
-  for (const entry of entries) {
-    const variant = variants.get(entry.variantId)!;
-    const availableBefore = variant.stock - variant.reservedStock > 0;
-    const availableAfter = variant.stock - (variant.reservedStock + entry.quantity) > 0;
-    if (availableBefore === availableAfter) continue;
-    subjects.set(variant.productId, {
-      productId: variant.productId,
-      slug: variant.slug,
-      categoryId: variant.categoryId,
-    });
-  }
-  return [...subjects.values()];
-}
-
-function buildReservationSubjects(
-  entries: ReservationBatchItem[],
-  variants: Map<string, ReservationVariantState>,
-): StockReservationAvailabilitySubject[] {
-  const subjects = new Map<string, StockReservationAvailabilitySubject>();
-  for (const entry of entries) {
-    const variant = variants.get(entry.variantId)!;
-    subjects.set(variant.productId, {
-      productId: variant.productId,
-      slug: variant.slug,
-      categoryId: variant.categoryId,
-    });
-  }
-  return [...subjects.values()];
-}
-
-function resolveFreshReservationAvailabilitySubjects(input: {
-  batchResults: readonly unknown[];
-  movementCount: number;
-  movementClaims: readonly ReservationMovementClaim[];
-  variants: Map<string, ReservationVariantState>;
-  fallback: StockReservationAvailabilitySubject[];
-}): StockReservationAvailabilitySubject[] {
-  const subjects = new Map<string, StockReservationAvailabilitySubject>();
-
-  for (let index = 0; index < input.movementClaims.length; index += 1) {
-    const result = input.batchResults[input.movementCount + index];
-    const row = Array.isArray(result) && result.length === 1
-      ? result[0]
-      : null;
-    if (!row || typeof row !== "object") return input.fallback;
-
-    const stock = (row as { stock?: unknown }).stock;
-    const reservedStock = (row as { reservedStock?: unknown }).reservedStock;
-    if (
-      typeof stock !== "number" || !Number.isSafeInteger(stock) ||
-      typeof reservedStock !== "number" || !Number.isSafeInteger(reservedStock)
-    ) {
-      return input.fallback;
-    }
-
-    const claim = input.movementClaims[index]!;
-    const availableBefore = stock - (reservedStock - claim.quantity) > 0;
-    const availableAfter = stock - reservedStock > 0;
-    if (availableBefore === availableAfter) continue;
-
-    const variant = input.variants.get(claim.variantId);
-    if (!variant) return input.fallback;
-    subjects.set(variant.productId, {
-      productId: variant.productId,
-      slug: variant.slug,
-      categoryId: variant.categoryId,
-    });
-  }
-
-  return [...subjects.values()];
-}
 
 function buildReservationBatchGuard(
   db: Database,
@@ -1252,9 +1131,6 @@ async function loadReservationVariantStates(
   const rows = await db
     .select({
       id: productVariants.id,
-      productId: products.id,
-      slug: products.slug,
-      categoryId: products.categoryId,
       stock: productVariants.stock,
       legacyReservedStock: productVariants.reservedStock,
       reservedStock: effectiveRegularReservedStockSql(),

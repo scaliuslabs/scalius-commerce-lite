@@ -203,21 +203,9 @@ describe("fresh checkout inventory transaction", () => {
     }));
 
     expect(plans.every((plan) => plan.success)).toBe(true);
-    const availabilityChanges = [];
     for (const plan of plans) {
-      const results = await safeBatch(fixture.db, plan.statements);
-      availabilityChanges.push(
-        plan.resolveCommittedAvailabilitySubjects?.(results as readonly unknown[]) ?? [],
-      );
+      await safeBatch(fixture.db, plan.statements);
     }
-
-    expect(availabilityChanges.slice(0, -1).every((subjects) => subjects.length === 0))
-      .toBe(true);
-    expect(availabilityChanges.at(-1)).toEqual([{
-      productId: "product_hot",
-      slug: "product-hot",
-      categoryId: "category_hot",
-    }]);
 
     expect(sqlite.prepare(`
       SELECT reserved_stock AS reservedStock, stock_version AS stockVersion

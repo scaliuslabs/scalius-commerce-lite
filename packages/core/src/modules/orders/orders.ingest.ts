@@ -25,7 +25,6 @@ import {
     isInventoryReservationConflictError,
     prepareStockReservationBatch,
     type PreparedStockReservationBatch,
-    type StockReservationAvailabilitySubject,
 } from "../inventory";
 import {
     buildMetaPurchaseOutboxClaimInsert,
@@ -68,7 +67,6 @@ export interface StorefrontOrderCommitResult {
     customerId: string | null;
     accountOwnerCustomerId: string | null;
     alreadyCommitted: boolean;
-    availabilityChangedSubjects: StockReservationAvailabilitySubject[];
 }
 
 export interface StorefrontOrderCheckoutCommit<TResponse = unknown> {
@@ -742,7 +740,6 @@ export async function commitStorefrontOrderPayload(
                 customerId: existing.customerId,
                 accountOwnerCustomerId: existing.accountOwnerCustomerId,
                 alreadyCommitted: true,
-                availabilityChangedSubjects: [],
             };
         }
 
@@ -776,19 +773,8 @@ export async function commitStorefrontOrderPayload(
             ...orderWrites,
             ...(checkoutAttemptPlan?.writesAfterOrder ?? []),
         ];
-        let committedAvailabilitySubjects = inventoryPlan.availabilityChangedSubjects;
-
         try {
-            const batchResults = await safeBatch(db, atomicWrites);
-            if (inventoryPlan.resolveCommittedAvailabilitySubjects) {
-                const inventoryOffset = checkoutAttemptPlan?.writesBeforeOrder.length ?? 0;
-                const inventoryResults = (batchResults as readonly unknown[]).slice(
-                    inventoryOffset,
-                    inventoryOffset + inventoryPlan.statements.length,
-                );
-                committedAvailabilitySubjects =
-                    inventoryPlan.resolveCommittedAvailabilitySubjects(inventoryResults);
-            }
+            await safeBatch(db, atomicWrites);
         } catch (error) {
             const committedAfterError = await loadExistingCommittedOrder(db, payload.orderData.id)
                 .catch(() => undefined);
@@ -798,9 +784,6 @@ export async function commitStorefrontOrderPayload(
                     customerId: committedAfterError.customerId,
                     accountOwnerCustomerId: committedAfterError.accountOwnerCustomerId,
                     alreadyCommitted: true,
-                    // The commit result was uncertain, so invalidate every
-                    // potentially changed tracked product conservatively.
-                    availabilityChangedSubjects: inventoryPlan.availabilityChangedSubjects,
                 };
             }
 
@@ -833,7 +816,6 @@ export async function commitStorefrontOrderPayload(
                     customerId: customer.id,
                     accountOwnerCustomerId: customer.accountOwnerCustomerId,
                     alreadyCommitted: false,
-                    availabilityChangedSubjects: inventoryPlan.availabilityChangedSubjects,
                 };
             }
             if (idempotentReservation?.manualReconciliationRequired) {
@@ -864,7 +846,6 @@ export async function commitStorefrontOrderPayload(
             customerId: customer.id,
             accountOwnerCustomerId: customer.accountOwnerCustomerId,
             alreadyCommitted: false,
-            availabilityChangedSubjects: committedAvailabilitySubjects,
         };
     }
 }

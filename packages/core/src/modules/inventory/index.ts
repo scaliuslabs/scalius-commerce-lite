@@ -12,7 +12,6 @@ export {
 export type {
   PreparedStockReservationBatch,
   ReserveStockBatchResult,
-  StockReservationAvailabilitySubject,
 } from "./reserve";
 export { deductStock, deductMultiple } from "./deduct";
 export { releaseReservation, releaseMultiple, releaseReservedStockBatch } from "./release";

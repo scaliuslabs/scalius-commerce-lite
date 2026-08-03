@@ -155,9 +155,6 @@ export interface PreparedCheckoutCommit<TPayload = unknown, TResponse = unknown>
 
 export interface CheckoutReservationLaneSnapshotRow {
   variantId: string;
-  productId: string;
-  productSlug: string | null;
-  categoryId: string | null;
   stock: number;
   legacyReservedStock: number;
   trackInventory: number | boolean;
@@ -760,9 +757,6 @@ export function buildCheckoutReservationLaneSnapshotStatement(
   return {
     sql: `SELECT
         variant.id AS variantId,
-        variant.product_id AS productId,
-        product.slug AS productSlug,
-        product.category_id AS categoryId,
         variant.stock AS stock,
         variant.reserved_stock AS legacyReservedStock,
         variant.track_inventory AS trackInventory,
