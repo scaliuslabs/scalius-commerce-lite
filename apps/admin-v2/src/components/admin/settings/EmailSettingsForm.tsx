@@ -102,7 +102,10 @@ export default function EmailSettingsForm() {
       return updateEmailSettings({ data: payload });
     },
     onSuccess: async (_response, saved) => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.settings.email() });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.settings.email() }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.settings.auth() }),
+      ]);
       const refreshed = queryClient.getQueryData<EmailSettingsPayload>(
         queryKeys.settings.email(),
       );

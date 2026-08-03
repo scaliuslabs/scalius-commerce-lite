@@ -223,8 +223,11 @@ export default function PaymentGatewaysManager() {
             setMethods((current) => current
                 ? { ...current, enabledMethods: nextEnabledMethods, defaultMethod }
                 : current);
-            await queryClient.invalidateQueries({ queryKey: queryKeys.settings.paymentMethods() });
-            await queryClient.invalidateQueries({ queryKey: queryKeys.settings.checkoutFlow() });
+            await Promise.all([
+                queryClient.invalidateQueries({ queryKey: queryKeys.settings.paymentMethods() }),
+                queryClient.invalidateQueries({ queryKey: queryKeys.settings.checkoutFlow() }),
+                queryClient.invalidateQueries({ queryKey: queryKeys.settings.checkoutReadiness() }),
+            ]);
             const refreshed = await loadMethods(false, false);
             if (!silent) {
                 if (refreshed) toast.success("Buyer payment methods saved");
@@ -277,8 +280,11 @@ export default function PaymentGatewaysManager() {
                 setSavedPolar({ ...committed });
                 setPolarConf({ token: Boolean(committed.accessToken), webhook: Boolean(committed.webhookSecret) });
             }
-            await queryClient.invalidateQueries({ queryKey: queryKeys.settings.paymentMethods() });
-            await queryClient.invalidateQueries({ queryKey: queryKeys.settings.checkoutFlow() });
+            await Promise.all([
+                queryClient.invalidateQueries({ queryKey: queryKeys.settings.paymentMethods() }),
+                queryClient.invalidateQueries({ queryKey: queryKeys.settings.checkoutFlow() }),
+                queryClient.invalidateQueries({ queryKey: queryKeys.settings.checkoutReadiness() }),
+            ]);
             loadedGateways.current.delete(gw);
             const [methodsRefreshed, credentialsRefreshed] = await Promise.all([
                 loadMethods(false, false, true),

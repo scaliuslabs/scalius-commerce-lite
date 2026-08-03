@@ -2,10 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
-interface UseSettingsFormOptions<T extends object> {
+interface UseSettingsFormOptions<T extends object, SaveResult> {
   queryKey: readonly unknown[];
   fetchFn: () => Promise<Partial<T>>;
-  saveFn: (values: T) => Promise<unknown>;
+  saveFn: (values: T) => Promise<SaveResult>;
+  resolveSavedValues?: (result: SaveResult, submittedValues: T) => T | undefined;
   defaultValues: T;
   successMessage?: string;
   errorMessage?: string;
@@ -20,15 +21,16 @@ interface UseSettingsFormOptions<T extends object> {
  *
  * Replaces the boilerplate of N useState calls + loading + saving + useEffect + handleSubmit.
  */
-export function useSettingsForm<T extends object>({
+export function useSettingsForm<T extends object, SaveResult = unknown>({
   queryKey,
   fetchFn,
   saveFn,
+  resolveSavedValues,
   defaultValues,
   successMessage = "Settings saved",
   errorMessage = "Failed to save settings",
   invalidateQueryKeys = [],
-}: UseSettingsFormOptions<T>) {
+}: UseSettingsFormOptions<T, SaveResult>) {
   const queryClient = useQueryClient();
 
   const { data, error, isError, isLoading } = useQuery({
@@ -53,13 +55,24 @@ export function useSettingsForm<T extends object>({
 
   const mutation = useMutation({
     mutationFn: saveFn,
-    onSuccess: (_result, submittedValues) => {
-      setValues(submittedValues);
-      setSavedValues(submittedValues);
-      queryClient.invalidateQueries({ queryKey: queryKey as unknown[] });
-      invalidateQueryKeys.forEach((key) => {
-        queryClient.invalidateQueries({ queryKey: key as unknown[] });
-      });
+    onSuccess: async (result, submittedValues) => {
+      const canonicalValues = resolveSavedValues?.(result, submittedValues);
+      const nextValues = canonicalValues ?? submittedValues;
+      setValues(nextValues);
+      setSavedValues(nextValues);
+
+      const invalidations = invalidateQueryKeys.map((key) =>
+        queryClient.invalidateQueries({ queryKey: key as unknown[] }),
+      );
+      if (canonicalValues) {
+        await queryClient.cancelQueries({ queryKey: queryKey as unknown[] });
+        queryClient.setQueryData(queryKey as unknown[], canonicalValues);
+      } else {
+        invalidations.push(
+          queryClient.invalidateQueries({ queryKey: queryKey as unknown[] }),
+        );
+      }
+      await Promise.all(invalidations);
       toast.success(successMessage);
     },
     onError: (error) => {
