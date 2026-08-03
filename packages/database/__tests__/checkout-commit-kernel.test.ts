@@ -418,6 +418,11 @@ describe("checkout aggregate commit kernel", () => {
   it("projects every normalized COD fact once and replays without double-counting", () => {
     executeRun(database, buildEnsureCheckoutReservationLanesStatement(["variant_hot"]));
     executeCommitBatch(database, [commit({ id: "order_projection" })], "batch_projection");
+    expect(database.prepare(`
+      SELECT COUNT(*) AS count
+      FROM orders_fts
+      WHERE orders_fts MATCH 'projection'
+    `).get()).toEqual({ count: 0 });
     const projection = buildCheckoutProjectionStatements("batch_projection");
 
     database.exec("BEGIN IMMEDIATE");
@@ -459,6 +464,11 @@ describe("checkout aggregate commit kernel", () => {
     expect(database.prepare(`
       SELECT status FROM checkout_batch_outbox WHERE id = 'batch_projection'
     `).get()).toEqual({ status: "complete" });
+    expect(database.prepare(`
+      SELECT COUNT(*) AS count
+      FROM orders_fts
+      WHERE orders_fts MATCH 'projection'
+    `).get()).toEqual({ count: 1 });
 
     // A lost projector response is harmless: a completed outbox has no target
     // rows, so no customer aggregate or normalized fact changes again.

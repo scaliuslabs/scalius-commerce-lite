@@ -355,6 +355,10 @@ ledger. Every migration from 0050 onward must:
   source SHA-256 ledger row; and
 - be listed in the runtime release manifest used by `/readyz`.
 
+The current release is `0051_orders_checkout_write_path`. It also demonstrates
+that the runner and its tests must handle a contiguous chain of releases rather
+than assuming the ledger contains only its bootstrap row.
+
 Do not delete or squash historical migrations after a release. Existing D1
 installations depend on Wrangler's migration history, while existing Turso and
 PostgreSQL installations depend on the provider-neutral ledger.

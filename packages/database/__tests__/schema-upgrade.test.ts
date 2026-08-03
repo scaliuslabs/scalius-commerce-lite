@@ -91,19 +91,27 @@ function quoteSqliteIdentifier(identifier: string): string {
 }
 
 describe("provider-neutral schema upgrades", () => {
-  it("loads one contiguous migration with exact Turso and PostgreSQL sidecars", async () => {
+  it("loads a contiguous migration chain with exact Turso and PostgreSQL sidecars", async () => {
     const artifacts = await loadSchemaUpgradeArtifacts();
     expect(artifacts.map((artifact) => ({
       version: artifact.version,
       name: artifact.name,
       sqliteStatements: artifact.sqliteStatements.length,
       postgresStatements: artifact.postgresStatements.length,
-    }))).toEqual([{
-      version: 50,
-      name: "0050_schema_release_contract",
-      sqliteStatements: 3,
-      postgresStatements: 3,
-    }]);
+    }))).toEqual([
+      {
+        version: 50,
+        name: "0050_schema_release_contract",
+        sqliteStatements: 3,
+        postgresStatements: 3,
+      },
+      {
+        version: 51,
+        name: "0051_orders_checkout_write_path",
+        sqliteStatements: 10,
+        postgresStatements: 10,
+      },
+    ]);
   });
 
   it("keeps the PostgreSQL sidecar DDL identical to the fresh-schema compiler", () => {
@@ -143,15 +151,15 @@ describe("provider-neutral schema upgrades", () => {
       const first = await applyTursoSchemaUpgrades(connection, artifacts);
       expect(first.before).toMatchObject(DATABASE_SCHEMA_LEGACY_BASELINE);
       expect(first.after).toEqual(CURRENT_DATABASE_SCHEMA);
-      expect(first.applied.map((artifact) => artifact.name)).toEqual([
-        CURRENT_DATABASE_SCHEMA.name,
-      ]);
+      expect(first.applied.map((artifact) => artifact.name))
+        .toEqual(artifacts.map((artifact) => artifact.name));
       expect(database.prepare(
-        "SELECT version, name, source_sha256 AS sourceSha256 FROM scalius_schema_migrations",
-      ).get()).toMatchObject({
-        ...CURRENT_DATABASE_SCHEMA,
-        sourceSha256: artifacts[0]!.sourceSha256,
-      });
+        "SELECT version, name, source_sha256 AS sourceSha256 FROM scalius_schema_migrations ORDER BY version",
+      ).all()).toEqual(artifacts.map((artifact) => ({
+        version: artifact.version,
+        name: artifact.name,
+        sourceSha256: artifact.sourceSha256,
+      })));
 
       const replay = await applyTursoSchemaUpgrades(connection, artifacts);
       expect(replay.before).toEqual(CURRENT_DATABASE_SCHEMA);
@@ -186,9 +194,9 @@ describe("provider-neutral schema upgrades", () => {
       await expect(applyTursoSchemaUpgrades(connection, artifacts))
         .rejects.toThrow(/response loss after commit/i);
       await expect(applyTursoSchemaUpgrades(base, artifacts)).resolves.toMatchObject({
-        before: CURRENT_DATABASE_SCHEMA,
+        before: { version: 50, name: "0050_schema_release_contract" },
         after: CURRENT_DATABASE_SCHEMA,
-        applied: [],
+        applied: [{ version: 51, name: "0051_orders_checkout_write_path" }],
       });
     } finally {
       database.close();
@@ -333,7 +341,8 @@ describe("provider-neutral schema upgrades", () => {
     ], artifacts)).toThrow(/diverges at version 50/i);
     expect(() => validateAppliedSchemaMigrations([
       { version: 50, name: artifacts[0]!.name, sourceSha256: artifacts[0]!.sourceSha256 },
-      { version: 51, name: "0051_future", sourceSha256: "c".repeat(64) },
+      { version: 51, name: artifacts[1]!.name, sourceSha256: artifacts[1]!.sourceSha256 },
+      { version: 52, name: "0052_future", sourceSha256: "c".repeat(64) },
     ], artifacts)).toThrow(/future row/i);
   });
 
@@ -373,10 +382,10 @@ describe("provider-neutral schema upgrades", () => {
 
   it("applies PostgreSQL sidecars in one serializable advisory-locked transaction", async () => {
     const artifacts = await loadSchemaUpgradeArtifacts();
-    let current: "legacy" | "current" = "legacy";
+    let appliedCount = 0;
     const query = vi.fn((sql: string) => {
       if (sql.includes("to_regclass('public.scalius_schema_migrations')")) {
-        return Promise.resolve(postgresResult([[current === "current" ? "scalius_schema_migrations" : null]]));
+        return Promise.resolve(postgresResult([[appliedCount > 0 ? "scalius_schema_migrations" : null]]));
       }
       if (sql.includes("SELECT to_regclass($1)")) {
         return Promise.resolve(postgresResult([[POSTGRES_MIGRATION_STATE_REGCLASS]]));
@@ -389,16 +398,18 @@ describe("provider-neutral schema upgrades", () => {
         ]]));
       }
       if (sql.includes("FROM scalius_schema_migrations ORDER BY version")) {
-        return Promise.resolve(postgresResult([[
-          CURRENT_DATABASE_SCHEMA.version,
-          CURRENT_DATABASE_SCHEMA.name,
-          artifacts[0]!.sourceSha256,
-        ]]));
+        return Promise.resolve(postgresResult(
+          artifacts.slice(0, appliedCount).map((artifact) => [
+            artifact.version,
+            artifact.name,
+            artifact.sourceSha256,
+          ]),
+        ));
       }
       return Promise.resolve(postgresResult([]));
     });
     const transaction = vi.fn(async (queries: PromiseLike<PostgresFullResult>[]) => {
-      current = "current";
+      appliedCount += 1;
       return await Promise.all(queries);
     });
     const connection = { query, transaction } as unknown as PostgresHttpConnection;
@@ -407,11 +418,10 @@ describe("provider-neutral schema upgrades", () => {
 
     expect(receipt.before).toMatchObject(DATABASE_SCHEMA_LEGACY_BASELINE);
     expect(receipt.after).toEqual(CURRENT_DATABASE_SCHEMA);
-    expect(receipt.applied.map((artifact) => artifact.name)).toEqual([
-      CURRENT_DATABASE_SCHEMA.name,
-    ]);
-    expect(transaction).toHaveBeenCalledOnce();
-    expect(transaction).toHaveBeenCalledWith(expect.any(Array), {
+    expect(receipt.applied.map((artifact) => artifact.name))
+      .toEqual(artifacts.map((artifact) => artifact.name));
+    expect(transaction).toHaveBeenCalledTimes(artifacts.length);
+    expect(transaction).toHaveBeenLastCalledWith(expect.any(Array), {
       arrayMode: true,
       fullResults: true,
       isolationLevel: "Serializable",
@@ -423,10 +433,10 @@ describe("provider-neutral schema upgrades", () => {
 
   it("treats a concurrently completed PostgreSQL migration as an idempotent replay", async () => {
     const artifacts = await loadSchemaUpgradeArtifacts();
-    let current: "legacy" | "current" = "legacy";
+    let appliedCount = 0;
     const query = vi.fn((sql: string) => {
       if (sql.includes("to_regclass('public.scalius_schema_migrations')")) {
-        return Promise.resolve(postgresResult([[current === "current" ? "scalius_schema_migrations" : null]]));
+        return Promise.resolve(postgresResult([[appliedCount > 0 ? "scalius_schema_migrations" : null]]));
       }
       if (sql.includes("SELECT to_regclass($1)")) {
         return Promise.resolve(postgresResult([[POSTGRES_MIGRATION_STATE_REGCLASS]]));
@@ -439,16 +449,18 @@ describe("provider-neutral schema upgrades", () => {
         ]]));
       }
       if (sql.includes("FROM scalius_schema_migrations ORDER BY version")) {
-        return Promise.resolve(postgresResult([[
-          CURRENT_DATABASE_SCHEMA.version,
-          CURRENT_DATABASE_SCHEMA.name,
-          artifacts[0]!.sourceSha256,
-        ]]));
+        return Promise.resolve(postgresResult(
+          artifacts.slice(0, appliedCount).map((artifact) => [
+            artifact.version,
+            artifact.name,
+            artifact.sourceSha256,
+          ]),
+        ));
       }
       return Promise.resolve(postgresResult([]));
     });
     const transaction = vi.fn(async () => {
-      current = "current";
+      appliedCount += 1;
       throw Object.assign(new Error("already applied"), {
         code: POSTGRES_SCHEMA_UPGRADE_ALREADY_APPLIED_CODE,
       });
@@ -459,6 +471,6 @@ describe("provider-neutral schema upgrades", () => {
 
     expect(receipt.after).toEqual(CURRENT_DATABASE_SCHEMA);
     expect(receipt.applied).toEqual([]);
-    expect(transaction).toHaveBeenCalledOnce();
+    expect(transaction).toHaveBeenCalledTimes(artifacts.length);
   });
 });

@@ -8,6 +8,9 @@ const ORDERS_SCHEMA_SOURCE = fileURLToPath(
 const BASELINE_MIGRATION = fileURLToPath(
     new URL("../migrations/0000_blushing_jack_power.sql", import.meta.url),
 );
+const CHECKOUT_WRITE_PATH_MIGRATION = fileURLToPath(
+    new URL("../migrations/0051_orders_checkout_write_path.sql", import.meta.url),
+);
 
 describe("order schema boundaries", () => {
     it("keeps admin order search and default list indexes aligned", () => {
@@ -53,6 +56,24 @@ describe("order schema boundaries", () => {
         );
         expect(baselineSource).toContain(
             "CREATE INDEX `orders_fulfillment_list_idx` ON `orders` (`deleted_at`,`fulfillment_status`,`updated_at`)",
+        );
+    });
+
+    it("keeps pending checkout search projection and nullable indexes off the commit path", () => {
+        const schemaSource = readFileSync(ORDERS_SCHEMA_SOURCE, "utf8");
+        const migrationSource = readFileSync(CHECKOUT_WRITE_PATH_MIGRATION, "utf8");
+
+        expect(schemaSource).not.toContain('index("orders_archived_at_idx")');
+        expect(schemaSource).not.toContain('index("orders_deleted_at_idx")');
+        expect(schemaSource).toContain('.where(sql`${table.customerId} IS NOT NULL`)');
+        expect(schemaSource).toContain('.where(sql`${table.accountOwnerCustomerId} IS NOT NULL`)');
+        expect(schemaSource).toContain('.where(sql`${table.shipmentClaimId} IS NOT NULL`)');
+        expect(migrationSource).toContain("DROP INDEX IF EXISTS `orders_customer_id_idx`");
+        expect(migrationSource).toContain(
+            "WHEN NEW.`checkout_projection_status` IS NULL OR NEW.`checkout_projection_status` = 'complete'",
+        );
+        expect(migrationSource).toContain(
+            "WHEN OLD.`checkout_projection_status` IS NULL OR OLD.`checkout_projection_status` = 'complete'",
         );
     });
 
