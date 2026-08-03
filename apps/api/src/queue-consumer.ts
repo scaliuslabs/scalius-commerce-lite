@@ -72,7 +72,6 @@ import { getCredentialEncryptionKey, getEncryptionKey } from "./utils/encryption
 import {
   createStorefrontCacheWarmMessageForPurge,
   enqueueStorefrontCacheWarm,
-  invalidateProductAvailabilityCaches,
   purgeStorefrontForPrefixes,
   warmStorefrontHtmlPaths,
   type StorefrontCachePurgeQueueMessage,
@@ -1008,7 +1007,6 @@ async function processQueueMessage(
       });
       const completionStatus = assertPaymentConfirmed(result, "stripe", payload.orderId);
       if (result.success && !result.alreadyProcessed) {
-        await invalidateProductAvailabilityCaches(db, { orderIds: [payload.orderId] }, { env, executionCtx });
         await enqueueOrderNotificationAfterPaymentConfirmed(db, env, {
           orderId: payload.orderId,
           gateway: "stripe",
@@ -1045,7 +1043,6 @@ async function processQueueMessage(
 
     case "payment.stripe.canceled": {
       await releaseOrderInventory(db, payload.orderId);
-      await invalidateProductAvailabilityCaches(db, { orderIds: [payload.orderId] }, { env, executionCtx });
       paymentWebhookStatus = "processed";
       paymentWebhookResult = createPaymentWebhookQueueResult(payload, msg.id, {
         gateway: "stripe",
@@ -1089,7 +1086,6 @@ async function processQueueMessage(
       });
       const completionStatus = assertPaymentConfirmed(result, "sslcommerz", payload.orderId);
       if (result.success && !result.alreadyProcessed) {
-        await invalidateProductAvailabilityCaches(db, { orderIds: [payload.orderId] }, { env, executionCtx });
         await enqueueOrderNotificationAfterPaymentConfirmed(db, env, {
           orderId: payload.orderId,
           gateway: "sslcommerz",
@@ -1158,7 +1154,6 @@ async function processQueueMessage(
       });
       const completionStatus = assertPaymentConfirmed(result, "polar", payload.orderId);
       if (result.success && !result.alreadyProcessed) {
-        await invalidateProductAvailabilityCaches(db, { orderIds: [payload.orderId] }, { env, executionCtx });
         await enqueueOrderNotificationAfterPaymentConfirmed(db, env, {
           orderId: payload.orderId,
           gateway: "polar",
@@ -1208,7 +1203,6 @@ async function processQueueMessage(
         polarStatus: payload.polarStatus,
       });
       if (result.success) {
-        await invalidateProductAvailabilityCaches(db, { orderIds: [payload.orderId] }, { env, executionCtx });
         await enqueueOrderRefundNotificationAfterPolarWebhook(db, env, {
           orderId: payload.orderId,
           notification: result.notification,

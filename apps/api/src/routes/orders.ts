@@ -67,8 +67,6 @@ import {
 import { CUSTOMER_AUTH_OTP_CHANNELS } from "@scalius/shared/customer-auth-policy";
 import {
   getOptionalExecutionContext,
-  invalidateProductAvailabilityCacheSubjects,
-  type ProductAvailabilityCacheSubject,
   type WaitUntilExecutionContext,
 } from "../utils/cache-invalidation";
 import { AppError, NotFoundError, ValidationError, RateLimitError, UnauthorizedError, ServiceUnavailableError } from "../utils/api-error";
@@ -211,27 +209,6 @@ async function enforceCheckoutRateLimits(
   ]);
   if (!ipAllowed || !phoneAllowed) {
     throw new RateLimitError("Too many order requests. Please try again later.");
-  }
-}
-
-async function invalidateStorefrontOrderAvailabilityCaches(
-  db: Database,
-  env: Env,
-  subjects: readonly ProductAvailabilityCacheSubject[],
-  executionCtx: WaitUntilExecutionContext | undefined,
-): Promise<void> {
-  if (subjects.length === 0) return;
-  try {
-    await invalidateProductAvailabilityCacheSubjects(
-      subjects,
-      { env, executionCtx },
-      db,
-    );
-  } catch (error) {
-    console.error("[Orders] Failed to invalidate product availability caches after order commit:", {
-      productCount: subjects.length,
-      error,
-    });
   }
 }
 
@@ -1826,24 +1803,12 @@ app.openapi(createOrderRoute, async (c) => {
         executionCtx,
       );
 
-      const sideEffectTasks: Promise<unknown>[] = [];
       if (coordinated.postCommitPayload) {
-        sideEffectTasks.push(runStorefrontOrderPostCommitSideEffects(
+        const sideEffects = runStorefrontOrderPostCommitSideEffects(
           db,
           c.env,
           coordinated.postCommitPayload,
-        ));
-      }
-      if (coordinated.availabilityChangedSubjects.length > 0) {
-        sideEffectTasks.push(invalidateStorefrontOrderAvailabilityCaches(
-          db,
-          c.env,
-          coordinated.availabilityChangedSubjects,
-          executionCtx,
-        ));
-      }
-      if (sideEffectTasks.length > 0) {
-        const sideEffects = Promise.all(sideEffectTasks).then(() => undefined);
+        );
         if (executionCtx && typeof executionCtx.waitUntil === "function") {
           executionCtx.waitUntil(sideEffects);
         } else {
@@ -2005,7 +1970,6 @@ app.openapi(createOrderRoute, async (c) => {
       message: "Order created",
     };
 
-    let commitResult;
     let committedResponsePayload = responsePayload;
     try {
       const coordinatedEligibility = getCoordinatedCheckoutEligibility(result.commitPayload);
@@ -2043,15 +2007,8 @@ app.openapi(createOrderRoute, async (c) => {
           );
         }
         committedResponsePayload = coordinated.response as typeof responsePayload;
-        commitResult = {
-          orderId: coordinated.orderId,
-          customerId: result.commitPayload.existingCustomer?.id ?? null,
-          accountOwnerCustomerId: result.commitPayload.existingCustomer?.id ?? null,
-          alreadyCommitted: coordinated.replay,
-          availabilityChangedSubjects: coordinated.availabilityChangedSubjects,
-        };
       } else {
-        commitResult = await commitStorefrontOrderPayload(db, result.commitPayload, {
+        await commitStorefrontOrderPayload(db, result.commitPayload, {
           attempt: checkoutAttempt,
           response: responsePayload,
         });
@@ -2106,15 +2063,11 @@ app.openapi(createOrderRoute, async (c) => {
       executionCtx,
     );
 
-    const sideEffects = Promise.all([
-      runStorefrontOrderPostCommitSideEffects(db, c.env, result.commitPayload),
-      invalidateStorefrontOrderAvailabilityCaches(
-        db,
-        c.env,
-        commitResult.availabilityChangedSubjects,
-        executionCtx,
-      ),
-    ]).then(() => undefined);
+    const sideEffects = runStorefrontOrderPostCommitSideEffects(
+      db,
+      c.env,
+      result.commitPayload,
+    );
     if (executionCtx && typeof executionCtx.waitUntil === "function") {
       executionCtx.waitUntil(sideEffects);
     } else {

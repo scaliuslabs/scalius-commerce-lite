@@ -13,7 +13,6 @@ import {
     markWebhookEventFailed,
     markWebhookEventProcessed,
 } from "../../utils/webhook-idempotency";
-import { invalidateProductAvailabilityCaches } from "../../utils/cache-invalidation";
 import { enqueueOrderStatusChangeNotification } from "../../utils/order-notification-queue";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -166,8 +165,6 @@ app.post("/", async (c) => {
             .where(eq(deliveryShipments.id, shipment.id));
 
         const statusResult = await updateOrderStatusFromShipment(db, shipment.id, normalizedStatus);
-        await invalidateProductAvailabilityCaches(db, { orderIds: [shipment.orderId] }, c);
-
         await enqueueOrderStatusChangeNotification({
             db,
             queue: c.env.ORDER_NOTIFICATIONS_QUEUE,
