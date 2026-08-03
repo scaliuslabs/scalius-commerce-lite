@@ -13,7 +13,10 @@ import type {
   CheckoutCommittedOrderRow,
   PortableSqlStatement,
 } from "@scalius/database/checkout-commit";
-import type { CheckoutSqlTransport } from "@scalius/database/checkout-transport";
+import {
+  createCheckoutSqlTransport,
+  type CheckoutSqlTransport,
+} from "@scalius/database/checkout-transport";
 import type { Database } from "@scalius/database/client";
 import * as schema from "@scalius/database/schema";
 import { compileSqliteMigrationForProvider } from "@scalius/database/migration-artifacts";
@@ -53,10 +56,9 @@ function createCheckoutDatabase(): DatabaseSync {
 
 function sqliteTransport(
   database: DatabaseSync,
-  provider: "d1" | "turso" = "d1",
 ): CheckoutSqlTransport {
   return {
-    provider,
+    provider: "d1",
     async all<T>(statement: PortableSqlStatement) {
       return database.prepare(statement.sql).all(
         ...(statement.args as SQLiteInput[]),
@@ -84,6 +86,102 @@ function sqliteTransport(
       }
     },
     close() {},
+  };
+}
+
+interface StatefulTursoHarness {
+  transport: CheckoutSqlTransport;
+  requestedBatchModes: Array<string | undefined>;
+  loseNextCheckoutCommitResponse(): void;
+}
+
+type StatefulTursoBatchStatement = string | {
+  sql: string;
+  args?: readonly unknown[];
+};
+
+function batchStatementSql(statement: StatefulTursoBatchStatement): string {
+  return typeof statement === "string" ? statement : statement.sql;
+}
+
+function batchStatementArgs(statement: StatefulTursoBatchStatement): SQLInputValue[] {
+  if (typeof statement === "string" || statement.args === undefined) return [];
+  if (!Array.isArray(statement.args)) {
+    throw new Error("Stateful Turso test connection accepts positional arguments only.");
+  }
+  return statement.args as SQLInputValue[];
+}
+
+/**
+ * Stateful test connection for the real Turso checkout transport. DatabaseSync
+ * supplies SQLite semantics while this boundary preserves Turso's raw rows,
+ * transaction modes, commit/rollback, direct all/get calls, and uncertain
+ * post-commit responses. It deliberately does not emulate MVCC scheduling.
+ */
+function statefulTursoTransport(database: DatabaseSync): StatefulTursoHarness {
+  const requestedBatchModes: Array<string | undefined> = [];
+  let loseCheckoutCommitResponse = false;
+
+  const connection = {
+    async batch(
+      statements: StatefulTursoBatchStatement[],
+      options?: { mode?: string; raw?: boolean },
+    ) {
+      requestedBatchModes.push(options?.mode);
+      const transactional = options?.mode !== undefined;
+      const shouldLoseResponse = loseCheckoutCommitResponse
+        && statements.some((statement) =>
+          /\bINSERT\s+INTO\s+orders\b/i.test(batchStatementSql(statement))
+        );
+      if (transactional) {
+        database.exec(options?.mode === "read" ? "BEGIN" : "BEGIN IMMEDIATE");
+      }
+      try {
+        const results = statements.map((statement) => {
+          const prepared = database.prepare(batchStatementSql(statement));
+          const args = batchStatementArgs(statement);
+          if (prepared.columns().length === 0) {
+            const result = prepared.run(...args);
+            return { rows: [], rowsAffected: Number(result.changes) };
+          }
+          prepared.setReturnArrays(true);
+          return {
+            rows: prepared.all(...args) as unknown as SQLOutputValue[][],
+            rowsAffected: 0,
+          };
+        });
+        if (transactional) database.exec("COMMIT");
+        if (shouldLoseResponse) {
+          loseCheckoutCommitResponse = false;
+          throw new Error("simulated Turso response loss after checkout commit");
+        }
+        return results;
+      } catch (error) {
+        if (transactional && database.isTransaction) database.exec("ROLLBACK");
+        throw error;
+      }
+    },
+    async all(sql: string, ...args: SQLInputValue[]) {
+      return database.prepare(sql).all(...args);
+    },
+    async get(sql: string, ...args: SQLInputValue[]) {
+      return database.prepare(sql).get(...args) ?? null;
+    },
+    close() {},
+  };
+
+  return {
+    transport: createCheckoutSqlTransport({
+      DATABASE_PROVIDER: "turso",
+      TURSO_DATABASE_URL: "turso://stateful-conformance.turso.io",
+      TURSO_AUTH_TOKEN: "test-token",
+    }, {
+      connectTurso: (() => connection) as never,
+    }),
+    requestedBatchModes,
+    loseNextCheckoutCommitResponse() {
+      loseCheckoutCommitResponse = true;
+    },
   };
 }
 
@@ -559,6 +657,42 @@ describe("production checkout coordinator engine", () => {
     `).get()).toEqual({ orders: 1, reserved: 1 });
   });
 
+  it("recovers an exact Turso replay when the checkout commit response is lost", async () => {
+    const harness = statefulTursoTransport(database);
+    harness.loseNextCheckoutCommitResponse();
+    const input = command("order_turso_response_loss");
+    try {
+      const firstEngine = new CheckoutCoordinatorEngine(harness.transport);
+      await expect(firstEngine.submit(input)).resolves.toMatchObject({
+        ok: true,
+        replay: true,
+      });
+
+      const restartedEngine = new CheckoutCoordinatorEngine(harness.transport);
+      await expect(restartedEngine.submit(input)).resolves.toMatchObject({
+        ok: true,
+        replay: true,
+      });
+      await expect(restartedEngine.submit(command("order_turso_response_loss", {
+        requestHash: "different_hash",
+      }))).resolves.toEqual({
+        ok: false,
+        code: "CHECKOUT_IDEMPOTENCY_CONFLICT",
+      });
+
+      expect(database.prepare(`
+        SELECT COUNT(*) AS orders,
+               (SELECT SUM(reserved_quantity) FROM inventory_reservation_lanes
+                WHERE variant_id = 'variant_hot') AS reserved,
+               (SELECT COUNT(*) FROM checkout_batch_outbox) AS outboxes
+        FROM orders
+      `).get()).toEqual({ orders: 1, reserved: 1, outboxes: 1 });
+      expect(harness.requestedBatchModes).toContain("concurrent");
+    } finally {
+      harness.transport.close();
+    }
+  });
+
   it("fails a stale checkout authority revision without writing an order", async () => {
     database.prepare(`
       UPDATE checkout_authority SET revision = 6, updated_at = unixepoch()
@@ -595,31 +729,38 @@ describe("production checkout coordinator engine", () => {
   });
 
   it("uses both lanes under concurrent-writer transport and fails closed at capacity", async () => {
-    const engine = new CheckoutCoordinatorEngine(sqliteTransport(database, "turso"));
-    const results = await Promise.all(Array.from({ length: 12 }, (_, index) =>
-      engine.submit(command(`order_${String(index).padStart(3, "0")}`))
-    ));
-    expect(results.every((result) => result.ok)).toBe(true);
-    expect(database.prepare(`
-      SELECT COUNT(DISTINCT lane) AS lanes, SUM(reserved_quantity) AS reserved
-      FROM inventory_reservation_lanes
-      WHERE variant_id = 'variant_hot' AND reserved_quantity > 0
-    `).get()).toEqual({ lanes: 2, reserved: 12 });
+    const harness = statefulTursoTransport(database);
+    const engine = new CheckoutCoordinatorEngine(harness.transport);
+    try {
+      const results = await Promise.all(Array.from({ length: 12 }, (_, index) =>
+        engine.submit(command(`order_${String(index).padStart(3, "0")}`))
+      ));
+      expect(results.every((result) => result.ok)).toBe(true);
+      expect(database.prepare(`
+        SELECT COUNT(DISTINCT lane) AS lanes, SUM(reserved_quantity) AS reserved
+        FROM inventory_reservation_lanes
+        WHERE variant_id = 'variant_hot' AND reserved_quantity > 0
+      `).get()).toEqual({ lanes: 2, reserved: 12 });
 
-    await expect(engine.submit(command("order_exhausted", { quantity: 9 })))
-      .resolves.toEqual({ ok: false, code: "CHECKOUT_INVENTORY_UNAVAILABLE" });
-    expect(database.prepare("SELECT COUNT(*) AS count FROM orders").get()).toEqual({ count: 12 });
-    expect(database.prepare(`
-      SELECT SUM(reserved_quantity) AS reserved
-      FROM inventory_reservation_lanes WHERE variant_id = 'variant_hot'
-    `).get()).toEqual({ reserved: 12 });
+      await expect(engine.submit(command("order_exhausted", { quantity: 9 })))
+        .resolves.toEqual({ ok: false, code: "CHECKOUT_INVENTORY_UNAVAILABLE" });
+      expect(database.prepare("SELECT COUNT(*) AS count FROM orders").get()).toEqual({ count: 12 });
+      expect(database.prepare(`
+        SELECT SUM(reserved_quantity) AS reserved
+        FROM inventory_reservation_lanes WHERE variant_id = 'variant_hot'
+      `).get()).toEqual({ reserved: 12 });
+      expect(harness.requestedBatchModes.filter((mode) => mode === "concurrent").length)
+        .toBeGreaterThanOrEqual(2);
+    } finally {
+      harness.transport.close();
+    }
   });
 
   it("commits a capacity-limited D1 tail instead of waiting for an impossible full batch", async () => {
     database.prepare(`
       UPDATE product_variants SET stock = 300 WHERE id = 'variant_hot'
     `).run();
-    const engine = new CheckoutCoordinatorEngine(sqliteTransport(database, "d1"));
+    const engine = new CheckoutCoordinatorEngine(sqliteTransport(database));
     const results = await Promise.all(Array.from({ length: 350 }, (_, index) =>
       engine.submit(command(`order_tail_${String(index).padStart(3, "0")}`))
     ));
@@ -645,31 +786,35 @@ describe("production checkout coordinator engine", () => {
         ('variant_hot', 'regular', 0, 10, 8, 8, 1, unixepoch(), unixepoch()),
         ('variant_hot', 'regular', 1, 10, 8, 8, 1, unixepoch(), unixepoch());
     `);
-    const engine = new CheckoutCoordinatorEngine(sqliteTransport(database, "turso"));
+    const harness = statefulTursoTransport(database);
+    const engine = new CheckoutCoordinatorEngine(harness.transport);
+    try {
+      await expect(engine.submit(command("order_fragmented", { quantity: 3 })))
+        .resolves.toMatchObject({ ok: true, replay: false });
+      expect(database.prepare(`
+        SELECT
+          SUM(reserved_quantity) AS reserved,
+          SUM(capacity) AS capacity,
+          SUM(capacity - reserved_quantity) AS free,
+          MIN(capacity - reserved_quantity) AS minFree,
+          MAX(capacity - reserved_quantity) AS maxFree
+        FROM inventory_reservation_lanes
+        WHERE variant_id = 'variant_hot'
+      `).get()).toEqual({
+        reserved: 19,
+        capacity: 20,
+        free: 1,
+        minFree: 0,
+        maxFree: 1,
+      });
+      expect(database.prepare(`
+        SELECT COUNT(*) AS orders FROM orders WHERE id = 'order_fragmented'
+      `).get()).toEqual({ orders: 1 });
 
-    await expect(engine.submit(command("order_fragmented", { quantity: 3 })))
-      .resolves.toMatchObject({ ok: true, replay: false });
-    expect(database.prepare(`
-      SELECT
-        SUM(reserved_quantity) AS reserved,
-        SUM(capacity) AS capacity,
-        SUM(capacity - reserved_quantity) AS free,
-        MIN(capacity - reserved_quantity) AS minFree,
-        MAX(capacity - reserved_quantity) AS maxFree
-      FROM inventory_reservation_lanes
-      WHERE variant_id = 'variant_hot'
-    `).get()).toEqual({
-      reserved: 19,
-      capacity: 20,
-      free: 1,
-      minFree: 0,
-      maxFree: 1,
-    });
-    expect(database.prepare(`
-      SELECT COUNT(*) AS orders FROM orders WHERE id = 'order_fragmented'
-    `).get()).toEqual({ orders: 1 });
-
-    await expect(engine.submit(command("order_after_fragmentation", { quantity: 2 })))
-      .resolves.toEqual({ ok: false, code: "CHECKOUT_INVENTORY_UNAVAILABLE" });
+      await expect(engine.submit(command("order_after_fragmentation", { quantity: 2 })))
+        .resolves.toEqual({ ok: false, code: "CHECKOUT_INVENTORY_UNAVAILABLE" });
+    } finally {
+      harness.transport.close();
+    }
   });
 });
