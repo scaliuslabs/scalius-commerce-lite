@@ -84,7 +84,7 @@ async function readHeroImages(response: Response): Promise<string[]> {
 }
 
 describe("hero route cache policy", () => {
-  it("varies cached hero slider list responses by explicit type query", async () => {
+  it("varies hero slider responses by explicit type query", async () => {
     const app = createTestApp();
     const { kv } = createKvMock();
     const env = { CACHE: kv } as unknown as Env;
@@ -100,24 +100,16 @@ describe("hero route cache policy", () => {
       env,
     );
 
-    expect(desktopResponse.headers.get("X-Cache")).toBe("MISS");
-    expect(mobileResponse.headers.get("X-Cache")).toBe("MISS");
+    expect(desktopResponse.headers.get("X-Cache")).toBeNull();
+    expect(mobileResponse.headers.get("X-Cache")).toBeNull();
     expect(await readHeroImages(desktopResponse)).toEqual([
       "https://cdn.example.com/desktop.jpg",
     ]);
     expect(await readHeroImages(mobileResponse)).toEqual([
       "https://cdn.example.com/mobile.jpg",
     ]);
-    expect(kv.put).toHaveBeenCalledWith(
-      expect.stringMatching(/^sc:api:hero:\/api\/v1\/hero\/sliders\?type=desktop#f:[a-f0-9]+$/),
-      expect.any(String),
-      { expirationTtl: 3600 },
-    );
-    expect(kv.put).toHaveBeenCalledWith(
-      expect.stringMatching(/^sc:api:hero:\/api\/v1\/hero\/sliders\?type=mobile#f:[a-f0-9]+$/),
-      expect.any(String),
-      { expirationTtl: 3600 },
-    );
+    expect(kv.get).not.toHaveBeenCalled();
+    expect(kv.put).not.toHaveBeenCalled();
   });
 
   it("does not cache User-Agent auto-detected hero slider list responses", async () => {

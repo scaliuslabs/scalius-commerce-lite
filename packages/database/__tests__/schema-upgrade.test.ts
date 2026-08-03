@@ -111,6 +111,12 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 10,
         postgresStatements: 10,
       },
+      {
+        version: 52,
+        name: "0052_remove_storefront_cache_queue",
+        sqliteStatements: 2,
+        postgresStatements: 2,
+      },
     ]);
   });
 
@@ -196,7 +202,10 @@ describe("provider-neutral schema upgrades", () => {
       await expect(applyTursoSchemaUpgrades(base, artifacts)).resolves.toMatchObject({
         before: { version: 50, name: "0050_schema_release_contract" },
         after: CURRENT_DATABASE_SCHEMA,
-        applied: [{ version: 51, name: "0051_orders_checkout_write_path" }],
+        applied: [
+          { version: 51, name: "0051_orders_checkout_write_path" },
+          { version: 52, name: "0052_remove_storefront_cache_queue" },
+        ],
       });
     } finally {
       database.close();
@@ -342,7 +351,8 @@ describe("provider-neutral schema upgrades", () => {
     expect(() => validateAppliedSchemaMigrations([
       { version: 50, name: artifacts[0]!.name, sourceSha256: artifacts[0]!.sourceSha256 },
       { version: 51, name: artifacts[1]!.name, sourceSha256: artifacts[1]!.sourceSha256 },
-      { version: 52, name: "0052_future", sourceSha256: "c".repeat(64) },
+      { version: 52, name: artifacts[2]!.name, sourceSha256: artifacts[2]!.sourceSha256 },
+      { version: 53, name: "0053_future", sourceSha256: "c".repeat(64) },
     ], artifacts)).toThrow(/future row/i);
   });
 

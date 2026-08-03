@@ -226,7 +226,6 @@ app.get("/readyz", async (c) => {
     queueBindingCheck("payment_events_queue", env.PAYMENT_EVENTS_QUEUE),
     queueBindingCheck("order_notifications_queue", env.ORDER_NOTIFICATIONS_QUEUE),
     queueBindingCheck("auth_otp_queue", env.AUTH_OTP_QUEUE),
-    queueBindingCheck("storefront_cache_queue", env.STOREFRONT_CACHE_QUEUE),
     configCheck(env),
   ];
   const ready = isReady(checks);

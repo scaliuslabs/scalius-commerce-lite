@@ -20,6 +20,4 @@ interface Env {
   ORDER_NOTIFICATIONS_DLQ: Queue<unknown>;
   AUTH_OTP_QUEUE: Queue<unknown>;
   AUTH_OTP_DLQ: Queue<unknown>;
-  STOREFRONT_CACHE_QUEUE: Queue<unknown>;
-  STOREFRONT_CACHE_DLQ: Queue<unknown>;
 }

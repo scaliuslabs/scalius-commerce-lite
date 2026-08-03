@@ -46,14 +46,6 @@
       {
         "binding": "AUTH_OTP_DLQ",
         "queue": "auth-otp-dlq"
-      },
-      {
-        "binding": "STOREFRONT_CACHE_QUEUE",
-        "queue": "storefront-cache"
-      },
-      {
-        "binding": "STOREFRONT_CACHE_DLQ",
-        "queue": "storefront-cache-dlq"
       }
     ]
   },

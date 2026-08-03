@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 51,
-  name: "0051_orders_checkout_write_path",
+  version: 52,
+  name: "0052_remove_storefront_cache_queue",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -33,8 +33,13 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     sourceSha256: "4b7e98071b3874f0a1e512b3bac3a188fdfb087f9cb118df9cd0fd8a77205194",
   },
   {
-    ...CURRENT_DATABASE_SCHEMA,
+    version: 51,
+    name: "0051_orders_checkout_write_path",
     sourceSha256: "be810d0a125e0ab2900e89bfa70a05d67b3b280cc0092a19e1016792a09288cc",
+  },
+  {
+    ...CURRENT_DATABASE_SCHEMA,
+    sourceSha256: "3f010183c503a22006650e8c01a746e83dc8f600bbb101075c8583c2f07cf62c",
   },
 ] as const;
 

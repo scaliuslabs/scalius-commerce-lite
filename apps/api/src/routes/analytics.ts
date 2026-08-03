@@ -2,10 +2,8 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 
 import { analytics } from "@scalius/database/schema";
 import { and, eq, isNull } from "drizzle-orm";
-import { cacheMiddleware } from "../middleware/cache";
 import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";
-import { CACHE_TTLS } from "../utils/cache-ttls";
 import {
   processAnalyticsScript,
   shouldInjectAnalyticsScript,
@@ -13,17 +11,6 @@ import {
 } from "@scalius/core/integrations/analytics";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
-
-// Apply cache middleware
-app.use(
-  "*",
-  cacheMiddleware({
-    ttl: CACHE_TTLS.NONE,
-    keyPrefix: "api:analytics:",
-    varyByQuery: false,
-    methods: ["GET"]
-  }),
-);
 
 // GET /analytics/configurations — get active analytics configurations
 const getConfigurationsRoute = createRoute({

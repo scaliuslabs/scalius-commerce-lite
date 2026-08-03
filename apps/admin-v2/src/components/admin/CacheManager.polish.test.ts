@@ -6,45 +6,25 @@ function readSource(relativePath: string): string {
 }
 
 describe("cache workspace presentation", () => {
-  it("keeps operational outcomes ahead of implementation detail", () => {
+  it("shows the simple native-cache mental model without legacy recovery concepts", () => {
     const source = readSource("./CacheManager.tsx");
-
-    expect(source).toContain("Cache health");
-    expect(source).toContain("Failed cache work");
-    expect(source).toContain("Invalidation groups");
-    expect(source).toContain("Invalidation dependencies");
-    expect(source).not.toContain("How it works");
-    expect(source).not.toContain("Data prefixes");
-    expect(source).not.toContain("Danger Zone");
-    expect(source).not.toContain("bg-gradient");
-  });
-
-  it("shows failed-work recovery only when it needs attention", () => {
-    const source = readSource("./CacheManager.tsx");
-
-    expect(source).toContain("const showFailedCacheWork =");
-    expect(source).toContain("storefrontDlqQuery.isError || storefrontDlqCount > 0");
-    expect(source).toContain("{showFailedCacheWork && (");
-    expect(source).not.toContain("Queue healthy. No purge or warm failures need attention.");
+    expect(source).toContain("Public cache");
+    expect(source).toContain("short TTL is the");
+    expect(source).not.toContain("Failed cache work");
+    expect(source).not.toContain("warm queue");
+    expect(source).not.toContain("KV prefix");
   });
 
   it("fails closed and keeps operator actions usable on phones", () => {
     const source = readSource("./CacheManager.tsx");
-
-    expect(source).toContain("cacheReadError");
     expect(source).toContain("groupsQuery.isError");
-    expect(source).toContain("No group defaults were assumed");
+    expect(source).toContain("will not guess domain names");
     expect(source).toContain("min-h-11");
-    expect(source).toContain("aria-label={`Clear ${label} cache`}");
-    expect(source).toContain('"Not cleared manually"');
-    expect(source).not.toContain("Cleared Never");
   });
 
   it("uses the compact route heading shared by current settings pages", () => {
     const source = readSource("../../routes/admin/settings/cache.tsx");
-
-    expect(source).toContain('text-xl font-semibold tracking-tight');
+    expect(source).toContain("text-xl font-semibold tracking-tight");
     expect(source).not.toContain("text-3xl");
-    expect(source).not.toContain(">Cache Settings</h1>");
   });
 });

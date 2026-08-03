@@ -10,56 +10,17 @@ import {
   getPublicAttributesByCategory,
   getPublicAttributesForSearch,
 } from "@scalius/core/modules/attributes/attributes.public";
-import { cacheMiddleware } from "../middleware/cache";
 import { NotFoundError } from "../utils/api-error";
 
 import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";
-import { CACHE_TTLS } from "../utils/cache-ttls";
-import { normalizePublicFtsSearchCacheValue, normalizePublicFtsSearchQuery } from "../utils/public-search-query";
+import { normalizePublicFtsSearchQuery } from "../utils/public-search-query";
 import { getPublicCategoryById } from "@scalius/core/modules/categories";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // Cache this endpoint as it changes infrequently
-app.use(
-  "/filterable",
-  cacheMiddleware({
-    ttl: CACHE_TTLS.STANDARD,
-    keyPrefix: "api:attributes:filterable"
-  }),
-);
-
 // Cache category-specific attributes
-app.use(
-  "/category/:categoryId",
-  cacheMiddleware({
-    ttl: CACHE_TTLS.ATTRIBUTES,
-    keyPrefix: "api:attributes:category",
-    varyByQuery: false
-  }),
-);
-
 // Cache category-specific attributes by slug
-app.use(
-  "/category-slug/:categorySlug",
-  cacheMiddleware({
-    ttl: CACHE_TTLS.ATTRIBUTES,
-    keyPrefix: "api:attributes:category-slug",
-    varyByQuery: false
-  }),
-);
-
-app.use(
-  "/search-filters",
-  cacheMiddleware({
-    ttl: CACHE_TTLS.ATTRIBUTES,
-    keyPrefix: "api:attributes:search-filters",
-    varyByQuery: true,
-    queryNormalizers: { q: normalizePublicFtsSearchCacheValue },
-    methods: ["GET"],
-  }),
-);
-
 const attributeFilterSchema = z.object({ id: z.string(), name: z.string(), slug: z.string(), values: z.array(z.string()) }).passthrough();
 const filterResponseSchema = successEnvelope(z.object({ filters: z.array(attributeFilterSchema) }));
 

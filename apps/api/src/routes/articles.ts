@@ -3,8 +3,6 @@ import {
   getPublicArticleBySlug,
   getPublicArticles,
 } from "@scalius/core/modules/pages/pages.service";
-import { cacheMiddleware } from "../middleware/cache";
-import { CACHE_TTLS } from "../utils/cache-ttls";
 import { NotFoundError } from "../utils/api-error";
 import { ok } from "../utils/api-response";
 import {
@@ -15,16 +13,6 @@ import {
 import { pageSchema } from "../schemas/entities";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
-
-app.use(
-  "*",
-  cacheMiddleware({
-    ttl: CACHE_TTLS.STANDARD,
-    keyPrefix: "api:pages:articles:",
-    varyByQuery: true,
-    methods: ["GET"],
-  }),
-);
 
 const articleListQuerySchema = z.object({
   limit: z.coerce.number().min(1).max(24).default(12),

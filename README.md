@@ -102,7 +102,7 @@ flowchart TB
     subgraph API ["API Worker (Hono)"]
         direction TB
         HonoApp["275 OpenAPI paths / 373 operations<br/>(@hono/zod-openapi)"]
-        QueueConsumer["Queue Consumer<br/>(payments, notifications,<br/>OTP, cache purge)"]
+        QueueConsumer["Queue Consumer<br/>(payments, notifications, OTP)"]
         CoreModules["@scalius/core<br/>(domain services)"]
     end
 
@@ -110,7 +110,7 @@ flowchart TB
         SQLiteDB[(SQLite Authority<br/>D1 starter / Turso scale tier)]
         KV[(KV Namespaces<br/>cache + sessions + auth)]
         R2[(R2 Bucket<br/>media storage)]
-        Queues["5 Queues<br/>(payment-events, notifications,<br/>auth-otp, auth-otp-dlq,<br/>storefront-cache)"]
+        Queues["6 Queues<br/>(payment, notification, OTP<br/>plus their DLQs)"]
     end
 
     subgraph External ["External Services"]
@@ -319,8 +319,6 @@ The generated OpenAPI spec and `packages/api-client/openapi.json` are the source
 | `order-notifications` | `order.notification` (9 types) | 20 |
 | `auth-otp` | `auth.send_otp` (email, SMS, WhatsApp) | 10 |
 | `auth-otp-dlq` | D1 receipt terminalization for failed OTP queue messages without provider calls | 3 |
-| `storefront-cache` | `storefront.cache_purge`, `storefront.cache_warm` (durable purge/warm retry) | 10 |
-| `storefront-cache-dlq` | D1 archive of terminal storefront cache queue failures for admin replay/ignore | 10 |
 
 ### Response Contract
 

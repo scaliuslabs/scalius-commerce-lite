@@ -2,7 +2,6 @@
 // Storefront product routes — thin HTTP layer.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { PRODUCT_CONDITION_VALUES } from "@scalius/shared/product-condition";
-import { cacheMiddleware } from "../middleware/cache";
 import {
   getStorefrontFeedProducts,
   getStorefrontSitemapProducts,
@@ -15,118 +14,13 @@ import { NotFoundError } from "../utils/api-error";
 import { successEnvelope, paginationSchema, errorResponses } from "../schemas/responses";
 
 import { ok } from "../utils/api-response";
-import { CACHE_TTLS } from "../utils/cache-ttls";
 import {
-  isPublicProductListCacheable,
-  isPublicProductSearchCacheable,
-  normalizePublicFtsSearchCacheValue,
-  normalizePublicIntegerCacheValue,
   normalizePublicListingSearchParam,
-  normalizePublicNumberCacheValue,
   readRepeatedPublicQueryValues,
 } from "../utils/public-search-query";
-import { PRODUCT_API_CACHE_NAMESPACE } from "../utils/product-api-cache";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
-const PRODUCT_FEED_QUERY_KEYS = new Set(["cursor", "limit", "category", "search", "minPrice", "maxPrice", "ids"]);
-const PRODUCT_SITEMAP_QUERY_KEYS = new Set(["page", "limit"]);
 const PRODUCT_FEED_CURSOR_PATTERN = /^feed-v1\.[0-9a-z]+\.[A-Za-z0-9_-]+$/;
-
-function hasOptionalIntegerParamInRange(
-  params: URLSearchParams,
-  key: string,
-  min: number,
-  max: number,
-): boolean {
-  if (!params.has(key)) return true;
-  const value = params.get(key)?.trim() ?? "";
-  if (!/^\d+$/.test(value)) return false;
-  const numericValue = Number(value);
-  return numericValue >= min && numericValue <= max;
-}
-
-function hasOptionalFiniteNumberParam(params: URLSearchParams, key: string): boolean {
-  if (!params.has(key)) return true;
-  const value = params.get(key)?.trim() ?? "";
-  return value !== "" && Number.isFinite(Number(value));
-}
-
-function isStorefrontFeedProductsCacheable(url: string): boolean {
-  const params = new URL(url).searchParams;
-  for (const [key, value] of params.entries()) {
-    if (!PRODUCT_FEED_QUERY_KEYS.has(key)) return false;
-    if (value.trim() === "" && key !== "search") return false;
-  }
-
-  const cursor = params.get("cursor");
-  return (
-    (cursor === null || (cursor.length <= 512 && PRODUCT_FEED_CURSOR_PATTERN.test(cursor))) &&
-    hasOptionalIntegerParamInRange(params, "limit", 1, 100) &&
-    hasOptionalFiniteNumberParam(params, "minPrice") &&
-    hasOptionalFiniteNumberParam(params, "maxPrice")
-  );
-}
-
-function isStorefrontSitemapProductsCacheable(url: string): boolean {
-  const params = new URL(url).searchParams;
-  for (const [key, value] of params.entries()) {
-    if (!PRODUCT_SITEMAP_QUERY_KEYS.has(key) || value.trim() === "") return false;
-  }
-
-  return (
-    hasOptionalIntegerParamInRange(params, "page", 1, 1000) &&
-    hasOptionalIntegerParamInRange(params, "limit", 1, 5000)
-  );
-}
-
-app.use(
-  "*",
-  cacheMiddleware({
-    ttl: CACHE_TTLS.AVAILABILITY,
-    keyPrefix: PRODUCT_API_CACHE_NAMESPACE,
-    varyByQuery: true,
-    queryDefaults: (c) => {
-      const normalizedPath = c.req.path.replace(/\/$/, "");
-      if (normalizedPath.endsWith("/products/search")) {
-        return { search: "", page: 1, limit: 10 };
-      }
-      if (normalizedPath.endsWith("/products/feed")) {
-        return { limit: 100 };
-      }
-      if (normalizedPath.endsWith("/products/sitemap")) {
-        return { page: 1, limit: 100 };
-      }
-      if (normalizedPath.endsWith("/products")) {
-        return { page: 1, limit: 20, sort: "newest" };
-      }
-      return {};
-    },
-    queryNormalizers: {
-      search: normalizePublicFtsSearchCacheValue,
-      page: normalizePublicIntegerCacheValue,
-      limit: normalizePublicIntegerCacheValue,
-      minPrice: normalizePublicNumberCacheValue,
-      maxPrice: normalizePublicNumberCacheValue,
-    },
-    cacheCondition: (c) => {
-      const normalizedPath = c.req.path.replace(/\/$/, "");
-      if (normalizedPath.endsWith("/products/search")) {
-        return isPublicProductSearchCacheable(c.req.url);
-      }
-      if (normalizedPath.endsWith("/products/feed")) {
-        return isStorefrontFeedProductsCacheable(c.req.url);
-      }
-      if (normalizedPath.endsWith("/products/sitemap")) {
-        return isStorefrontSitemapProductsCacheable(c.req.url);
-      }
-      if (normalizedPath.endsWith("/products")) {
-        return isPublicProductListCacheable(c.req.url);
-      }
-      return true;
-    },
-    methods: ["GET"]
-  }),
-);
 
 function validatePriceRange(
   value: { minPrice?: number; maxPrice?: number },

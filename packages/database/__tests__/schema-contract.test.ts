@@ -35,18 +35,18 @@ describe("database schema contract", () => {
       sourceSha256: "a".repeat(64),
     }], /has 1 row/i],
     [[...CURRENT_DATABASE_SCHEMA_MIGRATIONS, {
-      version: 52,
-      name: "0052_future",
+      version: 53,
+      name: "0053_future",
       sourceSha256: "b".repeat(64),
-    }], /has 3 row/i],
+    }], /has 4 row/i],
     [[{
       ...CURRENT_DATABASE_SCHEMA_MIGRATIONS[0],
       name: "0050_wrong",
-    }, CURRENT_DATABASE_SCHEMA_MIGRATIONS[1]], /diverges/i],
+    }, ...CURRENT_DATABASE_SCHEMA_MIGRATIONS.slice(1)], /diverges/i],
     [[{
       ...CURRENT_DATABASE_SCHEMA_MIGRATIONS[0],
       sourceSha256: "c".repeat(64),
-    }, CURRENT_DATABASE_SCHEMA_MIGRATIONS[1]], /diverges/i],
+    }, ...CURRENT_DATABASE_SCHEMA_MIGRATIONS.slice(1)], /diverges/i],
     [[{
       version: "invalid",
       name: "0050_schema_release_contract",
@@ -66,7 +66,7 @@ describe("database schema contract", () => {
         ...CURRENT_DATABASE_SCHEMA_MIGRATIONS[0],
         sourceSha256: "d".repeat(64),
       },
-      CURRENT_DATABASE_SCHEMA_MIGRATIONS[1],
+      ...CURRENT_DATABASE_SCHEMA_MIGRATIONS.slice(1),
     ]))).rejects.toThrow(/diverges at version 50/i);
   });
 });

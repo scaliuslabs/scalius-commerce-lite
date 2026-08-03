@@ -1186,7 +1186,7 @@ describe("admin route graph boundaries", () => {
     expect(queryClientSource).toContain("refetchOnReconnect: false");
     expect(queryClientSource).toContain("retry: ADMIN_QUERY_RETRY");
     expect(queryClientSource).toContain("ADMIN_QUERY_RETRY = false");
-    expect(cacheQuerySource.match(/refetchOnReconnect: true/g)?.length).toBe(4);
+    expect(cacheQuerySource).not.toContain("refetchOnReconnect: true");
     expect(orderDetailSource).toContain("refetchInterval: 30_000");
     expect(orderDetailSource).not.toContain("refetchOnWindowFocus: true");
     expect(orderDetailSource).not.toContain("refetchOnReconnect: true");

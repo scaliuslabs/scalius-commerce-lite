@@ -20,31 +20,15 @@ describe("product route query boundaries", () => {
     expect(source).not.toContain('await import("drizzle-orm")');
   });
 
-  it("bounds public product list limits and normalizes search cache keys", () => {
+  it("bounds public product list limits and normalizes search input", () => {
     const source = readFileSync(`${ROUTES_DIR}/products.ts`, "utf8");
 
     expect(source).toContain("page: z.coerce.number().int().min(1).max(1000).optional().default(1)");
     expect(source).toContain("limit: z.coerce.number().int().min(1).max(100).optional().default(20)");
-    expect(source).toContain("queryNormalizers: {");
-    expect(source).toContain("search: normalizePublicFtsSearchCacheValue");
-    expect(source).toContain("limit: normalizePublicIntegerCacheValue");
-    expect(source).toContain("cacheCondition: (c) => {");
     expect(source).toContain("category: z.string().optional().openapi({ description: \"Category slug or ID filter\" })");
-    expect(source).toContain("return isPublicProductSearchCacheable(c.req.url);");
-    expect(source).toContain("return isPublicProductListCacheable(c.req.url);");
     expect(source).toContain("const search = normalizePublicListingSearchParam(params.search);");
     expect(source).toContain("getStorefrontProducts(db, { ...params, search, attributeFilters })");
     expect(source).toContain("400: errorResponses[400]");
-  });
-
-  it("reads product responses only from the versioned cache contract", () => {
-    const source = readFileSync(`${ROUTES_DIR}/products.ts`, "utf8");
-
-    expect(source).toContain(
-      'import { PRODUCT_API_CACHE_NAMESPACE } from "../utils/product-api-cache";',
-    );
-    expect(source).toContain("keyPrefix: PRODUCT_API_CACHE_NAMESPACE");
-    expect(source).not.toContain('keyPrefix: "api:products:"');
   });
 
   it("keeps feed projection on a dedicated route without expanding normal product list cards", () => {
@@ -56,15 +40,6 @@ describe("product route query boundaries", () => {
     const slugRouteStart = source.indexOf("const getProductBySlugRoute = createRoute({");
 
     expect(source).toContain("getStorefrontFeedProducts");
-    expect(source).toContain("const PRODUCT_FEED_QUERY_KEYS = new Set([\"cursor\", \"limit\", \"category\", \"search\", \"minPrice\", \"maxPrice\", \"ids\"]);");
-    expect(source).toContain("function isStorefrontFeedProductsCacheable(url: string): boolean");
-    expect(source).toContain("if (!PRODUCT_FEED_QUERY_KEYS.has(key)) return false;");
-    expect(source).toContain("if (value.trim() === \"\" && key !== \"search\") return false;");
-    expect(source).toContain("hasOptionalFiniteNumberParam(params, \"minPrice\")");
-    expect(source).toContain("hasOptionalFiniteNumberParam(params, \"maxPrice\")");
-    expect(source).toContain("if (normalizedPath.endsWith(\"/products/feed\"))");
-    expect(source).toContain("return { limit: 100 };");
-    expect(source).toContain("return isStorefrontFeedProductsCacheable(c.req.url);");
     expect(source).toContain("const productFeedSchema = z.object({");
     expect(source).toContain("category: z.string().optional().openapi({ description: \"Category slug or ID filter\" })");
     expect(source).toContain("search: z.string().optional().openapi({ description: \"Search query\" })");
@@ -91,7 +66,7 @@ describe("product route query boundaries", () => {
     expect(feedSchema).toContain("variants: z.array(storefrontFeedVariantSchema)");
   });
 
-  it("keeps category-term feed search on the normalized cached projection", () => {
+  it("keeps category-term feed search on the normalized projection", () => {
     const source = readFileSync(`${ROUTES_DIR}/products.ts`, "utf8");
     const feedHandlerStart = source.indexOf(
       "app.openapi(feedProductsRoute, async (c) => {",
@@ -102,13 +77,6 @@ describe("product route query boundaries", () => {
     );
     const feedHandler = source.slice(feedHandlerStart, sitemapRouteStart);
 
-    expect(source).toContain("search: normalizePublicFtsSearchCacheValue");
-    expect(source).toContain(
-      'if (normalizedPath.endsWith("/products/feed"))',
-    );
-    expect(source).toContain(
-      'return { limit: 100 };',
-    );
     expect(feedHandler).toContain(
       "const search = normalizePublicListingSearchParam(params.search);",
     );

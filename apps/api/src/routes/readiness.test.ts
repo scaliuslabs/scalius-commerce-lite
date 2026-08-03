@@ -111,7 +111,6 @@ function createEnv(overrides: Partial<Env> = {}): Env {
     PAYMENT_EVENTS_QUEUE: createQueue(),
     ORDER_NOTIFICATIONS_QUEUE: createQueue(),
     AUTH_OTP_QUEUE: createQueue(),
-    STOREFRONT_CACHE_QUEUE: createQueue(),
     BETTER_AUTH_SECRET: "test-secret",
     PUBLIC_API_BASE_URL: "https://api.example.test",
     STOREFRONT_URL: "https://storefront.example.test",
@@ -151,7 +150,6 @@ describe("API readiness route", () => {
       payment_events_queue: { status: "ok" },
       order_notifications_queue: { status: "ok" },
       auth_otp_queue: { status: "ok" },
-      storefront_cache_queue: { status: "ok" },
       runtime_config: { status: "ok" },
     });
   });
@@ -162,7 +160,6 @@ describe("API readiness route", () => {
     const env = createEnv({
       DB: createDb({ fail: true }),
       PAYMENT_EVENTS_QUEUE: undefined as unknown as Queue,
-      STOREFRONT_CACHE_QUEUE: undefined as unknown as Queue,
       STOREFRONT_URL: "",
       PURGE_TOKEN: "",
     });
@@ -191,10 +188,6 @@ describe("API readiness route", () => {
       status: "missing",
       detail: "queue binding is not configured",
     });
-    expect(json.checks?.storefront_cache_queue).toMatchObject({
-      status: "missing",
-      detail: "queue binding is not configured",
-    });
     expect(json.checks?.runtime_config).toMatchObject({
       status: "missing",
       detail: "missing STOREFRONT_URL, PURGE_TOKEN",
@@ -213,7 +206,6 @@ describe("API readiness route", () => {
       degradedChecks: [
         "d1:error",
         "payment_events_queue:missing",
-        "storefront_cache_queue:missing",
         "runtime_config:missing",
       ],
     });
@@ -241,7 +233,7 @@ describe("API readiness route", () => {
       expect(json.status).toBe("ready");
       expect(json.checks?.d1).toMatchObject({
         status: "ok",
-        detail: "schema 51/0051_orders_checkout_write_path",
+        detail: "schema 52/0052_remove_storefront_cache_queue",
       });
       expect(db.prepare).toHaveBeenCalledTimes(3);
     } finally {
@@ -269,7 +261,7 @@ describe("API readiness route", () => {
       expect(json.status).toBe("ready");
       expect(json.checks?.d1).toMatchObject({
         status: "ok",
-        detail: "schema 51/0051_orders_checkout_write_path",
+        detail: "schema 52/0052_remove_storefront_cache_queue",
       });
     } finally {
       vi.useRealTimers();
@@ -287,7 +279,7 @@ describe("API readiness route", () => {
             name: "0049_checkout_side_effect_authority_fence",
             sourceSha256: "a".repeat(64),
           },
-          CURRENT_DATABASE_SCHEMA_MIGRATIONS[1],
+          ...CURRENT_DATABASE_SCHEMA_MIGRATIONS.slice(1),
         ],
       }),
     });
@@ -314,7 +306,7 @@ describe("API readiness route", () => {
     ]],
     ["future", [
       ...CURRENT_DATABASE_SCHEMA_MIGRATIONS,
-      { version: 52, name: "0052_future", sourceSha256: "b".repeat(64) },
+      { version: 53, name: "0053_future", sourceSha256: "b".repeat(64) },
     ]],
     ["bad digest", [
       {

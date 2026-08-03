@@ -74,7 +74,9 @@ function resolvePublicPathTags(pathname: string): readonly string[] | null {
     return ["collections", "products", "layout"];
   }
   if (/^\/search\/?$/.test(pathname)) return ["search", "products", "layout"];
-  if (isCmsPagePath(pathname)) return ["pages", "layout"];
+  // CMS content can embed product shortcodes, so a low-frequency merchant
+  // product edit purges this bounded lane without per-page dependency scans.
+  if (isCmsPagePath(pathname)) return ["pages", "products", "layout"];
   return null;
 }
 

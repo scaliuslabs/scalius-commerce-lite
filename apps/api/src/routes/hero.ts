@@ -1,14 +1,11 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import type { Context } from "hono";
 
 import { heroSliders } from "@scalius/database/schema";
 import { eq, or, and, isNull } from "drizzle-orm";
-import { cacheMiddleware } from "../middleware/cache";
 import { NotFoundError } from "../utils/api-error";
 
 import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";
-import { CACHE_TTLS } from "../utils/cache-ttls";
 import { parseStoredHeroSlides } from "@scalius/shared/hero-slider";
 
 const heroImageSchema = z.object({
@@ -52,30 +49,6 @@ const formatHeroTimestamp = (value: unknown): string | null => {
 
 // Create an OpenAPIHono app for hero routes
 const app = new OpenAPIHono<{ Bindings: Env }>();
-
-function shouldCacheHeroRequest(c: Context): boolean {
-  const normalizedPath = c.req.path.replace(/\/$/, "");
-  if (!normalizedPath.endsWith("/hero/sliders")) {
-    return true;
-  }
-
-  const type = c.req.query("type");
-  return type === "desktop" || type === "mobile";
-}
-
-// Apply cache middleware with longer TTL for deterministic hero content.
-// The untyped slider list varies by User-Agent, so cache only explicit
-// `?type=desktop|mobile` list reads plus path-scoped slider detail reads.
-app.use(
-  "*",
-  cacheMiddleware({
-    ttl: CACHE_TTLS.STANDARD,
-    keyPrefix: "api:hero:",
-    varyByQuery: true,
-    methods: ["GET"],
-    cacheCondition: shouldCacheHeroRequest,
-  }),
-);
 
 // GET /hero/sliders — get all active hero sliders
 const listSlidersRoute = createRoute({
