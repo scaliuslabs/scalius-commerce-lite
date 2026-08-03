@@ -115,9 +115,42 @@ interface CloudflareSendEmailBinding {
   }): Promise<{ messageId: string }>;
 }
 
-interface ExecutionContext {
+interface WorkersCachePurgeResult {
+  success: boolean;
+  errors: Array<{ code: number; message: string }>;
+}
+
+interface WorkersCacheContext {
+  purge(
+    options:
+      | { purgeEverything: true }
+      | { tags?: string[]; pathPrefixes?: string[] },
+  ): Promise<WorkersCachePurgeResult>;
+}
+
+interface WorkerEntrypointFetchOptions<Props = unknown> {
+  props?: Props;
+  cf?: { cacheControl?: string };
+}
+
+interface WorkerEntrypointFetcher<Props = unknown> {
+  fetch(
+    request: Request,
+    options?: WorkerEntrypointFetchOptions<Props>,
+  ): Promise<Response>;
+}
+
+interface WorkerExports {
+  PublicApi: WorkerEntrypointFetcher;
+  [name: string]: WorkerEntrypointFetcher | undefined;
+}
+
+interface ExecutionContext<Props = unknown> {
   waitUntil(promise: Promise<unknown>): void;
   passThroughOnException(): void;
+  readonly props: Props;
+  readonly exports: WorkerExports;
+  readonly cache: WorkersCacheContext;
 }
 
 // Cloudflare Queue binding types
@@ -192,9 +225,9 @@ interface Env {
 
 // Cloudflare Workers module declaration
 declare module "cloudflare:workers" {
-  export abstract class WorkerEntrypoint<E = unknown> {
+  export abstract class WorkerEntrypoint<E = unknown, Props = unknown> {
     protected env: E;
-    protected ctx: ExecutionContext;
+    protected ctx: ExecutionContext<Props>;
     fetch?(request: Request): Promise<Response>;
     queue?(batch: MessageBatch): Promise<void>;
   }

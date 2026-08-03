@@ -9,9 +9,40 @@ import {
   createDatabaseMigrationFreezeResponse,
   isDatabaseMigrationFrozen,
 } from "@scalius/shared/database-migration-freeze";
+import {
+  decoratePublicApiResponse,
+  getPublicApiCachePolicy,
+} from "./public-cache-policy";
 
 export type { AppType } from "./app";
 export { CheckoutCoordinator } from "./checkout-coordinator";
+
+async function fetchApiApp(
+  request: Request,
+  env: Env,
+  ctx: ExecutionContext,
+): Promise<Response> {
+  const { default: app } = await import("./app");
+  const response = await app.fetch(request, env, ctx);
+  return applyBaselineSecurityHeaders(request, response, {
+    frameProtection: "deny",
+  });
+}
+
+export class PublicApi extends WorkerEntrypoint<Env> {
+  async fetch(request: Request): Promise<Response> {
+    const policy = getPublicApiCachePolicy(request);
+    if (!policy) {
+      return new Response("Request is not eligible for public caching", {
+        status: 400,
+        headers: { "Cache-Control": "private, no-store" },
+      });
+    }
+
+    const response = await fetchApiApp(request, this.env, this.ctx);
+    return decoratePublicApiResponse(response, policy);
+  }
+}
 
 export default class ApiWorker extends WorkerEntrypoint<Env> {
   // HTTP: Hono handles all requests
@@ -30,11 +61,12 @@ export default class ApiWorker extends WorkerEntrypoint<Env> {
       });
     }
 
-    const { default: app } = await import("./app");
-    const response = await app.fetch(request, this.env, this.ctx);
-    return applyBaselineSecurityHeaders(request, response, {
-      frameProtection: "deny",
-    });
+    const cachePolicy = getPublicApiCachePolicy(request);
+    if (cachePolicy) {
+      return this.ctx.exports.PublicApi.fetch(request);
+    }
+
+    return fetchApiApp(request, this.env, this.ctx);
   }
 
   // Queues: payment events, OTP, notifications, storefront cache purge
