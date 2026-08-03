@@ -22,7 +22,6 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("./gateway-settings", () => ({
-  FRESH_GATEWAY_SETTINGS_READ_OPTIONS: { bypassMemoryCache: true },
   getStripeSettings: mocks.getStripeSettings,
   getSSLCommerzSettings: mocks.getSSLCommerzSettings,
   getPolarSettings: mocks.getPolarSettings,

@@ -3,10 +3,7 @@
 
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { verifyPolarWebhook } from "@scalius/core/modules/payments/polar";
-import {
-    FRESH_GATEWAY_SETTINGS_READ_OPTIONS,
-    getPolarSettings,
-} from "@scalius/core/modules/payments/gateway-settings";
+import { getPolarSettings } from "@scalius/core/modules/payments/gateway-settings";
 import { type Database } from "@scalius/database/client";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import type { PaymentQueueMessage } from "../../queue-consumer";
@@ -93,16 +90,13 @@ polarWebhookRoutes.post("/", async (c) => {
         });
 
         const db: Database = c.get("db");
-        const kv = c.env.CACHE;
         const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
 
         let polarSettings: Awaited<ReturnType<typeof getPolarSettings>>;
         try {
             polarSettings = await getPolarSettings(
                 db,
-                kv,
                 encryptionKey,
-                FRESH_GATEWAY_SETTINGS_READ_OPTIONS,
             );
         } catch (error) {
             console.error(

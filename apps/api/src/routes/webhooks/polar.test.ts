@@ -38,7 +38,6 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@scalius/core/modules/payments/gateway-settings", () => ({
-  FRESH_GATEWAY_SETTINGS_READ_OPTIONS: { bypassMemoryCache: true },
   getPolarSettings: mocks.getPolarSettings,
 }));
 
@@ -126,9 +125,7 @@ describe("Polar webhook route", () => {
     expect(response.status).toBe(200);
     expect(mocks.getPolarSettings).toHaveBeenCalledWith(
       { id: "db" },
-      kv,
       "test-key",
-      expect.objectContaining({ bypassMemoryCache: true }),
     );
     expect(mocks.verifyPolarWebhook).toHaveBeenCalledWith(
       expect.any(String),

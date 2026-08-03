@@ -24,7 +24,6 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@scalius/core/modules/payments/gateway-settings", () => ({
-  FRESH_GATEWAY_SETTINGS_READ_OPTIONS: { bypassMemoryCache: true },
   getStripeSettings: mocks.getStripeSettings,
 }));
 
@@ -118,9 +117,7 @@ describe("Stripe webhook route", () => {
     expect(response.status).toBe(200);
     expect(mocks.getStripeSettings).toHaveBeenCalledWith(
       { id: "db" },
-      kv,
       "test-key",
-      expect.objectContaining({ bypassMemoryCache: true }),
     );
     expect(mocks.verifyStripeWebhook).toHaveBeenCalledWith(
       "sk_test",

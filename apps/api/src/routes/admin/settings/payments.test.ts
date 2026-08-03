@@ -75,6 +75,7 @@ const mocks = vi.hoisted(() => {
         upsertSetting: vi.fn(),
         upsertEncryptedSetting: vi.fn(),
         getPaymentMethodPreferences: vi.fn(),
+        getPaymentGatewaySettingsSnapshot: vi.fn(),
         getActivePaymentMethods: vi.fn(),
         getStripeSettings: vi.fn(),
         getStripeCheckoutReadiness: vi.fn((settings: {
@@ -242,10 +243,6 @@ const mocks = vi.hoisted(() => {
         )),
         getPolarSettings: vi.fn(),
         isPolarPlaceholderCredential: vi.fn(isPolarPlaceholder),
-        invalidatePaymentMethodsCache: vi.fn(),
-        invalidateStripeCache: vi.fn(),
-        invalidateSSLCommerzCache: vi.fn(),
-        invalidatePolarCache: vi.fn(),
     };
 });
 
@@ -267,6 +264,7 @@ vi.mock("@scalius/core/modules/payments/gateway-settings", () => ({
     upsertSetting: mocks.upsertSetting,
     upsertEncryptedSetting: mocks.upsertEncryptedSetting,
     getPaymentMethodPreferences: mocks.getPaymentMethodPreferences,
+    getPaymentGatewaySettingsSnapshot: mocks.getPaymentGatewaySettingsSnapshot,
     getActivePaymentMethods: mocks.getActivePaymentMethods,
     getStripeSettings: mocks.getStripeSettings,
     getStripeCheckoutReadiness: mocks.getStripeCheckoutReadiness,
@@ -280,10 +278,6 @@ vi.mock("@scalius/core/modules/payments/gateway-settings", () => ({
     isPolarCheckoutUsable: mocks.isPolarCheckoutUsable,
     isPolarPlaceholderCredential: mocks.isPolarPlaceholderCredential,
     getPolarSettings: mocks.getPolarSettings,
-    invalidatePaymentMethodsCache: mocks.invalidatePaymentMethodsCache,
-    invalidateStripeCache: mocks.invalidateStripeCache,
-    invalidateSSLCommerzCache: mocks.invalidateSSLCommerzCache,
-    invalidatePolarCache: mocks.invalidatePolarCache,
 }));
 
 import { paymentSettingsRoutes } from "./payments";
@@ -328,10 +322,6 @@ function createTestApp(
     mocks.safeBatch.mockResolvedValue([]);
     mocks.upsertSetting.mockResolvedValue(undefined);
     mocks.upsertEncryptedSetting.mockResolvedValue(undefined);
-    mocks.invalidatePaymentMethodsCache.mockResolvedValue(undefined);
-    mocks.invalidateStripeCache.mockResolvedValue(undefined);
-    mocks.invalidateSSLCommerzCache.mockResolvedValue(undefined);
-    mocks.invalidatePolarCache.mockResolvedValue(undefined);
     mocks.getPaymentMethodPreferences.mockResolvedValue({
         enabledMethods: ["cod"],
         defaultMethod: "cod",
@@ -341,6 +331,16 @@ function createTestApp(
     mocks.getStripeSettings.mockResolvedValue(null);
     mocks.getSSLCommerzSettings.mockResolvedValue(null);
     mocks.getPolarSettings.mockResolvedValue(null);
+    mocks.getPaymentGatewaySettingsSnapshot.mockImplementation(async (database, encryptionKey) => ({
+        preferences: await mocks.getPaymentMethodPreferences(database),
+        activePaymentMethods: await mocks.getActivePaymentMethods(database, encryptionKey),
+        settings: {
+            stripe: await mocks.getStripeSettings(database, encryptionKey),
+            sslcommerz: await mocks.getSSLCommerzSettings(database, encryptionKey),
+            polar: await mocks.getPolarSettings(database, encryptionKey),
+            cod: { enabled: true },
+        },
+    }));
 
     app.onError((error, c) => {
         const { body, status } = errorResponseFromError(error);
@@ -351,7 +351,7 @@ function createTestApp(
         await next();
     });
     app.route("/admin/settings", paymentSettingsRoutes);
-    return { app, env, kv };
+    return { app, env };
 }
 
 async function postJson(app: OpenAPIHono<{ Bindings: Env }>, env: Env, path: string, body: unknown) {
@@ -380,7 +380,7 @@ describe("payment settings cache invalidation", () => {
     });
 
     it("invalidates API and storefront checkout caches after payment method saves", async () => {
-        const { app, env, kv } = createTestApp();
+        const { app, env } = createTestApp();
         mocks.getStripeSettings.mockResolvedValueOnce({
             enabled: true,
             secretKey: "sk_live_existing",
@@ -401,7 +401,6 @@ describe("payment settings cache invalidation", () => {
             ]),
         );
         expect(mocks.safeBatch.mock.calls[0]?.[1]).toHaveLength(2);
-        expect(mocks.invalidatePaymentMethodsCache).toHaveBeenCalledWith(kv);
         expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
             ["checkout"],
             expect.objectContaining({ env }),
@@ -560,7 +559,6 @@ describe("payment settings cache invalidation", () => {
 
         expect(response.status, await response.clone().text()).toBe(400);
         expect(mocks.upsertSetting).not.toHaveBeenCalled();
-        expect(mocks.invalidatePaymentMethodsCache).not.toHaveBeenCalled();
     });
 
     it("rejects saving a default method hidden by the current checkout flow", async () => {
@@ -590,11 +588,10 @@ describe("payment settings cache invalidation", () => {
         });
         expect(mocks.upsertSetting).not.toHaveBeenCalled();
         expect(mocks.safeBatch).not.toHaveBeenCalled();
-        expect(mocks.invalidatePaymentMethodsCache).not.toHaveBeenCalled();
     });
 
     it("invalidates API and storefront checkout caches after Stripe saves", async () => {
-        const { app, env, kv } = createTestApp({}, [
+        const { app, env } = createTestApp({}, [
             { key: "secret_key", value: "encrypted-secret" },
             { key: "webhook_secret", value: "encrypted-webhook" },
         ]);
@@ -605,8 +602,6 @@ describe("payment settings cache invalidation", () => {
         });
 
         expect(response.status).toBe(200);
-        expect(mocks.invalidateStripeCache).toHaveBeenCalledWith(kv);
-        expect(mocks.invalidatePaymentMethodsCache).toHaveBeenCalledWith(kv);
         expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
             ["checkout"],
             expect.objectContaining({ env }),
@@ -633,7 +628,6 @@ describe("payment settings cache invalidation", () => {
             },
         });
         expect(mocks.upsertSetting).not.toHaveBeenCalled();
-        expect(mocks.invalidateStripeCache).not.toHaveBeenCalled();
     });
 
     it("rejects enabling Stripe with submitted placeholder credentials", async () => {
@@ -657,7 +651,6 @@ describe("payment settings cache invalidation", () => {
         expect(mocks.requireEncryptionKey).not.toHaveBeenCalled();
         expect(mocks.upsertSetting).not.toHaveBeenCalled();
         expect(mocks.upsertEncryptedSetting).not.toHaveBeenCalled();
-        expect(mocks.invalidateStripeCache).not.toHaveBeenCalled();
     });
 
     it("rejects a new live publishable key paired with a retained test secret", async () => {
@@ -688,7 +681,6 @@ describe("payment settings cache invalidation", () => {
             },
         });
         expect(mocks.upsertSetting).not.toHaveBeenCalled();
-        expect(mocks.invalidateStripeCache).not.toHaveBeenCalled();
     });
 
     it("rejects enabling Stripe when a masked stored credential is a placeholder", async () => {
@@ -713,7 +705,6 @@ describe("payment settings cache invalidation", () => {
         });
         expect(mocks.upsertSetting).not.toHaveBeenCalled();
         expect(mocks.upsertEncryptedSetting).not.toHaveBeenCalled();
-        expect(mocks.invalidateStripeCache).not.toHaveBeenCalled();
     });
 
     it("requires the credential encryption key before saving Stripe secrets", async () => {
@@ -764,11 +755,10 @@ describe("payment settings cache invalidation", () => {
             },
         });
         expect(mocks.upsertSetting).not.toHaveBeenCalled();
-        expect(mocks.invalidateStripeCache).not.toHaveBeenCalled();
     });
 
     it("allows disabling one online gateway while partial payments still have another online gateway", async () => {
-        const { app, env, kv } = createTestApp({
+        const { app, env } = createTestApp({
             partialPaymentEnabled: true,
             partialPaymentAmount: 500,
         });
@@ -788,11 +778,10 @@ describe("payment settings cache invalidation", () => {
             "enabled",
             "false",
         );
-        expect(mocks.invalidateStripeCache).toHaveBeenCalledWith(kv);
     });
 
     it("invalidates API and storefront checkout caches after SSLCommerz saves", async () => {
-        const { app, env, kv } = createTestApp({}, [
+        const { app, env } = createTestApp({}, [
             { key: "store_password", value: "encrypted-password" },
         ]);
         mocks.getSSLCommerzSettings.mockResolvedValueOnce({
@@ -809,8 +798,6 @@ describe("payment settings cache invalidation", () => {
         });
 
         expect(response.status).toBe(200);
-        expect(mocks.invalidateSSLCommerzCache).toHaveBeenCalledWith(kv);
-        expect(mocks.invalidatePaymentMethodsCache).toHaveBeenCalledWith(kv);
         expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
             ["checkout"],
             expect.objectContaining({ env }),
@@ -835,7 +822,6 @@ describe("payment settings cache invalidation", () => {
             },
         });
         expect(mocks.upsertSetting).not.toHaveBeenCalled();
-        expect(mocks.invalidateSSLCommerzCache).not.toHaveBeenCalled();
     });
 
     it("rejects enabling SSLCommerz with submitted placeholder credentials", async () => {
@@ -858,7 +844,6 @@ describe("payment settings cache invalidation", () => {
         expect(mocks.requireEncryptionKey).not.toHaveBeenCalled();
         expect(mocks.upsertSetting).not.toHaveBeenCalled();
         expect(mocks.upsertEncryptedSetting).not.toHaveBeenCalled();
-        expect(mocks.invalidateSSLCommerzCache).not.toHaveBeenCalled();
     });
 
     it("rejects enabling SSLCommerz when a masked stored credential is a placeholder", async () => {
@@ -889,7 +874,6 @@ describe("payment settings cache invalidation", () => {
         });
         expect(mocks.upsertSetting).not.toHaveBeenCalled();
         expect(mocks.upsertEncryptedSetting).not.toHaveBeenCalled();
-        expect(mocks.invalidateSSLCommerzCache).not.toHaveBeenCalled();
     });
 
     it("requires the credential encryption key before saving SSLCommerz secrets", async () => {
@@ -911,7 +895,7 @@ describe("payment settings cache invalidation", () => {
     });
 
     it("invalidates API and storefront checkout caches after Polar saves", async () => {
-        const { app, env, kv } = createTestApp({}, [
+        const { app, env } = createTestApp({}, [
             { key: "access_token", value: "encrypted-token" },
             { key: "webhook_secret", value: "encrypted-webhook" },
         ]);
@@ -923,8 +907,6 @@ describe("payment settings cache invalidation", () => {
         });
 
         expect(response.status).toBe(200);
-        expect(mocks.invalidatePolarCache).toHaveBeenCalledWith(kv);
-        expect(mocks.invalidatePaymentMethodsCache).toHaveBeenCalledWith(kv);
         expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
             ["checkout"],
             expect.objectContaining({ env }),
@@ -951,7 +933,6 @@ describe("payment settings cache invalidation", () => {
             },
         });
         expect(mocks.upsertSetting).not.toHaveBeenCalled();
-        expect(mocks.invalidatePolarCache).not.toHaveBeenCalled();
     });
 
     it("rejects enabling Polar with submitted placeholder credentials", async () => {
@@ -975,7 +956,6 @@ describe("payment settings cache invalidation", () => {
         expect(mocks.requireEncryptionKey).not.toHaveBeenCalled();
         expect(mocks.upsertSetting).not.toHaveBeenCalled();
         expect(mocks.upsertEncryptedSetting).not.toHaveBeenCalled();
-        expect(mocks.invalidatePolarCache).not.toHaveBeenCalled();
     });
 
     it("rejects enabling Polar when a masked stored credential is a placeholder", async () => {
@@ -1000,7 +980,6 @@ describe("payment settings cache invalidation", () => {
         });
         expect(mocks.upsertSetting).not.toHaveBeenCalled();
         expect(mocks.upsertEncryptedSetting).not.toHaveBeenCalled();
-        expect(mocks.invalidatePolarCache).not.toHaveBeenCalled();
     });
 
     it("requires the credential encryption key before saving Polar secrets", async () => {

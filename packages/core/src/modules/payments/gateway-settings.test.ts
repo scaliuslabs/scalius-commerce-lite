@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   getActivePaymentMethods,
@@ -11,10 +11,6 @@ import {
   getStripeSettings,
   getStripeCheckoutReadiness,
   isStripePlaceholderCredential,
-  invalidatePaymentMethodsCache,
-  invalidatePolarCache,
-  invalidateSSLCommerzCache,
-  invalidateStripeCache,
   resolveActivePaymentMethodsFromRows,
   upsertEncryptedSetting,
 } from "./gateway-settings";
@@ -22,33 +18,24 @@ import { getStripeCredentialEnvironment } from "@scalius/shared/payment-gateway-
 import { getGatewayMeta } from "./gateway-registry";
 import { decryptCredentials, encryptCredentials } from "../../utils/credential-encryption";
 
-function createRejectingDeleteKv(): KVNamespace {
-  return {
-    delete: vi.fn().mockRejectedValue(new Error("kv unavailable")),
-  } as unknown as KVNamespace;
-}
-
-function createDbReturningNoSettings() {
-  return {
-    select: () => ({
-      from: () => ({
-        where: () => ({
-          all: async () => [],
-        }),
-      }),
-    }),
-  };
-}
-
 function createDbReturningCategoryReads(
   rowsByRead: Array<Array<{ key: string; value: string }>>,
 ) {
   let readIndex = 0;
   return {
-    select: () => ({
+    select: (projection: Record<string, unknown>) => ({
       from: () => ({
         where: () => ({
-          all: async () => rowsByRead[readIndex++] ?? [],
+          all: async () => {
+            if ("category" in projection) {
+              const categories = ["payment_methods", "stripe", "sslcommerz", "polar"];
+              return rowsByRead.flatMap((rows, index) => rows.map((row) => ({
+                ...row,
+                category: categories[index],
+              })));
+            }
+            return rowsByRead[readIndex++] ?? [];
+          },
         }),
       }),
     }),
@@ -71,55 +58,8 @@ function createDbCapturingInsert() {
   return { db, captured };
 }
 
-describe("payment gateway settings cache cleanup", () => {
-  afterEach(async () => {
-    await Promise.all([
-      invalidateStripeCache(),
-      invalidateSSLCommerzCache(),
-      invalidatePolarCache(),
-      invalidatePaymentMethodsCache(),
-    ]);
-    vi.restoreAllMocks();
-  });
-
-  it.each([
-    ["stripe", invalidateStripeCache, "gw:stripe"],
-    ["sslcommerz", invalidateSSLCommerzCache, "gw:sslcommerz"],
-    ["polar", invalidatePolarCache, "gw:polar"],
-    ["payment methods", invalidatePaymentMethodsCache, "gw:payment_methods"],
-  ])("does not throw when %s legacy KV cleanup fails", async (_label, invalidate, key) => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const kv = createRejectingDeleteKv();
-
-    await expect(invalidate(kv)).resolves.toBeUndefined();
-
-    expect(kv.delete).toHaveBeenCalledWith(key);
-    expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining(`Legacy KV credential cache delete failed for ${key}`),
-      "kv unavailable",
-    );
-  });
-
-  it("does not throw when stale Stripe KV lookup fails during migration cleanup", async () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const kv = {
-      get: vi.fn().mockRejectedValue(new Error("kv lookup unavailable")),
-      delete: vi.fn(),
-    } as unknown as KVNamespace;
-
-    await expect(
-      getStripeSettings(createDbReturningNoSettings() as never, kv),
-    ).resolves.toBeNull();
-
-    expect(kv.get).toHaveBeenCalledWith("gw:stripe");
-    expect(kv.delete).not.toHaveBeenCalled();
-    expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining("Legacy KV credential cache lookup failed for gw:stripe"),
-      "kv lookup unavailable",
-    );
-  });
-
-  it("bypasses stale in-memory gateway credentials for fresh checkout config reads", async () => {
+describe("payment gateway settings reads", () => {
+  it("does not retain decrypted gateway credentials across requests", async () => {
     const oldDb = createDbReturningCategoryReads([
       [
         { key: "secret_key", value: "sk_old" },
@@ -144,22 +84,13 @@ describe("payment gateway settings cache cleanup", () => {
     });
 
     await expect(getStripeSettings(freshDb as never)).resolves.toMatchObject({
-      secretKey: "sk_old",
-      publishableKey: "pk_old",
-      enabled: true,
-    });
-    await expect(
-      getStripeSettings(freshDb as never, undefined, undefined, {
-        bypassMemoryCache: true,
-      }),
-    ).resolves.toMatchObject({
       secretKey: "sk_new",
       publishableKey: "pk_new",
       enabled: false,
     });
   });
 
-  it("bypasses stale in-memory payment-method allowlists for fresh checkout config reads", async () => {
+  it("does not retain payment-method allowlists across requests", async () => {
     const oldDb = createDbReturningCategoryReads([
       [
         { key: "enabled_methods", value: JSON.stringify(["cod"]) },
@@ -171,6 +102,8 @@ describe("payment gateway settings cache cleanup", () => {
         { key: "enabled_methods", value: JSON.stringify(["polar"]) },
         { key: "default_method", value: "polar" },
       ],
+      [],
+      [],
       [
         { key: "access_token", value: "polar_token" },
         { key: "product_id", value: "polar_product" },
@@ -185,14 +118,6 @@ describe("payment gateway settings cache cleanup", () => {
     });
 
     await expect(getActivePaymentMethods(freshDb as never)).resolves.toEqual({
-      enabledMethods: ["cod"],
-      defaultMethod: "cod",
-    });
-    await expect(
-      getActivePaymentMethods(freshDb as never, undefined, undefined, {
-        bypassMemoryCache: true,
-      }),
-    ).resolves.toEqual({
       enabledMethods: ["polar"],
       defaultMethod: "polar",
     });
@@ -214,9 +139,7 @@ describe("payment gateway settings cache cleanup", () => {
     ]);
 
     await expect(
-      getActivePaymentMethods(db as never, undefined, undefined, {
-        bypassMemoryCache: true,
-      }),
+      getActivePaymentMethods(db as never),
     ).resolves.toEqual({
       enabledMethods: [],
       defaultMethod: "cod",
@@ -237,9 +160,7 @@ describe("payment gateway settings cache cleanup", () => {
     ]);
 
     await expect(
-      getActivePaymentMethods(db as never, undefined, undefined, {
-        bypassMemoryCache: true,
-      }),
+      getActivePaymentMethods(db as never),
     ).resolves.toEqual({
       enabledMethods: [],
       defaultMethod: "cod",
@@ -260,9 +181,7 @@ describe("payment gateway settings cache cleanup", () => {
     ]);
 
     await expect(
-      getActivePaymentMethods(db as never, undefined, undefined, {
-        bypassMemoryCache: true,
-      }),
+      getActivePaymentMethods(db as never),
     ).resolves.toEqual({
       enabledMethods: [],
       defaultMethod: "cod",
@@ -286,9 +205,7 @@ describe("payment gateway settings cache cleanup", () => {
     ]);
 
     await expect(
-      getActivePaymentMethods(db as never, undefined, wrongKey, {
-        bypassMemoryCache: true,
-      }),
+      getActivePaymentMethods(db as never, wrongKey),
     ).resolves.toEqual({
       enabledMethods: [],
       defaultMethod: "cod",
@@ -322,15 +239,9 @@ describe("payment gateway settings cache cleanup", () => {
       ],
     ]);
 
-    const stripe = await getStripeSettings(stripeDb as never, undefined, wrongKey, {
-      bypassMemoryCache: true,
-    });
-    const ssl = await getSSLCommerzSettings(sslDb as never, undefined, wrongKey, {
-      bypassMemoryCache: true,
-    });
-    const polar = await getPolarSettings(polarDb as never, undefined, wrongKey, {
-      bypassMemoryCache: true,
-    });
+    const stripe = await getStripeSettings(stripeDb as never, wrongKey);
+    const ssl = await getSSLCommerzSettings(sslDb as never, wrongKey);
+    const polar = await getPolarSettings(polarDb as never, wrongKey);
 
     expect(getStripeCheckoutReadiness(stripe)).toMatchObject({
       configured: false,
@@ -486,9 +397,7 @@ describe("payment gateway settings cache cleanup", () => {
     ]);
 
     await expect(
-      getActivePaymentMethods(db as never, undefined, undefined, {
-        bypassMemoryCache: true,
-      }),
+      getActivePaymentMethods(db as never),
     ).resolves.toEqual({
       enabledMethods: [],
       defaultMethod: "cod",
@@ -553,9 +462,7 @@ describe("payment gateway settings cache cleanup", () => {
     ]);
 
     await expect(
-      getActivePaymentMethods(db as never, undefined, undefined, {
-        bypassMemoryCache: true,
-      }),
+      getActivePaymentMethods(db as never),
     ).resolves.toEqual({
       enabledMethods: [],
       defaultMethod: "cod",
@@ -629,9 +536,7 @@ describe("payment gateway settings cache cleanup", () => {
     ]);
 
     await expect(
-      getActivePaymentMethods(db as never, undefined, undefined, {
-        bypassMemoryCache: true,
-      }),
+      getActivePaymentMethods(db as never),
     ).resolves.toEqual({
       enabledMethods: [],
       defaultMethod: "cod",
@@ -653,9 +558,7 @@ describe("payment gateway settings cache cleanup", () => {
     ]);
 
     await expect(
-      getActivePaymentMethods(db as never, undefined, undefined, {
-        bypassMemoryCache: true,
-      }),
+      getActivePaymentMethods(db as never),
     ).resolves.toEqual({
       enabledMethods: ["stripe"],
       defaultMethod: "stripe",

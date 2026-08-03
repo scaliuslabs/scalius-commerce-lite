@@ -58,10 +58,6 @@ export {
   getActivePaymentMethods,
   upsertSetting,
   upsertEncryptedSetting,
-  invalidateStripeCache,
-  invalidateSSLCommerzCache,
-  invalidatePolarCache,
-  invalidatePaymentMethodsCache,
 } from "./gateway-settings";
 export type {
   StripeSettings,

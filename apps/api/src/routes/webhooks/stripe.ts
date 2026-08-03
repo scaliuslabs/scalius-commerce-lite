@@ -4,10 +4,7 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import type Stripe from "stripe";
 import { verifyStripeWebhook } from "@scalius/core/modules/payments/stripe";
-import {
-  FRESH_GATEWAY_SETTINGS_READ_OPTIONS,
-  getStripeSettings,
-} from "@scalius/core/modules/payments/gateway-settings";
+import { getStripeSettings } from "@scalius/core/modules/payments/gateway-settings";
 import type { PaymentQueueMessage } from "../../queue-consumer";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import {
@@ -27,9 +24,7 @@ app.post("/", async (c) => {
   try {
     stripeSettings = await getStripeSettings(
       db,
-      c.env.CACHE,
       encryptionKey,
-      FRESH_GATEWAY_SETTINGS_READ_OPTIONS,
     );
   } catch (error) {
     console.error(

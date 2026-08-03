@@ -17,7 +17,10 @@ import {
     type CustomerAuthPolicyConfig,
 } from "@scalius/shared/customer-auth-policy";
 import { getRegisteredGateways } from "../payments/gateway-registry";
-import { getActivePaymentMethods } from "../payments/gateway-settings";
+import {
+    getPaymentGatewaySettingsSnapshot,
+    type PaymentGatewaySettingsSnapshot,
+} from "../payments/gateway-settings";
 import { isCheckoutGatewayUsableForFlow } from "./checkout-flow";
 import {
     CHECKOUT_READINESS_PUBLIC_UNAVAILABLE_MESSAGE,
@@ -47,13 +50,29 @@ export interface CheckoutConfig {
     unavailableMessage?: string;
 }
 
+function getGatewaySettings(
+    snapshot: PaymentGatewaySettingsSnapshot,
+    gatewayId: string,
+): ({ enabled: boolean } & Record<string, unknown>) | null {
+    if (gatewayId === "stripe") {
+        return snapshot.settings.stripe ? { ...snapshot.settings.stripe } : null;
+    }
+    if (gatewayId === "sslcommerz") {
+        return snapshot.settings.sslcommerz ? { ...snapshot.settings.sslcommerz } : null;
+    }
+    if (gatewayId === "polar") {
+        return snapshot.settings.polar ? { ...snapshot.settings.polar } : null;
+    }
+    if (gatewayId === "cod") return { ...snapshot.settings.cod };
+    return null;
+}
+
 /**
  * Assemble the full checkout configuration for the storefront.
  * Reads site settings, currency, allowed countries, and resolves enabled payment gateways.
  */
 export async function getCheckoutConfig(
     db: Database,
-    kv?: KVNamespace,
     encryptionKey?: string,
     runtimeEnv?: Record<string, unknown>,
 ): Promise<CheckoutConfig> {
@@ -120,9 +139,8 @@ export async function getCheckoutConfig(
         };
     }
 
-    const activePaymentMethods = await getActivePaymentMethods(db, kv, encryptionKey, {
-        bypassMemoryCache: true,
-    });
+    const gatewaySnapshot = await getPaymentGatewaySettingsSnapshot(db, encryptionKey);
+    const activePaymentMethods = gatewaySnapshot.activePaymentMethods;
     const allowedGatewayIds = new Set(activePaymentMethods.enabledMethods);
 
     // Dynamically resolve enabled gateways from the registry
@@ -136,18 +154,12 @@ export async function getCheckoutConfig(
             partialPaymentAmount,
         });
     });
-    const settingsResults = await Promise.all(
-        candidateGateways.map((gw) =>
-            gw.getSettings(db, kv, encryptionKey, { bypassMemoryCache: true })
-        ),
-    );
-
     const gateways: Array<Record<string, unknown>> = [];
 
     for (let i = 0; i < candidateGateways.length; i++) {
         const gw = candidateGateways[i];
         if (!gw) continue;
-        const gwSettings = settingsResults[i];
+        const gwSettings = getGatewaySettings(gatewaySnapshot, gw.id);
         if (!isPublicGatewaySettingsUsable(gw.id, gwSettings)) continue;
         const advertisedCurrencies = gw.getCurrencies?.(gatewayCurrencyCode) ?? [gatewayCurrencyCode];
         const currencies = Array.from(new Set(

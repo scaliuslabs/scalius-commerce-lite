@@ -6,10 +6,7 @@ import { eq } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { orders, PaymentStatus } from "@scalius/database/schema";
 import { retrieveStripePaymentIntent } from "@scalius/core/modules/payments/stripe";
-import {
-  FRESH_GATEWAY_SETTINGS_READ_OPTIONS,
-  getStripeSettings,
-} from "@scalius/core/modules/payments/gateway-settings";
+import { getStripeSettings } from "@scalius/core/modules/payments/gateway-settings";
 import type { PaymentQueueMessage } from "../../queue-consumer";
 import { validateReceiptToken } from "../../utils/order-receipt-token";
 import { successEnvelope, errorResponses, serviceUnavailableResponse } from "../../schemas/responses";
@@ -179,9 +176,7 @@ app.openapi(reconcileRoute, async (c) => {
 
   const settings = await getStripeSettings(
     db,
-    c.env.CACHE,
     getCredentialEncryptionKey(c.env as Record<string, unknown>),
-    FRESH_GATEWAY_SETTINGS_READ_OPTIONS,
   );
   if (!settings?.enabled || !settings.secretKey || settings.credentialErrors?.length) {
     throw new ServiceUnavailableError("Stripe payment verification is temporarily unavailable.");

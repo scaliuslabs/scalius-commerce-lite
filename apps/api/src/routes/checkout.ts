@@ -47,12 +47,10 @@ app.use(
 app.openapi(getCheckoutConfigRoute, async (c) => {
   try {
     const db = c.get("db");
-    const kv: KVNamespace | undefined = c.env.CACHE;
 
     const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
     const config = await getCheckoutConfig(
       db,
-      kv,
       encryptionKey,
       c.env as unknown as Record<string, unknown>,
     );
