@@ -35,6 +35,11 @@ const STOREFRONT_WARM_PATH_BATCH_SIZE = 2;
 
 export type WaitUntilExecutionContext = {
   waitUntil(promise: Promise<unknown>): void;
+  readonly exports?: {
+    PublicApi?: {
+      purgeGroups(groups: string[]): Promise<void>;
+    };
+  };
 };
 
 export interface InvalidationGroupDef {
@@ -1221,8 +1226,20 @@ export async function invalidateGroups(
   kv?: KVNamespace,
   options: { cleanupExecutionCtx?: WaitUntilExecutionContext } = {},
 ): Promise<void> {
+  const validGroups = [...new Set(groups.filter((group) => group in INVALIDATION_GROUPS))];
+  const nativePurger = options.cleanupExecutionCtx?.exports?.PublicApi;
+  if (nativePurger && validGroups.length > 0) {
+    try {
+      await nativePurger.purgeGroups(validGroups);
+    } catch (error: unknown) {
+      // The database write is already committed. Preserve mutation success
+      // while making the cache-control failure visible to operations.
+      console.error("[Cache] Public API tag purge failed:", error);
+    }
+  }
+
   const prefixes = new Set<string>();
-  for (const g of groups) {
+  for (const g of validGroups) {
     const def = INVALIDATION_GROUPS[g];
     if (def) {
       for (const p of def.kvPrefixes) {
@@ -1235,7 +1252,7 @@ export async function invalidateGroups(
   if (uniquePrefixes.length === 0) return;
 
   console.log(
-    `[Cache] Invalidating groups [${groups.join(", ")}] – ${uniquePrefixes.length} KV prefix(es)`,
+    `[Cache] Invalidating groups [${validGroups.join(", ")}] – ${uniquePrefixes.length} KV prefix(es)`,
   );
 
   await bumpApiCacheFences(uniquePrefixes, kv);

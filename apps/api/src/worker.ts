@@ -12,6 +12,7 @@ import {
 import {
   decoratePublicApiResponse,
   getPublicApiCachePolicy,
+  normalizePublicApiCacheTags,
 } from "./public-cache-policy";
 
 export type { AppType } from "./app";
@@ -42,6 +43,17 @@ export class PublicApi extends WorkerEntrypoint<Env> {
     const response = await fetchApiApp(request, this.env, this.ctx);
     return decoratePublicApiResponse(response, policy);
   }
+
+  async purgeGroups(groups: string[]): Promise<void> {
+    const tags = normalizePublicApiCacheTags(groups);
+    if (tags.length === 0) return;
+
+    const result = await this.ctx.cache.purge({ tags });
+    if (!result.success) {
+      const codes = result.errors.map((error) => error.code).join(",");
+      throw new Error(`Public API cache purge failed (${codes || "unknown"})`);
+    }
+  }
 }
 
 export default class ApiWorker extends WorkerEntrypoint<Env> {
@@ -63,7 +75,9 @@ export default class ApiWorker extends WorkerEntrypoint<Env> {
 
     const cachePolicy = getPublicApiCachePolicy(request);
     if (cachePolicy) {
-      return this.ctx.exports.PublicApi.fetch(request);
+      return this.ctx.exports.PublicApi.fetch(request, {
+        cf: { cacheKey: cachePolicy.cacheKey },
+      });
     }
 
     return fetchApiApp(request, this.env, this.ctx);

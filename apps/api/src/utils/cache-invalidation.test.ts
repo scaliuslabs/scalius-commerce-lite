@@ -702,6 +702,19 @@ describe("triggerStorefrontPurgeForGroups", () => {
     expect(calls.indexOf("list")).toBeGreaterThan(calls.indexOf("put"));
   });
 
+  it("awaits native tag purging even for a group without legacy KV prefixes", async () => {
+    const purgeGroups = vi.fn().mockResolvedValue(undefined);
+
+    await invalidateGroups(["product-schema", "unknown"], undefined, {
+      cleanupExecutionCtx: {
+        waitUntil: vi.fn(),
+        exports: { PublicApi: { purgeGroups } },
+      },
+    });
+
+    expect(purgeGroups).toHaveBeenCalledWith(["product-schema"]);
+  });
+
   it("can defer stale KV cleanup after the cache fence is committed", async () => {
     let finishList!: (value: { keys: []; list_complete: true }) => void;
     const listPromise = new Promise<{ keys: []; list_complete: true }>(
