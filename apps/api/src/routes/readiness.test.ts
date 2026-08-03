@@ -1,6 +1,7 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  CURRENT_DATABASE_SCHEMA,
   CURRENT_DATABASE_SCHEMA_MIGRATIONS,
 } from "@scalius/database/schema-contract";
 
@@ -33,6 +34,17 @@ function createDb(options: {
   }[];
 } = {}) {
   let attempts = 0;
+  const hasSchemaOverride = options.schemaVersion !== undefined
+    || options.schemaName !== undefined
+    || options.schemaSha256 !== undefined;
+  const schemaRows = options.schemaRows ?? (hasSchemaOverride
+    ? [{
+        version: options.schemaVersion ?? CURRENT_DATABASE_SCHEMA.version,
+        name: options.schemaName ?? CURRENT_DATABASE_SCHEMA.name,
+        sourceSha256: options.schemaSha256
+          ?? CURRENT_DATABASE_SCHEMA_MIGRATIONS.at(-1)!.sourceSha256,
+      }]
+    : CURRENT_DATABASE_SCHEMA_MIGRATIONS);
   return {
     prepare: vi.fn(() => {
       const statement = {
@@ -51,12 +63,7 @@ function createDb(options: {
           return {
             success: true,
             meta: {},
-            results: options.schemaRows ?? [{
-              version: options.schemaVersion ?? 50,
-              name: options.schemaName ?? "0050_schema_release_contract",
-              sourceSha256: options.schemaSha256
-                ?? CURRENT_DATABASE_SCHEMA_MIGRATIONS[0].sourceSha256,
-            }],
+            results: schemaRows,
           };
         }),
       };
@@ -234,7 +241,7 @@ describe("API readiness route", () => {
       expect(json.status).toBe("ready");
       expect(json.checks?.d1).toMatchObject({
         status: "ok",
-        detail: "schema 50/0050_schema_release_contract",
+        detail: "schema 51/0051_orders_checkout_write_path",
       });
       expect(db.prepare).toHaveBeenCalledTimes(3);
     } finally {
@@ -262,7 +269,7 @@ describe("API readiness route", () => {
       expect(json.status).toBe("ready");
       expect(json.checks?.d1).toMatchObject({
         status: "ok",
-        detail: "schema 50/0050_schema_release_contract",
+        detail: "schema 51/0051_orders_checkout_write_path",
       });
     } finally {
       vi.useRealTimers();
@@ -274,8 +281,14 @@ describe("API readiness route", () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
     const env = createEnv({
       DB: createDb({
-        schemaVersion: 49,
-        schemaName: "0049_checkout_side_effect_authority_fence",
+        schemaRows: [
+          {
+            version: 49,
+            name: "0049_checkout_side_effect_authority_fence",
+            sourceSha256: "a".repeat(64),
+          },
+          CURRENT_DATABASE_SCHEMA_MIGRATIONS[1],
+        ],
       }),
     });
 
@@ -301,12 +314,15 @@ describe("API readiness route", () => {
     ]],
     ["future", [
       ...CURRENT_DATABASE_SCHEMA_MIGRATIONS,
-      { version: 51, name: "0051_future", sourceSha256: "b".repeat(64) },
+      { version: 52, name: "0052_future", sourceSha256: "b".repeat(64) },
     ]],
-    ["bad digest", [{
-      ...CURRENT_DATABASE_SCHEMA_MIGRATIONS[0],
-      sourceSha256: "c".repeat(64),
-    }]],
+    ["bad digest", [
+      {
+        ...CURRENT_DATABASE_SCHEMA_MIGRATIONS[0],
+        sourceSha256: "c".repeat(64),
+      },
+      CURRENT_DATABASE_SCHEMA_MIGRATIONS[1],
+    ]],
   ])("fails closed for a %s D1 schema ledger", async (_label, schemaRows) => {
     const app = createApp();
     vi.spyOn(console, "warn").mockImplementation(() => {});

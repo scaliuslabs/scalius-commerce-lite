@@ -33,20 +33,20 @@ describe("database schema contract", () => {
       version: 49,
       name: "0049_checkout_side_effect_authority_fence",
       sourceSha256: "a".repeat(64),
-    }], /diverges/i],
+    }], /has 1 row/i],
     [[...CURRENT_DATABASE_SCHEMA_MIGRATIONS, {
-      version: 51,
-      name: "0051_future",
+      version: 52,
+      name: "0052_future",
       sourceSha256: "b".repeat(64),
-    }], /has 2 row/i],
+    }], /has 3 row/i],
     [[{
       ...CURRENT_DATABASE_SCHEMA_MIGRATIONS[0],
       name: "0050_wrong",
-    }], /diverges/i],
+    }, CURRENT_DATABASE_SCHEMA_MIGRATIONS[1]], /diverges/i],
     [[{
       ...CURRENT_DATABASE_SCHEMA_MIGRATIONS[0],
       sourceSha256: "c".repeat(64),
-    }], /diverges/i],
+    }, CURRENT_DATABASE_SCHEMA_MIGRATIONS[1]], /diverges/i],
     [[{
       version: "invalid",
       name: "0050_schema_release_contract",
@@ -61,9 +61,12 @@ describe("database schema contract", () => {
       databaseReturning(CURRENT_DATABASE_SCHEMA_MIGRATIONS),
     )).resolves.toEqual(CURRENT_DATABASE_SCHEMA);
 
-    await expect(readDatabaseSchemaState(databaseReturning([{
-      ...CURRENT_DATABASE_SCHEMA_MIGRATIONS[0],
-      sourceSha256: "d".repeat(64),
-    }]))).rejects.toThrow(/diverges at version 50/i);
+    await expect(readDatabaseSchemaState(databaseReturning([
+      {
+        ...CURRENT_DATABASE_SCHEMA_MIGRATIONS[0],
+        sourceSha256: "d".repeat(64),
+      },
+      CURRENT_DATABASE_SCHEMA_MIGRATIONS[1],
+    ]))).rejects.toThrow(/diverges at version 50/i);
   });
 });

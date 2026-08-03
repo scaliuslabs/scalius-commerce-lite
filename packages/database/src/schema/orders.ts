@@ -113,12 +113,12 @@ export const orders = sqliteTable("orders", {
         table.customerId,
         table.deletedAt,
         table.createdAt,
-    ),
-    index("orders_account_owner_customer_id_idx").on(table.accountOwnerCustomerId),
+    ).where(sql`${table.customerId} IS NOT NULL`),
+    index("orders_account_owner_customer_id_idx")
+        .on(table.accountOwnerCustomerId)
+        .where(sql`${table.accountOwnerCustomerId} IS NOT NULL`),
     index("orders_created_at_idx").on(table.createdAt),
-    index("orders_archived_at_idx").on(table.archivedAt),
     index("orders_archive_list_idx").on(table.deletedAt, table.archivedAt, table.updatedAt),
-    index("orders_deleted_at_idx").on(table.deletedAt),
     index("orders_list_updated_at_idx").on(table.deletedAt, table.updatedAt),
     index("orders_payment_status_list_idx").on(
         table.deletedAt,
@@ -149,7 +149,9 @@ export const orders = sqliteTable("orders", {
     ),
     index("orders_dashboard_agg_idx").on(table.deletedAt, table.createdAt, table.status),
     index("orders_customer_phone_idx").on(table.customerPhone),
-    index("orders_shipment_claim_idx").on(table.shipmentClaimId, table.shipmentClaimExpiresAt),
+    index("orders_shipment_claim_idx")
+        .on(table.shipmentClaimId, table.shipmentClaimExpiresAt)
+        .where(sql`${table.shipmentClaimId} IS NOT NULL`),
     uniqueIndex("orders_checkout_request_key_unique")
         .on(table.checkoutRequestKey)
         .where(sql`${table.checkoutRequestKey} IS NOT NULL`),

@@ -22,14 +22,21 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 50,
-  name: "0050_schema_release_contract",
+  version: 51,
+  name: "0051_orders_checkout_write_path",
 } as const;
 
-export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [{
-  ...CURRENT_DATABASE_SCHEMA,
-  sourceSha256: "4b7e98071b3874f0a1e512b3bac3a188fdfb087f9cb118df9cd0fd8a77205194",
-}] as const;
+export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
+  {
+    version: 50,
+    name: "0050_schema_release_contract",
+    sourceSha256: "4b7e98071b3874f0a1e512b3bac3a188fdfb087f9cb118df9cd0fd8a77205194",
+  },
+  {
+    ...CURRENT_DATABASE_SCHEMA,
+    sourceSha256: "be810d0a125e0ab2900e89bfa70a05d67b3b280cc0092a19e1016792a09288cc",
+  },
+] as const;
 
 export interface DatabaseSchemaState {
   version: number;

@@ -44,8 +44,9 @@ Database release compatibility is exact, not a connectivity probe. Migration
 `0050_schema_release_contract` starts one ordered ledger shared by D1, TursoDB,
 and PostgreSQL. Each release row includes the canonical source digest, and API
 `/readyz` rejects missing, extra, renamed, future, or digest-mismatched rows.
-Historical migrations are an installed-system contract and must not be deleted
-or squashed after release.
+`0051_orders_checkout_write_path` is the current release. Historical migrations
+are an installed-system contract and must not be deleted or squashed after
+release.
 
 D1 continues to use Wrangler's normal migration application. Existing TursoDB
 and PostgreSQL databases use the explicit `upgrade:schema` runner. Every
@@ -315,13 +316,53 @@ selected relational database:
 
 This topology has local end-to-end D1 authority/projection coverage and focused
 routing, lane grouping, response-order, overload, replay, and sold-out
-invalidation tests. It is an architectural prerequisite, not a capacity claim.
-Full disposable-Worker D1, current TursoDB concurrent-writer, and Neon tests must
-still establish sustainable arrival rate, p95/p99 latency, overload rate,
+invalidation tests. It is an architectural prerequisite, not by itself a
+capacity claim. The disposable D1 evidence below now covers that provider;
+current TursoDB concurrent-writer and full Worker-to-Neon tests must still
+establish the same sustainable arrival rate, p95/p99 latency, overload rate,
 projection lag, exact order/idempotency counts, and inventory invariants before
-publishing provider throughput. See Cloudflare's current
+publishing their provider throughput. See Cloudflare's current
 [Durable Object limits](https://developers.cloudflare.com/durable-objects/platform/limits/)
 and Turso's [concurrent-write contract](https://docs.turso.tech/tursodb/concurrent-writes/).
+
+## Verified disposable D1 coordinator-v2 load — 2026-08-03
+
+The sentinel-protected D1 target and Worker contained no production resources.
+Migration `0051_orders_checkout_write_path` removed one stale legacy customer
+index, removed two redundant single-column indexes, made three nullable indexes
+partial, and stopped synchronously indexing a coordinated order in FTS before
+its durable projection was complete. Projected orders remain searchable; local
+behavioral coverage and a live 1,000-order oracle both proved exact FTS
+visibility after projection.
+
+- Before the write-path migration, a short 1,000-order run at 250 scheduled
+  arrivals/second completed at 157.29 responses/second. The same short shape
+  completed at 180.75 after removing the redundant initial FTS/index writes.
+- A sustained 5,000-order untracked-SKU run at 250 scheduled arrivals/second
+  returned 5,000/5,000 HTTP 201 responses with exact order, item, and checkout
+  attempt counts. It completed at 235.32 responses/second with p95 service
+  latency 1.506 seconds and projection catch-up in 1.537 seconds.
+- After applying and recording release 0051 through normal Wrangler migration
+  and deployment, a second 5,000-order run returned 5,000/5,000 HTTP 201,
+  completed at 236.87 responses/second, had p95/p99 service latency of
+  2.195/2.839 seconds, and projected in 1.767 seconds. Foreign keys remained
+  clean and no legacy inventory movement was created.
+- One tracked SKU with exactly 5,000 available units received 6,000 submissions
+  at 250/second. Exactly 5,000 orders committed and 1,000 were rejected as
+  unavailable. Accepted orders completed at 200.86/second; the two reservation
+  lanes advanced by exactly 5,000 contiguous version/quantity edges, physical
+  stock and `stockVersion` did not drift, and no oversell or duplicate ledger
+  edge occurred.
+- The final clean-name deployment `aac260ed-6fe1-4bda-910d-0768df2e89c3`
+  served 100%, reported `schema 51/0051_orders_checkout_write_path`, and passed
+  a fresh 100-way simultaneous replay burst with 100 HTTP 201 responses but
+  exactly one order, one item, and one checkout attempt.
+
+These are database/coordinator capacity results with external providers and the
+production KV/rate-limit bindings intentionally absent. They prove that this D1
+shape can absorb the measured 250-order arrival stream while preserving its
+authority invariants; they do not prove thousands of orders/second or every
+merchant cart/provider workload.
 
 ## Verified live TursoDB to PostgreSQL cutover — 2026-08-03
 
