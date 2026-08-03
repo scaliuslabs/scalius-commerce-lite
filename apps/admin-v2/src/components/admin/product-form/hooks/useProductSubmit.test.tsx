@@ -5,6 +5,7 @@ import { createRoot, type Root } from "react-dom/client";
 import type { UseFormReturn } from "react-hook-form";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AdminApiResponseError } from "~/lib/admin-api-error";
+import { queryKeys } from "~/lib/query-keys";
 
 const mocks = vi.hoisted(() => ({
   invalidateQueries: vi.fn(),
@@ -22,14 +23,14 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@tanstack/react-query", () => ({
   useMutation: (options: {
     mutationFn: (values: unknown) => Promise<unknown>;
-    onSuccess?: (result: unknown, values: unknown) => void;
+    onSuccess?: (result: unknown, values: unknown) => void | Promise<void>;
     onError?: (error: unknown, values: unknown) => void;
   }) => ({
     isPending: false,
     mutateAsync: async (values: unknown) => {
       try {
         const result = await options.mutationFn(values);
-        options.onSuccess?.(result, values);
+        await options.onSuccess?.(result, values);
         return result;
       } catch (error) {
         options.onError?.(error, values);
@@ -113,6 +114,49 @@ describe("useProductSubmit", () => {
     expect(settled).toBe(false);
     resolveMutation?.({ id: "prod_one", aggregateRevision: 1 });
     await expect(submission).resolves.toBe(true);
+  });
+
+  it("awaits the canonical product dependency fan-out", async () => {
+    renderHarness();
+    mocks.serverMutation.mockResolvedValueOnce({
+      id: "prod_one",
+      aggregateRevision: 1,
+    });
+    let resolveFirstInvalidation: (() => void) | undefined;
+    mocks.invalidateQueries
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveFirstInvalidation = resolve;
+          }),
+      )
+      .mockResolvedValue(undefined);
+    let settled = false;
+
+    const submission = requireResult(result)
+      .handleSubmit(productValues())
+      .then((saved) => {
+        settled = true;
+        return saved;
+      });
+
+    await vi.waitFor(() => {
+      expect(mocks.invalidateQueries.mock.calls.map(([options]) => options.queryKey)).toEqual([
+        queryKeys.products.list(),
+        queryKeys.products.byIds(),
+        queryKeys.products.collectionOptions(),
+        queryKeys.products.stats(),
+        queryKeys.dashboard.all,
+        queryKeys.inventory.list(),
+        queryKeys.products.detail("prod_one"),
+        queryKeys.products.variants("prod_one"),
+      ]);
+    });
+    expect(settled).toBe(false);
+
+    resolveFirstInvalidation?.();
+    await expect(submission).resolves.toBe(true);
+    expect(mocks.toastSuccess).toHaveBeenCalledTimes(1);
   });
 
   it("sends and advances the shared aggregate revision without remounting", async () => {

@@ -138,15 +138,20 @@ function CategoryCombobox({
         status: data.status,
       };
 
+      onCategoryCreated(newCategory);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.categories.list() }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.categories.formOptions(),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.collections.categoryOptions(),
+        }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.products.stats() }),
+      ]);
       toast.success(`Draft category “${newCategory.name}” created`, {
         description: "Assign products now, then publish the category from its edit page.",
       });
-      onCategoryCreated(newCategory);
-      queryClient.invalidateQueries({ queryKey: queryKeys.categories.list() });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.categories.formOptions(),
-      });
-      queryClient.invalidateQueries({ queryKey: queryKeys.products.stats() });
       setOpen(false);
       setSearch("");
     } catch (error: unknown) {

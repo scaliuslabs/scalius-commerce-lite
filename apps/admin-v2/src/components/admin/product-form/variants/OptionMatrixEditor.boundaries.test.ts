@@ -27,4 +27,17 @@ describe("option matrix editor responsive boundaries", () => {
     expect(source).not.toContain("Try Size, Color, Format, Shape, or Pack.");
     expect(source).toContain("options.length > 0 && !combinationsPending");
   });
+
+  it("awaits every affected product projection after a composition save", () => {
+    expect(source).toContain("await Promise.all([");
+    expect(source).toContain("queryKeys.products.list()");
+    expect(source).toContain("queryKeys.products.byIds()");
+    expect(source).toContain("queryKeys.products.collectionOptions()");
+    expect(source).toContain("queryKeys.products.stats()");
+    expect(source).toContain("queryKeys.dashboard.all");
+    expect(source).toContain("queryKeys.inventory.list()");
+    expect(source).toContain("queryKeys.products.detail(productId!)");
+    expect(source).toContain("queryKeys.products.variants(productId!)");
+    expect(source).not.toContain('queryKey: ["products"');
+  });
 });

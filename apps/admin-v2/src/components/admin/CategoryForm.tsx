@@ -157,6 +157,7 @@ export function CategoryForm({
     invalidateKeys: [
       queryKeys.categories.list(),
       queryKeys.categories.formOptions(),
+      queryKeys.collections.categoryOptions(),
       queryKeys.products.stats(),
       ...(isEdit && defaultValues?.id ? [queryKeys.categories.detail(defaultValues.id)] : []),
     ],
