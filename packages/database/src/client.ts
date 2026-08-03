@@ -19,7 +19,16 @@ function createD1RequestClient(binding: D1Database): D1Database {
 
   // The first operation observes the primary. Later reads in the same request
   // may use a replica without losing sequential consistency.
-  return binding.withSession("first-primary") as unknown as D1Database;
+  const session = binding.withSession("first-primary");
+  return {
+    prepare: (query) => session.prepare(query),
+    batch: <T = unknown>(statements: D1PreparedStatement[]) =>
+      session.batch<T>(statements),
+    exec: (query) => binding.exec(query),
+    withSession: (constraintOrBookmark) =>
+      binding.withSession(constraintOrBookmark),
+    dump: () => binding.dump(),
+  };
 }
 
 export type { Database } from "./types";
