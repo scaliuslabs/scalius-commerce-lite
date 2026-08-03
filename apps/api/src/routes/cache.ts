@@ -367,7 +367,9 @@ app.openapi(clearGroupRoute, async (c) => {
     throw new ValidationError("No valid groups specified");
   }
 
-  await invalidateGroups(validGroups, kv(c));
+  await invalidateGroups(validGroups, kv(c), {
+    cleanupExecutionCtx: c.executionCtx,
+  });
 
   const bumpVersion = shouldBumpStorefrontVersion(validGroups);
   triggerStorefrontPurgeForGroups(validGroups, c.env, c.executionCtx);

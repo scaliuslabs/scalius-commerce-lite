@@ -130,7 +130,7 @@ interface WorkersCacheContext {
 
 interface WorkerEntrypointFetchOptions<Props = unknown> {
   props?: Props;
-  cf?: { cacheControl?: string };
+  cf?: { cacheControl?: string; cacheKey?: string };
 }
 
 interface WorkerEntrypointFetcher<Props = unknown> {
@@ -141,7 +141,9 @@ interface WorkerEntrypointFetcher<Props = unknown> {
 }
 
 interface WorkerExports {
-  PublicApi: WorkerEntrypointFetcher;
+  PublicApi: WorkerEntrypointFetcher & {
+    purgeGroups(groups: string[]): Promise<void>;
+  };
   [name: string]: WorkerEntrypointFetcher | undefined;
 }
 
