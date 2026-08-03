@@ -1,8 +1,8 @@
 import type { ProductFacet, ProductListOptions } from "@/lib/api";
 import {
-  HTML_CACHE_IGNORED_QUERY_PARAMS,
+  STOREFRONT_QUERY_IGNORED_PARAMS,
   buildCanonicalQueryString,
-} from "./cache-key";
+} from "./canonical-query";
 import { DEFAULT_MIN_PRICE } from "./filters/price-url";
 import { normalizeSearchQuery } from "./search-query";
 
@@ -21,7 +21,7 @@ const PRODUCT_LIST_BOOLEAN_FILTERS = ["freeDelivery", "hasDiscount"] as const;
 const PRODUCT_LIST_PRICE_FILTERS = ["minPrice", "maxPrice"] as const;
 
 const IGNORED_PRODUCT_LIST_QUERY_PARAMS = new Set<string>(
-  HTML_CACHE_IGNORED_QUERY_PARAMS,
+  STOREFRONT_QUERY_IGNORED_PARAMS,
 );
 const NAVIGATION_PARAM_SET = new Set<string>(PRODUCT_LIST_NAVIGATION_PARAMS);
 const SORT_VALUE_SET = new Set<string>(PRODUCT_LIST_SORT_VALUES);

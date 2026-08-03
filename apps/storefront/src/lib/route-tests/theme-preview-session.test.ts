@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const resolveThemePreviewMock = vi.hoisted(() => vi.fn());
@@ -9,11 +10,18 @@ import { ALL, POST } from "../../pages/theme-preview/session";
 const TOKEN = `tpv_${"a".repeat(48)}`;
 
 function request(body: unknown, origin = "https://storefront.example.test") {
-  return new Request("https://storefront.example.test/theme-preview/session", {
+  const result = new Request("https://storefront.example.test/theme-preview/session", {
     method: "POST",
-    headers: { "Content-Type": "application/json", "Origin": origin },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
+  result.headers.set(
+    "Origin",
+    origin === "https://storefront.example.test"
+      ? new URL(result.url).origin
+      : origin,
+  );
+  return result;
 }
 
 describe("theme preview session route", () => {

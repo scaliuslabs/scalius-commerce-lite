@@ -52,12 +52,11 @@ const CHECKOUT_UNAVAILABLE: CheckoutConfig = {
   unavailableMessage: "Checkout is temporarily unavailable. Please try again shortly.",
 };
 
-  /**
-   * Get active payment gateway configuration from backend.
-   * Uses the shared edge cache (L1 + L2) so it is properly invalidated
-   * when /api/purge-cache bumps the KV version.
-   * Backend/API failures fail closed instead of guessing COD availability.
-   */
+/**
+ * Get active payment gateway configuration from the backend. Concurrent SSR
+ * reads share one in-flight request; the API remains the cache authority.
+ * Backend/API failures fail closed instead of guessing COD availability.
+ */
 export async function getCheckoutConfig(): Promise<CheckoutConfig> {
   const result = await withEdgeCache<CheckoutConfig>(
     "checkout_config",

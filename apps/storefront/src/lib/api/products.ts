@@ -20,7 +20,7 @@ import {
   getApiV1ProductsSearch,
   getApiV1ProductsSitemap,
 } from "@scalius/api-client/sdk";
-import { buildCanonicalQueryString } from "@/lib/cache-key";
+import { buildCanonicalQueryString } from "@/lib/canonical-query";
 import { normalizeSearchQuery } from "@/lib/search-query";
 
 /**

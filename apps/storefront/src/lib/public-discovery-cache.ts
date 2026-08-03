@@ -1,7 +1,6 @@
 const HTML_BROWSER_CACHE_CONTROL = "no-cache, no-store, must-revalidate";
-// Discovery responses are stored in the Worker Cache API under versioned and
-// exact-generation keys. Browser copies must revalidate so a crawler or
-// merchant does not retain an invalidated XML/text response for hours.
+// The native Worker entrypoint owns edge storage and tag purging. Browser
+// copies must revalidate so crawlers never outlive the bounded edge policy.
 const DISCOVERY_BROWSER_CACHE_CONTROL =
   "public, max-age=0, no-cache, must-revalidate";
 const PUBLIC_DISCOVERY_CONTENT_TYPES = [
@@ -22,6 +21,10 @@ export function getPublicDiscoveryCacheControl(
   }
 
   if (pathname === "/sitemap.xsl") {
+    return DISCOVERY_BROWSER_CACHE_CONTROL;
+  }
+
+  if (pathname === "/blog/feed.xml" || pathname === "/.well-known/ucp") {
     return DISCOVERY_BROWSER_CACHE_CONTROL;
   }
 

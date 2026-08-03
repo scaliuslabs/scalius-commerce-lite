@@ -70,9 +70,9 @@ scripts/          # Dev setup, deploy pipeline, dev server wrapper
 | Database | Drizzle ORM + Cloudflare D1 by default; Turso is the concurrent-writer scale tier |
 | UI | Tailwind CSS v4 + shadcn/ui + Radix primitives |
 | Auth | Better Auth (email/password + optional 2FA with TOTP/email OTP) |
-| Caching | Cloudflare KV + in-memory L1 + Cache API L2 (storefront) |
+| Caching | Native Cloudflare Worker entrypoint caches + bounded tag purges |
 | Storage | Cloudflare R2 for media + Cloudflare Image Resizing |
-| Queues | Cloudflare Queues (payments, notifications, OTP, storefront cache purge/warm, DLQ evidence) |
+| Queues | Cloudflare Queues (payments, notifications, OTP, and their DLQs) |
 | Payments | Stripe, SSLCommerz, Polar, COD |
 | Delivery | Pathao, Steadfast (webhook-driven tracking) |
 | Notifications | Email (Cloudflare Email default, Resend fallback), SMS (4 providers), Firebase Cloud Messaging |
@@ -95,7 +95,7 @@ flowchart TB
     subgraph Storefront ["Storefront (Astro 7 SSR)"]
         direction TB
         AstroPages["SSR Pages<br/>(product, cart, checkout, search)"]
-        EdgeCache["L1 In-Memory + L2 Cache API<br/>(KV-versioned invalidation)"]
+        EdgeCache["Native PublicStorefront Cache<br/>(5s TTL + domain tags)"]
         SDKClient["SDK Client<br/>(@scalius/api-client)"]
     end
 
@@ -267,12 +267,13 @@ The storefront is an **Astro 7 SSR** application with React 19 islands for inter
 | Order Success | Confirmation with tracking link |
 | CMS Pages (`/[slug]`) | Dynamic content pages |
 
-### Caching (Two-Tier)
+### Caching
 
-- **L1**: In-memory Map (max 1000 entries, LRU eviction, per-isolate)
-- **L2**: Cloudflare Cache API with KV version control (survives cold starts)
-- **Invalidation**: `POST /api/purge-cache` bumps KV or exact-path generations; affected edge caches become stale. `GET /api/purge-cache` is intentionally non-mutating and returns `405 Allow: POST`. Catalog and CMS writes send bounded exact `htmlPaths`; queue-driven purges suppress storefront-side warming and enqueue a separate retryable warm message so affected product/category/search/CMS pages are refilled without repeating purge/version bumps. Checkout-affecting admin writes, including delivery providers, invalidate the checkout cache group and purge matching storefront prefixes.
-- **Cache busting**: `BUILD_ID` in cache key ensures new deploys never serve stale HTML
+- Anonymous public reads enter dedicated native `PublicApi` and `PublicStorefront` cache entrypoints; private, authenticated, checkout, cart, account, recovery, and variant-selection requests never do.
+- Public entries have a five-second edge TTL and semantic domain tags. Merchant writes commit first, then purge the affected API and storefront tags directly.
+- Browser HTML remains `no-store`; discovery files require revalidation. A small in-flight map only coalesces duplicate SSR reads and retains no values.
+- `POST /api/purge-cache` is the authenticated cross-Worker purge boundary. `GET` is non-mutating and returns `405 Allow: POST`.
+- Checkout/order hot paths do not perform broad catalog purges or cache warming, avoiding write amplification at high order concurrency.
 
 ### SEO
 
