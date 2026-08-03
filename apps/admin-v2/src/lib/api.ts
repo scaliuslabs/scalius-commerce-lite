@@ -84,6 +84,7 @@ async function requestAdminApiFromBrowser(
     {
       method: request.method,
       credentials: "same-origin",
+      cache: "no-store",
       headers: hasBody ? { "Content-Type": "application/json" } : undefined,
       body: hasBody ? JSON.stringify(request.body) : undefined,
     },
