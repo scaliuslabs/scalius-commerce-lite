@@ -8,6 +8,7 @@ import {
 
 import {
     buildBatchGuard,
+    isBatchGuardError,
     isTursoConflictError,
     safeBatch,
     type Database,
@@ -328,10 +329,8 @@ function terminalPostcondition(
     );
     return buildBatchGuard(
         db,
-        sql`CASE WHEN ${predicate}
-            THEN 1
-            ELSE json_extract('{}', 'CHECKOUT_LANE_TRANSITION_POSTCONDITION_FAILED')
-        END`,
+        predicate,
+        "CHECKOUT_LANE_TRANSITION_POSTCONDITION_FAILED",
     );
 }
 
@@ -439,7 +438,10 @@ function buildTerminalStatements(
 function isRetriableLaneTransitionError(error: unknown): boolean {
     if (isTursoConflictError(error)) return true;
     const message = error instanceof Error ? error.message : String(error);
-    return /(?:CHECKOUT_LANE_TRANSITION|checkout_inventory_lane_movements.*UNIQUE|inventory_movements.*UNIQUE)/i.test(message);
+    return isBatchGuardError(
+        error,
+        "CHECKOUT_LANE_TRANSITION_POSTCONDITION_FAILED",
+    ) || /(?:CHECKOUT_LANE_TRANSITION|checkout_inventory_lane_movements.*UNIQUE|inventory_movements.*UNIQUE)/i.test(message);
 }
 
 async function readConvergedAction(

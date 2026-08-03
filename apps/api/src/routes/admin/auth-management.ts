@@ -6,6 +6,7 @@ import { and, desc, eq, gt, isNotNull, ne, or, sql } from "drizzle-orm";
 import { getCookies, parseSetCookieHeader, splitSetCookieHeader } from "better-auth/cookies";
 import {
     buildBatchGuard,
+    isBatchGuardError,
     safeBatch,
     type Database,
 } from "@scalius/database/client";
@@ -25,12 +26,18 @@ import {
     adminPrincipalExists,
 } from "@scalius/core/auth/admin-setup";
 import {
+    AUTH_PASSWORD_MAX_LENGTH,
+    AUTH_PASSWORD_MIN_LENGTH,
     claimAdminSetup,
+    completeAdminSetupClaimWithCredentialIdentity,
     completeAdminSetupClaimWithUserPromotion,
+    createInvitedAdminCredentialAccount,
     createAuth,
     enforceAdminSetupRateLimit,
+    isCredentialIdentityConflictError,
     markAdminSetupClaimCompleted,
     markAdminSetupClaimFailed,
+    prepareCredentialIdentity,
     createPendingEmailMethodChallenge,
     createPendingTotpMethodChallenge,
     getTwoFactorMethodChallengeIdentifier,
@@ -38,7 +45,6 @@ import {
     verifyPendingTotpCode,
     type ClaimedAdminSetup,
 } from "@scalius/core/auth";
-import { assignRoleToUser } from "@scalius/core/auth/rbac/helpers";
 
 import { ok, created } from "../../utils/api-response";
 import { UnauthorizedError, ForbiddenError, NotFoundError, ValidationError, ConflictError, ServiceUnavailableError } from "../../utils/api-error";
@@ -308,6 +314,7 @@ app.openapi(createUserRoute, async (c) => {
         const auth = createAuth(env);
 
         const { name, email, roleId } = c.req.valid("json");
+        const normalizedEmail = email.trim().toLowerCase();
 
         if (!env.BETTER_AUTH_URL && !env.PUBLIC_API_BASE_URL) {
             throw new ValidationError("BETTER_AUTH_URL or PUBLIC_API_BASE_URL must be configured");
@@ -346,53 +353,34 @@ app.openapi(createUserRoute, async (c) => {
             }
         }
 
-        const existingUser = await db.select({ id: user.id }).from(user).where(eq(user.email, email)).get();
+        const existingUser = await db
+            .select({ id: user.id })
+            .from(user)
+            .where(eq(user.email, normalizedEmail))
+            .get();
         if (existingUser) throw new ConflictError("A user with this email already exists");
 
         const bootstrapPassword = generateBootstrapPassword();
-
-        const signUpResult = await auth.api.signUpEmail({
-            body: { name, email, password: bootstrapPassword }
+        const credential = await prepareCredentialIdentity({
+            name,
+            email: normalizedEmail,
+            password: bootstrapPassword,
         });
-
-        if (!signUpResult || !signUpResult.user) {
-            throw new ServiceUnavailableError("Could not create admin user");
-        }
-
-        const invitationId = `invite_${crypto.randomUUID()}`;
-        const createdAt = new Date();
-        await safeBatch(db, [
-            db.update(user)
-                .set({
-                    role: "admin",
-                    emailVerified: true,
-                    mustChangePassword: true,
-                    mustEnrollTwoFactor: true,
-                })
-                .where(eq(user.id, signUpResult.user.id)),
-            db.insert(adminInvitations).values({
-                id: invitationId,
-                userId: signUpResult.user.id,
+        const createdAdmin = await createInvitedAdminCredentialAccount(
+            db,
+            credential,
+            {
                 invitedByUserId: sessionUser.id,
-                name,
-                email,
-                status: "pending",
-                deliveryStatus: "pending",
-                createdAt,
-                updatedAt: createdAt,
-            }),
-        ]);
-
-        if (roleId) {
-            await assignRoleToUser(db, signUpResult.user.id, roleId, sessionUser.id, env.CACHE as KVNamespace | undefined);
-        }
+                roleId,
+            },
+        );
 
         let emailFailed = false;
         try {
             await auth.api.requestPasswordReset({
                 headers: c.req.raw.headers,
                 body: {
-                    email,
+                    email: createdAdmin.email,
                     redirectTo: "/auth/reset-password",
                 },
             });
@@ -406,13 +394,13 @@ app.openapi(createUserRoute, async (c) => {
                     expiresAt: null,
                     updatedAt: new Date(),
                 })
-                .where(eq(adminInvitations.id, invitationId));
+                .where(eq(adminInvitations.id, createdAdmin.invitationId));
         }
 
         if (emailFailed) {
             return created(c, {
                 message: "Admin user created but the setup email failed to send. The account is blocked until the password reset flow is completed and 2FA is enabled.",
-                user: { id: signUpResult.user.id, name, email },
+                user: { id: createdAdmin.userId, name: credential.name, email: createdAdmin.email },
                 emailFailed: true,
                 onboardingRequired: true,
             });
@@ -420,7 +408,7 @@ app.openapi(createUserRoute, async (c) => {
 
         return created(c, {
             message: "Admin user created successfully. A secure setup link has been sent.",
-            user: { id: signUpResult.user.id, name, email },
+            user: { id: createdAdmin.userId, name: credential.name, email: createdAdmin.email },
             onboardingRequired: true,
         });
     } catch (error: unknown) {
@@ -716,7 +704,7 @@ app.openapi(setAdminSuspensionRoute, async (c) => {
         throw new ValidationError("Cannot suspend the last active administrator");
     }
 
-    const authorityGuard = buildBatchGuard(db, sql`CASE WHEN EXISTS (
+    const authorityGuard = buildBatchGuard(db, sql`EXISTS (
         SELECT 1 FROM ${user}
         WHERE ${user.id} = ${userId}
           AND ${user.isSuperAdmin} = ${false}
@@ -741,7 +729,7 @@ app.openapi(setAdminSuspensionRoute, async (c) => {
             OR other_user_roles.id IS NOT NULL
             OR other_user_permissions.id IS NOT NULL
           )
-    ) THEN 1 ELSE json_extract('ADMIN_SUSPENSION_CONFLICT', '$') END`);
+    )`, "ADMIN_SUSPENSION_CONFLICT");
 
     try {
         await safeBatch(db, [
@@ -757,8 +745,7 @@ app.openapi(setAdminSuspensionRoute, async (c) => {
             db.delete(sessionTable).where(eq(sessionTable.userId, userId)),
         ]);
     } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        if (/ADMIN_SUSPENSION_CONFLICT|malformed json/iu.test(message)) {
+        if (isBatchGuardError(error, "ADMIN_SUSPENSION_CONFLICT")) {
             throw new ConflictError("Administrator access changed. Refresh the team list and try again");
         }
         throw error;
@@ -776,7 +763,9 @@ app.openapi(setAdminSuspensionRoute, async (c) => {
 
 const changePasswordSchema = z.object({
     currentPassword: z.string().min(1),
-    newPassword: z.string().min(12, "New password must be at least 12 characters")
+    newPassword: z.string()
+        .min(AUTH_PASSWORD_MIN_LENGTH, `New password must be at least ${AUTH_PASSWORD_MIN_LENGTH} characters`)
+        .max(AUTH_PASSWORD_MAX_LENGTH, `New password must be at most ${AUTH_PASSWORD_MAX_LENGTH} characters`)
 });
 
 const changePasswordRoute = createRoute({
@@ -1184,7 +1173,7 @@ app.openapi(update2faMethodRoute, async (c) => {
             const proofSession = await verifySubmittedCode("email", methodInput.code);
 
             const claimedAt = new Date();
-            const emailGuard = buildBatchGuard(db, sql`CASE WHEN EXISTS (
+            const emailGuard = buildBatchGuard(db, sql`EXISTS (
                 SELECT 1 FROM ${verification}
                 WHERE ${verification.id} = ${methodInput.challengeId}
                   AND ${verification.identifier} = ${identifier}
@@ -1202,7 +1191,7 @@ app.openapi(update2faMethodRoute, async (c) => {
                 SELECT 1 FROM ${twoFactorTable}
                 WHERE ${twoFactorTable.id} = ${existingTwoFactor.id}
                   AND ${twoFactorTable.userId} = ${sessionUser.id}
-            ) THEN 1 ELSE json_extract('TWO_FACTOR_METHOD_CHALLENGE_CONFLICT', '$') END`);
+            )`, "TWO_FACTOR_METHOD_CHALLENGE_CONFLICT");
             try {
                 await safeBatch(db, [
                     emailGuard,
@@ -1227,8 +1216,7 @@ app.openapi(update2faMethodRoute, async (c) => {
                     )),
                 ]);
             } catch (error) {
-                const message = error instanceof Error ? error.message : String(error);
-                if (/TWO_FACTOR_METHOD_CHALLENGE_CONFLICT|malformed json/iu.test(message)) {
+                if (isBatchGuardError(error, "TWO_FACTOR_METHOD_CHALLENGE_CONFLICT")) {
                     throw new ConflictError("The email method change was already used or became stale");
                 }
                 throw error;
@@ -1244,7 +1232,7 @@ app.openapi(update2faMethodRoute, async (c) => {
             throw new ValidationError("The verification code is invalid or expired");
         }
 
-        const authorityGuard = buildBatchGuard(db, sql`CASE WHEN EXISTS (
+        const authorityGuard = buildBatchGuard(db, sql`EXISTS (
             SELECT 1 FROM ${verification}
             WHERE ${verification.id} = ${methodInput.challengeId}
               AND ${verification.identifier} = ${identifier}
@@ -1261,7 +1249,7 @@ app.openapi(update2faMethodRoute, async (c) => {
             SELECT 1 FROM ${twoFactorTable}
             WHERE ${twoFactorTable.id} = ${existingTwoFactor.id}
               AND ${twoFactorTable.userId} = ${sessionUser.id}
-        ) THEN 1 ELSE json_extract('TWO_FACTOR_METHOD_CHALLENGE_CONFLICT', '$') END`);
+        )`, "TWO_FACTOR_METHOD_CHALLENGE_CONFLICT");
         const claimedAt = new Date();
         try {
             await safeBatch(db, [
@@ -1297,8 +1285,7 @@ app.openapi(update2faMethodRoute, async (c) => {
                 )),
             ]);
         } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
-            if (/TWO_FACTOR_METHOD_CHALLENGE_CONFLICT|malformed json/iu.test(message)) {
+            if (isBatchGuardError(error, "TWO_FACTOR_METHOD_CHALLENGE_CONFLICT")) {
                 throw new ConflictError("The authenticator setup changed before it could be committed");
             }
             throw error;
@@ -1332,7 +1319,7 @@ app.openapi(update2faMethodRoute, async (c) => {
 
     const authority = twoFactorRows[0]!;
     const committedAt = new Date();
-    const enrollmentGuard = buildBatchGuard(db, sql`CASE WHEN EXISTS (
+    const enrollmentGuard = buildBatchGuard(db, sql`EXISTS (
         SELECT 1 FROM ${sessionTable}
         WHERE ${sessionTable.id} = ${proofSession.sessionId}
           AND ${sessionTable.userId} = ${sessionUser.id}
@@ -1345,7 +1332,7 @@ app.openapi(update2faMethodRoute, async (c) => {
         SELECT 1 FROM ${user}
         WHERE ${user.id} = ${sessionUser.id}
           AND ${user.twoFactorEnabled} = ${true}
-    ) THEN 1 ELSE json_extract('TWO_FACTOR_ENROLLMENT_CONFLICT', '$') END`);
+    )`, "TWO_FACTOR_ENROLLMENT_CONFLICT");
     try {
         await safeBatch(db, [
             enrollmentGuard,
@@ -1372,8 +1359,7 @@ app.openapi(update2faMethodRoute, async (c) => {
                 )),
         ]);
     } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        if (/TWO_FACTOR_ENROLLMENT_CONFLICT|malformed json/iu.test(message)) {
+        if (isBatchGuardError(error, "TWO_FACTOR_ENROLLMENT_CONFLICT")) {
             throw new ConflictError("Two-factor enrollment changed before it could be committed");
         }
         throw error;
@@ -1815,22 +1801,10 @@ setupApp.openapi(adminExistsRoute, async (c) => {
 const setupSchema = z.object({
     name: z.string().min(1),
     email: z.string().email(),
-    password: z.string().min(12, "Password must be at least 12 characters")
+    password: z.string()
+        .min(AUTH_PASSWORD_MIN_LENGTH, `Password must be at least ${AUTH_PASSWORD_MIN_LENGTH} characters`)
+        .max(AUTH_PASSWORD_MAX_LENGTH, `Password must be at most ${AUTH_PASSWORD_MAX_LENGTH} characters`)
 });
-
-function isBetterAuthUserAlreadyExistsError(error: unknown): boolean {
-    const candidate = error as {
-        body?: { code?: string; message?: string };
-        message?: string;
-        statusCode?: number;
-    };
-
-    return (
-        candidate?.body?.code === "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL" ||
-        candidate?.body?.message === "User already exists. Use another email." ||
-        candidate?.message === "User already exists. Use another email."
-    );
-}
 
 async function verifyExistingSetupAccountPassword(
     auth: ReturnType<typeof createAuth>,
@@ -1885,6 +1859,7 @@ setupApp.openapi(setupRoute, async (c) => {
     const auth = createAuth(env);
 
     const { name, email, password } = c.req.valid("json");
+    const normalizedEmail = email.trim().toLowerCase();
     let setupClaim: ClaimedAdminSetup | null = null;
     let promotedUserId: string | null = null;
 
@@ -1899,30 +1874,32 @@ setupApp.openapi(setupRoute, async (c) => {
         }
 
         try {
-            const signUpResult = await auth.api.signUpEmail({ body: { name, email, password } });
-            if (!signUpResult || !signUpResult.user) {
-                throw new ServiceUnavailableError("Could not create user account");
-            }
-
-            await completeAdminSetupClaimWithUserPromotion(db, setupClaim, {
-                userId: signUpResult.user.id,
+            const credential = await prepareCredentialIdentity({
+                name,
+                email: normalizedEmail,
+                password,
             });
-            promotedUserId = signUpResult.user.id;
+            await completeAdminSetupClaimWithCredentialIdentity(
+                db,
+                setupClaim,
+                credential,
+            );
+            promotedUserId = credential.userId;
             setupClaim = null;
 
             const { autoSeedRbacIfNeeded } = await import("@scalius/core/auth/rbac/auto-seed");
             await autoSeedRbacIfNeeded(db, kv);
 
-            return created(c, { message: "Admin account created successfully", userId: signUpResult.user.id });
+            return created(c, { message: "Admin account created successfully", userId: credential.userId });
         } catch (error: unknown) {
-            if (!isBetterAuthUserAlreadyExistsError(error)) {
+            if (!isCredentialIdentityConflictError(error)) {
                 throw error;
             }
 
             const existingUser = await db
                 .select({ id: user.id })
                 .from(user)
-                .where(eq(user.email, email))
+                .where(eq(user.email, normalizedEmail))
                 .get();
 
             if (!existingUser) {
@@ -1937,7 +1914,7 @@ setupApp.openapi(setupRoute, async (c) => {
             const passwordMatchesExistingAccount = await verifyExistingSetupAccountPassword(
                 auth,
                 db,
-                email,
+                normalizedEmail,
                 password,
             );
             if (!passwordMatchesExistingAccount) {

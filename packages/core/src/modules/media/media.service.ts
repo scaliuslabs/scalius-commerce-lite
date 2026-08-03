@@ -7,7 +7,12 @@ import {
     products,
     orderItems,
 } from "@scalius/database/schema";
-import { buildBatchGuard, safeBatch, type Database } from "@scalius/database/client";
+import {
+    buildBatchGuard,
+    isBatchGuardError,
+    safeBatch,
+    type Database,
+} from "@scalius/database/client";
 import {
     abortMediaMultipartUpload,
     buildMediaObjectKey,
@@ -892,12 +897,12 @@ export async function updateMediaFolder(db: Database, id: string, name: string, 
 }
 
 export async function deleteMediaFolder(db: Database, id: string, expectedVersion: number) {
-    const guard = buildBatchGuard(db, sql`CASE WHEN EXISTS (
+    const guard = buildBatchGuard(db, sql`EXISTS (
         SELECT 1 FROM ${mediaFolders}
         WHERE ${mediaFolders.id} = ${id}
           AND ${mediaFolders.version} = ${expectedVersion}
           AND ${mediaFolders.deletedAt} IS NULL
-    ) THEN 1 ELSE json_extract('MEDIA_FOLDER_DELETE_CONFLICT', '$') END`);
+    )`, "MEDIA_FOLDER_DELETE_CONFLICT");
     try {
         await safeBatch(db, [
             guard,
@@ -917,7 +922,7 @@ export async function deleteMediaFolder(db: Database, id: string, expectedVersio
             }).where(and(eq(media.folderId, id), ne(media.status, "deleted"))),
         ] as never);
     } catch (error) {
-        if (error instanceof Error && /MEDIA_FOLDER_DELETE_CONFLICT|malformed json/i.test(error.message)) {
+        if (isBatchGuardError(error, "MEDIA_FOLDER_DELETE_CONFLICT")) {
             throw new ConflictError("Media folder changed. Reload and try again.");
         }
         throw error;

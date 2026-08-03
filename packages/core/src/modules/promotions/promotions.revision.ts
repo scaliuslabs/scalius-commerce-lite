@@ -1,5 +1,9 @@
 import type { Database } from "@scalius/database/client";
-import { buildBatchGuard, safeBatch } from "@scalius/database/client";
+import {
+    buildBatchGuard,
+    isBatchGuardError,
+    safeBatch,
+} from "@scalius/database/client";
 import { promotions } from "@scalius/database/schema";
 import { AppError, ConflictError } from "@scalius/core/errors";
 import { eq, sql } from "drizzle-orm";
@@ -41,14 +45,14 @@ export function buildPromotionRevisionGuard(
     expectedRevision: number,
 ): BatchItem<"sqlite"> {
     return buildBatchGuard(db, sql`
-        CASE WHEN EXISTS (
+        EXISTS (
             SELECT 1 FROM ${promotions}
             WHERE ${promotions.id} = ${promotionId}
               AND ${promotions.revision} = ${expectedRevision}
               AND ${promotions.deletedAt} IS NULL
               AND ${promotions.status} <> 'archived'
-        ) THEN 1 ELSE json_extract(${PROMOTION_REVISION_CONFLICT}, '$') END
-    `);
+        )
+    `, PROMOTION_REVISION_CONFLICT);
 }
 
 function buildPromotionRevisionBump(
@@ -66,8 +70,7 @@ function buildPromotionRevisionBump(
 }
 
 function isPromotionRevisionGuardError(error: unknown): boolean {
-    const message = error instanceof Error ? error.message : String(error);
-    return /PROMOTION_REVISION_CONFLICT|malformed json/iu.test(message);
+    return isBatchGuardError(error, PROMOTION_REVISION_CONFLICT);
 }
 
 async function rethrowPromotionRevisionConflictIfStale(

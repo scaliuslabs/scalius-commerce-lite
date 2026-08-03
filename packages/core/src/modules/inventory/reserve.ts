@@ -12,6 +12,7 @@ import {
 } from "@scalius/database/inventory-authority";
 import {
   buildBatchGuard,
+  isBatchGuardError,
   isTursoConflictError,
   safeBatch,
   type Database,
@@ -698,7 +699,7 @@ function buildReservationBatchGuard(
           )`
       : sql`${availableRegularStockSql()} >= ${entry.quantity}`;
 
-  return buildBatchGuard(db, sql`CASE WHEN EXISTS (
+  return buildBatchGuard(db, sql`EXISTS (
     SELECT 1
     FROM ${productVariants}
     INNER JOIN ${products}
@@ -710,23 +711,12 @@ function buildReservationBatchGuard(
       AND ${sql.raw('"products"."is_active"')} = 1
       AND ${sql.raw('"products"."deleted_at"')} IS NULL
       AND ${availability}
-  ) THEN 1 ELSE json_extract(${INVENTORY_RESERVATION_CONFLICT}, '$') END`);
+  )`, INVENTORY_RESERVATION_CONFLICT);
 }
 
 export function isInventoryReservationConflictError(error: unknown): boolean {
-  if (isTursoConflictError(error)) return true;
-
-  let current = error;
-  for (let depth = 0; depth < 5 && current; depth += 1) {
-    const message = current instanceof Error ? current.message : String(current);
-    if (new RegExp(`${INVENTORY_RESERVATION_CONFLICT}|malformed json`, "i").test(message)) {
-      return true;
-    }
-    current = current instanceof Error
-      ? (current as Error & { cause?: unknown }).cause
-      : null;
-  }
-  return false;
+  return isTursoConflictError(error)
+    || isBatchGuardError(error, INVENTORY_RESERVATION_CONFLICT);
 }
 
 function reservationMovementType(pool: ReservationPool): "reserved" | "preorder_reserved" {
@@ -1090,7 +1080,7 @@ function buildFreshReservationFinalGuard(
     newReservedStock: sql.raw('"inventory_movements"."new_reserved_stock"'),
     newPreorderStock: sql.raw('"inventory_movements"."new_preorder_stock"'),
   };
-  return buildBatchGuard(db, sql`CASE WHEN EXISTS (
+  return buildBatchGuard(db, sql`EXISTS (
     SELECT 1
     FROM ${productVariants}
     INNER JOIN ${inventoryMovements}
@@ -1106,7 +1096,7 @@ function buildFreshReservationFinalGuard(
       AND ${variant.stock} = ${movement.newStock}
       AND ${variant.reservedStock} = ${movement.newReservedStock}
       AND ${variant.preorderStock} = ${movement.newPreorderStock}
-  ) THEN 1 ELSE json_extract(${INVENTORY_RESERVATION_CONFLICT}, '$') END`);
+  )`, INVENTORY_RESERVATION_CONFLICT);
 }
 
 function findVariantWithMultipleReservationOrders(

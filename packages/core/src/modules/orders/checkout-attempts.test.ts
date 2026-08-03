@@ -177,7 +177,7 @@ describe("atomic checkout attempts", () => {
       orderId: "order_atomic_1",
       message: "Order created",
     }));
-    expect(guard.params).toContain("CHECKOUT_ATTEMPT_ATOMIC_COMMIT_CONFLICT");
+    expect(guard.sql).toContain("CHECKOUT_ATTEMPT_ATOMIC_COMMIT_CONFLICT");
     expect(receiptWrite.sql.toLowerCase()).toContain('insert into "order_receipts"');
     expect(receiptWrite.params).toContain(await hashOrderReceiptToken("chk_atomic_receipt_secret"));
   });

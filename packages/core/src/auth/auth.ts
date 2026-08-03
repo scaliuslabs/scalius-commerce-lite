@@ -7,6 +7,10 @@ import { getDb, safeBatch } from "@scalius/database/client";
 import * as schema from "@scalius/database/schema";
 import { escapeHtml } from "@scalius/shared/html-escape";
 import { createTwoFactorRecoveryCodeStorage } from "./two-factor-method-challenge";
+import {
+  AUTH_PASSWORD_MAX_LENGTH,
+  AUTH_PASSWORD_MIN_LENGTH,
+} from "./credential-account";
 import { retryTransientD1 } from "../utils/transient-d1";
 
 function getEmailRuntimeContext(env?: Env | NodeJS.ProcessEnv) {
@@ -61,7 +65,8 @@ export function createAuth(env?: Env | NodeJS.ProcessEnv) {
     emailAndPassword: {
       enabled: true,
       requireEmailVerification: false,
-      minPasswordLength: 12,
+      minPasswordLength: AUTH_PASSWORD_MIN_LENGTH,
+      maxPasswordLength: AUTH_PASSWORD_MAX_LENGTH,
       resetPasswordTokenExpiresIn: 60 * 60,
       revokeSessionsOnPasswordReset: true,
       // Email verification callback - called when user needs to verify email

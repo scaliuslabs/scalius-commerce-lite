@@ -4,7 +4,12 @@
 import { productAttributes, productAttributeValues, products } from "@scalius/database/schema";
 import { sql, eq, and, or, like, asc, desc, count, inArray, isNull, lte, type SQL } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { buildBatchGuard, safeBatch, type Database } from "@scalius/database/client";
+import {
+    buildBatchGuard,
+    isBatchGuardError,
+    safeBatch,
+    type Database,
+} from "@scalius/database/client";
 import { NotFoundError, ConflictError, ValidationError } from "@scalius/core/errors";
 import type { BatchItem } from "drizzle-orm/batch";
 
@@ -325,7 +330,6 @@ function attributeDeleteGuard(
         : sql`${productAttributes.deletedAt} IS NULL`;
 
     return buildBatchGuard(db, sql`
-        CASE WHEN
             (SELECT count(*) FROM ${productAttributes}
              WHERE ${productAttributes.id} IN (
                 SELECT CAST(value AS TEXT) FROM json_each(${idSet})
@@ -336,8 +340,7 @@ function attributeDeleteGuard(
                     SELECT CAST(value AS TEXT) FROM json_each(${idSet})
                 )
             )
-        THEN 1 ELSE json_extract('ATTRIBUTE_DELETE_CONFLICT', '$') END
-    `);
+    `, "ATTRIBUTE_DELETE_CONFLICT");
 }
 
 async function deleteAttributes(
@@ -360,10 +363,7 @@ async function deleteAttributes(
     try {
         await safeBatch(db, [attributeDeleteGuard(db, ids, permanent), write] as never);
     } catch (error) {
-        if (
-            error instanceof Error &&
-            /ATTRIBUTE_DELETE_CONFLICT|malformed json/i.test(error.message)
-        ) {
+        if (isBatchGuardError(error, "ATTRIBUTE_DELETE_CONFLICT")) {
             throw new ConflictError(
                 "Attributes changed while the delete was being processed. Refresh and try again.",
             );
@@ -399,7 +399,6 @@ export async function bulkRestoreAttributes(db: Database, ids: string[]) {
 function attributeRestoreGuard(db: Database, ids: string[]): SQLiteBatchItem {
     const idSet = JSON.stringify(ids);
     return buildBatchGuard(db, sql`
-        CASE WHEN
             (SELECT count(*) FROM ${productAttributes}
              WHERE ${productAttributes.id} IN (
                 SELECT CAST(value AS TEXT) FROM json_each(${idSet})
@@ -417,8 +416,7 @@ function attributeRestoreGuard(db: Database, ids: string[]): SQLiteBatchItem {
                     SELECT CAST(value AS TEXT) FROM json_each(${idSet})
                 )
             )
-        THEN 1 ELSE json_extract('ATTRIBUTE_RESTORE_CONFLICT', '$') END
-    `);
+    `, "ATTRIBUTE_RESTORE_CONFLICT");
 }
 
 async function restoreAttributes(db: Database, rawIds: string[]): Promise<void> {
@@ -491,10 +489,7 @@ async function restoreAttributes(db: Database, rawIds: string[]): Promise<void> 
     try {
         await safeBatch(db, [attributeRestoreGuard(db, ids), write] as never);
     } catch (error) {
-        if (
-            error instanceof Error &&
-            /ATTRIBUTE_RESTORE_CONFLICT|malformed json/i.test(error.message)
-        ) {
+        if (isBatchGuardError(error, "ATTRIBUTE_RESTORE_CONFLICT")) {
             throw new ConflictError(
                 "Attributes changed while the restore was being processed. Refresh and try again.",
             );

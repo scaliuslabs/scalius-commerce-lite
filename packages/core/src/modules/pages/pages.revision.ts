@@ -1,6 +1,7 @@
 import { pages } from "@scalius/database/schema";
 import {
     buildBatchGuard,
+    isBatchGuardError,
     type Database,
 } from "@scalius/database/client";
 import { sql, type SQL } from "drizzle-orm";
@@ -92,15 +93,14 @@ export function buildPageRevisionGuard(
     claims: readonly PageRevisionClaim[],
     requiredState: PageLifecycleState,
 ): BatchItem<"sqlite"> {
-    return buildBatchGuard(db, sql`CASE WHEN ${pageRevisionClaimsMatchCondition(
+    return buildBatchGuard(db, pageRevisionClaimsMatchCondition(
         claims,
         requiredState,
-    )} THEN 1 ELSE json_extract(${PAGE_REVISION_CONFLICT}, '$') END`);
+    ), PAGE_REVISION_CONFLICT);
 }
 
 function isPageRevisionGuardError(error: unknown): boolean {
-    const message = error instanceof Error ? error.message : String(error);
-    return /PAGE_REVISION_CONFLICT|malformed json/i.test(message);
+    return isBatchGuardError(error, PAGE_REVISION_CONFLICT);
 }
 
 export async function rethrowPageRevisionConflict(

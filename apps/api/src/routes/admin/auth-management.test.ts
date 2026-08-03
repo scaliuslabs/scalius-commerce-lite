@@ -12,11 +12,24 @@ const mocks = vi.hoisted(() => ({
     singletonKey: "first_admin" as const,
     claimId: "setup_claim_test",
   })),
+  completeAdminSetupClaimWithCredentialIdentity: vi.fn(async () => undefined),
   completeAdminSetupClaimWithUserPromotion: vi.fn(async () => undefined),
+  createInvitedAdminCredentialAccount: vi.fn(async (
+    _db: unknown,
+    credential: { userId: string; normalizedEmail: string },
+  ) => ({
+    userId: credential.userId,
+    invitationId: "invite_test",
+    email: credential.normalizedEmail,
+  })),
   createPendingEmailMethodChallenge: vi.fn(),
   createPendingTotpMethodChallenge: vi.fn(),
   createAuth: vi.fn(),
   enforceAdminSetupRateLimit: vi.fn(async () => undefined),
+  isCredentialIdentityConflictError: vi.fn(
+    (error: unknown) =>
+      (error as { code?: string } | undefined)?.code === "CREDENTIAL_IDENTITY_CONFLICT",
+  ),
   markAdminSetupClaimCompleted: vi.fn(async () => undefined),
   markAdminSetupClaimFailed: vi.fn(async () => undefined),
   getTwoFactorMethodChallengeIdentifier: vi.fn(
@@ -24,30 +37,44 @@ const mocks = vi.hoisted(() => ({
       `admin:2fa-method:${userId}:${sessionId}`,
   ),
   readPendingTwoFactorMethodChallenge: vi.fn(),
+  prepareCredentialIdentity: vi.fn(async (input: {
+    name: string;
+    email: string;
+    password: string;
+  }) => ({
+    userId: "new_admin",
+    accountRowId: "account_new_admin",
+    name: input.name.trim(),
+    normalizedEmail: input.email.trim().toLowerCase(),
+    passwordHash: "better-auth-compatible-hash",
+    createdAt: new Date("2026-08-03T00:00:00.000Z"),
+  })),
   verifyPendingTotpCode: vi.fn(),
-  assignRoleToUser: vi.fn(async () => undefined),
 }));
 
 vi.mock("@scalius/core/auth", () => ({
+  AUTH_PASSWORD_MAX_LENGTH: 128,
+  AUTH_PASSWORD_MIN_LENGTH: 12,
   claimAdminSetup: mocks.claimAdminSetup,
+  completeAdminSetupClaimWithCredentialIdentity:
+    mocks.completeAdminSetupClaimWithCredentialIdentity,
   completeAdminSetupClaimWithUserPromotion: mocks.completeAdminSetupClaimWithUserPromotion,
+  createInvitedAdminCredentialAccount: mocks.createInvitedAdminCredentialAccount,
   createPendingEmailMethodChallenge: mocks.createPendingEmailMethodChallenge,
   createPendingTotpMethodChallenge: mocks.createPendingTotpMethodChallenge,
   createAuth: mocks.createAuth,
   enforceAdminSetupRateLimit: mocks.enforceAdminSetupRateLimit,
+  isCredentialIdentityConflictError: mocks.isCredentialIdentityConflictError,
   markAdminSetupClaimCompleted: mocks.markAdminSetupClaimCompleted,
   markAdminSetupClaimFailed: mocks.markAdminSetupClaimFailed,
   getTwoFactorMethodChallengeIdentifier: mocks.getTwoFactorMethodChallengeIdentifier,
   readPendingTwoFactorMethodChallenge: mocks.readPendingTwoFactorMethodChallenge,
+  prepareCredentialIdentity: mocks.prepareCredentialIdentity,
   verifyPendingTotpCode: mocks.verifyPendingTotpCode,
 }));
 
 vi.mock("@scalius/core/auth/rbac/auto-seed", () => ({
   autoSeedRbacIfNeeded: mocks.autoSeedRbacIfNeeded,
-}));
-
-vi.mock("@scalius/core/auth/rbac/helpers", () => ({
-  assignRoleToUser: mocks.assignRoleToUser,
 }));
 
 import { errorResponseFromError } from "../../utils/api-response";
@@ -76,10 +103,35 @@ beforeEach(() => {
     singletonKey: "first_admin",
     claimId: "setup_claim_test",
   });
+  mocks.completeAdminSetupClaimWithCredentialIdentity.mockResolvedValue(undefined);
   mocks.completeAdminSetupClaimWithUserPromotion.mockResolvedValue(undefined);
+  mocks.createInvitedAdminCredentialAccount.mockImplementation(async (
+    _db: unknown,
+    credential: { userId: string; normalizedEmail: string },
+  ) => ({
+    userId: credential.userId,
+    invitationId: "invite_test",
+    email: credential.normalizedEmail,
+  }));
   mocks.enforceAdminSetupRateLimit.mockResolvedValue(undefined);
   mocks.markAdminSetupClaimCompleted.mockResolvedValue(undefined);
   mocks.markAdminSetupClaimFailed.mockResolvedValue(undefined);
+  mocks.isCredentialIdentityConflictError.mockImplementation(
+    (error: unknown) =>
+      (error as { code?: string } | undefined)?.code === "CREDENTIAL_IDENTITY_CONFLICT",
+  );
+  mocks.prepareCredentialIdentity.mockImplementation(async (input: {
+    name: string;
+    email: string;
+    password: string;
+  }) => ({
+    userId: "new_admin",
+    accountRowId: "account_new_admin",
+    name: input.name.trim(),
+    normalizedEmail: input.email.trim().toLowerCase(),
+    passwordHash: "better-auth-compatible-hash",
+    createdAt: new Date("2026-08-03T00:00:00.000Z"),
+  }));
   mocks.createPendingTotpMethodChallenge.mockResolvedValue({
     challengeId: "tfmc_0123456789abcdef0123456789abcdef",
     identifier: "admin:2fa-method:user_1:session_1",
@@ -652,13 +704,10 @@ function createSetupTestApp(db: ReturnType<typeof createSetupDbMock>) {
   return app;
 }
 
-function duplicateUserError() {
-  return {
-    body: {
-      code: "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL",
-      message: "User already exists. Use another email.",
-    },
-  };
+function credentialIdentityConflictError() {
+  return Object.assign(new Error("A user with this email already exists"), {
+    code: "CREDENTIAL_IDENTITY_CONFLICT",
+  });
 }
 
 function setupRequestBody(password = "ScaliusLocal123!") {
@@ -1027,13 +1076,9 @@ describe("admin auth management suspension lifecycle", () => {
 describe("admin auth management team invites", () => {
   it("validates setup URL configuration before creating a blocked invited admin", async () => {
     const db = createAdminInviteDbMock();
-    const signUpEmail = vi.fn();
     const requestPasswordReset = vi.fn();
     mocks.createAuth.mockReturnValue({
-      api: {
-        signUpEmail,
-        requestPasswordReset,
-      },
+      api: { requestPasswordReset },
     });
     const app = createTestApp(db, {
       session: { id: "session_1", twoFactorVerified: true },
@@ -1052,26 +1097,20 @@ describe("admin auth management team invites", () => {
 
     expect(response.status).toBe(400);
     expect(body.error?.code).toBe("VALIDATION_ERROR");
-    expect(signUpEmail).not.toHaveBeenCalled();
+    expect(mocks.prepareCredentialIdentity).not.toHaveBeenCalled();
+    expect(mocks.createInvitedAdminCredentialAccount).not.toHaveBeenCalled();
     expect(requestPasswordReset).not.toHaveBeenCalled();
     expect(db.__updateSet).not.toHaveBeenCalled();
-    expect(mocks.assignRoleToUser).not.toHaveBeenCalled();
   });
 
   it("creates blocked invited admins and sends a one-use password setup link", async () => {
     const db = createAdminInviteDbMock();
-    const signUpEmail = vi.fn().mockResolvedValue({
-      user: { id: "new_admin" },
-    });
     const requestPasswordReset = vi.fn().mockResolvedValue({
       status: true,
       message: "If this email exists in our system, check your email for the reset link",
     });
     mocks.createAuth.mockReturnValue({
-      api: {
-        signUpEmail,
-        requestPasswordReset,
-      },
+      api: { requestPasswordReset },
     });
     const app = createTestApp(db, {
       session: { id: "session_1", twoFactorVerified: true },
@@ -1088,36 +1127,23 @@ describe("admin auth management team invites", () => {
     }, { BETTER_AUTH_URL: "https://admin.scalius.test" } as never);
 
     expect(response.status, await response.clone().text()).toBe(201);
-    expect(signUpEmail).toHaveBeenCalledWith({
-      body: {
-        name: "Ops Admin",
-        email: "ops@example.com",
-        password: expect.any(String),
-      },
-    });
-    const generatedPassword = signUpEmail.mock.calls[0]?.[0]?.body?.password;
-    expect(generatedPassword).toHaveLength(32);
-    expect(db.__updateSet).toHaveBeenCalledWith({
-      role: "admin",
-      emailVerified: true,
-      mustChangePassword: true,
-      mustEnrollTwoFactor: true,
-    });
-    expect(db.__insertValues).toHaveBeenCalledWith(expect.objectContaining({
-      userId: "new_admin",
-      invitedByUserId: "user_1",
+    expect(mocks.prepareCredentialIdentity).toHaveBeenCalledWith({
       name: "Ops Admin",
       email: "ops@example.com",
-      status: "pending",
-      deliveryStatus: "pending",
-    }));
-    expect(db.__batch).toHaveBeenCalledOnce();
-    expect(mocks.assignRoleToUser).toHaveBeenCalledWith(
+      password: expect.any(String),
+    });
+    const generatedPassword = mocks.prepareCredentialIdentity.mock.calls[0]?.[0]?.password;
+    expect(generatedPassword).toHaveLength(32);
+    expect(mocks.createInvitedAdminCredentialAccount).toHaveBeenCalledWith(
       db,
-      "new_admin",
-      "role_1",
-      "user_1",
-      undefined,
+      expect.objectContaining({
+        userId: "new_admin",
+        normalizedEmail: "ops@example.com",
+      }),
+      {
+        invitedByUserId: "user_1",
+        roleId: "role_1",
+      },
     );
     expect(requestPasswordReset).toHaveBeenCalledWith({
       headers: expect.any(Headers),
@@ -1137,9 +1163,8 @@ describe("admin auth management team invites", () => {
     const db = createAdminInviteDbMock({
       role: { id: "role_super_admin", name: "super_admin" },
     });
-    const signUpEmail = vi.fn();
     mocks.createAuth.mockReturnValue({
-      api: { signUpEmail, requestPasswordReset: vi.fn() },
+      api: { requestPasswordReset: vi.fn() },
     });
     const app = createTestApp(db, {
       adminPermissions: new Set(["team.manage", "team.manage_roles"]),
@@ -1157,18 +1182,16 @@ describe("admin auth management team invites", () => {
     }, { BETTER_AUTH_URL: "https://admin.scalius.test" } as never);
 
     expect(response.status).toBe(403);
-    expect(signUpEmail).not.toHaveBeenCalled();
-    expect(mocks.assignRoleToUser).not.toHaveBeenCalled();
+    expect(mocks.prepareCredentialIdentity).not.toHaveBeenCalled();
+    expect(mocks.createInvitedAdminCredentialAccount).not.toHaveBeenCalled();
   });
 
   it("lets team managers assign a role contained within their own authority", async () => {
     const db = createAdminInviteDbMock({
       rolePermissions: ["products.view"],
     });
-    const signUpEmail = vi.fn().mockResolvedValue({ user: { id: "new_admin" } });
     mocks.createAuth.mockReturnValue({
       api: {
-        signUpEmail,
         requestPasswordReset: vi.fn().mockResolvedValue({ status: true }),
       },
     });
@@ -1187,12 +1210,10 @@ describe("admin auth management team invites", () => {
     }, { BETTER_AUTH_URL: "https://admin.scalius.test" } as never);
 
     expect(response.status, await response.clone().text()).toBe(201);
-    expect(mocks.assignRoleToUser).toHaveBeenCalledWith(
+    expect(mocks.createInvitedAdminCredentialAccount).toHaveBeenCalledWith(
       db,
-      "new_admin",
-      "role_1",
-      "user_1",
-      undefined,
+      expect.objectContaining({ userId: "new_admin" }),
+      { invitedByUserId: "user_1", roleId: "role_1" },
     );
   });
 
@@ -1200,9 +1221,8 @@ describe("admin auth management team invites", () => {
     const db = createAdminInviteDbMock({
       rolePermissions: ["products.view", "team.manage_roles"],
     });
-    const signUpEmail = vi.fn();
     mocks.createAuth.mockReturnValue({
-      api: { signUpEmail, requestPasswordReset: vi.fn() },
+      api: { requestPasswordReset: vi.fn() },
     });
     const app = createTestApp(db, {
       adminPermissions: new Set(["team.manage", "products.view"]),
@@ -1219,8 +1239,8 @@ describe("admin auth management team invites", () => {
     }, { BETTER_AUTH_URL: "https://admin.scalius.test" } as never);
 
     expect(response.status).toBe(403);
-    expect(signUpEmail).not.toHaveBeenCalled();
-    expect(mocks.assignRoleToUser).not.toHaveBeenCalled();
+    expect(mocks.prepareCredentialIdentity).not.toHaveBeenCalled();
+    expect(mocks.createInvitedAdminCredentialAccount).not.toHaveBeenCalled();
   });
 
   it("keeps team invites off raw credential emails", () => {
@@ -1230,8 +1250,8 @@ describe("admin auth management team invites", () => {
     );
 
     expect(source).toContain("requestPasswordReset");
-    expect(source).toContain("mustChangePassword: true");
-    expect(source).toContain("mustEnrollTwoFactor: true");
+    expect(source).toContain("createInvitedAdminCredentialAccount");
+    expect(source).not.toContain("signUpEmail");
     expect(source).not.toContain("sendAdminInviteEmail");
     expect(source).not.toContain("Temporary Password");
   });
@@ -2121,12 +2141,6 @@ describe("admin auth management legacy 2FA verification", () => {
 describe("first-admin setup recovery", () => {
   it("treats RBAC-only admin principals as bootstrapped for setup checks", async () => {
     const db = createSetupDbMock({ adminExistsResult: { found: 1 } });
-    const signUpEmail = vi.fn();
-    mocks.createAuth.mockReturnValue({
-      api: {
-        signUpEmail,
-      },
-    });
     const app = createSetupTestApp(db);
 
     const statusResponse = await app.request("/api/v1/setup", {
@@ -2143,7 +2157,8 @@ describe("first-admin setup recovery", () => {
     }, {});
 
     expect(setupResponse.status).toBe(403);
-    expect(signUpEmail).not.toHaveBeenCalled();
+    expect(mocks.prepareCredentialIdentity).not.toHaveBeenCalled();
+    expect(mocks.completeAdminSetupClaimWithCredentialIdentity).not.toHaveBeenCalled();
     expect(mocks.enforceAdminSetupRateLimit).not.toHaveBeenCalled();
     expect(mocks.claimAdminSetup).not.toHaveBeenCalled();
     const query = new SQLiteSyncDialect().sqlToQuery(
@@ -2158,14 +2173,7 @@ describe("first-admin setup recovery", () => {
 
   it("treats D1 no-row undefined as no existing admin", async () => {
     const db = createSetupDbMock({ adminExistsResult: undefined });
-    const signUpEmail = vi.fn().mockResolvedValue({
-      user: { id: "new_admin" },
-    });
-    mocks.createAuth.mockReturnValue({
-      api: {
-        signUpEmail,
-      },
-    });
+    mocks.createAuth.mockReturnValue({ api: {} });
     const app = createSetupTestApp(db);
 
     const response = await app.request("/api/v1/setup", {
@@ -2175,20 +2183,14 @@ describe("first-admin setup recovery", () => {
     }, {});
 
     expect(response.status, await response.clone().text()).toBe(201);
-    expect(signUpEmail).toHaveBeenCalledTimes(1);
+    expect(mocks.prepareCredentialIdentity).toHaveBeenCalledTimes(1);
+    expect(mocks.completeAdminSetupClaimWithCredentialIdentity).toHaveBeenCalledTimes(1);
     expect(mocks.claimAdminSetup).toHaveBeenCalledWith(db);
   });
 
   it("claims D1 setup coordination before creating the first admin even when KV is unavailable", async () => {
     const db = createSetupDbMock();
-    const signUpEmail = vi.fn().mockResolvedValue({
-      user: { id: "new_admin" },
-    });
-    mocks.createAuth.mockReturnValue({
-      api: {
-        signUpEmail,
-      },
-    });
+    mocks.createAuth.mockReturnValue({ api: {} });
     const app = createSetupTestApp(db);
 
     const response = await app.request("/api/v1/setup", {
@@ -2203,29 +2205,25 @@ describe("first-admin setup recovery", () => {
     expect(response.status, await response.clone().text()).toBe(201);
     expect(mocks.enforceAdminSetupRateLimit).toHaveBeenCalledWith(db, "203.0.113.10");
     expect(mocks.claimAdminSetup).toHaveBeenCalledWith(db);
-    expect(signUpEmail).toHaveBeenCalledTimes(1);
+    expect(mocks.prepareCredentialIdentity).toHaveBeenCalledTimes(1);
     expect(mocks.claimAdminSetup.mock.invocationCallOrder[0]!)
-      .toBeLessThan(signUpEmail.mock.invocationCallOrder[0]!);
-    expect(mocks.completeAdminSetupClaimWithUserPromotion).toHaveBeenCalledWith(
+      .toBeLessThan(mocks.prepareCredentialIdentity.mock.invocationCallOrder[0]!);
+    expect(mocks.completeAdminSetupClaimWithCredentialIdentity).toHaveBeenCalledWith(
       db,
       {
         singletonKey: "first_admin",
         claimId: "setup_claim_test",
       },
-      { userId: "new_admin" },
+      expect.objectContaining({ userId: "new_admin" }),
     );
+    expect(mocks.completeAdminSetupClaimWithUserPromotion).not.toHaveBeenCalled();
     expect(mocks.markAdminSetupClaimCompleted).not.toHaveBeenCalled();
     expect(mocks.markAdminSetupClaimFailed).not.toHaveBeenCalled();
   });
 
   it("does not call Better Auth when another setup claim is active", async () => {
     const db = createSetupDbMock();
-    const signUpEmail = vi.fn();
-    mocks.createAuth.mockReturnValue({
-      api: {
-        signUpEmail,
-      },
-    });
+    mocks.createAuth.mockReturnValue({ api: {} });
     mocks.claimAdminSetup.mockRejectedValueOnce(
       new ConflictError("Admin setup is already in progress. Please wait."),
     );
@@ -2240,7 +2238,8 @@ describe("first-admin setup recovery", () => {
 
     expect(response.status).toBe(409);
     expect(body.error?.code).toBe("CONFLICT");
-    expect(signUpEmail).not.toHaveBeenCalled();
+    expect(mocks.prepareCredentialIdentity).not.toHaveBeenCalled();
+    expect(mocks.completeAdminSetupClaimWithCredentialIdentity).not.toHaveBeenCalled();
     expect(mocks.markAdminSetupClaimCompleted).not.toHaveBeenCalled();
     expect(mocks.markAdminSetupClaimFailed).not.toHaveBeenCalled();
   });
@@ -2248,11 +2247,8 @@ describe("first-admin setup recovery", () => {
   it("marks the setup claim failed when account creation fails after claiming", async () => {
     const db = createSetupDbMock();
     const failure = new Error("signup provider unavailable");
-    mocks.createAuth.mockReturnValue({
-      api: {
-        signUpEmail: vi.fn().mockRejectedValue(failure),
-      },
-    });
+    mocks.createAuth.mockReturnValue({ api: {} });
+    mocks.completeAdminSetupClaimWithCredentialIdentity.mockRejectedValueOnce(failure);
     const app = createSetupTestApp(db);
 
     const response = await app.request("/api/v1/setup", {
@@ -2276,11 +2272,11 @@ describe("first-admin setup recovery", () => {
   it("does not promote an existing account when the submitted password cannot authenticate it", async () => {
     const db = createSetupDbMock();
     const signInEmail = vi.fn().mockRejectedValue(new Error("Invalid password"));
+    mocks.completeAdminSetupClaimWithCredentialIdentity.mockRejectedValueOnce(
+      credentialIdentityConflictError(),
+    );
     mocks.createAuth.mockReturnValue({
-      api: {
-        signInEmail,
-        signUpEmail: vi.fn().mockRejectedValue(duplicateUserError()),
-      },
+      api: { signInEmail },
     });
     const app = createSetupTestApp(db);
 
@@ -2305,11 +2301,11 @@ describe("first-admin setup recovery", () => {
       twoFactorRedirect: true,
       twoFactorMethods: ["totp"],
     });
+    mocks.completeAdminSetupClaimWithCredentialIdentity.mockRejectedValueOnce(
+      credentialIdentityConflictError(),
+    );
     mocks.createAuth.mockReturnValue({
-      api: {
-        signInEmail,
-        signUpEmail: vi.fn().mockRejectedValue(duplicateUserError()),
-      },
+      api: { signInEmail },
     });
     const app = createSetupTestApp(db);
 
@@ -2331,11 +2327,11 @@ describe("first-admin setup recovery", () => {
   it("promotes an existing account only after the submitted password authenticates it", async () => {
     const db = createSetupDbMock();
     const signInEmail = vi.fn().mockResolvedValue({ token: "temporary_setup_session" });
+    mocks.completeAdminSetupClaimWithCredentialIdentity.mockRejectedValueOnce(
+      credentialIdentityConflictError(),
+    );
     mocks.createAuth.mockReturnValue({
-      api: {
-        signInEmail,
-        signUpEmail: vi.fn().mockRejectedValue(duplicateUserError()),
-      },
+      api: { signInEmail },
     });
     const app = createSetupTestApp(db);
 

@@ -13,7 +13,12 @@ import {
     type UpdateCategoryInput,
     type UpdateCategoryStatusInput,
 } from "./categories.validation";
-import { buildBatchGuard, safeBatch, type Database } from "@scalius/database/client";
+import {
+    buildBatchGuard,
+    isBatchGuardError,
+    safeBatch,
+    type Database,
+} from "@scalius/database/client";
 import { NotFoundError, ConflictError, ValidationError } from "@scalius/core/errors";
 import type { BatchItem } from "drizzle-orm/batch";
 import {
@@ -36,15 +41,15 @@ function categoryDeleteUsageGuard(
     claims: readonly CategoryRevisionClaim[],
 ): SQLiteBatchItem {
     return buildBatchGuard(db, sql`
-        CASE WHEN NOT EXISTS (
+        NOT EXISTS (
             SELECT 1 FROM ${products}
             WHERE ${products.categoryId} IN (
                 SELECT CAST(json_extract(value, '$.id') AS TEXT)
                 FROM json_each(${JSON.stringify(claims)})
             )
               AND ${products.deletedAt} IS NULL
-        ) THEN 1 ELSE json_extract('CATEGORY_DELETE_IN_USE', '$') END
-    `);
+        )
+    `, "CATEGORY_DELETE_IN_USE");
 }
 
 function categoriesHaveNoAssignedProductsCondition(
@@ -748,10 +753,7 @@ export async function bulkDeleteCategories(
             } catch (translated) {
                 if (translated !== error) throw translated;
             }
-            if (
-                error instanceof Error &&
-                /CATEGORY_DELETE_IN_USE|malformed json/i.test(error.message)
-            ) {
+            if (isBatchGuardError(error, "CATEGORY_DELETE_IN_USE")) {
                 throw new ValidationError(
                     "Cannot delete categories while active products are still assigned to them.",
                     {

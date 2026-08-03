@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
-import { buildBatchGuard, type Database } from "@scalius/database/client";
+import {
+    buildBatchGuard,
+    isBatchGuardError,
+    type Database,
+} from "@scalius/database/client";
 import {
     orderItems,
     orders,
@@ -28,7 +32,10 @@ import {
     assertUniqueVariantBarcodes,
     reconcileVariantLowStockAlerts,
 } from "./products.variants";
-import { executeProductAggregateMutationBatch } from "./products.aggregate-revision";
+import {
+    executeProductAggregateMutationBatch,
+    isProductAggregateRevisionConflict,
+} from "./products.aggregate-revision";
 import { buildStockMovementClaim } from "../inventory/stock-movement-claims";
 import { effectiveRegularReservedStockSql } from "@scalius/database/inventory-authority";
 
@@ -761,20 +768,17 @@ export async function saveProductOptionMatrix(
     for (const variant of normalizedVariants) {
         const existing = variantById.get(variant.id);
         if (!existing || variant.stock === existing.stock) continue;
-        statements.push(buildBatchGuard(db, sql`
-            CASE WHEN EXISTS (
+        statements.push(buildBatchGuard(db, sql`EXISTS (
                 SELECT 1 FROM ${productVariants}
                 WHERE ${productVariants.id} = ${variant.id}
                   AND ${productVariants.productId} = ${productId}
                   AND ${productVariants.stockVersion} = ${existing.stockVersion}
                   AND ${effectiveRegularReservedStockSql()} <= ${variant.stock}
                   AND ${productVariants.deletedAt} IS NULL
-            ) THEN 1 ELSE json_extract('OPTION_MATRIX_STOCK_CONFLICT', '$') END
-        `));
+            )`, "OPTION_MATRIX_STOCK_CONFLICT"));
     }
     for (const restored of restoredVariantById.values()) {
-        statements.push(buildBatchGuard(db, sql`
-            CASE WHEN EXISTS (
+        statements.push(buildBatchGuard(db, sql`EXISTS (
                 SELECT 1 FROM ${productVariants}
                 WHERE ${productVariants.id} = ${restored.id}
                   AND ${productVariants.productId} = ${productId}
@@ -783,13 +787,11 @@ export async function saveProductOptionMatrix(
                   AND ${effectiveRegularReservedStockSql()} = 0
                   AND ${productVariants.preorderStock} = 0
                   AND ${productVariants.deletedAt} IS NOT NULL
-            ) THEN 1 ELSE json_extract('OPTION_MATRIX_RESTORE_CONFLICT', '$') END
-        `));
+            )`, "OPTION_MATRIX_RESTORE_CONFLICT"));
     }
     if (retiringVariants.length > 0) {
         const retiringIds = JSON.stringify(retiringVariants.map((variant) => variant.id));
-        statements.push(buildBatchGuard(db, sql`
-            CASE WHEN (
+        statements.push(buildBatchGuard(db, sql`(
                 SELECT count(*) FROM ${productVariants}
                 WHERE ${productVariants.id} IN (
                     SELECT CAST(value AS TEXT) FROM json_each(${retiringIds})
@@ -808,12 +810,10 @@ export async function saveProductOptionMatrix(
                 )
                   AND ${sql.raw('"orders"."deleted_at"')} IS NULL
                   AND ${not(inArray(orders.status, CLOSED_ORDER_STATUSES))}
-            ) THEN 1 ELSE json_extract('OPTION_MATRIX_RETIRE_CONFLICT', '$') END
-        `));
+            )`, "OPTION_MATRIX_RETIRE_CONFLICT"));
     }
     if (defaultSku) {
-        statements.push(buildBatchGuard(db, sql`
-            CASE WHEN EXISTS (
+        statements.push(buildBatchGuard(db, sql`EXISTS (
                 SELECT 1 FROM ${productVariants}
                 WHERE ${productVariants.id} = ${defaultSku.id}
                   AND ${productVariants.productId} = ${productId}
@@ -822,8 +822,7 @@ export async function saveProductOptionMatrix(
                   AND ${effectiveRegularReservedStockSql()} = 0
                   AND ${productVariants.preorderStock} = 0
                   AND ${productVariants.deletedAt} IS NULL
-            ) THEN 1 ELSE json_extract('OPTION_MATRIX_DEFAULT_RETIRE_CONFLICT', '$') END
-        `));
+            )`, "OPTION_MATRIX_DEFAULT_RETIRE_CONFLICT"));
     }
     for (const variant of normalizedVariants) {
         const existing = variantById.get(variant.id);
@@ -967,7 +966,14 @@ export async function saveProductOptionMatrix(
         );
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        if (/OPTION_MATRIX_(STOCK|RETIRE|RESTORE|DEFAULT_(?:STOCK|RETIRE))_CONFLICT|aggregate revision|constraint|unique/i.test(message)) {
+        if (
+            isBatchGuardError(error, "OPTION_MATRIX_STOCK_CONFLICT")
+            || isBatchGuardError(error, "OPTION_MATRIX_RESTORE_CONFLICT")
+            || isBatchGuardError(error, "OPTION_MATRIX_RETIRE_CONFLICT")
+            || isBatchGuardError(error, "OPTION_MATRIX_DEFAULT_RETIRE_CONFLICT")
+            || isProductAggregateRevisionConflict(error)
+            || /constraint|unique/i.test(message)
+        ) {
             throw new ConflictError(
                 "This product changed while you were editing. Reload the latest matrix and try again.",
             );
