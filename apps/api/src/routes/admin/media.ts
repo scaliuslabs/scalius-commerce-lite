@@ -105,7 +105,7 @@ const initiateRoute = createRoute({
         503: serviceUnavailableResponse,
     },
 });
-app.openapi(initiateRoute, async (c) => created(c, { session: await initiateMediaUpload(c.get("db"), c.req.valid("json")) }));
+app.openapi(initiateRoute, async (c) => created(c, { session: await initiateMediaUpload(c.get("db"), c.req.valid("json"), c.env.BUCKET) }));
 
 const getUploadRoute = createRoute({
     method: "get",
@@ -162,7 +162,7 @@ app.openapi(uploadPartRoute, async (c) => {
         signatureBytes: partNumber === 1
             ? value.slice(0, Math.min(declaredLength, MEDIA_SIGNATURE_READ_BYTES))
             : undefined,
-    }));
+    }, c.env.BUCKET));
 });
 
 const completeRoute = createRoute({
@@ -177,7 +177,7 @@ const completeRoute = createRoute({
         503: serviceUnavailableResponse,
     },
 });
-app.openapi(completeRoute, async (c) => ok(c, { file: await completeMediaUpload(c.get("db"), c.req.valid("param").id) }));
+app.openapi(completeRoute, async (c) => ok(c, { file: await completeMediaUpload(c.get("db"), c.req.valid("param").id, c.env.BUCKET) }));
 
 const abortRoute = createRoute({
     method: "delete",
@@ -188,7 +188,7 @@ const abortRoute = createRoute({
     responses: { 204: noContentResponse, ...mediaErrorResponses, 503: serviceUnavailableResponse },
 });
 app.openapi(abortRoute, async (c) => {
-    await abortMediaUpload(c.get("db"), c.req.valid("param").id);
+    await abortMediaUpload(c.get("db"), c.req.valid("param").id, c.env.BUCKET);
     return noContent(c);
 });
 
@@ -205,7 +205,7 @@ const reconcileRoute = createRoute({
         ...mediaErrorResponses,
     },
 });
-app.openapi(reconcileRoute, async (c) => ok(c, await reconcileExpiredMediaUploads(c.get("db"), c.req.valid("query").limit)));
+app.openapi(reconcileRoute, async (c) => ok(c, await reconcileExpiredMediaUploads(c.get("db"), c.env.BUCKET, c.req.valid("query").limit)));
 
 const patchMediaRoute = createRoute({
     method: "patch",
@@ -253,7 +253,7 @@ const permanentDeleteRoute = createRoute({
     responses: { 204: noContentResponse, ...mediaErrorResponses, 503: serviceUnavailableResponse },
 });
 app.openapi(permanentDeleteRoute, async (c) => {
-    await permanentlyDeleteMediaFile(c.get("db"), c.req.valid("param").id, c.req.valid("query").expectedVersion);
+    await permanentlyDeleteMediaFile(c.get("db"), c.req.valid("param").id, c.req.valid("query").expectedVersion, c.env.BUCKET);
     return noContent(c);
 });
 

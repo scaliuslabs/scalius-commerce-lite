@@ -527,7 +527,6 @@ describe("customer auth private cache policy", () => {
     expect(response.status, await response.clone().text()).toBe(200);
     expect(mocks.sendOtp).toHaveBeenCalledWith(
       expect.anything(),
-      {},
       expect.objectContaining({
         intent: "sign_up",
         method: "email",
@@ -567,7 +566,6 @@ describe("customer auth private cache policy", () => {
     expect(response.status, await response.clone().text()).toBe(200);
     expect(mocks.sendOtp).toHaveBeenCalledWith(
       expect.anything(),
-      {},
       expect.objectContaining({
         ip: "203.0.113.10",
       }),
@@ -601,7 +599,6 @@ describe("customer auth private cache policy", () => {
     expect(response.status, await response.clone().text()).toBe(200);
     expect(mocks.sendOtp).toHaveBeenCalledWith(
       expect.anything(),
-      {},
       expect.objectContaining({
         ip: "unknown",
       }),
@@ -635,7 +632,6 @@ describe("customer auth private cache policy", () => {
     expect(response.status, await response.clone().text()).toBe(200);
     expect(mocks.sendOtp).toHaveBeenCalledWith(
       expect.anything(),
-      {},
       expect.objectContaining({
         ip: "198.51.100.77",
       }),

@@ -2,7 +2,6 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { settings, siteSettings } from "@scalius/database/schema";
 import { safeBatch, type Database } from "@scalius/database/client";
 import { eq, sql } from "drizzle-orm";
-import { getKv } from "../../../utils/kv-cache";
 import { ok } from "../../../utils/api-response";
 import { ValidationError } from "../../../utils/api-error";
 import { getCredentialEncryptionKey, requireEncryptionKey } from "../../../utils/encryption-key";
@@ -75,7 +74,7 @@ async function assertDisablingGatewayKeepsCheckoutFlow(
 
     const activePaymentMethods = await getActivePaymentMethods(
         db,
-        getKv(),
+        env.CACHE,
         getCredentialEncryptionKey(env as Record<string, unknown>),
         { bypassMemoryCache: true },
     );
@@ -320,7 +319,7 @@ const getPaymentMethodsRoute = createRoute({
 
 app.openapi(getPaymentMethodsRoute, async (c) => {
     const db = c.get("db");
-        const kv = getKv();
+        const kv = c.env.CACHE;
         const encKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
         const readOptions = { bypassMemoryCache: true };
         const [rawConfig, activeConfig] = await Promise.all([
@@ -451,7 +450,7 @@ app.openapi(savePaymentMethodsRoute, async (c) => {
         throw new ValidationError("Default method must be one of the enabled methods");
     }
 
-    const kv = getKv();
+    const kv = c.env.CACHE;
     const encKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
     const readOptions = { bypassMemoryCache: true };
     const [stripeSettings, sslSettings, polarSettings] = await Promise.all([
@@ -572,7 +571,7 @@ app.openapi(saveStripeRoute, async (c) => {
     const db = c.get("db");
         const body = c.req.valid("json");
         const ops: Promise<void>[] = [];
-        const kv = getKv();
+        const kv = c.env.CACHE;
         const configuredEncryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
         const [existingMap, storedSettings] = await Promise.all([
             readStripeSettingsMap(db),
@@ -664,7 +663,7 @@ app.openapi(saveSSLCommerzRoute, async (c) => {
         const body = c.req.valid("json");
         const ops: Promise<void>[] = [];
         const existingMap = await readSSLCommerzSettingsMap(db);
-        const kv = getKv();
+        const kv = c.env.CACHE;
         const storedSettings = await getSSLCommerzSettings(
             db,
             kv,
@@ -781,7 +780,7 @@ app.openapi(savePolarRoute, async (c) => {
 
         await Promise.all(ops);
 
-        const kv = getKv();
+        const kv = c.env.CACHE;
         await Promise.all([
             invalidatePolarCache(kv),
             invalidatePaymentMethodsCache(kv),

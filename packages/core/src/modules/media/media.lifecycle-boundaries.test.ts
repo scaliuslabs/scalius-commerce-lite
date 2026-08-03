@@ -53,7 +53,7 @@ describe("media lifecycle boundaries", () => {
         const dependencyRead = source.indexOf("loadMediaDeleteDependencies", functionStart);
         const claim = source.indexOf("status: \"deleting\"", functionStart);
         const productGuard = source.indexOf("SELECT 1 FROM ${productMedia}", claim);
-        const storageDelete = source.indexOf("deleteFile(current.objectKey)", functionStart);
+        const storageDelete = source.indexOf("deleteFile(current.objectKey, bucket)", functionStart);
         expect(dependencyRead).toBeGreaterThan(functionStart);
         expect(claim).toBeGreaterThan(dependencyRead);
         expect(productGuard).toBeGreaterThan(claim);

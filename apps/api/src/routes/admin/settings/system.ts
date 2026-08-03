@@ -3,7 +3,6 @@ import { settings, siteSettings } from "@scalius/database/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 
-import { getKv } from "../../../utils/kv-cache";
 import { invalidateSiteSettingsCache } from "@scalius/core/modules/settings";
 import { getCredentialEncryptionKey, requireEncryptionKey } from "../../../utils/encryption-key";
 import { getEmailProviderReadiness, getEmailRuntimeSettings, readEmailSetting } from "@scalius/core/integrations/email";
@@ -218,7 +217,7 @@ app.openapi(saveCheckoutFlowRoute, async (c) => {
     }
     const activePaymentMethods = await getActivePaymentMethods(
         db,
-        getKv(),
+        c.env.CACHE,
         credentialEncryptionKey,
         { bypassMemoryCache: true },
     );
@@ -227,7 +226,7 @@ app.openapi(saveCheckoutFlowRoute, async (c) => {
         availablePaymentMethods: activePaymentMethods.enabledMethods,
     });
 
-    await invalidateSiteSettingsCache(getKv());
+    await invalidateSiteSettingsCache(c.env.CACHE);
     await invalidateApiAndScheduleStorefrontGroups(CHECKOUT_CACHE_GROUPS, c);
     return ok(c, saved);
 });
@@ -434,7 +433,7 @@ app.openapi(saveAuthRoute, async (c) => {
             await clearNotificationProviderBlocks(db, { channel: "whatsapp" });
         }
 
-        await invalidateSiteSettingsCache(getKv());
+        await invalidateSiteSettingsCache(c.env.CACHE);
         await invalidateApiAndScheduleStorefrontGroups(CHECKOUT_CACHE_GROUPS, c);
         return ok(c, { message: "Auth settings saved successfully" });
 });

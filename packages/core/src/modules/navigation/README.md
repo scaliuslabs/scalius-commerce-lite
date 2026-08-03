@@ -129,7 +129,8 @@ The `AddNavItemDialog` component (`apps/admin-v2/src/components/admin/navigation
 | PUT | `/admin/navigation/{id}` | Deprecated compatibility update through the same CAS authority |
 | DELETE | `/admin/navigation/{id}` | Deprecated compatibility reset through the same CAS authority |
 
-After saving, `invalidateSiteSettingsCache(getKv())` is called to bust the KV cache.
+After saving, the route invalidates the layout cache through its request-scoped
+`CACHE` binding and schedules the corresponding storefront purge.
 
 ### Public Routes (Storefront)
 

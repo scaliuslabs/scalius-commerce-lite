@@ -232,12 +232,7 @@ export async function getNavigationMenu(db: Database, id: string) {
     return null;
 }
 
-/** Save (create or update) navigation config for header or footer.
- *  WIRE: api-app should call this from routes/admin/navigation.ts (saveConfigRoute handler)
- *  replacing the inline DB query at lines 146-163.
- *  Route must still call `invalidateSiteSettingsCache(getKv())` after this function.
- *  Swap: `await saveNavigationConfig(db, type, config);`
- *  then `await invalidateSiteSettingsCache(getKv());` + `return ok(c, { message: ... });` */
+/** Save the legacy header or footer navigation config. */
 export async function saveNavigationConfig(
     db: Database,
     type: "header" | "footer",
@@ -269,12 +264,7 @@ export async function saveNavigationConfig(
     }
 }
 
-/** Update navigation config by site settings ID.
- *  WIRE: api-app should call this from routes/admin/navigation.ts (updateConfigRoute handler)
- *  replacing the inline DB query at lines 194-201.
- *  Route must still call `invalidateSiteSettingsCache(getKv())` after this function.
- *  Swap: `await updateNavigationConfig(db, id, type, config);`
- *  then `await invalidateSiteSettingsCache(getKv());` + `return ok(c, { message: ... });` */
+/** Update a legacy navigation config by site-settings ID. */
 export async function updateNavigationConfig(
     db: Database,
     id: string,
@@ -297,12 +287,7 @@ export async function updateNavigationConfig(
         .where(eq(siteSettings.id, id));
 }
 
-/** Reset navigation config to empty by site settings ID.
- *  WIRE: api-app should call this from routes/admin/navigation.ts (deleteConfigRoute handler)
- *  replacing the inline DB query at lines 237-244.
- *  Route must still call `invalidateSiteSettingsCache(getKv())` after this function.
- *  Swap: `await deleteNavigationConfig(db, id, type);`
- *  then `await invalidateSiteSettingsCache(getKv());` + `return noContent(c);` */
+/** Reset a legacy navigation config by site-settings ID. */
 export async function deleteNavigationConfig(
     db: Database,
     id: string,

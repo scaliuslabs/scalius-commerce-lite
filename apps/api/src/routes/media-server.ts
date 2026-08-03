@@ -1,6 +1,5 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import {
-  getBucket,
   validateMediaObjectKey,
 } from "@scalius/core/integrations/storage";
 
@@ -27,7 +26,7 @@ app.get("/:key{.+}", async (c) => {
     // or turn an unsupported path into an operational 5xx signal.
     return c.notFound();
   }
-  const bucket = c.env.BUCKET || c.env.STORAGE || getBucket();
+  const bucket = c.env.BUCKET || c.env.STORAGE;
   if (!bucket) {
     return c.text(
       "R2 Bucket binding not found. Expected binding 'BUCKET' or 'STORAGE'.",

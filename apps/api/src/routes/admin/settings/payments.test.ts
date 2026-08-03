@@ -68,7 +68,6 @@ const mocks = vi.hoisted(() => {
         typeof value === "string" && polarPlaceholders.has(value.trim().toLowerCase());
 
     return {
-        getKv: vi.fn(),
         getCredentialEncryptionKey: vi.fn(),
         requireEncryptionKey: vi.fn(),
         invalidateApiAndScheduleStorefrontGroups: vi.fn(),
@@ -250,10 +249,6 @@ const mocks = vi.hoisted(() => {
     };
 });
 
-vi.mock("../../../utils/kv-cache", () => ({
-    getKv: mocks.getKv,
-}));
-
 vi.mock("../../../utils/encryption-key", () => ({
     getCredentialEncryptionKey: mocks.getCredentialEncryptionKey,
     requireEncryptionKey: mocks.requireEncryptionKey,
@@ -318,16 +313,15 @@ function createTestApp(
             })),
         })),
     };
-    const kv = { id: "gateway-kv" };
+    const kv = { id: "api-cache-kv" };
     const env = {
-        CACHE: { id: "api-cache-kv" },
+        CACHE: kv,
         PURGE_URL: "https://storefront.example.com/api/purge-cache",
         PURGE_TOKEN: "secret-token",
         JWT_SECRET: "test-jwt-secret",
     } as unknown as Env;
     const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
 
-    mocks.getKv.mockReturnValue(kv);
     mocks.getCredentialEncryptionKey.mockReturnValue("enc-key");
     mocks.requireEncryptionKey.mockReturnValue("credential-key");
     mocks.invalidateApiAndScheduleStorefrontGroups.mockResolvedValue(undefined);

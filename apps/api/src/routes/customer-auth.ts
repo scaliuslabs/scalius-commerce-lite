@@ -183,10 +183,9 @@ app.openapi(sendOtpRoute, async (c) => {
 	  const email = body.email?.trim().toLowerCase();
 
   const db = c.get("db");
-  const kv = c.env.CACHE;
   const ip = getTrustedClientIp(c);
 
-  const result = await sendOtp(db, kv, {
+  const result = await sendOtp(db, {
 	    method,
 	    channel: body.channel,
 	    intent: body.intent,
@@ -316,9 +315,8 @@ app.openapi(verifyOtpRoute, async (c) => {
   const email = body.email?.trim().toLowerCase();
 
   const db = c.get("db");
-  const kv = c.env.CACHE;
 
-  const result = await verifyOtp(db, kv, {
+  const result = await verifyOtp(db, {
 	    method,
 	    channel: body.channel,
 	    intent: body.intent,

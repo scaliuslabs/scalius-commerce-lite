@@ -674,7 +674,6 @@ async function resolveActiveCustomerLocation(
  */
 export async function sendOtp(
     db: Database,
-    _kv: KVNamespace,
     input: SendOtpInput,
 ): Promise<SendOtpResult> {
     const { method, identifier, name, ip } = input;
@@ -826,7 +825,6 @@ export async function sendOtp(
  */
 export async function verifyOtp(
     db: Database,
-    _kv: KVNamespace,
     input: VerifyOtpInput,
 ): Promise<VerifyOtpResult> {
     const { method, identifier, code, name, phone, email } = input;
