@@ -113,10 +113,27 @@ const DeliveryProvidersContainer: FC<DeliveryProvidersContainerProps> = ({
   const creds = parseJSON(formData.credentials);
   const conf = parseJSON(formData.config);
 
-  const refreshDeliveryProviderQueries = () => {
-    void queryClient.invalidateQueries({
-      queryKey: queryKeys.settings.deliveryProviders(),
-    });
+  const refreshDeliveryProviderQueries = async () => {
+    const providerQueryKey = queryKeys.settings.deliveryProviders();
+    await Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: providerQueryKey,
+      }),
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.settings.checkoutReadiness(),
+      }),
+    ]);
+
+    const providerQuery = queryClient.getQueryState(providerQueryKey);
+    const refreshedProviders = queryClient.getQueryData<DeliveryProviderRecord[]>(
+      providerQueryKey,
+    );
+    if (providerQuery?.error || !Array.isArray(refreshedProviders)) return;
+
+    setProviders(refreshedProviders);
+    setSelectedProvider((current) => current
+      ? refreshedProviders.find((provider) => provider.id === current.id) ?? null
+      : null);
   };
 
   const resetForm = (provider?: DeliveryProviderRecord) => {
@@ -213,7 +230,7 @@ const DeliveryProvidersContainer: FC<DeliveryProvidersContainerProps> = ({
       resetForm(savedProvider);
       setIsEditing(false);
       setIsCreating(false);
-      refreshDeliveryProviderQueries();
+      await refreshDeliveryProviderQueries();
       toast.success("Provider saved successfully");
     } catch (error: unknown) {
       toast.error(getServerFnError(error, "Failed to save provider"));
@@ -230,7 +247,7 @@ const DeliveryProvidersContainer: FC<DeliveryProvidersContainerProps> = ({
       setProviders((prev) =>
         prev.filter((p) => p.id !== selectedProvider.id),
       );
-      refreshDeliveryProviderQueries();
+      await refreshDeliveryProviderQueries();
       toast.success("Provider deleted");
       setSelectedProvider(null);
     } catch (error: unknown) {
@@ -247,6 +264,7 @@ const DeliveryProvidersContainer: FC<DeliveryProvidersContainerProps> = ({
       const result = await testDeliveryProvider({
         data: { id: selectedProvider.id },
       }) as { success: boolean; message?: string };
+      await refreshDeliveryProviderQueries();
       if (result.success) {
         toast.success(result.message || "Connection successful");
       } else {

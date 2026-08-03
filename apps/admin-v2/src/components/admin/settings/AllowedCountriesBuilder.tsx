@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Card,
   CardContent,
@@ -14,7 +15,12 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
 import { ChevronDown, Loader2, RotateCcw, Save, X, Search } from "lucide-react";
 import { getServerFnError } from "@/lib/api-helpers";
-import { getAllowedCountries, updateAllowedCountries } from "@/lib/api-functions/settings";
+import {
+  getAllowedCountries,
+  updateAllowedCountries,
+  type AllowedCountriesPayload,
+} from "@/lib/api-functions/settings";
+import { queryKeys } from "@/lib/query-keys";
 import { getCountries, getCountryCallingCode } from "react-phone-number-input";
 import en from "react-phone-number-input/locale/en";
 import type { Country } from "react-phone-number-input";
@@ -36,6 +42,7 @@ const ALL_COUNTRIES: CountryOption[] = getCountries().map((code) => ({
 type CountryMode = "include" | "exclude";
 
 export default function AllowedCountriesBuilder() {
+  const queryClient = useQueryClient();
   const [loading, setLoading] = useState(true);
   const [hasLoaded, setHasLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -83,9 +90,34 @@ export default function AllowedCountriesBuilder() {
     setSaving(true);
     try {
       await updateAllowedCountries({ data: { allowedCountries: selected, mode } });
-      setSavedSelected(selected);
-      setSavedMode(mode);
-      toast.success("Country policy saved");
+      const submittedPolicy: AllowedCountriesPayload = {
+        allowedCountries: [...selected],
+        allowedCountriesMode: mode,
+      };
+      const [{ savedPolicy, refreshed }] = await Promise.all([
+        getAllowedCountries()
+          .then((policy) => ({ savedPolicy: policy, refreshed: true }))
+          .catch(() => ({ savedPolicy: submittedPolicy, refreshed: false })),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.settings.checkoutReadiness(),
+        }),
+      ]);
+
+      const nextSelected = Array.isArray(savedPolicy.allowedCountries)
+        ? (savedPolicy.allowedCountries as Country[])
+        : [];
+      const nextMode: CountryMode = savedPolicy.allowedCountriesMode === "exclude"
+        ? "exclude"
+        : "include";
+
+      setSelected(nextSelected);
+      setMode(nextMode);
+      setSavedSelected(nextSelected);
+      setSavedMode(nextMode);
+      queryClient.setQueryData(queryKeys.settings.allowedCountries(), savedPolicy);
+
+      if (refreshed) toast.success("Country policy saved");
+      else toast.warning("Country policy was saved, but its current value could not be refreshed.");
     } catch (err) {
       toast.error(getServerFnError(err, "Failed to save allowed countries"));
     } finally {
