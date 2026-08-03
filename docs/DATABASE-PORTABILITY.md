@@ -77,7 +77,9 @@ typed, volatile `scalius_compat.fail_bigint()` function. Feature code cannot
 mix dialect-specific `CASE` result types, and one error classifier preserves
 the same domain conflict across D1, TursoDB, and PostgreSQL transports. The
 full database/core/API suites and a disposable native Neon branch proved both
-the successful and rollback paths on 2026-08-03.
+the successful and rollback paths on 2026-08-03. Production API Worker version
+`5a1be633-eed5-48b9-a2a5-4b170ee3a0b1` then passed four PostgreSQL readiness
+samples and the complete read-only release check on the Neon-backed demo.
 
 Administrative credential creation is also one provider-native commit. The
 application hashes passwords with Better Auth's implementation, then inserts
