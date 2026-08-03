@@ -58,6 +58,32 @@ describe("cacheMiddleware", () => {
     expect(mocks.setCache).not.toHaveBeenCalled();
   });
 
+  it("resolves request-aware TTLs before writing", async () => {
+    mocks.getCache.mockResolvedValue(null);
+    mocks.setCache.mockResolvedValue(undefined);
+
+    const app = new Hono<{ Bindings: Env }>();
+    app.use(
+      "*",
+      cacheMiddleware({
+        ttl: (c) => c.req.path.endsWith("/products") ? 5 : 3600,
+        keyPrefix: "test:",
+      }),
+    );
+    app.get("/categories", (c) => c.json({ stable: true }));
+    app.get("/categories/shoes/products", (c) => c.json({ products: [] }));
+
+    await app.request("/categories", {}, {
+      CACHE: { id: "api-cache-kv" },
+    } as unknown as Env);
+    await app.request("/categories/shoes/products", {}, {
+      CACHE: { id: "api-cache-kv" },
+    } as unknown as Env);
+
+    expect(mocks.setCache.mock.calls[0]?.[2]).toBe(3600);
+    expect(mocks.setCache.mock.calls[1]?.[2]).toBe(5);
+  });
+
   it("schedules cache writes after the response when executionCtx is available", async () => {
     mocks.getCache.mockResolvedValue(null);
 

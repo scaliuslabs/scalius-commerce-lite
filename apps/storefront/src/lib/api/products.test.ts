@@ -23,7 +23,7 @@ vi.mock("./client", () => ({
 }));
 
 vi.mock("@/lib/edge-cache", () => ({
-  CACHE_TTL: { LONG: 86400, MEDIUM: 3600, SHORT: 300 },
+  CACHE_TTL: { AVAILABILITY: 5, LONG: 86400, MEDIUM: 3600, SHORT: 300 },
   withEdgeCache: async <T>(
     key: string,
     fetcher: () => Promise<T | null>,

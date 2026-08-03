@@ -105,7 +105,7 @@ export async function getProductBySlugResult(
         return null;
       }
     },
-    { ttlSeconds: CACHE_TTL.LONG },
+    { ttlSeconds: CACHE_TTL.AVAILABILITY },
   );
 
   return result ?? { state: "unavailable" };
@@ -165,7 +165,7 @@ export async function getProductVariants(
         return null;
       }
     },
-    { ttlSeconds: CACHE_TTL.LONG },
+    { ttlSeconds: CACHE_TTL.AVAILABILITY },
   );
 }
 
@@ -402,7 +402,7 @@ async function readDedicatedFeedProducts(
 
 /**
  * Fetches a paginated list of products belonging to a specific category.
- * Wrapped with EdgeCache (1h TTL) - shorter TTL as paginated data can be large.
+ * Uses the bounded availability TTL because cards expose price and stock state.
  * @param categorySlug The slug of the category.
  * @param options Filtering and pagination options.
  * @returns A promise resolving to a paginated list of products or null on failure.
@@ -473,13 +473,13 @@ export async function getProductsByCategory(
         return null;
       }
     },
-    { ttlSeconds: CACHE_TTL.MEDIUM },
+    { ttlSeconds: CACHE_TTL.AVAILABILITY },
   );
 }
 
 /**
  * Fetches a list of all products, with extensive filtering and sorting capabilities.
- * Wrapped with EdgeCache (1h TTL) - shorter TTL as paginated data can be large.
+ * Uses the bounded availability TTL because cards expose price and stock state.
  * @param options Filtering, sorting, and pagination options.
  * @returns A promise resolving to a paginated list of products or null on failure.
  */
@@ -510,7 +510,7 @@ export async function getAllProducts(
         return null;
       }
     },
-    { ttlSeconds: CACHE_TTL.MEDIUM },
+    { ttlSeconds: CACHE_TTL.AVAILABILITY },
   );
 }
 
@@ -532,7 +532,7 @@ export async function getFeedProducts(
   return withEdgeCache(
     cacheKey,
     () => readDedicatedFeedProducts(normalizedOptions),
-    { ttlSeconds: CACHE_TTL.MEDIUM },
+    { ttlSeconds: CACHE_TTL.AVAILABILITY },
   );
 }
 
@@ -566,7 +566,7 @@ export async function getSitemapProducts(
         return null;
       }
     },
-    { ttlSeconds: CACHE_TTL.MEDIUM },
+    { ttlSeconds: CACHE_TTL.AVAILABILITY },
   );
 }
 

@@ -127,7 +127,7 @@ export interface ThemePreviewData {
 /**
  * Fetches all homepage data in a single consolidated request.
  * Reduces 4 + N API calls to 1.
- * Wrapped with EdgeCache ( TTL) - invalidated via purge-cache.
+ * Uses the bounded availability TTL because homepage collections expose products.
  *
  * IMPORTANT: Cache key includes BUILD_ID to ensure fresh data after deployments.
  *
@@ -147,7 +147,7 @@ export async function getHomepageData(): Promise<HomepageData | null> {
         return null;
       }
     },
-    { ttlSeconds: CACHE_TTL.LONG },
+    { ttlSeconds: CACHE_TTL.AVAILABILITY },
   );
 }
 

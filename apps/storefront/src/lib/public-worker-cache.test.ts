@@ -16,15 +16,13 @@ describe("public storefront Worker cache policy", () => {
     );
 
     expect(left).toMatchObject({
-      cacheKey: "/about?campaign=sale&ref=footer",
+      cacheKey: "/about?campaign=sale",
       tags: ["pages", "layout"],
     });
     expect(right?.cacheKey).toBe(left?.cacheKey);
   });
 
   it.each([
-    ["home", "/", {}],
-    ["product", "/products/fish", {}],
     ["checkout", "/checkout", {}],
     ["recovery", "/payment-recovery", {}],
     ["cookie", "/about", { Cookie: "session=private" }],
@@ -49,6 +47,28 @@ describe("public storefront Worker cache policy", () => {
     ).toBeNull();
   });
 
+  it.each([
+    ["/", ["homepage", "layout", "products"]],
+    ["/products/fish", ["products", "layout"]],
+    ["/categories/fish", ["categories", "products", "layout"]],
+    ["/collections/featured", ["collections", "products", "layout"]],
+    ["/search?q=fish", ["search", "products", "layout"]],
+  ])("caches anonymous public route %s for five seconds", (path, tags) => {
+    const policy = getPublicStorefrontCachePolicy(
+      new Request(`https://shop.example${path}`),
+    );
+    expect(policy?.edgeTtlSeconds).toBe(5);
+    expect(policy?.tags).toEqual(tags);
+  });
+
+  it("keeps product variant-specific HTML off the shared cache lane", () => {
+    expect(
+      getPublicStorefrontCachePolicy(
+        new Request("https://shop.example/products/fish?size=large"),
+      ),
+    ).toBeNull();
+  });
+
   it("adds edge-only caching metadata to successful public responses", () => {
     const policy = getPublicStorefrontCachePolicy(
       new Request("https://shop.example/about"),
@@ -65,7 +85,7 @@ describe("public storefront Worker cache policy", () => {
 
     expect(response.headers.get("Cache-Control")).toContain("no-store");
     expect(response.headers.get("Cloudflare-CDN-Cache-Control")).toBe(
-      "public, max-age=3600, must-revalidate",
+      "public, max-age=5, must-revalidate",
     );
     expect(response.headers.get("Cache-Tag")).toBe("pages,layout");
   });
@@ -89,6 +109,6 @@ describe("public storefront Worker cache policy", () => {
         "layout",
         "pages",
       ]),
-    ).toEqual(["pages", "layout"]);
+    ).toEqual(["pages", "products", "layout"]);
   });
 });

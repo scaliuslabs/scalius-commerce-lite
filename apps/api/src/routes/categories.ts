@@ -24,7 +24,10 @@ const app = new OpenAPIHono<{ Bindings: Env }>();
 app.use(
   "*",
   cacheMiddleware({
-    ttl: CACHE_TTLS.STANDARD,
+    ttl: (c) =>
+      c.req.path.replace(/\/$/, "").endsWith("/products")
+        ? CACHE_TTLS.AVAILABILITY
+        : CACHE_TTLS.STANDARD,
     keyPrefix: "api:categories:",
     varyByQuery: true,
     queryDefaults: (c) =>

@@ -31,7 +31,7 @@ type CacheQueryNormalizers = Record<
 >;
 
 export interface CacheOptions {
-  ttl?: number;
+  ttl?: number | ((c: Context) => number);
   keyPrefix?: string;
   cacheNullValues?: boolean;
   methods?: string[];
@@ -104,7 +104,8 @@ export const cacheMiddleware = (
 
   return async (c, next) => {
     if (!methods.includes(c.req.method)) return next();
-    if (ttl <= 0) return next();
+    const resolvedTtl = typeof ttl === "function" ? ttl(c) : ttl;
+    if (resolvedTtl <= 0) return next();
     if (cacheCondition && !cacheCondition(c)) return next();
 
     // KV namespace from Cloudflare Workers env binding
@@ -194,7 +195,7 @@ export const cacheMiddleware = (
         await setCache(
           versionedCacheKey,
           { status: cloned.status, headers, body },
-          ttl,
+          resolvedTtl,
           kv,
         );
       } catch (error: unknown) {
