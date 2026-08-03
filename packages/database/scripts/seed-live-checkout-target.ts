@@ -1,10 +1,19 @@
 import {
   connect,
-  type Connection,
   type SQLInputValue,
 } from "@tursodatabase/serverless";
 import { pathToFileURL } from "node:url";
 
+import {
+  connectNeonPostgres,
+  type PostgresHttpConnection,
+} from "../src/postgres-adapter";
+import {
+  compileSqliteStatementForPostgres,
+  normalizePostgresParameters,
+  normalizePostgresResultObjects,
+} from "../src/postgres-sqlite-profile";
+import { assertDatabaseSchemaCompatible } from "../src/schema-contract";
 import {
   assertDisposableDatabaseProvisionTarget,
   assertDisposableDatabaseTarget,
@@ -13,8 +22,18 @@ import {
 } from "./live-checkout-load-core";
 
 type QueryRow = Record<string, unknown>;
+type SeedProvider = "turso" | "postgres";
+type SeedValue = SQLInputValue | bigint | boolean | Uint8Array;
+type SeedStatement = string | { sql: string; args: readonly SeedValue[] };
+
+interface SeedConnection {
+  query(sql: string, args?: readonly SeedValue[]): Promise<QueryRow[]>;
+  batch(statements: readonly SeedStatement[]): Promise<void>;
+  close(): Promise<void>;
+}
 
 interface SeedTargetOptions {
+  provider: SeedProvider;
   databaseUrl: string;
   databaseToken: string;
   acknowledgedDatabaseHostname: string;
@@ -29,9 +48,18 @@ function requiredEnvironment(name: string): string {
 }
 
 function readOptions(): SeedTargetOptions {
+  const provider = requiredEnvironment("LOADTEST_DATABASE_PROVIDER").toLowerCase();
+  if (provider !== "turso" && provider !== "postgres") {
+    throw new Error("LOADTEST_DATABASE_PROVIDER must be turso or postgres for seeding.");
+  }
   return {
-    databaseUrl: requiredEnvironment("TURSO_DATABASE_URL"),
-    databaseToken: requiredEnvironment("TURSO_AUTH_TOKEN"),
+    provider,
+    databaseUrl: requiredEnvironment(
+      provider === "turso" ? "TURSO_DATABASE_URL" : "POSTGRES_DATABASE_URL",
+    ),
+    databaseToken: provider === "turso"
+      ? requiredEnvironment("TURSO_AUTH_TOKEN")
+      : "",
     acknowledgedDatabaseHostname: requiredEnvironment(
       "LOADTEST_ACK_DATABASE_HOST",
     ),
@@ -40,13 +68,71 @@ function readOptions(): SeedTargetOptions {
   };
 }
 
-async function query(
-  connection: Connection,
-  sql: string,
-  args: readonly SQLInputValue[] = [],
-): Promise<QueryRow[]> {
-  const statement = await connection.prepare(sql);
-  return await statement.all([...args]) as QueryRow[];
+function createTursoSeedConnection(options: SeedTargetOptions): SeedConnection {
+  const connection = connect({
+    url: options.databaseUrl,
+    authToken: options.databaseToken,
+  });
+  return {
+    async query(sql, args = []) {
+      const statement = await connection.prepare(sql);
+      return await statement.all([...args] as SQLInputValue[]) as QueryRow[];
+    },
+    async batch(statements) {
+      await connection.batch(statements.map((statement) => typeof statement === "string"
+        ? statement
+        : { sql: statement.sql, args: [...statement.args] as SQLInputValue[] }), "immediate");
+    },
+    async close() {
+      await connection.close();
+    },
+  };
+}
+
+function postgresRows(result: Awaited<ReturnType<PostgresHttpConnection["query"]>>): QueryRow[] {
+  if (result.fields.some((field) => !field.name)) {
+    throw new Error("PostgreSQL load seed result field is missing its name.");
+  }
+  return normalizePostgresResultObjects(
+    result.rows,
+    result.fields as { name: string; dataTypeID: number }[],
+  );
+}
+
+function createPostgresSeedConnection(options: SeedTargetOptions): SeedConnection {
+  const connection = connectNeonPostgres(options.databaseUrl);
+  return {
+    async query(sql, args = []) {
+      const compiled = compileSqliteStatementForPostgres(sql, args.length);
+      return postgresRows(await connection.query(
+        compiled.sql,
+        normalizePostgresParameters(args),
+      ));
+    },
+    async batch(statements) {
+      const queries = statements.map((statement) => {
+        const sql = typeof statement === "string" ? statement : statement.sql;
+        const args = typeof statement === "string" ? [] : statement.args;
+        const compiled = compileSqliteStatementForPostgres(sql, args.length);
+        return connection.query(compiled.sql, normalizePostgresParameters(args));
+      });
+      await connection.transaction(queries, {
+        arrayMode: true,
+        fullResults: true,
+        isolationLevel: "Serializable",
+        readOnly: false,
+      });
+    },
+    async close() {
+      // Neon HTTP has no persistent client connection to close.
+    },
+  };
+}
+
+function createSeedConnection(options: SeedTargetOptions): SeedConnection {
+  return options.provider === "postgres"
+    ? createPostgresSeedConnection(options)
+    : createTursoSeedConnection(options);
 }
 
 function scalarNumber(rows: readonly QueryRow[], key: string): number {
@@ -74,16 +160,68 @@ function fixtureValues(identity: LoadTargetIdentity) {
   };
 }
 
-async function readSentinelRows(connection: Connection): Promise<QueryRow[]> {
-  return query(
-    connection,
+async function readSentinelRows(connection: SeedConnection): Promise<QueryRow[]> {
+  return connection.query(
     `SELECT target_id, purpose, database_hostname, fixture_namespace
        FROM scalius_loadtest_target`,
   );
 }
 
+async function readSeedDatabaseHealth(
+  connection: SeedConnection,
+  provider: SeedProvider,
+): Promise<{
+  integrity: string;
+  journalMode: string;
+  foreignKeyViolations: number;
+}> {
+  if (provider === "postgres") {
+    const [schemaRows, invalidForeignKeyRows] = await Promise.all([
+      connection.query(
+        `SELECT version, name, source_sha256
+           FROM scalius_schema_migrations
+          ORDER BY version`,
+      ),
+      connection.query(
+        `SELECT conname
+           FROM pg_constraint
+          WHERE contype = 'f' AND NOT convalidated`,
+      ),
+    ]);
+    assertDatabaseSchemaCompatible(schemaRows.map((row) => ({
+      version: row.version,
+      name: row.name,
+      sourceSha256: row.source_sha256,
+    })));
+    if (invalidForeignKeyRows.length !== 0) {
+      throw new Error("Seeded PostgreSQL load target has unvalidated foreign keys.");
+    }
+    return {
+      integrity: "postgres-constraints",
+      journalMode: "postgres-mvcc",
+      foreignKeyViolations: 0,
+    };
+  }
+
+  const [integrityRows, foreignKeyRows, journalRows] = await Promise.all([
+    connection.query("PRAGMA integrity_check"),
+    connection.query("PRAGMA foreign_key_check"),
+    connection.query("PRAGMA journal_mode"),
+  ]);
+  const integrity = String(Object.values(integrityRows[0] ?? {})[0] ?? "").toLowerCase();
+  const journalMode = String(Object.values(journalRows[0] ?? {})[0] ?? "").toLowerCase();
+  if (integrity !== "ok" || foreignKeyRows.length !== 0 || journalMode !== "mvcc") {
+    throw new Error("Seeded load-test target failed TursoDB integrity checks.");
+  }
+  return {
+    integrity,
+    journalMode,
+    foreignKeyViolations: foreignKeyRows.length,
+  };
+}
+
 async function verifySeededTarget(
-  connection: Connection,
+  connection: SeedConnection,
   options: SeedTargetOptions,
 ): Promise<Record<string, string | number | boolean>> {
   const identity = assertDisposableDatabaseTarget({
@@ -94,8 +232,7 @@ async function verifySeededTarget(
     sentinelRows: await readSentinelRows(connection),
   });
   const fixture = fixtureValues(identity);
-  const fixtureRows = await query(
-    connection,
+  const fixtureRows = await connection.query(
     `SELECT COUNT(*) AS fixture_count
        FROM products p
        JOIN product_variants v ON v.product_id = p.id
@@ -112,23 +249,12 @@ async function verifySeededTarget(
   if (scalarNumber(fixtureRows, "fixture_count") !== 2) {
     throw new Error("Load-test target fixtures do not match the sentinel identity.");
   }
-  const [integrityRows, foreignKeyRows, journalRows] = await Promise.all([
-    query(connection, "PRAGMA integrity_check"),
-    query(connection, "PRAGMA foreign_key_check"),
-    query(connection, "PRAGMA journal_mode"),
-  ]);
-  const integrity = String(Object.values(integrityRows[0] ?? {})[0] ?? "").toLowerCase();
-  const journalMode = String(Object.values(journalRows[0] ?? {})[0] ?? "").toLowerCase();
-  if (integrity !== "ok" || foreignKeyRows.length !== 0 || journalMode !== "mvcc") {
-    throw new Error("Seeded load-test target failed TursoDB integrity checks.");
-  }
+  const health = await readSeedDatabaseHealth(connection, options.provider);
   return {
     targetId: identity.targetId,
     databaseHostname: identity.databaseHostname,
     fixtureNamespace: identity.fixtureNamespace,
-    journalMode,
-    integrity,
-    foreignKeyViolations: foreignKeyRows.length,
+    ...health,
     spreadProductId: fixture.spreadProductId,
     spreadVariantId: fixture.spreadVariantId,
     hotProductId: fixture.hotProductId,
@@ -150,15 +276,14 @@ export async function seedLiveCheckoutTarget(
     expectedTargetId: options.targetId,
     acknowledgedTargetId: options.acknowledgedTargetId,
   });
-  const connection = connect({
-    url: options.databaseUrl,
-    authToken: options.databaseToken,
-  });
+  const connection = createSeedConnection(options);
   try {
-    const journalRows = await query(connection, "PRAGMA journal_mode");
-    const journalMode = String(Object.values(journalRows[0] ?? {})[0] ?? "").toLowerCase();
-    if (journalMode !== "mvcc") {
-      throw new Error(`Load-test target journal mode is ${journalMode || "empty"}, not mvcc.`);
+    if (options.provider === "turso") {
+      const journalRows = await connection.query("PRAGMA journal_mode");
+      const journalMode = String(Object.values(journalRows[0] ?? {})[0] ?? "").toLowerCase();
+      if (journalMode !== "mvcc") {
+        throw new Error(`Load-test target journal mode is ${journalMode || "empty"}, not mvcc.`);
+      }
     }
 
     const requiredTables = [
@@ -171,22 +296,28 @@ export async function seedLiveCheckoutTarget(
       "shipping_methods",
       "site_settings",
     ];
-    const schemaRows = await query(
-      connection,
-      `SELECT name FROM sqlite_schema
-        WHERE type = 'table'
-          AND name IN (${requiredTables.map(() => "?").join(", ")})`,
+    const schemaRows = await connection.query(
+      options.provider === "postgres"
+        ? `SELECT table_name AS name FROM information_schema.tables
+            WHERE table_schema = 'public'
+              AND table_name IN (${requiredTables.map(() => "?").join(", ")})`
+        : `SELECT name FROM sqlite_schema
+            WHERE type = 'table'
+              AND name IN (${requiredTables.map(() => "?").join(", ")})`,
       requiredTables,
     );
     if (schemaRows.length !== requiredTables.length) {
       throw new Error("Load-test target is missing the canonical application schema.");
     }
 
-    const sentinelTableRows = await query(
-      connection,
-      `SELECT COUNT(*) AS sentinel_table_count
-         FROM sqlite_schema
-        WHERE type = 'table' AND name = 'scalius_loadtest_target'`,
+    const sentinelTableRows = await connection.query(
+      options.provider === "postgres"
+        ? `SELECT COUNT(*) AS sentinel_table_count
+             FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_name = 'scalius_loadtest_target'`
+        : `SELECT COUNT(*) AS sentinel_table_count
+             FROM sqlite_schema
+            WHERE type = 'table' AND name = 'scalius_loadtest_target'`,
     );
     if (scalarNumber(sentinelTableRows, "sentinel_table_count") === 1) {
       return {
@@ -195,8 +326,7 @@ export async function seedLiveCheckoutTarget(
       };
     }
 
-    const countRows = await query(
-      connection,
+    const countRows = await connection.query(
       `SELECT
          (SELECT COUNT(*) FROM products) AS products_count,
          (SELECT COUNT(*) FROM product_variants) AS variants_count,
@@ -327,7 +457,7 @@ export async function seedLiveCheckoutTarget(
           `${identity.targetId}-HOT`.toUpperCase(),
         ],
       },
-    ], "immediate");
+    ]);
 
     return {
       ...(await verifySeededTarget(connection, options)),

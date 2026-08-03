@@ -4,22 +4,36 @@ import { chmod, stat } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
+import type { DatabaseProvider } from "../src/provider";
 import {
   createProviderSchemaDatabase,
   readApplicationTableNames,
 } from "./sqlite-provider-schema";
 import { convertToTursoMvccArtifact } from "./prepare-turso-upload";
 
-function parseOutputPath(argv: readonly string[]): string {
+interface PrepareOptions {
+  outputPath: string;
+  provider: Extract<DatabaseProvider, "turso" | "postgres">;
+}
+
+function parseOptions(argv: readonly string[]): PrepareOptions {
   let outputPath: string | undefined;
+  let provider: PrepareOptions["provider"] = "turso";
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
     if (argument === "--") continue;
     if (argument === "--out") outputPath = argv[++index];
+    else if (argument === "--provider") {
+      const value = argv[++index];
+      if (value !== "turso" && value !== "postgres") {
+        throw new Error("--provider must be turso or postgres.");
+      }
+      provider = value;
+    }
     else throw new Error(`Unknown argument ${JSON.stringify(argument)}.`);
   }
   if (!outputPath?.trim()) throw new Error("--out is required.");
-  return resolve(outputPath);
+  return { outputPath: resolve(outputPath), provider };
 }
 
 async function requireMissingFile(path: string): Promise<void> {
@@ -38,20 +52,27 @@ async function sha256File(path: string): Promise<string> {
 }
 
 export async function prepareLiveCheckoutTargetSchema(
+  provider: PrepareOptions["provider"],
   outputPath: string,
 ): Promise<Record<string, string | number>> {
   await requireMissingFile(outputPath);
-  const database = await createProviderSchemaDatabase("turso", outputPath);
-  let applicationTables = 0;
-  let integrity = "";
-  let foreignKeyViolations = 0;
+  const database = await createProviderSchemaDatabase(provider, outputPath);
+  let applicationTables: number;
+  let integrity: string;
+  let foreignKeyViolations: number;
+  let journalMode: string;
   try {
-    const journalMode = String(
-      Object.values(database.prepare("PRAGMA journal_mode = WAL").get() ?? {})[0]
+    journalMode = String(
+      Object.values(database.prepare(
+        `PRAGMA journal_mode = ${provider === "turso" ? "WAL" : "DELETE"}`,
+      ).get() ?? {})[0]
         ?? "",
     ).toLowerCase();
-    if (journalMode !== "wal") {
-      throw new Error("Prepared load-test schema could not enter WAL mode.");
+    const expectedJournalMode = provider === "turso" ? "wal" : "delete";
+    if (journalMode !== expectedJournalMode) {
+      throw new Error(
+        `Prepared ${provider} load-test schema could not enter ${expectedJournalMode} mode.`,
+      );
     }
     integrity = String(
       Object.values(database.prepare("PRAGMA integrity_check").get() ?? {})[0]
@@ -71,23 +92,29 @@ export async function prepareLiveCheckoutTargetSchema(
     database.close();
     await chmod(outputPath, 0o600);
   }
-  const pragmas = await convertToTursoMvccArtifact(outputPath);
+  if (provider === "turso") {
+    journalMode = (await convertToTursoMvccArtifact(outputPath)).journalMode;
+  }
   return {
     outputPath,
+    provider,
     applicationTables,
-    journalMode: pragmas.journalMode,
+    journalMode,
     integrity,
     foreignKeyViolations,
   };
 }
 
 async function main(): Promise<void> {
-  const outputPath = parseOutputPath(process.argv.slice(2));
-  const summary = await prepareLiveCheckoutTargetSchema(outputPath);
+  const options = parseOptions(process.argv.slice(2));
+  const summary = await prepareLiveCheckoutTargetSchema(
+    options.provider,
+    options.outputPath,
+  );
   process.stdout.write(`${JSON.stringify({
     ...summary,
-    bytes: (await stat(outputPath)).size,
-    sha256: await sha256File(outputPath),
+    bytes: (await stat(options.outputPath)).size,
+    sha256: await sha256File(options.outputPath),
   })}\n`);
 }
 

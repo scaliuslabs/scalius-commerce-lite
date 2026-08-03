@@ -677,6 +677,9 @@ importers:
       drizzle-kit:
         specifier: ^0.31.10
         version: 0.31.10
+      undici:
+        specifier: '>=8.5.0'
+        version: 8.9.0
 
   packages/shared:
     dependencies:

@@ -148,6 +148,20 @@ describe("PostgreSQL SQLite-profile compiler", () => {
     );
   });
 
+  it("keeps portable table-valued cross-join predicates boolean on PostgreSQL", () => {
+    const compiled = compileSqliteStatementForPostgres(
+      `SELECT edge.value
+         FROM orders AS checkout_order
+         JOIN json_each(checkout_order.checkout_inventory_edges) AS edge ON 1 = 1
+        WHERE checkout_order.notes = ?`,
+      1,
+    );
+
+    expect(compiled.sql).toContain(
+      "json_each(checkout_order.checkout_inventory_edges) AS edge ON 1 = 1",
+    );
+  });
+
   it("fails closed for malformed SQL and parameter drift", () => {
     expect(() => compileSqliteStatementForPostgres("select '?'", 1))
       .toThrow(/parameter count/i);
