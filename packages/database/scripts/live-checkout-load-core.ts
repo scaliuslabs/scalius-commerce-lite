@@ -54,6 +54,23 @@ export interface TursoLoadBillingIsolation {
   productionOrganization: string | null;
 }
 
+export function describeLoadTransportError(error: unknown): string {
+  const labels: string[] = [];
+  let current = error;
+  for (let depth = 0; depth < 4 && current && typeof current === "object"; depth += 1) {
+    const candidate = current as { name?: unknown; code?: unknown; cause?: unknown };
+    const label = typeof candidate.code === "string"
+      ? candidate.code
+      : typeof candidate.name === "string"
+      ? candidate.name
+      : "request_error";
+    const normalized = label.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 80);
+    if (normalized && labels.at(-1) !== normalized) labels.push(normalized);
+    current = candidate.cause;
+  }
+  return labels.join(":") || "request_error";
+}
+
 interface LoadTargetSentinelInput extends LoadTargetAcknowledgementInput {
   sentinelRows: readonly Record<string, unknown>[];
 }
@@ -170,20 +187,44 @@ export function assertDisposableDatabaseProvisionTarget(
 ): LoadTargetIdentity {
   const parsed = new URL(input.databaseUrl);
   const hostname = parsed.hostname.toLowerCase();
-  if (parsed.protocol !== "https:" && parsed.protocol !== "turso:") {
-    throw new Error("Live checkout load databases must use HTTPS or Turso URLs.");
-  }
-  if (
-    parsed.username ||
-    parsed.password ||
-    parsed.search ||
-    parsed.hash ||
-    (parsed.pathname && parsed.pathname !== "/")
-  ) {
-    throw new Error("Live checkout load database must be a credential-free origin URL.");
-  }
-  if (!hostname.includes("loadtest")) {
-    throw new Error("Live checkout load database hostname must contain loadtest.");
+  const isPostgres = parsed.protocol === "postgres:" || parsed.protocol === "postgresql:";
+  if (isPostgres) {
+    const encodedDatabase = parsed.pathname.slice(1);
+    let databaseName: string;
+    try {
+      databaseName = decodeURIComponent(encodedDatabase).toLowerCase();
+    } catch {
+      throw new Error("Live checkout load PostgreSQL URL has an invalid database name.");
+    }
+    if (
+      !hostname ||
+      parsed.hash ||
+      !encodedDatabase ||
+      encodedDatabase.includes("/")
+    ) {
+      throw new Error("Live checkout load PostgreSQL URL must name exactly one database.");
+    }
+    if (!databaseName.includes("loadtest")) {
+      throw new Error("Live checkout load PostgreSQL database name must contain loadtest.");
+    }
+  } else {
+    if (parsed.protocol !== "https:" && parsed.protocol !== "turso:") {
+      throw new Error(
+        "Live checkout load databases must use HTTPS, Turso, or PostgreSQL URLs.",
+      );
+    }
+    if (
+      parsed.username ||
+      parsed.password ||
+      parsed.search ||
+      parsed.hash ||
+      (parsed.pathname && parsed.pathname !== "/")
+    ) {
+      throw new Error("Live checkout load database must be a credential-free origin URL.");
+    }
+    if (!hostname.includes("loadtest")) {
+      throw new Error("Live checkout load database hostname must contain loadtest.");
+    }
   }
   if (input.acknowledgedDatabaseHostname.trim().toLowerCase() !== hostname) {
     throw new Error(

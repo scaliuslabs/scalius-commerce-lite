@@ -3,15 +3,24 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { Agent, fetch as loadFetch } from "undici";
 
 import {
   createTursoPortabilityExecutor,
   type SqlitePortabilityExecutor,
 } from "../src/portability";
+import { connectNeonPostgres } from "../src/postgres-adapter";
+import {
+  compileSqliteStatementForPostgres,
+  normalizePostgresParameters,
+  normalizePostgresResultObjects,
+} from "../src/postgres-sqlite-profile";
+import { assertDatabaseSchemaCompatible } from "../src/schema-contract";
 import {
   assertDisposableDatabaseTarget,
   assertDisposableLoadTarget,
   assertTursoLoadBillingIsolation,
+  describeLoadTransportError,
   runOpenArrival,
   summarizeTimings,
   type LoadTargetIdentity,
@@ -38,7 +47,7 @@ interface LoadFixture {
 }
 
 interface LoadOptions {
-  databaseProvider: "turso" | "d1";
+  databaseProvider: "turso" | "d1" | "postgres";
   apiOrigin: string;
   databaseUrl: string;
   databaseToken: string;
@@ -66,6 +75,8 @@ interface LoadOptions {
   hotOrders: number;
   hotRate: number;
   timeoutMs: number;
+  clientConnections: number;
+  dispatcher?: Agent;
 }
 
 interface SafeHttpResult {
@@ -185,6 +196,7 @@ function parseArguments(argv: readonly string[]): LoadOptions {
   let hotOrders = 60;
   let hotRate = 30;
   let timeoutMs = 30_000;
+  let clientConnections = 256;
 
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
@@ -207,6 +219,12 @@ function parseArguments(argv: readonly string[]): LoadOptions {
       hotRate = parsePositiveNumber(argv[++index], hotRate, argument);
     } else if (argument === "--timeout-ms") {
       timeoutMs = parsePositiveInteger(argv[++index], timeoutMs, argument);
+    } else if (argument === "--client-connections") {
+      clientConnections = parsePositiveInteger(
+        argv[++index],
+        clientConnections,
+        argument,
+      );
     } else {
       throw new Error(`Unknown argument ${JSON.stringify(argument)}.`);
     }
@@ -217,13 +235,18 @@ function parseArguments(argv: readonly string[]): LoadOptions {
     apiUrl,
     requiredEnvironment("LOADTEST_ACK_HOST"),
   ).origin;
-  const databaseProvider = process.env.LOADTEST_DATABASE_PROVIDER?.trim().toLowerCase() === "d1"
-    ? "d1"
-    : "turso";
-  const d1 = databaseProvider === "d1"
+  const databaseProvider = requiredEnvironment("LOADTEST_DATABASE_PROVIDER")
+    .toLowerCase();
+  if (!(["d1", "turso", "postgres"] as const).includes(
+    databaseProvider as "d1" | "turso" | "postgres",
+  )) {
+    throw new Error("LOADTEST_DATABASE_PROVIDER must be d1, turso, or postgres.");
+  }
+  const selectedProvider = databaseProvider as LoadOptions["databaseProvider"];
+  const d1 = selectedProvider === "d1"
     ? readD1TargetOptions()
     : undefined;
-  const tursoBillingIsolation = databaseProvider === "turso"
+  const tursoBillingIsolation = selectedProvider === "turso"
     ? assertTursoLoadBillingIsolation({
         loadOrganization: requiredEnvironment("LOADTEST_TURSO_ORGANIZATION"),
         acknowledgedLoadOrganization: requiredEnvironment(
@@ -237,19 +260,24 @@ function parseArguments(argv: readonly string[]): LoadOptions {
         ),
       })
     : undefined;
-  const databaseUrl = databaseProvider === "d1"
+  const databaseUrl = selectedProvider === "d1"
     ? `https://${d1!.databaseName}`
-    : requiredEnvironment("TURSO_DATABASE_URL");
+    : selectedProvider === "turso"
+    ? requiredEnvironment("TURSO_DATABASE_URL")
+    : requiredEnvironment("POSTGRES_DATABASE_URL");
   const parsedDatabaseUrl = new URL(databaseUrl);
-  if (parsedDatabaseUrl.username || parsedDatabaseUrl.password) {
+  if (
+    selectedProvider !== "postgres"
+    && (parsedDatabaseUrl.username || parsedDatabaseUrl.password)
+  ) {
     throw new Error("TURSO_DATABASE_URL must not contain credentials.");
   }
 
   return {
-    databaseProvider,
+    databaseProvider: selectedProvider,
     apiOrigin,
     databaseUrl,
-    databaseToken: databaseProvider === "turso"
+    databaseToken: selectedProvider === "turso"
       ? requiredEnvironment("TURSO_AUTH_TOKEN")
       : "",
     acknowledgedDatabaseHostname: requiredEnvironment(
@@ -306,6 +334,7 @@ function parseArguments(argv: readonly string[]): LoadOptions {
     hotOrders,
     hotRate,
     timeoutMs,
+    clientConnections,
   };
 }
 
@@ -392,6 +421,28 @@ function createLoadOracle(options: LoadOptions): SqlitePortabilityExecutor {
   if (options.databaseProvider === "d1") {
     if (!options.d1) throw new Error("D1 load target options are missing.");
     return createD1CliOracle(options.d1);
+  }
+  if (options.databaseProvider === "postgres") {
+    const connection = connectNeonPostgres(options.databaseUrl);
+    return {
+      async query(sql, params = []) {
+        const compiled = compileSqliteStatementForPostgres(sql, params.length);
+        if (!compiled.readOnly) {
+          throw new Error("PostgreSQL load oracle accepts read-only SQL only.");
+        }
+        const result = await connection.query(
+          compiled.sql,
+          normalizePostgresParameters(params),
+        );
+        if (result.fields.some((field) => !field.name)) {
+          throw new Error("PostgreSQL load oracle result field is missing its name.");
+        }
+        return normalizePostgresResultObjects(
+          result.rows,
+          result.fields as { name: string; dataTypeID: number }[],
+        );
+      },
+    };
   }
   return createTursoPortabilityExecutor({
     url: options.databaseUrl,
@@ -488,6 +539,49 @@ async function assertDatabaseHealth(
   oracle: SqlitePortabilityExecutor,
   provider: LoadOptions["databaseProvider"],
 ): Promise<Record<string, string | number>> {
+  if (provider === "postgres") {
+    const [schemaRows, objectRows, invalidForeignKeyRows] = await Promise.all([
+      oracle.query(
+        `SELECT version, name, source_sha256
+           FROM scalius_schema_migrations
+          ORDER BY version`,
+      ),
+      oracle.query(
+        `SELECT COUNT(*) AS schema_objects
+           FROM information_schema.tables
+          WHERE table_schema = 'public'`,
+      ),
+      oracle.query(
+        `SELECT constraint_name
+           FROM information_schema.table_constraints
+          WHERE constraint_schema = 'public'
+            AND constraint_type = 'FOREIGN KEY'
+            AND constraint_name IN (
+              SELECT conname
+                FROM pg_constraint
+               WHERE contype = 'f' AND NOT convalidated
+            )`,
+      ),
+    ]);
+    assertDatabaseSchemaCompatible(schemaRows.map((row) => ({
+      version: row.version,
+      name: row.name,
+      sourceSha256: row.source_sha256,
+    })));
+    const schemaObjects = scalarNumber(objectRows, "schema_objects");
+    if (schemaObjects < 1) throw new Error("PostgreSQL load target has no public tables.");
+    if (invalidForeignKeyRows.length !== 0) {
+      throw new Error(
+        `PostgreSQL has ${invalidForeignKeyRows.length} unvalidated foreign-key constraints.`,
+      );
+    }
+    return {
+      integrity: "postgres-constraints",
+      foreignKeyViolations: 0,
+      journalMode: "postgres-mvcc",
+      schemaObjects,
+    };
+  }
   const [integrityRows, foreignKeyRows] = await Promise.all([
     provider === "turso"
       ? oracle.query("PRAGMA integrity_check")
@@ -644,9 +738,9 @@ async function requestJson(
   body?: unknown,
   headers: Record<string, string> = {},
 ): Promise<{ result: SafeHttpResult; raw: Record<string, unknown> | null }> {
-  let response: Response;
+  let response: Awaited<ReturnType<typeof loadFetch>>;
   try {
-    response = await fetch(`${options.apiOrigin}${path}`, {
+    response = await loadFetch(`${options.apiOrigin}${path}`, {
       method,
       headers: {
         Accept: "application/json",
@@ -655,11 +749,15 @@ async function requestJson(
       },
       body: body === undefined ? undefined : JSON.stringify(body),
       signal: AbortSignal.timeout(options.timeoutMs),
+      dispatcher: options.dispatcher,
     });
   } catch (error) {
-    const description = error instanceof Error ? error.name : "request_error";
     return {
-      result: { status: 0, orderId: null, errorCode: description },
+      result: {
+        status: 0,
+        orderId: null,
+        errorCode: describeLoadTransportError(error),
+      },
       raw: null,
     };
   }
@@ -1020,7 +1118,7 @@ async function runHot(
         COALESCE(MIN(CAST(json_extract(edge.value, '$.laneVersionBefore') AS INTEGER)), 0) AS min_version_before,
         COALESCE(MAX(CAST(json_extract(edge.value, '$.laneVersionAfter') AS INTEGER)), 0) AS max_version_after
        FROM orders AS checkout_order
-       JOIN json_each(checkout_order.checkout_inventory_edges) AS edge
+       JOIN json_each(checkout_order.checkout_inventory_edges) AS edge ON 1 = 1
       WHERE checkout_order.notes = ?
         AND checkout_order.inventory_authority = 'checkout_lane_v1'
         AND checkout_order.inventory_action = 'reserved'
@@ -1130,6 +1228,7 @@ export async function runLiveCheckoutLoad(options: LoadOptions): Promise<{
   targetHostname: string;
   targetId: string;
   databaseHostname: string;
+  clientConnections: number;
   scenarios: ScenarioSummary[];
 }> {
   if (options.databaseProvider === "turso") {
@@ -1145,37 +1244,46 @@ export async function runLiveCheckoutLoad(options: LoadOptions): Promise<{
     });
   }
   const runId = `lt_${Date.now().toString(36)}_${randomUUID().slice(0, 8)}`;
-  const oracle = createLoadOracle(options);
+  if (options.clientConnections > 4_096) {
+    throw new Error("Load-test client connections must not exceed 4096.");
+  }
+  const dispatcher = new Agent({
+    connections: options.clientConnections,
+    connect: { timeout: Math.min(options.timeoutMs, 60_000) },
+  });
+  const executionOptions: LoadOptions = { ...options, dispatcher };
+  const oracle = createLoadOracle(executionOptions);
   const scenarios: ScenarioSummary[] = [];
   try {
-    await assertDatabaseHealth(oracle, options.databaseProvider);
-    let identity = await assertLoadTargetPreflight(options, oracle);
-    if (options.scenario === "smoke" || options.scenario === "all") {
-      identity = await assertLoadTargetPreflight(options, oracle);
-      scenarios.push(await runSmoke(options, oracle, runId));
+    await assertDatabaseHealth(oracle, executionOptions.databaseProvider);
+    let identity = await assertLoadTargetPreflight(executionOptions, oracle);
+    if (executionOptions.scenario === "smoke" || executionOptions.scenario === "all") {
+      identity = await assertLoadTargetPreflight(executionOptions, oracle);
+      scenarios.push(await runSmoke(executionOptions, oracle, runId));
     }
-    if (options.scenario === "idempotency" || options.scenario === "all") {
-      identity = await assertLoadTargetPreflight(options, oracle);
-      scenarios.push(await runIdempotency(options, oracle, runId));
+    if (executionOptions.scenario === "idempotency" || executionOptions.scenario === "all") {
+      identity = await assertLoadTargetPreflight(executionOptions, oracle);
+      scenarios.push(await runIdempotency(executionOptions, oracle, runId));
     }
-    if (options.scenario === "spread" || options.scenario === "all") {
-      identity = await assertLoadTargetPreflight(options, oracle);
-      scenarios.push(await runSpread(options, oracle, runId));
+    if (executionOptions.scenario === "spread" || executionOptions.scenario === "all") {
+      identity = await assertLoadTargetPreflight(executionOptions, oracle);
+      scenarios.push(await runSpread(executionOptions, oracle, runId));
     }
-    if (options.scenario === "hot" || options.scenario === "all") {
-      identity = await assertLoadTargetPreflight(options, oracle);
-      scenarios.push(await runHot(options, oracle, runId));
+    if (executionOptions.scenario === "hot" || executionOptions.scenario === "all") {
+      identity = await assertLoadTargetPreflight(executionOptions, oracle);
+      scenarios.push(await runHot(executionOptions, oracle, runId));
     }
-    identity = await assertLoadTargetPreflight(options, oracle);
+    identity = await assertLoadTargetPreflight(executionOptions, oracle);
     return {
       runId,
       targetHostname: new URL(options.apiOrigin).hostname,
       targetId: identity.targetId,
       databaseHostname: identity.databaseHostname,
+      clientConnections: executionOptions.clientConnections,
       scenarios,
     };
   } finally {
-    await oracle.close?.();
+    await Promise.all([oracle.close?.(), dispatcher.close()]);
   }
 }
 

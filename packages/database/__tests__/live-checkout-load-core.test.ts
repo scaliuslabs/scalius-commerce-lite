@@ -5,6 +5,7 @@ import {
   assertDisposableDatabaseProvisionTarget,
   assertDisposableLoadTarget,
   assertTursoLoadBillingIsolation,
+  describeLoadTransportError,
   LOADTEST_TARGET_PURPOSE,
   percentile,
   runOpenArrival,
@@ -130,6 +131,47 @@ describe("live checkout load safety and timing", () => {
     })).toThrow(/exactly one/);
   });
 
+  it("accepts only explicitly named disposable PostgreSQL databases", () => {
+    const databaseUrl =
+      "postgresql://load_user:load_password@ep-example.ap-southeast-1.aws.neon.tech/scalius_loadtest_20260803?sslmode=require";
+    const targetId = "lt_a1b2c3d4e5f60708";
+    const input = {
+      databaseUrl,
+      acknowledgedDatabaseHostname: "ep-example.ap-southeast-1.aws.neon.tech",
+      expectedTargetId: targetId,
+      acknowledgedTargetId: targetId,
+    };
+
+    expect(assertDisposableDatabaseProvisionTarget(input)).toEqual({
+      targetId,
+      databaseHostname: "ep-example.ap-southeast-1.aws.neon.tech",
+      fixtureNamespace: targetId,
+    });
+    expect(assertDisposableDatabaseTarget({
+      ...input,
+      sentinelRows: [{
+        purpose: LOADTEST_TARGET_PURPOSE,
+        target_id: targetId,
+        database_hostname: "ep-example.ap-southeast-1.aws.neon.tech",
+        fixture_namespace: targetId,
+      }],
+    })).toEqual({
+      targetId,
+      databaseHostname: "ep-example.ap-southeast-1.aws.neon.tech",
+      fixtureNamespace: targetId,
+    });
+
+    expect(() => assertDisposableDatabaseProvisionTarget({
+      ...input,
+      databaseUrl:
+        "postgresql://load_user:load_password@ep-example.ap-southeast-1.aws.neon.tech/neondb?sslmode=require",
+    })).toThrow(/database name must contain loadtest/);
+    expect(() => assertDisposableDatabaseProvisionTarget({
+      ...input,
+      acknowledgedDatabaseHostname: "different.ap-southeast-1.aws.neon.tech",
+    })).toThrow(/exactly match the database hostname/);
+  });
+
   it("reports nearest-rank latency percentiles", () => {
     expect(percentile([100, 20, 40, 80, 60], 0.5)).toBe(60);
     expect(summarizeTimings([
@@ -158,5 +200,13 @@ describe("live checkout load safety and timing", () => {
     expect(result[0]?.timing.serviceMs).toBe(30);
     expect(result[0]?.timing.scheduledMs).toBe(30);
     expect(result[0]?.timing.startLagMs).toBe(0);
+  });
+
+  it("classifies nested transport failures without copying error messages", () => {
+    const error = Object.assign(new TypeError("fetch failed for a sensitive URL"), {
+      cause: Object.assign(new Error("socket closed"), { code: "UND_ERR_SOCKET" }),
+    });
+
+    expect(describeLoadTransportError(error)).toBe("TypeError:UND_ERR_SOCKET");
   });
 });
