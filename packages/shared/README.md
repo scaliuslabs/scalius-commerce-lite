@@ -25,7 +25,6 @@ import { validateAndFormatPhone, phoneNumberSchema } from "@scalius/shared/custo
 import { generateEAN13, validateEAN13 } from "@scalius/shared/barcode-utils";
 import { generateBarcodeSvg } from "@scalius/shared/barcode-svg";
 import { buildStorefrontPath } from "@scalius/shared/storefront-url";
-import { layoutCache, CACHE_KEYS } from "@scalius/shared/layout-cache";
 import { escapeHtml } from "@scalius/shared/html-escape";
 import { sanitizeHtml } from "@scalius/shared/html-sanitize";
 import { parseShortcodes } from "@scalius/shared/shortcodes";
@@ -55,7 +54,6 @@ import { getStatusBadgeClass } from "@scalius/shared/status-badges";
 | `barcode-utils.ts` | EAN-13 barcode generation and validation (GS1 200-299 prefix) | `generateEAN13()`, `calculateEAN13CheckDigit()`, `validateEAN13()` |
 | `barcode-svg.ts` | Pure SVG barcode rendering using Code 128B encoding | `generateBarcodeSvg()`, `BarcodeSvgOptions` -- uses `escapeHtml()` for label text |
 | `storefront-url.ts` | Storefront URL path construction | `buildStorefrontPath()` |
-| `layout-cache.ts` | In-memory TTL cache (5 min) for admin layout data | `layoutCache`, `CACHE_KEYS` |
 
 ## Dependencies
 
@@ -90,7 +88,3 @@ Use `html-escape.ts` when inserting individual values into templates and `html-s
 ### Timestamps
 
 `timestamps.ts` provides utilities for working with Unix epoch seconds at the service/application layer. For Drizzle schema defaults, use `UNIX_NOW` from `@scalius/database/schema` instead.
-
-## Known Gaps
-
-- `layout-cache.ts` uses in-memory state that is per-Worker-isolate; clearing in one Worker does not affect others.

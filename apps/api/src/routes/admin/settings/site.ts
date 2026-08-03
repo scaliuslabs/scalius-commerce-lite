@@ -3,7 +3,6 @@ import {
   invalidateSiteSettingsCache,
   invalidateStorefrontUrlCache,
 } from "@scalius/core/modules/settings";
-import { layoutCache, CACHE_KEYS } from "@scalius/shared/layout-cache";
 import {
   STOREFRONT_THEME_BODY_FONTS,
   STOREFRONT_THEME_BUTTON_STYLES,
@@ -1166,7 +1165,6 @@ app.openapi(saveStorefrontUrlRoute, async (c) => {
   const db = c.get("db");
   const { storefrontUrl } = c.req.valid("json");
   await saveStorefrontUrl(db, storefrontUrl);
-  layoutCache.invalidate(CACHE_KEYS.STOREFRONT_URL);
   const kv = c.env.CACHE;
   await Promise.all([
     invalidateSiteSettingsCache(kv),
