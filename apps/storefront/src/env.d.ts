@@ -68,6 +68,28 @@ interface Fetcher {
 interface ExecutionContext {
   waitUntil(promise: Promise<unknown>): void;
   passThroughOnException(): void;
+  readonly exports: {
+    PublicStorefront: WorkerEntrypointFetcher & {
+      purgeGroups(groups: string[]): Promise<void>;
+    };
+  };
+  readonly cache: WorkersCacheContext;
+}
+
+interface WorkersCachePurgeResult {
+  success: boolean;
+  errors: Array<{ code: number; message: string }>;
+}
+
+interface WorkersCacheContext {
+  purge(options: { tags: string[] }): Promise<WorkersCachePurgeResult>;
+}
+
+interface WorkerEntrypointFetcher {
+  fetch(
+    request: Request,
+    options?: { cf?: { cacheKey?: string } },
+  ): Promise<Response>;
 }
 
 // Cloudflare Workers environment bindings (global Env interface).
@@ -104,6 +126,10 @@ interface Env {
 // Required by @astrojs/cloudflare -- provides the Worker `env` object at module level.
 declare module "cloudflare:workers" {
   export const env: Env;
+  export abstract class WorkerEntrypoint<Bindings = unknown> {
+    protected readonly env: Bindings;
+    protected readonly ctx: ExecutionContext;
+  }
 }
 
 declare namespace App {
