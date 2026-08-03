@@ -1,6 +1,6 @@
 import { categories } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
-import { buildBatchGuard } from "@scalius/database/client";
+import { buildBatchGuard, isBatchGuardError } from "@scalius/database/client";
 import { sql, type SQL } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { AppError, ValidationError } from "@scalius/core/errors";
@@ -75,10 +75,10 @@ export function buildCategoryRevisionGuard(
     claims: readonly CategoryRevisionClaim[],
     requiredState: CategoryLifecycleState,
 ): BatchItem<"sqlite"> {
-    return buildBatchGuard(db, sql`CASE WHEN ${categoryRevisionClaimsMatchCondition(
+    return buildBatchGuard(db, categoryRevisionClaimsMatchCondition(
         claims,
         requiredState,
-    )} THEN 1 ELSE json_extract(${CATEGORY_REVISION_CONFLICT}, '$') END`);
+    ), CATEGORY_REVISION_CONFLICT);
 }
 
 export function categoryRevisionClaimsMatchCondition(
@@ -99,8 +99,7 @@ export function categoryRevisionClaimsMatchCondition(
 }
 
 function isCategoryRevisionGuardError(error: unknown): boolean {
-    const message = error instanceof Error ? error.message : String(error);
-    return /CATEGORY_REVISION_CONFLICT|malformed json/i.test(message);
+    return isBatchGuardError(error, CATEGORY_REVISION_CONFLICT);
 }
 
 export async function rethrowCategoryRevisionConflict(

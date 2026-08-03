@@ -135075,7 +135075,8 @@
                   },
                   "newPassword": {
                     "type": "string",
-                    "minLength": 12
+                    "minLength": 12,
+                    "maxLength": 128
                   }
                 },
                 "required": [
@@ -153325,7 +153326,8 @@
                   },
                   "password": {
                     "type": "string",
-                    "minLength": 12
+                    "minLength": 12,
+                    "maxLength": 128
                   }
                 },
                 "required": [

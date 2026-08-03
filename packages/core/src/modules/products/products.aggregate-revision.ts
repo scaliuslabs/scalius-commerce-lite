@@ -1,6 +1,10 @@
 import { products } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
-import { buildBatchGuard, safeBatch } from "@scalius/database/client";
+import {
+    buildBatchGuard,
+    isBatchGuardError,
+    safeBatch,
+} from "@scalius/database/client";
 import type { BatchItem } from "drizzle-orm/batch";
 import { eq, sql } from "drizzle-orm";
 import { AppError, ConflictError } from "@scalius/core/errors";
@@ -41,9 +45,9 @@ export class ProductStateConflictError extends AppError {
 }
 
 /**
- * A zero-row UPDATE does not make D1 batch() fail. This guard deliberately
- * raises a SQLite JSON error when the expected revision is stale, so every
- * later statement in the same batch is rolled back atomically.
+ * A zero-row UPDATE does not make an atomic batch fail. This guard deliberately
+ * raises the provider-neutral batch-guard error when the expected revision is
+ * stale, so every later statement in the same batch is rolled back atomically.
  */
 export function buildProductAggregateRevisionGuard(
     db: Database,
@@ -51,16 +55,14 @@ export function buildProductAggregateRevisionGuard(
     expectedAggregateRevision: number,
     requiredState: ProductAggregateLifecycle = "active",
 ): BatchItem<"sqlite"> {
-    return buildBatchGuard(db, sql`
-        CASE WHEN EXISTS (
+    return buildBatchGuard(db, sql`EXISTS (
             SELECT 1 FROM ${products}
             WHERE ${products.id} = ${productId}
               AND ${products.aggregateRevision} = ${expectedAggregateRevision}
               AND ${requiredState === "active"
                 ? sql`${products.deletedAt} IS NULL`
                 : sql`${products.deletedAt} IS NOT NULL`}
-        ) THEN 1 ELSE json_extract(${PRODUCT_AGGREGATE_REVISION_CONFLICT}, '$') END
-    `);
+        )`, PRODUCT_AGGREGATE_REVISION_CONFLICT);
 }
 
 /** Must be included exactly once in the guarded aggregate mutation batch. */
@@ -79,8 +81,7 @@ export function buildProductAggregateRevisionBump(
 }
 
 export function isProductAggregateRevisionConflict(error: unknown): boolean {
-    const message = error instanceof Error ? error.message : String(error);
-    return /PRODUCT_AGGREGATE_REVISION_CONFLICT|malformed json/i.test(message);
+    return isBatchGuardError(error, PRODUCT_AGGREGATE_REVISION_CONFLICT);
 }
 
 /**

@@ -1,4 +1,8 @@
-import { buildBatchGuard, type Database } from "@scalius/database/client";
+import {
+  buildBatchGuard,
+  isBatchGuardError,
+  type Database,
+} from "@scalius/database/client";
 import { checkoutAttempts, orderReceipts, orders } from "@scalius/database/schema";
 import { and, eq, isNull, lte, or, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
@@ -223,11 +227,11 @@ export async function prepareAtomicCheckoutAttemptCommit<TResponse>(
     eq(checkoutAttempts.status, "committed"),
     eq(checkoutAttempts.responsePayload, responsePayload),
   );
-  const guard = buildBatchGuard(db, sql`CASE WHEN EXISTS (
+  const guard = buildBatchGuard(db, sql`EXISTS (
     SELECT 1
     FROM ${checkoutAttempts}
     WHERE ${committedIdentityCondition}
-  ) THEN 1 ELSE json_extract('{}', ${CHECKOUT_ATTEMPT_ATOMIC_COMMIT_CONFLICT}) END`);
+  )`, CHECKOUT_ATTEMPT_ATOMIC_COMMIT_CONFLICT);
 
   const receiptWrite = db
     .insert(orderReceipts)
@@ -258,16 +262,7 @@ export async function prepareAtomicCheckoutAttemptCommit<TResponse>(
 }
 
 export function isCheckoutAttemptCommitConflictError(error: unknown): boolean {
-  let current = error;
-  for (let depth = 0; depth < 5 && current; depth += 1) {
-    const message = current instanceof Error ? current.message : String(current);
-    const normalizedMessage = message.toUpperCase();
-    if (normalizedMessage.includes(CHECKOUT_ATTEMPT_ATOMIC_COMMIT_CONFLICT)) return true;
-    current = current instanceof Error
-      ? (current as Error & { cause?: unknown }).cause
-      : null;
-  }
-  return false;
+  return isBatchGuardError(error, CHECKOUT_ATTEMPT_ATOMIC_COMMIT_CONFLICT);
 }
 
 async function selectCheckoutAttemptByKey(

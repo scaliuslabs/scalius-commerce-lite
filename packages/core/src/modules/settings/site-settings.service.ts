@@ -17,6 +17,7 @@ import { eq, and, desc, gt, lte, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import {
   buildBatchGuard,
+  isBatchGuardError,
   safeBatch,
   type Database,
 } from "@scalius/database/client";
@@ -207,8 +208,7 @@ function serializeThemeSettings(theme: StorefrontThemeSettings): {
 const THEME_REVISION_CONFLICT_SENTINEL = "THEME_REVISION_CONFLICT";
 
 function isThemeRevisionConflict(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error);
-  return /THEME_REVISION_CONFLICT|malformed json/iu.test(message);
+  return isBatchGuardError(error, THEME_REVISION_CONFLICT_SENTINEL);
 }
 
 function themeConflict(message: string): ConflictError {
@@ -860,8 +860,7 @@ function buildPublishedThemeRevisionGuard(
   db: Database,
   expectedRevision: number,
 ) {
-  return buildBatchGuard(db, sql`
-    CASE WHEN ${expectedRevision === 0
+  return buildBatchGuard(db, expectedRevision === 0
       ? sql`NOT EXISTS (
           SELECT 1 FROM ${themeSettings}
           WHERE ${themeSettings.id} = ${THEME_SETTINGS_ID}
@@ -870,9 +869,7 @@ function buildPublishedThemeRevisionGuard(
           SELECT 1 FROM ${themeSettings}
           WHERE ${themeSettings.id} = ${THEME_SETTINGS_ID}
             AND ${themeSettings.revision} = ${expectedRevision}
-        )`}
-    THEN 1 ELSE json_extract(${THEME_REVISION_CONFLICT_SENTINEL}, '$') END
-  `);
+        )`, THEME_REVISION_CONFLICT_SENTINEL);
 }
 
 function buildThemeDraftRevisionGuard(
@@ -881,13 +878,13 @@ function buildThemeDraftRevisionGuard(
   basePublishedRevision: number,
 ) {
   return buildBatchGuard(db, sql`
-    CASE WHEN EXISTS (
+    EXISTS (
       SELECT 1 FROM ${themeSettingsDrafts}
       WHERE ${themeSettingsDrafts.id} = ${THEME_SETTINGS_ID}
         AND ${themeSettingsDrafts.revision} = ${expectedDraftRevision}
         AND ${themeSettingsDrafts.basePublishedRevision} = ${basePublishedRevision}
-    ) THEN 1 ELSE json_extract(${THEME_REVISION_CONFLICT_SENTINEL}, '$') END
-  `);
+    )
+  `, THEME_REVISION_CONFLICT_SENTINEL);
 }
 
 function publishedThemeWriteStatement(

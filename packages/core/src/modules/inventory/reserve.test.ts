@@ -198,7 +198,7 @@ describe("reserveStockBatch sellability guard", () => {
     expect(guard.sql).toContain('"inventory_reservation_lanes"."pool" = \'regular\'');
     expect(guard.params).toContain(7);
     expect(guard.params).toContain(2);
-    expect(guard.params).toContain("INVENTORY_RESERVATION_CONFLICT");
+    expect(guard.sql).toContain("INVENTORY_RESERVATION_CONFLICT");
     expect(plan.availabilityChangedSubjects).toEqual([{
       productId: "product_a",
       slug: "product-a",

@@ -97,8 +97,9 @@ export function buildCategoryPublishReadyGuard(
     db: Database,
     categoryId: string,
 ): BatchItem<"sqlite"> {
-    return buildBatchGuard(db, sql`
-        CASE WHEN ${buyerResolvableCategoryProductExists(categoryId)}
-        THEN 1 ELSE json_extract(${CATEGORY_PUBLISH_NOT_READY}, '$') END
-    `);
+    return buildBatchGuard(
+        db,
+        buyerResolvableCategoryProductExists(categoryId),
+        CATEGORY_PUBLISH_NOT_READY,
+    );
 }

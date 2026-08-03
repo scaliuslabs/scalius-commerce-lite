@@ -1,5 +1,5 @@
 import type { Database } from "@scalius/database/client";
-import { buildBatchGuard } from "@scalius/database/client";
+import { buildBatchGuard, isBatchGuardError } from "@scalius/database/client";
 import { adminOrderCreateAttempts } from "@scalius/database/schema";
 import { and, eq, isNull, lte, or, sql } from "drizzle-orm";
 import { ConflictError, ServiceUnavailableError } from "@scalius/core/errors";
@@ -165,15 +165,15 @@ export function buildAdminOrderCreateAttemptGuard(
   attempt: ClaimedAdminOrderCreateAttempt,
 ) {
   return buildBatchGuard(db, sql`
-    CASE WHEN EXISTS (
+    EXISTS (
       SELECT 1 FROM ${adminOrderCreateAttempts}
       WHERE ${adminOrderCreateAttempts.id} = ${attempt.id}
         AND ${adminOrderCreateAttempts.requestKeyHash} = ${attempt.requestKeyHash}
         AND ${adminOrderCreateAttempts.requestHash} = ${attempt.requestHash}
         AND ${adminOrderCreateAttempts.claimId} = ${attempt.claimId}
         AND ${adminOrderCreateAttempts.status} = 'processing'
-    ) THEN 1 ELSE json_extract(${ADMIN_CREATE_ATTEMPT_GUARD_MARKER}, '$') END
-  `);
+    )
+  `, ADMIN_CREATE_ATTEMPT_GUARD_MARKER);
 }
 
 export function buildAdminOrderCreateAttemptCommit(
@@ -225,8 +225,7 @@ export async function markAdminOrderCreateAttemptFailed(
 }
 
 export function isAdminOrderCreateAttemptGuardError(error: unknown): boolean {
-  return error instanceof Error &&
-    new RegExp(`${ADMIN_CREATE_ATTEMPT_GUARD_MARKER}|malformed json`, "i").test(error.message);
+  return isBatchGuardError(error, ADMIN_CREATE_ATTEMPT_GUARD_MARKER);
 }
 
 async function selectAttemptByKey(

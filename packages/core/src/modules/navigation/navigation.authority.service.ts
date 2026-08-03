@@ -8,6 +8,7 @@ import {
 } from "@scalius/database/schema";
 import {
     buildBatchGuard,
+    isBatchGuardError,
     safeBatch,
     type Database,
 } from "@scalius/database/client";
@@ -105,14 +106,12 @@ function buildMenuRevisionGuard(
     menuId: string,
     expectedRevision: number,
 ): BatchItem<"sqlite"> {
-    return buildBatchGuard(db, sql`
-        CASE WHEN EXISTS (
+    return buildBatchGuard(db, sql`EXISTS (
             SELECT 1 FROM ${navigationMenus}
             WHERE ${navigationMenus.id} = ${menuId}
               AND ${navigationMenus.revision} = ${expectedRevision}
               AND ${navigationMenus.deletedAt} IS NULL
-        ) THEN 1 ELSE json_extract(${NAVIGATION_REVISION_GUARD}, '$') END
-    `);
+        )`, NAVIGATION_REVISION_GUARD);
 }
 
 function buildTrashedMenuRevisionGuard(
@@ -120,14 +119,12 @@ function buildTrashedMenuRevisionGuard(
     menuId: string,
     expectedRevision: number,
 ): BatchItem<"sqlite"> {
-    return buildBatchGuard(db, sql`
-        CASE WHEN EXISTS (
+    return buildBatchGuard(db, sql`EXISTS (
             SELECT 1 FROM ${navigationMenus}
             WHERE ${navigationMenus.id} = ${menuId}
               AND ${navigationMenus.revision} = ${expectedRevision}
               AND ${navigationMenus.deletedAt} IS NOT NULL
-        ) THEN 1 ELSE json_extract(${NAVIGATION_REVISION_GUARD}, '$') END
-    `);
+        )`, NAVIGATION_REVISION_GUARD);
 }
 
 function buildMenuRevisionBump(
@@ -145,8 +142,7 @@ function buildMenuRevisionBump(
 }
 
 function isRevisionGuardError(error: unknown): boolean {
-    const message = error instanceof Error ? error.message : String(error);
-    return /NAVIGATION_REVISION_CONFLICT|malformed json/i.test(message);
+    return isBatchGuardError(error, NAVIGATION_REVISION_GUARD);
 }
 
 async function rethrowNavigationMutationError(

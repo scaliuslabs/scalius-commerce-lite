@@ -70,6 +70,27 @@ search/navigation helpers preserve the public contract. Atomic domain writes
 use the shared commit/transport boundary: TursoDB retries only explicit MVCC
 conflicts, and PostgreSQL retries only serialization/deadlock conflicts.
 
+Guarded compare-and-swap batches expose one API: a boolean success predicate
+plus an uppercase semantic failure marker. The database package constructs the
+SQLite invalid-path sentinel and the PostgreSQL compiler rewrites it to the
+typed, volatile `scalius_compat.fail_bigint()` function. Feature code cannot
+mix dialect-specific `CASE` result types, and one error classifier preserves
+the same domain conflict across D1, TursoDB, and PostgreSQL transports. The
+full database/core/API suites and a disposable native Neon branch proved both
+the successful and rollback paths on 2026-08-03.
+
+Administrative credential creation is also one provider-native commit. The
+application hashes passwords with Better Auth's implementation, then inserts
+the Better Auth user/account rows together with the setup claim or invitation
+and optional RBAC role. It deliberately does not call the public Better Auth
+sign-up route internally: that route creates an unused session and its
+transaction callback falls back to sequential writes on the one-shot proxy
+adapters. Local D1 proves end-to-end Better Auth sign-in; local D1 and stateful
+TursoDB prove compatible password hashes, duplicate rollback, and setup-claim
+rollback; equivalent credential and claim conformance passed on a disposable
+native Neon branch on 2026-08-03. D1 batches, Turso atomic batches, and Neon
+HTTP one-shot transactions remain the shared boundary.
+
 ## Deterministic D1 to Turso protocol
 
 The control plane must persist a resumable migration record and evidence for

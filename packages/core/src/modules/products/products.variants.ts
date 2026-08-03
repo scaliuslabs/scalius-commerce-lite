@@ -1,7 +1,7 @@
 // src/modules/products/products.variants.ts
 // Variant-specific queries and mutations + barcode lookup.
 import type { DrizzleD1Database } from "drizzle-orm/d1";
-import { buildBatchGuard } from "@scalius/database/client";
+import { buildBatchGuard, isBatchGuardError } from "@scalius/database/client";
 import { effectiveRegularReservedStockSql } from "@scalius/database/inventory-authority";
 import * as schema from "@scalius/database/schema";
 import {
@@ -168,7 +168,9 @@ async function assertSelectableVariantImage(
 
 function isAtomicVariantConflict(error: unknown): boolean {
     const message = error instanceof Error ? error.message : String(error);
-    return /constraint|unique|malformed json|variant_edit_conflict/i.test(message);
+    return isBatchGuardError(error, "VARIANT_EDIT_CONFLICT")
+        || isBatchGuardError(error, "VARIANT_DELETE_CONFLICT")
+        || /constraint|unique/i.test(message);
 }
 
 export function normalizeVariantBarcode(
@@ -719,16 +721,14 @@ export async function updateVariant(
                 isNull(productVariants.deletedAt),
             ))
             .returning();
-        const stockGuard = buildBatchGuard(db, sql`
-            CASE WHEN EXISTS (
+        const stockGuard = buildBatchGuard(db, sql`EXISTS (
                 SELECT 1 FROM ${productVariants}
                 WHERE ${productVariants.id} = ${variantId}
                   AND ${productVariants.productId} = ${productId}
                   AND ${productVariants.stockVersion} = ${existingVariant.stockVersion}
                   AND ${effectiveRegularReservedStockSql()} <= ${data.stock}
                   AND ${productVariants.deletedAt} IS NULL
-            ) THEN 1 ELSE json_extract('VARIANT_EDIT_CONFLICT', '$') END
-        `);
+            )`, "VARIANT_EDIT_CONFLICT");
 
         let result;
         try {
@@ -839,8 +839,7 @@ export async function deleteVariant(
         eq(effectiveRegularReservedStockSql(), 0),
     );
 
-    const transactionalDeleteGuard = buildBatchGuard(db, sql`
-        CASE WHEN EXISTS (
+    const transactionalDeleteGuard = buildBatchGuard(db, sql`EXISTS (
             SELECT 1 FROM ${productVariants}
             WHERE ${productVariants.id} = ${variantId}
               AND ${productVariants.productId} = ${productId}
@@ -866,8 +865,7 @@ export async function deleteVariant(
                   AND ${productVariants.deletedAt} IS NULL
                   AND ${customerOptionPredicate()}
             )
-        ) THEN 1 ELSE json_extract('VARIANT_DELETE_CONFLICT', '$') END
-    `);
+        )`, "VARIANT_DELETE_CONFLICT");
     const deleteStatement = db
         .update(productVariants)
         .set({

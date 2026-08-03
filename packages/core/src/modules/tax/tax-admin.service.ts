@@ -1,4 +1,9 @@
-import { buildBatchGuard, safeBatch, type Database } from "@scalius/database/client";
+import {
+    buildBatchGuard,
+    isBatchGuardError,
+    safeBatch,
+    type Database,
+} from "@scalius/database/client";
 import {
     deliveryLocations,
     productVariants,
@@ -180,13 +185,11 @@ function buildTaxConfigurationReadinessGuard(db: Database) {
         deletedAt: sql.raw('"tax_rates"."deleted_at"'),
     };
     return buildBatchGuard(db, sql`
-        CASE
-            WHEN NOT EXISTS (
+            NOT EXISTS (
                 SELECT 1 FROM ${taxSettings}
                 WHERE ${settings.id} = 'default'
                   AND ${settings.enabled} = 1
-            ) THEN 1
-            WHEN EXISTS (
+            ) OR EXISTS (
                 SELECT 1 FROM ${taxSettings}
                 WHERE ${settings.id} = 'default'
                   AND ${settings.enabled} = 1
@@ -224,15 +227,12 @@ function buildTaxConfigurationReadinessGuard(db: Database) {
                             )
                       )
                   )
-            ) THEN 1
-            ELSE json_extract(${TAX_CONFIGURATION_READINESS_CONFLICT}, '$')
-        END
-    `);
+            )
+    `, TAX_CONFIGURATION_READINESS_CONFLICT);
 }
 
 function isTaxConfigurationReadinessConflict(error: unknown): boolean {
-    const message = error instanceof Error ? error.message : String(error);
-    return /TAX_CONFIGURATION_READINESS_CONFLICT|malformed json/i.test(message);
+    return isBatchGuardError(error, TAX_CONFIGURATION_READINESS_CONFLICT);
 }
 
 async function executeTaxConfigurationGuardedMutation<TMutation extends BatchItem<"sqlite">>(
@@ -591,14 +591,12 @@ export async function updateTaxClassification(db: Database, input: {
 }) {
     await assertActiveTaxClass(db, input.taxClassId, "Tax class");
     if (input.kind === "product") {
-        const classificationGuard = buildBatchGuard(db, sql`
-            CASE WHEN EXISTS (
+        const classificationGuard = buildBatchGuard(db, sql`EXISTS (
                 SELECT 1 FROM ${products}
                 WHERE ${products.id} = ${input.id}
                   AND ${products.taxClassificationVersion} = ${input.expectedVersion}
                   AND ${products.deletedAt} IS NULL
-            ) THEN 1 ELSE json_extract('TAX_CLASSIFICATION_CONFLICT', '$') END
-        `);
+            )`, "TAX_CLASSIFICATION_CONFLICT");
         const update = db.update(products).set({
             taxClassId: input.taxClassId,
             taxClassificationVersion: sql`${products.taxClassificationVersion} + 1`,
@@ -627,7 +625,7 @@ export async function updateTaxClassification(db: Database, input: {
                 };
             }
         } catch (error) {
-            if (error instanceof Error && /TAX_CLASSIFICATION_CONFLICT|malformed json/i.test(error.message)) {
+            if (isBatchGuardError(error, "TAX_CLASSIFICATION_CONFLICT")) {
                 throw new ConflictError("Tax classification changed or the catalog item is unavailable. Reload and try again.");
             }
             throw error;
@@ -641,15 +639,13 @@ export async function updateTaxClassification(db: Database, input: {
         if (!variant) {
             throw new ConflictError("Tax classification changed or the catalog item is unavailable. Reload and try again.");
         }
-        const classificationGuard = buildBatchGuard(db, sql`
-            CASE WHEN EXISTS (
+        const classificationGuard = buildBatchGuard(db, sql`EXISTS (
                 SELECT 1 FROM ${productVariants}
                 WHERE ${productVariants.id} = ${input.id}
                   AND ${productVariants.productId} = ${variant.productId}
                   AND ${productVariants.taxClassificationVersion} = ${input.expectedVersion}
                   AND ${productVariants.deletedAt} IS NULL
-            ) THEN 1 ELSE json_extract('TAX_CLASSIFICATION_CONFLICT', '$') END
-        `);
+            )`, "TAX_CLASSIFICATION_CONFLICT");
         const update = db.update(productVariants).set({
             taxClassId: input.taxClassId,
             taxClassificationVersion: sql`${productVariants.taxClassificationVersion} + 1`,
@@ -678,7 +674,7 @@ export async function updateTaxClassification(db: Database, input: {
                 };
             }
         } catch (error) {
-            if (error instanceof Error && /TAX_CLASSIFICATION_CONFLICT|malformed json/i.test(error.message)) {
+            if (isBatchGuardError(error, "TAX_CLASSIFICATION_CONFLICT")) {
                 throw new ConflictError("Tax classification changed or the catalog item is unavailable. Reload and try again.");
             }
             throw error;

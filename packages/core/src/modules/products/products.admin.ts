@@ -1412,8 +1412,7 @@ function buildPermanentDeleteReferenceGuard(
     const guardedMovementVariantId = sql`${sql.identifier("inventory_movements")}.${sql.identifier("variant_id")}`;
     const guardedVariantId = sql`${sql.identifier("product_variants")}.${sql.identifier("id")}`;
     const guardedVariantProductId = sql`${sql.identifier("product_variants")}.${sql.identifier("product_id")}`;
-    return buildBatchGuard(db, sql`
-        CASE WHEN NOT EXISTS (
+    return buildBatchGuard(db, sql`NOT EXISTS (
             SELECT 1 FROM ${orderItems}
             WHERE ${orderItems.productId} IN (
                 SELECT CAST(value AS TEXT) FROM json_each(${idSet})
@@ -1438,8 +1437,7 @@ function buildPermanentDeleteReferenceGuard(
                     SELECT CAST(value AS TEXT) FROM json_each(${idSet})
                 )
             )
-        ) THEN 1 ELSE json_extract('PRODUCT_HARD_DELETE_CONFLICT', '$') END
-    `);
+        )`, "PRODUCT_HARD_DELETE_CONFLICT");
 }
 
 function deleteLowStockAlertsForProductBatch(

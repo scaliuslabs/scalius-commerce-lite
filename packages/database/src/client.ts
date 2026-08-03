@@ -77,4 +77,8 @@ export function getDatabaseProviderForClient(
 }
 
 export { schema };
-export { buildBatchGuard, safeBatch } from "./batch-helper";
+export {
+  buildBatchGuard,
+  isBatchGuardError,
+  safeBatch,
+} from "./batch-helper";

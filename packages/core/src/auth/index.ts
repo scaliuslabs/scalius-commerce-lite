@@ -11,6 +11,20 @@ export {
 } from "./admin-setup";
 export type { AdminPrincipalExistsDb, ClaimedAdminSetup } from "./admin-setup";
 export {
+  AUTH_PASSWORD_MAX_LENGTH,
+  AUTH_PASSWORD_MIN_LENGTH,
+  completeAdminSetupClaimWithCredentialIdentity,
+  createInvitedAdminCredentialAccount,
+  isCredentialIdentityConflictError,
+  prepareCredentialIdentity,
+} from "./credential-account";
+export type {
+  CompleteFirstAdminInput,
+  CreateInvitedAdminInput,
+  PreparedCredentialIdentity,
+  PrepareCredentialIdentityInput,
+} from "./credential-account";
+export {
   createScannerTokenClaim,
   consumeScannerTokenClaim,
   cleanupExpiredScannerTokenClaims,
