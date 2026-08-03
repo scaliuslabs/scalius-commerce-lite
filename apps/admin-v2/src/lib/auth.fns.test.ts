@@ -70,7 +70,7 @@ function createAdminGuardDb(sessionRow: Record<string, unknown> | null) {
   const sessionGet = vi.fn(async () => sessionRow);
   const get = vi.fn((query: SQL) => {
     const compiled = new SQLiteSyncDialect().sqlToQuery(query);
-    return compiled.sql.includes("FROM session s")
+    return /from\s+"?session"?\s+s/i.test(compiled.sql)
       ? sessionGet()
       : adminGet();
   });
