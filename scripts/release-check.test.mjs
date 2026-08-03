@@ -129,6 +129,14 @@ describe("release discovery policy", () => {
     )).toMatchObject({ ok: true, errors: [] });
   });
 
+  it("accepts public discovery responses that require browser revalidation", () => {
+    expect(evaluateDiscoveryCacheHeaders(
+      new Headers({
+        "Cache-Control": "public, max-age=0, no-cache, must-revalidate",
+      }),
+    )).toMatchObject({ ok: true, errors: [] });
+  });
+
   it("accepts only the catalog search and lookup UCP capabilities", () => {
     const profile = catalogOnlyUcpProfile();
     expect(evaluateUcpProfile(profile, {

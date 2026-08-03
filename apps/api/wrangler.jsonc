@@ -156,7 +156,7 @@
     "crons": ["*/15 * * * *"]
   },
   "vars": {
-    "DATABASE_PROVIDER": "postgres",
+    "DATABASE_PROVIDER": "d1",
     "PUBLIC_API_BASE_URL": "https://api.scalius.com",
     "BETTER_AUTH_URL": "https://dashboard.scalius.com",
     "STOREFRONT_URL": "https://storefront.scalius.com",

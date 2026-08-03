@@ -44,7 +44,7 @@ Database release compatibility is exact, not a connectivity probe. Migration
 `0050_schema_release_contract` starts one ordered ledger shared by D1, TursoDB,
 and PostgreSQL. Each release row includes the canonical source digest, and API
 `/readyz` rejects missing, extra, renamed, future, or digest-mismatched rows.
-`0051_orders_checkout_write_path` is the current release. Historical migrations
+`0052_remove_storefront_cache_queue` is the current release. Historical migrations
 are an installed-system contract and must not be deleted or squashed after
 release.
 
