@@ -21,17 +21,28 @@ describe("database client composition", () => {
     expect(getDatabaseProviderForClient(firstDb)).toBe("d1");
   });
 
-  it("uses a primary-anchored D1 session for request consistency and replicas", () => {
+  it("uses a primary-anchored D1 session for request consistency and replicas", async () => {
     const session = { prepare: vi.fn(), batch: vi.fn() };
     const binding = {
       prepare: vi.fn(),
+      batch: vi.fn(),
+      exec: vi.fn(),
+      dump: vi.fn(),
       withSession: vi.fn(() => session),
     } as unknown as D1Database;
 
     const db = getDb({ DB: binding });
 
     expect(binding.withSession).toHaveBeenCalledWith("first-primary");
-    expect((db as unknown as { $client: object }).$client).toBe(session);
+    const client = (db as unknown as { $client: D1Database }).$client;
+    const statement = { bind: vi.fn() } as unknown as D1PreparedStatement;
+    session.prepare.mockReturnValue(statement);
+    session.batch.mockResolvedValue([]);
+
+    expect(client.prepare("SELECT 1")).toBe(statement);
+    await expect(client.batch([statement])).resolves.toEqual([]);
+    expect(session.prepare).toHaveBeenCalledWith("SELECT 1");
+    expect(session.batch).toHaveBeenCalledWith([statement]);
   });
 
   it("fails closed when no complete provider is configured", () => {
