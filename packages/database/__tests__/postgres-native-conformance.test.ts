@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { safeBatch } from "../src/batch-helper";
 import {
-  connectNeonPostgres,
+  connectPostgres,
   createPostgresDatabase,
 } from "../src/postgres-adapter";
 import { customers, customerSessions } from "../src/schema";
@@ -17,7 +17,7 @@ const nativePostgresUrl = process.env.SCALIUS_TEST_POSTGRES_URL?.trim();
 describe.runIf(nativePostgresUrl)("native PostgreSQL adapter conformance", () => {
   it("persists, revokes, expires, and rolls back customer sessions", async () => {
     const db = createPostgresDatabase(nativePostgresUrl!, {
-      connect: connectNeonPostgres,
+      connect: connectPostgres,
     });
     const scope = randomUUID().replaceAll("-", "");
     const customerId = `customer_pg_${scope}`;

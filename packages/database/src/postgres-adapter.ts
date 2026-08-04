@@ -4,6 +4,7 @@ import {
   type AsyncRemoteCallback,
 } from "drizzle-orm/sqlite-proxy";
 import { neon } from "@neondatabase/serverless";
+import { Client as PgClient } from "pg";
 
 import * as schema from "./schema";
 import {
@@ -46,6 +47,23 @@ export interface PostgresHttpConnection {
   ): Promise<PostgresFullResult[]>;
 }
 
+interface NativePostgresClient {
+  connect(): Promise<void>;
+  query(config: {
+    text: string;
+    values?: unknown[];
+    rowMode: "array";
+  }): Promise<{
+    rows: unknown[][];
+    fields: Array<{ name: string; dataTypeID: number }>;
+  }>;
+  end(): Promise<void>;
+}
+
+export interface NativePostgresConnectionOptions {
+  createClient?: (connectionString: string) => NativePostgresClient;
+}
+
 export function connectNeonPostgres(
   connectionString: string,
 ): PostgresHttpConnection {
@@ -61,6 +79,141 @@ export function connectNeonPostgres(
       ) as unknown as PostgresFullResult[];
     },
   };
+}
+
+function toPostgresFullResult(result: {
+  rows: unknown[][];
+  fields: Array<{ name: string; dataTypeID: number }>;
+}): PostgresFullResult {
+  return {
+    rows: result.rows,
+    fields: result.fields.map((field) => ({
+      name: field.name,
+      dataTypeID: field.dataTypeID,
+    })),
+  };
+}
+
+function postgresBeginSql(
+  isolationLevel: "ReadCommitted" | "RepeatableRead" | "Serializable",
+  readOnly: boolean,
+): string {
+  const isolation = isolationLevel === "ReadCommitted"
+    ? "READ COMMITTED"
+    : isolationLevel === "RepeatableRead"
+      ? "REPEATABLE READ"
+      : "SERIALIZABLE";
+  return `BEGIN ISOLATION LEVEL ${isolation} ${readOnly ? "READ ONLY" : "READ WRITE"}`;
+}
+
+/**
+ * Native PostgreSQL transport for a normal connection string or a Cloudflare
+ * Hyperdrive connection string. Each operation owns and closes its client;
+ * Hyperdrive supplies the regional pool in production.
+ */
+export function connectNativePostgres(
+  connectionString: string,
+  options: NativePostgresConnectionOptions = {},
+): PostgresHttpConnection {
+  const createClient = options.createClient ?? ((url: string) =>
+    new PgClient({ connectionString: url }) as unknown as NativePostgresClient);
+  const descriptors = new WeakMap<object, { sql: string; params: readonly unknown[] }>();
+
+  const withClient = async <T>(
+    operation: (client: NativePostgresClient) => Promise<T>,
+  ): Promise<T> => {
+    const client = createClient(connectionString);
+    let connected = false;
+    let operationFailed = false;
+    try {
+      await client.connect();
+      connected = true;
+      return await operation(client);
+    } catch (error) {
+      operationFailed = true;
+      throw error;
+    } finally {
+      if (connected) {
+        try {
+          await client.end();
+        } catch (error) {
+          // A close failure matters only when it is the primary failure. Query
+          // and transaction errors retain their PostgreSQL codes for retries.
+          if (!operationFailed) throw error;
+        }
+      }
+    }
+  };
+
+  const execute = async (
+    client: NativePostgresClient,
+    descriptor: { sql: string; params: readonly unknown[] },
+  ): Promise<PostgresFullResult> => toPostgresFullResult(await client.query({
+    text: descriptor.sql,
+    values: [...descriptor.params],
+    rowMode: "array",
+  }));
+
+  return {
+    query(sql, params) {
+      const descriptor = { sql, params };
+      let standalone: Promise<PostgresFullResult> | undefined;
+      const query = {
+        then<TResult1 = PostgresFullResult, TResult2 = never>(
+          onfulfilled?: ((value: PostgresFullResult) => TResult1 | PromiseLike<TResult1>) | null,
+          onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+        ): PromiseLike<TResult1 | TResult2> {
+          standalone ??= withClient((client) => execute(client, descriptor));
+          return standalone.then(onfulfilled, onrejected);
+        },
+      } satisfies PromiseLike<PostgresFullResult>;
+      descriptors.set(query, descriptor);
+      return query;
+    },
+    async transaction(queries, transactionOptions) {
+      const statements = queries.map((query) => {
+        const descriptor = descriptors.get(query as object);
+        if (!descriptor) {
+          throw new Error("Native PostgreSQL transaction received a foreign query object.");
+        }
+        return descriptor;
+      });
+      return await withClient(async (client) => {
+        await client.query({
+          text: postgresBeginSql(
+            transactionOptions.isolationLevel,
+            transactionOptions.readOnly,
+          ),
+          rowMode: "array",
+        });
+        try {
+          const results: PostgresFullResult[] = [];
+          for (const statement of statements) {
+            results.push(await execute(client, statement));
+          }
+          await client.query({ text: "COMMIT", rowMode: "array" });
+          return results;
+        } catch (error) {
+          try {
+            await client.query({ text: "ROLLBACK", rowMode: "array" });
+          } catch {
+            // Preserve the query failure; closing the client discards the session.
+          }
+          throw error;
+        }
+      });
+    },
+  };
+}
+
+/** Select Neon's one-shot HTTP transport when its managed endpoint is present. */
+export function connectPostgres(
+  connectionString: string,
+): PostgresHttpConnection {
+  const hostname = new URL(connectionString).hostname.toLowerCase();
+  return hostname.endsWith(".neon.tech")
+    ? connectNeonPostgres(connectionString)
+    : connectNativePostgres(connectionString);
 }
 
 export interface PostgresAdapterOptions {

@@ -45,11 +45,13 @@
     "@tursodatabase/database": "^0.7.2",
     "@tursodatabase/serverless": "^1.4.0",
     "@tursodatabase/sync": "0.7.2",
-    "drizzle-orm": "^0.45.2"
+    "drizzle-orm": "^0.45.2",
+    "pg": "8.22.0"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260730.1",
     "@scalius/tsconfig": "workspace:*",
+    "@types/pg": "8.20.3",
     "drizzle-kit": "^0.31.10",
     "undici": "8.9.0"
   },

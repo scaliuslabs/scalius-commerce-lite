@@ -5,7 +5,7 @@ import {
 import { pathToFileURL } from "node:url";
 
 import {
-  connectNeonPostgres,
+  connectPostgres,
   type PostgresHttpConnection,
 } from "../src/postgres-adapter";
 import {
@@ -100,7 +100,7 @@ function postgresRows(result: Awaited<ReturnType<PostgresHttpConnection["query"]
 }
 
 function createPostgresSeedConnection(options: SeedTargetOptions): SeedConnection {
-  const connection = connectNeonPostgres(options.databaseUrl);
+  const connection = connectPostgres(options.databaseUrl);
   return {
     async query(sql, args = []) {
       const compiled = compileSqliteStatementForPostgres(sql, args.length);
@@ -124,7 +124,7 @@ function createPostgresSeedConnection(options: SeedTargetOptions): SeedConnectio
       });
     },
     async close() {
-      // Neon HTTP has no persistent client connection to close.
+      // Neither transport retains a connection at this wrapper boundary.
     },
   };
 }

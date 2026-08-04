@@ -27,6 +27,9 @@ describe("HTTP transport security", () => {
     expect(
       redirectPlaintextRequest(new Request("http://127.0.0.1:3000/auth/login")),
     ).toBeNull();
+    expect(
+      redirectPlaintextRequest(new Request("http://scalius-loadtest.localhost:3000/auth/login")),
+    ).toBeNull();
   });
 
   it("adds HTTPS-only HSTS and the baseline browser protections", async () => {

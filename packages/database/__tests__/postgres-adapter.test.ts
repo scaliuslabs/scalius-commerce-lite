@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { safeBatch } from "../src/batch-helper";
 import {
+  connectNativePostgres,
   createPostgresDatabase,
   isPostgresSerializationError,
   type PostgresFullResult,
@@ -184,5 +185,110 @@ describe("PostgreSQL HTTP adapter", () => {
     expect(isPostgresSerializationError({ code: "40001" })).toBe(true);
     expect(isPostgresSerializationError({ cause: { code: "40P01" } })).toBe(true);
     expect(isPostgresSerializationError({ code: "23505" })).toBe(false);
+  });
+});
+
+describe("native PostgreSQL transport", () => {
+  function nativeClient() {
+    return {
+      connect: vi.fn(async () => undefined),
+      query: vi.fn(async ({ text }: { text: string }) => ({
+        rows: text === "SELECT $1" ? [[42]] : [],
+        fields: text === "SELECT $1"
+          ? [{ name: "answer", dataTypeID: 23 }]
+          : [],
+      })),
+      end: vi.fn(async () => undefined),
+    };
+  }
+
+  it("owns and closes one client for a standalone query", async () => {
+    const client = nativeClient();
+    const connection = connectNativePostgres(
+      "postgresql://user:secret@postgres.example.com/scalius",
+      { createClient: () => client },
+    );
+
+    await expect(connection.query("SELECT $1", [42])).resolves.toEqual({
+      rows: [[42]],
+      fields: [{ name: "answer", dataTypeID: 23 }],
+    });
+    expect(client.connect).toHaveBeenCalledOnce();
+    expect(client.query).toHaveBeenCalledWith({
+      text: "SELECT $1",
+      values: [42],
+      rowMode: "array",
+    });
+    expect(client.end).toHaveBeenCalledOnce();
+  });
+
+  it("executes lazy queries on one transaction client", async () => {
+    const client = nativeClient();
+    const connection = connectNativePostgres(
+      "postgresql://user:secret@postgres.example.com/scalius",
+      { createClient: () => client },
+    );
+    const first = connection.query("SELECT $1", [42]);
+    const second = connection.query("UPDATE example SET value = $1", [7]);
+
+    await expect(connection.transaction([first, second], {
+      arrayMode: true,
+      fullResults: true,
+      isolationLevel: "Serializable",
+      readOnly: false,
+    })).resolves.toHaveLength(2);
+
+    expect(client.connect).toHaveBeenCalledOnce();
+    expect(client.query.mock.calls.map(([input]) => input.text)).toEqual([
+      "BEGIN ISOLATION LEVEL SERIALIZABLE READ WRITE",
+      "SELECT $1",
+      "UPDATE example SET value = $1",
+      "COMMIT",
+    ]);
+    expect(client.end).toHaveBeenCalledOnce();
+  });
+
+  it("rolls back and closes after a failed transaction statement", async () => {
+    const failure = Object.assign(new Error("deadlock"), { code: "40P01" });
+    const client = nativeClient();
+    client.query.mockImplementation(async ({ text }: { text: string }) => {
+      if (text === "UPDATE broken") throw failure;
+      return { rows: [], fields: [] };
+    });
+    const connection = connectNativePostgres(
+      "postgresql://user:secret@postgres.example.com/scalius",
+      { createClient: () => client },
+    );
+
+    await expect(connection.transaction([
+      connection.query("UPDATE broken", []),
+    ], {
+      arrayMode: true,
+      fullResults: true,
+      isolationLevel: "ReadCommitted",
+      readOnly: false,
+    })).rejects.toBe(failure);
+    expect(client.query.mock.calls.map(([input]) => input.text)).toEqual([
+      "BEGIN ISOLATION LEVEL READ COMMITTED READ WRITE",
+      "UPDATE broken",
+      "ROLLBACK",
+    ]);
+    expect(client.end).toHaveBeenCalledOnce();
+  });
+
+  it("preserves the query error when closing the failed client also fails", async () => {
+    const queryFailure = Object.assign(new Error("serialization failure"), {
+      code: "40001",
+    });
+    const client = nativeClient();
+    client.query.mockRejectedValue(queryFailure);
+    client.end.mockRejectedValue(new Error("socket close failed"));
+    const connection = connectNativePostgres(
+      "postgresql://user:secret@postgres.example.com/scalius",
+      { createClient: () => client },
+    );
+
+    await expect(connection.query("SELECT 1", [])).rejects.toBe(queryFailure);
+    expect(client.end).toHaveBeenCalledOnce();
   });
 });

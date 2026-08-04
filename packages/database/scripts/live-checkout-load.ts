@@ -9,7 +9,7 @@ import {
   createTursoPortabilityExecutor,
   type SqlitePortabilityExecutor,
 } from "../src/portability";
-import { connectNeonPostgres } from "../src/postgres-adapter";
+import { connectPostgres } from "../src/postgres-adapter";
 import {
   compileSqliteStatementForPostgres,
   normalizePostgresParameters,
@@ -423,7 +423,7 @@ function createLoadOracle(options: LoadOptions): SqlitePortabilityExecutor {
     return createD1CliOracle(options.d1);
   }
   if (options.databaseProvider === "postgres") {
-    const connection = connectNeonPostgres(options.databaseUrl);
+    const connection = connectPostgres(options.databaseUrl);
     return {
       async query(sql, params = []) {
         const compiled = compileSqliteStatementForPostgres(sql, params.length);

@@ -43,6 +43,7 @@ export function getDatabaseProviderCapabilities(
 
 export interface DatabaseEnvironment extends Record<string, unknown> {
   DB?: D1Database;
+  HYPERDRIVE?: { connectionString: string };
   DATABASE_PROVIDER?: unknown;
   TURSO_DATABASE_URL?: unknown;
   TURSO_AUTH_TOKEN?: unknown;
@@ -63,6 +64,7 @@ export type DatabaseConfiguration =
   | {
       provider: "postgres";
       connectionString: string;
+      transport: "neon-http" | "native";
     };
 
 function optionalString(value: unknown): string | undefined {
@@ -121,11 +123,15 @@ function requireTursoConfiguration(
 
 function requirePostgresConfiguration(
   connectionStringValue: unknown,
+  hyperdriveValue: unknown,
 ): Extract<DatabaseConfiguration, { provider: "postgres" }> {
-  const connectionString = optionalString(connectionStringValue);
+  const hyperdrive = hyperdriveValue && typeof hyperdriveValue === "object"
+    ? optionalString(Reflect.get(hyperdriveValue, "connectionString"))
+    : undefined;
+  const connectionString = hyperdrive ?? optionalString(connectionStringValue);
   if (!connectionString) {
     throw new Error(
-      "PostgreSQL database configuration is incomplete: POSTGRES_DATABASE_URL is required.",
+      "PostgreSQL database configuration is incomplete: POSTGRES_DATABASE_URL or HYPERDRIVE is required.",
     );
   }
   let parsed: URL;
@@ -146,7 +152,13 @@ function requirePostgresConfiguration(
       "PostgreSQL database configuration is invalid: POSTGRES_DATABASE_URL must use postgres:// or postgresql:// and name a database.",
     );
   }
-  return { provider: "postgres", connectionString };
+  return {
+    provider: "postgres",
+    connectionString,
+    transport: hyperdrive || !parsed.hostname.toLowerCase().endsWith(".neon.tech")
+      ? "native"
+      : "neon-http",
+  };
 }
 
 /**
@@ -180,11 +192,16 @@ export function resolveDatabaseConfiguration(
   }
 
   if (explicitProvider === "postgres") {
-    return requirePostgresConfiguration(env.POSTGRES_DATABASE_URL);
+    return requirePostgresConfiguration(
+      env.POSTGRES_DATABASE_URL,
+      env.HYPERDRIVE,
+    );
   }
 
   const hasTursoConfiguration = Boolean(env.TURSO_DATABASE_URL || env.TURSO_AUTH_TOKEN);
-  const hasPostgresConfiguration = Boolean(env.POSTGRES_DATABASE_URL);
+  const hasPostgresConfiguration = Boolean(
+    env.POSTGRES_DATABASE_URL || env.HYPERDRIVE,
+  );
   if (
     explicitProvider !== "d1"
     && hasTursoConfiguration
@@ -196,7 +213,10 @@ export function resolveDatabaseConfiguration(
   }
 
   if (explicitProvider !== "d1" && hasPostgresConfiguration) {
-    return requirePostgresConfiguration(env.POSTGRES_DATABASE_URL);
+    return requirePostgresConfiguration(
+      env.POSTGRES_DATABASE_URL,
+      env.HYPERDRIVE,
+    );
   }
 
   if (explicitProvider !== "d1" && hasTursoConfiguration) {

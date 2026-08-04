@@ -12,8 +12,10 @@ database tiers:
   services, but provider selection alone is not a throughput guarantee.
 - PostgreSQL/Neon is the proven high-throughput tier. Its adapter translates the
   canonical SQLite-shaped application surface, while its checkout commit uses
-  native PostgreSQL transactions and conflict handling. Dialect differences do
-  not leak into routes or commerce services.
+  native PostgreSQL transactions and conflict handling. Neon `*.neon.tech`
+  endpoints use the managed HTTP transport; generic PostgreSQL and Cloudflare
+  Hyperdrive use `pg`. Dialect and transport differences do not leak into
+  routes or commerce services.
 
 The application does not provision databases or move data. A hosted Scalius
 control plane owns provider accounts, database creation, migration state,
@@ -32,7 +34,13 @@ no external database credentials are present. A Turso deployment requires:
 A PostgreSQL deployment requires:
 
 - `DATABASE_PROVIDER=postgres`
-- `POSTGRES_DATABASE_URL`
+- either `POSTGRES_DATABASE_URL` or a `HYPERDRIVE` binding
+
+`POSTGRES_DATABASE_URL` alone is sufficient for Neon and generic PostgreSQL.
+For generic PostgreSQL on production Workers, the hosted control plane should
+provision Hyperdrive and bind it as `HYPERDRIVE`; that binding takes precedence
+over the retained direct URL and supplies Cloudflare's regional connection
+pool. This is a transport choice, not a second application database adapter.
 
 An incomplete configuration fails closed. When Turso and PostgreSQL credentials
 are both installed, `DATABASE_PROVIDER` is mandatory; `DATABASE_PROVIDER=d1` is
@@ -471,7 +479,15 @@ foreign-key violations, or failed integrity.
   upgraded plan.
 
 The default remains D1. PostgreSQL remains the only qualified high-throughput
-tier, with separate claims for the 1,161–1,426/second native backend evidence
-and the 329/second complete Worker path on undersized 0.25-CU Neon. Turso stays
-a supported migration/runtime adapter, but it must pass the same sustained
-Worker-origin oracle before the hosted control plane offers it as a scale tier.
+tier. In addition to the 1,161–1,426/second native backend evidence and the
+329/second complete Worker path on undersized 0.25-CU Neon, a disposable local
+generic PostgreSQL 15 target exercised the full Worker route through the native
+transport: 5,000/5,000 orders returned HTTP 201 at 581.82 orders/second, all
+5,000 orders/items/attempts projected, projection caught up in 4.254 seconds,
+and constraints remained clean. That run exposed and fixed a limit mismatch:
+the commit kernel permitted 1,000-order durable outboxes while recovery accepted
+only 500; projection recovery now accepts the same hard ceiling and its release
+batching target remains independently bounded. These are tested deployment
+profiles, not a universal throughput promise. Turso stays a supported
+migration/runtime adapter, but it must pass the same sustained Worker-origin
+oracle before the hosted control plane offers it as a scale tier.
