@@ -5,13 +5,14 @@
 
 export const GALLERY_CONFIG = {
   imageTransforms: {
-    // Covers the largest rendered thumbnail without shipping a 320px source
-    // into a roughly 96–130px slot.
-    preview: 160,
+    // Covers the largest rendered thumbnail without shipping a larger source
+    // into a roughly 76–96px slot.
+    preview: 120,
+    previewQuality: 62,
     // Keep the eager mobile LCP image below the Slow-4G transfer budget while
     // retaining enough detail for the largest single-column phone layout.
-    mobileDisplay: 480,
-    mobileQuality: 68,
+    mobileDisplay: 420,
+    mobileQuality: 52,
     display: 600,
     zoom: 1400,
   },
