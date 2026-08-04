@@ -9,7 +9,10 @@ import { NotFoundError, ValidationError } from "../../utils/api-error";
 
 import { ok } from "../../utils/api-response";
 import { successEnvelope, paginationSchema, errorResponses, conflictResponse } from "../../schemas/responses";
-import { invalidateProductAvailabilityCaches } from "../../utils/cache-invalidation";
+import {
+    findStockMutationAvailabilityTransitions,
+    invalidateProductAvailabilityCaches,
+} from "../../utils/cache-invalidation";
 import { nullableTimestampSchema } from "../../schemas/timestamps";
 import { parseBangladeshDateOnlyBoundary } from "./order-date-filter";
 
@@ -19,6 +22,17 @@ const INVENTORY_MOVEMENT_EXPORT_PAGE_SIZE = 100;
 
 type AdminRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>;
 type AdminRouteContext<R extends RouteConfig> = Parameters<AdminRouteHandler<R>>[0];
+
+async function invalidateStockMutationIfVisible(
+    db: Parameters<typeof findStockMutationAvailabilityTransitions>[0],
+    result: { variantId: string; previousStock: number; newStock: number },
+    c: Parameters<typeof invalidateProductAvailabilityCaches>[2],
+): Promise<void> {
+    const variantIds = await findStockMutationAvailabilityTransitions(db, [result]);
+    if (variantIds.length > 0) {
+        await invalidateProductAvailabilityCaches(db, { variantIds }, c);
+    }
+}
 
 // ─── Inline response schemas ──
 
@@ -464,7 +478,9 @@ app.openapi(adjustRoute, async (c) => {
     const user = c.get("user");
     try {
         const result = await adjustInventory(db, variantId, payload, user?.id);
-        await invalidateProductAvailabilityCaches(db, { variantIds: [variantId] }, c);
+        if (payload.pool === "stock") {
+            await invalidateStockMutationIfVisible(db, result, c);
+        }
         return ok(c, result);
     } catch (error: unknown) {
         if (error instanceof Error && error.message === "Variant not found") throw new NotFoundError(error.message);
@@ -540,7 +556,7 @@ app.openapi(stockAdjustRoute, async (c) => {
     const user = c.get("user");
     try {
         const result = await adjustStock(db, variantId, adjustment, operationKey, reason, user?.id);
-        await invalidateProductAvailabilityCaches(db, { variantIds: [variantId] }, c);
+        await invalidateStockMutationIfVisible(db, result, c);
         return ok(c, result);
     } catch (error: unknown) {
         if (error instanceof Error && error.message === "Variant not found") throw new NotFoundError(error.message);
@@ -585,7 +601,7 @@ app.openapi(stockSetRoute, async (c) => {
     const user = c.get("user");
     try {
         const result = await setStock(db, variantId, newStock, operationKey, reason, user?.id);
-        await invalidateProductAvailabilityCaches(db, { variantIds: [variantId] }, c);
+        await invalidateStockMutationIfVisible(db, result, c);
         return ok(c, result);
     } catch (error: unknown) {
         if (error instanceof Error && error.message === "Variant not found") throw new NotFoundError(error.message);
