@@ -402,9 +402,26 @@ The manifest records the canonical and compiled SHA-256 for every file plus one
 bundle digest. D1 output is byte-identical to the canonical migration chain.
 
 Frozen D1 and TursoDB sources converge on one canonical SQLite artifact. D1
-exports are fenced by an unchanged Time Travel bookmark; TursoDB exports are
-fenced by an unchanged remote revision and checkpointed through Turso Sync. An
-empty PostgreSQL/Neon target is then populated with the resumable migrator:
+exports are fenced by an unchanged Time Travel bookmark. Legacy SQLite-backed
+Turso databases can still be fenced and checkpointed through Turso Sync. The
+current TursoDB engine uses the platform snapshot exported under the control
+plane's write freeze:
+
+```bash
+turso db export '<database>' --output-file /path/to/frozen.db
+TURSO_DATABASE_URL='turso://<expected-host>' \
+pnpm --filter @scalius/database export:turso-portable \
+  --snapshot /path/to/frozen.db \
+  --snapshot-revision '<persisted-freeze-proof-or-provider-revision>' \
+  --out /path/to/portable-bundle \
+  --ack-source-host '<expected-host>'
+```
+
+The command copies the snapshot and its `-wal`/`-log` sidecar, checkpoints it
+through the embedded Turso engine, converts it to ordinary SQLite, rebuilds the
+canonical schema, and records whether evidence came from Sync or a platform
+export. An empty PostgreSQL/Neon target is then populated with the resumable
+migrator:
 
 ```bash
 POSTGRES_DATABASE_URL='<target-url>' \
