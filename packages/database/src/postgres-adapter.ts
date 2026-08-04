@@ -124,25 +124,27 @@ export function connectNativePostgres(
   ): Promise<T> => {
     const client = createClient(connectionString);
     let connected = false;
-    let operationFailed = false;
+    let outcome: { ok: true; value: T } | { ok: false; error: unknown };
     try {
       await client.connect();
       connected = true;
-      return await operation(client);
+      outcome = { ok: true, value: await operation(client) };
     } catch (error) {
-      operationFailed = true;
-      throw error;
-    } finally {
-      if (connected) {
-        try {
-          await client.end();
-        } catch (error) {
-          // A close failure matters only when it is the primary failure. Query
-          // and transaction errors retain their PostgreSQL codes for retries.
-          if (!operationFailed) throw error;
-        }
+      outcome = { ok: false, error };
+    }
+
+    if (connected) {
+      try {
+        await client.end();
+      } catch (error) {
+        // A close failure matters only when it is the primary failure. Query
+        // and transaction errors retain their PostgreSQL codes for retries.
+        if (outcome.ok) throw error;
       }
     }
+
+    if (!outcome.ok) throw outcome.error;
+    return outcome.value;
   };
 
   const execute = async (
