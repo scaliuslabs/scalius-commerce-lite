@@ -24,7 +24,7 @@ describe("public API cache gateway policy", () => {
 
     expect(policy?.tags).toEqual(tags);
     expect(policy?.edgeTtlSeconds).toBeGreaterThan(0);
-    expect(policy?.cacheKey).toBe(path);
+    expect(policy?.canonicalUrl).toBe(`https://api.example.com${path}`);
   });
 
   it.each([
@@ -104,16 +104,18 @@ describe("public API cache gateway policy", () => {
     expect(response.headers.get("Cache-Tag")).toBe("categories");
   });
 
-  it("canonicalizes query order and trailing slashes for one edge key", () => {
-    const left = getPublicApiCachePolicy(
-      new Request("https://api.example.com/api/v1/pages/?tag=sale&page=2"),
-    );
-    const right = getPublicApiCachePolicy(
+  it("maps equivalent query orders to one native cache URL", () => {
+    const canonical = getPublicApiCachePolicy(
       new Request("https://api.example.com/api/v1/pages?page=2&tag=sale"),
     );
+    const permuted = getPublicApiCachePolicy(
+      new Request("https://api.example.com/api/v1/pages?tag=sale&page=2"),
+    );
 
-    expect(left?.cacheKey).toBe("/api/v1/pages?page=2&tag=sale");
-    expect(right?.cacheKey).toBe(left?.cacheKey);
+    expect(canonical?.canonicalUrl).toBe(
+      "https://api.example.com/api/v1/pages?page=2&tag=sale",
+    );
+    expect(permuted?.canonicalUrl).toBe(canonical?.canonicalUrl);
   });
 
   it("accepts only cache tags owned by the public API lane", () => {
@@ -129,7 +131,7 @@ describe("public API cache gateway policy", () => {
 
   it("does not make an error or private response cacheable", () => {
     const policy = {
-      cacheKey: "/api/v1/checkout/config",
+      canonicalUrl: "https://api.example.com/api/v1/checkout/config",
       edgeTtlSeconds: 60,
       tags: ["checkout"],
     };

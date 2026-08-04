@@ -279,6 +279,8 @@ describe("storefront post-deploy warming", () => {
         retryDelayMs: 0,
         fetchImpl,
       },
-    )).rejects.toThrow("served build src-old; expected src-current");
+    )).rejects.toThrow(
+      "Purge all public cache domains and rerun storefront deployment verification",
+    );
   });
 });

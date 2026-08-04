@@ -1,12 +1,12 @@
 import { CACHE_TTLS } from "./utils/cache-ttls";
 
 export interface PublicApiCachePolicy {
-  cacheKey: string;
+  canonicalUrl: string;
   edgeTtlSeconds: number;
   tags: readonly string[];
 }
 
-interface PublicApiRoutePolicy extends Omit<PublicApiCachePolicy, "cacheKey"> {
+interface PublicApiRoutePolicy extends Omit<PublicApiCachePolicy, "canonicalUrl"> {
   path: string;
   exact?: boolean;
   isEligible?: (url: URL) => boolean;
@@ -206,8 +206,10 @@ export function getPublicApiCachePolicy(
   );
   if (!policy) return null;
 
+  const canonicalCachePath = buildPublicApiCacheKey(url);
+
   return {
-    cacheKey: buildPublicApiCacheKey(url),
+    canonicalUrl: new URL(canonicalCachePath, url.origin).toString(),
     edgeTtlSeconds: policy.edgeTtlSeconds,
     tags: policy.tags,
   };

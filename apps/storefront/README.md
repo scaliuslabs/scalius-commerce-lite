@@ -33,7 +33,7 @@ src/
     checkout/        # Checkout page logic + gateway handlers
     edge-cache.ts    # Concurrent SSR read coalescing (no retained values)
     canonical-query.ts # Canonical public query-string handling
-    public-worker-cache.ts # Native cache eligibility, keys, tags, and TTL
+    public-worker-cache.ts # Native cache eligibility, tags, and route TTLs
     middleware-helper/ # CSP handler
     tracking/        # Analytics tracking
   pages/             # File-based routing
@@ -74,18 +74,19 @@ Injects Cloudflare Worker runtime bindings into AsyncLocalStorage for the reques
 
 The default Worker entrypoint is an uncached safety gateway. It delegates only
 allowlisted anonymous `GET`/`HEAD` requests to the native `PublicStorefront`
-entrypoint. The public entrypoint owns canonical cache keys, a one-day edge
-safety TTL, and semantic tags. Browser HTML is `no-store`; discovery XML/text is public but
-must revalidate. Requests with authorization, cookies, variant-selection
+entrypoint. The public entrypoint owns bounded route TTLs and semantic tags.
+Browser HTML is `no-store`; discovery XML/text is public but must revalidate.
+Requests with authorization, cookies, variant-selection
 parameters, cart, checkout, account, recovery, or other buyer state stay
 private and never reach the shared cache.
 
-Public keys canonicalize safe query strings by sorting parameters, collapsing
-search text, and dropping tracking parameters. The request host remains part of
-the key, so custom domains and preview hosts do not share rendered responses.
-The internal native-cache key also includes the generated storefront build ID;
-native cache storage survives Worker code rollouts, so this namespace prevents a
-new deployment from serving HTML produced by the superseded build.
+The gateway maps tracking-decorated, default-valued, and permuted query forms
+to a canonical same-host internal Request. This prevents equivalent-query cache
+amplification without an Enterprise-only custom cache-key dependency.
+Cloudflare's native key retains the complete canonical URL,
+so custom domains and preview hosts do not share responses, and its default
+Worker-version component prevents a new deployment from serving an older
+version's cached HTML. Keep `cross_version_cache` disabled.
 
 **Generated browser assets**:
 - Astro emits generated JS/CSS beneath `/_astro/{BUILD_ID}/...`. Do not flatten
@@ -101,7 +102,9 @@ new deployment from serving HTML produced by the superseded build.
 
 - `StorefrontGateway` classifies public requests before cache lookup.
 - `PublicStorefront` renders eligible responses and attaches `Cache-Tag` plus
-  `Cloudflare-CDN-Cache-Control: public, max-age=86400, must-revalidate`.
+  a route-owned `Cloudflare-CDN-Cache-Control` directive. Availability-bearing
+  HTML/feed routes use five seconds; mutation-purged discovery routes use one
+  day.
 - `StorefrontGateway` removes those two internal directives after the native
   entrypoint lookup so downstream caches cannot reinterpret them. The browser
   still receives `no-store` HTML, while `X-Cache-Status` and
@@ -113,12 +116,15 @@ new deployment from serving HTML produced by the superseded build.
   the same isolate. It removes the Promise immediately after settlement and is
   not a persistent cache layer.
 
-### Cache Key Canonicalization
+### Cache Key Admission
 
 - `src/lib/canonical-query.ts` owns canonical query handling for API read keys.
 - `@scalius/shared/storefront-cache-path` owns rendered public-path canonicalization.
-- Equivalent filter objects and tracking-decorated URLs map to one key; product
-  variant-selection parameters bypass public caching entirely.
+- The native cache owns the complete canonical Request URL and Worker-version
+  key. Equivalent safe query forms share that URL; product variant-selection
+  parameters bypass public caching entirely.
+- Do not pass `cf.cacheKey` to the native entrypoint. It is unnecessary for
+  version/host isolation and is an Enterprise-only CDN feature.
 
 ### Cache Invalidation
 
@@ -127,17 +133,19 @@ PURGE_TOKEN`, the storefront validates and deduplicates at most 30 known domain
 groups, then awaits `PublicStorefront.purgeGroups()`. Unknown groups are ignored
 by the cache owner. `GET` and query-string tokens are rejected. A failed purge
 is observable but never rolls back an already committed database mutation; the
-one-day TTL is only the final correctness backstop. Normal successful writes purge
-their semantic tags immediately.
+five-second availability TTL is the high-write correctness bound, while the
+one-day content TTL is the final backstop for low-frequency mutation-purged
+routes. Normal successful merchant writes purge their semantic tags immediately.
 
 ### Cache TTL Constants
 
 | Constant | Seconds | Purpose |
 |----------|---------|---------|
-| `STOREFRONT_EDGE_TTL_SECONDS` | 86,400 | Edge residency and last-resort expiry; semantic purges own freshness |
-The legacy `CACHE_TTL` names remain as call-site hints while `withEdgeCache()`
-is request-only deduplication. Persistent public TTL is centrally fixed in
-`public-worker-cache.ts`.
+| `CACHE_TTL.AVAILABILITY` | 5 | Maximum cached buyer-visible price/availability staleness without per-order invalidation |
+| `CACHE_TTL.LONG` | 86,400 | Edge residency for low-frequency routes whose merchant writes await semantic purges |
+
+`withEdgeCache()` is request-only deduplication. Persistent public TTL policy is
+centralized in `public-worker-cache.ts`.
 
 ## Page Data Loading
 

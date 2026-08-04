@@ -75,9 +75,10 @@ export default class ApiWorker extends WorkerEntrypoint<Env> {
 
     const cachePolicy = getPublicApiCachePolicy(request);
     if (cachePolicy) {
-      return this.ctx.exports.PublicApi.fetch(request, {
-        cf: { cacheKey: cachePolicy.cacheKey },
-      });
+      const cacheRequest = cachePolicy.canonicalUrl === request.url
+        ? request
+        : new Request(cachePolicy.canonicalUrl, request);
+      return this.ctx.exports.PublicApi.fetch(cacheRequest);
     }
 
     return fetchApiApp(request, this.env, this.ctx);
