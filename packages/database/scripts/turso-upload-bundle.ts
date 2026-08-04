@@ -29,7 +29,7 @@ export interface TursoUploadBundleEvidence {
     bytes: number;
     sha256: string;
     portableExport: {
-      version: "scalius-d1-portable-export/v2";
+      version: "scalius-d1-portable-export/v3";
       database: string;
       snapshotRef: string;
       evidenceSha256: string;
@@ -115,7 +115,7 @@ export async function readTursoUploadBundle(bundlePath: string): Promise<{
     const portableExport = parsed.source.portableExport;
     if (
       !portableExport
-      || portableExport.version !== "scalius-d1-portable-export/v2"
+      || portableExport.version !== "scalius-d1-portable-export/v3"
       || typeof portableExport.database !== "string"
       || !portableExport.database
       || typeof portableExport.snapshotRef !== "string"

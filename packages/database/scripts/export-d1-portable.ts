@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   access,
+  appendFile,
   chmod,
   mkdtemp,
   readFile,
@@ -23,7 +24,7 @@ import {
 import { sha256File } from "./turso-upload-bundle";
 
 export const D1_PORTABLE_EXPORT_VERSION =
-  "scalius-d1-portable-export/v2" as const;
+  "scalius-d1-portable-export/v3" as const;
 export const D1_PORTABLE_EXPORT_FILENAME = "source.sql";
 export const D1_PORTABLE_EXPORT_EVIDENCE_FILENAME = "export-evidence.json";
 
@@ -52,6 +53,8 @@ export interface D1PortableExportEvidence {
   tables: readonly string[];
   retiredTables: readonly string[];
   tableSetSha256: string;
+  schemaObjectCount: number;
+  schemaObjectSetSha256: string;
   artifact: {
     filename: typeof D1_PORTABLE_EXPORT_FILENAME;
     bytes: number;
@@ -66,8 +69,17 @@ export interface ExportD1PortableSummary {
   tableCount: number;
   retiredTableCount: number;
   tableSetSha256: string;
+  schemaObjectCount: number;
+  schemaObjectSetSha256: string;
   artifactBytes: number;
   artifactSha256: string;
+}
+
+export interface D1PortableSchemaObject {
+  type: "index" | "trigger";
+  name: string;
+  table: string;
+  sql: string;
 }
 
 function requireSha256(value: unknown, label: string): string {
@@ -221,6 +233,57 @@ export function parseD1ExecuteTableNames(stdout: string): readonly string[] {
   return names.sort((left, right) => left.localeCompare(right));
 }
 
+export function parseD1ExecuteSchemaObjects(
+  stdout: string,
+  exportedTables: readonly string[],
+): readonly D1PortableSchemaObject[] {
+  const parsed = JSON.parse(stdout) as unknown;
+  if (!Array.isArray(parsed) || parsed.length !== 1) {
+    throw new Error("Wrangler returned an invalid D1 schema-object result.");
+  }
+  const result = parsed[0] as { success?: unknown; results?: unknown };
+  if (result.success !== true || !Array.isArray(result.results)) {
+    throw new Error("Wrangler did not return successful D1 schema objects.");
+  }
+  const allowedTables = new Set(exportedTables);
+  const objects = result.results.flatMap((value) => {
+    const row = value as {
+      type?: unknown;
+      name?: unknown;
+      tbl_name?: unknown;
+      sql?: unknown;
+    };
+    if (
+      (row.type !== "index" && row.type !== "trigger")
+      || typeof row.name !== "string"
+      || typeof row.tbl_name !== "string"
+      || typeof row.sql !== "string"
+      || !row.name
+      || !row.tbl_name
+      || !row.sql.trim()
+      || /[\0]/.test(row.sql)
+    ) {
+      throw new Error("Wrangler returned an invalid D1 schema object.");
+    }
+    if (
+      !allowedTables.has(row.tbl_name)
+      || isProviderDerivedSourceTable(row.name)
+      || isProviderDerivedSourceTable(row.tbl_name)
+    ) return [];
+    return [{
+      type: row.type,
+      name: row.name,
+      table: row.tbl_name,
+      sql: `${row.sql.trim().replace(/;+$/, "")};`,
+    } satisfies D1PortableSchemaObject];
+  }).sort((left, right) =>
+    left.type.localeCompare(right.type) || left.name.localeCompare(right.name));
+  if (new Set(objects.map(({ name }) => name)).size !== objects.length) {
+    throw new Error("Wrangler returned duplicate D1 schema-object names.");
+  }
+  return objects;
+}
+
 async function readRemoteD1TableNames(input: {
   wranglerEntry: string;
   wranglerConfig: string;
@@ -239,6 +302,28 @@ async function readRemoteD1TableNames(input: {
     input.wranglerConfig,
   ]);
   return parseD1ExecuteTableNames(stdout);
+}
+
+async function readRemoteD1SchemaObjects(input: {
+  wranglerEntry: string;
+  wranglerConfig: string;
+  database: string;
+  tables: readonly string[];
+}): Promise<readonly D1PortableSchemaObject[]> {
+  const stdout = await runWrangler(input.wranglerEntry, [
+    "d1",
+    "execute",
+    input.database,
+    "--remote",
+    "--json",
+    "--command",
+    "SELECT type, name, tbl_name, sql FROM sqlite_schema "
+      + "WHERE type IN ('index', 'trigger') AND sql IS NOT NULL "
+      + "ORDER BY type, name",
+    "--config",
+    input.wranglerConfig,
+  ]);
+  return parseD1ExecuteSchemaObjects(stdout, input.tables);
 }
 
 export function classifyD1ExportTables(
@@ -314,6 +399,14 @@ export async function verifyD1PortableExportBundle(bundlePath: string): Promise<
   if (parsed.tableSetSha256 !== tableSetSha256) {
     throw new Error("D1 portable export table-set digest does not match evidence.");
   }
+  const schemaObjectCount = requireNonNegativeSafeInteger(
+    parsed.schemaObjectCount,
+    "schemaObjectCount",
+  );
+  const schemaObjectSetSha256 = requireSha256(
+    parsed.schemaObjectSetSha256,
+    "schemaObjectSetSha256",
+  );
   if (parsed.artifact?.filename !== D1_PORTABLE_EXPORT_FILENAME) {
     throw new Error("D1 portable export names an unexpected source artifact.");
   }
@@ -341,6 +434,8 @@ export async function verifyD1PortableExportBundle(bundlePath: string): Promise<
       tables,
       retiredTables,
       tableSetSha256,
+      schemaObjectCount,
+      schemaObjectSetSha256,
       artifact: {
         filename: D1_PORTABLE_EXPORT_FILENAME,
         bytes: expectedBytes,
@@ -395,6 +490,12 @@ export async function exportD1PortableBundle(
       remoteTables,
       canonicalTables,
     );
+    const schemaObjects = await readRemoteD1SchemaObjects({
+      wranglerEntry,
+      wranglerConfig,
+      database,
+      tables,
+    });
     await runWrangler(wranglerEntry, [
       "d1",
       "export",
@@ -407,6 +508,11 @@ export async function exportD1PortableBundle(
       wranglerConfig,
       ...tables.flatMap((table) => ["--table", table]),
     ]);
+    await appendFile(
+      exportPath,
+      `\n${schemaObjects.map(({ sql }) => sql).join("\n")}\n`,
+      { mode: 0o600 },
+    );
     const bookmarkAfter = await readD1Bookmark({
       wranglerEntry,
       wranglerConfig,
@@ -422,6 +528,9 @@ export async function exportD1PortableBundle(
     const tableSetSha256 = createHash("sha256")
       .update(tables.join("\n"))
       .digest("hex");
+    const schemaObjectSetSha256 = createHash("sha256")
+      .update(JSON.stringify(schemaObjects))
+      .digest("hex");
     const evidence: D1PortableExportEvidence = {
       version: D1_PORTABLE_EXPORT_VERSION,
       database,
@@ -429,6 +538,8 @@ export async function exportD1PortableBundle(
       tables,
       retiredTables,
       tableSetSha256,
+      schemaObjectCount: schemaObjects.length,
+      schemaObjectSetSha256,
       artifact: {
         filename: D1_PORTABLE_EXPORT_FILENAME,
         bytes: artifact.bytes,
@@ -449,6 +560,8 @@ export async function exportD1PortableBundle(
       tableCount: tables.length,
       retiredTableCount: retiredTables.length,
       tableSetSha256,
+      schemaObjectCount: schemaObjects.length,
+      schemaObjectSetSha256,
       artifactBytes: artifact.bytes,
       artifactSha256: artifact.sha256,
     };

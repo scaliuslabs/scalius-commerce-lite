@@ -11,6 +11,7 @@ import {
   D1_PORTABLE_EXPORT_FILENAME,
   D1_PORTABLE_EXPORT_VERSION,
   parseD1ExecuteTableNames,
+  parseD1ExecuteSchemaObjects,
   verifyD1PortableExportBundle,
 } from "../scripts/export-d1-portable";
 import {
@@ -58,6 +59,53 @@ describe("portable D1 export table boundary", () => {
     }]))).toThrow(/duplicate D1 table names/i);
   });
 
+  it("reconstructs only portable indexes and triggers for table-filtered exports", () => {
+    const objects = parseD1ExecuteSchemaObjects(JSON.stringify([{
+      success: true,
+      results: [
+        {
+          type: "trigger",
+          name: "products_guard",
+          tbl_name: "products",
+          sql: "CREATE TRIGGER products_guard BEFORE DELETE ON products BEGIN SELECT 1; END",
+        },
+        {
+          type: "index",
+          name: "products_slug_idx",
+          tbl_name: "products",
+          sql: "CREATE INDEX products_slug_idx ON products (slug)",
+        },
+        {
+          type: "trigger",
+          name: "products_fts_after_insert",
+          tbl_name: "products",
+          sql: "CREATE TRIGGER products_fts_after_insert AFTER INSERT ON products BEGIN SELECT 1; END",
+        },
+        {
+          type: "index",
+          name: "orders_created_idx",
+          tbl_name: "orders",
+          sql: "CREATE INDEX orders_created_idx ON orders (created_at)",
+        },
+      ],
+    }]), ["products"]);
+
+    expect(objects).toEqual([
+      {
+        type: "index",
+        name: "products_slug_idx",
+        table: "products",
+        sql: "CREATE INDEX products_slug_idx ON products (slug);",
+      },
+      {
+        type: "trigger",
+        name: "products_guard",
+        table: "products",
+        sql: "CREATE TRIGGER products_guard BEFORE DELETE ON products BEGIN SELECT 1; END;",
+      },
+    ]);
+  });
+
   it("binds a canonical export artifact to strict bookmark and table evidence", async () => {
     const directory = await mkdtemp(join(tmpdir(), "scalius-d1-export-proof-"));
     try {
@@ -80,6 +128,10 @@ describe("portable D1 export table boundary", () => {
           retiredTables: ["plugin_routes"],
           tableSetSha256: createHash("sha256")
             .update(tables.join("\n"))
+            .digest("hex"),
+          schemaObjectCount: 0,
+          schemaObjectSetSha256: createHash("sha256")
+            .update("[]")
             .digest("hex"),
           artifact: {
             filename: D1_PORTABLE_EXPORT_FILENAME,

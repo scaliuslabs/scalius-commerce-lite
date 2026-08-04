@@ -19,6 +19,7 @@ import {
 } from "./sqlite-provider-schema";
 import { compileSqliteMigrationForProvider } from "../src/migration-artifacts";
 import type { DatabaseProvider } from "../src/provider";
+import { CURRENT_DATABASE_SCHEMA_MIGRATIONS } from "../src/schema-contract";
 
 interface TableColumn {
   name: string;
@@ -289,6 +290,13 @@ interface SqliteSchemaFingerprint {
   objectCount: number;
 }
 
+interface CanonicalSnapshotSchemaObject {
+  type: string;
+  name: string;
+  table: string;
+  definition: unknown;
+}
+
 function sha256Text(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
@@ -396,10 +404,10 @@ function isExcludedSnapshotSchemaObject(name: string, table: string): boolean {
     || EMPTY_PROVIDER_SNAPSHOT_TRANSIENT_TABLES.has(candidate));
 }
 
-function fingerprintCanonicalSnapshotSchema(
+export function readCanonicalSnapshotSchemaObjects(
   database: DatabaseSync,
-): SqliteSchemaFingerprint {
-  const objects = database.prepare(`
+): readonly CanonicalSnapshotSchemaObject[] {
+  return database.prepare(`
     SELECT type, name, tbl_name, sql
     FROM sqlite_schema
     WHERE sql IS NOT NULL
@@ -421,6 +429,12 @@ function fingerprintCanonicalSnapshotSchema(
         ? readSemanticSqliteTableDefinition(database, object.name, object.sql)
         : canonicalizeSqliteSchemaDefinition(object.sql),
     }));
+}
+
+function fingerprintCanonicalSnapshotSchema(
+  database: DatabaseSync,
+): SqliteSchemaFingerprint {
+  const objects = readCanonicalSnapshotSchemaObjects(database);
   return {
     sha256: sha256Text(JSON.stringify(objects)),
     objectCount: objects.length,
@@ -561,6 +575,49 @@ async function readCanonicalSqliteMigrations(
   }));
 }
 
+function readReleaseLedgerMigrationCount(
+  database: DatabaseSync,
+  migrations: readonly CanonicalSqliteMigration[],
+): number | undefined {
+  const hasLedger = database.prepare(`
+    SELECT 1 AS present
+    FROM sqlite_schema
+    WHERE type = 'table' AND name = 'scalius_schema_migrations'
+  `).get();
+  if (!hasLedger) return undefined;
+
+  const firstLedgerIndex = migrations.findIndex(
+    ({ name }) => name.replace(/\.sql$/, "") === CURRENT_DATABASE_SCHEMA_MIGRATIONS[0]?.name,
+  );
+  if (firstLedgerIndex < 0 || CURRENT_DATABASE_SCHEMA_MIGRATIONS.length === 0) {
+    throw new Error("Canonical migrations are missing the release-ledger boundary.");
+  }
+  const rows = database.prepare(`
+    SELECT version, name, source_sha256
+    FROM scalius_schema_migrations
+    ORDER BY version
+  `).all();
+  if (rows.length === 0 || rows.length > CURRENT_DATABASE_SCHEMA_MIGRATIONS.length) {
+    throw new Error("SQLite source has an invalid release migration ledger.");
+  }
+  for (let index = 0; index < rows.length; index += 1) {
+    const row = rows[index]!;
+    const expected = CURRENT_DATABASE_SCHEMA_MIGRATIONS[index]!;
+    const migration = migrations[firstLedgerIndex + index]!;
+    if (
+      migration.name.replace(/\.sql$/, "") !== expected.name
+      || Number(row.version) !== expected.version
+      || String(row.name) !== expected.name
+      || String(row.source_sha256) !== expected.sourceSha256
+    ) {
+      throw new Error(
+        `SQLite source release ledger diverges at ${expected.name}.`,
+      );
+    }
+  }
+  return firstLedgerIndex + rows.length;
+}
+
 async function upgradeSqliteSnapshotSchema(
   databasePath: string,
   provider: Extract<DatabaseProvider, "d1" | "turso">,
@@ -573,6 +630,7 @@ async function upgradeSqliteSnapshotSchema(
   let transactionOpen = false;
   try {
     const sourceSchema = fingerprintCanonicalSnapshotSchema(source);
+    const ledgerMigrationCount = readReleaseLedgerMigrationCount(source, migrations);
     const matches: number[] = [];
     let targetSchema: SqliteSchemaFingerprint | undefined;
     for (let migrationCount = 0; migrationCount <= migrations.length; migrationCount += 1) {
@@ -584,7 +642,24 @@ async function upgradeSqliteSnapshotSchema(
       }
       canonical.exec(migrations[migrationCount]!.compiled);
     }
-    if (matches.length !== 1) {
+    if (ledgerMigrationCount === undefined && matches.length !== 1) {
+      const sourceObjects = readCanonicalSnapshotSchemaObjects(source);
+      const targetObjects = readCanonicalSnapshotSchemaObjects(canonical);
+      const sourceByIdentity = new Map(sourceObjects.map((object) => [
+        `${object.type}:${object.name}`,
+        object,
+      ]));
+      const targetByIdentity = new Map(targetObjects.map((object) => [
+        `${object.type}:${object.name}`,
+        object,
+      ]));
+      const schemaDifferences = [...new Set([
+        ...sourceByIdentity.keys(),
+        ...targetByIdentity.keys(),
+      ])].filter((identity) =>
+        JSON.stringify(sourceByIdentity.get(identity)?.definition)
+          !== JSON.stringify(targetByIdentity.get(identity)?.definition)
+      ).slice(0, 12);
       const canonicalTables = new Set(canonical.prepare(`
         SELECT name FROM sqlite_schema WHERE type = 'table'
       `).all().map((row) => String(row.name)));
@@ -605,11 +680,12 @@ async function upgradeSqliteSnapshotSchema(
       }
       throw new Error(
         matches.length === 0
-          ? "SQLite source schema does not match any canonical migration boundary."
+          ? "SQLite source schema does not match any canonical migration boundary"
+            + `${schemaDifferences.length > 0 ? `; first differences: ${schemaDifferences.join(", ")}` : ""}.`
           : "SQLite source schema ambiguously matches several canonical migration boundaries.",
       );
     }
-    const sourceMigrationCount = matches[0]!;
+    const sourceMigrationCount = ledgerMigrationCount ?? matches[0]!;
     if (sourceMigrationCount < MINIMUM_PORTABLE_SOURCE_MIGRATION_COUNT) {
       throw new Error(
         `SQLite source schema is at migration ${sourceMigrationCount}, below the portable baseline `
@@ -630,7 +706,11 @@ async function upgradeSqliteSnapshotSchema(
       transactionOpen = false;
     }
     const upgradedSchema = fingerprintCanonicalSnapshotSchema(source);
-    if (
+    if (ledgerMigrationCount !== undefined) {
+      if (readReleaseLedgerMigrationCount(source, migrations) !== migrations.length) {
+        throw new Error("SQLite snapshot release ledger did not reach the canonical target.");
+      }
+    } else if (
       !targetSchema
       || upgradedSchema.sha256 !== targetSchema.sha256
       || upgradedSchema.objectCount !== targetSchema.objectCount

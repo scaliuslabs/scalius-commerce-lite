@@ -127,6 +127,10 @@ describe("native Turso upload bundle", () => {
       tableSetSha256: createHash("sha256")
         .update(tables.join("\n"))
         .digest("hex"),
+      schemaObjectCount: 0,
+      schemaObjectSetSha256: createHash("sha256")
+        .update("[]")
+        .digest("hex"),
       artifact: {
         filename: D1_PORTABLE_EXPORT_FILENAME,
         bytes: source.byteLength,
@@ -454,4 +458,34 @@ INSERT INTO scalius_turso_control_a VALUES ('probe-row', 'retired-run', 7);
       sqliteBinary: "sqlite3",
     })).rejects.toThrow(/unexpected noncanonical tables.*unexplained_extension/i);
   }, 30_000);
+
+  it("trusts an exact release ledger when a historical D1 schema differs physically", async () => {
+    const directory = await temporaryDirectory();
+    const databasePath = join(directory, "historical-d1.sqlite3");
+    const exportPath = join(directory, "historical-d1.sql");
+    const targetPath = join(directory, "normalized.sqlite3");
+    const database = await createProviderSchemaDatabase("d1", databasePath);
+    try {
+      // Production D1 databases can retain an older physical index shape even
+      // when their provider-neutral release ledger is current. Normalization
+      // rebuilds a canonical target, so exact ledger authority is the safe
+      // migration boundary instead of byte-identical sqlite_schema text.
+      database.exec("DROP INDEX IF EXISTS products_status_idx");
+    } finally {
+      database.close();
+    }
+    await dumpSqlite(databasePath, exportPath);
+
+    const summary = await normalizeD1ExportToTursoDatabase({
+      input: exportPath,
+      targetDatabasePath: targetPath,
+      sqliteBinary: "sqlite3",
+    });
+
+    expect(summary.schemaUpgrade.sourceMigrationCount).toBe(
+      summary.schemaUpgrade.targetMigrationCount,
+    );
+    expect(summary.schemaUpgrade.appliedMigrations).toEqual([]);
+    expect(summary.foreignKeyViolations).toBe(0);
+  });
 });
