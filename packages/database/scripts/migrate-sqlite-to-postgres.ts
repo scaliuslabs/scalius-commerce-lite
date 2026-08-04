@@ -267,7 +267,10 @@ export async function assertSourceArtifactUnchanged(
   expectedBytes: number,
   expectedSha256: string,
 ): Promise<void> {
-  await assertStandaloneSqliteArtifact(path);
+  // A WAL-format snapshot can create an empty -wal file and a shared-memory
+  // index during our own read-only SQLite opens. The migration rejects any
+  // sidecar before it starts; completion safety is the immutable main-file
+  // size and digest captured after that gate.
   const current = await stat(path);
   if (!current.isFile() || current.size !== expectedBytes) {
     throw new Error("SQLite migration source changed size or file type during migration.");

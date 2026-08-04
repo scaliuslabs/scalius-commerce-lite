@@ -141,6 +141,13 @@ describe("SQLite-to-PostgreSQL migration checkpoints", () => {
         8,
         "0682c5f2076f099c34cfdd15a9e063849ed437a49677e6fcc5b4198c76575be5",
       )).resolves.toBeUndefined();
+      await writeFile(`${source}-wal`, "", { mode: 0o600 });
+      await writeFile(`${source}-shm`, "read-only sqlite state", { mode: 0o600 });
+      await expect(assertSourceArtifactUnchanged(
+        source,
+        8,
+        "0682c5f2076f099c34cfdd15a9e063849ed437a49677e6fcc5b4198c76575be5",
+      )).resolves.toBeUndefined();
       await writeFile(source, "mutation", { mode: 0o600 });
       await expect(assertSourceArtifactUnchanged(
         source,
