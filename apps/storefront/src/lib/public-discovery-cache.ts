@@ -24,7 +24,11 @@ export function getPublicDiscoveryCacheControl(
     return DISCOVERY_BROWSER_CACHE_CONTROL;
   }
 
-  if (pathname === "/blog/feed.xml" || pathname === "/.well-known/ucp") {
+  if (
+    pathname === "/blog/feed.xml" ||
+    pathname === "/.well-known/ucp" ||
+    pathname === "/llms.txt"
+  ) {
     return DISCOVERY_BROWSER_CACHE_CONTROL;
   }
 

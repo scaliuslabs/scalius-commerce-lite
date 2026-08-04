@@ -2324,7 +2324,39 @@ export async function checkUcpDiscovery(options, { fetchImpl, productUrl, logger
     throw new Error(`UCP profile failed: ${profileEvaluation.errors.join("; ")}`);
   }
 
+  const llmsUrl = buildUrl(options.storefrontUrl, "/llms.txt");
+  const llmsResponse = await fetchText(llmsUrl, {
+    fetchImpl,
+    timeoutMs: options.timeoutMs,
+  });
+  requireStatus(llmsResponse, "Storefront /llms.txt", (status) => status >= 200 && status < 300);
+  const llmsCache = evaluateDiscoveryCacheHeaders(llmsResponse.headers, {
+    label: "llms.txt",
+  });
+  if (!llmsCache.ok) {
+    throw new Error(`llms.txt cache headers failed: ${llmsCache.errors.join("; ")}`);
+  }
+  const requiredLlmsFacts = [
+    profileUrl,
+    UCP_CATALOG_SEARCH_CAPABILITY,
+    UCP_CATALOG_LOOKUP_CAPABILITY,
+    "UCP-Agent:",
+    "not advertised",
+  ];
+  const missingLlmsFacts = requiredLlmsFacts.filter((fact) =>
+    !llmsResponse.body.includes(fact)
+  );
+  if (missingLlmsFacts.length > 0) {
+    throw new Error(`llms.txt is missing required UCP guidance: ${missingLlmsFacts.join(", ")}`);
+  }
+
   const result = {
+    llms: {
+      url: redactUrl(llmsUrl),
+      statusCode: llmsResponse.statusCode,
+      durationMs: llmsResponse.durationMs,
+      cacheControl: llmsCache.cacheControl,
+    },
     profile: {
       url: redactUrl(profileUrl),
       statusCode: profileResponse.statusCode,

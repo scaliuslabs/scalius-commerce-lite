@@ -244,6 +244,22 @@ describe("release UCP catalog candidate", () => {
     });
   }
 
+  function llmsResponse() {
+    return new Response([
+      "https://storefront.example.test/.well-known/ucp",
+      "dev.ucp.shopping.catalog.search",
+      "dev.ucp.shopping.catalog.lookup",
+      "UCP-Agent:",
+      "Checkout capabilities are not advertised",
+    ].join("\n"), {
+      status: 200,
+      headers: {
+        "Cache-Control": "public, max-age=60",
+        "Content-Type": "text/plain",
+      },
+    });
+  }
+
   const options = {
     storefrontUrl: "https://storefront.example.test",
     timeoutMs: 1_000,
@@ -254,6 +270,7 @@ describe("release UCP catalog candidate", () => {
     const fetchImpl = async (url) => {
       urls.push(url);
       if (url.endsWith("/.well-known/ucp")) return jsonResponse(catalogOnlyUcpProfile());
+      if (url.endsWith("/llms.txt")) return llmsResponse();
       if (url.endsWith("/catalog/search")) return jsonResponse({ products: [] });
       throw new Error(`Unexpected UCP request: ${url}`);
     };
@@ -266,6 +283,7 @@ describe("release UCP catalog candidate", () => {
 
     expect(urls).toEqual([
       "https://storefront.example.test/.well-known/ucp",
+      "https://storefront.example.test/llms.txt",
       "https://storefront.example.test/ucp/catalog/search",
     ]);
     expect(result.catalog).toMatchObject({
@@ -281,6 +299,7 @@ describe("release UCP catalog candidate", () => {
     const fetchImpl = async (url) => {
       urls.push(url);
       if (url.endsWith("/.well-known/ucp")) return jsonResponse(catalogOnlyUcpProfile());
+      if (url.endsWith("/llms.txt")) return llmsResponse();
       if (url.endsWith("/catalog/search")) {
         return jsonResponse({
           products: [{ id: "gid://scalius/Product/product-1", variants: [{ id: variantId }] }],
@@ -311,6 +330,7 @@ describe("release UCP catalog candidate", () => {
 
     expect(urls).toEqual([
       "https://storefront.example.test/.well-known/ucp",
+      "https://storefront.example.test/llms.txt",
       "https://storefront.example.test/ucp/catalog/search",
       "https://storefront.example.test/ucp/catalog/lookup",
       "https://storefront.example.test/ucp/catalog/product",

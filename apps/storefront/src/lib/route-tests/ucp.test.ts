@@ -35,6 +35,7 @@ vi.mock("@/lib/api/runtime-env", () => ({
 }));
 
 import { GET as getProfile } from "../../pages/.well-known/ucp";
+import { GET as getLlmsTxt } from "../../pages/llms.txt";
 import { POST as lookupCatalog } from "../../pages/ucp/catalog/lookup";
 import { POST as getCatalogProduct } from "../../pages/ucp/catalog/product";
 import { POST as searchCatalog } from "../../pages/ucp/catalog/search";
@@ -152,6 +153,27 @@ describe("UCP storefront routes", () => {
     ]) {
       expect(serializedProfile).not.toContain(unsafeCapability);
     }
+  });
+
+  it("publishes an accurate llms.txt guide to the read-only UCP catalog", async () => {
+    const response = await getLlmsTxt({} as never);
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Content-Type")).toContain("text/plain");
+    expect(body).toContain("https://storefront.example.test/.well-known/ucp");
+    expect(body).toContain("dev.ucp.shopping.catalog.search");
+    expect(body).toContain("dev.ucp.shopping.catalog.lookup");
+    expect(body).toContain('UCP-Agent: profile="https://your-agent.example/.well-known/ucp"');
+    expect(body).toContain("Cart, checkout, order, fulfillment, payment, and recovery capabilities are not advertised");
+  });
+
+  it("fails llms.txt closed when the canonical HTTPS storefront URL is unavailable", async () => {
+    mocks.getRuntimeStorefrontUrl.mockReturnValueOnce("");
+
+    const response = await getLlmsTxt({} as never);
+    expect(response.status).toBe(503);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
   });
 
   it("fails closed when the storefront URL cannot form an HTTPS profile origin", async () => {

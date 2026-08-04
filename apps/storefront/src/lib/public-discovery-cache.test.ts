@@ -26,6 +26,9 @@ describe("public discovery cache policy", () => {
     expect(getPublicDiscoveryCacheControl("/sitemap.xsl")).toBe(
       "public, max-age=0, no-cache, must-revalidate",
     );
+    expect(getPublicDiscoveryCacheControl("/llms.txt")).toBe(
+      "public, max-age=0, no-cache, must-revalidate",
+    );
   });
 
   it("keeps HTML responses in the browser revalidation lane", () => {
