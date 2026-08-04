@@ -1,9 +1,8 @@
 // src/modules/products/products.variants.ts
 // Variant-specific queries and mutations + barcode lookup.
-import type { DrizzleD1Database } from "drizzle-orm/d1";
 import { buildBatchGuard, isBatchGuardError } from "@scalius/database/client";
 import { effectiveRegularReservedStockSql } from "@scalius/database/inventory-authority";
-import * as schema from "@scalius/database/schema";
+import type { Database } from "@scalius/database/types";
 import {
     orders,
     orderItems,
@@ -144,7 +143,7 @@ function normalizedSkuKey(value: string): string {
 }
 
 async function assertSelectableVariantImage(
-    db: DrizzleD1Database<typeof schema>,
+    db: Database,
     productId: string,
     imageId: string | null,
     retainedImageId: string | null = null,
@@ -209,7 +208,7 @@ export function resolveNewVariantBarcode(
 }
 
 export async function assertUniqueVariantBarcodes(
-    db: DrizzleD1Database<typeof schema>,
+    db: Database,
     candidates: Array<{
         id?: string;
         barcode: string | null;
@@ -271,7 +270,7 @@ export function assertUniqueChangedVariantOptions(
 }
 
 export async function assertProductVariantOptionAxes(
-    db: DrizzleD1Database<typeof schema>,
+    db: Database,
     productId: string,
     changedVariants: Array<{ id?: string; selectedOptionValueIds: string[] }>,
     excludedVariantIds: string[] = [],
@@ -312,7 +311,7 @@ function customerOptionPredicate() {
     return sql`trim(coalesce(${productVariants.optionCombinationKey}, '')) <> ''`;
 }
 
-async function variantHasOpenOrderReference(db: DrizzleD1Database<typeof schema>, variantId: string): Promise<boolean> {
+async function variantHasOpenOrderReference(db: Database, variantId: string): Promise<boolean> {
     const openOrderReference = await db
         .select({ count: sql<number>`count(*)` })
         .from(orderItems)
@@ -336,7 +335,7 @@ async function variantHasOpenOrderReference(db: DrizzleD1Database<typeof schema>
  * Returns the variant with its parent product details, or null if not found.
  * Used by barcode scanners in the admin interface.
  */
-export async function lookupByBarcode(db: DrizzleD1Database<typeof schema>, barcode: string) {
+export async function lookupByBarcode(db: Database, barcode: string) {
     const barcodeKey = getBarcodeIdentityKey(barcode);
     if (!barcodeKey) return null;
     const variant = await db
@@ -401,7 +400,7 @@ export async function lookupByBarcode(db: DrizzleD1Database<typeof schema>, barc
 // Variant specific mutations
 // ─────────────────────────────────────────
 
-export async function getProductVariants(db: DrizzleD1Database<typeof schema>, productId: string) {
+export async function getProductVariants(db: Database, productId: string) {
     const variants = await db.select()
         .from(productVariants)
         .where(
@@ -419,7 +418,7 @@ export async function getProductVariants(db: DrizzleD1Database<typeof schema>, p
 }
 
 export async function createVariant(
-    db: DrizzleD1Database<typeof schema>,
+    db: Database,
     productId: string,
     data: z.infer<typeof createVariantSchema>,
 ): Promise<PersistedVariant & ProductAggregateRevisionResult> {
@@ -552,7 +551,7 @@ export async function createVariant(
 }
 
 export async function updateVariant(
-    db: DrizzleD1Database<typeof schema>,
+    db: Database,
     productId: string,
     variantId: string,
     data: z.infer<typeof updateVariantSchema>,
@@ -782,7 +781,7 @@ export async function updateVariant(
 }
 
 export async function deleteVariant(
-    db: DrizzleD1Database<typeof schema>,
+    db: Database,
     productId: string,
     variantId: string,
     expectedAggregateRevision: number,
@@ -904,7 +903,7 @@ type PersistedVariant = typeof productVariants.$inferSelect;
 const LOW_STOCK_RECONCILIATION_WAVE_SIZE = 5;
 
 export async function reconcileVariantLowStockAlerts(
-    db: DrizzleD1Database<typeof schema>,
+    db: Database,
     variantIds: string[],
 ): Promise<void> {
     const uniqueVariantIds = Array.from(new Set(variantIds));
