@@ -280,7 +280,7 @@ describe("storefront post-deploy warming", () => {
         fetchImpl,
       },
     )).rejects.toThrow(
-      "Purge all public cache domains and rerun storefront deployment verification",
+      "Verify the custom-domain target and Worker propagation, then rerun deployment verification",
     );
   });
 });

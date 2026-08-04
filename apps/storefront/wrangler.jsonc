@@ -13,6 +13,12 @@
 	// workers_dev: false — Workers only accessible via custom domains, not *.workers.dev
 	"workers_dev": false,
 	"preview_urls": false,
+	"routes": [
+		{
+			"pattern": "storefront.scalius.com",
+			"custom_domain": true
+		}
+	],
 	"cache": {
 		"enabled": true
 	},

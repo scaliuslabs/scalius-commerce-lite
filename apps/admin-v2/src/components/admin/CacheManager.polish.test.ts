@@ -9,7 +9,8 @@ describe("cache workspace presentation", () => {
   it("shows the simple native-cache mental model without legacy recovery concepts", () => {
     const source = readSource("./CacheManager.tsx");
     expect(source).toContain("Public cache");
-    expect(source).toContain("short TTL is the");
+    expect(source).toContain("writes durably purge the affected domains");
+    expect(source).toContain("one-hour TTL is only a");
     expect(source).not.toContain("Failed cache work");
     expect(source).not.toContain("warm queue");
     expect(source).not.toContain("KV prefix");

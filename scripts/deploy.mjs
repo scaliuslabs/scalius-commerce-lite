@@ -61,11 +61,10 @@ const storefrontStaticPostDeployWarmPaths = ["/", "/search"];
 const STOREFRONT_DYNAMIC_WARM_LIMIT = 4;
 const STOREFRONT_DYNAMIC_WARM_TIMEOUT_MS = 8_000;
 const STOREFRONT_WARM_CONCURRENCY = 4;
-// Native Workers Caching isolates versions. Allow enough retries for the
-// five-second availability window plus propagation, then fail with an explicit
-// legacy-purge instruction instead of polling an old pre-native cache entry for
-// several minutes.
-const STOREFRONT_WARM_MAX_ATTEMPTS = 12;
+// Custom-domain routing can trail a 100%-reported Worker deployment briefly.
+// Bound verification at 30 seconds; /health is no-store, so an old health build
+// is route propagation evidence rather than a cache-purge instruction.
+const STOREFRONT_WARM_MAX_ATTEMPTS = 20;
 const STOREFRONT_WARM_RETRY_DELAY_MS = 1_500;
 const API_READYZ_SAMPLE_COUNT = 4;
 const API_READYZ_SAMPLE_DELAY_MS = 1_000;
@@ -530,7 +529,7 @@ export async function warmStorefrontPath(url, path, {
 
   throw new Error(
     `Storefront warm verification failed for ${path}: ${lastFailure}. ` +
-    "Purge all public cache domains and rerun storefront deployment verification.",
+    "Verify the custom-domain target and Worker propagation, then rerun deployment verification.",
   );
 }
 
