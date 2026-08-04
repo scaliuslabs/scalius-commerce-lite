@@ -41,9 +41,10 @@ export default class StorefrontGateway extends WorkerEntrypoint<Env> {
     const policy = getPublicStorefrontCachePolicy(request);
     if (!policy) return handle(request, this.env, this.ctx);
 
-    const response = await this.ctx.exports.PublicStorefront.fetch(request, {
-      cf: { cacheKey: policy.cacheKey },
-    });
+    const cacheRequest = policy.canonicalUrl === request.url
+      ? request
+      : new Request(policy.canonicalUrl, request);
+    const response = await this.ctx.exports.PublicStorefront.fetch(cacheRequest);
     return exposePublicStorefrontResponse(response);
   }
 }

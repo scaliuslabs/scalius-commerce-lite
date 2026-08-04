@@ -61,11 +61,11 @@ const storefrontStaticPostDeployWarmPaths = ["/", "/search"];
 const STOREFRONT_DYNAMIC_WARM_LIMIT = 4;
 const STOREFRONT_DYNAMIC_WARM_TIMEOUT_MS = 8_000;
 const STOREFRONT_WARM_CONCURRENCY = 4;
-// Storefront cache keys are build-scoped, so a new deployment cannot serve HTML
-// produced by the superseded version. Hosted deployments may still seed their
-// bounded critical route set after rollout; this verifier is the deterministic
-// OSS fallback for direct deployments.
-const STOREFRONT_WARM_MAX_ATTEMPTS = 220;
+// Native Workers Caching isolates versions. Allow enough retries for the
+// five-second availability window plus propagation, then fail with an explicit
+// legacy-purge instruction instead of polling an old pre-native cache entry for
+// several minutes.
+const STOREFRONT_WARM_MAX_ATTEMPTS = 12;
 const STOREFRONT_WARM_RETRY_DELAY_MS = 1_500;
 const API_READYZ_SAMPLE_COUNT = 4;
 const API_READYZ_SAMPLE_DELAY_MS = 1_000;
@@ -529,7 +529,8 @@ export async function warmStorefrontPath(url, path, {
   }
 
   throw new Error(
-    `Storefront warm verification failed for ${path}: ${lastFailure}`,
+    `Storefront warm verification failed for ${path}: ${lastFailure}. ` +
+    "Purge all public cache domains and rerun storefront deployment verification.",
   );
 }
 

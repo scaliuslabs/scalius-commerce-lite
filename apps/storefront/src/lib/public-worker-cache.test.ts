@@ -8,30 +8,29 @@ import {
 } from "./public-worker-cache";
 
 describe("public storefront Worker cache policy", () => {
-  it("allows anonymous CMS pages with deterministic query keys", () => {
+  it("maps equivalent CMS query forms to one native cache URL", () => {
     const left = getPublicStorefrontCachePolicy(
       new Request("https://shop.example/about/?ref=footer&campaign=sale"),
-      "build-test",
     );
     const right = getPublicStorefrontCachePolicy(
       new Request("https://shop.example/about?campaign=sale&ref=footer"),
-      "build-test",
     );
 
     expect(left).toMatchObject({
-      cacheKey: "/about?campaign=sale&__scalius_build=build-test",
+      canonicalUrl: "https://shop.example/about?campaign=sale",
+      edgeTtlSeconds: 5,
       tags: ["pages", "products", "layout", "media"],
     });
-    expect(right?.cacheKey).toBe(left?.cacheKey);
+    expect(right?.canonicalUrl).toBe(left?.canonicalUrl);
   });
 
-  it("isolates native cache entries across storefront deployments", () => {
-    const request = new Request("https://shop.example/products/fish");
-
-    expect(getPublicStorefrontCachePolicy(request, "build-one")?.cacheKey)
-      .toBe("/products/fish?__scalius_build=build-one");
-    expect(getPublicStorefrontCachePolicy(request, "build-two")?.cacheKey)
-      .toBe("/products/fish?__scalius_build=build-two");
+  it.each([
+    ["https://shop.example", "https://shop.example/products/fish"],
+    ["https://preview.example", "https://preview.example/products/fish"],
+  ])("retains host isolation for %s", (origin, canonicalUrl) => {
+    expect(getPublicStorefrontCachePolicy(
+      new Request(`${origin}/products/fish`),
+    )?.canonicalUrl).toBe(canonicalUrl);
   });
 
   it.each([
@@ -67,7 +66,20 @@ describe("public storefront Worker cache policy", () => {
     ["/search?q=fish", ["search", "products", "layout", "media"]],
     ["/blog/news", ["pages", "products", "layout", "media"]],
     ["/api/product-feed.xml", ["discovery", "products", "layout", "media"]],
-  ])("caches anonymous public route %s for one day", (path, tags) => {
+  ])("bounds availability-bearing public route %s to five seconds", (path, tags) => {
+    const policy = getPublicStorefrontCachePolicy(
+      new Request(`https://shop.example${path}`),
+    );
+    expect(policy?.edgeTtlSeconds).toBe(5);
+    expect(policy?.tags).toEqual(tags);
+  });
+
+  it.each([
+    ["/robots.txt", ["discovery", "products", "categories", "collections", "pages", "layout"]],
+    ["/sitemap.xml", ["discovery", "products", "categories", "collections", "pages", "layout"]],
+    ["/blog/feed.xml", ["pages", "products", "discovery"]],
+    ["/.well-known/ucp", ["discovery", "products", "layout"]],
+  ])("keeps mutation-purged content route %s resident for one day", (path, tags) => {
     const policy = getPublicStorefrontCachePolicy(
       new Request(`https://shop.example${path}`),
     );
@@ -99,7 +111,7 @@ describe("public storefront Worker cache policy", () => {
 
     expect(response.headers.get("Cache-Control")).toContain("no-store");
     expect(response.headers.get("Cloudflare-CDN-Cache-Control")).toBe(
-      "public, max-age=86400, must-revalidate",
+      "public, max-age=5, must-revalidate",
     );
     expect(response.headers.get("Cache-Tag")).toBe(
       "pages,products,layout,media",

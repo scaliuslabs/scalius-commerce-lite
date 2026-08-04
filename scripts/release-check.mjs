@@ -56,7 +56,7 @@ const FEED_ENDPOINTS = [
 ];
 const STOREFRONT_CACHE_HEADER_PATHS = [
   "/",
-  "/search?sortBy=newest",
+  "/search?q=release-check",
   "/checkout",
   "/api/product-feed.xml?limit=5",
   "/api/purge-cache",
@@ -1888,7 +1888,7 @@ async function checkStorefrontPages(options, { fetchImpl, logger }) {
 
 async function checkStorefrontCacheHeaders(options, { fetchImpl, logger }) {
   const publicPages = [];
-  for (const path of ["/", "/search?sortBy=newest"]) {
+  for (const path of ["/", "/search?q=release-check"]) {
     const response = await fetchText(buildUrlWithSearch(options.storefrontUrl, path), {
       fetchImpl,
       timeoutMs: options.timeoutMs,

@@ -2,11 +2,7 @@ import {
   canonicalizeStorefrontHtmlCachePath,
   hasStorefrontProductVariantSelectionParams,
 } from "@scalius/shared/storefront-cache-path";
-import { BUILD_ID } from "@/config/build-id";
-// Freshness is mutation-driven through semantic cache-tag purges. This long
-// TTL keeps hot public HTML resident at the edge; it is only a final fallback
-// if every explicit purge attempt fails.
-const STOREFRONT_EDGE_TTL_SECONDS = 86_400;
+import { CACHE_TTL } from "@/lib/edge-cache";
 const MAX_PUBLIC_QUERY_ENTRIES = 30;
 const MAX_PUBLIC_QUERY_KEY_LENGTH = 64;
 const MAX_PUBLIC_QUERY_VALUE_LENGTH = 512;
@@ -46,7 +42,12 @@ const PUBLIC_STOREFRONT_CACHE_TAGS = new Set([
 ]);
 
 export interface PublicStorefrontCachePolicy {
-  cacheKey: string;
+  canonicalUrl: string;
+  edgeTtlSeconds: number;
+  tags: readonly string[];
+}
+
+interface PublicStorefrontRoutePolicy {
   edgeTtlSeconds: number;
   tags: readonly string[];
 }
@@ -68,25 +69,37 @@ function isCmsPagePath(pathname: string): boolean {
   );
 }
 
-function resolvePublicPathTags(pathname: string): readonly string[] | null {
-  if (pathname === "/") return ["homepage", "layout", "media", "products"];
+function availabilityPolicy(tags: readonly string[]): PublicStorefrontRoutePolicy {
+  return { edgeTtlSeconds: CACHE_TTL.AVAILABILITY, tags };
+}
+
+function contentPolicy(tags: readonly string[]): PublicStorefrontRoutePolicy {
+  return { edgeTtlSeconds: CACHE_TTL.LONG, tags };
+}
+
+function resolvePublicPathPolicy(
+  pathname: string,
+): PublicStorefrontRoutePolicy | null {
+  if (pathname === "/") {
+    return availabilityPolicy(["homepage", "layout", "media", "products"]);
+  }
   if (/^\/products\/[^/]+\/?$/.test(pathname)) {
-    return ["products", "product-schema", "layout", "media"];
+    return availabilityPolicy(["products", "product-schema", "layout", "media"]);
   }
   if (/^\/categories\/[^/]+\/?$/.test(pathname)) {
-    return ["categories", "products", "layout", "media"];
+    return availabilityPolicy(["categories", "products", "layout", "media"]);
   }
   if (/^\/collections\/[^/]+\/?$/.test(pathname)) {
-    return ["collections", "products", "layout", "media"];
+    return availabilityPolicy(["collections", "products", "layout", "media"]);
   }
   if (/^\/search\/?$/.test(pathname)) {
-    return ["search", "products", "layout", "media"];
-  }
-  if (/^\/blog(?:\/[^/]+)?\/?$/.test(pathname)) {
-    return ["pages", "products", "layout", "media"];
+    return availabilityPolicy(["search", "products", "layout", "media"]);
   }
   if (pathname === "/blog/feed.xml") {
-    return ["pages", "products", "discovery"];
+    return contentPolicy(["pages", "products", "discovery"]);
+  }
+  if (/^\/blog(?:\/[^/]+)?\/?$/.test(pathname)) {
+    return availabilityPolicy(["pages", "products", "layout", "media"]);
   }
   if (
     pathname === "/robots.txt" ||
@@ -94,28 +107,28 @@ function resolvePublicPathTags(pathname: string): readonly string[] | null {
     pathname === "/sitemap.xsl" ||
     /^\/sitemap-.*\.xml$/.test(pathname)
   ) {
-    return [
+    return contentPolicy([
       "discovery",
       "products",
       "categories",
       "collections",
       "pages",
       "layout",
-    ];
+    ]);
   }
   if (
     pathname === "/api/product-feed.xml" ||
     pathname === "/api/facebook-feed.xml"
   ) {
-    return ["discovery", "products", "layout", "media"];
+    return availabilityPolicy(["discovery", "products", "layout", "media"]);
   }
   if (pathname === "/.well-known/ucp") {
-    return ["discovery", "products", "layout"];
+    return contentPolicy(["discovery", "products", "layout"]);
   }
   // CMS content can embed product shortcodes, so a low-frequency merchant
   // product edit purges this bounded lane without per-page dependency scans.
   if (isCmsPagePath(pathname)) {
-    return ["pages", "products", "layout", "media"];
+    return availabilityPolicy(["pages", "products", "layout", "media"]);
   }
   return null;
 }
@@ -134,7 +147,6 @@ function hasBoundedPublicQuery(url: URL): boolean {
 
 export function getPublicStorefrontCachePolicy(
   request: Request,
-  buildId = BUILD_ID,
 ): PublicStorefrontCachePolicy | null {
   if (request.method !== "GET" && request.method !== "HEAD") return null;
   if (hasPrivateRequestSignals(request)) return null;
@@ -142,23 +154,20 @@ export function getPublicStorefrontCachePolicy(
   const url = new URL(request.url);
   if (!hasBoundedPublicQuery(url)) return null;
   if (hasStorefrontProductVariantSelectionParams(url)) return null;
-  const tags = resolvePublicPathTags(url.pathname);
-  if (!tags) return null;
+  const routePolicy = resolvePublicPathPolicy(url.pathname);
+  if (!routePolicy) return null;
   const normalizedPathname = url.pathname.replace(/\/$/, "") || "/";
-  const canonicalCacheKey = canonicalizeStorefrontHtmlCachePath(
-    `${normalizedPathname}${url.search}`,
-  );
-  if (!canonicalCacheKey) return null;
-
-  // Native Worker caches survive code rollouts. A build-scoped internal key
-  // makes the first request after deployment render the new code immediately;
-  // semantic tags continue to own freshness within that build.
-  const cacheKey = `${canonicalCacheKey}${canonicalCacheKey.includes("?") ? "&" : "?"}__scalius_build=${encodeURIComponent(buildId)}`;
+  const requestCachePath = `${normalizedPathname}${url.search}`;
+  const canonicalCachePath = canonicalizeStorefrontHtmlCachePath(requestCachePath);
+  if (!canonicalCachePath) return null;
 
   return {
-    cacheKey,
-    edgeTtlSeconds: STOREFRONT_EDGE_TTL_SECONDS,
-    tags,
+    // Pass a canonical same-host Request to the cache-enabled entrypoint. Native
+    // Workers Caching then owns the complete URL plus Worker-version key without
+    // requiring the Enterprise-only cf.cacheKey override.
+    canonicalUrl: new URL(canonicalCachePath, url.origin).toString(),
+    edgeTtlSeconds: routePolicy.edgeTtlSeconds,
+    tags: routePolicy.tags,
   };
 }
 
