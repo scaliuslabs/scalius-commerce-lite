@@ -157,6 +157,14 @@ the final traffic switch. A connection string alone cannot safely perform the
 export, data movement, verification, token rotation, deployment, or rollback
 retention.
 
+Do not substitute `turso db create --from-file ... --tursodb` for the native
+upload flow. A live 2026-08-05 rehearsal reported a successful upload but
+created a target containing only Turso's internal MVCC table. The repo-owned
+flow refused to infer readiness from provisioning success and instead uploaded
+the prepared native MVCC artifact, then verified every table, row, fingerprint,
+journal mode, integrity result, and foreign-key result before issuing a final
+receipt.
+
 ## Deterministic D1 or TursoDB to PostgreSQL protocol
 
 The migration orchestrator uses the same frozen canonical SQLite artifact for
@@ -203,6 +211,35 @@ a reverse migration would lose orders, inventory movements, sessions, and other
 merchant facts. The migration operator must either migrate the Turso delta/full
 state back into a verified D1 target or present rollback as a deliberate restore
 to the cutover snapshot with an explicit data-loss decision.
+
+## Current release portability proof — 2026-08-05
+
+Fresh disposable targets proved release `0053_checkout_language_authority`
+without using production merchant data:
+
+- The D1-shaped SQLite source and the Turso native upload each contained 109
+  canonical tables and six synthetic rows. Turso matched source and target
+  fingerprint
+  `fe077796db9192b89251f7eb0029e7ef29909e33f08a1207c74ef037faa18b29`,
+  used the `mvcc` journal, passed integrity and foreign-key checks, and produced
+  provision, upload, and final receipts.
+- A disposable Turso schema-52 state advanced to schema 53 in one provider
+  transaction, restored both checkout-language authority indexes, and replayed
+  as an exact no-op.
+- Direct SQLite-to-Neon migration completed 109 tables and six rows with schema
+  digest `f491501d5cfb75d9df6d6f9d4301a4d76d4bca98870b834f9276345d94a4f89c`
+  and content digest
+  `573f0af41c90d4a41dbcfba7c7c3129c9acc3a22ec64a937d96b1a7a2fc5e82a`.
+  A disposable PostgreSQL schema-52 state advanced to schema 53 in one
+  serializable transaction, replayed as a no-op, restored both authority
+  indexes, and left zero unvalidated constraints.
+- A current Turso platform snapshot normalized back to 109 tables and six rows,
+  then migrated into a second empty Neon database with the same schema and
+  content digests as the direct SQLite-to-Neon path. This proves the current
+  D1-to-PostgreSQL and Turso-to-PostgreSQL paths converge on identical logical
+  data.
+- Both disposable Turso databases/groups and the disposable Neon project were
+  deleted after verification; provider inventories returned empty.
 
 ## Historical verified D1 to TursoDB cutover — 2026-08-01
 
