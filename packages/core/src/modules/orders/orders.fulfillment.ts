@@ -17,7 +17,7 @@ import {
     ShipmentStatus,
     orderPayments,
 } from "@scalius/database/schema";
-import { applyInventoryForStatusChange } from "../inventory/inventory-transitions";
+import { applyInventoryForStatusChangeWithImpact } from "../inventory/inventory-transitions";
 import { markCODReturned, recordCODCollection, recordCODFailure, validateCODCollectionDetails } from "../payments/cod";
 import { createShipment, getDeliveryProviderActionReadiness, markShipmentReconciliationRequired } from "../delivery/delivery.service";
 import {
@@ -71,9 +71,10 @@ async function reconcileInventoryForStatus(
     db: Database,
     orderId: string,
     status: string,
-): Promise<void> {
-    const newInventoryAction = await applyInventoryForStatusChange(db, orderId, status);
-    await db.update(orders).set({ inventoryAction: newInventoryAction }).where(eq(orders.id, orderId));
+): Promise<string[]> {
+    const impact = await applyInventoryForStatusChangeWithImpact(db, orderId, status);
+    await db.update(orders).set({ inventoryAction: impact.inventoryAction }).where(eq(orders.id, orderId));
+    return impact.availabilityTransitionVariantIds;
 }
 
 function assertOrderCodActionAllowed(status: string, action: OrderCodAction): void {
@@ -398,7 +399,11 @@ export async function reconcileOrderShipment(
             orderStatusChanged = true;
         }
 
-        await reconcileInventoryForStatus(db, orderId, targetOrderStatus);
+        const availabilityTransitionVariantIds = await reconcileInventoryForStatus(
+            db,
+            orderId,
+            targetOrderStatus,
+        );
 
         await db
             .update(deliveryShipments)
@@ -428,6 +433,7 @@ export async function reconcileOrderShipment(
             claimCleared: order.shipmentClaimId === shipmentId,
             trackingId: shipment.trackingId,
             message: "Shipment inventory reconciliation repaired.",
+            availabilityTransitionVariantIds,
         };
     }
     if (order.shipmentClaimId !== shipmentId) {
@@ -478,7 +484,11 @@ export async function reconcileOrderShipment(
             .where(and(eq(orders.id, orderId), eq(orders.shipmentClaimId, shipmentId)));
     }
 
-    await reconcileInventoryForStatus(db, orderId, finalOrderStatus);
+    const availabilityTransitionVariantIds = await reconcileInventoryForStatus(
+        db,
+        orderId,
+        finalOrderStatus,
+    );
 
     await db
         .update(deliveryShipments)
@@ -506,6 +516,7 @@ export async function reconcileOrderShipment(
         claimCleared: true,
         trackingId: shipment.trackingId,
         message: "Shipment recovery repaired and order finalization completed.",
+        availabilityTransitionVariantIds,
     };
 }
 
@@ -557,11 +568,20 @@ export async function bulkShipOrders(
             });
             await assertNoActivePaymentSessionAttempt(db, orderId);
             if (order.status === OrderStatus.SHIPPED) {
-                await reconcileInventoryForStatus(db, orderId, OrderStatus.SHIPPED);
+                const availabilityTransitionVariantIds = await reconcileInventoryForStatus(
+                    db,
+                    orderId,
+                    OrderStatus.SHIPPED,
+                );
                 if (order.shipmentClaimId) {
                     await clearShipmentClaim(db, orderId, order.shipmentClaimId);
                 }
-                results.push({ orderId, success: true, message: "Order already shipped; inventory reconciled" });
+                results.push({
+                    orderId,
+                    success: true,
+                    message: "Order already shipped; inventory reconciled",
+                    availabilityTransitionVariantIds,
+                });
                 continue;
             }
             if (hasActiveShipmentClaim(order)) {
@@ -616,6 +636,7 @@ export async function bulkShipOrders(
                 });
                 continue;
             }
+            let availabilityTransitionVariantIds: string[] = [];
             if (shipment.success) {
                 // CAS update first — only apply inventory if we win the version check
                 const casResult = await db.update(orders).set({
@@ -649,7 +670,11 @@ export async function bulkShipOrders(
                 }
 
                 try {
-                    await reconcileInventoryForStatus(db, orderId, OrderStatus.SHIPPED);
+                    availabilityTransitionVariantIds = await reconcileInventoryForStatus(
+                        db,
+                        orderId,
+                        OrderStatus.SHIPPED,
+                    );
                     await clearShipmentClaim(db, orderId, claimId);
                 } catch (error: unknown) {
                     await markShipmentReconciliationRequired(
@@ -684,7 +709,13 @@ export async function bulkShipOrders(
             } else {
                 await clearShipmentClaim(db, orderId, claimId);
             }
-            results.push({ orderId, success: shipment.success, shipment: shipment.success ? shipment : undefined, error: shipment.success ? undefined : shipment.message });
+            results.push({
+                orderId,
+                success: shipment.success,
+                shipment: shipment.success ? shipment : undefined,
+                error: shipment.success ? undefined : shipment.message,
+                availabilityTransitionVariantIds,
+            });
         } catch (error: unknown) {
             results.push({ orderId, success: false, error: error instanceof Error ? error.message : String(error) });
         }
@@ -796,19 +827,29 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
                 }
             }
             try {
-                await reconcileInventoryForStatus(db, orderId, OrderStatus.DELIVERED);
+                const availabilityTransitionVariantIds = await reconcileInventoryForStatus(
+                    db,
+                    orderId,
+                    OrderStatus.DELIVERED,
+                );
+                await markManualDeliveryEvidence(db, orderId);
+                return {
+                    message: "COD collection recorded",
+                    availabilityTransitionVariantIds,
+                };
             } catch (error: unknown) {
                 await rollbackStatusClaim();
                 throw error;
             }
-            await markManualDeliveryEvidence(db, orderId);
-            return { message: "COD collection recorded" };
         }
         case "failed": {
             assertOrderCodActionAllowed(order.status, "failed");
             const failResult = await recordCODFailure(db, { orderId, reason: body.reason as "other" | "not_home" | "refused" | "no_cash" | "wrong_address", notes: body.notes as string | undefined });
             if (!failResult.success) throw new ValidationError(failResult.error || "COD failure recording failed");
-            return { message: "COD failure recorded" };
+            return {
+                message: "COD failure recorded",
+                availabilityTransitionVariantIds: [],
+            };
         }
         case "returned": {
             assertOrderCodActionAllowed(order.status, "returned");
@@ -864,6 +905,7 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
             return {
                 message: "Courier return-to-sender recorded; stock awaits warehouse receipt.",
                 returnId: returnRecord.id,
+                availabilityTransitionVariantIds: [],
             };
         }
         default:
@@ -1000,18 +1042,19 @@ export async function createFulfillmentShipment(db: Database, orderId: string, b
         isFinalShipment &&
         (shouldShipOrder || order.status === OrderStatus.SHIPPED || order.status === OrderStatus.DELIVERED);
 
-    if (shouldReconcileShipmentInventory) {
-        await reconcileInventoryForStatus(
+    const availabilityTransitionVariantIds = shouldReconcileShipmentInventory
+        ? await reconcileInventoryForStatus(
             db,
             orderId,
             order.status === OrderStatus.DELIVERED ? OrderStatus.DELIVERED : OrderStatus.SHIPPED,
-        );
-    }
+        )
+        : [];
 
     return {
         shipmentId,
         isFinalShipment,
         fulfillmentStatus: newFulfillmentStatus,
+        availabilityTransitionVariantIds,
         ...(shouldShipOrder
             ? {
                 statusChange: {
@@ -1069,11 +1112,18 @@ export async function updateOrderStatus(db: Database, orderId: string, status: s
     await assertNoActiveRefundAttempt(db, orderId);
     await assertNoActivePaymentSessionAttempt(db, orderId);
     if (currentStatus === nextStatus) {
-        await reconcileInventoryForStatus(db, orderId, nextStatus);
+        const availabilityTransitionVariantIds = await reconcileInventoryForStatus(
+            db,
+            orderId,
+            nextStatus,
+        );
         if (nextStatus === OrderStatus.DELIVERED || nextStatus === OrderStatus.COMPLETED) {
             await markManualDeliveryEvidence(db, orderId);
         }
-        return { message: "Status unchanged; inventory reconciled" };
+        return {
+            message: "Status unchanged; inventory reconciled",
+            availabilityTransitionVariantIds,
+        };
     }
 
     assertGenericAdminOrderStatusTransition(currentStatus, nextStatus);
@@ -1118,8 +1168,13 @@ export async function updateOrderStatus(db: Database, orderId: string, status: s
     // CAS succeeded. If inventory reconciliation fails before the order's
     // inventoryAction changes, roll back the buyer-visible status so operators
     // do not see a completed transition with stale stock counters.
+    let availabilityTransitionVariantIds: string[];
     try {
-        await reconcileInventoryForStatus(db, orderId, nextStatus);
+        availabilityTransitionVariantIds = await reconcileInventoryForStatus(
+            db,
+            orderId,
+            nextStatus,
+        );
     } catch (error: unknown) {
         await rollbackOrderStatusIfInventoryUnchanged(db, {
             orderId,
@@ -1158,5 +1213,9 @@ export async function updateOrderStatus(db: Database, orderId: string, status: s
         }
         : undefined;
 
-    return { message: "Order status updated successfully", notification };
+    return {
+        message: "Order status updated successfully",
+        notification,
+        availabilityTransitionVariantIds,
+    };
 }

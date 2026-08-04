@@ -226,7 +226,10 @@ describe("Steadfast webhook idempotency keys", () => {
       previousStatus: "shipped",
       newStatus: "delivered",
     };
-    mocks.updateOrderStatusFromShipment.mockResolvedValue(statusChange);
+    mocks.updateOrderStatusFromShipment.mockResolvedValue({
+      statusChange,
+      availabilityTransitionVariantIds: ["variant_1"],
+    });
     const queue = { send: vi.fn() };
     const { db } = createDbMock({
       id: "shipment_1",
@@ -260,6 +263,11 @@ describe("Steadfast webhook idempotency keys", () => {
       trackingId: "INV-1",
       source: "steadfast-webhook",
     });
+    expect(mocks.invalidateProductAvailabilityCaches).toHaveBeenCalledWith(
+      db,
+      { variantIds: ["variant_1"] },
+      expect.anything(),
+    );
   });
 
   it("skips duplicate durable delivery-status events before shipment updates", async () => {

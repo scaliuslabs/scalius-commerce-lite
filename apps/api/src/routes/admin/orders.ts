@@ -763,9 +763,27 @@ app.openapi(bulkShipRoute, (async (c: AdminRouteContext<typeof bulkShipRoute>) =
     const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
     const results = await OrdersService.bulkShipOrders(db, data.orderIds, data.providerId, data.options, encryptionKey);
     const successCount = results.filter((r) => r.success).length;
-    const successfulOrderIds = results.filter(isSuccessfulOrderResult).map((r) => r.orderId);
     const newlyShippedResults = results.filter(isNewShipmentResult);
-    await invalidateProductAvailabilityCaches(db, { orderIds: successfulOrderIds }, c);
+    const availabilityTransitionVariantIds = results.flatMap((result) =>
+        "availabilityTransitionVariantIds" in result
+        && Array.isArray(result.availabilityTransitionVariantIds)
+            ? result.availabilityTransitionVariantIds
+            : [],
+    );
+    if (availabilityTransitionVariantIds.length > 0) {
+        await invalidateProductAvailabilityCaches(
+            db,
+            { variantIds: availabilityTransitionVariantIds },
+            c,
+        );
+    }
+    const responseResults = results.map((result) => {
+        const {
+            availabilityTransitionVariantIds: _internalCacheSignal,
+            ...responseResult
+        } = result as typeof result & { availabilityTransitionVariantIds?: string[] };
+        return responseResult;
+    });
 
     await enqueueOrderNotificationsForStatus({
         db,
@@ -792,7 +810,7 @@ app.openapi(bulkShipRoute, (async (c: AdminRouteContext<typeof bulkShipRoute>) =
         totalProcessed: results.length,
         successCount,
         failureCount: results.length - successCount,
-        results
+        results: responseResults,
     });
 }) as unknown as AdminRouteHandler<typeof bulkShipRoute>);
 

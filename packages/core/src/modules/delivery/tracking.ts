@@ -1,6 +1,6 @@
 import { deliveryShipments, orders, ShipmentStatus } from "@scalius/database/schema";
 import { eq, and, sql } from "drizzle-orm";
-import { applyInventoryForStatusChange } from "../inventory/inventory-transitions";
+import { applyInventoryForStatusChangeWithImpact } from "../inventory/inventory-transitions";
 import { canTransitionTo } from "../orders/order-state-machine";
 import type { Database } from "@scalius/database/client";
 import { assertNoActiveShipmentClaim } from "../orders/shipment-claim";
@@ -96,14 +96,15 @@ async function reconcileShipmentInventory(
   orderId: string,
   orderStatus: string,
   shipmentStatus: string,
-): Promise<void> {
+): Promise<string[]> {
   try {
-    const newInventoryAction = await applyInventoryForStatusChange(db, orderId, orderStatus);
+    const impact = await applyInventoryForStatusChangeWithImpact(db, orderId, orderStatus);
     await db
       .update(orders)
-      .set({ inventoryAction: newInventoryAction })
+      .set({ inventoryAction: impact.inventoryAction })
       .where(eq(orders.id, orderId));
     await clearShipmentReconciliationIfNeeded(db, shipment, shipmentStatus);
+    return impact.availabilityTransitionVariantIds;
   } catch (error: unknown) {
     await markInventoryReconciliationRequired(db, shipment.id, shipmentStatus, orderStatus, error);
     throw error;
@@ -250,22 +251,37 @@ export async function updateOrderStatusFromShipment(
       // CAS succeeded; if inventory reconciliation fails, the webhook/admin
       // status-check caller can retry and operators see the shipment recovery
       // marker instead of a silent status/inventory split.
-      await reconcileShipmentInventory(db, shipment, order.id, newOrderStatus, newStatus);
+      const availabilityTransitionVariantIds = await reconcileShipmentInventory(
+        db,
+        shipment,
+        order.id,
+        newOrderStatus,
+        newStatus,
+      );
 
       console.log(
         `Updated order ${order.id} status from ${order.status} to ${newOrderStatus}`,
       );
       return {
-        orderId: order.id,
-        previousStatus: order.status,
-        newStatus: newOrderStatus,
-        version: order.version + 1,
+        statusChange: {
+          orderId: order.id,
+          previousStatus: order.status,
+          newStatus: newOrderStatus,
+          version: order.version + 1,
+        },
+        availabilityTransitionVariantIds,
       };
     }
 
-    await reconcileShipmentInventory(db, shipment, order.id, newOrderStatus, newStatus);
+    const availabilityTransitionVariantIds = await reconcileShipmentInventory(
+      db,
+      shipment,
+      order.id,
+      newOrderStatus,
+      newStatus,
+    );
 
-    return null;
+    return { statusChange: null, availabilityTransitionVariantIds };
   } catch (error: unknown) {
     console.error("Error updating order status from shipment:", {
       shipmentId,

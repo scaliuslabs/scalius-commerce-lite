@@ -14,6 +14,7 @@ import {
     markWebhookEventProcessed,
 } from "../../utils/webhook-idempotency";
 import { enqueueOrderStatusChangeNotification } from "../../utils/order-notification-queue";
+import { invalidateProductAvailabilityCaches } from "../../utils/cache-invalidation";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -254,10 +255,21 @@ app.post("/", async (c) => {
         await enqueueOrderStatusChangeNotification({
             db,
             queue: c.env.ORDER_NOTIFICATIONS_QUEUE,
-            statusChange: statusResult,
+            statusChange: statusResult?.statusChange ?? null,
             trackingId: shipment.trackingId,
             source: "steadfast-webhook",
         });
+        if (
+            statusResult
+            && Array.isArray(statusResult.availabilityTransitionVariantIds)
+            && statusResult.availabilityTransitionVariantIds.length > 0
+        ) {
+            await invalidateProductAvailabilityCaches(
+                db,
+                { variantIds: statusResult.availabilityTransitionVariantIds },
+                c,
+            );
+        }
 
         await markWebhookEventProcessed(
             db,

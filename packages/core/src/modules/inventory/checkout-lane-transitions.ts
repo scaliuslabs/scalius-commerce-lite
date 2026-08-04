@@ -55,6 +55,7 @@ export interface CheckoutLaneInventoryEdge {
 export interface CheckoutLaneTerminalResult {
     action: "restored" | "deducted";
     variantIds: string[];
+    availabilityTransitionVariantIds: string[];
 }
 
 interface CheckoutLaneRow {
@@ -73,6 +74,8 @@ interface CheckoutVariantRow {
     reservedStock: number;
     preorderStock: number;
     stockVersion: number;
+    trackInventory: boolean;
+    lowStockThreshold: number | null;
 }
 
 interface PreparedTerminalEdge {
@@ -81,6 +84,16 @@ interface PreparedTerminalEdge {
     variant: CheckoutVariantRow;
     laneMovementId: string;
     stockMovementId: string | null;
+    availableBefore: number;
+}
+
+function availabilityBand(available: number, lowStockThreshold: number | null) {
+    if (available <= 0) return "out_of_stock";
+    return lowStockThreshold !== null
+        && lowStockThreshold > 0
+        && available <= lowStockThreshold
+        ? "low_stock"
+        : "in_stock";
 }
 
 function isSafeIntegerAtLeast(value: unknown, minimum: number): value is number {
@@ -192,6 +205,8 @@ async function prepareTerminalEdges(
             reservedStock: productVariants.reservedStock,
             preorderStock: productVariants.preorderStock,
             stockVersion: productVariants.stockVersion,
+            trackInventory: productVariants.trackInventory,
+            lowStockThreshold: productVariants.lowStockThreshold,
         })
             .from(productVariants)
             .where(inArray(productVariants.id, variantIds)),
@@ -252,6 +267,13 @@ async function prepareTerminalEdges(
             edge,
             lane: lane as CheckoutLaneRow & { capacity: number },
             variant,
+            availableBefore: Math.max(
+                0,
+                variant.stock
+                    - variant.reservedStock
+                    - lanes.get(laneKey(edge.variantId, "regular", 0))!.reservedQuantity
+                    - lanes.get(laneKey(edge.variantId, "regular", 1))!.reservedQuantity,
+            ),
             laneMovementId: await deterministicMovementId(
                 "checkout_lane_terminal_v1",
                 order.id,
@@ -491,6 +513,18 @@ export async function terminateCheckoutLaneReservations(
             return {
                 action: targetAction,
                 variantIds: prepared.map((item) => item.edge.variantId),
+                availabilityTransitionVariantIds: operation === "released"
+                    ? prepared
+                        .filter((item) => item.variant.trackInventory)
+                        .filter((item) => availabilityBand(
+                            item.availableBefore,
+                            item.variant.lowStockThreshold,
+                        ) !== availabilityBand(
+                            item.availableBefore + item.edge.quantity,
+                            item.variant.lowStockThreshold,
+                        ))
+                        .map((item) => item.edge.variantId)
+                    : [],
             };
         } catch (error) {
             const converged = await readConvergedAction(db, order.id);
@@ -503,6 +537,10 @@ export async function terminateCheckoutLaneReservations(
                     action: targetAction,
                     variantIds: parseCheckoutLaneInventoryEdges(order.checkoutInventoryEdges)
                         .map((edge) => edge.variantId),
+                    availabilityTransitionVariantIds: operation === "released"
+                        ? parseCheckoutLaneInventoryEdges(order.checkoutInventoryEdges)
+                            .map((edge) => edge.variantId)
+                        : [],
                 };
             }
             if (!isRetriableLaneTransitionError(error) || attempt + 1 >= CHECKOUT_LANE_TRANSITION_ATTEMPTS) {
