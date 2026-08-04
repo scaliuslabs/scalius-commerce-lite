@@ -50,7 +50,7 @@ const productFallbackMainUrl = getProductImageUrl(productFallbackUrl, {
 const productFallbackMobileUrl = getProductImageUrl(productFallbackUrl, {
   width: imageTransforms.mobileDisplay,
   height: imageTransforms.mobileDisplay,
-  quality: 78,
+  quality: imageTransforms.mobileQuality,
   format: "auto",
   fit: "contain",
   trim: "border",
@@ -127,7 +127,7 @@ const optimizedMedia = galleryMedia.map((item) => {
     mobileUrl: getProductImageUrl(item.url, {
       width: imageTransforms.mobileDisplay,
       height: imageTransforms.mobileDisplay,
-      quality: 78,
+      quality: imageTransforms.mobileQuality,
       format: "auto",
       fit: "contain",
       trim: "border",
