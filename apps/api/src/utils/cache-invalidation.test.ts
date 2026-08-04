@@ -6,6 +6,7 @@ import {
   INVALIDATION_GROUPS,
   SETTINGS_CACHE_DEPENDENCIES,
   getGroupsForPath,
+  hasBuyerAvailabilityBandTransition,
   invalidateApiAndStorefrontGroups,
   invalidateCatalogCaches,
   invalidateGroups,
@@ -37,6 +38,29 @@ describe("cache invalidation domains", () => {
       CATALOG_CACHE_GROUPS.products,
     );
     expect(getGroupsForPath("/api/v1/unknown")).toEqual([]);
+  });
+
+  it("invalidates only when buyer-visible availability changes", () => {
+    expect(hasBuyerAvailabilityBandTransition({
+      availableBefore: 20,
+      availableAfter: 19,
+      lowStockThreshold: 5,
+    })).toBe(false);
+    expect(hasBuyerAvailabilityBandTransition({
+      availableBefore: 6,
+      availableAfter: 5,
+      lowStockThreshold: 5,
+    })).toBe(true);
+    expect(hasBuyerAvailabilityBandTransition({
+      availableBefore: 1,
+      availableAfter: 0,
+      lowStockThreshold: 5,
+    })).toBe(true);
+    expect(hasBuyerAvailabilityBandTransition({
+      availableBefore: 5,
+      availableAfter: 4,
+      lowStockThreshold: 5,
+    })).toBe(false);
   });
 
   it("strips bearer-like query values from the storefront purge URL", () => {

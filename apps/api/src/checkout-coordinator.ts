@@ -76,6 +76,7 @@ export type CheckoutCoordinatorResult =
       orderId: string;
       response: JsonObject;
       replay: boolean;
+      availabilityTransitionVariantIds: string[];
     }
   | {
       ok: false;
@@ -116,6 +117,7 @@ interface PendingCheckout {
   resolvers: Array<(result: CheckoutCoordinatorResult) => void>;
   recoveryAttempts: number;
   requiredLane: number | null;
+  availabilityTransitionVariantIds: string[];
 }
 
 interface ReservationLaneState {
@@ -125,6 +127,7 @@ interface ReservationLaneState {
   reservedQuantity: number;
   laneVersion: number;
   sourceStockVersion: number;
+  lowStockThreshold: number | null;
 }
 
 interface PreparedLaneBatch {
@@ -267,6 +270,30 @@ function cloneLaneState(state: ReservationLaneState): ReservationLaneState {
   return { ...state };
 }
 
+type BuyerAvailabilityBand = "out_of_stock" | "low_stock" | "in_stock";
+
+function buyerAvailabilityBand(
+  variantId: string,
+  states: ReadonlyMap<string, ReservationLaneState>,
+): BuyerAvailabilityBand {
+  const lanes = Array.from(
+    { length: CHECKOUT_RESERVATION_LANE_COUNT },
+    (_, lane) => states.get(laneStateKey(variantId, lane)),
+  );
+  if (lanes.some((lane) => !lane)) {
+    throw new Error("Checkout availability authority is incomplete.");
+  }
+  const available = lanes.reduce(
+    (sum, lane) => sum + lane!.capacity - lane!.reservedQuantity,
+    0,
+  );
+  if (available <= 0) return "out_of_stock";
+  const threshold = lanes[0]!.lowStockThreshold;
+  return threshold !== null && threshold > 0 && available <= threshold
+    ? "low_stock"
+    : "in_stock";
+}
+
 function parseResponsePayload(payload: string): JsonObject | null {
   try {
     const parsed = JSON.parse(payload) as unknown;
@@ -308,6 +335,7 @@ export class CheckoutCoordinatorEngine {
     requestHash: string;
     orderId: string;
     response: JsonObject;
+    availabilityTransitionVariantIds: string[];
   }>();
   private readonly laneStates = new Map<string, ReservationLaneState>();
   private readonly inFlightLanes = new Set<number>();
@@ -352,6 +380,8 @@ export class CheckoutCoordinatorEngine {
         orderId: recent.orderId,
         response: recent.response,
         replay: true,
+        availabilityTransitionVariantIds:
+          recent.availabilityTransitionVariantIds,
       });
     }
 
@@ -372,6 +402,7 @@ export class CheckoutCoordinatorEngine {
         resolvers: [resolve],
         recoveryAttempts: 0,
         requiredLane,
+        availabilityTransitionVariantIds: [],
       };
       this.pending.push(pending);
       this.activeByRequestKey.set(command.requestKey, pending);
@@ -531,6 +562,10 @@ export class CheckoutCoordinatorEngine {
       const stock = Number(variantRows[0]!.stock);
       const legacyReservedStock = Number(variantRows[0]!.legacyReservedStock);
       const stockVersion = Number(variantRows[0]!.stockVersion);
+      const rawLowStockThreshold = variantRows[0]!.lowStockThreshold;
+      const lowStockThreshold = rawLowStockThreshold === null
+        ? null
+        : Number(rawLowStockThreshold);
       const totalCapacity = variantRows.reduce((sum, row) => sum + Number(row.capacity), 0);
       const totalLaneReserved = variantRows.reduce(
         (sum, row) => sum + Number(row.reservedQuantity),
@@ -543,6 +578,16 @@ export class CheckoutCoordinatorEngine {
         || legacyReservedStock < 0
         || !Number.isSafeInteger(stockVersion)
         || stockVersion < 1
+        || (
+          lowStockThreshold !== null
+          && (!Number.isSafeInteger(lowStockThreshold) || lowStockThreshold < 0)
+        )
+        || variantRows.some((row) => {
+          const candidate = row.lowStockThreshold === null
+            ? null
+            : Number(row.lowStockThreshold);
+          return candidate !== lowStockThreshold;
+        })
         || totalCapacity !== Math.max(
           totalLaneReserved,
           Math.max(0, stock - legacyReservedStock),
@@ -575,6 +620,7 @@ export class CheckoutCoordinatorEngine {
           reservedQuantity: Number(row.reservedQuantity),
           laneVersion: Number(row.laneVersion),
           sourceStockVersion: Number(row.sourceStockVersion),
+          lowStockThreshold,
         });
       }
     }
@@ -708,6 +754,16 @@ export class CheckoutCoordinatorEngine {
       }
       selectedAuthorityRevision ??= pending.command.authorityRevision;
 
+      const availabilityBefore = new Map<string, BuyerAvailabilityBand>();
+      for (const reservation of pending.command.reservations) {
+        if (!availabilityBefore.has(reservation.variantId)) {
+          availabilityBefore.set(
+            reservation.variantId,
+            buyerAvailabilityBand(reservation.variantId, localStates),
+          );
+        }
+      }
+
       const edges: CheckoutReservationEdge[] = pending.command.reservations.map((reservation) => {
         const key = laneStateKey(reservation.variantId, lane);
         const state = localStates.get(key)!;
@@ -727,6 +783,11 @@ export class CheckoutCoordinatorEngine {
         state.laneVersion = edge.laneVersionAfter;
         return edge;
       });
+      const availabilityTransitionVariantIds = [
+        ...availabilityBefore.entries(),
+      ].filter(([variantId, before]) =>
+        buyerAvailabilityBand(variantId, localStates) !== before
+      ).map(([variantId]) => variantId);
       const prepared: PreparedCheckoutCommit<JsonObject, JsonObject> = {
         ...pending.command,
         lane,
@@ -747,8 +808,11 @@ export class CheckoutCoordinatorEngine {
           state.reservedQuantity = edge.reservedBefore;
           state.laneVersion = edge.laneVersionBefore;
         }
+        pending.availabilityTransitionVariantIds = [];
         break;
       }
+      pending.availabilityTransitionVariantIds =
+        availabilityTransitionVariantIds;
       selected.push(pending);
       commits.push(prepared);
       selectedIndexes.push(index);
@@ -1104,12 +1168,15 @@ export class CheckoutCoordinatorEngine {
     pending: PendingCheckout,
     response: JsonObject,
     orderId = pending.command.order.id,
+    availabilityTransitionVariantIds =
+      pending.availabilityTransitionVariantIds,
   ): void {
     this.committedByRequestKey.delete(pending.command.requestKey);
     this.committedByRequestKey.set(pending.command.requestKey, {
       requestHash: pending.command.requestHash,
       orderId,
       response,
+      availabilityTransitionVariantIds,
     });
     while (this.committedByRequestKey.size > MAX_RECENT_COMMITS) {
       const oldest = this.committedByRequestKey.keys().next().value as string | undefined;
@@ -1123,14 +1190,27 @@ export class CheckoutCoordinatorEngine {
     response: JsonObject,
     replay: boolean,
     orderId = pending.command.order.id,
+    availabilityTransitionVariantIds = replay
+      ? [...new Set(
+          pending.command.reservations.map((reservation) =>
+            reservation.variantId
+          ),
+        )]
+      : pending.availabilityTransitionVariantIds,
   ): void {
     this.activeByRequestKey.delete(pending.command.requestKey);
-    this.rememberCommitted(pending, response, orderId);
+    this.rememberCommitted(
+      pending,
+      response,
+      orderId,
+      availabilityTransitionVariantIds,
+    );
     const result: CheckoutCoordinatorResult = {
       ok: true,
       orderId,
       response,
       replay,
+      availabilityTransitionVariantIds,
     };
     for (const resolve of pending.resolvers) resolve(result);
   }
@@ -1734,6 +1814,17 @@ function parseCheckoutCoordinatorResult(value: unknown): CheckoutCoordinatorResu
       typeof value.orderId !== "string"
       || !isJsonObject(value.response)
       || typeof value.replay !== "boolean"
+      || (
+        value.availabilityTransitionVariantIds !== undefined
+        && (
+          !Array.isArray(value.availabilityTransitionVariantIds)
+          || value.availabilityTransitionVariantIds.some((variantId) =>
+            typeof variantId !== "string"
+            || !variantId
+            || variantId.length > 180
+          )
+        )
+      )
     ) {
       return { ok: false, code: "CHECKOUT_COMMIT_UNAVAILABLE" };
     }
@@ -1742,6 +1833,11 @@ function parseCheckoutCoordinatorResult(value: unknown): CheckoutCoordinatorResu
       orderId: value.orderId,
       response: value.response,
       replay: value.replay,
+      availabilityTransitionVariantIds: Array.isArray(
+        value.availabilityTransitionVariantIds,
+      )
+        ? [...new Set(value.availabilityTransitionVariantIds as string[])]
+        : [],
     };
   }
   if (
@@ -1891,6 +1987,17 @@ export async function submitCheckoutIntentToCoordinator(
       || !isJsonObject(body.response)
       || typeof body.replay !== "boolean"
       || (body.postCommitPayload !== null && !isJsonObject(body.postCommitPayload))
+      || (
+        body.availabilityTransitionVariantIds !== undefined
+        && (
+          !Array.isArray(body.availabilityTransitionVariantIds)
+          || body.availabilityTransitionVariantIds.some((variantId) =>
+            typeof variantId !== "string"
+            || !variantId
+            || variantId.length > 180
+          )
+        )
+      )
     ) {
       return { ok: false, code: "CHECKOUT_COMMIT_UNAVAILABLE" };
     }
@@ -1900,6 +2007,11 @@ export async function submitCheckoutIntentToCoordinator(
       response: body.response,
       replay: body.replay,
       postCommitPayload: body.postCommitPayload as StorefrontOrderCommitPayload | null,
+      availabilityTransitionVariantIds: Array.isArray(
+        body.availabilityTransitionVariantIds,
+      )
+        ? [...new Set(body.availabilityTransitionVariantIds as string[])]
+        : [],
     };
   }
   if (
