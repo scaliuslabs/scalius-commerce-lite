@@ -9,7 +9,6 @@ import { createTursoDatabase } from "./turso-adapter";
 import {
   connectNeonPostgres,
   connectNativePostgres,
-  connectPostgres,
   createPostgresDatabase,
 } from "./postgres-adapter";
 import type { Database } from "./types";
@@ -51,10 +50,10 @@ export { createTursoDatabase, isTursoConflictError } from "./turso-adapter";
 export {
   connectNeonPostgres,
   connectNativePostgres,
-  connectPostgres,
   createPostgresDatabase,
   isPostgresSerializationError,
 } from "./postgres-adapter";
+export { connectPostgres } from "./postgres-adapter";
 
 /**
  * Compose a database client for the current request or Worker event.

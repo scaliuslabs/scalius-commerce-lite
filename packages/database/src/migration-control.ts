@@ -348,7 +348,7 @@ export function advanceDatabaseMigrationCheckpoint(
       phase = "source_exported";
       break;
     }
-    case "prepare_artifact":
+    case "prepare_artifact": {
       requirePhase(checkpoint, "source_exported", event.type);
       evidence.preparedArtifactSha256 = requireSha256(
         event.preparedArtifactSha256,
@@ -380,6 +380,7 @@ export function advanceDatabaseMigrationCheckpoint(
       );
       phase = "artifact_prepared";
       break;
+    }
     case "record_import":
       requirePhase(checkpoint, "artifact_prepared", event.type);
       evidence.importReceiptSha256 = requireSha256(
