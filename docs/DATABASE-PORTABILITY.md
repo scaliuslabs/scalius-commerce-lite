@@ -17,10 +17,10 @@ database tiers:
   Hyperdrive use `pg`. Dialect and transport differences do not leak into
   routes or commerce services.
 
-The application does not provision databases or move data. A hosted Scalius
-control plane owns provider accounts, database creation, migration state,
-Worker secrets, deployments, health checks, rollback retention, and eventual
-source retirement. Per-merchant Workers and resources remain isolated.
+The application does not provision databases or move data. The deployment
+operator owns provider accounts, database creation, migration state, Worker
+secrets, deployments, health checks, rollback retention, and eventual source
+retirement. Per-merchant Workers and resources remain isolated.
 
 ## Runtime contract
 
@@ -37,7 +37,7 @@ A PostgreSQL deployment requires:
 - either `POSTGRES_DATABASE_URL` or a `HYPERDRIVE` binding
 
 `POSTGRES_DATABASE_URL` alone is sufficient for Neon and generic PostgreSQL.
-For generic PostgreSQL on production Workers, the hosted control plane should
+For generic PostgreSQL on production Workers, the deployment operator should
 provision Hyperdrive and bind it as `HYPERDRIVE`; that binding takes precedence
 over the retained direct URL and supplies Cloudflare's regional connection
 pool. This is a transport choice, not a second application database adapter.
@@ -52,7 +52,7 @@ Database release compatibility is exact, not a connectivity probe. Migration
 `0050_schema_release_contract` starts one ordered ledger shared by D1, TursoDB,
 and PostgreSQL. Each release row includes the canonical source digest, and API
 `/readyz` rejects missing, extra, renamed, future, or digest-mismatched rows.
-`0052_remove_storefront_cache_queue` is the current release. Historical migrations
+`0053_checkout_language_authority` is the current release. Historical migrations
 are an installed-system contract and must not be deleted or squashed after
 release.
 
@@ -70,7 +70,7 @@ the primary and later reads may use a consistent replica; routes and services
 do not carry provider-specific consistency branches.
 
 Ordinary deploys never upgrade an external database. They run a read-only
-`--dry-run --require-current` preflight; an external control-plane operation
+`--dry-run --require-current` preflight; an explicit migration operation
 must first activate `DATABASE_MIGRATION_FREEZE`, prove the freeze, run the
 explicit mutation with that proof digest, and only then deploy the release.
 This separation prevents an ordinary redeploy from racing checkout, queue, or
@@ -108,8 +108,8 @@ HTTP one-shot transactions remain the shared boundary.
 
 ## Deterministic D1 to Turso protocol
 
-The control plane must persist a resumable migration record and evidence for
-each transition:
+The migration orchestrator must persist a resumable migration record and
+evidence for each transition:
 
 1. Enable `DATABASE_MIGRATION_FREEZE` on every Worker that can write. API health
    and readiness remain available; ordinary API/admin traffic is rejected,
@@ -126,7 +126,7 @@ each transition:
    discarded retired column and ignored retired table with its row count. The
    bundle and evidence are private, create-only files; the command refuses an
    existing destination and fsyncs the completed artifact.
-4. Run `provision-upload:turso` from the external control plane. It checks the
+4. Run `provision-upload:turso` from a secured operations host. It checks the
    organization's current storage usage and plan quota before creating a
    database, refuses an over-quota upload when overages are disabled, and
    requires `--allow-storage-overage` before a billable upload. It then creates
@@ -159,15 +159,15 @@ retention.
 
 ## Deterministic D1 or TursoDB to PostgreSQL protocol
 
-The control plane uses the same frozen canonical SQLite artifact for both
-sources and persists every phase as machine-readable evidence:
+The migration orchestrator uses the same frozen canonical SQLite artifact for
+both sources and persists every phase as machine-readable evidence:
 
 1. Pin the current provider, activate `DATABASE_MIGRATION_FREEZE` on API and
    admin, and prove ordinary writes are unavailable while health/readiness stay
    observable.
 2. For D1, run `export:d1-portable` against the exact unchanged Time Travel
-   bookmark. For a current-engine TursoDB target, persist the control-plane
-   freeze proof, run the platform's `turso db export`, and pass its snapshot to
+   bookmark. For a current-engine TursoDB target, persist the write-freeze
+   proof, run the platform's `turso db export`, and pass its snapshot to
    `export:turso-portable --snapshot ... --snapshot-revision ...`. The command
    copies and checkpoints the snapshot/log, converts MVCC to ordinary SQLite,
    and records platform-export evidence. Legacy SQLite-backed Turso targets may
@@ -200,9 +200,9 @@ sources and persists every phase as machine-readable evidence:
 Before the first target write, rollback is a provider pin and redeploy. After
 Turso accepts writes, the retained D1 snapshot is stale. Switching back without
 a reverse migration would lose orders, inventory movements, sessions, and other
-merchant facts. The control plane must either migrate the Turso delta/full state
-back into a verified D1 target or present rollback as a deliberate restore to
-the cutover snapshot with an explicit data-loss decision.
+merchant facts. The migration operator must either migrate the Turso delta/full
+state back into a verified D1 target or present rollback as a deliberate restore
+to the cutover snapshot with an explicit data-loss decision.
 
 ## Historical verified D1 to TursoDB cutover — 2026-08-01
 
@@ -245,7 +245,7 @@ production demo so failures could not mutate merchant data:
   It contained 105 canonical tables and 15,189 rows. Two independent
   preparations produced the same 8,089,600-byte MVCC artifact at SHA-256
   `e068a90cebaacf116b6341483141f2d6af22a8828a34c2255003b972b8663cd1`.
-- The one-command control-plane flow created a disposable native-upload target,
+- The one-command migration flow created a disposable native-upload target,
   uploaded and remotely verified all 105 tables/15,189 rows, matched logical
   fingerprint
   `4de71904216ca86e04e535ec57995b7bf7cedb30aea298827ac1398287a63c4b`,
@@ -490,4 +490,4 @@ only 500; projection recovery now accepts the same hard ceiling and its release
 batching target remains independently bounded. These are tested deployment
 profiles, not a universal throughput promise. Turso stays a supported
 migration/runtime adapter, but it must pass the same sustained Worker-origin
-oracle before the hosted control plane offers it as a scale tier.
+oracle before it is offered as a scale tier.
