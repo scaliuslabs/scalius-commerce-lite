@@ -285,6 +285,12 @@ export const checkoutLanguages = sqliteTable("checkout_languages", {
     deletedAt: integer("deleted_at", { mode: "timestamp" }),
 }, (table) => [
     index("checkout_languages_deleted_at_idx").on(table.deletedAt),
+    uniqueIndex("checkout_languages_one_active_idx")
+        .on(table.isActive)
+        .where(sql`${table.isActive} = true`),
+    uniqueIndex("checkout_languages_one_default_idx")
+        .on(table.isDefault)
+        .where(sql`${table.isDefault} = true`),
 ]);
 
 export type Setting = InferSelectModel<typeof settings>;

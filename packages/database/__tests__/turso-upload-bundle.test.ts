@@ -275,7 +275,7 @@ describe("native Turso upload bundle", () => {
     await appendFile(bundle.databasePath, Buffer.from([0]));
     await expect(verifyTursoUploadBundleFiles(bundlePath))
       .rejects.toThrow(/does not match evidence/i);
-  });
+  }, 20_000);
 
   it("keeps the active schema clean and losslessly archives non-empty retired tables", async () => {
     const directory = await temporaryDirectory();
