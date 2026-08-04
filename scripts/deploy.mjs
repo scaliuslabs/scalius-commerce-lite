@@ -61,7 +61,7 @@ const storefrontStaticPostDeployWarmPaths = ["/", "/search"];
 const STOREFRONT_DYNAMIC_WARM_LIMIT = 4;
 const STOREFRONT_DYNAMIC_WARM_TIMEOUT_MS = 8_000;
 const STOREFRONT_WARM_CONCURRENCY = 4;
-// Worker versions own isolated caches, so a new deployment cannot serve HTML
+// Storefront cache keys are build-scoped, so a new deployment cannot serve HTML
 // produced by the superseded version. Hosted deployments may still seed their
 // bounded critical route set after rollout; this verifier is the deterministic
 // OSS fallback for direct deployments.

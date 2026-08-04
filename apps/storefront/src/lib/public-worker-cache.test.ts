@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   decoratePublicStorefrontResponse,
+  exposePublicStorefrontResponse,
   getPublicStorefrontCachePolicy,
   normalizePublicStorefrontCacheTags,
 } from "./public-worker-cache";
@@ -10,16 +11,27 @@ describe("public storefront Worker cache policy", () => {
   it("allows anonymous CMS pages with deterministic query keys", () => {
     const left = getPublicStorefrontCachePolicy(
       new Request("https://shop.example/about/?ref=footer&campaign=sale"),
+      "build-test",
     );
     const right = getPublicStorefrontCachePolicy(
       new Request("https://shop.example/about?campaign=sale&ref=footer"),
+      "build-test",
     );
 
     expect(left).toMatchObject({
-      cacheKey: "/about?campaign=sale",
+      cacheKey: "/about?campaign=sale&__scalius_build=build-test",
       tags: ["pages", "products", "layout", "media"],
     });
     expect(right?.cacheKey).toBe(left?.cacheKey);
+  });
+
+  it("isolates native cache entries across storefront deployments", () => {
+    const request = new Request("https://shop.example/products/fish");
+
+    expect(getPublicStorefrontCachePolicy(request, "build-one")?.cacheKey)
+      .toBe("/products/fish?__scalius_build=build-one");
+    expect(getPublicStorefrontCachePolicy(request, "build-two")?.cacheKey)
+      .toBe("/products/fish?__scalius_build=build-two");
   });
 
   it.each([
@@ -92,6 +104,24 @@ describe("public storefront Worker cache policy", () => {
     expect(response.headers.get("Cache-Tag")).toBe(
       "pages,products,layout,media",
     );
+  });
+
+  it("keeps native cache directives inside the cache-enabled entrypoint", () => {
+    const response = exposePublicStorefrontResponse(
+      new Response("page", {
+        headers: {
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          "Cloudflare-CDN-Cache-Control": "public, max-age=86400",
+          "Cache-Tag": "products,layout",
+          "X-Cache-Status": "NATIVE",
+        },
+      }),
+    );
+
+    expect(response.headers.get("Cloudflare-CDN-Cache-Control")).toBeNull();
+    expect(response.headers.get("Cache-Tag")).toBeNull();
+    expect(response.headers.get("Cache-Control")).toContain("no-store");
+    expect(response.headers.get("X-Cache-Status")).toBe("NATIVE");
   });
 
   it("does not cache a no-store response that failed the inner public gate", () => {

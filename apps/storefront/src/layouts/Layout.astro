@@ -281,7 +281,8 @@ const runtimeGlobalsScript = [
 
     <!-- Preconnect: warm up DNS + TLS for API and CDN origins early -->
     {apiOrigin && <link rel="dns-prefetch" href={apiOrigin} />}
-    {apiOrigin && <link rel="preconnect" href={apiOrigin} crossorigin />}
+    {/* Public pages do not call the API during their critical render. Keep DNS
+        warm without opening an otherwise unused connection ahead of LCP. */}
     {cdnDomain && <link rel="dns-prefetch" href={`https://${cdnDomain}`} />}
     {
       cdnDomain && (
@@ -495,7 +496,13 @@ const runtimeGlobalsScript = [
       </main>
     </div>
 
-    {!hideFooter && <Footer footerData={footerData} />}
+    {
+      !hideFooter && (
+        <div class="storefront-deferred-region">
+          <Footer footerData={footerData} />
+        </div>
+      )
+    }
 
     {bodyEndScripts.map((script) => <Fragment set:html={script.config} />)}
 
@@ -505,3 +512,10 @@ const runtimeGlobalsScript = [
     </script>
   </body>
 </html>
+
+<style is:global>
+  .storefront-deferred-region {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 480px;
+  }
+</style>
