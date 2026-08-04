@@ -101,6 +101,9 @@ function resolvePublicPathPolicy(
   if (/^\/blog(?:\/[^/]+)?\/?$/.test(pathname)) {
     return availabilityPolicy(["pages", "products", "layout", "media"]);
   }
+  if (pathname === "/llms.txt") {
+    return contentPolicy(["discovery"]);
+  }
   if (
     pathname === "/robots.txt" ||
     pathname === "/sitemap.xml" ||

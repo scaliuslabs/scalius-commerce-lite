@@ -76,6 +76,7 @@ describe("public storefront Worker cache policy", () => {
 
   it.each([
     ["/robots.txt", ["discovery", "products", "categories", "collections", "pages", "layout"]],
+    ["/llms.txt", ["discovery"]],
     ["/sitemap.xml", ["discovery", "products", "categories", "collections", "pages", "layout"]],
     ["/blog/feed.xml", ["pages", "products", "discovery"]],
     ["/.well-known/ucp", ["discovery", "products", "layout"]],
