@@ -23,6 +23,9 @@ export interface PublicAttributeQueryFilter {
 }
 
 const MAX_PUBLIC_ATTRIBUTE_FILTER_VALUES = 90;
+export const PUBLIC_ATTRIBUTE_FACET_ATTRIBUTE_LIMIT = 50;
+export const PUBLIC_ATTRIBUTE_FACET_VALUE_LIMIT = 100;
+export const PUBLIC_ATTRIBUTE_FACET_ROW_LIMIT = 2_000;
 
 type PublicQueryValues = Record<string, string | string[]>;
 
@@ -134,7 +137,9 @@ export async function getPublicFilterableAttributes(db: Database): Promise<{ fil
                 eq(productAttributes.filterable, true),
                 isNull(productAttributes.deletedAt),
             ),
-        );
+        )
+        .orderBy(productAttributes.id)
+        .limit(PUBLIC_ATTRIBUTE_FACET_ATTRIBUTE_LIMIT);
 
     if (filterableAttributes.length === 0) {
         return { filters: [] };
@@ -158,7 +163,9 @@ export async function getPublicFilterableAttributes(db: Database): Promise<{ fil
         )
         .where(sql`${productAttributeValues.attributeId} IN (
             SELECT CAST(value AS TEXT) FROM json_each(${attributeIdsJson})
-        )`);
+        )`)
+        .orderBy(productAttributeValues.attributeId, productAttributeValues.value)
+        .limit(PUBLIC_ATTRIBUTE_FACET_ROW_LIMIT);
 
     const filters = filterableAttributes
         .map((attr) => ({
@@ -208,7 +215,9 @@ export async function getPublicAttributesByCategory(
                 isNull(products.deletedAt),
                 publicProductHasBuyerResolvableSku(),
             ),
-        );
+        )
+        .orderBy(productAttributeValues.attributeId, productAttributeValues.value)
+        .limit(PUBLIC_ATTRIBUTE_FACET_ROW_LIMIT);
 
     return { filters: groupAttributeValues(categoryAttributes) };
 }
@@ -251,7 +260,9 @@ export async function getPublicAttributesByProductIds(
         )
         .where(sql`${productAttributeValues.productId} IN (
             SELECT CAST(value AS TEXT) FROM json_each(${productIdsJson})
-        )`);
+        )`)
+        .orderBy(productAttributeValues.attributeId, productAttributeValues.value)
+        .limit(PUBLIC_ATTRIBUTE_FACET_ROW_LIMIT);
 
     return { filters: groupAttributeValues(attrs) };
 }
@@ -299,7 +310,9 @@ export async function getPublicAttributesForSearch(
                 eq(productAttributeValues.productId, products.id),
                 ...productConditions,
             ),
-        );
+        )
+        .orderBy(productAttributeValues.attributeId, productAttributeValues.value)
+        .limit(PUBLIC_ATTRIBUTE_FACET_ROW_LIMIT);
 
     return { filters: groupAttributeValues(attrs) };
 }
@@ -315,6 +328,7 @@ function groupAttributeValues(
 
     for (const item of rows) {
         if (!attributeMap.has(item.attributeId)) {
+            if (attributeMap.size >= PUBLIC_ATTRIBUTE_FACET_ATTRIBUTE_LIMIT) continue;
             attributeMap.set(item.attributeId, {
                 id: item.attributeId,
                 name: item.attributeName,
@@ -322,7 +336,8 @@ function groupAttributeValues(
                 values: new Set(),
             });
         }
-        attributeMap.get(item.attributeId)!.values.add(item.value);
+        const values = attributeMap.get(item.attributeId)!.values;
+        if (values.size < PUBLIC_ATTRIBUTE_FACET_VALUE_LIMIT) values.add(item.value);
     }
 
     return Array.from(attributeMap.values()).map((attr) => ({

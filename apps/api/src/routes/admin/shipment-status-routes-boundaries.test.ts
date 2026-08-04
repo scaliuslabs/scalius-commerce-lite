@@ -42,6 +42,17 @@ describe("admin shipment status route boundaries", () => {
     expect(source).not.toContain("Fulfillment status updated");
   });
 
+  it("serves order shipment history without a provider N+1", () => {
+    const source = readFileSync(ORDERS_STATUS_SOURCE, "utf8");
+    const start = source.indexOf("const getShipmentsRoute = createRoute");
+    const end = source.indexOf("const createShipmentBodySchema", start);
+    const route = source.slice(start, end);
+
+    expect(route).toContain("const shipments = await getShipments(db, orderId)");
+    expect(route).not.toContain("Promise.all");
+    expect(route).not.toContain("getDeliveryProvider(");
+  });
+
   it("keeps standalone shipment checks on the same sync helper and boolean response contract", () => {
     const source = readFileSync(SHIPMENTS_SOURCE, "utf8");
 

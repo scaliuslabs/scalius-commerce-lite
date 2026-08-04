@@ -4,7 +4,7 @@ import { encryptCredentials, readStoredCredentialStrict } from "@scalius/core/ut
 
 import type { Database } from "@scalius/database/client";
 import type { ShipmentOptions, ShipmentResult } from "./types";
-import { and, eq, desc, sql } from "drizzle-orm";
+import { and, eq, desc, getTableColumns, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { NotFoundError, ValidationError, ServiceUnavailableError, ConflictError } from "@scalius/core/errors";
 import { assertNoActiveShipmentClaim, hasActiveShipmentClaim } from "../orders/shipment-claim";
@@ -38,6 +38,8 @@ const EXPIRED_CLAIM_DELETABLE_STATUSES = new Set<string>([
   ShipmentStatus.FAILED,
   ShipmentStatus.CANCELLED,
 ]);
+
+export const ORDER_SHIPMENT_LIST_LIMIT = 100;
 
 async function readDeliveryProviderCredentials(
   storedCredentials: string,
@@ -597,10 +599,18 @@ export async function getLatestShipment(db: Database, orderId: string) {
  */
 export async function getShipments(db: Database, orderId: string) {
   return db
-    .select()
+    .select({
+      ...getTableColumns(deliveryShipments),
+      providerName: deliveryProviders.name,
+    })
     .from(deliveryShipments)
+    .leftJoin(
+      deliveryProviders,
+      eq(deliveryShipments.providerId, deliveryProviders.id),
+    )
     .where(eq(deliveryShipments.orderId, orderId))
-    .orderBy(desc(deliveryShipments.createdAt));
+    .orderBy(desc(deliveryShipments.createdAt), desc(deliveryShipments.id))
+    .limit(ORDER_SHIPMENT_LIST_LIMIT);
 }
 
 /**

@@ -17,4 +17,14 @@ describe("public attribute query boundaries", () => {
         expect(source).toContain("FROM json_each(${attributeIdsJson})");
         expect(source).toContain("FROM json_each(${productIdsJson})");
     });
+
+    it("bounds every public facet query and grouped response", () => {
+        expect(source.match(/\.limit\(PUBLIC_ATTRIBUTE_FACET_ROW_LIMIT\)/g))
+            .toHaveLength(4);
+        expect(source).toContain("PUBLIC_ATTRIBUTE_FACET_ATTRIBUTE_LIMIT = 50");
+        expect(source).toContain("PUBLIC_ATTRIBUTE_FACET_VALUE_LIMIT = 100");
+        expect(source).toContain("PUBLIC_ATTRIBUTE_FACET_ROW_LIMIT = 2_000");
+        expect(source).toContain("attributeMap.size >= PUBLIC_ATTRIBUTE_FACET_ATTRIBUTE_LIMIT");
+        expect(source).toContain("values.size < PUBLIC_ATTRIBUTE_FACET_VALUE_LIMIT");
+    });
 });

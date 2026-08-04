@@ -345,16 +345,11 @@ app.openapi(getShipmentsRoute, async (c) => {
     const db = c.get("db");
     const shipments = await getShipments(db, orderId);
 
-    const enhancedShipments = await Promise.all(
-        shipments.map(async (shipment) => {
-            const provider = shipment.providerId ? await getDeliveryProvider(db, shipment.providerId) : null;
-            return {
-                ...shipment,
-                providerName: provider?.name || shipment.providerType,
-                lastChecked: shipment.lastChecked || shipment.updatedAt
-            };
-        })
-    );
+    const enhancedShipments = shipments.map((shipment) => ({
+        ...shipment,
+        providerName: shipment.providerName || shipment.providerType,
+        lastChecked: shipment.lastChecked || shipment.updatedAt
+    }));
 
     return ok(c, enhancedShipments);
 });
