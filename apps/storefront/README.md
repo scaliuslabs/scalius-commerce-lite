@@ -83,6 +83,9 @@ private and never reach the shared cache.
 Public keys canonicalize safe query strings by sorting parameters, collapsing
 search text, and dropping tracking parameters. The request host remains part of
 the key, so custom domains and preview hosts do not share rendered responses.
+The internal native-cache key also includes the generated storefront build ID;
+native cache storage survives Worker code rollouts, so this namespace prevents a
+new deployment from serving HTML produced by the superseded build.
 
 **Generated browser assets**:
 - Astro emits generated JS/CSS beneath `/_astro/{BUILD_ID}/...`. Do not flatten
@@ -99,6 +102,10 @@ the key, so custom domains and preview hosts do not share rendered responses.
 - `StorefrontGateway` classifies public requests before cache lookup.
 - `PublicStorefront` renders eligible responses and attaches `Cache-Tag` plus
   `Cloudflare-CDN-Cache-Control: public, max-age=86400, must-revalidate`.
+- `StorefrontGateway` removes those two internal directives after the native
+  entrypoint lookup so downstream caches cannot reinterpret them. The browser
+  still receives `no-store` HTML, while `X-Cache-Status` and
+  `CF-Cache-Status` expose the native-cache result.
 - The API calls authenticated `POST /api/purge-cache` with bounded domain groups
   after a merchant write. That endpoint awaits the owning entrypoint's native
   tag purge; there is no KV version, prefix scan, warm queue, or abandoned key.

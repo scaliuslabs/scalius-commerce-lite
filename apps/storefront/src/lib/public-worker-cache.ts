@@ -2,6 +2,7 @@ import {
   canonicalizeStorefrontHtmlCachePath,
   hasStorefrontProductVariantSelectionParams,
 } from "@scalius/shared/storefront-cache-path";
+import { BUILD_ID } from "@/config/build-id";
 // Freshness is mutation-driven through semantic cache-tag purges. This long
 // TTL keeps hot public HTML resident at the edge; it is only a final fallback
 // if every explicit purge attempt fails.
@@ -133,6 +134,7 @@ function hasBoundedPublicQuery(url: URL): boolean {
 
 export function getPublicStorefrontCachePolicy(
   request: Request,
+  buildId = BUILD_ID,
 ): PublicStorefrontCachePolicy | null {
   if (request.method !== "GET" && request.method !== "HEAD") return null;
   if (hasPrivateRequestSignals(request)) return null;
@@ -143,10 +145,15 @@ export function getPublicStorefrontCachePolicy(
   const tags = resolvePublicPathTags(url.pathname);
   if (!tags) return null;
   const normalizedPathname = url.pathname.replace(/\/$/, "") || "/";
-  const cacheKey = canonicalizeStorefrontHtmlCachePath(
+  const canonicalCacheKey = canonicalizeStorefrontHtmlCachePath(
     `${normalizedPathname}${url.search}`,
   );
-  if (!cacheKey) return null;
+  if (!canonicalCacheKey) return null;
+
+  // Native Worker caches survive code rollouts. A build-scoped internal key
+  // makes the first request after deployment render the new code immediately;
+  // semantic tags continue to own freshness within that build.
+  const cacheKey = `${canonicalCacheKey}${canonicalCacheKey.includes("?") ? "&" : "?"}__scalius_build=${encodeURIComponent(buildId)}`;
 
   return {
     cacheKey,
@@ -182,6 +189,23 @@ export function decoratePublicStorefrontResponse(
     `public, max-age=${policy.edgeTtlSeconds}, must-revalidate`,
   );
   headers.set("Cache-Tag", policy.tags.join(","));
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
+/**
+ * The cache-enabled entrypoint consumes the edge TTL and tags before returning
+ * to the public gateway. Keep those implementation directives internal so no
+ * downstream cache can reinterpret them; the public response still exposes
+ * X-Cache-Status and Cloudflare's native HIT/MISS evidence.
+ */
+export function exposePublicStorefrontResponse(response: Response): Response {
+  const headers = new Headers(response.headers);
+  headers.delete("Cloudflare-CDN-Cache-Control");
+  headers.delete("Cache-Tag");
   return new Response(response.body, {
     status: response.status,
     statusText: response.statusText,

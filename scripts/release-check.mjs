@@ -616,6 +616,9 @@ function evaluatePublicStorefrontCacheHeaders(headers, { label }) {
   if (!/^(?:HIT|MISS|EXPIRED|REVALIDATED|UPDATING)$/i.test(cloudflareCacheStatus)) {
     errors.push(`${label} CF-Cache-Status must prove an active native cache lookup.`);
   }
+  if (headers.has("cloudflare-cdn-cache-control") || headers.has("cache-tag")) {
+    errors.push(`${label} must not expose internal native-cache directives.`);
+  }
 
   return {
     ok: errors.length === 0,

@@ -3,6 +3,7 @@ import { WorkerEntrypoint } from "cloudflare:workers";
 
 import {
   decoratePublicStorefrontResponse,
+  exposePublicStorefrontResponse,
   getPublicStorefrontCachePolicy,
   normalizePublicStorefrontCacheTags,
 } from "./lib/public-worker-cache";
@@ -40,8 +41,9 @@ export default class StorefrontGateway extends WorkerEntrypoint<Env> {
     const policy = getPublicStorefrontCachePolicy(request);
     if (!policy) return handle(request, this.env, this.ctx);
 
-    return this.ctx.exports.PublicStorefront.fetch(request, {
+    const response = await this.ctx.exports.PublicStorefront.fetch(request, {
       cf: { cacheKey: policy.cacheKey },
     });
+    return exposePublicStorefrontResponse(response);
   }
 }

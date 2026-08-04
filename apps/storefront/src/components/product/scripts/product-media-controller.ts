@@ -29,15 +29,6 @@ interface GalleryItem extends ProductMediaChangeDetail {
   thumbnail: HTMLButtonElement | null;
 }
 
-interface NetworkConnectionInfo {
-  saveData?: boolean;
-  effectiveType?: string;
-}
-
-interface NavigatorWithConnection extends Navigator {
-  connection?: NetworkConnectionInfo;
-}
-
 const imageCache = new Map<string, HTMLImageElement>();
 const imagePreloads = new Map<string, Promise<boolean>>();
 const mobileZoomBackgroundInertStates = new Map<HTMLElement, boolean>();
@@ -228,6 +219,63 @@ function dispatchChange(item: GalleryItem): void {
       },
     }),
   );
+}
+
+function sameDocumentUrl(left: string | null, right: string): boolean {
+  if (!left) return false;
+  try {
+    return new URL(left, document.baseURI).href === new URL(right, document.baseURI).href;
+  } catch {
+    return left === right;
+  }
+}
+
+/**
+ * SSR already renders the featured image/video and selected thumbnail. Seed
+ * controller state without rewriting that media immediately before LCP. The
+ * full mutation path remains the fallback for stale or client-constructed DOM.
+ */
+function adoptRenderedInitialItem(root: HTMLElement, item: GalleryItem): boolean {
+  const currentKey = `${item.kind}:${item.productMediaId ?? item.mediaId ?? item.url}`;
+
+  if (item.kind === "image") {
+    const mobileImage = root.querySelector<HTMLImageElement>(
+      "[data-mobile-main-image]",
+    );
+    const mobileStage = root.querySelector<HTMLElement>(
+      "[data-image-stage='mobile']",
+    );
+    const renderedUrl = item.mobileUrl || item.url;
+    if (
+      !mobileImage ||
+      mobileStage?.classList.contains("hidden") ||
+      !sameDocumentUrl(mobileImage.getAttribute("src"), renderedUrl)
+    ) return false;
+
+    root.dataset.activeMediaKey = currentKey;
+    root.dataset.activeMediaUrl = item.url;
+    root.dataset.activeMediaDisplayUrl = renderedUrl;
+    root.dataset.activeMediaZoomUrl = item.zoomUrl || item.url;
+    root.dataset.activeMediaAlt = item.altText;
+    mobileImage.dataset.zoomUrl = item.zoomUrl || item.url;
+    return true;
+  }
+
+  const video = root.querySelector<HTMLVideoElement>("[data-product-video]");
+  const videoStage = root.querySelector<HTMLElement>("[data-video-stage]");
+  if (
+    !video ||
+    videoStage?.classList.contains("hidden") ||
+    !sameDocumentUrl(video.getAttribute("src"), item.url)
+  ) return false;
+
+  root.dataset.activeMediaKey = currentKey;
+  root.dataset.activeMediaUrl = item.url;
+  root.dataset.activeMediaDisplayUrl = item.url;
+  root.dataset.activeMediaZoomUrl = item.url;
+  root.dataset.activeMediaAlt = item.altText;
+  void enhanceProductVideo(video);
+  return true;
 }
 
 function setSelectedItem(
@@ -604,46 +652,6 @@ function bindMobileZoom(root: HTMLElement, signal: AbortSignal): void {
   );
 }
 
-function canWarmVariantImages(): boolean {
-  const connection = (navigator as NavigatorWithConnection).connection;
-  if (connection?.saveData) return false;
-  return (
-    !connection?.effectiveType ||
-    !["slow-2g", "2g", "3g"].includes(connection.effectiveType)
-  );
-}
-
-function scheduleVariantImagePreload(
-  root: HTMLElement,
-  signal: AbortSignal,
-): void {
-  if (!canWarmVariantImages()) return;
-  const currentUrl = root.dataset.activeMediaUrl;
-  const limit = window.matchMedia("(min-width: 1024px)").matches ? 4 : 2;
-  const urls = Array.from(
-    root.querySelectorAll<HTMLButtonElement>(
-      "[data-thumbnail-rail='desktop'] [data-gallery-thumbnail][data-media-kind='image'][data-variant-image='true']",
-    ),
-  )
-    .flatMap((button) =>
-      button.dataset.mediaUrl ? [button.dataset.mediaUrl] : [],
-    )
-    .filter(
-      (url, index, values) =>
-        url !== currentUrl && values.indexOf(url) === index,
-    )
-    .slice(0, limit);
-  if (urls.length === 0) return;
-
-  const run = () => {
-    if (signal.aborted || !root.isConnected) return;
-    urls.forEach((url) => void preloadImage(url, "low"));
-  };
-  const requestIdleCallback = window.requestIdleCallback;
-  if (requestIdleCallback) requestIdleCallback(run, { timeout: 1_000 });
-  else window.setTimeout(run, 300);
-}
-
 function preferredThumbnail(
   buttons: HTMLButtonElement[],
   predicate: (button: HTMLButtonElement) => boolean,
@@ -749,10 +757,14 @@ export function initProductMediaGallery(
   const initial =
     buttons.find((button) => button.dataset.productMediaId === initialId) ??
     buttons[0];
-  if (initial) selectButton(initial, "initial");
+  if (initial) {
+    const item = itemFromButton(initial);
+    if (item && !adoptRenderedInitialItem(root, item)) {
+      setSelectedItem(root, item, "initial");
+    }
+  }
   else {
     const fallback = fallbackItem(root);
     if (fallback) setSelectedItem(root, fallback, "initial");
   }
-  scheduleVariantImagePreload(root, signal);
 }
