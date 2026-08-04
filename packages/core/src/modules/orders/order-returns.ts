@@ -26,7 +26,7 @@ import {
   ServiceUnavailableError,
   ValidationError,
 } from "@scalius/core/errors";
-import { applyClaimedInventoryEntryBatch } from "../inventory/inventory-transitions";
+import { applyClaimedInventoryEntryBatchWithImpact } from "../inventory/inventory-transitions";
 import type {
   ApproveOrderReturnInput,
   CancelOrderReturnInput,
@@ -115,6 +115,8 @@ export interface OrderReturnCommandResult {
   version: number;
   restockedQuantity: number;
   wholeOrderReturned: boolean;
+  /** Internal cache signal; API responses must not expose this field. */
+  availabilityTransitionVariantIds?: string[];
 }
 
 type ReturnCommandType = "create" | "approve" | "receive" | "cancel";
@@ -975,6 +977,7 @@ export async function receiveOrderReturn(
   }
 
   const movementByLineId = new Map<string, string | null>();
+  const availabilityTransitionVariantIds = new Set<string>();
   const inventoryPool = context.order.inventoryPool === "preorder"
     || context.order.inventoryPool === "backorder"
     ? context.order.inventoryPool
@@ -982,7 +985,7 @@ export async function receiveOrderReturn(
   for (const line of context.lines) {
     const receipt = receiptById.get(line.id);
     if (!receipt || receipt.restockQuantity === 0) continue;
-    const movementIds = await applyClaimedInventoryEntryBatch(db, {
+    const impact = await applyClaimedInventoryEntryBatchWithImpact(db, {
       orderId,
       operation: "restore",
       entries: [{ variantId: line.variantId!, quantity: receipt.restockQuantity }],
@@ -990,7 +993,10 @@ export async function receiveOrderReturn(
       pool: inventoryPool,
       createdBy: receiptActor.id ?? null,
     });
-    movementByLineId.set(line.id, movementIds[0] ?? null);
+    movementByLineId.set(line.id, impact.movementIds[0] ?? null);
+    for (const variantId of impact.availabilityTransitionVariantIds) {
+      availabilityTransitionVariantIds.add(variantId);
+    }
   }
 
   const nextReceivedByLineId = new Map<string, number>();
@@ -1018,6 +1024,7 @@ export async function receiveOrderReturn(
     status: nextStatus,
     version: input.expectedVersion + 1,
     restockedQuantity,
+    availabilityTransitionVariantIds: [...availabilityTransitionVariantIds],
   };
   const responsePayload = JSON.stringify({ ...baseResult, wholeOrderReturned });
   const activePredicate = and(

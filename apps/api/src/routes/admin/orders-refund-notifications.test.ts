@@ -87,6 +87,7 @@ describe("admin refund notification routes", () => {
             refundId: "re_1",
             amount: 120,
             isFullRefund: true,
+            availabilityTransitionVariantIds: ["variant_1"],
             refundNotification: {
                 notificationType: "order_refunded",
                 dedupeKey: "refund:order_1:refund_order_1_4:full",
@@ -105,7 +106,7 @@ describe("admin refund notification routes", () => {
         expect(response.status).toBe(200);
         expect(mocks.invalidateProductAvailabilityCaches).toHaveBeenCalledWith(
             db,
-            { orderIds: ["order_1"] },
+            { variantIds: ["variant_1"] },
             expect.anything(),
         );
         expect(mocks.enqueueOrderRefundNotificationForOrder).toHaveBeenCalledWith({
@@ -119,6 +120,7 @@ describe("admin refund notification routes", () => {
         });
         const body = await response.json() as { data: Record<string, unknown> };
         expect(body.data).not.toHaveProperty("refundNotification");
+        expect(body.data).not.toHaveProperty("availabilityTransitionVariantIds");
         expect(body.data).toMatchObject({ notificationCount: 1, sideEffectErrors: 0 });
     });
 
@@ -129,6 +131,7 @@ describe("admin refund notification routes", () => {
             refundId: "re_partial",
             amount: 40,
             isFullRefund: false,
+            availabilityTransitionVariantIds: [],
             refundNotification: {
                 notificationType: "order_partially_refunded",
                 dedupeKey: "refund:order_1:refund_order_1_4:partial",
@@ -166,6 +169,7 @@ describe("admin refund notification routes", () => {
             refundId: "refund_provider_1",
             amount: 120,
             isFullRefund: true,
+            availabilityTransitionVariantIds: ["variant_1"],
             refundNotification: {
                 notificationType: "order_refunded",
                 dedupeKey: "refund:order_1:refund_order_1_4:full",
@@ -212,6 +216,7 @@ describe("admin refund notification routes", () => {
                     dedupeKey: "refund:order_1:refund_order_1_3:processing",
                     amount: 30,
                 }],
+                availabilityTransitionVariantIds: ["variant_1"],
             },
         ));
         const { app, env } = createTestApp();
@@ -225,7 +230,7 @@ describe("admin refund notification routes", () => {
         expect(response.status).toBe(503);
         expect(mocks.invalidateProductAvailabilityCaches).toHaveBeenCalledWith(
             db,
-            { orderIds: ["order_1"] },
+            { variantIds: ["variant_1"] },
             expect.anything(),
         );
         expect(mocks.enqueueOrderRefundNotificationForOrder).toHaveBeenNthCalledWith(1, {
@@ -328,6 +333,7 @@ describe("admin refund notification routes", () => {
             gateway: "stripe",
             amount: 0,
             isFullRefund: true,
+            availabilityTransitionVariantIds: [],
         });
         const { app, env } = createTestApp();
 

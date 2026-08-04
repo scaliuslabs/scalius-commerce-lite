@@ -2438,7 +2438,11 @@ async function compensatePreWriteInventory(
     }
 }
 
-export async function updateOrder(db: Database, id: string, data: UpdateOrderData): Promise<{ id: string }> {
+export async function updateOrder(
+    db: Database,
+    id: string,
+    data: UpdateOrderData,
+): Promise<{ id: string; inventoryMutationVariantIds: string[] }> {
     const existingOrder = await db
         .select({
             id: orders.id,
@@ -2749,7 +2753,13 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
             await updateCustomerStatsService(db, customerId);
         }
 
-        return { id };
+        return {
+            id,
+            inventoryMutationVariantIds: [...new Set([
+                ...positiveEntries.map((entry) => entry.variantId),
+                ...negativeEntries.map((entry) => entry.variantId),
+            ])],
+        };
     } catch (error) {
         if (!writesCommitted) {
             try {

@@ -19,7 +19,7 @@ import {
     getSSLCommerzSettings,
     getPolarSettings,
 } from "./gateway-settings";
-import { applyInventoryForStatusChange } from "../inventory/inventory-transitions";
+import { applyInventoryForStatusChangeWithImpact } from "../inventory/inventory-transitions";
 import type { Database } from "@scalius/database/client";
 import type { PaymentGateway } from "./types";
 import { NotFoundError, ValidationError, ConflictError, ServiceUnavailableError } from "@scalius/core/errors";
@@ -70,6 +70,8 @@ export interface RefundResult {
     amount: number;
     isFullRefund: boolean;
     error?: string;
+    /** Internal cache signal; API responses must not expose this field. */
+    availabilityTransitionVariantIds: string[];
     refundNotification?: {
         notificationType: RefundCompletionNotificationType;
         dedupeKey: string;
@@ -112,12 +114,14 @@ export class PartialRefundProcessedError extends ServiceUnavailableError {
     readonly gateway: string;
     readonly refundNotifications: RefundNotificationFact[];
     readonly statusChange?: RefundRelatedOrderStatusChange;
+    readonly availabilityTransitionVariantIds: string[];
 
     constructor(message: string, options: {
         affectedOrderIds: string[];
         gateway: string;
         refundNotifications: RefundNotificationFact[];
         statusChange?: RefundRelatedOrderStatusChange;
+        availabilityTransitionVariantIds?: string[];
     }) {
         super(message);
         this.name = "PartialRefundProcessedError";
@@ -125,6 +129,8 @@ export class PartialRefundProcessedError extends ServiceUnavailableError {
         this.gateway = options.gateway;
         this.refundNotifications = options.refundNotifications;
         this.statusChange = options.statusChange;
+        this.availabilityTransitionVariantIds =
+            options.availabilityTransitionVariantIds ?? [];
     }
 }
 
@@ -425,6 +431,7 @@ export interface FinalizeAcceptedRefundAttemptsResult {
     orderIds: string[];
     finalizedAttemptIds: string[];
     refundNotifications: RefundNotificationFact[];
+    availabilityTransitionVariantIds: string[];
 }
 
 function isCapturedPaymentRow(payment: Pick<OrderPayment, "paymentType" | "status">): boolean {
@@ -482,7 +489,12 @@ export async function finalizeAcceptedRefundAttemptIds(
 ): Promise<FinalizeAcceptedRefundAttemptsResult> {
     const uniqueAttemptIds = [...new Set(attemptIds.filter(Boolean))];
     if (uniqueAttemptIds.length === 0) {
-        return { orderIds: [], finalizedAttemptIds: [], refundNotifications: [] };
+        return {
+            orderIds: [],
+            finalizedAttemptIds: [],
+            refundNotifications: [],
+            availabilityTransitionVariantIds: [],
+        };
     }
 
     const attempts = await db
@@ -573,6 +585,7 @@ export async function finalizeAcceptedRefundAttemptIds(
     const finalizedOrderIds = new Set<string>();
     const finalizedAttemptIds: string[] = [];
     const refundNotifications: RefundNotificationFact[] = [];
+    const availabilityTransitionVariantIds = new Set<string>();
 
     for (const orderId of new Set(attempts.map((attempt) => attempt.orderId))) {
         const orderAttempts = attempts.filter((attempt) => attempt.orderId === orderId);
@@ -606,7 +619,14 @@ export async function finalizeAcceptedRefundAttemptIds(
         }
 
         if (shouldReleaseInventory) {
-            await applyInventoryForStatusChange(db, orderId, OrderStatus.CANCELLED);
+            const impact = await applyInventoryForStatusChangeWithImpact(
+                db,
+                orderId,
+                OrderStatus.CANCELLED,
+            );
+            for (const variantId of impact.availabilityTransitionVariantIds) {
+                availabilityTransitionVariantIds.add(variantId);
+            }
         }
 
         finalizedOrderIds.add(orderId);
@@ -644,6 +664,7 @@ export async function finalizeAcceptedRefundAttemptIds(
         orderIds: [...finalizedOrderIds],
         finalizedAttemptIds,
         refundNotifications,
+        availabilityTransitionVariantIds: [...availabilityTransitionVariantIds],
     };
 }
 
@@ -1170,12 +1191,18 @@ export async function processRefund(
         order.status === OrderStatus.CANCELLED &&
         order.inventoryAction !== "deducted"
     ) {
-        await applyInventoryForStatusChange(db, params.orderId, OrderStatus.CANCELLED);
+        const impact = await applyInventoryForStatusChangeWithImpact(
+            db,
+            params.orderId,
+            OrderStatus.CANCELLED,
+        );
         return {
             success: true,
             gateway: params.gateway ?? order.paymentMethod,
             amount: 0,
             isFullRefund: true,
+            availabilityTransitionVariantIds:
+                impact.availabilityTransitionVariantIds,
         };
     }
 
@@ -1414,7 +1441,13 @@ export async function processRefund(
                 }
                 throw new PartialRefundProcessedError(
                     `Refund partially processed: ${completedAmount} was accepted by the provider, but ${remainingAmount} has an unknown provider outcome. Do not retry until the pending refund is reconciled.`,
-                    { affectedOrderIds, gateway: resultGateway, refundNotifications },
+                    {
+                        affectedOrderIds,
+                        gateway: resultGateway,
+                        refundNotifications,
+                        availabilityTransitionVariantIds:
+                            finalizedResult.availabilityTransitionVariantIds,
+                    },
                 );
             }
             if (remainingAmount > 0) {
@@ -1428,7 +1461,13 @@ export async function processRefund(
             }
             throw new PartialRefundProcessedError(
                 `Refund partially processed: ${completedAmount} was accepted by the provider, but ${remainingAmount} could not be completed. Please review before retrying.`,
-                { affectedOrderIds, gateway: resultGateway, refundNotifications },
+                {
+                    affectedOrderIds,
+                    gateway: resultGateway,
+                    refundNotifications,
+                    availabilityTransitionVariantIds:
+                        finalizedResult.availabilityTransitionVariantIds,
+                },
             );
         }
         if (isProviderRefundOutcomeUnknownError(error)) {
@@ -1437,11 +1476,14 @@ export async function processRefund(
         throw error;
     }
 
+    let availabilityTransitionVariantIds: string[];
     try {
-        await finalizeAcceptedRefundAttemptIds(
+        const finalizedResult = await finalizeAcceptedRefundAttemptIds(
             db,
             completedAllocations.map((allocation) => getRefundAttemptId(allocation)),
         );
+        availabilityTransitionVariantIds =
+            finalizedResult.availabilityTransitionVariantIds;
     } catch (finalizeError: unknown) {
         await markRefundAttemptsReconcileRequired(db, completedAllocations, finalizeError);
         throw finalizeError;
@@ -1462,6 +1504,7 @@ export async function processRefund(
         refundId: getCompletedRefundIds(completedAllocations),
         amount: refundAmount,
         isFullRefund,
+        availabilityTransitionVariantIds,
         refundNotification: {
             notificationType: refundNotification.notificationType,
             dedupeKey: refundNotification.dedupeKey,

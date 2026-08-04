@@ -40,7 +40,7 @@ vi.mock("../orders/order-state-machine", () => ({
 }));
 
 vi.mock("../inventory/inventory-transitions", () => ({
-  applyInventoryForStatusChange: mocks.applyInventoryForStatusChange,
+  applyInventoryForStatusChangeWithImpact: mocks.applyInventoryForStatusChange,
 }));
 
 vi.mock("../promotions/promotions.refunds", () => ({
@@ -261,6 +261,10 @@ function createDbMock({
 describe("refund allocation", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.applyInventoryForStatusChange.mockResolvedValue({
+      inventoryAction: "restored",
+      availabilityTransitionVariantIds: [],
+    });
     mocks.getCurrencyConfig.mockResolvedValue({ code: "BDT" });
     mocks.canTransitionTo.mockReturnValue(false);
     mocks.providerCreateRefund.mockResolvedValue({ refundId: "provider_refund" });

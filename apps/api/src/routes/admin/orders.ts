@@ -54,6 +54,7 @@ import { adminOrdersSupportRequestRoutes } from "./orders-support-requests";
 import { adminOrdersReturnRoutes } from "./orders-returns";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import {
+    findCheckoutReservationAvailabilityTransitions,
     invalidateProductAvailabilityCaches,
 } from "../../utils/cache-invalidation";
 import { parseBangladeshDateOnlyBoundary } from "./order-date-filter";
@@ -710,7 +711,22 @@ app.openapi(createOrderRoute, async (c) => {
     const data = c.req.valid("json");
     const user = c.get("user") as { id?: string } | undefined;
     const result = await OrdersService.createOrder(db, data, user?.id ?? null);
-    await invalidateProductAvailabilityCaches(db, { orderIds: [result.id] }, c);
+    const availabilityTransitionVariantIds =
+        await findCheckoutReservationAvailabilityTransitions(
+            db,
+            data.items.flatMap((item) =>
+                item.variantId && item.quantity > 0
+                    ? [{ variantId: item.variantId, quantity: item.quantity }]
+                    : [],
+            ),
+        );
+    if (availabilityTransitionVariantIds.length > 0) {
+        await invalidateProductAvailabilityCaches(
+            db,
+            { variantIds: availabilityTransitionVariantIds },
+            c,
+        );
+    }
     return created(c, result);
 });
 
@@ -910,8 +926,17 @@ app.openapi(updateOrderRoute, async (c) => {
         areaName: data.areaName ?? undefined,
         discountAmount: data.discountAmount ?? 0,
     });
-    await invalidateProductAvailabilityCaches(db, { orderIds: [orderId] }, c);
-    return ok(c, result);
+    if (
+        Array.isArray(result.inventoryMutationVariantIds)
+        && result.inventoryMutationVariantIds.length > 0
+    ) {
+        await invalidateProductAvailabilityCaches(
+            db,
+            { variantIds: result.inventoryMutationVariantIds },
+            c,
+        );
+    }
+    return ok(c, { id: result.id });
 });
 
 // ─── POST /:id/restore ──────────────────────────────────────────────────────
