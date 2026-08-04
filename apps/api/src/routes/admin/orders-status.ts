@@ -21,6 +21,15 @@ import { shipmentCreationOptionsSchema } from "@scalius/core/modules/orders/orde
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
+async function invalidateAvailabilityTransitions(
+    db: Parameters<typeof invalidateProductAvailabilityCaches>[0],
+    variantIds: readonly string[] | undefined,
+    c: Parameters<typeof invalidateProductAvailabilityCaches>[2],
+): Promise<void> {
+    if (!variantIds || variantIds.length === 0) return;
+    await invalidateProductAvailabilityCaches(db, { variantIds }, c);
+}
+
 type AdminRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>;
 type AdminRouteContext<R extends RouteConfig> = Parameters<AdminRouteHandler<R>>[0];
 
@@ -124,7 +133,11 @@ app.openapi(updateStatusRoute, async (c) => {
     const orderId = c.req.valid("param").id;
     const data = c.req.valid("json");
     const result = await OrdersService.updateOrderStatus(db, orderId, data.status);
-    await invalidateProductAvailabilityCaches(db, { orderIds: [orderId] }, c);
+    await invalidateAvailabilityTransitions(
+        db,
+        result.availabilityTransitionVariantIds,
+        c,
+    );
 
     if (result.notification) {
         await enqueueOrderNotificationMessage({
@@ -214,7 +227,8 @@ app.openapi(postCodRoute, async (c) => {
     const orderId = c.req.valid("param").id;
     const data = c.req.valid("json");
     const result = await OrdersService.processCodAction(db, orderId, data);
-    await invalidateProductAvailabilityCaches(db, { orderIds: [orderId] }, c);
+    const { availabilityTransitionVariantIds, ...responseData } = result;
+    await invalidateAvailabilityTransitions(db, availabilityTransitionVariantIds, c);
 
     // Enqueue notification for COD status changes that affect order status
     const COD_NOTIFICATION_MAP: Partial<Record<typeof data.action, OrderNotificationType>> = {
@@ -247,7 +261,7 @@ app.openapi(postCodRoute, async (c) => {
         }
     }
 
-    return ok(c, result);
+    return ok(c, responseData);
 });
 
 // ─── GET /:id/fulfill ────────────────────────────────────────────────────────
@@ -310,8 +324,12 @@ app.openapi(postFulfillRoute, async (c) => {
     const orderId = c.req.valid("param").id;
     const data = c.req.valid("json");
     const result = await OrdersService.createFulfillmentShipment(db, orderId, data);
-    const { statusChange, ...responseData } = result;
-    await invalidateProductAvailabilityCaches(db, { orderIds: [orderId] }, c);
+    const {
+        statusChange,
+        availabilityTransitionVariantIds,
+        ...responseData
+    } = result;
+    await invalidateAvailabilityTransitions(db, availabilityTransitionVariantIds, c);
     await enqueueOrderStatusChangeNotification({
         db,
         queue: c.env.ORDER_NOTIFICATIONS_QUEUE,
@@ -400,7 +418,13 @@ app.openapi(createShipmentRoute, async (c) => {
         console.error(`Failed to create shipment for order ${orderId}: ${errorMessage}`);
         throw new ValidationError(errorMessage);
     }
-    await invalidateProductAvailabilityCaches(db, { orderIds: [orderId] }, c);
+    await invalidateAvailabilityTransitions(
+        db,
+        Array.isArray(shipmentResult.availabilityTransitionVariantIds)
+            ? shipmentResult.availabilityTransitionVariantIds
+            : [],
+        c,
+    );
 
     const provider = await getDeliveryProvider(db, data.providerId);
     const createdShipmentRecord = await getLatestShipment(db, orderId);
@@ -597,7 +621,8 @@ app.openapi(reconcileShipmentRoute, async (c) => {
     const db = c.get("db");
 
     const result = await OrdersService.reconcileOrderShipment(db, orderId, shipmentId);
-    await invalidateProductAvailabilityCaches(db, { orderIds: [orderId] }, c);
+    const { availabilityTransitionVariantIds, ...responseData } = result;
+    await invalidateAvailabilityTransitions(db, availabilityTransitionVariantIds, c);
 
     if (RECONCILE_NOTIFICATION_STATUSES.has(result.orderStatus)) {
         await enqueueOrderNotificationsForStatus({
@@ -613,7 +638,7 @@ app.openapi(reconcileShipmentRoute, async (c) => {
         });
     }
 
-    return ok(c, result);
+    return ok(c, responseData);
 });
 
 export { app as adminOrdersStatusRoutes };

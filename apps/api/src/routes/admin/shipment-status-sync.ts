@@ -63,17 +63,24 @@ export async function checkAndSyncShipmentStatus(options: {
     ? await getDeliveryProvider(db, updatedShipment.providerId)
     : null;
 
-  const orderStatusChange = await updateOrderStatusFromShipment(
+  const orderSync = await updateOrderStatusFromShipment(
     db,
     shipment.id,
     updatedShipment.status,
   );
+  const orderStatusChange = orderSync?.statusChange ?? null;
 
-  await invalidateProductAvailabilityCaches(
-    db,
-    { orderIds: [updatedShipment.orderId] },
-    c,
-  );
+  if (
+    orderSync
+    && Array.isArray(orderSync.availabilityTransitionVariantIds)
+    && orderSync.availabilityTransitionVariantIds.length > 0
+  ) {
+    await invalidateProductAvailabilityCaches(
+      db,
+      { variantIds: orderSync.availabilityTransitionVariantIds },
+      c,
+    );
+  }
 
   const notificationResult = await enqueueOrderStatusChangeNotification({
     db,

@@ -59,6 +59,8 @@ export interface OrderShipmentReconciliationResult {
     claimCleared: boolean;
     trackingId: string | null;
     message: string;
+    /** Internal cache signal; API responses must not expose this field. */
+    availabilityTransitionVariantIds: string[];
 }
 
 export type OrderPaymentRecoveryState =
@@ -299,6 +301,8 @@ export interface StorefrontOrderCommitPayload {
 
 export interface StatusUpdateResult {
     message: string;
+    /** Internal cache signal; API responses must not expose this field. */
+    availabilityTransitionVariantIds: string[];
     /** Present when the new status warrants a customer notification. */
     notification?: {
         orderId: string;

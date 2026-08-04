@@ -21,7 +21,10 @@ import {
 import { compileSqliteMigrationForProvider } from "@scalius/database/migration-artifacts";
 import * as schema from "@scalius/database/schema";
 
-import { applyInventoryForStatusChange } from "./inventory-transitions";
+import {
+    applyInventoryForStatusChange,
+    applyInventoryForStatusChangeWithImpact,
+} from "./inventory-transitions";
 
 const migrationDirectory = fileURLToPath(new URL(
     "../../../../database/migrations/",
@@ -243,10 +246,14 @@ describe("coordinated checkout lane lifecycle on D1 SQL", () => {
 
     it("releases the exact lane edge atomically and replays as a no-op", async () => {
         commitCheckout(sqlite, "order_release");
+        sqlite.exec(`UPDATE product_variants SET low_stock_threshold = 6 WHERE id = 'variant_hot'`);
         sqlite.exec(`UPDATE orders SET status = 'cancelled' WHERE id = 'order_release'`);
 
-        await expect(applyInventoryForStatusChange(db, "order_release", "cancelled"))
-            .resolves.toBe("restored");
+        await expect(applyInventoryForStatusChangeWithImpact(db, "order_release", "cancelled"))
+            .resolves.toEqual({
+                inventoryAction: "restored",
+                availabilityTransitionVariantIds: ["variant_hot"],
+            });
         await expect(applyInventoryForStatusChange(db, "order_release", "cancelled"))
             .resolves.toBe("restored");
 
@@ -276,8 +283,11 @@ describe("coordinated checkout lane lifecycle on D1 SQL", () => {
         commitCheckout(sqlite, "order_deduct");
         sqlite.exec(`UPDATE orders SET status = 'shipped' WHERE id = 'order_deduct'`);
 
-        await expect(applyInventoryForStatusChange(db, "order_deduct", "shipped"))
-            .resolves.toBe("deducted");
+        await expect(applyInventoryForStatusChangeWithImpact(db, "order_deduct", "shipped"))
+            .resolves.toEqual({
+                inventoryAction: "deducted",
+                availabilityTransitionVariantIds: [],
+            });
         await expect(applyInventoryForStatusChange(db, "order_deduct", "shipped"))
             .resolves.toBe("deducted");
 
@@ -340,9 +350,16 @@ describe("coordinated checkout lane lifecycle on D1 SQL", () => {
             FROM product_variants WHERE id = 'variant_hot'
         `).get()).toEqual({ stock: 10, legacyReserved: 4, stockVersion: 2 });
 
+        sqlite.exec(`UPDATE product_variants SET low_stock_threshold = 6 WHERE id = 'variant_hot'`);
         sqlite.exec(`UPDATE orders SET status = 'cancelled' WHERE id = 'order_reactivate'`);
-        await expect(applyInventoryForStatusChange(db, "order_reactivate", "cancelled"))
-            .resolves.toBe("restored");
+        await expect(applyInventoryForStatusChangeWithImpact(
+            db,
+            "order_reactivate",
+            "cancelled",
+        )).resolves.toEqual({
+            inventoryAction: "restored",
+            availabilityTransitionVariantIds: ["variant_hot"],
+        });
         expect(sqlite.prepare(`
             SELECT reserved_stock AS legacyReserved FROM product_variants WHERE id = 'variant_hot'
         `).get()).toEqual({ legacyReserved: 2 });

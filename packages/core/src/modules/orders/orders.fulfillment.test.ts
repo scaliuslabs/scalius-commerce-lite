@@ -30,7 +30,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("../inventory/inventory-transitions", () => ({
-  applyInventoryForStatusChange: mocks.applyInventoryForStatusChange,
+  applyInventoryForStatusChangeWithImpact: mocks.applyInventoryForStatusChange,
 }));
 
 vi.mock("../delivery/delivery.service", () => ({
@@ -148,7 +148,10 @@ function createDbMock({
 describe("orders fulfillment side-effect ordering", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.applyInventoryForStatusChange.mockResolvedValue("deducted");
+    mocks.applyInventoryForStatusChange.mockResolvedValue({
+      inventoryAction: "deducted",
+      availabilityTransitionVariantIds: [],
+    });
     mocks.createShipment.mockResolvedValue({ success: true, data: { id: "provider_shipment" } });
     mocks.getDeliveryProviderActionReadiness.mockResolvedValue({
       ready: true,
@@ -458,7 +461,13 @@ describe("orders fulfillment side-effect ordering", () => {
     const result = await bulkShipOrders(db as never, ["order_1"], "provider_1", {});
 
     expect(result).toEqual([
-      { orderId: "order_1", success: false, shipment: undefined, error: "provider rejected" },
+      {
+        orderId: "order_1",
+        success: false,
+        shipment: undefined,
+        error: "provider rejected",
+        availabilityTransitionVariantIds: [],
+      },
     ]);
     expect(updates.at(-1)).toMatchObject({
       shipmentClaimId: null,
@@ -476,7 +485,12 @@ describe("orders fulfillment side-effect ordering", () => {
     const result = await bulkShipOrders(db as never, ["order_1"], "provider_1", {});
 
     expect(result).toEqual([
-      { orderId: "order_1", success: true, message: "Order already shipped; inventory reconciled" },
+      {
+        orderId: "order_1",
+        success: true,
+        message: "Order already shipped; inventory reconciled",
+        availabilityTransitionVariantIds: [],
+      },
     ]);
     expect(mocks.createShipment).not.toHaveBeenCalled();
     expect(mocks.applyInventoryForStatusChange).toHaveBeenCalledWith(db, "order_1", OrderStatus.SHIPPED);
@@ -820,7 +834,10 @@ describe("orders fulfillment side-effect ordering", () => {
       action: "collected",
       collectedBy: "Courier A",
       collectedAmount: 1.2346,
-    })).resolves.toEqual({ message: "COD collection recorded" });
+    })).resolves.toEqual({
+      message: "COD collection recorded",
+      availabilityTransitionVariantIds: [],
+    });
 
     expect(mocks.validateCODCollectionDetails).not.toHaveBeenCalled();
     expect(mocks.recordCODCollection).not.toHaveBeenCalled();
@@ -1135,7 +1152,10 @@ describe("orders fulfillment side-effect ordering", () => {
 
     const result = await updateOrderStatus(db as never, "order_1", OrderStatus.SHIPPED);
 
-    expect(result).toEqual({ message: "Status unchanged; inventory reconciled" });
+    expect(result).toEqual({
+      message: "Status unchanged; inventory reconciled",
+      availabilityTransitionVariantIds: [],
+    });
     expect(mocks.applyInventoryForStatusChange).toHaveBeenCalledWith(db, "order_1", OrderStatus.SHIPPED);
     expect(updates[0]).toMatchObject({ inventoryAction: "deducted" });
   });

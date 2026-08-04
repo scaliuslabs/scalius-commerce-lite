@@ -63,6 +63,7 @@ describe("admin manual fulfillment notifications", () => {
             shipmentId: "shp_1",
             isFinalShipment: true,
             fulfillmentStatus: "complete",
+            availabilityTransitionVariantIds: [],
             statusChange: {
                 orderId: "order_1",
                 previousStatus: "confirmed",
@@ -83,11 +84,7 @@ describe("admin manual fulfillment notifications", () => {
         }, env);
 
         expect(response.status).toBe(201);
-        expect(mocks.invalidateProductAvailabilityCaches).toHaveBeenCalledWith(
-            db,
-            { orderIds: ["order_1"] },
-            expect.anything(),
-        );
+        expect(mocks.invalidateProductAvailabilityCaches).not.toHaveBeenCalled();
         expect(mocks.enqueueOrderStatusChangeNotification).toHaveBeenCalledWith({
             db,
             queue,

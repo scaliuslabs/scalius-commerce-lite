@@ -8,6 +8,7 @@
 import { and, eq, gte, inArray, sql, type SQL } from "drizzle-orm";
 import { inventoryMovements, orders, orderItems, InventoryPool, productVariants } from "@scalius/database/schema";
 import { safeBatch, type Database } from "@scalius/database/client";
+import { effectiveRegularReservedStockSql } from "@scalius/database/inventory-authority";
 import { ValidationError } from "@scalius/core/errors";
 import { reserveStockBatch, type ReservationBatchItem } from "./reserve";
 import { checkAndAlertLowStock } from "./alerts";
@@ -64,6 +65,11 @@ type InventoryTransitionOperation = "deduct" | "release" | "reserve" | "restore"
 type StrictMovementOperation = Exclude<InventoryTransitionOperation, "reserve">;
 export type ClaimedInventoryEntryOperation = Extract<StrictMovementOperation, "deduct" | "restore">;
 
+export interface InventoryStatusTransitionImpact {
+    inventoryAction: InventoryAction;
+    availabilityTransitionVariantIds: string[];
+}
+
 export interface ClaimedInventoryEntryBatchInput {
     orderId: string;
     operation: ClaimedInventoryEntryOperation;
@@ -99,6 +105,17 @@ type InventoryVariantState = {
     reservedStock: number;
     preorderStock: number;
     stockVersion: number;
+    effectiveReservedStock: number;
+    trackInventory: boolean;
+    lowStockThreshold: number | null;
+    allowPreorder: boolean;
+    allowBackorder: boolean;
+    backorderLimit: number;
+};
+
+type StrictInventoryTransitionResult = {
+    movementIds: string[];
+    availabilityTransitionVariantIds: string[];
 };
 
 type InventoryTransitionMovementClaim = {
@@ -110,6 +127,45 @@ type InventoryTransitionMovementClaim = {
     notes: string;
     createdBy: string | null;
 } & InventoryLedgerV2EdgeFields;
+
+function availabilityBand(available: number, lowStockThreshold: number | null) {
+    if (available <= 0) return "out_of_stock";
+    return lowStockThreshold !== null
+        && lowStockThreshold > 0
+        && available <= lowStockThreshold
+        ? "low_stock"
+        : "in_stock";
+}
+
+function buyerCapacity(
+    state: InventoryVariantState,
+    pool: InventoryPoolName,
+): number {
+    if (!state.trackInventory) return Number.POSITIVE_INFINITY;
+    if (pool === "preorder") {
+        return state.allowPreorder ? Math.max(0, state.preorderStock) : 0;
+    }
+    if (pool === "backorder") {
+        if (!state.allowBackorder) return 0;
+        return state.backorderLimit > 0
+            ? Math.max(0, state.backorderLimit - state.reservedStock)
+            : Number.POSITIVE_INFINITY;
+    }
+    return Math.max(0, state.stock - state.effectiveReservedStock);
+}
+
+function hasBuyerCapacityTransition(
+    before: InventoryVariantState,
+    after: InventoryVariantState,
+    pool: InventoryPoolName,
+): boolean {
+    const beforeCapacity = buyerCapacity(before, pool);
+    const afterCapacity = buyerCapacity(after, pool);
+    if (!Number.isFinite(beforeCapacity) && !Number.isFinite(afterCapacity)) return false;
+    if (pool !== "regular") return (beforeCapacity > 0) !== (afterCapacity > 0);
+    return availabilityBand(beforeCapacity, before.lowStockThreshold)
+        !== availabilityBand(afterCapacity, after.lowStockThreshold);
+}
 
 /**
  * Build inventory SQL statements for a status change WITHOUT executing them.
@@ -127,8 +183,12 @@ export async function buildInventoryStatements(
     db: Database,
     orderId: string,
     newStatus: string,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch statements require any[] return type
-): Promise<{ statements: any[]; newAction: InventoryAction }> {
+): Promise<{
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch statements require any[] return type
+    statements: any[];
+    newAction: InventoryAction;
+    availabilityTransitionVariantIds: string[];
+}> {
     const order = await db
         .select({
             id: orders.id,
@@ -145,7 +205,11 @@ export async function buildInventoryStatements(
         .where(eq(orders.id, orderId))
         .get() as InventoryTransitionOrder | undefined;
 
-    if (!order) return { statements: [], newAction: "none" };
+    if (!order) return {
+        statements: [],
+        newAction: "none",
+        availabilityTransitionVariantIds: [],
+    };
 
     const currentAction = order.inventoryAction as InventoryAction;
     const needsRestore = STOCK_RESTORE_STATUSES.has(newStatus);
@@ -167,20 +231,27 @@ export async function buildInventoryStatements(
                     pool: "regular",
                 })),
             );
-            return { statements: [], newAction: terminal.action };
+            return {
+                statements: [],
+                newAction: terminal.action,
+                availabilityTransitionVariantIds:
+                    terminal.availabilityTransitionVariantIds,
+            };
         }
-        await releaseOrderReservations(db, order);
+        const availabilityTransitionVariantIds = await releaseOrderReservations(db, order);
         return {
             statements: [buildInventoryActionUpdate(db, order, "restored")],
             newAction: "restored",
+            availabilityTransitionVariantIds,
         };
     }
 
     if (needsRestore && currentAction === "deducted") {
-        await restoreDeductedOrderStock(db, order);
+        const availabilityTransitionVariantIds = await restoreDeductedOrderStock(db, order);
         return {
             statements: [buildInventoryActionUpdate(db, order, "restored")],
             newAction: "restored",
+            availabilityTransitionVariantIds,
         };
     }
 
@@ -200,12 +271,18 @@ export async function buildInventoryStatements(
                     pool: "regular",
                 })),
             );
-            return { statements: [], newAction: terminal.action };
+            return {
+                statements: [],
+                newAction: terminal.action,
+                availabilityTransitionVariantIds:
+                    terminal.availabilityTransitionVariantIds,
+            };
         }
-        await deductOrderStock(db, order);
+        const availabilityTransitionVariantIds = await deductOrderStock(db, order);
         return {
             statements: [buildInventoryActionUpdate(db, order, "deducted")],
             newAction: "deducted",
+            availabilityTransitionVariantIds,
         };
     }
 
@@ -214,14 +291,19 @@ export async function buildInventoryStatements(
     // order items are accounted for again. This mirrors the initial storefront checkout reservation.
     const needsReReserve = isStockReservableStatus(newStatus) && currentAction === "restored";
     if (needsReReserve) {
-        await reserveOrderItems(db, order);
+        const availabilityTransitionVariantIds = await reserveOrderItems(db, order);
         return {
             statements: [buildInventoryActionUpdate(db, order, "reserved", "legacy_counter")],
             newAction: "reserved",
+            availabilityTransitionVariantIds,
         };
     }
 
-    return { statements: [], newAction: currentAction };
+    return {
+        statements: [],
+        newAction: currentAction,
+        availabilityTransitionVariantIds: [],
+    };
 }
 
 /**
@@ -238,7 +320,20 @@ export async function applyInventoryForStatusChange(
     orderId: string,
     newStatus: string,
 ): Promise<InventoryAction> {
-    const { statements, newAction } = await buildInventoryStatements(db, orderId, newStatus);
+    const impact = await applyInventoryForStatusChangeWithImpact(db, orderId, newStatus);
+    return impact.inventoryAction;
+}
+
+export async function applyInventoryForStatusChangeWithImpact(
+    db: Database,
+    orderId: string,
+    newStatus: string,
+): Promise<InventoryStatusTransitionImpact> {
+    const {
+        statements,
+        newAction,
+        availabilityTransitionVariantIds,
+    } = await buildInventoryStatements(db, orderId, newStatus);
     if (statements.length > 0) {
         const results = await safeBatch(db, statements as never) as { id: string }[][];
         const missedActionUpdate = results.some((result) => !result || result.length === 0);
@@ -256,7 +351,10 @@ export async function applyInventoryForStatusChange(
             }
         }
     }
-    return newAction;
+    return {
+        inventoryAction: newAction,
+        availabilityTransitionVariantIds,
+    };
 }
 
 /**
@@ -284,7 +382,7 @@ export async function applyClaimedInventoryEntryBatch(
     const entries = mergeTransitionEntriesByVariant(input.entries, input.pool);
     if (entries.length === 0) return [];
 
-    return applyStrictInventoryTransitionMovements(
+    const result = await applyStrictInventoryTransitionMovements(
         db,
         {
             id: input.orderId,
@@ -302,6 +400,7 @@ export async function applyClaimedInventoryEntryBatch(
         input.claimKey,
         input.createdBy ?? null,
     );
+    return result.movementIds;
 }
 
 /**
@@ -333,12 +432,19 @@ function buildInventoryActionUpdate(
 async function deductOrderStock(
     db: Database,
     order: InventoryTransitionOrder,
-): Promise<void> {
+): Promise<string[]> {
     const entries = await getOrderInventoryEntries(db, order);
 
     if (entries.length > 0) {
-        await applyStrictInventoryTransitionMovements(db, order, "deduct", entries);
+        const result = await applyStrictInventoryTransitionMovements(
+            db,
+            order,
+            "deduct",
+            entries,
+        );
+        return result.availabilityTransitionVariantIds;
     }
+    return [];
 }
 
 /**
@@ -348,12 +454,19 @@ async function deductOrderStock(
 async function releaseOrderReservations(
     db: Database,
     order: InventoryTransitionOrder,
-): Promise<void> {
+): Promise<string[]> {
     const entries = await getOrderInventoryEntries(db, order);
 
     if (entries.length > 0) {
-        await applyStrictInventoryTransitionMovements(db, order, "release", entries);
+        const result = await applyStrictInventoryTransitionMovements(
+            db,
+            order,
+            "release",
+            entries,
+        );
+        return result.availabilityTransitionVariantIds;
     }
+    return [];
 }
 
 /**
@@ -364,14 +477,19 @@ async function releaseOrderReservations(
 async function reserveOrderItems(
     db: Database,
     order: InventoryTransitionOrder,
-): Promise<void> {
+): Promise<string[]> {
     const entries = await getOrderInventoryEntries(db, order);
 
     if (entries.length > 0) {
         const batchItems = await buildTransitionReservationBatchItems(db, order, entries);
         const result = await reserveStockBatch(db, batchItems, normalizeInventoryPool(order.inventoryPool));
         assertInventoryTransitionSucceeded(order.id, "reserve", result);
+        // Reactivation is an administrative edge case. The reservation helper
+        // does not expose its pre-commit capacity bands, so conservatively
+        // invalidate the affected SKUs rather than risk stale availability.
+        return [...new Set(entries.map((entry) => entry.variantId))];
     }
+    return [];
 }
 
 /**
@@ -382,12 +500,19 @@ async function reserveOrderItems(
 async function restoreDeductedOrderStock(
     db: Database,
     order: InventoryTransitionOrder,
-): Promise<void> {
+): Promise<string[]> {
     const entries = await getOrderInventoryEntries(db, order);
 
     if (entries.length > 0) {
-        await applyStrictInventoryTransitionMovements(db, order, "restore", entries);
+        const result = await applyStrictInventoryTransitionMovements(
+            db,
+            order,
+            "restore",
+            entries,
+        );
+        return result.availabilityTransitionVariantIds;
     }
+    return [];
 }
 
 async function applyStrictInventoryTransitionMovements(
@@ -397,13 +522,33 @@ async function applyStrictInventoryTransitionMovements(
     entries: ReservationEntry[],
     claimKey?: string,
     createdBy: string | null = null,
-): Promise<string[]> {
+): Promise<StrictInventoryTransitionResult> {
     const pool = normalizeInventoryPool(order.inventoryPool);
     const mergedEntries = mergeTransitionEntriesByVariant(entries, pool);
-    if (mergedEntries.length === 0) return [];
+    if (mergedEntries.length === 0) {
+        return { movementIds: [], availabilityTransitionVariantIds: [] };
+    }
 
     for (let attempt = 0; attempt < MAX_TRANSITION_RETRIES; attempt++) {
         const variants = await loadTransitionVariantStates(db, order.id, operation, mergedEntries);
+        const availabilityTransitionVariantIds = mergedEntries
+            .filter((entry) => {
+                const before = variants.get(entry.variantId)!;
+                const counterAfter = getTransitionCounterStateAfter(
+                    operation,
+                    entry.quantity,
+                    before,
+                    pool,
+                );
+                const after = {
+                    ...counterAfter,
+                    effectiveReservedStock: before.effectiveReservedStock
+                        + counterAfter.reservedStock
+                        - before.reservedStock,
+                };
+                return hasBuyerCapacityTransition(before, after, pool);
+            })
+            .map((entry) => entry.variantId);
         const movementClaims = await buildTransitionMovementClaims(
             db,
             order,
@@ -442,7 +587,13 @@ async function applyStrictInventoryTransitionMovements(
             );
             if (duplicateResolved) {
                 await checkLowStockForTransitionEntries(db, mergedEntries);
-                return movementClaims.map((claim) => claim.id);
+                return {
+                    movementIds: movementClaims.map((claim) => claim.id),
+                    // The committed pre-state is no longer reconstructable.
+                    // A conservative purge is rare and keeps replay truthful.
+                    availabilityTransitionVariantIds: mergedEntries
+                        .map((entry) => entry.variantId),
+                };
             }
 
             console.error(`[inventory/transition] ${operation} batch execution failed for order ${order.id}:`, err);
@@ -564,7 +715,10 @@ async function applyStrictInventoryTransitionMovements(
         }
 
         await checkLowStockForTransitionEntries(db, mergedEntries);
-        return movementClaims.map((claim) => claim.id);
+        return {
+            movementIds: movementClaims.map((claim) => claim.id),
+            availabilityTransitionVariantIds,
+        };
     }
 
     throw new ValidationError(
@@ -629,6 +783,12 @@ async function loadTransitionVariantStates(
                 reservedStock: productVariants.reservedStock,
                 preorderStock: productVariants.preorderStock,
                 stockVersion: productVariants.stockVersion,
+                effectiveReservedStock: effectiveRegularReservedStockSql(),
+                trackInventory: productVariants.trackInventory,
+                lowStockThreshold: productVariants.lowStockThreshold,
+                allowPreorder: productVariants.allowPreorder,
+                allowBackorder: productVariants.allowBackorder,
+                backorderLimit: productVariants.backorderLimit,
             })
             .from(productVariants)
             .where(eq(productVariants.id, entry.variantId))

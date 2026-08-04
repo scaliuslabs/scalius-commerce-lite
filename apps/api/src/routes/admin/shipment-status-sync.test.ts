@@ -105,7 +105,10 @@ describe("admin shipment status sync helper", () => {
       metadata: {},
     });
     mocks.getShipment.mockResolvedValue(updatedShipment);
-    mocks.updateOrderStatusFromShipment.mockResolvedValue(orderStatusChange);
+    mocks.updateOrderStatusFromShipment.mockResolvedValue({
+      statusChange: orderStatusChange,
+      availabilityTransitionVariantIds: ["variant_1"],
+    });
 
     const result = await checkAndSyncShipmentStatus({
       db: db as never,
@@ -127,7 +130,7 @@ describe("admin shipment status sync helper", () => {
     );
     expect(mocks.invalidateProductAvailabilityCaches).toHaveBeenCalledWith(
       db,
-      { orderIds: ["order_1"] },
+      { variantIds: ["variant_1"] },
       { env: { ORDER_NOTIFICATIONS_QUEUE: queue } },
     );
     expect(mocks.enqueueOrderStatusChangeNotification).toHaveBeenCalledWith({

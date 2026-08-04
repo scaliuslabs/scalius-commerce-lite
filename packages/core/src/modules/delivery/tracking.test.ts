@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("../inventory/inventory-transitions", () => ({
-  applyInventoryForStatusChange: mocks.applyInventoryForStatusChange,
+  applyInventoryForStatusChangeWithImpact: mocks.applyInventoryForStatusChange,
 }));
 
 vi.mock("./delivery.service", () => ({
@@ -105,7 +105,10 @@ describe("delivery shipment to order status mapping", () => {
     vi.clearAllMocks();
     vi.spyOn(console, "log").mockImplementation(() => undefined);
     vi.spyOn(console, "error").mockImplementation(() => undefined);
-    mocks.applyInventoryForStatusChange.mockResolvedValue("deducted");
+    mocks.applyInventoryForStatusChange.mockResolvedValue({
+      inventoryAction: "deducted",
+      availabilityTransitionVariantIds: [],
+    });
     mocks.markShipmentReconciliationRequired.mockResolvedValue(undefined);
   });
 
@@ -118,9 +121,11 @@ describe("delivery shipment to order status mapping", () => {
     const result = await updateOrderStatusFromShipment(db as never, "shipment_1", "out_for_delivery");
 
     expect(result).toMatchObject({
-      orderId: "order_1",
-      previousStatus: OrderStatus.CONFIRMED,
-      newStatus: OrderStatus.SHIPPED,
+      statusChange: {
+        orderId: "order_1",
+        previousStatus: OrderStatus.CONFIRMED,
+        newStatus: OrderStatus.SHIPPED,
+      },
     });
     expect(updates[0]).toMatchObject({ status: OrderStatus.SHIPPED, version: 6 });
     expect(mocks.applyInventoryForStatusChange).toHaveBeenCalledWith(
@@ -139,8 +144,10 @@ describe("delivery shipment to order status mapping", () => {
     const result = await updateOrderStatusFromShipment(db as never, "shipment_1", "delivery_failed");
 
     expect(result).toMatchObject({
-      previousStatus: OrderStatus.SHIPPED,
-      newStatus: OrderStatus.CONFIRMED,
+      statusChange: {
+        previousStatus: OrderStatus.SHIPPED,
+        newStatus: OrderStatus.CONFIRMED,
+      },
     });
     expect(updates[0]).toMatchObject({ status: OrderStatus.CONFIRMED });
   });
@@ -154,8 +161,10 @@ describe("delivery shipment to order status mapping", () => {
     const result = await updateOrderStatusFromShipment(db as never, "shipment_1", "partial_delivered");
 
     expect(result).toMatchObject({
-      previousStatus: OrderStatus.SHIPPED,
-      newStatus: OrderStatus.DELIVERED,
+      statusChange: {
+        previousStatus: OrderStatus.SHIPPED,
+        newStatus: OrderStatus.DELIVERED,
+      },
     });
     expect(updates[0]).toMatchObject({ status: OrderStatus.DELIVERED });
   });
@@ -169,8 +178,10 @@ describe("delivery shipment to order status mapping", () => {
     const result = await updateOrderStatusFromShipment(db as never, "shipment_1", "delivered");
 
     expect(result).toMatchObject({
-      previousStatus: OrderStatus.CONFIRMED,
-      newStatus: OrderStatus.DELIVERED,
+      statusChange: {
+        previousStatus: OrderStatus.CONFIRMED,
+        newStatus: OrderStatus.DELIVERED,
+      },
     });
     expect(updates[0]).toMatchObject({ status: OrderStatus.DELIVERED });
     expect(mocks.applyInventoryForStatusChange).toHaveBeenCalledWith(
@@ -245,7 +256,10 @@ describe("delivery shipment to order status mapping", () => {
 
     const result = await updateOrderStatusFromShipment(db as never, "shipment_1", "out_for_delivery");
 
-    expect(result).toBeNull();
+    expect(result).toEqual({
+      statusChange: null,
+      availabilityTransitionVariantIds: [],
+    });
     expect(mocks.applyInventoryForStatusChange).toHaveBeenCalledWith(
       db,
       "order_1",
@@ -301,7 +315,10 @@ describe("delivery shipment to order status mapping", () => {
 
     const result = await updateOrderStatusFromShipment(db as never, "shipment_1", "out_for_delivery");
 
-    expect(result).toBeNull();
+    expect(result).toEqual({
+      statusChange: null,
+      availabilityTransitionVariantIds: [],
+    });
     expect(mocks.applyInventoryForStatusChange).toHaveBeenCalledWith(
       db,
       "order_1",
