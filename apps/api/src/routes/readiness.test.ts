@@ -233,7 +233,7 @@ describe("API readiness route", () => {
       expect(json.status).toBe("ready");
       expect(json.checks?.d1).toMatchObject({
         status: "ok",
-        detail: "schema 52/0052_remove_storefront_cache_queue",
+        detail: `schema ${CURRENT_DATABASE_SCHEMA.version}/${CURRENT_DATABASE_SCHEMA.name}`,
       });
       expect(db.prepare).toHaveBeenCalledTimes(3);
     } finally {
@@ -261,7 +261,7 @@ describe("API readiness route", () => {
       expect(json.status).toBe("ready");
       expect(json.checks?.d1).toMatchObject({
         status: "ok",
-        detail: "schema 52/0052_remove_storefront_cache_queue",
+        detail: `schema ${CURRENT_DATABASE_SCHEMA.version}/${CURRENT_DATABASE_SCHEMA.name}`,
       });
     } finally {
       vi.useRealTimers();

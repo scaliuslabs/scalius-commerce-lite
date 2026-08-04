@@ -1,7 +1,12 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 
+import {
+  buildBatchGuard,
+  isBatchGuardError,
+  safeBatch,
+} from "@scalius/database/client";
 import { checkoutLanguages } from "@scalius/database/schema";
-import { eq, and, isNull, or, like, asc, desc, sql } from "drizzle-orm";
+import { eq, and, isNull, or, like, asc, desc, ne, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { NotFoundError, ConflictError } from "../utils/api-error";
 
@@ -12,6 +17,8 @@ import { invalidateApiAndScheduleStorefrontGroups } from "../utils/cache-invalid
 
 type CheckoutLanguageRouteApp = OpenAPIHono<{ Bindings: Env }>;
 const CHECKOUT_CACHE_GROUPS = ["checkout"] as const;
+const CHECKOUT_LANGUAGE_TRANSITION_TARGET_MISSING =
+  "CHECKOUT_LANGUAGE_TRANSITION_TARGET_MISSING";
 
 const publicApp = new OpenAPIHono<{ Bindings: Env }>();
 const adminApp = new OpenAPIHono<{ Bindings: Env }>();
@@ -104,6 +111,42 @@ const createCheckoutLanguageSchema = z.object({
 });
 
 const updateCheckoutLanguageSchema = createCheckoutLanguageSchema.partial();
+
+function checkoutLanguageConstraintText(error: unknown, depth = 0): string {
+  if (depth > 5 || error === null || error === undefined) return "";
+  if (typeof error !== "object") return String(error);
+
+  const candidate = error as {
+    message?: unknown;
+    detail?: unknown;
+    cause?: unknown;
+  };
+  return [
+    candidate.message,
+    candidate.detail,
+    checkoutLanguageConstraintText(candidate.cause, depth + 1),
+  ].filter((value): value is string => typeof value === "string")
+    .join(" ");
+}
+
+function rethrowCheckoutLanguageConstraint(error: unknown): never {
+  const message = checkoutLanguageConstraintText(error);
+  if (
+    /checkout_languages_code_unique|unique constraint failed:\s*checkout_languages\.code|unique constraint.*checkout_languages.*code/i
+      .test(message)
+  ) {
+    throw new ConflictError("A checkout language with this code already exists.");
+  }
+  if (
+    /checkout_languages_one_(?:active|default)_idx|unique constraint failed:\s*checkout_languages\.is_(?:active|default)/i
+      .test(message)
+  ) {
+    throw new ConflictError(
+      "Another checkout language selection was saved at the same time. Reload and try again.",
+    );
+  }
+  throw error;
+}
 
 // GET /checkout-languages/active — get active checkout language
 const getActiveRoute = createRoute({
@@ -296,15 +339,8 @@ adminApp.openapi(createRoute2, async (c) => {
     throw new ConflictError("A checkout language with this code already exists.");
   }
 
-  if (data.isActive) {
-    await db.update(checkoutLanguages).set({ isActive: false }).where(eq(checkoutLanguages.isActive, true));
-  }
-  if (data.isDefault) {
-    await db.update(checkoutLanguages).set({ isDefault: false }).where(eq(checkoutLanguages.isDefault, true));
-  }
-
   const newLanguageId = "cl_" + nanoid();
-  const [insertedLanguage] = await db.insert(checkoutLanguages).values({
+  const insertStatement = db.insert(checkoutLanguages).values({
     id: newLanguageId,
     name: data.name,
     code: data.code,
@@ -315,6 +351,33 @@ adminApp.openapi(createRoute2, async (c) => {
     createdAt: sql`(cast(strftime('%s','now') as int))`,
     updatedAt: sql`(cast(strftime('%s','now') as int))`
   }).returning();
+
+  let insertedLanguage: typeof checkoutLanguages.$inferSelect | undefined;
+  try {
+    if (data.isActive || data.isDefault) {
+      const resetValues: Partial<typeof checkoutLanguages.$inferInsert> = {};
+      const resetConditions = [];
+      if (data.isActive) {
+        resetValues.isActive = false;
+        resetConditions.push(eq(checkoutLanguages.isActive, true));
+      }
+      if (data.isDefault) {
+        resetValues.isDefault = false;
+        resetConditions.push(eq(checkoutLanguages.isDefault, true));
+      }
+      const [, insertedRows] = await safeBatch(db, [
+        db.update(checkoutLanguages)
+          .set(resetValues)
+          .where(or(...resetConditions)),
+        insertStatement,
+      ] as const);
+      insertedLanguage = insertedRows[0];
+    } else {
+      [insertedLanguage] = await insertStatement;
+    }
+  } catch (error) {
+    rethrowCheckoutLanguageConstraint(error);
+  }
 
   await invalidateApiAndScheduleStorefrontGroups(CHECKOUT_CACHE_GROUPS, c);
   return created(c, { language: insertedLanguage });
@@ -388,13 +451,6 @@ adminApp.openapi(updateRoute, async (c) => {
     if (conflict) throw new ConflictError("A checkout language with this code already exists.");
   }
 
-  if (data.isActive) {
-    await db.update(checkoutLanguages).set({ isActive: false }).where(eq(checkoutLanguages.isActive, true));
-  }
-  if (data.isDefault) {
-    await db.update(checkoutLanguages).set({ isDefault: false }).where(eq(checkoutLanguages.isDefault, true));
-  }
-
   const updateData: Record<string, unknown> = { updatedAt: sql`(cast(strftime('%s','now') as int))` };
   if (data.name !== undefined) updateData.name = data.name;
   if (data.code !== undefined) updateData.code = data.code;
@@ -403,7 +459,51 @@ adminApp.openapi(updateRoute, async (c) => {
   if (data.isActive !== undefined) updateData.isActive = data.isActive;
   if (data.isDefault !== undefined) updateData.isDefault = data.isDefault;
 
-  const [updated] = await db.update(checkoutLanguages).set(updateData).where(eq(checkoutLanguages.id, id)).returning();
+  const updateStatement = db.update(checkoutLanguages)
+    .set(updateData)
+    .where(eq(checkoutLanguages.id, id))
+    .returning();
+  let updated: typeof checkoutLanguages.$inferSelect | undefined;
+  try {
+    if (data.isActive || data.isDefault) {
+      const resetValues: Partial<typeof checkoutLanguages.$inferInsert> = {};
+      const resetConditions = [];
+      if (data.isActive) {
+        resetValues.isActive = false;
+        resetConditions.push(eq(checkoutLanguages.isActive, true));
+      }
+      if (data.isDefault) {
+        resetValues.isDefault = false;
+        resetConditions.push(eq(checkoutLanguages.isDefault, true));
+      }
+      const [, , updatedRows] = await safeBatch(db, [
+        buildBatchGuard(
+          db,
+          sql`EXISTS (SELECT 1 FROM ${checkoutLanguages} WHERE ${checkoutLanguages.id} = ${id})`,
+          CHECKOUT_LANGUAGE_TRANSITION_TARGET_MISSING,
+        ),
+        db.update(checkoutLanguages)
+          .set(resetValues)
+          .where(and(
+            ne(checkoutLanguages.id, id),
+            or(...resetConditions),
+          )),
+        updateStatement,
+      ] as const);
+      updated = updatedRows[0];
+    } else {
+      [updated] = await updateStatement;
+    }
+  } catch (error) {
+    if (isBatchGuardError(
+      error,
+      CHECKOUT_LANGUAGE_TRANSITION_TARGET_MISSING,
+    )) {
+      throw new NotFoundError("Not found");
+    }
+    rethrowCheckoutLanguageConstraint(error);
+  }
+  if (!updated) throw new NotFoundError("Not found");
   await invalidateApiAndScheduleStorefrontGroups(CHECKOUT_CACHE_GROUPS, c);
   return ok(c, { language: updated });
 });

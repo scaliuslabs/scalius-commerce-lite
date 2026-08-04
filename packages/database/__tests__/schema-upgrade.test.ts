@@ -117,6 +117,12 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 2,
         postgresStatements: 2,
       },
+      {
+        version: 53,
+        name: "0053_checkout_language_authority",
+        sqliteStatements: 5,
+        postgresStatements: 5,
+      },
     ]);
   });
 
@@ -205,6 +211,7 @@ describe("provider-neutral schema upgrades", () => {
         applied: [
           { version: 51, name: "0051_orders_checkout_write_path" },
           { version: 52, name: "0052_remove_storefront_cache_queue" },
+          { version: 53, name: "0053_checkout_language_authority" },
         ],
       });
     } finally {
@@ -352,7 +359,8 @@ describe("provider-neutral schema upgrades", () => {
       { version: 50, name: artifacts[0]!.name, sourceSha256: artifacts[0]!.sourceSha256 },
       { version: 51, name: artifacts[1]!.name, sourceSha256: artifacts[1]!.sourceSha256 },
       { version: 52, name: artifacts[2]!.name, sourceSha256: artifacts[2]!.sourceSha256 },
-      { version: 53, name: "0053_future", sourceSha256: "c".repeat(64) },
+      { version: 53, name: artifacts[3]!.name, sourceSha256: artifacts[3]!.sourceSha256 },
+      { version: 54, name: "0054_future", sourceSha256: "c".repeat(64) },
     ], artifacts)).toThrow(/future row/i);
   });
 
