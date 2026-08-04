@@ -241,6 +241,27 @@ without using production merchant data:
 - Both disposable Turso databases/groups and the disposable Neon project were
   deleted after verification; provider inventories returned empty.
 
+Release `0054_cache_invalidation_delivery` was then verified independently on
+fresh disposable targets:
+
+- A hosted `--tursodb` database at schema 53 advanced to schema 54 in one
+  provider transaction, created `cache_invalidation_state`, passed integrity
+  and foreign-key checks, and replayed through `--dry-run --require-current` as
+  an exact no-op.
+- A current D1-shaped SQLite artifact migrated into generic PostgreSQL across
+  110 tables and seven rows with schema digest
+  `f30d212d585d044cdb69af1278ef10a2d3838d794c751981daecf9ca5d302654`
+  and content digest
+  `a97d41cc76ab19b120258e7b28c3775bfd7e6861824f920d7ca7fa2d9ff10746`.
+  Re-running from the completed checkpoint reproduced the same receipts.
+- A current Turso platform export normalized to 110 tables and seven rows,
+  then migrated into a second generic PostgreSQL target with content digest
+  `43f55a4b0f55057e2d6115aac0c20fff1303b8ad6116d589c0caffafaf5ad560`.
+  Re-running was receipt-exact, schema 54 was current, and PostgreSQL reported
+  zero unvalidated constraints. The content digest intentionally differs from
+  the independently created D1-shaped fixture; each PostgreSQL target matched
+  its own immutable source exactly.
+
 ## Historical verified D1 to TursoDB cutover — 2026-08-01
 
 The production Scalius demo domains were migrated in place from D1 to TursoDB
@@ -514,6 +535,14 @@ foreign-key violations, or failed integrity.
   current hosted deployment from a throughput claim despite functional
   correctness, MVCC, independent client streams, remaining quota, and the
   upgraded plan.
+
+A fresh 2026-08-05 Developer-plan target created after the new-engine toggle
+became visible reproduced the same result: the CLI reported `Type: Turso`, the
+endpoint used `turso://`, and `journal_mode` was `mvcc`, but 32 independent
+`BEGIN CONCURRENT` two-statement transactions across 32 non-overlapping tables
+still achieved only 1.30 transactions/second with 24.573-second p99. All 32
+transactions and 64 rows committed exactly. Correctness passed; hosted write
+capacity did not.
 
 The default remains D1. PostgreSQL remains the only qualified high-throughput
 tier. In addition to the 1,161–1,426/second native backend evidence and the
