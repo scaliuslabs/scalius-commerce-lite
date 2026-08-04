@@ -217,8 +217,9 @@ describe("admin inventory cache invalidation", () => {
     expect(mocks.invalidateProductAvailabilityCaches).not.toHaveBeenCalled();
   });
 
-  it("does not inspect or purge buyer caches for preorder-only stock", async () => {
+  it("keeps preorder caches hot when capacity stays available", async () => {
     const { app, env } = createTestApp();
+    mocks.findStockMutationAvailabilityTransitions.mockResolvedValueOnce([]);
 
     const response = await postJson(app, env, "/var_1/adjust", {
       operationKey: "invop_api_preorder_001",
@@ -228,7 +229,13 @@ describe("admin inventory cache invalidation", () => {
     });
 
     expect(response.status).toBe(200);
-    expect(mocks.findStockMutationAvailabilityTransitions).not.toHaveBeenCalled();
+    expect(mocks.findStockMutationAvailabilityTransitions).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "db" }),
+      [expect.objectContaining({
+        variantId: "var_1",
+        pool: "preorderStock",
+      })],
+    );
     expect(mocks.invalidateProductAvailabilityCaches).not.toHaveBeenCalled();
   });
 
