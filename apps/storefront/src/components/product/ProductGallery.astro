@@ -84,7 +84,7 @@ const optimizedMedia = galleryMedia.map((item) => {
         ? getProductImageUrl(item.posterUrl, {
             width: imageTransforms.preview,
             height: imageTransforms.preview,
-            quality: 80,
+            quality: imageTransforms.previewQuality,
             format: "auto",
             fit: "contain",
           })
@@ -111,7 +111,7 @@ const optimizedMedia = galleryMedia.map((item) => {
     thumbUrl: getProductImageUrl(item.url, {
       width: imageTransforms.preview,
       height: imageTransforms.preview,
-      quality: 80,
+      quality: imageTransforms.previewQuality,
       format: "auto",
       fit: "contain",
       trim: "border",
