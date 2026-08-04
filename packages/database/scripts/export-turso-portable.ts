@@ -1,6 +1,7 @@
 import {
   access,
   chmod,
+  copyFile,
   mkdir,
   mkdtemp,
   readFile,
@@ -33,7 +34,7 @@ import {
 import { sha256File } from "./turso-upload-bundle";
 
 export const TURSO_PORTABLE_EXPORT_VERSION =
-  "scalius-turso-portable-export/v1" as const;
+  "scalius-turso-portable-export/v2" as const;
 export const TURSO_PORTABLE_EXPORT_FILENAME = "source.sqlite3" as const;
 export const TURSO_PORTABLE_EXPORT_EVIDENCE_FILENAME =
   "export-evidence.json" as const;
@@ -70,10 +71,12 @@ export interface TursoPortableExportDependencies {
 
 export interface ExportTursoPortableOptions {
   databaseUrl: string;
-  authToken: string;
+  authToken?: string;
   acknowledgedSourceHost: string;
   outputDirectory: string;
   pullBytesThreshold?: number;
+  snapshotPath?: string;
+  snapshotRevision?: string;
 }
 
 export interface TursoPortableExportEvidence {
@@ -82,6 +85,7 @@ export interface TursoPortableExportEvidence {
   source: {
     host: string;
     revision: string;
+    acquisition: "sync" | "platform-export";
   };
   sync: {
     pullAttempts: number;
@@ -91,7 +95,7 @@ export interface TursoPortableExportEvidence {
     pendingLocalOperations: 0;
     mainWalBytes: number;
     revertWalBytes: number;
-  };
+  } | null;
   artifact: {
     filename: typeof TURSO_PORTABLE_EXPORT_FILENAME;
     bytes: number;
@@ -189,11 +193,15 @@ function parseArguments(argv: readonly string[]): ExportTursoPortableOptions {
   let outputDirectory: string | undefined;
   let acknowledgedSourceHost: string | undefined;
   let pullBytesThreshold: number | undefined;
+  let snapshotPath: string | undefined;
+  let snapshotRevision: string | undefined;
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
     if (argument === "--") continue;
     if (argument === "--out") outputDirectory = argv[++index];
     else if (argument === "--ack-source-host") acknowledgedSourceHost = argv[++index];
+    else if (argument === "--snapshot") snapshotPath = argv[++index];
+    else if (argument === "--snapshot-revision") snapshotRevision = argv[++index];
     else if (argument === "--pull-bytes-threshold") {
       pullBytesThreshold = Number(argv[++index]);
     } else throw new Error(`Unknown argument ${JSON.stringify(argument)}.`);
@@ -201,6 +209,12 @@ function parseArguments(argv: readonly string[]): ExportTursoPortableOptions {
   if (!outputDirectory?.trim()) throw new Error("--out is required.");
   if (!acknowledgedSourceHost?.trim()) {
     throw new Error("--ack-source-host is required.");
+  }
+  if (snapshotPath && !snapshotRevision?.trim()) {
+    throw new Error("--snapshot-revision is required with --snapshot.");
+  }
+  if (snapshotRevision && !snapshotPath?.trim()) {
+    throw new Error("--snapshot is required with --snapshot-revision.");
   }
   if (pullBytesThreshold !== undefined) {
     if (
@@ -210,13 +224,18 @@ function parseArguments(argv: readonly string[]): ExportTursoPortableOptions {
     ) {
       throw new Error("--pull-bytes-threshold must be between 1 MiB and 1 GiB.");
     }
+    if (snapshotPath) {
+      throw new Error("--pull-bytes-threshold cannot be used with --snapshot.");
+    }
   }
   return {
     databaseUrl: requireEnvironment("TURSO_DATABASE_URL"),
-    authToken: requireEnvironment("TURSO_AUTH_TOKEN"),
+    authToken: snapshotPath ? undefined : requireEnvironment("TURSO_AUTH_TOKEN"),
     acknowledgedSourceHost,
     outputDirectory: resolve(outputDirectory),
     pullBytesThreshold,
+    snapshotPath: snapshotPath ? resolve(snapshotPath) : undefined,
+    snapshotRevision,
   };
 }
 
@@ -345,6 +364,38 @@ export async function convertSyncedTursoDatabase(
   await chmod(path, 0o600);
 }
 
+async function copyPlatformExportSnapshot(
+  sourcePath: string,
+  targetPath: string,
+): Promise<void> {
+  const source = await stat(sourcePath);
+  if (!source.isFile() || source.size <= 0) {
+    throw new Error("Turso platform export snapshot must be a non-empty file.");
+  }
+  await copyFile(sourcePath, targetPath);
+  await chmod(targetPath, 0o600);
+  let sidecarCount = 0;
+  for (const suffix of ["-wal", "-log"] as const) {
+    try {
+      const sidecar = await stat(`${sourcePath}${suffix}`);
+      if (!sidecar.isFile()) {
+        throw new Error(`Turso platform export ${suffix.slice(1)} sidecar is not a file.`);
+      }
+      await copyFile(`${sourcePath}${suffix}`, `${targetPath}${suffix}`);
+      await chmod(`${targetPath}${suffix}`, 0o600);
+      sidecarCount += 1;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") continue;
+      throw error;
+    }
+  }
+  if (sidecarCount !== 1) {
+    throw new Error(
+      "Turso platform export must include exactly one -wal or -log sidecar.",
+    );
+  }
+}
+
 function createNodeSqliteExecutor(database: DatabaseSync): SqlitePortabilityExecutor {
   return {
     async query(sql, params = []) {
@@ -375,7 +426,16 @@ export async function exportTursoPortable(
     options.databaseUrl,
     options.acknowledgedSourceHost,
   );
-  if (!options.authToken.trim() || /[\r\n\0]/.test(options.authToken)) {
+  const snapshotPath = options.snapshotPath?.trim()
+    ? resolve(options.snapshotPath)
+    : undefined;
+  const snapshotRevision = snapshotPath
+    ? requireOpaque(options.snapshotRevision, "Turso platform export revision")
+    : undefined;
+  if (
+    !snapshotPath
+    && (!options.authToken?.trim() || /[\r\n\0]/.test(options.authToken))
+  ) {
     throw new Error("TURSO_AUTH_TOKEN is invalid.");
   }
   const outputDirectory = resolve(options.outputDirectory);
@@ -397,18 +457,34 @@ export async function exportTursoPortable(
   let succeeded = false;
   let session: TursoSyncSession | undefined;
   try {
-    session = await dependencies.connectSync({
-      path: rawPath,
-      url: source.url,
-      authToken: options.authToken,
-      clientName: "scalius-frozen-migration-export",
-      ...(options.pullBytesThreshold === undefined
-        ? {}
-        : { pullBytesThreshold: options.pullBytesThreshold }),
-    });
-    const snapshot = await pullFrozenTursoSnapshot(session);
-    await session.close();
-    session = undefined;
+    let snapshot: StableSnapshotReceipt;
+    let acquisition: TursoPortableExportEvidence["source"]["acquisition"];
+    if (snapshotPath) {
+      await copyPlatformExportSnapshot(snapshotPath, rawPath);
+      snapshot = {
+        revision: snapshotRevision!,
+        pullAttempts: 0,
+        changedPulls: 0,
+        networkReceivedBytes: 0,
+        mainWalBytes: 0,
+        revertWalBytes: 0,
+      };
+      acquisition = "platform-export";
+    } else {
+      session = await dependencies.connectSync({
+        path: rawPath,
+        url: source.url,
+        authToken: options.authToken!,
+        clientName: "scalius-frozen-migration-export",
+        ...(options.pullBytesThreshold === undefined
+          ? {}
+          : { pullBytesThreshold: options.pullBytesThreshold }),
+      });
+      snapshot = await pullFrozenTursoSnapshot(session);
+      await session.close();
+      session = undefined;
+      acquisition = "sync";
+    }
 
     await dependencies.convertSyncedDatabase(rawPath);
     const rawStat = await stat(rawPath);
@@ -434,16 +510,19 @@ export async function exportTursoPortable(
       source: {
         host: source.host,
         revision: snapshot.revision,
+        acquisition,
       },
-      sync: {
-        pullAttempts: snapshot.pullAttempts,
-        changedPulls: snapshot.changedPulls,
-        stablePulls: REQUIRED_STABLE_PULLS,
-        networkReceivedBytes: snapshot.networkReceivedBytes,
-        pendingLocalOperations: 0,
-        mainWalBytes: snapshot.mainWalBytes,
-        revertWalBytes: snapshot.revertWalBytes,
-      },
+      sync: acquisition === "sync"
+        ? {
+          pullAttempts: snapshot.pullAttempts,
+          changedPulls: snapshot.changedPulls,
+          stablePulls: REQUIRED_STABLE_PULLS,
+          networkReceivedBytes: snapshot.networkReceivedBytes,
+          pendingLocalOperations: 0,
+          mainWalBytes: snapshot.mainWalBytes,
+          revertWalBytes: snapshot.revertWalBytes,
+        }
+        : null,
       artifact: {
         filename: TURSO_PORTABLE_EXPORT_FILENAME,
         bytes: artifactStat.size,
@@ -490,17 +569,24 @@ function parseEvidence(value: unknown): TursoPortableExportEvidence {
     throw new Error("Turso export evidence has an invalid source host.");
   }
   requireOpaque(source.revision, "Turso export revision");
-  const sync = evidence.sync as TursoPortableExportEvidence["sync"] | undefined;
-  if (!sync || sync.stablePulls !== REQUIRED_STABLE_PULLS || sync.pendingLocalOperations !== 0) {
-    throw new Error("Turso export evidence does not prove a stable read-only snapshot.");
+  if (source.acquisition !== "sync" && source.acquisition !== "platform-export") {
+    throw new Error("Turso export evidence has an invalid acquisition method.");
   }
-  for (const [label, number] of [
-    ["pull attempts", sync.pullAttempts],
-    ["changed pulls", sync.changedPulls],
-    ["received bytes", sync.networkReceivedBytes],
-    ["main WAL bytes", sync.mainWalBytes],
-    ["revert WAL bytes", sync.revertWalBytes],
-  ] as const) requireSafeInteger(number, `Turso export ${label}`);
+  const sync = evidence.sync as TursoPortableExportEvidence["sync"] | undefined;
+  if (source.acquisition === "sync") {
+    if (!sync || sync.stablePulls !== REQUIRED_STABLE_PULLS || sync.pendingLocalOperations !== 0) {
+      throw new Error("Turso export evidence does not prove a stable read-only snapshot.");
+    }
+    for (const [label, number] of [
+      ["pull attempts", sync.pullAttempts],
+      ["changed pulls", sync.changedPulls],
+      ["received bytes", sync.networkReceivedBytes],
+      ["main WAL bytes", sync.mainWalBytes],
+      ["revert WAL bytes", sync.revertWalBytes],
+    ] as const) requireSafeInteger(number, `Turso export ${label}`);
+  } else if (sync !== null) {
+    throw new Error("Turso platform export evidence must not contain Sync claims.");
+  }
   const artifact = evidence.artifact as TursoPortableExportEvidence["artifact"] | undefined;
   if (!artifact || artifact.filename !== TURSO_PORTABLE_EXPORT_FILENAME) {
     throw new Error("Turso export evidence names an invalid artifact.");

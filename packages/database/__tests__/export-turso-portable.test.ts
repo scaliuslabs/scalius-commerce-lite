@@ -132,6 +132,48 @@ describe("portable Turso export", () => {
     }
   });
 
+  it("normalizes a frozen current-engine platform export without Sync", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "scalius-turso-platform-export-"));
+    const snapshotPath = join(directory, "platform.db");
+    const outputPath = join(directory, "bundle");
+    try {
+      const snapshot = await createProviderSchemaDatabase("turso", snapshotPath);
+      snapshot.exec(`
+        INSERT INTO products (id, name, price, slug)
+        VALUES ('platform-product', 'Platform product', 1000, 'platform-product');
+      `);
+      snapshot.close();
+      await appendFile(`${snapshotPath}-log`, "");
+
+      const summary = await exportTursoPortable({
+        databaseUrl: "turso://merchant.example.turso.io",
+        acknowledgedSourceHost: "merchant.example.turso.io",
+        outputDirectory: outputPath,
+        snapshotPath,
+        snapshotRevision: "freeze-proof-sha256:0123456789abcdef",
+      }, {
+        async connectSync() {
+          throw new Error("Sync must not run for a platform export");
+        },
+        async convertSyncedDatabase(path) {
+          await convertSyncedTursoDatabase(path);
+        },
+      });
+
+      expect(summary.sourceRevision).toBe("freeze-proof-sha256:0123456789abcdef");
+      const verified = await verifyTursoPortableExportBundle(outputPath);
+      expect(verified.evidence.source.acquisition).toBe("platform-export");
+      expect(verified.evidence.sync).toBeNull();
+      const canonical = new DatabaseSync(verified.sourcePath, { readOnly: true });
+      expect(canonical.prepare(`
+        SELECT name FROM products WHERE id = 'platform-product'
+      `).get()).toEqual({ name: "Platform product" });
+      canonical.close();
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  }, 30_000);
+
   it("creates and re-verifies a canonical bundle with a lossless retired archive", async () => {
     const directory = await mkdtemp(join(tmpdir(), "scalius-turso-export-"));
     const fixturePath = join(directory, "fixture.sqlite3");

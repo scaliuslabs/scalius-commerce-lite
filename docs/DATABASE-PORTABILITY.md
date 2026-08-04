@@ -158,9 +158,12 @@ sources and persists every phase as machine-readable evidence:
    admin, and prove ordinary writes are unavailable while health/readiness stay
    observable.
 2. For D1, run `export:d1-portable` against the exact unchanged Time Travel
-   bookmark. For TursoDB, run `export:turso-portable`; it fences the remote
-   revision, checkpoints a Sync copy, rejects sidecar residue, and verifies that
-   the source revision did not move during export.
+   bookmark. For a current-engine TursoDB target, persist the control-plane
+   freeze proof, run the platform's `turso db export`, and pass its snapshot to
+   `export:turso-portable --snapshot ... --snapshot-revision ...`. The command
+   copies and checkpoints the snapshot/log, converts MVCC to ordinary SQLite,
+   and records platform-export evidence. Legacy SQLite-backed Turso targets may
+   use the command's revision-fenced Sync acquisition mode.
 3. Normalize the snapshot to the current canonical application-table and column
    set. Reject schema/nullability drift, row-count drift, non-canonical source
    state, foreign-key violations, or integrity failures before target work.
@@ -429,3 +432,39 @@ must not publish “PostgreSQL supports 1,000+ complete orders/second” until t
 same full-route oracle passes on sized compute or a proven horizontally scaled
 merchant topology. Database-tier throughput is a tested deployment profile,
 not a universal product adjective such as “enterprise-grade.”
+
+## Current-engine migration rehearsal — 2026-08-04
+
+A fresh production D1 bookmark export exposed and fixed two portability gaps:
+Wrangler's table-filtered export omitted indexes/triggers, and a legitimate
+historical D1 physical schema did not byte-match a freshly replayed migration
+boundary even though its provider-neutral release ledger was exact. Portable
+export v3 now appends the selected remote schema objects inside the unchanged
+bookmark fence. Normalization validates the exact release ledger, rebuilds a
+clean canonical target, and still rejects ledger drift, data-shape drift,
+foreign-key violations, or failed integrity.
+
+- The D1 snapshot normalized to 109 canonical tables and 15,335 rows. Four
+  non-empty retired tables containing 15 rows were preserved in the separate
+  retired-schema archive. Integrity and foreign keys were clean.
+- D1 to the current Rust TursoDB engine completed through native MVCC upload.
+  Source and target matched portability fingerprint
+  `0a52076bfd4a5f9d23478c4e3803445a4622dab56b91534a1cac1f5c539a41cb`.
+- The same D1 artifact migrated into a fresh 0.25-CU Neon database with 109
+  exact table receipts and 15,335 rows. A current-engine `turso db export` was
+  then converted through portable-export v2 and migrated into a second fresh
+  Neon database. Both PostgreSQL targets completed with whole-database content
+  fingerprint
+  `98510f57a0a4b8ceef47b845c2705608a6e6c6f06c3eb3412f27f60a8e639a13`.
+- The current TursoDB engine reported `journal_mode=mvcc` and preserved every
+  direct concurrency-probe row, but its measured service rate was not viable:
+  200 concurrent two-statement transactions achieved 1.43 transactions/second;
+  32 concurrent transactions achieved 1.81/second; 32 autocommit batches
+  achieved 4.41/second. These results disqualify this deployment from a
+  throughput claim despite functional correctness and the upgraded plan.
+
+The default remains D1. PostgreSQL remains the only qualified high-throughput
+tier, with separate claims for the 1,161–1,426/second native backend evidence
+and the 329/second complete Worker path on undersized 0.25-CU Neon. Turso stays
+a supported migration/runtime adapter, but it must pass the same sustained
+Worker-origin oracle before the hosted control plane offers it as a scale tier.
