@@ -25,7 +25,7 @@ describe("CacheManager release boundaries", () => {
 
   it("explains automatic precise purging before the manual fallback", () => {
     const source = readSource("./CacheManager.tsx");
-    expect(source).toContain("writes purge the affected domains automatically");
+    expect(source).toContain("writes durably purge the affected domains");
     expect(source).toContain("Purge everything");
     expect(source).toContain("AlertDialogTrigger asChild");
   });
