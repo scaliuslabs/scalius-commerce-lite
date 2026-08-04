@@ -24,6 +24,7 @@ describe("storefront response cache boundaries", () => {
     expect(middlewareSource).toContain("getPublicStorefrontCachePolicy(request)");
     expect(middlewareSource).toContain("response.status === 200");
     expect(middlewareSource).toContain('response.headers.set("X-Cache-Status", "NATIVE")');
+    expect(middlewareSource).toContain('response.headers.set("X-Storefront-Build", BUILD_ID)');
   });
 
   it("contains no Cache API or KV-generation implementation", () => {

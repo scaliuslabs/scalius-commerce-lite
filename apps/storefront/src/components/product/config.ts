@@ -8,6 +8,9 @@ export const GALLERY_CONFIG = {
     // Covers the largest rendered thumbnail without shipping a 320px source
     // into a roughly 96–130px slot.
     preview: 160,
+    // Sized for the throttled mobile DPR used by PageSpeed without making the
+    // first product image pay for the wider desktop gallery.
+    mobileDisplay: 540,
     display: 600,
     zoom: 1400,
   },

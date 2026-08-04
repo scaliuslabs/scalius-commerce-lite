@@ -11,7 +11,6 @@ import {
   X,
 } from "lucide-react";
 import {
-  getProductImageSrcSet,
   getProductImageUrl,
   hasProductImage,
   PRODUCT_IMAGE_FALLBACK,
@@ -45,6 +44,14 @@ const productFallbackMainUrl = getProductImageUrl(productFallbackUrl, {
   width: imageTransforms.display,
   height: imageTransforms.display,
   quality: 85,
+  format: "auto",
+  fit: "contain",
+  trim: "border",
+});
+const productFallbackMobileUrl = getProductImageUrl(productFallbackUrl, {
+  width: imageTransforms.mobileDisplay,
+  height: imageTransforms.mobileDisplay,
+  quality: 78,
   format: "auto",
   fit: "contain",
   trim: "border",
@@ -84,7 +91,7 @@ const optimizedMedia = galleryMedia.map((item) => {
           })
         : null,
       mainUrl: item.url,
-      mainSrcSet: "",
+      mobileUrl: item.url,
       zoomUrl: null,
       posterUrl: item.posterUrl
         ? getProductImageUrl(item.posterUrl, {
@@ -118,26 +125,14 @@ const optimizedMedia = galleryMedia.map((item) => {
       fit: "contain",
       trim: "border",
     }),
-    mainSrcSet: getProductImageSrcSet(item.url, [
-      {
-        descriptor: "400w",
-        width: 400,
-        height: 400,
-        quality: 80,
-        format: "auto",
-        fit: "contain",
-        trim: "border",
-      },
-      {
-        descriptor: "600w",
-        width: 600,
-        height: 600,
-        quality: 85,
-        format: "auto",
-        fit: "contain",
-        trim: "border",
-      },
-    ]),
+    mobileUrl: getProductImageUrl(item.url, {
+      width: imageTransforms.mobileDisplay,
+      height: imageTransforms.mobileDisplay,
+      quality: 78,
+      format: "auto",
+      fit: "contain",
+      trim: "border",
+    }),
     zoomUrl: getProductImageUrl(item.url, {
       width: imageTransforms.zoom,
       height: imageTransforms.zoom,
@@ -157,6 +152,8 @@ const initialImage =
     ? initialMedia
     : (optimizedMedia.find(({ item }) => item.kind === "image") ?? null);
 const initialImageUrl = initialImage?.mainUrl ?? productFallbackMainUrl;
+const initialMobileImageUrl =
+  initialImage?.mobileUrl ?? productFallbackMobileUrl;
 const initialImageZoomUrl = initialImage?.zoomUrl ?? productFallbackZoomUrl;
 const initialImageAlt =
   initialImage?.altText ?? product.imageAlt?.trim() ?? product.name;
@@ -171,6 +168,7 @@ const variantImageIds = new Set(
   data-product-gallery
   data-initial-product-media-id={featuredMedia?.id ?? undefined}
   data-fallback-url={productFallbackMainUrl}
+  data-fallback-mobile-url={productFallbackMobileUrl}
   data-fallback-zoom-url={productFallbackZoomUrl}
   data-fallback-media-id={product.imageMediaId ?? undefined}
   data-fallback-alt={product.imageAlt?.trim() || product.name}
@@ -214,6 +212,7 @@ const variantImageIds = new Set(
                 data-media-id={itemData.item.mediaId}
                 data-media-kind={itemData.item.kind}
                 data-media-url={itemData.mainUrl}
+                data-mobile-media-url={itemData.mobileUrl}
                 data-preview-url={itemData.item.kind === "image"
                   ? itemData.thumbUrl
                   : undefined}
@@ -240,7 +239,8 @@ const variantImageIds = new Set(
                     width={desktopThumb.imageSize}
                     height={desktopThumb.imageSize}
                     class="h-full w-full object-contain object-center transition-transform duration-500 group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100"
-                    loading={index < 5 ? "eager" : "lazy"}
+                    loading="lazy"
+                    fetchpriority="low"
                   />
                 ) : (
                   <span
@@ -323,11 +323,7 @@ const variantImageIds = new Set(
           >
             <img
               data-mobile-main-image
-              src={initialImageUrl}
-              srcset={initialImage?.mainSrcSet || undefined}
-              sizes={initialImage?.mainSrcSet
-                ? "(max-width: 640px) 400px, 600px"
-                : undefined}
+              src={initialMobileImageUrl}
               data-zoom-url={initialImageZoomUrl}
               alt={initialImageAlt}
               width="600"
@@ -423,6 +419,7 @@ const variantImageIds = new Set(
                       data-media-id={itemData.item.mediaId}
                       data-media-kind={itemData.item.kind}
                       data-media-url={itemData.mainUrl}
+                      data-mobile-media-url={itemData.mobileUrl}
                       data-preview-url={itemData.item.kind === "image"
                         ? itemData.thumbUrl
                         : undefined}
@@ -452,6 +449,7 @@ const variantImageIds = new Set(
                           height={mobileThumb.imageSize}
                           class="h-full w-full object-contain object-center"
                           loading="lazy"
+                          fetchpriority="low"
                         />
                       ) : (
                         <span
@@ -537,6 +535,8 @@ const variantImageIds = new Set(
         data-fullscreen-image
         data-zoom-src={initialImageZoomUrl}
         alt={`${initialImageAlt} — zoomed view`}
+        width={imageTransforms.zoom}
+        height={imageTransforms.zoom}
         loading="lazy"
         decoding="async"
         class="max-h-full max-w-full origin-center object-contain transition-transform duration-100 ease-out will-change-transform motion-reduce:transition-none"

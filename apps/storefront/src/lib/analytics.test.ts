@@ -19,7 +19,6 @@ vi.mock("./tracking/meta-event-id", () => ({
 }));
 
 import {
-  shouldUsePartytown,
   trackFbAddPaymentInfo,
   trackFbAddToCart,
   trackFbInitiateCheckout,
@@ -47,55 +46,6 @@ describe("storefront analytics", () => {
     sessionStorage.clear();
     delete (window as Window & { __scaliusAnalyticsDedupe?: Set<string> })
       .__scaliusAnalyticsDedupe;
-  });
-
-  it("keeps Cloudflare Web Analytics out of Partytown", () => {
-    expect(
-      shouldUsePartytown({
-        id: "analytics_1",
-        name: "Cloudflare Web Analytics",
-        type: "cloudflare_web_analytics",
-        isActive: true,
-        usePartytown: true,
-        config: "",
-        location: "body_end",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      }),
-    ).toBe(false);
-  });
-
-  it("keeps Cloudflare Web Analytics beacon snippets out of Partytown even as custom scripts", () => {
-    expect(
-      shouldUsePartytown({
-        id: "analytics_1",
-        name: "Cloudflare Web Analytics pasted as custom",
-        type: "custom",
-        isActive: true,
-        usePartytown: true,
-        config:
-          '<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon=\'{"token":"site_token_123"}\'></script>',
-        location: "body_end",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      }),
-    ).toBe(false);
-  });
-
-  it("defaults TikTok Pixel scripts into Partytown", () => {
-    expect(
-      shouldUsePartytown({
-        id: "analytics_1",
-        name: "TikTok Pixel",
-        type: "tiktok_pixel",
-        isActive: true,
-        usePartytown: undefined as unknown as boolean,
-        config: "",
-        location: "head",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      }),
-    ).toBe(true);
   });
 
   it("bridges add-to-cart events to Zaraz ecommerce when available", () => {

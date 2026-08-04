@@ -250,6 +250,7 @@ const expandedActionsXlWidth =
           >
             <span
               id="cart-total-display"
+              aria-hidden="true"
               class="hidden md:block text-[14px] font-bold tracking-tight whitespace-nowrap tabular-nums text-card"
             >
               0
@@ -263,6 +264,7 @@ const expandedActionsXlWidth =
               <ShoppingCart className="h-3.5 w-3.5 lg:h-4 lg:w-4 stroke-2" />
               <span
                 id="cart-count"
+                aria-hidden="true"
                 class="absolute -top-1 -right-1 flex h-3.5 w-3.5 lg:h-4 lg:w-4 min-w-3.5 lg:min-w-4 items-center justify-center rounded-full bg-destructive text-destructive-foreground px-0.5 text-[9px] lg:text-[10px] font-bold ring-2 ring-card-foreground transition-all duration-300 scale-0 opacity-0 shadow-sm"
               >
                 0
@@ -455,21 +457,20 @@ const expandedActionsXlWidth =
 </style>
 
 <script>
-  import { toast } from "sonner";
   import { shouldUseCompactHeader } from "./header-scroll-state";
 
   let isCompact = false;
   let scrollFrame: number | null = null;
   let headerResizeObserver: ResizeObserver | null = null;
 
+  function setHeaderHeight(height: number) {
+    document.documentElement.style.setProperty("--header-height", `${height}px`);
+  }
+
   function updateHeaderHeight() {
     const header = document.getElementById("main-header");
     if (!header) return;
-    const height = header.offsetHeight;
-    document.documentElement.style.setProperty(
-      "--header-height",
-      `${height}px`,
-    );
+    setHeaderHeight(header.offsetHeight);
   }
 
   function observeHeaderHeight() {
@@ -479,9 +480,14 @@ const expandedActionsXlWidth =
       updateHeaderHeight();
       return;
     }
-    headerResizeObserver = new ResizeObserver(updateHeaderHeight);
+    headerResizeObserver = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      const borderBox = Array.isArray(entry?.borderBoxSize)
+        ? entry.borderBoxSize[0]
+        : entry?.borderBoxSize;
+      if (borderBox?.blockSize) setHeaderHeight(borderBox.blockSize);
+    });
     headerResizeObserver.observe(header);
-    updateHeaderHeight();
   }
 
   function applyScrollState() {
@@ -521,7 +527,6 @@ const expandedActionsXlWidth =
       try {
         await navigator.clipboard.writeText(phone);
         iconSuccess.classList.remove("translate-y-full");
-        toast.success("Copied to clipboard", { duration: 2000 });
         setTimeout(() => iconSuccess.classList.add("translate-y-full"), 2000);
       } catch {
         window.location.href = `tel:${phone}`;
@@ -529,7 +534,6 @@ const expandedActionsXlWidth =
     });
   }
 
-  window.addEventListener("resize", updateHeaderHeight);
   window.addEventListener("scroll", scheduleScrollState, { passive: true });
   applyScrollState();
   observeHeaderHeight();

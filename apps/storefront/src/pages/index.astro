@@ -140,7 +140,11 @@ function isCollection2(
             />
           )}
           {isCollection2(firstCollection) && (
-            <Collection2 collection={firstCollection} />
+            <Collection2
+              collection={firstCollection}
+              currencySymbol={currencySymbol}
+              currencyCode={currencyCode}
+            />
           )}
         </Fragment>
       )
@@ -158,7 +162,13 @@ function isCollection2(
               currencyCode={currencyCode}
             />
           )}
-          {isCollection2(collection) && <Collection2 collection={collection} />}
+          {isCollection2(collection) && (
+            <Collection2
+              collection={collection}
+              currencySymbol={currencySymbol}
+              currencyCode={currencyCode}
+            />
+          )}
         </Fragment>
       ))
     }

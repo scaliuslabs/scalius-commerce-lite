@@ -194,7 +194,7 @@ describe("admin product cache invalidation", () => {
     vi.clearAllMocks();
   });
 
-  it("warms the new product detail page after product creation", async () => {
+  it("purges product projections after product creation", async () => {
     const { app, env } = createTestApp();
 
     const response = await requestJson(
@@ -209,11 +209,10 @@ describe("admin product cache invalidation", () => {
     expect(mocks.invalidateCatalogCaches).toHaveBeenCalledWith(
       "products",
       expect.objectContaining({ env }),
-      { htmlPaths: ["/products/new-hilsa", "/categories/new-fish"] },
     );
   });
 
-  it("warms old and new product detail pages after slug/category updates", async () => {
+  it("purges product projections after slug/category updates", async () => {
     const { app, env } = createTestApp();
 
     const response = await requestJson(
@@ -228,14 +227,6 @@ describe("admin product cache invalidation", () => {
     expect(mocks.invalidateCatalogCaches).toHaveBeenCalledWith(
       "products",
       expect.objectContaining({ env }),
-      {
-        htmlPaths: [
-          "/products/old-hilsa",
-          "/categories/old-fish",
-          "/products/new-hilsa",
-          "/categories/new-fish",
-        ],
-      },
     );
   });
 
@@ -244,7 +235,7 @@ describe("admin product cache invalidation", () => {
     { label: "soft delete", path: "/prod_1?expectedAggregateRevision=1", method: "DELETE" },
     { label: "restore", path: "/prod_1/restore?expectedAggregateRevision=1", method: "POST" },
     { label: "permanent delete", path: "/prod_1/permanent?expectedAggregateRevision=1", method: "DELETE" },
-  ])("warms the affected product detail page before $label", async ({ path, method, body }) => {
+  ])("purges product projections after $label", async ({ path, method, body }) => {
     const { app, env } = createTestApp();
 
     const response = await requestJson(app, env, path, method, body);
@@ -253,7 +244,6 @@ describe("admin product cache invalidation", () => {
     expect(mocks.invalidateCatalogCaches).toHaveBeenCalledWith(
       "products",
       expect.objectContaining({ env }),
-      { htmlPaths: ["/products/old-hilsa", "/categories/old-fish"] },
     );
   });
 
@@ -352,7 +342,7 @@ describe("admin product cache invalidation", () => {
       },
       status: 200,
     },
-  ])("warms the parent product detail page after $label", async ({ path, method, body, status }) => {
+  ])("purges product projections after $label", async ({ path, method, body, status }) => {
     const { app, env } = createTestApp();
 
     const response = await requestJson(app, env, path, method, body);
@@ -361,7 +351,6 @@ describe("admin product cache invalidation", () => {
     expect(mocks.invalidateCatalogCaches).toHaveBeenCalledWith(
       "products",
       expect.objectContaining({ env }),
-      { htmlPaths: ["/products/old-hilsa", "/categories/old-fish"] },
     );
   });
 });

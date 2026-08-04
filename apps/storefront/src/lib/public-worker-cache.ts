@@ -2,8 +2,10 @@ import {
   canonicalizeStorefrontHtmlCachePath,
   hasStorefrontProductVariantSelectionParams,
 } from "@scalius/shared/storefront-cache-path";
-
-const STOREFRONT_EDGE_TTL_SECONDS = 5;
+// Freshness is mutation-driven through semantic cache-tag purges. This long
+// TTL keeps hot public HTML resident at the edge; it is only a final fallback
+// if every explicit purge attempt fails.
+const STOREFRONT_EDGE_TTL_SECONDS = 86_400;
 const MAX_PUBLIC_QUERY_ENTRIES = 30;
 const MAX_PUBLIC_QUERY_KEY_LENGTH = 64;
 const MAX_PUBLIC_QUERY_VALUE_LENGTH = 512;

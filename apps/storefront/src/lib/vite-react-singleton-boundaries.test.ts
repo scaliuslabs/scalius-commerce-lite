@@ -12,11 +12,11 @@ const REACT_SINGLETON_DEPS = [
 ];
 
 describe("storefront Vite React singleton boundaries", () => {
-  it("keeps large shared styles cacheable instead of duplicating them in every page", () => {
+  it("keeps cold storefront paint free of a render-blocking stylesheet request", () => {
     const source = readFileSync(storefrontRootPath("astro.config.mjs"), "utf8");
 
-    expect(source).toContain('inlineStylesheets: "auto"');
-    expect(source).not.toContain('inlineStylesheets: "always"');
+    expect(source).toContain('inlineStylesheets: "always"');
+    expect(source).not.toContain('inlineStylesheets: "auto"');
   });
 
   it("dedupes every React server and JSX entrypoint for dev SSR", () => {

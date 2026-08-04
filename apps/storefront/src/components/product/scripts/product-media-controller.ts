@@ -25,6 +25,7 @@ declare global {
 }
 
 interface GalleryItem extends ProductMediaChangeDetail {
+  mobileUrl: string | null;
   thumbnail: HTMLButtonElement | null;
 }
 
@@ -121,6 +122,7 @@ function itemFromButton(button: HTMLButtonElement): GalleryItem | null {
     productMediaId: optional(button.dataset.productMediaId),
     mediaId: optional(button.dataset.mediaId),
     url,
+    mobileUrl: kind === "image" ? optional(button.dataset.mobileMediaUrl) : null,
     previewUrl: kind === "image" ? optional(button.dataset.previewUrl) : null,
     posterUrl: optional(button.dataset.posterUrl),
     zoomUrl: kind === "image" ? optional(button.dataset.zoomUrl) : null,
@@ -138,6 +140,7 @@ function fallbackItem(root: HTMLElement): GalleryItem | null {
     productMediaId: optional(root.dataset.fallbackProductMediaId),
     mediaId: optional(root.dataset.fallbackMediaId),
     url,
+    mobileUrl: optional(root.dataset.fallbackMobileUrl),
     previewUrl: null,
     posterUrl: null,
     zoomUrl: optional(root.dataset.fallbackZoomUrl),
@@ -291,11 +294,13 @@ function setSelectedItem(
     mobileTrigger?.removeAttribute("aria-disabled");
     placeholder?.classList.add("hidden");
 
+    const useMobileImage = !window.matchMedia("(min-width: 1024px)").matches;
+    const targetUrl = useMobileImage && item.mobileUrl ? item.mobileUrl : item.url;
     const shouldUsePreview =
       source !== "initial" &&
       Boolean(item.previewUrl) &&
-      !imageCache.has(item.url);
-    const displayUrl = shouldUsePreview ? item.previewUrl! : item.url;
+      !imageCache.has(targetUrl);
+    const displayUrl = shouldUsePreview ? item.previewUrl! : targetUrl;
     const presentedItem = {
       ...item,
       previewUrl: shouldUsePreview ? item.previewUrl : null,
@@ -316,10 +321,10 @@ function setSelectedItem(
     dispatchChange({ ...presentedItem, source });
 
     if (shouldUsePreview) {
-      void preloadImage(item.url, "high").then((loaded) => {
+      void preloadImage(targetUrl, "high").then((loaded) => {
         if (!loaded || root.dataset.activeMediaKey !== currentKey) return;
-        root.dataset.activeMediaDisplayUrl = item.url;
-        if (mobileImage) mobileImage.src = item.url;
+        root.dataset.activeMediaDisplayUrl = targetUrl;
+        if (mobileImage) mobileImage.src = targetUrl;
         if (desktopImage) desktopImage.src = item.url;
       });
     }

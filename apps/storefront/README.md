@@ -74,8 +74,8 @@ Injects Cloudflare Worker runtime bindings into AsyncLocalStorage for the reques
 
 The default Worker entrypoint is an uncached safety gateway. It delegates only
 allowlisted anonymous `GET`/`HEAD` requests to the native `PublicStorefront`
-entrypoint. The public entrypoint owns cache keys, a five-second edge TTL, and
-semantic tags. Browser HTML is `no-store`; discovery XML/text is public but
+entrypoint. The public entrypoint owns canonical cache keys, a one-day edge
+safety TTL, and semantic tags. Browser HTML is `no-store`; discovery XML/text is public but
 must revalidate. Requests with authorization, cookies, variant-selection
 parameters, cart, checkout, account, recovery, or other buyer state stay
 private and never reach the shared cache.
@@ -98,7 +98,7 @@ the key, so custom domains and preview hosts do not share rendered responses.
 
 - `StorefrontGateway` classifies public requests before cache lookup.
 - `PublicStorefront` renders eligible responses and attaches `Cache-Tag` plus
-  `Cloudflare-CDN-Cache-Control: public, max-age=5, must-revalidate`.
+  `Cloudflare-CDN-Cache-Control: public, max-age=86400, must-revalidate`.
 - The API calls authenticated `POST /api/purge-cache` with bounded domain groups
   after a merchant write. That endpoint awaits the owning entrypoint's native
   tag purge; there is no KV version, prefix scan, warm queue, or abandoned key.
@@ -120,15 +120,17 @@ PURGE_TOKEN`, the storefront validates and deduplicates at most 30 known domain
 groups, then awaits `PublicStorefront.purgeGroups()`. Unknown groups are ignored
 by the cache owner. `GET` and query-string tokens are rejected. A failed purge
 is observable but never rolls back an already committed database mutation; the
-five-second TTL is the correctness backstop.
+one-day TTL is only the final correctness backstop. Normal successful writes purge
+their semantic tags immediately.
 
 ### Cache TTL Constants
 
 | Constant | Seconds | Purpose |
 |----------|---------|---------|
+| `STOREFRONT_EDGE_TTL_SECONDS` | 86,400 | Edge residency and last-resort expiry; semantic purges own freshness |
 The legacy `CACHE_TTL` names remain as call-site hints while `withEdgeCache()`
-is request-only deduplication. Persistent public TTL is centrally fixed at five
-seconds in `public-worker-cache.ts`.
+is request-only deduplication. Persistent public TTL is centrally fixed in
+`public-worker-cache.ts`.
 
 ## Page Data Loading
 
@@ -196,7 +198,7 @@ Proxy routes handle operations that require the `API_TOKEN` secret or need to un
 | `checkout/stripe-intent.ts` | Create Stripe PaymentIntent |
 | `checkout/sslcommerz-session.ts` | Create SSLCommerz session |
 | `checkout/polar-session.ts` | Create Polar checkout session |
-| `purge-cache.ts` | Cache purge endpoint (KV version bumps, exact product generation bumps, exact L1/L2 key cleanup, exact HTML path warming) |
+| `purge-cache.ts` | Authenticated semantic cache-tag purge endpoint for public storefront responses |
 | `auth/` | Auth proxy routes |
 | `customer-auth/` | Same-origin Customer OTP auth proxy; preserves `Set-Cookie` on the storefront domain |
 | `products/` | Product data proxy |

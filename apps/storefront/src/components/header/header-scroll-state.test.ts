@@ -78,8 +78,12 @@ describe("header scroll state", () => {
       "utf8",
     );
 
-    expect(source).toContain("new ResizeObserver(updateHeaderHeight)");
+    expect(source).toContain("new ResizeObserver((entries) =>");
+    expect(source).toContain("borderBox?.blockSize");
     expect(source).toContain("headerResizeObserver.observe(header)");
+    expect(source).not.toContain(
+      'window.addEventListener("resize", updateHeaderHeight)',
+    );
     expect(source).not.toContain("setTimeout(updateHeaderHeight, 350)");
   });
 });

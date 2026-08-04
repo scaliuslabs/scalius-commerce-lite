@@ -26,7 +26,12 @@ function thumbnail(
   mediaId: string,
   kind: "image" | "video",
   url: string,
-  options: { poster?: string; zoom?: string; preview?: string } = {},
+  options: {
+    poster?: string;
+    zoom?: string;
+    preview?: string;
+    mobile?: string;
+  } = {},
 ): string {
   return `<button
     data-gallery-thumbnail
@@ -34,6 +39,7 @@ function thumbnail(
     data-media-id="${mediaId}"
     data-media-kind="${kind}"
     data-media-url="${url}"
+    ${options.mobile ? `data-mobile-media-url="${options.mobile}"` : ""}
     ${options.preview ? `data-preview-url="${options.preview}"` : ""}
     ${options.poster ? `data-poster-url="${options.poster}"` : ""}
     ${options.zoom ? `data-zoom-url="${options.zoom}"` : ""}
@@ -49,6 +55,7 @@ function renderGallery(initial = "pmed_video") {
     thumbnail("pmed_image", "med_image", "image", "/image-main.jpg", {
       zoom: "/image-zoom.jpg",
       preview: "/image-preview.jpg",
+      mobile: "/image-mobile.jpg",
     }),
   ].join("");
   document.body.innerHTML = `
@@ -58,6 +65,7 @@ function renderGallery(initial = "pmed_video") {
         data-product-gallery
         data-initial-product-media-id="${initial}"
         data-fallback-url="/fallback-main.jpg"
+        data-fallback-mobile-url="/fallback-mobile.jpg"
         data-fallback-zoom-url="/fallback-zoom.jpg"
         data-fallback-media-id="med_poster"
         data-fallback-alt="Fallback image"
@@ -114,6 +122,17 @@ afterEach(() => {
 });
 
 describe("mixed product media gallery", () => {
+  it("uses the smaller display transform for the initial mobile product image", () => {
+    const root = renderGallery("pmed_image");
+
+    initProductMediaGallery(root);
+
+    expect(
+      root.querySelector<HTMLImageElement>("[data-mobile-main-image]")?.src,
+    ).toContain("/image-mobile.jpg");
+    expect(root.dataset.activeMediaUrl).toBe("/image-main.jpg");
+  });
+
   it("selects a featured video without autoplay or eager offscreen video sources", () => {
     const root = renderGallery();
     const changes: ProductMediaChangeDetail[] = [];
@@ -222,6 +241,7 @@ describe("mixed product media gallery", () => {
       '[data-thumbnail-rail="desktop"] [data-product-media-id="pmed_image"]',
     )!;
     imageButton.dataset.mediaUrl = "/promotion-full.jpg";
+    imageButton.dataset.mobileMediaUrl = "/promotion-full.jpg";
     imageButton.dataset.previewUrl = "/promotion-preview.jpg";
     imageButton.click();
 
@@ -275,11 +295,13 @@ describe("mixed product media gallery", () => {
 
     imageButton.dataset.productMediaId = "pmed_first";
     imageButton.dataset.mediaUrl = "/first-full.jpg";
+    imageButton.dataset.mobileMediaUrl = "/first-full.jpg";
     imageButton.dataset.previewUrl = "/first-preview.jpg";
     imageButton.click();
 
     imageButton.dataset.productMediaId = "pmed_latest";
     imageButton.dataset.mediaUrl = "/latest-full.jpg";
+    imageButton.dataset.mobileMediaUrl = "/latest-full.jpg";
     imageButton.dataset.previewUrl = "/latest-preview.jpg";
     imageButton.click();
     expect(main.src).toContain("/latest-preview.jpg");

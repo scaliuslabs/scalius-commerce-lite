@@ -25,7 +25,7 @@ const finalButtonClass = `${baseButtonClass} ${mobileView ? mobileClasses : desk
     type="button"
     id={mobileView ? "mobile-search-trigger" : "desktop-search-trigger"}
     class={finalButtonClass}
-    aria-label="Search products"
+    aria-label={mobileView ? "Search for products" : "Search store"}
   >
     <!-- Icon -->
     <Search
@@ -38,6 +38,7 @@ const finalButtonClass = `${baseButtonClass} ${mobileView ? mobileClasses : desk
 
     <!-- Placeholder Text -->
     <span
+      aria-hidden="true"
       class={`ml-3 text-sm truncate font-medium select-none flex-1 ${
         mobileView ? "text-muted-foreground" : "text-muted-foreground group-hover:text-foreground"
       }`}
@@ -48,7 +49,7 @@ const finalButtonClass = `${baseButtonClass} ${mobileView ? mobileClasses : desk
     <!-- Keyboard Shortcut Hint (Desktop Only) -->
     {
       !mobileView && (
-        <div class="hidden xl:flex items-center gap-1 ml-auto pl-3 pointer-events-none opacity-50 group-hover:opacity-100 transition-opacity">
+        <div aria-hidden="true" class="hidden xl:flex items-center gap-1 ml-auto pl-3 pointer-events-none opacity-50 group-hover:opacity-100 transition-opacity">
           <kbd class="inline-flex h-5 items-center justify-center rounded bg-muted border border-input px-1.5 font-sans text-[10px] font-bold text-muted-foreground">
             <span class="text-xs">⌘</span>K
           </kbd>

@@ -5,7 +5,6 @@ import type { ProductPageData } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { addToCart } from "@/store/cart";
-import { trackFbAddToCart } from "@/lib/analytics";
 import { Minus, Plus, ShoppingCart, Check } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { formatPrice, getCurrencyCode, getCurrencySymbol, getDecimalPlaces } from "@/lib/currency";
@@ -97,10 +96,14 @@ export default function ProductShortcode({ productData }: { productData: Product
       freeDelivery: product.freeDelivery,
     });
     if (!added) return showToast("This product option could not be added. Please refresh and try again.", "error");
-    trackFbAddToCart({
-      content_ids: [matchingVariant.id], content_name: product.name, content_type: "product",
-      contents: [{ id: matchingVariant.id, quantity, item_price: finalPrice }],
-      currency: currencyCode, value: finalPrice * quantity,
+    void import("@/lib/analytics").then(({ trackFbAddToCart }) => {
+      trackFbAddToCart({
+        content_ids: [matchingVariant.id], content_name: product.name, content_type: "product",
+        contents: [{ id: matchingVariant.id, quantity, item_price: finalPrice }],
+        currency: currencyCode, value: finalPrice * quantity,
+      });
+    }).catch((error: unknown) => {
+      console.error("Failed to track add to cart:", error);
     });
     showToast("Added to cart successfully!", "success");
     if (redirect) window.setTimeout(() => { window.location.href = "/cart"; }, 300);

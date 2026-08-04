@@ -246,7 +246,8 @@ export function ProductImageZoom({
           "w-full h-full object-contain object-center transition-opacity duration-150 motion-reduce:transition-none",
           isZoomed ? "opacity-0" : "opacity-100",
         )}
-        loading="eager"
+        loading="lazy"
+        fetchPriority="low"
         decoding="async"
       />
 

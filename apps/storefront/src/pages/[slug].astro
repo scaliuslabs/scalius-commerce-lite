@@ -104,6 +104,25 @@ const featuredImageUrl = featuredImage?.url
       gravity: "auto",
     })
   : "";
+const featuredImageSrcSet = featuredImage?.url
+  ? [
+      [640, 320],
+      [960, 480],
+      [1280, 640],
+    ]
+      .map(
+        ([width, height]) =>
+          `${getOptimizedImageUrl(featuredImage.url, {
+            width,
+            height,
+            quality: width === 1280 ? 85 : 80,
+            format: "auto",
+            fit: "cover",
+            gravity: "auto",
+          })} ${width}w`,
+      )
+      .join(", ")
+  : "";
 const featuredImageAlt =
   featuredImage?.altText || featuredImage?.filename || page.title;
 
@@ -135,10 +154,15 @@ const richContentClasses =
           <div class="mx-auto w-full max-w-7xl px-4 pt-6">
             <img
               src={featuredImageUrl}
+              srcset={featuredImageSrcSet}
+              sizes="(max-width: 767px) calc(100vw - 2rem), 1280px"
               alt={featuredImageAlt}
+              width={1280}
+              height={640}
               class="h-auto w-full rounded-lg object-cover"
               loading="eager"
-              decoding="async"
+              fetchpriority="high"
+              decoding="sync"
             />
           </div>
         )}
@@ -158,10 +182,15 @@ const richContentClasses =
           <figure class="mb-10 overflow-hidden rounded-xl bg-muted">
             <img
               src={featuredImageUrl}
+              srcset={featuredImageSrcSet}
+              sizes="(max-width: 767px) calc(100vw - 2rem), 1024px"
               alt={featuredImageAlt}
+              width={1280}
+              height={640}
               class="h-auto w-full object-cover"
               loading="eager"
-              decoding="async"
+              fetchpriority="high"
+              decoding="sync"
             />
           </figure>
         )}

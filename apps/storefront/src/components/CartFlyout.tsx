@@ -33,9 +33,13 @@ import { getProductImageUrl } from "@/lib/product-media";
 
 export const cartOpenState = atom<boolean>(false);
 
-type AddToCartEventDetail = Parameters<typeof addToCart>[0] & {
+export type AddToCartEventDetail = Parameters<typeof addToCart>[0] & {
   redirectToCart?: boolean;
 };
+
+interface Props {
+  onReady?: () => void;
+}
 
 export function setCartOpen(value: boolean) {
   if (typeof window !== "undefined") {
@@ -47,7 +51,7 @@ export function setCartOpen(value: boolean) {
   }
 }
 
-export default function CartFlyout() {
+export default function CartFlyout({ onReady }: Props) {
   const cart = useStore(cartStore);
   const isOpen = useStore(cartOpenState);
   const autoCloseTimer = useRef<NodeJS.Timeout | null>(null);
@@ -146,6 +150,20 @@ export default function CartFlyout() {
     document.addEventListener("open-cart", handleOpenCartEvent);
     window.addEventListener("resize", checkScroll);
 
+    const pendingEvents = window.__scaliusCartPendingEvents?.splice(0) ?? [];
+    for (const pendingEvent of pendingEvents) {
+      if (pendingEvent.type === "add") {
+        handleAddToCartEvent(
+          new CustomEvent<AddToCartEventDetail>("add-to-cart", {
+            detail: pendingEvent.detail,
+          }),
+        );
+      } else {
+        handleOpenCartEvent();
+      }
+    }
+    onReady?.();
+
     return () => {
       document.removeEventListener(
         "add-to-cart",
@@ -155,7 +173,7 @@ export default function CartFlyout() {
       window.removeEventListener("resize", checkScroll);
       clearAutoCloseTimer();
     };
-  }, [checkScroll, clearAutoCloseTimer, disableAutoClose, startAutoCloseTimer]);
+  }, [checkScroll, clearAutoCloseTimer, disableAutoClose, onReady, startAutoCloseTimer]);
 
   const handleCheckout = () => {
     window.location.href = "/cart";

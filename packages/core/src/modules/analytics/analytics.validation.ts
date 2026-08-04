@@ -50,6 +50,30 @@ export function isMainThreadOnlyAnalyticsType(type: string): boolean {
     return type === "cloudflare_web_analytics";
 }
 
+export function isPartytownRequiredAnalyticsType(type: string): boolean {
+    return (
+        type === "google_analytics" ||
+        type === "google_tag_manager" ||
+        type === "facebook_pixel" ||
+        type === "tiktok_pixel"
+    );
+}
+
+export function resolveAnalyticsPartytownPolicy(script: {
+    type: string;
+    config?: string;
+    usePartytown?: boolean;
+}): boolean {
+    if (
+        isMainThreadOnlyAnalyticsType(script.type) ||
+        script.config?.includes(CLOUDFLARE_WEB_ANALYTICS_SCRIPT_SRC) === true
+    ) {
+        return false;
+    }
+    if (isPartytownRequiredAnalyticsType(script.type)) return true;
+    return script.usePartytown ?? true;
+}
+
 export function normalizeCloudflareWebAnalyticsConfig(config: string): string {
     const trimmedConfig = config.trim();
     if (/<script/i.test(trimmedConfig)) {

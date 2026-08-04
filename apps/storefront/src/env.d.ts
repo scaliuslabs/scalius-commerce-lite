@@ -189,6 +189,15 @@ interface Window {
   __CHECKOUT_CONFIG__?: unknown;
   __CHECKOUT_LANGUAGE__?: unknown;
   __scaliusAuthModalOpenPending?: boolean;
+  __scaliusSearchPaletteOpenPending?: boolean;
+  __scaliusCartPendingEvents?: Array<
+    | { type: "open" }
+    | {
+        type: "add";
+        detail: import("@/components/CartFlyout").AddToCartEventDetail;
+      }
+  >;
+  __scaliusLazyGlobalUiInstalled?: boolean;
   __scaliusCartPageAbortController?: AbortController;
   dataLayer?: Record<string, unknown>[];
   fbq?: ((...args: unknown[]) => void) & { q?: unknown[] };

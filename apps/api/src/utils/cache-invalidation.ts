@@ -1,8 +1,6 @@
 // src/server/utils/cache-invalidation.ts
 import type { Database } from "@scalius/database/client";
 
-export const MAX_STOREFRONT_EXACT_HTML_PATHS = 20;
-
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -313,10 +311,6 @@ export const SETTINGS_CACHE_DEPENDENCIES = {
   },
 } as const satisfies Record<string, SettingsCacheDependencyDef>;
 
-export interface CatalogCacheInvalidationOptions {
-  htmlPaths?: readonly string[];
-}
-
 export const ADMIN_PATH_TO_GROUPS: Record<string, string[]> = {
   "/api/v1/admin/products": [...CATALOG_CACHE_GROUPS.products],
   "/api/v1/admin/categories": [...CATALOG_CACHE_GROUPS.categories],
@@ -376,6 +370,8 @@ export interface StorefrontPurgeResult {
   skippedReason?: "no-valid-groups" | "missing-config";
 }
 
+const CACHE_PURGE_ATTEMPTS = 3;
+
 function validInvalidationGroups(groups: readonly string[]): string[] {
   return [...new Set(groups.filter((group) => group in INVALIDATION_GROUPS))];
 }
@@ -410,26 +406,38 @@ export async function purgeStorefrontForGroups(
     return { attempted: false, ok: false, skippedReason: "missing-config" };
   }
 
-  try {
-    const response = await fetch(normalizeStorefrontPurgeUrl(env.PURGE_URL), {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${env.PURGE_TOKEN}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ groups: normalizedGroups }),
-    });
-    if (!response.ok) {
-      console.error("[Cache] Storefront tag purge failed:", {
-        status: response.status,
-        groups: normalizedGroups,
+  let lastStatus: number | undefined;
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= CACHE_PURGE_ATTEMPTS; attempt += 1) {
+    try {
+      const response = await fetch(normalizeStorefrontPurgeUrl(env.PURGE_URL), {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${env.PURGE_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ groups: normalizedGroups }),
       });
+      lastStatus = response.status;
+      if (response.ok) {
+        return { attempted: true, ok: true, status: response.status };
+      }
+      await response.body?.cancel();
+    } catch (error: unknown) {
+      lastError = error;
     }
-    return { attempted: true, ok: response.ok, status: response.status };
-  } catch (error: unknown) {
-    console.error("[Cache] Storefront tag purge request failed:", error);
-    return { attempted: true, ok: false };
   }
+
+  console.error("[Cache] Storefront tag purge failed after retries:", {
+    status: lastStatus,
+    groups: normalizedGroups,
+    error: lastError,
+  });
+  return {
+    attempted: true,
+    ok: false,
+    ...(lastStatus === undefined ? {} : { status: lastStatus }),
+  };
 }
 
 export function getOptionalExecutionContext(c: {
@@ -451,11 +459,16 @@ export async function invalidateGroups(
   const normalizedGroups = validInvalidationGroups(groups);
   const nativePurger = options.cleanupExecutionCtx?.exports?.PublicApi;
   if (!nativePurger || normalizedGroups.length === 0) return;
-  try {
-    await nativePurger.purgeGroups(normalizedGroups);
-  } catch (error: unknown) {
-    console.error("[Cache] Public API tag purge failed:", error);
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= CACHE_PURGE_ATTEMPTS; attempt += 1) {
+    try {
+      await nativePurger.purgeGroups(normalizedGroups);
+      return;
+    } catch (error: unknown) {
+      lastError = error;
+    }
   }
+  console.error("[Cache] Public API tag purge failed after retries:", lastError);
 }
 
 /** Purge both public Workers after a committed merchant mutation. */
@@ -463,7 +476,6 @@ export async function invalidateApiAndStorefrontGroups(
   groups: readonly string[],
   env?: Env,
   options: {
-    htmlPaths?: readonly string[];
     cleanupExecutionCtx?: WaitUntilExecutionContext;
   } = {},
 ): Promise<StorefrontPurgeResult> {
@@ -480,7 +492,6 @@ export async function invalidateApiAndStorefrontGroups(
 export async function invalidateApiAndScheduleStorefrontGroups(
   groups: readonly string[],
   c: { env?: Env; executionCtx?: WaitUntilExecutionContext },
-  _options: { htmlPaths?: readonly string[] } = {},
 ): Promise<void> {
   await invalidateApiAndStorefrontGroups(groups, c.env, {
     cleanupExecutionCtx: getOptionalExecutionContext(c),
@@ -512,7 +523,6 @@ export async function invalidateProductAvailabilityCaches(
 export async function invalidateCatalogCaches(
   domain: CatalogCacheDomain,
   c: { env?: Env; executionCtx?: WaitUntilExecutionContext },
-  _options: CatalogCacheInvalidationOptions = {},
 ): Promise<void> {
   await invalidateApiAndStorefrontGroups(CATALOG_CACHE_GROUPS[domain], c.env, {
     cleanupExecutionCtx: getOptionalExecutionContext(c),

@@ -22,8 +22,8 @@ import {
 import {
     getActiveAnalyticsConfigError,
     getAnalyticsProviderIdentifier,
-    isMainThreadOnlyAnalyticsType,
     normalizeCloudflareWebAnalyticsConfig,
+    resolveAnalyticsPartytownPolicy,
     type AnalyticsScriptType,
     type createAnalyticsSchema,
     type updateAnalyticsSchema,
@@ -73,6 +73,7 @@ function formatScriptDetail(script: Analytics | undefined | null) {
     if (!script) return null;
     return {
         ...script,
+        usePartytown: resolveAnalyticsPartytownPolicy(script),
         createdAt: toIso(script.createdAt),
         updatedAt: toIso(script.updatedAt),
         deletedAt: toIso(script.deletedAt),
@@ -90,7 +91,7 @@ function formatScriptSummary(script: Analytics) {
         name: script.name,
         type: script.type,
         isActive: script.isActive,
-        usePartytown: script.usePartytown,
+        usePartytown: resolveAnalyticsPartytownPolicy(script),
         location: script.location,
         revision: script.revision,
         identifier: getAnalyticsProviderIdentifier(script.type, script.config),
@@ -115,9 +116,11 @@ function normalizeAnalyticsScriptValues(
 
     return {
         config,
-        usePartytown: isMainThreadOnlyAnalyticsType(data.type)
-            ? false
-            : data.usePartytown,
+        usePartytown: resolveAnalyticsPartytownPolicy({
+            type: data.type,
+            config,
+            usePartytown: data.usePartytown,
+        }),
     };
 }
 

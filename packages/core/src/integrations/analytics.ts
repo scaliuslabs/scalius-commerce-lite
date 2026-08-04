@@ -12,9 +12,8 @@ declare const window: {
 } & Record<string, unknown>;
 
 import {
-  CLOUDFLARE_WEB_ANALYTICS_SCRIPT_SRC,
-  isMainThreadOnlyAnalyticsType,
   isPubliclyInjectableAnalyticsConfig,
+  resolveAnalyticsPartytownPolicy,
 } from "../modules/analytics/analytics.validation";
 
 export interface AnalyticsConfig {
@@ -31,39 +30,25 @@ export interface AnalyticsConfig {
  */
 export function processAnalyticsScript(script: AnalyticsConfig): string {
   if (!script.config) return "";
-
-  if (
-    !script.config.includes("<script") ||
-    script.config.includes("text/partytown")
-  ) {
-    return script.config;
-  }
-  return script.config.replace(/<script/g, '<script type="text/partytown"');
+  return script.config.replace(
+    /<script\b([^>]*)>/gi,
+    (_openingTag, attributes: string) => {
+      const workerAttributes = attributes.replace(
+        /\s+type\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi,
+        "",
+      );
+      return `<script type="text/partytown"${workerAttributes}>`;
+    },
+  );
 }
 
 /**
- * Determines if a script configuration should use Partytown.
- * Respects the usePartytown field from the database configuration.
+ * Determines the effective delivery policy. Known marketing providers are
+ * isolated even when a legacy row predates that invariant; only custom code
+ * may opt in or out.
  */
 export function shouldUsePartytown(script: AnalyticsConfig): boolean {
-  if (isMainThreadOnlyAnalyticsType(script.type)) {
-    return false;
-  }
-  if (script.config.includes(CLOUDFLARE_WEB_ANALYTICS_SCRIPT_SRC)) {
-    return false;
-  }
-
-  if (typeof script.usePartytown === "boolean") {
-    return script.usePartytown;
-  }
-  // Fallback to type-based decision if usePartytown is not explicitly set
-  const partytownTypes = [
-    "google_analytics",
-    "facebook_pixel",
-    "google_tag_manager",
-    "tiktok_pixel",
-  ];
-  return partytownTypes.includes(script.type) || script.type === "custom";
+  return resolveAnalyticsPartytownPolicy(script);
 }
 
 export function shouldInjectAnalyticsScript(script: AnalyticsConfig): boolean {

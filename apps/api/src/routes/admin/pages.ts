@@ -12,16 +12,12 @@ import {
   bulkPublishPages,
   bulkUnpublishPages,
   restorePages,
-  publicPageVisibilityCondition,
   createPageSchema,
   updatePageSchema,
   pageRevisionClaimSchema,
   pageRevisionClaimsSchema,
 } from "@scalius/core/modules/pages";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
-import type { Database } from "@scalius/database/client";
-import { pages } from "@scalius/database/schema";
-import { and, inArray } from "drizzle-orm";
 import { NotFoundError } from "../../utils/api-error";
 import {
   successEnvelope,
@@ -34,9 +30,6 @@ import {
 import { pageSchema } from "../../schemas/entities";
 import {
   invalidateApiAndScheduleStorefrontGroups,
-  invalidateApiAndStorefrontGroups,
-  getOptionalExecutionContext,
-  MAX_STOREFRONT_EXACT_HTML_PATHS,
   type WaitUntilExecutionContext,
 } from "../../utils/cache-invalidation";
 
@@ -44,85 +37,14 @@ import { ok, created, noContent } from "../../utils/api-response";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 const PAGE_CACHE_GROUPS = ["pages"] as const;
-const PAGE_DISCOVERY_HTML_PATH = "/sitemap-pages.xml";
-const ARTICLE_DISCOVERY_HTML_PATHS = [
-  "/blog",
-  "/blog/feed.xml",
-  "/sitemap-articles.xml",
-] as const;
 const pageMutationSchema = z.object({ revision: z.number().int().min(1) });
 const pageCreateResultSchema = pageMutationSchema.extend({ id: z.string() });
 const pageRevisionBodySchema = pageRevisionClaimSchema.omit({ id: true });
 
-function pageHtmlPath(
-  slug: string | null | undefined,
-  contentType: "page" | "article",
-): string[] {
-  if (!slug) return [];
-  return [contentType === "article" ? `/blog/${slug}` : `/${slug}`];
-}
-
-async function publicPageHtmlPathsByIds(
-  db: Database,
-  pageIds: readonly string[],
-): Promise<string[]> {
-  const ids = [...new Set(pageIds.filter(Boolean))].slice(
-    0,
-    MAX_STOREFRONT_EXACT_HTML_PATHS,
-  );
-  if (ids.length === 0) return [];
-
-  const rows = await db
-    .select({ slug: pages.slug, contentType: pages.contentType })
-    .from(pages)
-    .where(and(inArray(pages.id, ids), publicPageVisibilityCondition()));
-
-  return rows.flatMap((page) => pageHtmlPath(page.slug, page.contentType));
-}
-
 async function invalidatePageCaches(
   c: { env: Env; executionCtx?: WaitUntilExecutionContext },
-  options: { htmlPaths?: readonly string[] } = {},
 ): Promise<void> {
-  const publicPaths = options.htmlPaths ?? [];
-  if (publicPaths.length === 0) return;
-
-  const htmlPaths = [
-    PAGE_DISCOVERY_HTML_PATH,
-    ...ARTICLE_DISCOVERY_HTML_PATHS,
-    ...publicPaths,
-  ];
-  // Draft-only writes do not change a buyer-visible projection. Public path
-  // changes retain the synchronous exact purge so the response does not claim
-  // success while buyers can still see stale content.
-  try {
-    const cleanupExecutionCtx = getOptionalExecutionContext(c);
-    const result = await invalidateApiAndStorefrontGroups(
-      [...PAGE_CACHE_GROUPS],
-      c.env,
-      {
-        htmlPaths,
-        ...(cleanupExecutionCtx ? { cleanupExecutionCtx } : {}),
-      },
-    );
-    if (result.ok) return;
-  } catch (error: unknown) {
-    console.error(
-      "[Pages] Immediate storefront cache purge failed; queueing fallback:",
-      error,
-    );
-  }
-
-  await invalidateApiAndScheduleStorefrontGroups([...PAGE_CACHE_GROUPS], c, {
-    htmlPaths,
-  });
-}
-
-function uniqueHtmlPaths(...pathGroups: readonly string[][]): string[] {
-  return [...new Set(pathGroups.flat())].slice(
-    0,
-    MAX_STOREFRONT_EXACT_HTML_PATHS,
-  );
+  await invalidateApiAndScheduleStorefrontGroups([...PAGE_CACHE_GROUPS], c);
 }
 
 // ── List Pages ──
@@ -227,9 +149,7 @@ app.openapi(createPageRoute, async (c) => {
   const result = await createPage(db, c.req.valid("json"), {
     canPublish: c.get("adminPermissions").has(PERMISSIONS.PAGES_PUBLISH),
   });
-  await invalidatePageCaches(c, {
-    htmlPaths: await publicPageHtmlPathsByIds(db, [result.id]),
-  });
+  await invalidatePageCaches(c);
   return created(c, result);
 });
 
@@ -261,12 +181,8 @@ const bulkDeleteRoute = createRoute({
 app.openapi(bulkDeleteRoute, async (c) => {
   const db = c.get("db");
   const { pages: revisionClaims, permanent } = c.req.valid("json");
-  const previousHtmlPaths = await publicPageHtmlPathsByIds(
-    db,
-    revisionClaims.map((claim) => claim.id),
-  );
   await bulkDeletePages(db, revisionClaims, permanent);
-  await invalidatePageCaches(c, { htmlPaths: previousHtmlPaths });
+  await invalidatePageCaches(c);
   return noContent(c);
 });
 
@@ -293,12 +209,7 @@ app.openapi(bulkPublishRoute, async (c) => {
   const db = c.get("db");
   const { pages: revisionClaims } = c.req.valid("json");
   await bulkPublishPages(db, revisionClaims);
-  await invalidatePageCaches(c, {
-    htmlPaths: await publicPageHtmlPathsByIds(
-      db,
-      revisionClaims.map((claim) => claim.id),
-    ),
-  });
+  await invalidatePageCaches(c);
   return noContent(c);
 });
 
@@ -324,12 +235,8 @@ const bulkUnpublishRoute = createRoute({
 app.openapi(bulkUnpublishRoute, async (c) => {
   const db = c.get("db");
   const revisionClaims = c.req.valid("json").pages;
-  const previousHtmlPaths = await publicPageHtmlPathsByIds(
-    db,
-    revisionClaims.map((claim) => claim.id),
-  );
   await bulkUnpublishPages(db, revisionClaims);
-  await invalidatePageCaches(c, { htmlPaths: previousHtmlPaths });
+  await invalidatePageCaches(c);
   return noContent(c);
 });
 
@@ -356,12 +263,7 @@ app.openapi(bulkRestoreRoute, async (c) => {
   const db = c.get("db");
   const { pages: revisionClaims } = c.req.valid("json");
   await restorePages(db, revisionClaims);
-  await invalidatePageCaches(c, {
-    htmlPaths: await publicPageHtmlPathsByIds(
-      db,
-      revisionClaims.map((claim) => claim.id),
-    ),
-  });
+  await invalidatePageCaches(c);
   return noContent(c);
 });
 
@@ -400,9 +302,7 @@ app.openapi(restoreRoute, async (c) => {
   await restorePages(db, [
     { id, expectedRevision: c.req.valid("json").expectedRevision },
   ]);
-  await invalidatePageCaches(c, {
-    htmlPaths: await publicPageHtmlPathsByIds(db, [id]),
-  });
+  await invalidatePageCaches(c);
   return ok(c, { message: "Page restored" });
 });
 
@@ -459,16 +359,10 @@ const updatePageRoute = createRoute({
 app.openapi(updatePageRoute, async (c) => {
   const db = c.get("db");
   const { id } = c.req.valid("param");
-  const previousHtmlPaths = await publicPageHtmlPathsByIds(db, [id]);
   const result = await updatePage(db, id, c.req.valid("json"), {
     canPublish: c.get("adminPermissions").has(PERMISSIONS.PAGES_PUBLISH),
   });
-  await invalidatePageCaches(c, {
-    htmlPaths: uniqueHtmlPaths(
-      previousHtmlPaths,
-      await publicPageHtmlPathsByIds(db, [id]),
-    ),
-  });
+  await invalidatePageCaches(c);
   return ok(c, result);
 });
 
@@ -499,9 +393,8 @@ const deletePageRoute = createRoute({
 app.openapi(deletePageRoute, async (c) => {
   const db = c.get("db");
   const { id } = c.req.valid("param");
-  const previousHtmlPaths = await publicPageHtmlPathsByIds(db, [id]);
   await deletePage(db, id, c.req.valid("json").expectedRevision);
-  await invalidatePageCaches(c, { htmlPaths: previousHtmlPaths });
+  await invalidatePageCaches(c);
   return noContent(c);
 });
 
@@ -532,13 +425,12 @@ const permanentDeleteRoute = createRoute({
 app.openapi(permanentDeleteRoute, async (c) => {
   const db = c.get("db");
   const { id } = c.req.valid("param");
-  const previousHtmlPaths = await publicPageHtmlPathsByIds(db, [id]);
   await bulkDeletePages(
     db,
     [{ id, expectedRevision: c.req.valid("json").expectedRevision }],
     true,
   );
-  await invalidatePageCaches(c, { htmlPaths: previousHtmlPaths });
+  await invalidatePageCaches(c);
   return noContent(c);
 });
 

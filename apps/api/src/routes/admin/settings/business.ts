@@ -101,9 +101,7 @@ app.openapi(saveBusinessRoute, async (c) => {
     const db = c.get("db");
     const body = c.req.valid("json");
     await saveBusinessSettings(db, body);
-    await invalidateApiAndScheduleStorefrontGroups(LAYOUT_CACHE_GROUPS, c, {
-        htmlPaths: ["/"],
-    });
+    await invalidateApiAndScheduleStorefrontGroups(LAYOUT_CACHE_GROUPS, c);
     return ok(c, { message: "Business settings saved successfully" });
 });
 

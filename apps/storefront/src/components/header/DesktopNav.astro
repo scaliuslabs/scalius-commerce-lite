@@ -131,6 +131,10 @@ const dropdownPanelClass =
     updateNav() {
       if (!this.navList || !this.moreItem) return;
 
+      // The desktop navigation is CSS-hidden on mobile. Avoid querying layout
+      // for a subtree that PageSpeed cannot display.
+      if (!window.matchMedia("(min-width: 1024px)").matches) return;
+
       if (this.container.offsetParent === null) {
         return;
       }

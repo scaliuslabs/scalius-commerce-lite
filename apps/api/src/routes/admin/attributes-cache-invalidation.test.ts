@@ -122,7 +122,6 @@ describe("admin attribute cache invalidation", () => {
     expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
       ["attributes", "products"],
       expect.objectContaining({ env }),
-      { htmlPaths: ["/search"] },
     );
   });
 
@@ -143,7 +142,6 @@ describe("admin attribute cache invalidation", () => {
     expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
       ["attributes", "products"],
       expect.objectContaining({ env }),
-      { htmlPaths: ["/search"] },
     );
   });
 

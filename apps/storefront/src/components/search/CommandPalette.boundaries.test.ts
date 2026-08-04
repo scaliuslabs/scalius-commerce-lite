@@ -30,8 +30,13 @@ describe("CommandPalette search request boundaries", () => {
       storefrontSourcePath("layouts", "Layout.astro"),
       "utf8",
     );
-    expect(layout).toContain("<CommandPalette client:load />");
-    expect(layout).not.toContain("<CommandPalette client:idle />");
+    const runtime = await readFile(
+      storefrontSourcePath("scripts", "lazy-global-ui.ts"),
+      "utf8",
+    );
+    expect(layout).not.toContain("<CommandPalette client:");
+    expect(runtime).toContain('import("@/components/client/mount-command-palette")');
+    expect(runtime).toContain("window.__scaliusSearchPaletteOpenPending = true;");
   });
 
   it("exposes dialog/listbox semantics and keeps failures distinct from empty results", async () => {

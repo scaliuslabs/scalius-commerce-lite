@@ -50,7 +50,7 @@ Fetches and shapes all layout data in a **single batched D1 round-trip** (11 par
 
 Returns: `{ analytics, header, navigation, footer, currency, theme, media, metaCapi, business, seo }`
 
-**Analytics processing**: Each active analytics script is processed -- if `usePartytown` is true and the script matches Partytown criteria (`shouldUsePartytown()`), the config is modified via `processAnalyticsScript()`. Timestamps are converted to ISO 8601 via `unixToISO()`.
+**Analytics processing**: Each active analytics script is assigned an effective delivery policy by `shouldUsePartytown()`. GA4, GTM, Facebook Pixel, and TikTok are always worker-isolated even when a legacy stored flag is false; Cloudflare Web Analytics stays on the main thread; trusted custom code respects its saved choice. Worker-isolated snippets are normalized through `processAnalyticsScript()` and the response exposes the effective policy.
 
 **Header processing**: Normalizes social links (supports both array format and legacy `{ facebook: "url" }` object format). Falls back to auto-generated navigation from categories + pages when no custom navigation is configured in `headerConfig`. Includes topBar, logo, favicon, contact, and social fields with sensible defaults.
 

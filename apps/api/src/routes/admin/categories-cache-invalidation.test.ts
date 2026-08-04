@@ -132,7 +132,7 @@ describe("admin category cache invalidation", () => {
     vi.clearAllMocks();
   });
 
-  it("invalidates catalog caches without warming a new draft category page", async () => {
+  it("purges category projections after creating a draft category", async () => {
     const { app, env } = createTestApp();
 
     const response = await requestJson(
@@ -150,7 +150,7 @@ describe("admin category cache invalidation", () => {
     );
   });
 
-  it("warms old and new category pages after slug updates", async () => {
+  it("purges category projections after slug updates", async () => {
     const { app, env } = createTestApp();
 
     const response = await requestJson(
@@ -169,7 +169,6 @@ describe("admin category cache invalidation", () => {
     expect(mocks.invalidateCatalogCaches).toHaveBeenCalledWith(
       "categories",
       expect.objectContaining({ env }),
-      { htmlPaths: ["/categories/old-fish", "/categories/new-fish"] },
     );
   });
 });
