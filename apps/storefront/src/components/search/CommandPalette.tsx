@@ -108,10 +108,14 @@ export default function CommandPalette() {
       }
     };
 
-    const handleCustomEvent = () => setIsOpen(true);
+    const handleCustomEvent = () => {
+      delete window.__scaliusSearchPaletteOpenPending;
+      setIsOpen(true);
+    };
 
     document.addEventListener("keydown", handleKeydown);
     document.addEventListener("open-search-palette", handleCustomEvent);
+    if (window.__scaliusSearchPaletteOpenPending) handleCustomEvent();
     return () => {
       document.removeEventListener("keydown", handleKeydown);
       document.removeEventListener("open-search-palette", handleCustomEvent);

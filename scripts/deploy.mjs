@@ -61,11 +61,11 @@ const storefrontStaticPostDeployWarmPaths = ["/", "/search"];
 const STOREFRONT_DYNAMIC_WARM_LIMIT = 4;
 const STOREFRONT_DYNAMIC_WARM_TIMEOUT_MS = 8_000;
 const STOREFRONT_WARM_CONCURRENCY = 4;
-// A custom-domain edge can lag the 100%-served deployment record by close to a
-// minute. Keep the verifier bounded to one minute, but long enough to observe
-// the route switching instead of reporting a successfully uploaded build as a
-// failed deployment after only thirty seconds.
-const STOREFRONT_WARM_MAX_ATTEMPTS = 40;
+// Worker versions own isolated caches, so a new deployment cannot serve HTML
+// produced by the superseded version. Hosted deployments may still seed their
+// bounded critical route set after rollout; this verifier is the deterministic
+// OSS fallback for direct deployments.
+const STOREFRONT_WARM_MAX_ATTEMPTS = 220;
 const STOREFRONT_WARM_RETRY_DELAY_MS = 1_500;
 const API_READYZ_SAMPLE_COUNT = 4;
 const API_READYZ_SAMPLE_DELAY_MS = 1_000;

@@ -9,6 +9,7 @@ import ProductBreadcrumbs from "@/components/product/ProductBreadcrumbs.astro";
 import ProductGallery from "@/components/product/ProductGallery.astro";
 import ProductSummary from "@/components/product/ProductSummary.astro";
 import RelatedProducts from "@/components/product/RelatedProducts.astro";
+import { GALLERY_CONFIG } from "@/components/product/config";
 import { getProductImageUrl, hasProductImage } from "@/lib/product-media";
 import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
@@ -208,10 +209,20 @@ const initialGalleryImageSource = requestedVariantImageUrl
       : !featuredGalleryMedia && primaryImageUrl
         ? { url: primaryImageUrl, trimBorder: true }
         : null;
-const initialGalleryPreloadUrl = initialGalleryImageSource
+const initialGalleryMobilePreloadUrl = initialGalleryImageSource
   ? getProductImageUrl(initialGalleryImageSource.url, {
-      width: 600,
-      height: 600,
+      width: GALLERY_CONFIG.imageTransforms.mobileDisplay,
+      height: GALLERY_CONFIG.imageTransforms.mobileDisplay,
+      quality: 78,
+      format: "auto",
+      fit: "contain",
+      ...(initialGalleryImageSource.trimBorder ? { trim: "border" } : {}),
+    })
+  : null;
+const initialGalleryDesktopPreloadUrl = initialGalleryImageSource
+  ? getProductImageUrl(initialGalleryImageSource.url, {
+      width: GALLERY_CONFIG.imageTransforms.display,
+      height: GALLERY_CONFIG.imageTransforms.display,
       quality: 85,
       format: "auto",
       fit: "contain",
@@ -575,11 +586,23 @@ const productCategoryAnalytics = productCategory
 >
   <Fragment slot="head">
     {
-      initialGalleryPreloadUrl && (
+      initialGalleryMobilePreloadUrl && (
         <link
           rel="preload"
           as="image"
-          href={initialGalleryPreloadUrl}
+          href={initialGalleryMobilePreloadUrl}
+          media="(max-width: 1023px)"
+          fetchpriority="high"
+        />
+      )
+    }
+    {
+      initialGalleryDesktopPreloadUrl && (
+        <link
+          rel="preload"
+          as="image"
+          href={initialGalleryDesktopPreloadUrl}
+          media="(min-width: 1024px)"
           fetchpriority="high"
         />
       )
@@ -664,6 +687,7 @@ const productCategoryAnalytics = productCategory
 </script>
 <script>
   import type { Product, Category, ProductVariant } from "@/lib/api";
+  import { scheduleNonCriticalAnalytics } from "@/lib/non-critical-analytics";
 
   document.addEventListener("DOMContentLoaded", () => {
     const container = document.getElementById("product-container");
@@ -683,11 +707,6 @@ const productCategoryAnalytics = productCategory
       const category: Category | null = JSON.parse(categoryDataAttr);
       const variants: ProductVariant[] = JSON.parse(variantsDataAttr);
 
-      // DEFER DEPENDENCY CHAIN:
-      // Dynamically load the analytics tracker only after the page has fully loaded
-      // to remove it from the Lighthouse Critical Request Chain. We use the 'load'
-      // event instead of a 'setTimeout' to avoid arbitrary delays and ensure data
-      // isn't dropped for fast-bouncing visitors while remaining predictable for developers.
       const triggerAnalytics = () => {
         import("@/lib/analytics").then(({ trackFbViewContent }) => {
           trackFbViewContent({
@@ -715,11 +734,7 @@ const productCategoryAnalytics = productCategory
         });
       };
 
-      if (document.readyState === "complete") {
-        setTimeout(triggerAnalytics, 1);
-      } else {
-        window.addEventListener("load", triggerAnalytics, { once: true });
-      }
+      scheduleNonCriticalAnalytics(triggerAnalytics);
     } catch (error: unknown) {
       console.error("FB ViewContent: Error parsing data attributes:", error);
     }

@@ -68,6 +68,24 @@ describe("cache invalidation domains", () => {
     );
   });
 
+  it("retries transient storefront purge failures before returning", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(null, { status: 503 }))
+      .mockRejectedValueOnce(new Error("network unavailable"))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      purgeStorefrontForGroups(["products"], {
+        PURGE_URL: "https://shop.example/api/purge-cache",
+        PURGE_TOKEN: "secret",
+      } as never),
+    ).resolves.toEqual({ attempted: true, ok: true, status: 204 });
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
   it("makes missing storefront configuration an explicit bounded skip", async () => {
     await expect(purgeStorefrontForGroups(["products"])).resolves.toEqual({
       attempted: false,
@@ -85,6 +103,23 @@ describe("cache invalidation domains", () => {
       },
     });
     expect(purgeGroups).toHaveBeenCalledWith(["products"]);
+  });
+
+  it("retries transient native API purge failures", async () => {
+    const purgeGroups = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("transient"))
+      .mockRejectedValueOnce(new Error("transient"))
+      .mockResolvedValueOnce(undefined);
+
+    await invalidateGroups(["products"], undefined, {
+      cleanupExecutionCtx: {
+        waitUntil: vi.fn(),
+        exports: { PublicApi: { purgeGroups } },
+      },
+    });
+
+    expect(purgeGroups).toHaveBeenCalledTimes(3);
   });
 
   it("purges API and storefront entrypoints together", async () => {

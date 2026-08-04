@@ -1,8 +1,7 @@
 // src/lib/analytics.ts
 
 /**
- * Utility functions for handling analytics scripts and event tracking
- * with Partytown for Facebook Pixel, TikTok Pixel, and Google Analytics 4,
+ * Storefront commerce event tracking for the configured analytics providers,
  * plus a passive Cloudflare Zaraz e-commerce bridge when Zaraz is enabled on the zone.
  *
  * NOW INCLUDES SERVER-SIDE EVENT DISPATCHING FOR META CONVERSIONS API (CAPI).
@@ -12,22 +11,6 @@ import { createMetaEventId } from "./tracking/meta-event-id";
 import { normalizeSearchQuery } from "./search-query";
 
 // Window augmentation for dataLayer, fbq, ttq, and Zaraz is in src/env.d.ts
-
-// Analytics type definition (from database schema)
-interface AnalyticsConfig {
-  id: string;
-  name: string;
-  type: string;
-  isActive: boolean;
-  usePartytown: boolean;
-  config: string; // JSON string for analytics configuration
-  location: string; // 'head', 'body_start', 'body_end'
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-const CLOUDFLARE_WEB_ANALYTICS_SCRIPT_SRC =
-  "https://static.cloudflareinsights.com/beacon.min.js";
 
 // CAPI: Define a type for user data that can be passed into tracking functions.
 interface CapiUserData {
@@ -43,48 +26,6 @@ interface MetaEventOptions {
 
 function pixelEventOptions(eventId: string) {
   return { eventID: eventId };
-}
-
-/**
- * Processes an analytics script configuration to add Partytown attributes.
- * This function adds the type="text/partytown" attribute to script tags
- * to ensure they run in a web worker via Partytown.
- */
-export function processAnalyticsScript(script: AnalyticsConfig): string {
-  if (!script.config) return "";
-
-  if (
-    !script.config.includes("<script") ||
-    script.config.includes("text/partytown")
-  ) {
-    return script.config;
-  }
-  return script.config.replace(/<script/g, '<script type="text/partytown"');
-}
-
-/**
- * Determines if a script configuration should use Partytown.
- * Respects the usePartytown field from the database configuration.
- */
-export function shouldUsePartytown(script: AnalyticsConfig): boolean {
-  if (script.type === "cloudflare_web_analytics") {
-    return false;
-  }
-  if (script.config.includes(CLOUDFLARE_WEB_ANALYTICS_SCRIPT_SRC)) {
-    return false;
-  }
-
-  if (typeof script.usePartytown === "boolean") {
-    return script.usePartytown;
-  }
-  // Fallback to type-based decision if usePartytown is not explicitly set
-  const partytownTypes = [
-    "google_analytics",
-    "facebook_pixel",
-    "google_tag_manager",
-    "tiktok_pixel",
-  ];
-  return partytownTypes.includes(script.type) || script.type === "custom";
 }
 
 type AnalyticsPrimitive = string | number | boolean;

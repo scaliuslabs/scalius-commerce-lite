@@ -481,12 +481,13 @@ export async function getLayoutData(
     .filter(shouldInjectAnalyticsScript)
     .map((script) => {
       let processedConfig = script.config;
-      if (shouldUsePartytown(script))
+      const usePartytown = shouldUsePartytown(script);
+      if (usePartytown)
         processedConfig = processAnalyticsScript(script);
       return {
         id: script.id,
         type: script.type,
-        usePartytown: script.usePartytown,
+        usePartytown,
         config: processedConfig,
         location: script.location,
       };

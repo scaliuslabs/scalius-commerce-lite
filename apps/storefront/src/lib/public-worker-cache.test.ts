@@ -55,11 +55,11 @@ describe("public storefront Worker cache policy", () => {
     ["/search?q=fish", ["search", "products", "layout", "media"]],
     ["/blog/news", ["pages", "products", "layout", "media"]],
     ["/api/product-feed.xml", ["discovery", "products", "layout", "media"]],
-  ])("caches anonymous public route %s for five seconds", (path, tags) => {
+  ])("caches anonymous public route %s for one day", (path, tags) => {
     const policy = getPublicStorefrontCachePolicy(
       new Request(`https://shop.example${path}`),
     );
-    expect(policy?.edgeTtlSeconds).toBe(5);
+    expect(policy?.edgeTtlSeconds).toBe(86_400);
     expect(policy?.tags).toEqual(tags);
   });
 
@@ -87,7 +87,7 @@ describe("public storefront Worker cache policy", () => {
 
     expect(response.headers.get("Cache-Control")).toContain("no-store");
     expect(response.headers.get("Cloudflare-CDN-Cache-Control")).toBe(
-      "public, max-age=5, must-revalidate",
+      "public, max-age=86400, must-revalidate",
     );
     expect(response.headers.get("Cache-Tag")).toBe(
       "pages,products,layout,media",

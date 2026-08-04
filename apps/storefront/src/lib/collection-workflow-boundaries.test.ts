@@ -11,7 +11,7 @@ const grid = readFileSync(
   "utf8",
 );
 const carousel = readFileSync(
-  storefrontSourcePath("components/sliders/ProductCarousel.tsx"),
+  storefrontSourcePath("components/collection2.astro"),
   "utf8",
 );
 const productCard = readFileSync(
@@ -77,44 +77,32 @@ describe("collection storefront workflow boundaries", () => {
     expect(grid).toContain(".slice(0, config.maxProducts || 8)");
   });
 
-  it("keeps carousel progress controls touchable and product images responsive", () => {
+  it("keeps the homepage rail server-rendered, touchable, and responsive", () => {
     expect(carousel).toContain(
-      'className="flex h-11 w-11 items-center justify-center rounded-full',
+      'class="flex h-11 w-11 items-center justify-center rounded-full',
     );
-    expect(carousel).toContain("{current + 1} / {count}");
-    expect(carousel).toContain(
-      'className="group flex h-6 w-6 items-center justify-center rounded-full"',
-    );
-    expect(carousel).toContain('className="hidden items-center sm:flex"');
-    expect(carousel).toContain(
-      'aria-current={current === i ? "true" : undefined}',
-    );
-    expect(carousel).toContain("getProductImageSrcSet");
-    expect(carousel).toContain('descriptor: "480w"');
-    expect(carousel).toContain('sizes="(max-width: 639px) 72vw');
-    expect(carousel).toContain(
-      'className="lg:hidden h-11 w-11 flex items-center justify-center',
-    );
+    expect(carousel).toContain("snap-x snap-mandatory");
+    expect(carousel).toContain("<ProductCard");
+    expect(carousel).toContain("track.scrollBy({");
+    expect(carousel).not.toContain("client:");
+    expect(carousel).not.toContain('from "react"');
+    expect(carousel).not.toContain(".tsx");
     expect(productCard).toContain("getProductImageSrcSet");
     expect(productCard).toContain('sizes="(max-width: 639px) 50vw');
     expect(productCard).toContain("h-11 w-11");
     expect(productCard).toContain("aria-label={`View ${product.name}`}");
   });
 
-  it("does not autoplay the carousel for reduced-motion users", () => {
+  it("uses reduced-motion-safe native scrolling without autoplay", () => {
     expect(carousel).toContain("prefers-reduced-motion: reduce");
+    expect(carousel).not.toContain("setInterval");
   });
 
   it("uses the shared short money formatter across homepage presentations", () => {
-    for (const source of [productCard, carousel]) {
-      expect(source).toContain("formatPriceShort");
-      expect(source).not.toContain("discountedPrice.toLocaleString()");
-      expect(source).not.toContain("price.toLocaleString()");
-    }
-    expect(carousel).toContain(
-      'const pricePrefix = product.priceVaries ? "From " : "";',
-    );
-    expect(carousel).toContain("{pricePrefix}");
-    expect(carousel).toContain("{formatMoney(product.discountedPrice)}");
+    expect(productCard).toContain("formatPriceShort");
+    expect(productCard).not.toContain("discountedPrice.toLocaleString()");
+    expect(productCard).not.toContain("price.toLocaleString()");
+    expect(carousel).toContain("currencySymbol={currencySymbol}");
+    expect(carousel).toContain("currencyCode={currencyCode}");
   });
 });

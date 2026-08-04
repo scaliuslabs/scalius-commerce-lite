@@ -179,6 +179,9 @@ export function AnalyticsForm({
       location: providerDeliveryDefaults.location,
       ...defaultValues,
       ...(defaultType === "cloudflare_web_analytics" ? { usePartytown: false } : {}),
+      ...(defaultType !== "cloudflare_web_analytics" && defaultType !== "custom"
+        ? { usePartytown: true }
+        : {}),
     },
   });
 
@@ -283,6 +286,7 @@ export function AnalyticsForm({
   const isActive = form.watch("isActive");
   const isCloudflare = selectedType === "cloudflare_web_analytics";
   const isCustom = selectedType === "custom";
+  const isWorkerIsolationLocked = !isCustom;
 
   return (
     <FormContainer
@@ -299,7 +303,7 @@ export function AnalyticsForm({
       form={form}
       onSubmit={form.handleSubmit((values) => submitEntity({
         ...values,
-        usePartytown: isCloudflare ? false : values.usePartytown,
+        usePartytown: isCloudflare ? false : isCustom ? values.usePartytown : true,
       }))}
       formClassName="space-y-4"
       allowSamePathStateNavigation={!isEdit}
@@ -504,13 +508,15 @@ export function AnalyticsForm({
                       <FormDescription>
                         {isCloudflare
                           ? "Cloudflare runs on the main thread for performance timing."
-                          : "Move supported third-party scripts off the main UI thread."}
+                          : isCustom
+                            ? "Move this trusted custom script off the main UI thread when compatible."
+                            : "This provider is always isolated from the main UI thread."}
                       </FormDescription>
                     </div>
                     <FormControl>
                       <Switch
                         checked={field.value}
-                        disabled={isCloudflare}
+                        disabled={isWorkerIsolationLocked}
                         onCheckedChange={field.onChange}
                         aria-label="Use worker isolation"
                       />

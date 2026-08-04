@@ -45,5 +45,7 @@ describe("homepage carousel media boundaries", () => {
     expect(source).toContain('document.addEventListener("astro:before-swap"');
     expect(source).toContain("carousel.__carouselController?.dispose()");
     expect(source).toContain("this.resizeObserver?.disconnect()");
+    expect(source).toContain("Math.max(8_000, this.interval)");
+    expect(source).toContain("if (this.initialTimer) clearTimeout(this.initialTimer)");
   });
 });

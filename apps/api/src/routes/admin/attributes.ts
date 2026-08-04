@@ -41,15 +41,12 @@ import {
 } from "../../utils/cache-invalidation";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const ATTRIBUTE_CACHE_GROUPS = ["attributes", "products"] as const;
-const ATTRIBUTE_STOREFRONT_HTML_PATHS = ["/search"] as const;
 
 async function invalidateAttributeCaches(c: {
     env?: Env;
     executionCtx?: WaitUntilExecutionContext;
 }) {
-    await invalidateApiAndScheduleStorefrontGroups(ATTRIBUTE_CACHE_GROUPS, c, {
-        htmlPaths: ATTRIBUTE_STOREFRONT_HTML_PATHS,
-    });
+    await invalidateApiAndScheduleStorefrontGroups(ATTRIBUTE_CACHE_GROUPS, c);
 }
 
 // ── List Attributes ──

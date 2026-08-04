@@ -192,6 +192,7 @@ if (images.length === 0) return;
       autoRotate: boolean;
       interval: number;
       timer: ReturnType<typeof setInterval> | null = null;
+      initialTimer: ReturnType<typeof setTimeout> | null = null;
       warmTimer: ReturnType<typeof setTimeout> | null = null;
       resizeObserver: ResizeObserver | null = null;
       slideLoads = new Map<number, Promise<void>>();
@@ -347,17 +348,26 @@ if (images.length === 0) return;
 
         this.scheduleNextWarm();
 
-        this.timer = setInterval(() => {
+        const rotate = () => {
           if (!this.isHovering && !this.isSwiping && !this.isTransitioning) {
             void this.goToNextSlide();
           }
-        }, this.interval);
+        };
+        // Give the first campaign enough reading time and keep the initial page
+        // visually stable while Core Web Vitals settle.
+        this.initialTimer = setTimeout(() => {
+          this.initialTimer = null;
+          rotate();
+          if (!this.disposed) this.timer = setInterval(rotate, this.interval);
+        }, Math.max(8_000, this.interval));
       }
 
       stopAutoRotation() {
         if (this.timer) clearInterval(this.timer);
+        if (this.initialTimer) clearTimeout(this.initialTimer);
         if (this.warmTimer) clearTimeout(this.warmTimer);
         this.timer = null;
+        this.initialTimer = null;
         this.warmTimer = null;
       }
 
@@ -368,7 +378,7 @@ if (images.length === 0) return;
           !this.isHovering &&
           !this.isSwiping
         ) {
-          if (!this.timer) this.startAutoRotation();
+          if (!this.timer && !this.initialTimer) this.startAutoRotation();
         } else {
           this.stopAutoRotation();
         }

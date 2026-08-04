@@ -160,14 +160,18 @@ describe("product detail page SKU boundaries", () => {
   it("preloads the same primary-image transformation rendered by the gallery", () => {
     const source = readFileSync(PRODUCT_PAGE_SOURCE, "utf8");
     const preload = source.slice(
-      source.indexOf("initialGalleryPreloadUrl &&"),
+      source.indexOf("initialGalleryMobilePreloadUrl &&"),
       source.indexOf("productJsonLd &&"),
     );
 
     expect(source).toContain("const featuredGalleryMedia =");
     expect(source).toContain("queryVariantSelection?.variant.imageUrl");
-    expect(source).toContain("const initialGalleryPreloadUrl =");
-    expect(preload).toContain("href={initialGalleryPreloadUrl}");
+    expect(source).toContain("const initialGalleryMobilePreloadUrl =");
+    expect(source).toContain("const initialGalleryDesktopPreloadUrl =");
+    expect(preload).toContain("href={initialGalleryMobilePreloadUrl}");
+    expect(preload).toContain('media="(max-width: 1023px)"');
+    expect(preload).toContain("href={initialGalleryDesktopPreloadUrl}");
+    expect(preload).toContain('media="(min-width: 1024px)"');
     expect(preload).not.toContain("getProductImageUrl(primaryImageUrl");
   });
 

@@ -3,11 +3,8 @@
 import "../styles/global.css";
 import Header from "../components/header/header.astro";
 import Footer from "../components/Footer.astro";
-import { Toaster } from "@/components/ui/sonner";
 import { getLayoutData, resolveThemePreview, type LayoutData } from "@/lib/api";
 import type { AnalyticsConfig } from "@/lib/api";
-import CommandPalette from "@/components/search/CommandPalette";
-import AuthModal from "@/components/AuthModal";
 import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime-env";
 import {
@@ -295,14 +292,6 @@ const runtimeGlobalsScript = [
     <!-- Runtime API URL, CDN domain, and currency for client-side JS (Cloudflare Worker env vars aren't available to Vite client bundles) -->
     <script is:inline set:html={runtimeGlobalsScript} />
 
-    <script is:inline>
-      (function () {
-        window.addEventListener("open-auth-modal", function () {
-          window.__scaliusAuthModalOpenPending = true;
-        });
-      })();
-    </script>
-
     <!-- Stale Asset Detector -->
     <script is:inline>
       (function () {
@@ -508,11 +497,11 @@ const runtimeGlobalsScript = [
 
     {!hideFooter && <Footer footerData={footerData} />}
 
-    <Toaster position="top-right" expand={false} richColors closeButton />
-
-    <CommandPalette client:load />
-    <AuthModal client:idle />
-
     {bodyEndScripts.map((script) => <Fragment set:html={script.config} />)}
+
+    <script>
+      import { installLazyGlobalUi } from "@/scripts/lazy-global-ui";
+      installLazyGlobalUi();
+    </script>
   </body>
 </html>

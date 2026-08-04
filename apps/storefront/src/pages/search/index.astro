@@ -208,9 +208,9 @@ const analyticsProductData = products.map((p) => ({
             <div
               class="flex items-center justify-between border-b border-border bg-background p-4 lg:hidden"
             >
-              <h3 id="mobile-filter-title" class="font-semibold text-lg">
+              <h2 id="mobile-filter-title" class="font-semibold text-lg">
                 Filters
-              </h3>
+              </h2>
               <button
                 type="button"
                 id="mobile-filter-close"
@@ -245,7 +245,7 @@ const analyticsProductData = products.map((p) => ({
                 </div>
 
                 <CategoryFilters
-                  client:load
+                  client:visible
                   facets={facets}
                   currentFilters={currentFilters}
                   priceRange={productsResponse.priceRange}
@@ -337,11 +337,13 @@ const analyticsProductData = products.map((p) => ({
             products.length > 0 && (
               <Fragment>
                 <div class="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 mb-8">
-                  {products.map((product) => (
+                  {products.map((product, index) => (
                     <ProductCard
                       product={product}
                       currencySymbol={currencySymbol}
                       currencyCode={currencyCode}
+                      priority={index < 2}
+                      headingLevel="h2"
                     />
                   ))}
                 </div>
@@ -376,7 +378,7 @@ const analyticsProductData = products.map((p) => ({
 </script>
 
 <script>
-  import { trackStorefrontSearchResults } from "@/lib/analytics";
+  import { scheduleNonCriticalAnalytics } from "@/lib/non-critical-analytics";
 
   type ProductAnalyticsData = {
     id: string;
@@ -384,7 +386,7 @@ const analyticsProductData = products.map((p) => ({
     price: number;
   };
 
-  function trackSearchResults() {
+  async function trackSearchResults() {
     const productListElement = document.querySelector<HTMLElement>(
       "[data-products-for-analytics]",
     );
@@ -400,6 +402,7 @@ const analyticsProductData = products.map((p) => ({
       );
       const searchQuery = productListElement.dataset.searchQuery || "";
 
+      const { trackStorefrontSearchResults } = await import("@/lib/analytics");
       const tracked = trackStorefrontSearchResults({
         searchQuery,
         products: productsData,
@@ -412,6 +415,9 @@ const analyticsProductData = products.map((p) => ({
     }
   }
 
-  document.addEventListener("DOMContentLoaded", trackSearchResults);
-  document.addEventListener("astro:page-load", trackSearchResults);
+  const scheduleSearchResults = () => {
+    scheduleNonCriticalAnalytics(() => void trackSearchResults());
+  };
+  document.addEventListener("DOMContentLoaded", scheduleSearchResults);
+  document.addEventListener("astro:page-load", scheduleSearchResults);
 </script>

@@ -14,6 +14,7 @@ import {
   isSuccessfulPublicDiscoveryResponse,
 } from "@/lib/public-discovery-cache";
 import { getPublicStorefrontCachePolicy } from "@/lib/public-worker-cache";
+import { BUILD_ID } from "@/config/build-id";
 
 function getEnv(): Env | null {
   try {
@@ -40,6 +41,7 @@ function setPrivateResponse(response: Response, status: string): void {
 const responsePolicyMiddleware = defineMiddleware(async (context, next) => {
   const { request, url } = context;
   const response = await next();
+  response.headers.set("X-Storefront-Build", BUILD_ID);
   const isGet = request.method === "GET" || request.method === "HEAD";
   const hasVariantSelection = hasStorefrontProductVariantSelectionParams(url);
   const hasPrivateSession = requestHasPrivateSession(request.headers);

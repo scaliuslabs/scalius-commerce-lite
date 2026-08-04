@@ -47,12 +47,38 @@ describe("analytics script processing", () => {
     );
   });
 
+  it("normalizes every script tag in a multi-script provider snippet", () => {
+    const processed = processAnalyticsScript({
+      ...baseScript,
+      config:
+        '<SCRIPT async src="https://example.com/provider.js"></SCRIPT><script type="text/javascript">window.provider = true;</script>',
+    });
+
+    expect(processed.match(/type="text\/partytown"/g)).toHaveLength(2);
+    expect(processed).not.toContain('type="text/javascript"');
+  });
+
   it("defaults TikTok Pixel scripts into Partytown", () => {
     expect(
       shouldUsePartytown({
         ...baseScript,
         type: "tiktok_pixel",
         usePartytown: undefined as unknown as boolean,
+      }),
+    ).toBe(true);
+  });
+
+  it.each([
+    "google_analytics",
+    "google_tag_manager",
+    "facebook_pixel",
+    "tiktok_pixel",
+  ])("keeps legacy %s rows off the main thread", (type) => {
+    expect(
+      shouldUsePartytown({
+        ...baseScript,
+        type,
+        usePartytown: false,
       }),
     ).toBe(true);
   });

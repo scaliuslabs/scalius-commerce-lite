@@ -1,7 +1,6 @@
 ---
 // Header component - receives data from Layout.astro
 import type { HeaderData, NavigationItem } from "@/lib/api";
-import CartFlyout from "../CartFlyout";
 import HeaderLayout from "./HeaderLayout.astro";
 import DesktopNav from "./DesktopNav.astro";
 import MobileMenu from "./MobileMenu.astro";
@@ -55,12 +54,10 @@ const headerData: HeaderData = {
     contact={headerData.contact}
     social={headerData.social}
   />
-
-  <CartFlyout client:load />
 </header>
 
 <script>
-  import { cartStore } from "@/store/cart";
+  import { cartStore, hydrateCartFromStorage } from "@/store/cart";
   import { debounce } from "@/lib/utils";
   import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 
@@ -75,6 +72,8 @@ const headerData: HeaderData = {
   function initializeHeader() {
     const runtimeWindow = window as HeaderRuntimeWindow;
     runtimeWindow.__scaliusHeaderCleanup?.();
+
+    hydrateCartFromStorage();
 
     function updateCartDisplay() {
       const { totalItems, totalAmount } = cartStore.get();

@@ -41,9 +41,11 @@ export default defineConfig({
     // changes. Scope the whole asset directory to BUILD_ID so a browser can safely
     // cache deployed JS/CSS as immutable without executing a previous build.
     assets: buildAssetsDirectory,
-    // Keep small route styles inline, but let substantial shared stylesheets load
-    // in parallel and remain cached while shoppers move between storefront pages.
-    inlineStylesheets: "auto",
+    // Storefront HTML is edge-cached and compressed. Inlining the compact shared
+    // stylesheet removes a render-blocking request from cold mobile navigations.
+    // A cold mobile visit is faster with the compressed stylesheet in the
+    // document than with two render-blocking stylesheet round trips.
+    inlineStylesheets: "always",
   },
 
   output: "server",

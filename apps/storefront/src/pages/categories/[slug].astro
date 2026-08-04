@@ -360,9 +360,9 @@ const collectionJsonLd =
             >
               <div class="flex h-full w-full flex-col bg-background text-foreground lg:sticky lg:top-[calc(var(--header-height,4rem)+1rem)] lg:max-h-[calc(100dvh-var(--header-height,4rem)-2rem)] lg:w-full lg:overflow-hidden lg:rounded-lg lg:border lg:border-border lg:shadow-sm">
                 <div class="flex items-center justify-between border-b border-border bg-background p-4 lg:hidden">
-                  <h3 id="mobile-filter-title" class="font-semibold text-lg">
+                  <h2 id="mobile-filter-title" class="font-semibold text-lg">
                     Filters
-                  </h3>
+                  </h2>
                   <button
                     type="button"
                     id="mobile-filter-close"
@@ -393,7 +393,7 @@ const collectionJsonLd =
                       />
                     </div>
                     <CategoryFilters
-                      client:load
+                      client:visible
                       facets={facets}
                       currentFilters={currentFilters}
                       categorySlug={slug}
@@ -494,11 +494,13 @@ const collectionJsonLd =
             products.length > 0 && (
               <Fragment>
                 <div class="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 mb-8">
-                  {products.map((product) => (
+                  {products.map((product, index) => (
                     <ProductCard
                       product={product}
                       currencySymbol={currencySymbol}
                       currencyCode={currencyCode}
+                      priority={index < 2}
+                      headingLevel="h2"
                     />
                   ))}
                 </div>
@@ -550,7 +552,7 @@ const collectionJsonLd =
 </script>
 
 <script>
-  import { trackFbViewContent } from "@/lib/analytics";
+  import { scheduleNonCriticalAnalytics } from "@/lib/non-critical-analytics";
 
   type ProductAnalyticsData = {
     id: string;
@@ -558,7 +560,7 @@ const collectionJsonLd =
     price: number;
   };
 
-  function trackCategoryView() {
+  async function trackCategoryView() {
     const productListElement = document.querySelector<HTMLElement>(
       "[data-products-for-analytics]",
     );
@@ -586,6 +588,7 @@ const collectionJsonLd =
       }));
       const value = productsData.reduce((sum, p) => sum + p.price, 0);
 
+      const { trackFbViewContent } = await import("@/lib/analytics");
       trackFbViewContent({
         content_ids,
         content_name: `Product list for category: ${categoryName}`,
@@ -602,6 +605,9 @@ const collectionJsonLd =
     }
   }
 
-  document.addEventListener("DOMContentLoaded", trackCategoryView);
-  document.addEventListener("astro:page-load", trackCategoryView);
+  const scheduleCategoryView = () => {
+    scheduleNonCriticalAnalytics(() => void trackCategoryView());
+  };
+  document.addEventListener("DOMContentLoaded", scheduleCategoryView);
+  document.addEventListener("astro:page-load", scheduleCategoryView);
 </script>

@@ -146,8 +146,9 @@ describe("storefront page data boundaries", () => {
     );
 
     expect(source).toContain(
-      'import { trackStorefrontSearchResults } from "@/lib/analytics";',
+      'const { trackStorefrontSearchResults } = await import("@/lib/analytics");',
     );
+    expect(source).toContain("scheduleNonCriticalAnalytics(");
     expect(source).toContain("trackStorefrontSearchResults({");
     expect(source).not.toContain("trackFbViewContent");
     expect(source).not.toContain("viewContentTracked");

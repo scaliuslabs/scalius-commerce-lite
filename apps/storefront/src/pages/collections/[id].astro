@@ -371,7 +371,7 @@ const collectionJsonLd =
                       />
                     </div>
                     <CategoryFilters
-                      client:load
+                      client:visible
                       facets={facets}
                       currentFilters={currentFilters}
                       priceRange={collection.priceRange}
@@ -457,11 +457,13 @@ const collectionJsonLd =
             products.length > 0 ? (
               <>
                 <div class="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4">
-                  {products.map((product) => (
+                  {products.map((product, index) => (
                     <ProductCard
                       product={product}
                       currencySymbol={currencySymbol}
                       currencyCode={currencyCode}
+                      priority={index < 2}
+                      headingLevel="h2"
                     />
                   ))}
                 </div>

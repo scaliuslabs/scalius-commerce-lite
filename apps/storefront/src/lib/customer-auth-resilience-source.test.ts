@@ -84,14 +84,15 @@ describe("customer auth resilience source boundaries", () => {
     }
   });
 
-  it("buffers auth modal opens before the idle React island hydrates", () => {
+  it("buffers auth modal opens before the interaction-loaded React root mounts", () => {
     const source = readStorefrontSource("src/layouts/Layout.astro");
+    const runtimeSource = readStorefrontSource("src/scripts/lazy-global-ui.ts");
 
-    const bufferIndex = source.indexOf("window.__scaliusAuthModalOpenPending = true;");
-    const modalIndex = source.indexOf("<AuthModal client:idle />");
-
-    expect(bufferIndex).toBeGreaterThanOrEqual(0);
-    expect(modalIndex).toBeGreaterThan(bufferIndex);
+    expect(source).toContain('import { installLazyGlobalUi } from "@/scripts/lazy-global-ui";');
+    expect(source).not.toContain("<AuthModal client:");
+    expect(runtimeSource).toContain("window.__scaliusAuthModalOpenPending = true;");
+    expect(runtimeSource).toContain('import("@/components/client/mount-auth-modal")');
+    expect(runtimeSource).toContain("if (hasCustomerAuthMirrorCookie()) {");
   });
 
   it("consumes pending auth modal opens after registering the hydrated listener", () => {

@@ -270,7 +270,7 @@ The storefront is an **Astro 7 SSR** application with React 19 islands for inter
 ### Caching
 
 - Anonymous public reads enter dedicated native `PublicApi` and `PublicStorefront` cache entrypoints; private, authenticated, checkout, cart, account, recovery, and variant-selection requests never do.
-- Public entries have a five-second edge TTL and semantic domain tags. Merchant writes commit first, then purge the affected API and storefront tags directly.
+- Public entries use canonical cache keys, a one-day edge safety TTL, and semantic domain tags. Freshness is mutation-driven: merchant writes commit first, then purge the affected API and storefront tags directly, so successful writes remain immediately fresh while hot pages stay resident at the edge.
 - Browser HTML remains `no-store`; discovery files require revalidation. A small in-flight map only coalesces duplicate SSR reads and retains no values.
 - `POST /api/purge-cache` is the authenticated cross-Worker purge boundary. `GET` is non-mutating and returns `405 Allow: POST`.
 - Checkout/order hot paths do not perform broad catalog purges or cache warming, avoiding write amplification at high order concurrency.

@@ -41,6 +41,26 @@ describe("analytics service", () => {
     });
   });
 
+  it("forces known browser analytics providers into worker isolation", async () => {
+    const values = vi.fn(() => ({
+      returning: vi.fn(async () => [{ id: "analytics_meta" }]),
+    }));
+    const insert = vi.fn(() => ({ values }));
+
+    await createAnalyticsScript({ insert } as never, {
+      name: "Meta Pixel",
+      type: "facebook_pixel",
+      config: "<script>fbq('init', '123456789');</script>",
+      location: "body_start",
+      usePartytown: false,
+      isActive: false,
+    });
+
+    expect(values).toHaveBeenCalledWith(
+      expect.objectContaining({ usePartytown: true }),
+    );
+  });
+
   it("does not let ordinary edit permission change activation", async () => {
     const db = {
       select: vi.fn(() => ({
@@ -150,7 +170,7 @@ describe("analytics service", () => {
       type: "google_analytics",
       config: "<script>gtag('config', 'G-ABC123DEF4');</script>",
       isActive: false,
-      usePartytown: true,
+      usePartytown: false,
       location: "head",
       revision: 3,
       createdAt: new Date("2026-07-01T00:00:00.000Z"),
@@ -174,6 +194,7 @@ describe("analytics service", () => {
     expect(result.pagination).toEqual({ total: 1, page: 1, limit: 20, totalPages: 1 });
     expect(result.scripts[0]).toMatchObject({
       id: "analytics_ga4",
+      usePartytown: true,
       identifier: "G-ABC123DEF4",
       readiness: "ready_to_activate",
       revision: 3,

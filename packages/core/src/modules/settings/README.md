@@ -166,7 +166,7 @@ All under `/api/v1/admin/settings/` -- split across multiple route files:
 | GET | `/theme` | Get the published semantic storefront style and revision |
 | POST | `/theme` | Save storefront color overrides. Invalidates `api:storefront:layout:*` KV keys |
 | GET | `/seo` | Get siteTitle, homepageTitle, homepageMetaDescription, robotsTxt, discovery policy, and merchant return-policy schema settings; fails closed on read errors |
-| POST | `/seo` | Save SEO fields, nested partial discovery toggles, and top-level `returnPolicy` settings on `siteSettings/settings`; the API route invalidates homepage/layout/API caches and schedules warmups for public robots/sitemap/feed XML paths after committed saves |
+| POST | `/seo` | Save SEO fields, nested partial discovery toggles, and top-level `returnPolicy` settings on `siteSettings/settings`; after commit the API route invalidates the semantic homepage/layout/discovery cache groups, including public robots/sitemap/feed XML |
 | GET | `/storefront-url` | Get storefrontUrl from siteSettings |
 | POST | `/storefront-url` | Save storefrontUrl. Invalidates layout cache + site settings KV |
 | GET | `/allowed-countries` | Get allowed countries list and mode (include/exclude). Backward-compatible: handles old format (plain array) and new format (`{ countries, mode }`) |

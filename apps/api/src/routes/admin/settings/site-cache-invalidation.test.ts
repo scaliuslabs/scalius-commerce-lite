@@ -537,22 +537,6 @@ describe("site settings cache invalidation", () => {
     expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
       ["homepage", "layout", "discovery"],
       expect.anything(),
-      {
-        htmlPaths: [
-          "/",
-          "/robots.txt",
-          "/sitemap.xml",
-          "/sitemap-static.xml",
-          "/sitemap-categories.xml",
-          "/sitemap-collections.xml",
-          "/sitemap-pages.xml",
-          "/sitemap-articles.xml",
-          "/blog/feed.xml",
-          "/sitemap-products.xml?page=1",
-          "/api/product-feed.xml",
-          "/api/facebook-feed.xml",
-        ],
-      },
     );
   });
 
@@ -586,9 +570,6 @@ describe("site settings cache invalidation", () => {
     expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
       ["homepage", "layout", "discovery"],
       expect.objectContaining({ env }),
-      expect.objectContaining({
-        htmlPaths: expect.arrayContaining(["/robots.txt", "/sitemap.xml"]),
-      }),
     );
   });
 
@@ -708,44 +689,12 @@ describe("site settings cache invalidation", () => {
       method: "POST" as const,
       body: { siteTitle: "Site", homepageTitle: "Home" },
       groups: ["homepage", "layout", "discovery"],
-      options: {
-        htmlPaths: [
-          "/",
-          "/robots.txt",
-          "/sitemap.xml",
-          "/sitemap-static.xml",
-          "/sitemap-categories.xml",
-          "/sitemap-collections.xml",
-          "/sitemap-pages.xml",
-          "/sitemap-articles.xml",
-          "/blog/feed.xml",
-          "/sitemap-products.xml?page=1",
-          "/api/product-feed.xml",
-          "/api/facebook-feed.xml",
-        ],
-      },
     },
     {
       path: "/storefront-url",
       method: "POST" as const,
       body: { storefrontUrl: "https://storefront.example.com" },
       groups: ["homepage", "layout", "discovery"],
-      options: {
-        htmlPaths: [
-          "/",
-          "/robots.txt",
-          "/sitemap.xml",
-          "/sitemap-static.xml",
-          "/sitemap-categories.xml",
-          "/sitemap-collections.xml",
-          "/sitemap-pages.xml",
-          "/sitemap-articles.xml",
-          "/blog/feed.xml",
-          "/sitemap-products.xml?page=1",
-          "/api/product-feed.xml",
-          "/api/facebook-feed.xml",
-        ],
-      },
     },
     {
       path: "/homepage-presentation",
@@ -769,25 +718,15 @@ describe("site settings cache invalidation", () => {
     },
   ])(
     "invalidates $groups after $path saves",
-    async ({ path, method, body, groups, options }) => {
+    async ({ path, method, body, groups }) => {
       const { app, env, kv } = createTestApp();
 
       const response = await requestJson(app, env, method, path, body);
 
       expect(response.status).toBe(200);
-      if (options) {
-        expect(
-          mocks.invalidateApiAndScheduleStorefrontGroups,
-        ).toHaveBeenCalledWith(
-          groups,
-          expect.objectContaining({ env }),
-          options,
-        );
-      } else {
-        expect(
-          mocks.invalidateApiAndScheduleStorefrontGroups,
-        ).toHaveBeenCalledWith(groups, expect.objectContaining({ env }));
-      }
+      expect(
+        mocks.invalidateApiAndScheduleStorefrontGroups,
+      ).toHaveBeenCalledWith(groups, expect.objectContaining({ env }));
       if (path === "/storefront-url") {
         expect(mocks.invalidateSiteSettingsCache).toHaveBeenCalledOnce();
         expect(mocks.invalidateStorefrontUrlCache).toHaveBeenCalledOnce();

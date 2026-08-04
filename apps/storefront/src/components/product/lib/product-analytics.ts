@@ -3,7 +3,6 @@
  * Product Analytics Coordinator
  */
 
-import { trackFbAddToCart } from "@/lib/analytics";
 import type { Variant } from "./variant-state-machine";
 
 export interface ProductAnalyticsData {
@@ -50,11 +49,11 @@ export function trackProductAddToCart(data: AddToCartAnalyticsData): void {
   };
 
   // Track with Facebook Pixel (also sends to Meta CAPI)
-  try {
-    trackFbAddToCart(fbPixelData);
-  } catch (error: unknown) {
-    console.error("Failed to track add to cart:", error);
-  }
+  void import("@/lib/analytics")
+    .then(({ trackFbAddToCart }) => trackFbAddToCart(fbPixelData))
+    .catch((error: unknown) => {
+      console.error("Failed to track add to cart:", error);
+    });
 
   // Dispatch cart update event for UI components
   dispatchCartUpdateEvent();

@@ -6,8 +6,6 @@ import {
     productOptionMatrixSchema,
     saveProductOptionMatrix,
 } from "@scalius/core/modules/products/products.option-matrix";
-import type { Database } from "@scalius/database/client";
-import { categories, products } from "@scalius/database/schema";
 import {
     createVariantSchema,
     updateVariantSchema
@@ -30,10 +28,8 @@ import {
 } from "../../schemas/entities";
 import {
     invalidateCatalogCaches,
-    MAX_STOREFRONT_EXACT_HTML_PATHS,
     type WaitUntilExecutionContext,
 } from "../../utils/cache-invalidation";
-import { eq, inArray } from "drizzle-orm";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -50,65 +46,10 @@ function parseLookupIds(ids: string | undefined): string[] {
     return Array.from(new Set((ids ?? "").split(",").map((id) => id.trim()).filter(Boolean))).slice(0, 100);
 }
 
-function categoryHtmlPath(slug: string | null | undefined): string[] {
-    return slug ? [`/categories/${slug}`] : [];
-}
-
-function productHtmlPath(slug: string | null | undefined): string[] {
-    return slug ? [`/products/${slug}`] : [];
-}
-
-async function categoryHtmlPathsByIds(
-    db: Database,
-    categoryIds: readonly string[],
-): Promise<string[]> {
-    const ids = [...new Set(categoryIds.filter(Boolean))]
-        .slice(0, MAX_STOREFRONT_EXACT_HTML_PATHS);
-    if (ids.length === 0) return [];
-
-    const rows = await db
-        .select({ slug: categories.slug })
-        .from(categories)
-        .where(inArray(categories.id, ids));
-
-    return rows.flatMap((category) => categoryHtmlPath(category.slug));
-}
-
-async function productStorefrontHtmlPathsByIds(
-    db: Database,
-    productIds: readonly string[],
-): Promise<string[]> {
-    const ids = [...new Set(productIds.filter(Boolean))]
-        .slice(0, MAX_STOREFRONT_EXACT_HTML_PATHS);
-    if (ids.length === 0) return [];
-
-    const rows = await db
-        .select({
-            productSlug: products.slug,
-            categorySlug: categories.slug,
-        })
-        .from(products)
-        .leftJoin(categories, eq(categories.id, products.categoryId))
-        .where(inArray(products.id, ids));
-
-    return [
-        ...rows.flatMap((row) => productHtmlPath(row.productSlug)),
-        ...rows.flatMap((row) => categoryHtmlPath(row.categorySlug)),
-    ];
-}
-
 async function invalidateProductCatalogCaches(
-    db: Database,
     c: { env?: Env; executionCtx?: WaitUntilExecutionContext },
-    productIds: readonly string[],
-    htmlPaths: readonly string[] = [],
 ) {
-    await invalidateCatalogCaches("products", c, {
-        htmlPaths: [
-            ...(await productStorefrontHtmlPathsByIds(db, productIds)),
-            ...htmlPaths,
-        ],
-    });
+    await invalidateCatalogCaches("products", c);
 }
 
 // ── Product Stats ──
@@ -362,12 +303,7 @@ app.openapi(createProductRoute, async (c) => {
     const data = c.req.valid("json");
     try {
         const result = await ProductsAdmin.createProduct(db, data);
-        await invalidateCatalogCaches("products", c, {
-            htmlPaths: [
-                ...productHtmlPath(data.slug),
-                ...(await categoryHtmlPathsByIds(db, [data.categoryId])),
-            ],
-        });
+        await invalidateCatalogCaches("products", c);
         return created(c, result);
     } catch (error: unknown) {
         if (error instanceof Error && error.message?.includes("slug")) {
@@ -406,14 +342,12 @@ const bulkDeleteRoute = createRoute({
 app.openapi(bulkDeleteRoute, async (c) => {
     const db = c.get("db");
     const data = c.req.valid("json");
-    const productIds = data.products.map((product) => product.id);
-    const htmlPaths = await productStorefrontHtmlPathsByIds(db, productIds);
     const result = await ProductsAdmin.bulkDeleteProducts(db, data.products, data.permanent);
     const deletedIds = result.outcomes
         .filter((outcome) => outcome.status === "deleted")
         .map((outcome) => outcome.id);
     if (!data.permanent || deletedIds.length > 0) {
-        await invalidateCatalogCaches("products", c, { htmlPaths });
+        await invalidateCatalogCaches("products", c);
     }
     return ok(c, {
         products: result.revisions.map((revision, index) => ({
@@ -477,13 +411,8 @@ app.openapi(updateProductRoute, async (c) => {
     const { id } = c.req.valid("param");
     const data = c.req.valid("json");
     try {
-        const htmlPaths = [
-            ...(await productStorefrontHtmlPathsByIds(db, [id])),
-            ...productHtmlPath(data.slug),
-            ...(await categoryHtmlPathsByIds(db, [data.categoryId])),
-        ];
         const result = await ProductsAdmin.updateProduct(db, id, data);
-        await invalidateCatalogCaches("products", c, { htmlPaths });
+        await invalidateCatalogCaches("products", c);
         return ok(c, result);
     } catch (error: unknown) {
         if (error instanceof Error) {
@@ -518,9 +447,8 @@ app.openapi(deleteProductRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     const { expectedAggregateRevision } = c.req.valid("query");
-    const htmlPaths = await productStorefrontHtmlPathsByIds(db, [id]);
     const result = await ProductsAdmin.deleteProduct(db, id, expectedAggregateRevision);
-    await invalidateCatalogCaches("products", c, { htmlPaths });
+    await invalidateCatalogCaches("products", c);
     return ok(c, result);
 });
 
@@ -548,9 +476,8 @@ app.openapi(restoreProductRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     const { expectedAggregateRevision } = c.req.valid("query");
-    const htmlPaths = await productStorefrontHtmlPathsByIds(db, [id]);
     const result = await ProductsAdmin.restoreProduct(db, id, expectedAggregateRevision);
-    await invalidateCatalogCaches("products", c, { htmlPaths });
+    await invalidateCatalogCaches("products", c);
     return ok(c, result);
 });
 
@@ -575,9 +502,8 @@ app.openapi(permanentDeleteRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     const { expectedAggregateRevision } = c.req.valid("query");
-    const htmlPaths = await productStorefrontHtmlPathsByIds(db, [id]);
     await ProductsAdmin.permanentlyDeleteProduct(db, id, expectedAggregateRevision);
-    await invalidateCatalogCaches("products", c, { htmlPaths });
+    await invalidateCatalogCaches("products", c);
     return noContent(c);
 });
 
@@ -608,7 +534,7 @@ app.openapi(createVariantRoute, async (c) => {
     try {
         const result = await ProductsVariants.createVariant(db, id, data);
         if (!result) throw new NotFoundError("Failed to create variant");
-        await invalidateProductCatalogCaches(db, c, [id]);
+        await invalidateProductCatalogCaches(c);
         return created(c, result);
     } catch (error: unknown) {
         if (error instanceof Error && error.message?.includes("SKU")) throw new ValidationError(error.message);
@@ -672,7 +598,7 @@ app.openapi(updateVariantRoute, async (c) => {
     try {
         const result = await ProductsVariants.updateVariant(db, id, variantId, data, user?.id);
         if (!result) throw new NotFoundError("Variant not found");
-        await invalidateProductCatalogCaches(db, c, [id]);
+        await invalidateProductCatalogCaches(c);
         return ok(c, result);
     } catch (error: unknown) {
         if (error instanceof Error) {
@@ -714,7 +640,7 @@ app.openapi(deleteVariantRoute, async (c) => {
             variantId,
             expectedAggregateRevision,
         );
-        await invalidateProductCatalogCaches(db, c, [id]);
+        await invalidateProductCatalogCaches(c);
         return ok(c, result);
     } catch (error: unknown) {
         if (error instanceof Error && error.message === "Variant not found") throw new NotFoundError(error.message);
@@ -745,7 +671,7 @@ app.openapi(saveOptionMatrixRoute, async (c) => {
     const { id } = c.req.valid("param");
     const user = c.get("user");
     const result = await saveProductOptionMatrix(db, id, c.req.valid("json"), user?.id);
-    await invalidateProductCatalogCaches(db, c, [id]);
+    await invalidateProductCatalogCaches(c);
     return ok(c, result);
 });
 

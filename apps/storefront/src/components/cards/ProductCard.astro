@@ -10,13 +10,18 @@ interface Props {
   product: Product;
   currencySymbol?: string;
   currencyCode?: string;
+  priority?: boolean;
+  headingLevel?: "h2" | "h3";
 }
 
 const {
   product,
   currencySymbol = DEFAULT_CURRENCY.symbol,
   currencyCode = DEFAULT_CURRENCY.code,
+  priority = false,
+  headingLevel = "h3",
 } = Astro.props;
+const TitleTag = headingLevel;
 const formatMoney = (price: number) =>
   formatPriceShort(price, {
     symbol: currencySymbol,
@@ -84,8 +89,9 @@ const productImageSrcSet = getProductImageSrcSet(product.imageUrl, [
         alt={product.imageAlt || product.name}
         width={400}
         height={400}
-        loading="lazy"
-        decoding="async"
+        loading={priority ? "eager" : "lazy"}
+        fetchpriority={priority ? "high" : "auto"}
+        decoding={priority ? "sync" : "async"}
         class="w-full h-full object-contain object-center transition-transform duration-700 ease-out group-hover:scale-110"
       />
     </a>
@@ -127,13 +133,13 @@ const productImageSrcSet = getProductImageSrcSet(product.imageUrl, [
   <!-- Details -->
   <div class="p-3 sm:p-4 flex flex-col flex-1">
     <div class="mb-1">
-      <h3
+      <TitleTag
         class="text-[14px] sm:text-[15px] font-semibold text-foreground leading-tight line-clamp-2 min-h-[2.25rem] group-hover:text-primary transition-colors duration-300"
       >
         <a href={`/products/${product.slug}`}>
           {product.name}
         </a>
-      </h3>
+      </TitleTag>
     </div>
 
     <div class="mt-auto flex items-center justify-between gap-1.5">

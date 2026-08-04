@@ -22,9 +22,8 @@ import {
     getCategoryPublishReadiness,
     CATEGORY_BATCH_LIMIT,
 } from "@scalius/core/modules/categories";
-import type { Database } from "@scalius/database/client";
 import { categories } from "@scalius/database/schema";
-import { asc, inArray, isNull } from "drizzle-orm";
+import { asc, isNull } from "drizzle-orm";
 import {
     successEnvelope,
     paginatedEnvelope,
@@ -34,10 +33,7 @@ import {
 } from "../../schemas/responses";
 import { categoryDetailSchema, categorySummarySchema } from "../../schemas/entities";
 import { categoryStatusSchema } from "@scalius/shared/category-publication";
-import {
-    invalidateCatalogCaches,
-    MAX_STOREFRONT_EXACT_HTML_PATHS,
-} from "../../utils/cache-invalidation";
+import { invalidateCatalogCaches } from "../../utils/cache-invalidation";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const categoryIdSchema = z.string().trim().min(1).max(180);
@@ -55,26 +51,6 @@ const categoryPublishReadinessSchema = z.object({
     blockers: z.array(z.object({ code: z.string(), message: z.string() })),
     warnings: z.array(z.object({ code: z.string(), message: z.string() })),
 });
-
-function categoryHtmlPath(slug: string | null | undefined): string[] {
-    return slug ? [`/categories/${slug}`] : [];
-}
-
-async function categoryHtmlPathsByIds(
-    db: Database,
-    categoryIds: readonly string[],
-): Promise<string[]> {
-    const ids = [...new Set(categoryIds.filter(Boolean))]
-        .slice(0, MAX_STOREFRONT_EXACT_HTML_PATHS);
-    if (ids.length === 0) return [];
-
-    const rows = await db
-        .select({ slug: categories.slug })
-        .from(categories)
-        .where(inArray(categories.id, ids));
-
-    return rows.flatMap((category) => categoryHtmlPath(category.slug));
-}
 
 // ── Form Options (lightweight for dropdowns) ──
 
@@ -259,10 +235,8 @@ const bulkDeleteRoute = createRoute({
 app.openapi(bulkDeleteRoute, async (c) => {
     const db = c.get("db");
     const { categories: revisionClaims, permanent } = c.req.valid("json");
-    const categoryIds = revisionClaims.map((claim) => claim.id);
-    const htmlPaths = await categoryHtmlPathsByIds(db, categoryIds);
     await bulkDeleteCategories(db, revisionClaims, permanent);
-    await invalidateCatalogCaches("categories", c, { htmlPaths });
+    await invalidateCatalogCaches("categories", c);
     return noContent(c);
 });
 
@@ -322,14 +296,8 @@ app.openapi(updateCategoryRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     const data = c.req.valid("json");
-    const existing = await getCategoryById(db, id);
     const result = await updateCategory(db, id, data);
-    await invalidateCatalogCaches("categories", c, {
-        htmlPaths: data.status === "published" ? [
-            ...categoryHtmlPath(existing?.slug),
-            ...categoryHtmlPath(data.slug),
-        ] : categoryHtmlPath(existing?.slug),
-    });
+    await invalidateCatalogCaches("categories", c);
     return ok(c, result);
 });
 
@@ -356,11 +324,8 @@ app.openapi(updateStatusRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     const data = c.req.valid("json");
-    const existing = await getCategoryById(db, id);
     const result = await updateCategoryStatus(db, id, data);
-    await invalidateCatalogCaches("categories", c, {
-        htmlPaths: categoryHtmlPath(existing?.slug),
-    });
+    await invalidateCatalogCaches("categories", c);
     return ok(c, result);
 });
 
@@ -388,9 +353,8 @@ app.openapi(deleteCategoryRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     const { expectedRevision } = c.req.valid("json");
-    const htmlPaths = await categoryHtmlPathsByIds(db, [id]);
     await deleteCategory(db, id, expectedRevision);
-    await invalidateCatalogCaches("categories", c, { htmlPaths });
+    await invalidateCatalogCaches("categories", c);
     return noContent(c);
 });
 
@@ -418,9 +382,8 @@ app.openapi(permanentDeleteRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     const { expectedRevision } = c.req.valid("json");
-    const htmlPaths = await categoryHtmlPathsByIds(db, [id]);
     await permanentlyDeleteCategory(db, id, expectedRevision);
-    await invalidateCatalogCaches("categories", c, { htmlPaths });
+    await invalidateCatalogCaches("categories", c);
     return noContent(c);
 });
 

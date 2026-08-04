@@ -79,7 +79,6 @@ describe("business settings cache invalidation", () => {
         expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
             ["layout"],
             expect.anything(),
-            { htmlPaths: ["/"] },
         );
     });
 
