@@ -355,7 +355,7 @@ ledger. Every migration from 0050 onward must:
   source SHA-256 ledger row; and
 - be listed in the runtime release manifest used by `/readyz`.
 
-The current release is `0051_orders_checkout_write_path`. It also demonstrates
+The current release is `0052_remove_storefront_cache_queue`. It also demonstrates
 that the runner and its tests must handle a contiguous chain of releases rather
 than assuming the ledger contains only its bootstrap row.
 
