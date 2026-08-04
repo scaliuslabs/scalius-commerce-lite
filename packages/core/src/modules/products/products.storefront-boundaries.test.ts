@@ -149,6 +149,19 @@ describe("storefront product query boundaries", () => {
         expect(source.match(/eq\(productAttributes\.filterable, true\)/g)).toHaveLength(2);
     });
 
+    it("loads the optional public category with the product instead of spending a sixth parallel D1 connection", () => {
+        const source = readFileSync(
+            `${PRODUCTS_MODULE_DIR}/products.storefront.ts`,
+            "utf8",
+        );
+        const detailBody = getFunctionBody(source, "getStorefrontProductBySlug");
+
+        expect(detailBody).toContain(".leftJoin(categories, and(");
+        expect(detailBody).toContain("...publicCategoryConditions()");
+        expect(detailBody).toContain("const { category, ...product } = productRow");
+        expect(detailBody).not.toContain('type: "category"');
+    });
+
     it("carries merchant option metadata only in feed and detail projections", () => {
         const source = readFileSync(
             `${PRODUCTS_MODULE_DIR}/products.storefront.ts`,

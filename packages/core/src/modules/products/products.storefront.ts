@@ -1094,7 +1094,7 @@ export async function getStorefrontCollectionProducts(
  * for a single product identified by slug.
  */
 export async function getStorefrontProductBySlug(db: Database, slug: string) {
-    const product = await db
+    const productRow = await db
         .select({
             id: products.id,
             name: products.name,
@@ -1115,8 +1115,24 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             deletedAt: sql<number | null>`CAST(${products.deletedAt} AS INTEGER)`,
             createdAt: sql<number>`CAST(${products.createdAt} AS INTEGER)`,
             updatedAt: sql<number>`CAST(${products.updatedAt} AS INTEGER)`,
+            category: {
+                id: categories.id,
+                name: categories.name,
+                slug: categories.slug,
+                description: categories.description,
+                imageUrl: categories.imageUrl,
+                metaTitle: categories.metaTitle,
+                metaDescription: categories.metaDescription,
+                canonicalPath: categories.canonicalPath,
+                noIndex: categories.noIndex,
+                excludeFromSitemap: categories.excludeFromSitemap,
+            },
         })
         .from(products)
+        .leftJoin(categories, and(
+            eq(products.categoryId, categories.id),
+            ...publicCategoryConditions(),
+        ))
         .where(and(
             eq(products.slug, slug),
             eq(products.isActive, true),
@@ -1125,7 +1141,8 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
         ))
         .get();
 
-    if (!product) return null;
+    if (!productRow) return null;
+    const { category, ...product } = productRow;
     const buyerPricing = buildBuyerCatalogPricingProjection(db);
     const mediaMapPromise = loadProductMediaProjections(db, [product.id]);
 
@@ -1183,20 +1200,6 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
 
     if (product.categoryId) {
         promises.push(
-            db.select({
-                id: categories.id, name: categories.name, slug: categories.slug,
-                description: categories.description, imageUrl: categories.imageUrl,
-                metaTitle: categories.metaTitle, metaDescription: categories.metaDescription,
-                canonicalPath: categories.canonicalPath,
-                noIndex: categories.noIndex, excludeFromSitemap: categories.excludeFromSitemap,
-            }).from(categories).where(and(
-                eq(categories.id, product.categoryId!),
-                ...publicCategoryConditions(),
-            )).get()
-                .then((res: { id: string; name: string; slug: string; description: string | null; imageUrl: string | null; metaTitle: string | null; metaDescription: string | null; canonicalPath: string | null; noIndex: boolean; excludeFromSitemap: boolean } | undefined) => ({ type: "category", data: res })),
-        );
-
-        promises.push(
             (async () => {
                 const relatedProds = await db.select({
                     id: products.id, name: products.name, price: buyerPricing.basePrice,
@@ -1246,7 +1249,6 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
 
     const mediaItems = (results.find((r) => r.type === "media")?.data as ProductMediaProjection[]) || [];
     const variants = (results.find((r) => r.type === "variants")?.data as unknown[]) || [];
-    const category = (results.find((r) => r.type === "category")?.data as unknown) || null;
     const additionalInfo = (results.find((r) => r.type === "additionalInfo")?.data as unknown[]) || [];
     const relatedProducts = (results.find((r) => r.type === "relatedProducts")?.data as unknown[]) || [];
     const attributes = (results.find((r) => r.type === "attributes")?.data as unknown[]) || [];

@@ -135,6 +135,12 @@ function createExecutionContext() {
 }
 
 describe("runScheduledMaintenance", () => {
+  it("uses the existing bounded helper maxima for high-volume recovery", () => {
+    expect(CHECKOUT_PROJECTION_SWEEP_LIMIT).toBe(100);
+    expect(ORDER_NOTIFICATION_OUTBOX_SWEEP_LIMIT).toBe(25);
+    expect(META_PURCHASE_OUTBOX_SWEEP_LIMIT).toBe(25);
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useFakeTimers();
