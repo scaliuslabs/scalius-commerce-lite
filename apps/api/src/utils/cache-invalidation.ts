@@ -43,13 +43,16 @@ export interface StockAvailabilityMutationInput {
   variantId: string;
   previousStock: number;
   newStock: number;
+  pool?: "stock" | "preorderStock";
 }
 
 interface BuyerAvailabilityRow {
   id: string;
   stock: number;
+  preorderStock: number;
   reservedStock: number;
   trackInventory: boolean;
+  allowPreorder: boolean;
   lowStockThreshold: number | null;
 }
 
@@ -91,8 +94,10 @@ async function loadBuyerAvailabilityRows(
       .select({
         id: productVariants.id,
         stock: productVariants.stock,
+        preorderStock: productVariants.preorderStock,
         reservedStock: effectiveRegularReservedStockSql(),
         trackInventory: productVariants.trackInventory,
+        allowPreorder: productVariants.allowPreorder,
         lowStockThreshold: productVariants.lowStockThreshold,
       })
       .from(productVariants)
@@ -154,7 +159,7 @@ export async function findCheckoutReservationAvailabilityTransitions(
   }
 }
 
-/** Manual regular-stock writes are low volume but still avoid broad purges. */
+/** Manual stock writes are low volume but still avoid broad purges. */
 export async function findStockMutationAvailabilityTransitions(
   db: Database,
   mutations: readonly StockAvailabilityMutationInput[],
@@ -180,6 +185,10 @@ export async function findStockMutationAvailabilityTransitions(
     const transitions = rows.filter((row) => {
       if (!row.trackInventory) return false;
       const mutation = byVariant.get(row.id)!;
+      if (mutation.pool === "preorderStock") {
+        if (!row.allowPreorder) return false;
+        return (mutation.previousStock > 0) !== (mutation.newStock > 0);
+      }
       return hasBuyerAvailabilityBandTransition({
         availableBefore: Math.max(
           0,

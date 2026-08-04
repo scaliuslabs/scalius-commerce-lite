@@ -25,7 +25,12 @@ type AdminRouteContext<R extends RouteConfig> = Parameters<AdminRouteHandler<R>>
 
 async function invalidateStockMutationIfVisible(
     db: Parameters<typeof findStockMutationAvailabilityTransitions>[0],
-    result: { variantId: string; previousStock: number; newStock: number },
+    result: {
+        variantId: string;
+        previousStock: number;
+        newStock: number;
+        pool?: "stock" | "preorderStock";
+    },
     c: Parameters<typeof invalidateProductAvailabilityCaches>[2],
 ): Promise<void> {
     const variantIds = await findStockMutationAvailabilityTransitions(db, [result]);
@@ -478,9 +483,7 @@ app.openapi(adjustRoute, async (c) => {
     const user = c.get("user");
     try {
         const result = await adjustInventory(db, variantId, payload, user?.id);
-        if (payload.pool === "stock") {
-            await invalidateStockMutationIfVisible(db, result, c);
-        }
+        await invalidateStockMutationIfVisible(db, { ...result, pool: payload.pool }, c);
         return ok(c, result);
     } catch (error: unknown) {
         if (error instanceof Error && error.message === "Variant not found") throw new NotFoundError(error.message);
