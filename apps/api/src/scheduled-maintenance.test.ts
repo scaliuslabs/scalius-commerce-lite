@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => {
     reconcileDueRefundAttempts: vi.fn(),
     reconcileStripeExternalRefundWebhooks: vi.fn(),
     invalidateProductAvailabilityCaches: vi.fn(),
+    flushPendingCacheInvalidations: vi.fn(),
     enqueueOrderRefundNotificationForOrder: vi.fn(),
     failStaleQueuedPaymentWebhookEvents: vi.fn(),
   };
@@ -86,6 +87,8 @@ vi.mock("@scalius/core/modules/payments", () => ({
 
 vi.mock("./utils/cache-invalidation", () => ({
   invalidateProductAvailabilityCaches: mocks.invalidateProductAvailabilityCaches,
+  flushPendingCacheInvalidations: mocks.flushPendingCacheInvalidations,
+  CACHE_INVALIDATION_SWEEP_LIMIT: 20,
 }));
 
 vi.mock("./utils/order-notification-queue", () => ({
@@ -152,6 +155,7 @@ describe("runScheduledMaintenance", () => {
       limit: INVENTORY_EXPIRY_SWEEP_LIMIT,
       hasMore: false,
       releasedVariantIds: [],
+      availabilityTransitionVariantIds: [],
       errors: [],
     });
     mocks.archiveStaleIncompleteOrders.mockResolvedValue({
@@ -190,6 +194,13 @@ describe("runScheduledMaintenance", () => {
       failed: 0,
       skipped: 0,
       busy: 0,
+    });
+    mocks.flushPendingCacheInvalidations.mockResolvedValue({
+      scanned: 0,
+      applied: 0,
+      pending: 0,
+      api: { attempted: false, ok: true },
+      storefront: { attempted: false, ok: true },
     });
     mocks.cleanupExpiredCustomerAuthOtpChallenges.mockResolvedValue({
       scanned: 0,
@@ -263,7 +274,7 @@ describe("runScheduledMaintenance", () => {
     vi.restoreAllMocks();
   });
 
-  it("runs inventory expiry, stale hosted-payment cleanup, and outbox flush without cache purges", async () => {
+  it("runs inventory expiry, durable cache delivery, and bounded outbox recovery", async () => {
     const now = new Date("2026-06-20T12:00:00.000Z");
     vi.setSystemTime(now);
     const env = createEnv();
@@ -275,6 +286,7 @@ describe("runScheduledMaintenance", () => {
       limit: INVENTORY_EXPIRY_SWEEP_LIMIT,
       hasMore: false,
       releasedVariantIds: ["variant_1"],
+      availabilityTransitionVariantIds: ["variant_1"],
       errors: [],
     });
     mocks.archiveStaleIncompleteOrders.mockResolvedValue({
@@ -381,6 +393,12 @@ describe("runScheduledMaintenance", () => {
     });
 
     expect(mocks.getDb).toHaveBeenCalledWith(env);
+    expect(mocks.flushPendingCacheInvalidations).toHaveBeenCalledWith(
+      mocks.db,
+      env,
+      executionCtx,
+      20,
+    );
     expect(mocks.releaseExpiredReservations).toHaveBeenCalledWith(mocks.db, 30, {
       limit: INVENTORY_EXPIRY_SWEEP_LIMIT,
     });
@@ -404,7 +422,11 @@ describe("runScheduledMaintenance", () => {
       CHECKOUT_PROJECTION_SWEEP_LIMIT,
     );
     expect(mocks.checkoutTransport.close).toHaveBeenCalledOnce();
-    expect(mocks.invalidateProductAvailabilityCaches).not.toHaveBeenCalled();
+    expect(mocks.invalidateProductAvailabilityCaches).toHaveBeenCalledWith(
+      mocks.db,
+      { variantIds: ["variant_1"] },
+      { env, executionCtx },
+    );
     expect(mocks.flushPendingOrderNotificationOutbox).toHaveBeenCalledWith({
       db: mocks.db,
       queue: env.ORDER_NOTIFICATIONS_QUEUE,

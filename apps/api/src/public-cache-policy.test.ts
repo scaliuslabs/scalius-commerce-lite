@@ -64,7 +64,7 @@ describe("public API cache gateway policy", () => {
       getPublicApiCachePolicy(
         new Request(`https://api.example.com${path}`),
       )?.edgeTtlSeconds,
-    ).toBe(5);
+    ).toBe(3600);
   });
 
   it("rejects unbounded query-cardinality inputs", () => {

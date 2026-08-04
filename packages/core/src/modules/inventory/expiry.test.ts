@@ -21,7 +21,14 @@ function createDbMock(options: {
   terminalMovementExists?: boolean;
   reservedQuantity?: number;
   terminalQuantity?: number;
-  variant?: { stock: number; reservedStock: number; preorderStock: number } | null;
+  variant?: {
+    stock: number;
+    reservedStock: number;
+    preorderStock: number;
+    trackInventory?: boolean;
+    allowPreorder?: boolean;
+    lowStockThreshold?: number | null;
+  } | null;
   batchError?: Error;
 }) {
   const updates: Array<{ table: unknown; values: Record<string, unknown> }> = [];
@@ -65,7 +72,15 @@ function createDbMock(options: {
                     };
                   }
                   if ("reservedStock" in projection) {
-                    return options.variant ? { stockVersion: 1, ...options.variant } : null;
+                    return options.variant
+                      ? {
+                          stockVersion: 1,
+                          trackInventory: true,
+                          allowPreorder: false,
+                          lowStockThreshold: null,
+                          ...options.variant,
+                        }
+                      : null;
                   }
                   return null;
                 },
@@ -172,6 +187,24 @@ describe("releaseExpiredReservations", () => {
     expect(inserts).toHaveLength(1);
     expect(inserts[0]).toMatchObject({
       table: inventoryMovements,
+    });
+  });
+
+  it("reports only releases that cross a buyer-visible availability band", async () => {
+    const { db } = createDbMock({
+      expiredReservations,
+      orderExists: false,
+      variant: {
+        stock: 2,
+        reservedStock: 2,
+        preorderStock: 0,
+        lowStockThreshold: 5,
+      },
+    });
+
+    await expect(releaseExpiredReservations(db as never, 30)).resolves.toMatchObject({
+      releasedVariantIds: ["variant_1"],
+      availabilityTransitionVariantIds: ["variant_1"],
     });
   });
 
