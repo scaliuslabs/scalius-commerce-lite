@@ -1,5 +1,8 @@
 // src/server/utils/cache-invalidation.ts
 import type { Database } from "@scalius/database/client";
+import { productVariants } from "@scalius/database/schema";
+import { effectiveRegularReservedStockSql } from "@scalius/database/inventory-authority";
+import { inArray } from "drizzle-orm";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -29,6 +32,110 @@ export interface ProductAvailabilityCacheInput {
   orderIds?: readonly string[];
   productIds?: readonly string[];
   variantIds?: readonly string[];
+}
+
+export interface CheckoutReservationAvailabilityInput {
+  variantId: string;
+  quantity: number;
+}
+
+type BuyerAvailabilityBand = "out_of_stock" | "low_stock" | "in_stock";
+
+function buyerAvailabilityBand(
+  available: number,
+  lowStockThreshold: number | null,
+): BuyerAvailabilityBand {
+  if (available <= 0) return "out_of_stock";
+  return lowStockThreshold !== null
+      && lowStockThreshold > 0
+      && available <= lowStockThreshold
+    ? "low_stock"
+    : "in_stock";
+}
+
+export function hasBuyerAvailabilityBandTransition(input: {
+  availableBefore: number;
+  availableAfter: number;
+  lowStockThreshold: number | null;
+}): boolean {
+  return buyerAvailabilityBand(
+    input.availableBefore,
+    input.lowStockThreshold,
+  ) !== buyerAvailabilityBand(
+    input.availableAfter,
+    input.lowStockThreshold,
+  );
+}
+
+/**
+ * Direct checkout is the compatibility lane; the high-throughput coordinator
+ * reports transitions without this read. Conservatively return every affected
+ * variant if authority cannot be read after the commit.
+ */
+export async function findCheckoutReservationAvailabilityTransitions(
+  db: Database,
+  entries: readonly CheckoutReservationAvailabilityInput[],
+): Promise<string[]> {
+  const quantities = new Map<string, number>();
+  for (const entry of entries) {
+    if (
+      !entry.variantId
+      || entry.variantId.length > 180
+      || !Number.isSafeInteger(entry.quantity)
+      || entry.quantity <= 0
+    ) {
+      continue;
+    }
+    quantities.set(
+      entry.variantId,
+      (quantities.get(entry.variantId) ?? 0) + entry.quantity,
+    );
+  }
+  const variantIds = [...quantities.keys()];
+  if (variantIds.length === 0) return [];
+
+  try {
+    const rows: Array<{
+      id: string;
+      stock: number;
+      reservedStock: number;
+      trackInventory: boolean;
+      lowStockThreshold: number | null;
+    }> = [];
+    for (let offset = 0; offset < variantIds.length; offset += 90) {
+      rows.push(...await db
+        .select({
+          id: productVariants.id,
+          stock: productVariants.stock,
+          reservedStock: effectiveRegularReservedStockSql(),
+          trackInventory: productVariants.trackInventory,
+          lowStockThreshold: productVariants.lowStockThreshold,
+        })
+        .from(productVariants)
+        .where(inArray(productVariants.id, variantIds.slice(offset, offset + 90)))
+        .all());
+    }
+    const found = new Set(rows.map((row) => row.id));
+    const transitions = rows.filter((row) => {
+      if (!row.trackInventory) return false;
+      const availableAfter = Math.max(0, row.stock - row.reservedStock);
+      return hasBuyerAvailabilityBandTransition({
+        availableBefore: availableAfter + quantities.get(row.id)!,
+        availableAfter,
+        lowStockThreshold: row.lowStockThreshold,
+      });
+    }).map((row) => row.id);
+    for (const variantId of variantIds) {
+      if (!found.has(variantId)) transitions.push(variantId);
+    }
+    return [...new Set(transitions)];
+  } catch (error) {
+    console.error(
+      "[Cache] Checkout availability transition read failed; purging conservatively:",
+      error,
+    );
+    return variantIds;
+  }
 }
 
 // ---------------------------------------------------------------------------

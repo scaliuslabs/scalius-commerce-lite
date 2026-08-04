@@ -158,6 +158,7 @@ export interface CheckoutReservationLaneSnapshotRow {
   stock: number;
   legacyReservedStock: number;
   trackInventory: number | boolean;
+  lowStockThreshold: number | null;
   stockVersion: number;
   lane: number | null;
   capacity: number | null;
@@ -760,6 +761,7 @@ export function buildCheckoutReservationLaneSnapshotStatement(
         variant.stock AS stock,
         variant.reserved_stock AS legacyReservedStock,
         variant.track_inventory AS trackInventory,
+        variant.low_stock_threshold AS lowStockThreshold,
         variant.stock_version AS stockVersion,
         lane.lane AS lane,
         lane.capacity AS capacity,

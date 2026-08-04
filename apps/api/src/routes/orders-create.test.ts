@@ -39,6 +39,8 @@ const mocks = vi.hoisted(() => ({
   calculateStorefrontTaxQuote: vi.fn(),
   isDiscountValid: vi.fn(),
   calculateDiscountAmount: vi.fn(),
+  findCheckoutReservationAvailabilityTransitions: vi.fn(),
+  invalidateProductAvailabilityCaches: vi.fn(),
 }));
 
 vi.mock("@scalius/core/modules/orders", async (importOriginal) => {
@@ -69,6 +71,9 @@ vi.mock("../checkout-coordinator", () => ({
 }));
 
 vi.mock("../utils/cache-invalidation", () => ({
+  findCheckoutReservationAvailabilityTransitions:
+    mocks.findCheckoutReservationAvailabilityTransitions,
+  invalidateProductAvailabilityCaches: mocks.invalidateProductAvailabilityCaches,
   getOptionalExecutionContext: (c: { executionCtx?: unknown }) => {
     try {
       return c.executionCtx;
@@ -170,6 +175,8 @@ beforeEach(() => {
   mocks.calculateStorefrontTaxQuote.mockResolvedValue(DEFAULT_TAX_QUOTE);
   mocks.isDiscountValid.mockResolvedValue({ valid: false });
   mocks.calculateDiscountAmount.mockResolvedValue(0);
+  mocks.findCheckoutReservationAvailabilityTransitions.mockResolvedValue([]);
+  mocks.invalidateProductAvailabilityCaches.mockResolvedValue(undefined);
   mocks.createStorefrontOrder.mockResolvedValue({
     checkoutToken: "chk_order_1",
     orderId: "order_1",
@@ -1334,6 +1341,7 @@ describe("create order commit/KV ordering", () => {
       orderId: "order_1",
       response: coordinatedResponse,
       postCommitPayload: null,
+      availabilityTransitionVariantIds: [],
     });
 
     const { app, kv } = createTestApp();
@@ -1805,7 +1813,7 @@ describe("create order commit/KV ordering", () => {
     expect(kv.put).not.toHaveBeenCalled();
   });
 
-  it("does not schedule write-coupled availability purges after commit", async () => {
+  it("schedules availability purging only for a buyer-visible transition", async () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
     try {
       mocks.createStorefrontOrder.mockResolvedValue({
@@ -1814,9 +1822,22 @@ describe("create order commit/KV ordering", () => {
         paymentMethod: "cod",
         totalAmount: 100,
         taxQuote: DEFAULT_TAX_QUOTE,
-        commitPayload: { orderData: { id: "order_cache_failure" } },
+        commitPayload: {
+          orderData: {
+            id: "order_cache_failure",
+            inventoryAction: "reserved",
+          },
+          items: [{
+            variantId: "variant_transition",
+            quantity: 1,
+            inventoryTracked: true,
+          }],
+        },
       });
       mocks.commitStorefrontOrderPayload.mockResolvedValue({});
+      mocks.findCheckoutReservationAvailabilityTransitions.mockResolvedValue([
+        "variant_transition",
+      ]);
       const { app, kv } = createTestApp();
 
       const response = await app.request(
@@ -1833,6 +1854,17 @@ describe("create order commit/KV ordering", () => {
       expect(response.status, responseText).toBe(201);
       expect(mocks.commitStorefrontOrderPayload).toHaveBeenCalledOnce();
       expect(mocks.runStorefrontOrderPostCommitSideEffects).toHaveBeenCalledOnce();
+      expect(
+        mocks.findCheckoutReservationAvailabilityTransitions,
+      ).toHaveBeenCalledWith(
+        expect.anything(),
+        [{ variantId: "variant_transition", quantity: 1 }],
+      );
+      expect(mocks.invalidateProductAvailabilityCaches).toHaveBeenCalledWith(
+        expect.anything(),
+        { variantIds: ["variant_transition"] },
+        expect.anything(),
+      );
       expect(JSON.stringify(consoleError.mock.calls)).not.toContain(
         "availability caches",
       );

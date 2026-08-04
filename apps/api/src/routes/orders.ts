@@ -50,6 +50,7 @@ import {
   verifyOrderPaymentRecoveryOtp,
   type StorefrontCheckoutAuthoritySnapshot,
   type StorefrontCheckoutSettingsSnapshot,
+  type StorefrontOrderCommitPayload,
 } from "@scalius/core/modules/orders";
 import {
   submitCheckoutCommitToCoordinator,
@@ -66,7 +67,9 @@ import {
 } from "@scalius/core/modules/tax";
 import { CUSTOMER_AUTH_OTP_CHANNELS } from "@scalius/shared/customer-auth-policy";
 import {
+  findCheckoutReservationAvailabilityTransitions,
   getOptionalExecutionContext,
+  invalidateProductAvailabilityCaches,
   type WaitUntilExecutionContext,
 } from "../utils/cache-invalidation";
 import { AppError, NotFoundError, ValidationError, RateLimitError, UnauthorizedError, ServiceUnavailableError } from "../utils/api-error";
@@ -1664,6 +1667,49 @@ const checkoutCreatedPayloadSchema = z.object({
 
 type CheckoutCreatedPayload = z.infer<typeof checkoutCreatedPayloadSchema>;
 
+function checkoutReservationEntries(
+  payload: StorefrontOrderCommitPayload,
+): Array<{ variantId: string; quantity: number }> {
+  if (
+    payload.orderData.inventoryAction !== "reserved"
+    || !Array.isArray(payload.items)
+  ) return [];
+  const quantities = new Map<string, number>();
+  for (const item of payload.items) {
+    if (item.inventoryTracked === false) continue;
+    quantities.set(
+      item.variantId,
+      (quantities.get(item.variantId) ?? 0) + item.quantity,
+    );
+  }
+  return [...quantities.entries()].map(([variantId, quantity]) => ({
+    variantId,
+    quantity,
+  }));
+}
+
+function createCheckoutAvailabilityInvalidation(
+  db: Database,
+  payload: StorefrontOrderCommitPayload,
+  transitionVariantIds: readonly string[] | null,
+  c: {
+    env: Env;
+    executionCtx?: WaitUntilExecutionContext;
+  },
+): Promise<void> | null {
+  const reservationEntries = checkoutReservationEntries(payload);
+  if (transitionVariantIds === null && reservationEntries.length === 0) {
+    return null;
+  }
+  return (async () => {
+    const variantIds = transitionVariantIds === null
+      ? await findCheckoutReservationAvailabilityTransitions(db, reservationEntries)
+      : [...new Set(transitionVariantIds)];
+    if (variantIds.length === 0) return;
+    await invalidateProductAvailabilityCaches(db, { variantIds }, c);
+  })();
+}
+
 const createOrderRoute = createRoute({
   method: "post",
   path: "/",
@@ -1802,6 +1848,21 @@ app.openapi(createOrderRoute, async (c) => {
         committedOrderId,
         executionCtx,
       );
+
+      const coordinatedAvailabilityTransitions =
+        coordinated.availabilityTransitionVariantIds ?? [];
+      if (coordinatedAvailabilityTransitions.length > 0) {
+        const availabilityInvalidation = invalidateProductAvailabilityCaches(
+          db,
+          { variantIds: coordinatedAvailabilityTransitions },
+          c,
+        );
+        if (executionCtx && typeof executionCtx.waitUntil === "function") {
+          executionCtx.waitUntil(availabilityInvalidation);
+        } else {
+          await availabilityInvalidation;
+        }
+      }
 
       if (coordinated.postCommitPayload) {
         const sideEffects = runStorefrontOrderPostCommitSideEffects(
@@ -1971,6 +2032,7 @@ app.openapi(createOrderRoute, async (c) => {
     };
 
     let committedResponsePayload = responsePayload;
+    let committedAvailabilityTransitionVariantIds: string[] | null = null;
     try {
       const coordinatedEligibility = getCoordinatedCheckoutEligibility(result.commitPayload);
       if (coordinatedEligibility.eligible && c.env.CHECKOUT_COORDINATOR) {
@@ -2007,6 +2069,8 @@ app.openapi(createOrderRoute, async (c) => {
           );
         }
         committedResponsePayload = coordinated.response as typeof responsePayload;
+        committedAvailabilityTransitionVariantIds =
+          coordinated.availabilityTransitionVariantIds ?? [];
       } else {
         await commitStorefrontOrderPayload(db, result.commitPayload, {
           attempt: checkoutAttempt,
@@ -2062,6 +2126,22 @@ app.openapi(createOrderRoute, async (c) => {
       result.orderId,
       executionCtx,
     );
+
+    const availabilityInvalidation = createCheckoutAvailabilityInvalidation(
+      db,
+      result.commitPayload,
+      committedAvailabilityTransitionVariantIds,
+      c,
+    );
+    if (
+      availabilityInvalidation
+      && executionCtx
+      && typeof executionCtx.waitUntil === "function"
+    ) {
+      executionCtx.waitUntil(availabilityInvalidation);
+    } else if (availabilityInvalidation) {
+      await availabilityInvalidation;
+    }
 
     const sideEffects = runStorefrontOrderPostCommitSideEffects(
       db,

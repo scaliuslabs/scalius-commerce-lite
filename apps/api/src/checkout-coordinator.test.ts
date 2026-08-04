@@ -607,10 +607,10 @@ describe("production checkout coordinator engine", () => {
         ('product_second', 'Second product', 100, 'second-product', 1);
       INSERT INTO product_variants (
         id, product_id, sku, price, stock, reserved_stock,
-        stock_version, track_inventory, is_default
+        stock_version, track_inventory, is_default, low_stock_threshold
       ) VALUES
-        ('variant_hot', 'product_hot', 'HOT-1', 100, 20, 0, 1, 1, 1),
-        ('variant_second', 'product_second', 'HOT-2', 100, 20, 0, 1, 1, 1);
+        ('variant_hot', 'product_hot', 'HOT-1', 100, 20, 0, 1, 1, 1, 5),
+        ('variant_second', 'product_second', 'HOT-2', 100, 20, 0, 1, 1, 1, 5);
     `);
   });
 
@@ -1088,7 +1088,7 @@ describe("production checkout coordinator engine", () => {
     `).get()).toEqual({ orders: 300, reserved: 300 });
   });
 
-  it("commits exact stock capacity without a cache side-channel", async () => {
+  it("signals only buyer-visible availability band transitions", async () => {
     const engine = new CheckoutCoordinatorEngine(sqliteTransport(database));
     const results = await Promise.all(Array.from({ length: 20 }, (_, index) =>
       engine.submit(command(`order_sold_out_${String(index).padStart(2, "0")}`))
@@ -1100,8 +1100,11 @@ describe("production checkout coordinator engine", () => {
       FROM inventory_reservation_lanes
       WHERE variant_id = 'variant_hot'
     `).get()).toEqual({ reserved: 20 });
-    expect(results.every((result) => !("availabilityChangedSubjects" in result)))
-      .toBe(true);
+    expect(results.filter((result) =>
+      result.ok && result.availabilityTransitionVariantIds.length > 0
+    ).map((result) =>
+      result.ok ? result.availabilityTransitionVariantIds : []
+    )).toEqual([["variant_hot"], ["variant_hot"]]);
   });
 
   it("moves only free capacity to avoid false out-of-stock from lane fragmentation", async () => {
