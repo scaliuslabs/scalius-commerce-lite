@@ -98,6 +98,7 @@ describe("admin item return routes", () => {
             status: "completed",
             version: 3,
             restockedQuantity: 1,
+            availabilityTransitionVariantIds: ["variant_1"],
         });
         const app = createApp();
         const response = await app.request("/api/v1/admin/orders/order_1/returns/ret_1/receive", {
@@ -118,8 +119,11 @@ describe("admin item return routes", () => {
         expect(response.status).toBe(200);
         expect(mocks.invalidateProductAvailabilityCaches).toHaveBeenCalledWith(
             db,
-            { orderIds: ["order_1"] },
+            { variantIds: ["variant_1"] },
             expect.anything(),
+        );
+        expect(await response.json()).not.toHaveProperty(
+            "data.availabilityTransitionVariantIds",
         );
         expect(mocks.enqueueOrderNotificationsForStatus).not.toHaveBeenCalled();
     });

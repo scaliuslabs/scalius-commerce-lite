@@ -6,7 +6,8 @@ const inventoryMocks = vi.hoisted(() => ({
 }));
 
 vi.mock("../inventory/inventory-transitions", () => ({
-  applyClaimedInventoryEntryBatch: inventoryMocks.applyClaimedInventoryEntryBatch,
+  applyClaimedInventoryEntryBatchWithImpact:
+    inventoryMocks.applyClaimedInventoryEntryBatch,
 }));
 
 import {
@@ -86,7 +87,10 @@ const actor = { type: "admin" as const, id: "admin_1" };
 describe("order return service", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    inventoryMocks.applyClaimedInventoryEntryBatch.mockResolvedValue(["movement_1"]);
+    inventoryMocks.applyClaimedInventoryEntryBatch.mockResolvedValue({
+      movementIds: ["movement_1"],
+      availabilityTransitionVariantIds: [],
+    });
   });
 
   it("replays an exact committed command and rejects same-key/different-payload", async () => {
@@ -209,8 +213,14 @@ describe("order return service", () => {
       receivedQuantity: 0, restockQuantity: 0, damagedQuantity: 0, rejectedQuantity: 0, notes: null,
     }));
     inventoryMocks.applyClaimedInventoryEntryBatch
-      .mockResolvedValueOnce(["movement_1"])
-      .mockResolvedValueOnce(["movement_2"]);
+      .mockResolvedValueOnce({
+        movementIds: ["movement_1"],
+        availabilityTransitionVariantIds: [],
+      })
+      .mockResolvedValueOnce({
+        movementIds: ["movement_2"],
+        availabilityTransitionVariantIds: [],
+      });
     const { db } = createDb({
       gets: [
         { commandKey: input.commandKey, commandHash: requestHash }, processing,

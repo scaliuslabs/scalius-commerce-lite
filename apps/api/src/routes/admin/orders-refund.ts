@@ -131,11 +131,13 @@ async function recordPartialRefundProcessedSideEffects(options: {
     statusSource?: string;
 }) {
     try {
-        await invalidateProductAvailabilityCaches(
-            options.db,
-            { orderIds: options.error.affectedOrderIds },
-            options.context,
-        );
+        if (options.error.availabilityTransitionVariantIds.length > 0) {
+            await invalidateProductAvailabilityCaches(
+                options.db,
+                { variantIds: options.error.availabilityTransitionVariantIds },
+                options.context,
+            );
+        }
         if (options.error.statusChange && options.statusSource) {
             await enqueueOrderStatusChangeNotification({
                 db: options.db,
@@ -211,15 +213,20 @@ async function recordDirectRefundSideEffects(options: {
     let notificationCount = 0;
     let sideEffectErrors = 0;
 
-    try {
-        await invalidateProductAvailabilityCaches(
-            options.db,
-            { orderIds: [options.orderId] },
-            options.context,
-        );
-    } catch (error: unknown) {
-        sideEffectErrors += 1;
-        console.error("[orders-refund] Direct refund cache invalidation failed after local commit:", error);
+    if (
+        Array.isArray(options.result.availabilityTransitionVariantIds)
+        && options.result.availabilityTransitionVariantIds.length > 0
+    ) {
+        try {
+            await invalidateProductAvailabilityCaches(
+                options.db,
+                { variantIds: options.result.availabilityTransitionVariantIds },
+                options.context,
+            );
+        } catch (error: unknown) {
+            sideEffectErrors += 1;
+            console.error("[orders-refund] Direct refund cache invalidation failed after local commit:", error);
+        }
     }
 
     if (options.result.refundNotification) {
@@ -241,8 +248,15 @@ async function recordDirectRefundSideEffects(options: {
     return { notificationCount, sideEffectErrors };
 }
 
-function publicRefundResult<T extends { refundNotification?: unknown }>(result: T): Omit<T, "refundNotification"> {
-    const { refundNotification: _refundNotification, ...publicResult } = result;
+function publicRefundResult<T extends {
+    refundNotification?: unknown;
+    availabilityTransitionVariantIds?: unknown;
+}>(result: T): Omit<T, "refundNotification" | "availabilityTransitionVariantIds"> {
+    const {
+        refundNotification: _refundNotification,
+        availabilityTransitionVariantIds: _cacheSignal,
+        ...publicResult
+    } = result;
     return publicResult;
 }
 

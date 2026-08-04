@@ -12,7 +12,7 @@ vi.mock("../orders/order-state-machine", () => ({
 }));
 
 vi.mock("../inventory/inventory-transitions", () => ({
-  applyInventoryForStatusChange: mocks.applyInventoryForStatusChange,
+  applyInventoryForStatusChangeWithImpact: mocks.applyInventoryForStatusChange,
 }));
 
 import { finalizeAcceptedRefundAttemptIds } from "./refund-service";
@@ -52,6 +52,10 @@ function createDbMock(selectResults: unknown[], returningResults: unknown[][] = 
 describe("finalizeAcceptedRefundAttemptIds", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.applyInventoryForStatusChange.mockResolvedValue({
+      inventoryAction: "restored",
+      availabilityTransitionVariantIds: [],
+    });
     mocks.canTransitionTo.mockImplementation((_domain: string, _from: string, to: string) =>
       to === OrderStatus.CANCELLED
     );
@@ -92,6 +96,7 @@ describe("finalizeAcceptedRefundAttemptIds", () => {
     expect(result).toEqual({
       orderIds: ["order_1"],
       finalizedAttemptIds: ["rfa_1"],
+      availabilityTransitionVariantIds: [],
       refundNotifications: [{
         orderId: "order_1",
         notificationType: "order_refunded",

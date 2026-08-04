@@ -37,7 +37,7 @@ vi.mock("../orders/order-state-machine", () => ({
 }));
 
 vi.mock("../inventory/inventory-transitions", () => ({
-  applyInventoryForStatusChange: mocks.applyInventoryForStatusChange,
+  applyInventoryForStatusChangeWithImpact: mocks.applyInventoryForStatusChange,
 }));
 
 vi.mock("../promotions/promotions.refunds", () => ({

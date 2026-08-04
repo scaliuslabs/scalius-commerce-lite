@@ -186,7 +186,16 @@ async function postReceiptSideEffects(
     c: Parameters<AdminRouteHandler<typeof receiveRoute>>[0],
     result: Awaited<ReturnType<typeof receiveOrderReturn>>,
 ) {
-    if (result.restockedQuantity > 0) {
+    if (result.availabilityTransitionVariantIds?.length) {
+        await invalidateProductAvailabilityCaches(
+            c.get("db"),
+            { variantIds: result.availabilityTransitionVariantIds },
+            c,
+        );
+    } else if (
+        result.restockedQuantity > 0
+        && result.availabilityTransitionVariantIds === undefined
+    ) {
         await invalidateProductAvailabilityCaches(
             c.get("db"),
             { orderIds: [result.orderId] },
@@ -228,7 +237,8 @@ app.openapi(receiveRoute, async (c) => {
         c.get("db"), id, returnId, c.req.valid("json") as ReceiveOrderReturnInput, actor(c),
     );
     await postReceiptSideEffects(c, result);
-    return ok(c, result);
+    const { availabilityTransitionVariantIds: _cacheSignal, ...response } = result;
+    return ok(c, response);
 });
 app.openapi(cancelRoute, async (c) => {
     const { id, returnId } = c.req.valid("param");
@@ -240,7 +250,8 @@ app.openapi(reconcileRoute, async (c) => {
     const { id, returnId } = c.req.valid("param");
     const result = await reconcileOrderReturnReceipt(c.get("db"), id, returnId);
     await postReceiptSideEffects(c as Parameters<AdminRouteHandler<typeof receiveRoute>>[0], result);
-    return ok(c, result);
+    const { availabilityTransitionVariantIds: _cacheSignal, ...response } = result;
+    return ok(c, response);
 });
 
 export { app as adminOrdersReturnRoutes };

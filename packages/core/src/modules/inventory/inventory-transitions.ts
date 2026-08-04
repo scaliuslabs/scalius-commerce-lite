@@ -113,10 +113,12 @@ type InventoryVariantState = {
     backorderLimit: number;
 };
 
-type StrictInventoryTransitionResult = {
+export interface ClaimedInventoryEntryBatchImpact {
     movementIds: string[];
     availabilityTransitionVariantIds: string[];
-};
+}
+
+type StrictInventoryTransitionResult = ClaimedInventoryEntryBatchImpact;
 
 type InventoryTransitionMovementClaim = {
     id: string;
@@ -371,6 +373,14 @@ export async function applyClaimedInventoryEntryBatch(
     db: Database,
     input: ClaimedInventoryEntryBatchInput,
 ): Promise<string[]> {
+    const result = await applyClaimedInventoryEntryBatchWithImpact(db, input);
+    return result.movementIds;
+}
+
+export async function applyClaimedInventoryEntryBatchWithImpact(
+    db: Database,
+    input: ClaimedInventoryEntryBatchInput,
+): Promise<ClaimedInventoryEntryBatchImpact> {
     if (!input.orderId.trim()) {
         throw new ValidationError("Inventory claim requires an order id.");
     }
@@ -380,7 +390,9 @@ export async function applyClaimedInventoryEntryBatch(
     for (const entry of input.entries) validatePositiveQuantity(entry.quantity);
 
     const entries = mergeTransitionEntriesByVariant(input.entries, input.pool);
-    if (entries.length === 0) return [];
+    if (entries.length === 0) {
+        return { movementIds: [], availabilityTransitionVariantIds: [] };
+    }
 
     const result = await applyStrictInventoryTransitionMovements(
         db,
@@ -400,7 +412,7 @@ export async function applyClaimedInventoryEntryBatch(
         input.claimKey,
         input.createdBy ?? null,
     );
-    return result.movementIds;
+    return result;
 }
 
 /**
