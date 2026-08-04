@@ -17,6 +17,12 @@ import { reconcileDueRefundAttempts, reconcileStripeExternalRefundWebhooks } fro
 import { getCredentialEncryptionKey } from "./utils/encryption-key";
 import { failStaleQueuedPaymentWebhookEvents } from "./utils/webhook-idempotency";
 import { enqueueOrderRefundNotificationForOrder } from "./utils/order-notification-queue";
+import {
+  CACHE_INVALIDATION_SWEEP_LIMIT,
+  flushPendingCacheInvalidations,
+  invalidateProductAvailabilityCaches,
+  type WaitUntilExecutionContext,
+} from "./utils/cache-invalidation";
 
 export const INVENTORY_EXPIRY_SWEEP_LIMIT = 50;
 export const STALE_INCOMPLETE_ORDER_SWEEP_LIMIT = 25;
@@ -154,14 +160,40 @@ async function runScheduledMaintenanceInner(
   runContext: ScheduledRunContext,
 ): Promise<void> {
   const db = getDb(env);
+  const cacheExecutionCtx = executionCtx as unknown as WaitUntilExecutionContext;
   const timed = <T>(operation: string, fn: () => Promise<T>) =>
     timedScheduledOperation(runContext, operation, fn);
+
+  const cacheInvalidations = await timed("cache_invalidation_flush", () =>
+    flushPendingCacheInvalidations(
+      db,
+      env,
+      cacheExecutionCtx,
+      CACHE_INVALIDATION_SWEEP_LIMIT,
+    ),
+  );
+  if (cacheInvalidations.scanned > 0 || cacheInvalidations.pending > 0) {
+    console.log(
+      `[scheduled] Cache invalidation flush: scanned=${cacheInvalidations.scanned}, `
+        + `applied=${cacheInvalidations.applied}, pending=${cacheInvalidations.pending}`,
+    );
+  }
 
   const result = await timed("inventory_expiry_sweep", () =>
     releaseExpiredReservations(db, 30, {
       limit: INVENTORY_EXPIRY_SWEEP_LIMIT,
     }),
   );
+  const expiryAvailabilityTransitions = result.availabilityTransitionVariantIds ?? [];
+  if (expiryAvailabilityTransitions.length > 0) {
+    await timed("inventory_expiry_cache_invalidation", () =>
+      invalidateProductAvailabilityCaches(
+        db,
+        { variantIds: expiryAvailabilityTransitions },
+        { env, executionCtx: cacheExecutionCtx },
+      ),
+    );
+  }
 
   const staleIncompleteCutoff = Math.floor(Date.now() / 1000) - STALE_INCOMPLETE_ORDER_MAX_AGE_MINUTES * 60;
   const staleIncompleteOrders = await timed("stale_incomplete_order_cleanup", () =>

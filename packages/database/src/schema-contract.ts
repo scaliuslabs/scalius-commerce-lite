@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 53,
-  name: "0053_checkout_language_authority",
+  version: 54,
+  name: "0054_cache_invalidation_delivery",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -43,8 +43,13 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     sourceSha256: "3f010183c503a22006650e8c01a746e83dc8f600bbb101075c8583c2f07cf62c",
   },
   {
-    ...CURRENT_DATABASE_SCHEMA,
+    version: 53,
+    name: "0053_checkout_language_authority",
     sourceSha256: "eaac242dba1606345bde9433d3d883e56605b44ce3d6f52be3b999aa6a588e9d",
+  },
+  {
+    ...CURRENT_DATABASE_SCHEMA,
+    sourceSha256: "79be02aabbc23a8df2d1d249411c3940ae3389d12981b2a0ff81dad7b15476fa",
   },
 ] as const;
 

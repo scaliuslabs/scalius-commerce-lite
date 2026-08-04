@@ -67,6 +67,42 @@ export const checkoutAuthority = sqliteTable("checkout_authority", {
 ]);
 
 /**
+ * Coalesced delivery authority for native API/storefront cache purges.
+ *
+ * A cache domain owns one row regardless of mutation volume. Writers advance
+ * `requestedGeneration`; successful delivery advances `appliedGeneration` only
+ * to the generation it actually purged. This leaves a newer concurrent request
+ * pending without creating an unbounded event log.
+ */
+export const cacheInvalidationState = sqliteTable("cache_invalidation_state", {
+    group: text("group_name").primaryKey(),
+    requestedGeneration: integer("requested_generation").notNull().default(1),
+    appliedGeneration: integer("applied_generation").notNull().default(0),
+    attemptCount: integer("attempt_count").notNull().default(0),
+    lastError: text("last_error"),
+    createdAt: integer("created_at").notNull().default(UNIX_NOW),
+    updatedAt: integer("updated_at").notNull().default(UNIX_NOW),
+    appliedAt: integer("applied_at"),
+}, (table) => [
+    check(
+        "cache_invalidation_state_requested_positive",
+        sql`${table.requestedGeneration} >= 1`,
+    ),
+    check(
+        "cache_invalidation_state_applied_nonnegative",
+        sql`${table.appliedGeneration} >= 0`,
+    ),
+    check(
+        "cache_invalidation_state_generation_order",
+        sql`${table.appliedGeneration} <= ${table.requestedGeneration}`,
+    ),
+    check(
+        "cache_invalidation_state_attempts_nonnegative",
+        sql`${table.attemptCount} >= 0`,
+    ),
+]);
+
+/**
  * Published storefront theme document.
  *
  * Presentation settings affect every buyer-facing route, so they need an explicit

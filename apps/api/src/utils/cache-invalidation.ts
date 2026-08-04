@@ -1,8 +1,19 @@
 // src/server/utils/cache-invalidation.ts
-import type { Database } from "@scalius/database/client";
+import { getDb, type Database } from "@scalius/database/client";
 import { productVariants } from "@scalius/database/schema";
 import { effectiveRegularReservedStockSql } from "@scalius/database/inventory-authority";
 import { inArray } from "drizzle-orm";
+import {
+  CACHE_INVALIDATION_SWEEP_LIMIT,
+  hasDatabaseConfiguration,
+  markCacheInvalidationsApplied,
+  markCacheInvalidationsFailed,
+  readPendingCacheInvalidations,
+  recordCacheInvalidationRequest,
+  type CacheInvalidationGeneration,
+} from "./cache-invalidation-delivery";
+
+export { CACHE_INVALIDATION_SWEEP_LIMIT } from "./cache-invalidation-delivery";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -550,6 +561,20 @@ export interface StorefrontPurgeResult {
   skippedReason?: "no-valid-groups" | "missing-config";
 }
 
+export interface NativeApiPurgeResult {
+  attempted: boolean;
+  ok: boolean;
+  skippedReason?: "no-valid-groups" | "missing-entrypoint";
+}
+
+export interface CacheInvalidationFlushResult {
+  scanned: number;
+  applied: number;
+  pending: number;
+  api: NativeApiPurgeResult;
+  storefront: StorefrontPurgeResult;
+}
+
 const CACHE_PURGE_ATTEMPTS = 3;
 
 function validInvalidationGroups(groups: readonly string[]): string[] {
@@ -635,20 +660,89 @@ export async function invalidateGroups(
   groups: readonly string[],
   _kv?: KVNamespace,
   options: { cleanupExecutionCtx?: WaitUntilExecutionContext } = {},
-): Promise<void> {
+): Promise<NativeApiPurgeResult> {
   const normalizedGroups = validInvalidationGroups(groups);
   const nativePurger = options.cleanupExecutionCtx?.exports?.PublicApi;
-  if (!nativePurger || normalizedGroups.length === 0) return;
+  if (normalizedGroups.length === 0) {
+    return { attempted: false, ok: false, skippedReason: "no-valid-groups" };
+  }
+  if (!nativePurger) {
+    return { attempted: false, ok: false, skippedReason: "missing-entrypoint" };
+  }
   let lastError: unknown;
   for (let attempt = 1; attempt <= CACHE_PURGE_ATTEMPTS; attempt += 1) {
     try {
       await nativePurger.purgeGroups(normalizedGroups);
-      return;
+      return { attempted: true, ok: true };
     } catch (error: unknown) {
       lastError = error;
     }
   }
   console.error("[Cache] Public API tag purge failed after retries:", lastError);
+  return { attempted: true, ok: false };
+}
+
+async function purgeAndSettleCacheInvalidations(
+  db: Database | undefined,
+  generations: readonly CacheInvalidationGeneration[],
+  env: Env | undefined,
+  executionCtx: WaitUntilExecutionContext | undefined,
+): Promise<CacheInvalidationFlushResult> {
+  const groups = generations.map((item) => item.group);
+  const [api, storefront] = await Promise.all([
+    invalidateGroups(groups, env?.CACHE, {
+      cleanupExecutionCtx: executionCtx,
+    }),
+    purgeStorefrontForGroups(groups, env),
+  ]);
+
+  if (db && generations.length > 0) {
+    try {
+      if (api.ok && storefront.ok) {
+        await markCacheInvalidationsApplied(db, generations);
+      } else {
+        const reason = !api.ok && !storefront.ok
+          ? "api_and_storefront"
+          : !api.ok
+            ? "api"
+            : "storefront";
+        await markCacheInvalidationsFailed(db, generations, reason);
+      }
+    } catch (error) {
+      // A successful purge with an unrecorded acknowledgement is safe: the
+      // pending generation is replayed. Never trade freshness for bookkeeping.
+      console.error("[Cache] Failed to settle durable cache invalidation state:", error);
+    }
+  }
+
+  const applied = api.ok && storefront.ok ? generations.length : 0;
+  return {
+    scanned: generations.length,
+    applied,
+    pending: generations.length - applied,
+    api,
+    storefront,
+  };
+}
+
+/** Retry every coalesced domain whose latest generation was not fully purged. */
+export async function flushPendingCacheInvalidations(
+  db: Database,
+  env: Env,
+  executionCtx: WaitUntilExecutionContext,
+  limit = CACHE_INVALIDATION_SWEEP_LIMIT,
+): Promise<CacheInvalidationFlushResult> {
+  const pending = await readPendingCacheInvalidations(db, limit);
+  if (pending.length === 0) {
+    return {
+      scanned: 0,
+      applied: 0,
+      pending: 0,
+      api: { attempted: false, ok: true },
+      storefront: { attempted: false, ok: true },
+    };
+  }
+  return purgeAndSettleCacheInvalidations(db, pending, env, executionCtx);
 }
 
 /** Purge both public Workers after a committed merchant mutation. */
@@ -660,13 +754,31 @@ export async function invalidateApiAndStorefrontGroups(
   } = {},
 ): Promise<StorefrontPurgeResult> {
   const normalizedGroups = validInvalidationGroups(groups);
-  const [, storefrontResult] = await Promise.all([
-    invalidateGroups(normalizedGroups, env?.CACHE, {
-      cleanupExecutionCtx: options.cleanupExecutionCtx,
-    }),
-    purgeStorefrontForGroups(normalizedGroups, env),
-  ]);
-  return storefrontResult;
+  let db: Database | undefined;
+  let generations: CacheInvalidationGeneration[] = normalizedGroups.map((group) => ({
+    group,
+    generation: 0,
+  }));
+
+  if (hasDatabaseConfiguration(env)) {
+    try {
+      db = getDb(env);
+      generations = await recordCacheInvalidationRequest(db, normalizedGroups);
+    } catch (error) {
+      // Direct purge remains useful if the durability write is temporarily
+      // unavailable. The bounded cache TTL remains the final safety net.
+      db = undefined;
+      console.error("[Cache] Failed to record durable cache invalidation request:", error);
+    }
+  }
+
+  const result = await purgeAndSettleCacheInvalidations(
+    db,
+    generations,
+    env,
+    options.cleanupExecutionCtx,
+  );
+  return result.storefront;
 }
 
 export async function invalidateApiAndScheduleStorefrontGroups(

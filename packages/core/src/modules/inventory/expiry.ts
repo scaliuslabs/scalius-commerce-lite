@@ -28,6 +28,8 @@ export interface ExpiryResult {
   released: number;
   /** Variant IDs that were released */
   releasedVariantIds: string[];
+  /** Released variants whose buyer-visible availability band changed. */
+  availabilityTransitionVariantIds: string[];
   /** Any errors encountered (non-fatal) */
   errors: string[];
 }
@@ -129,6 +131,18 @@ function isDuplicateExpiryReleaseClaimError(err: unknown): boolean {
   );
 }
 
+function availabilityBand(
+  available: number,
+  lowStockThreshold: number | null,
+): "out_of_stock" | "low_stock" | "in_stock" {
+  if (available <= 0) return "out_of_stock";
+  return lowStockThreshold !== null
+      && lowStockThreshold > 0
+      && available <= lowStockThreshold
+    ? "low_stock"
+    : "in_stock";
+}
+
 /**
  * Find and release orphaned expired stock reservations.
  *
@@ -166,6 +180,7 @@ export async function releaseExpiredReservations(
     hasMore: false,
     released: 0,
     releasedVariantIds: [],
+    availabilityTransitionVariantIds: [],
     errors: [],
   };
 
@@ -287,6 +302,9 @@ export async function releaseExpiredReservations(
           reservedStock: productVariants.reservedStock,
           preorderStock: productVariants.preorderStock,
           stockVersion: productVariants.stockVersion,
+          trackInventory: productVariants.trackInventory,
+          allowPreorder: productVariants.allowPreorder,
+          lowStockThreshold: productVariants.lowStockThreshold,
         })
         .from(productVariants)
         .where(eq(productVariants.id, variantId))
@@ -385,6 +403,24 @@ export async function releaseExpiredReservations(
       result.released++;
       if (!result.releasedVariantIds.includes(variantId)) {
         result.releasedVariantIds.push(variantId);
+      }
+      const reservedAfter = Math.max(0, variant.reservedStock - outstandingQuantity);
+      const regularBefore = Math.max(0, variant.stock - variant.reservedStock);
+      const regularAfter = Math.max(0, variant.stock - reservedAfter);
+      const regularBandChanged = variant.trackInventory
+        && availabilityBand(regularBefore, variant.lowStockThreshold)
+          !== availabilityBand(regularAfter, variant.lowStockThreshold);
+      const preorderBecameAvailable = isPreorder
+        && variant.trackInventory
+        && variant.allowPreorder
+        && regularAfter <= 0
+        && variant.preorderStock <= 0
+        && variant.preorderStock + outstandingQuantity > 0;
+      if (
+        (regularBandChanged || preorderBecameAvailable)
+        && !result.availabilityTransitionVariantIds.includes(variantId)
+      ) {
+        result.availabilityTransitionVariantIds.push(variantId);
       }
     } catch (err: unknown) {
       if (isDuplicateExpiryReleaseClaimError(err)) continue;

@@ -18,7 +18,7 @@ describe("public storefront Worker cache policy", () => {
 
     expect(left).toMatchObject({
       canonicalUrl: "https://shop.example/about?campaign=sale",
-      edgeTtlSeconds: 5,
+      edgeTtlSeconds: 3600,
       tags: ["pages", "products", "layout", "media"],
     });
     expect(right?.canonicalUrl).toBe(left?.canonicalUrl);
@@ -70,7 +70,7 @@ describe("public storefront Worker cache policy", () => {
     const policy = getPublicStorefrontCachePolicy(
       new Request(`https://shop.example${path}`),
     );
-    expect(policy?.edgeTtlSeconds).toBe(5);
+    expect(policy?.edgeTtlSeconds).toBe(3600);
     expect(policy?.tags).toEqual(tags);
   });
 
@@ -112,7 +112,7 @@ describe("public storefront Worker cache policy", () => {
 
     expect(response.headers.get("Cache-Control")).toContain("no-store");
     expect(response.headers.get("Cloudflare-CDN-Cache-Control")).toBe(
-      "public, max-age=5, must-revalidate",
+      "public, max-age=3600, must-revalidate",
     );
     expect(response.headers.get("Cache-Tag")).toBe(
       "pages,products,layout,media",

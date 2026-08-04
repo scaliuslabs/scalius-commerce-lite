@@ -31,7 +31,8 @@ export async function withEdgeCache<T>(
 }
 
 export const CACHE_TTL = {
-  AVAILABILITY: 5,
+  // Native domain purges own freshness; the hour is a failure-only backstop.
+  AVAILABILITY: 3_600,
   LONG: 86_400,
   MEDIUM: 3_600,
   SHORT: 300,
