@@ -460,8 +460,15 @@ foreign-key violations, or failed integrity.
   direct concurrency-probe row, but its measured service rate was not viable:
   200 concurrent two-statement transactions achieved 1.43 transactions/second;
   32 concurrent transactions achieved 1.81/second; 32 autocommit batches
-  achieved 4.41/second. These results disqualify this deployment from a
-  throughput claim despite functional correctness and the upgraded plan.
+  achieved 4.41/second. A second, fresh Developer-plan database created with
+  the CLI's explicit `--tursodb` flag reproduced the result: 32 independent
+  connections wrote two rows each to 32 non-overlapping tables using
+  `BEGIN CONCURRENT`; all 64 rows committed exactly, but the run completed at
+  only 1.30 transactions/second with 24.6-second p99 latency. The disposable
+  database and group were deleted after the run. These results disqualify the
+  current hosted deployment from a throughput claim despite functional
+  correctness, MVCC, independent client streams, remaining quota, and the
+  upgraded plan.
 
 The default remains D1. PostgreSQL remains the only qualified high-throughput
 tier, with separate claims for the 1,161–1,426/second native backend evidence
