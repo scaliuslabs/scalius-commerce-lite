@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   setStock: vi.fn(),
   lookupByBarcodeOrSku: vi.fn(),
   acknowledgeLowStockAlert: vi.fn(),
+  findStockMutationAvailabilityTransitions: vi.fn(),
   invalidateProductAvailabilityCaches: vi.fn(),
   invalidateCatalogCaches: vi.fn(),
 }));
@@ -50,6 +51,8 @@ vi.mock("@scalius/core/modules/inventory/alerts", () => ({
 }));
 
 vi.mock("../../utils/cache-invalidation", () => ({
+  findStockMutationAvailabilityTransitions:
+    mocks.findStockMutationAvailabilityTransitions,
   invalidateProductAvailabilityCaches: mocks.invalidateProductAvailabilityCaches,
   invalidateCatalogCaches: mocks.invalidateCatalogCaches,
 }));
@@ -92,6 +95,7 @@ function createTestApp() {
     pageInfo: { limit: 100, hasMore: false, nextCursor: null },
   });
   mocks.acknowledgeLowStockAlert.mockResolvedValue(true);
+  mocks.findStockMutationAvailabilityTransitions.mockResolvedValue(["var_1"]);
   mocks.invalidateProductAvailabilityCaches.mockResolvedValue(undefined);
   mocks.getInventoryLabelVariants.mockResolvedValue({
     variants: [],
@@ -186,12 +190,46 @@ describe("admin inventory cache invalidation", () => {
     expect(response.status).toBe(200);
     expect(coreCall()).toHaveBeenCalled();
     expect(JSON.stringify(coreCall().mock.calls[0])).toContain(operationKey);
+    expect(mocks.findStockMutationAvailabilityTransitions).toHaveBeenCalledWith(
+      db,
+      [expect.objectContaining({ variantId: "var_1" })],
+    );
     expect(mocks.invalidateProductAvailabilityCaches).toHaveBeenCalledWith(
       db,
       { variantIds: ["var_1"] },
       expect.objectContaining({ env }),
     );
     expect(mocks.invalidateCatalogCaches).not.toHaveBeenCalled();
+  });
+
+  it("keeps caches hot when a regular-stock write stays in the same availability band", async () => {
+    const { app, env } = createTestApp();
+    mocks.findStockMutationAvailabilityTransitions.mockResolvedValueOnce([]);
+
+    const response = await postJson(app, env, "/stock-adjust", {
+      operationKey: "invop_api_same_band_01",
+      variantId: "var_1",
+      adjustment: 3,
+    });
+
+    expect(response.status).toBe(200);
+    expect(mocks.findStockMutationAvailabilityTransitions).toHaveBeenCalledOnce();
+    expect(mocks.invalidateProductAvailabilityCaches).not.toHaveBeenCalled();
+  });
+
+  it("does not inspect or purge buyer caches for preorder-only stock", async () => {
+    const { app, env } = createTestApp();
+
+    const response = await postJson(app, env, "/var_1/adjust", {
+      operationKey: "invop_api_preorder_001",
+      delta: 2,
+      reason: "received",
+      pool: "preorderStock",
+    });
+
+    expect(response.status).toBe(200);
+    expect(mocks.findStockMutationAvailabilityTransitions).not.toHaveBeenCalled();
+    expect(mocks.invalidateProductAvailabilityCaches).not.toHaveBeenCalled();
   });
 
   it("does not invalidate caches when the stock write fails", async () => {

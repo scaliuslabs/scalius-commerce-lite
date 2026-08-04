@@ -39,6 +39,20 @@ export interface CheckoutReservationAvailabilityInput {
   quantity: number;
 }
 
+export interface StockAvailabilityMutationInput {
+  variantId: string;
+  previousStock: number;
+  newStock: number;
+}
+
+interface BuyerAvailabilityRow {
+  id: string;
+  stock: number;
+  reservedStock: number;
+  trackInventory: boolean;
+  lowStockThreshold: number | null;
+}
+
 type BuyerAvailabilityBand = "out_of_stock" | "low_stock" | "in_stock";
 
 function buyerAvailabilityBand(
@@ -65,6 +79,27 @@ export function hasBuyerAvailabilityBandTransition(input: {
     input.availableAfter,
     input.lowStockThreshold,
   );
+}
+
+async function loadBuyerAvailabilityRows(
+  db: Database,
+  variantIds: readonly string[],
+): Promise<BuyerAvailabilityRow[]> {
+  const rows: BuyerAvailabilityRow[] = [];
+  for (let offset = 0; offset < variantIds.length; offset += 90) {
+    rows.push(...await db
+      .select({
+        id: productVariants.id,
+        stock: productVariants.stock,
+        reservedStock: effectiveRegularReservedStockSql(),
+        trackInventory: productVariants.trackInventory,
+        lowStockThreshold: productVariants.lowStockThreshold,
+      })
+      .from(productVariants)
+      .where(inArray(productVariants.id, variantIds.slice(offset, offset + 90)))
+      .all());
+  }
+  return rows;
 }
 
 /**
@@ -95,26 +130,7 @@ export async function findCheckoutReservationAvailabilityTransitions(
   if (variantIds.length === 0) return [];
 
   try {
-    const rows: Array<{
-      id: string;
-      stock: number;
-      reservedStock: number;
-      trackInventory: boolean;
-      lowStockThreshold: number | null;
-    }> = [];
-    for (let offset = 0; offset < variantIds.length; offset += 90) {
-      rows.push(...await db
-        .select({
-          id: productVariants.id,
-          stock: productVariants.stock,
-          reservedStock: effectiveRegularReservedStockSql(),
-          trackInventory: productVariants.trackInventory,
-          lowStockThreshold: productVariants.lowStockThreshold,
-        })
-        .from(productVariants)
-        .where(inArray(productVariants.id, variantIds.slice(offset, offset + 90)))
-        .all());
-    }
+    const rows = await loadBuyerAvailabilityRows(db, variantIds);
     const found = new Set(rows.map((row) => row.id));
     const transitions = rows.filter((row) => {
       if (!row.trackInventory) return false;
@@ -132,6 +148,54 @@ export async function findCheckoutReservationAvailabilityTransitions(
   } catch (error) {
     console.error(
       "[Cache] Checkout availability transition read failed; purging conservatively:",
+      error,
+    );
+    return variantIds;
+  }
+}
+
+/** Manual regular-stock writes are low volume but still avoid broad purges. */
+export async function findStockMutationAvailabilityTransitions(
+  db: Database,
+  mutations: readonly StockAvailabilityMutationInput[],
+): Promise<string[]> {
+  const byVariant = new Map<string, StockAvailabilityMutationInput>();
+  for (const mutation of mutations) {
+    if (
+      !mutation.variantId
+      || mutation.variantId.length > 180
+      || !Number.isSafeInteger(mutation.previousStock)
+      || !Number.isSafeInteger(mutation.newStock)
+    ) {
+      continue;
+    }
+    byVariant.set(mutation.variantId, mutation);
+  }
+  const variantIds = [...byVariant.keys()];
+  if (variantIds.length === 0) return [];
+
+  try {
+    const rows = await loadBuyerAvailabilityRows(db, variantIds);
+    const found = new Set(rows.map((row) => row.id));
+    const transitions = rows.filter((row) => {
+      if (!row.trackInventory) return false;
+      const mutation = byVariant.get(row.id)!;
+      return hasBuyerAvailabilityBandTransition({
+        availableBefore: Math.max(
+          0,
+          mutation.previousStock - row.reservedStock,
+        ),
+        availableAfter: Math.max(0, mutation.newStock - row.reservedStock),
+        lowStockThreshold: row.lowStockThreshold,
+      });
+    }).map((row) => row.id);
+    for (const variantId of variantIds) {
+      if (!found.has(variantId)) transitions.push(variantId);
+    }
+    return [...new Set(transitions)];
+  } catch (error) {
+    console.error(
+      "[Cache] Stock availability transition read failed; purging conservatively:",
       error,
     );
     return variantIds;
