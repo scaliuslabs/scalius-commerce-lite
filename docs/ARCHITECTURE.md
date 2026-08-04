@@ -57,22 +57,21 @@ provider selection, transport adaptation, capability fallbacks, atomic writes,
 and conflict retry stay inside the database/core boundaries. Do not add
 provider branches throughout domain code.
 
-This repository is the per-merchant data plane. Provisioning, desired state,
-deployments, domains, migration orchestration, monitoring, rollback retention,
-and resource retirement belong to the separately hosted control plane, not
-Worker request paths. A provider switch is valid only after a write freeze, a
+This repository is the per-merchant commerce runtime. Provisioning, desired
+state, deployments, domains, migration orchestration, monitoring, rollback
+retention, and resource retirement belong to deployment operations, not Worker
+request paths. A provider switch is valid only after a write freeze, a
 revision-fenced canonical source snapshot, canonical normalization, verified
 target import, and exact logical schema/data fingerprints. See
 [Database portability and cutover](DATABASE-PORTABILITY.md).
 
-The current root deploy command is a single-merchant operational deployment,
-not the future hosted-platform package: it deploys API, admin, storefront, and a
-supplemental Cloudflare ops-monitor Worker from fixed Wrangler configuration.
-The hosted platform still needs a versioned merchant resource manifest and
-idempotent Workers for Platforms reconcilers that render isolated bindings,
-domains, secrets, resource identities, and release digests. Its independently
-hosted monitor remains authoritative during a Cloudflare outage; the optional
-Cloudflare monitor provides inside-provider telemetry only.
+The current root deploy command is a single-merchant operational deployment: it
+deploys API, admin, storefront, and a supplemental Cloudflare ops-monitor Worker
+from fixed Wrangler configuration. Automated deployment systems should consume
+versioned manifests and idempotently reconcile isolated bindings, domains,
+secrets, resource identities, and release digests. External monitoring remains
+authoritative during a Cloudflare outage; the optional Cloudflare monitor
+provides inside-provider telemetry only.
 
 ---
 

@@ -116,7 +116,7 @@ function requireTursoConfiguration(
     // Turso Cloud gives the Rust/TursoDB engine a `turso://` endpoint and
     // legacy libSQL databases a `libsql://` endpoint. Keep the compatibility
     // path conservative while activating MVCC without another deployment
-    // setting for every control-plane-provisioned TursoDB database.
+    // setting for every operator-provisioned TursoDB database.
     writeBatchMode: parsed.protocol === "turso:" ? "concurrent" : "immediate",
   };
 }

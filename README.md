@@ -331,8 +331,8 @@ All error responses: `{ "success": false, "error": { "code": "...", "message": "
 ## Database (`packages/database/`)
 
 Drizzle schema and canonical SQLite migrations for Cloudflare D1 and Turso. D1
-is the zero-configuration starter. Turso is selected only after a verified
-control-plane migration and provides the concurrent-writer scale tier. The
+is the zero-configuration starter. Turso is selected only after a verified,
+operator-managed migration and provides the concurrent-writer scale tier. The
 schema declarations and migration journal are the source of truth; avoid
 copying volatile table or migration counts into docs.
 
@@ -565,7 +565,7 @@ Worker; admin and storefront shortcuts typecheck before their focused build and
 deploy.
 
 The deployment wrapper intentionally does not infer or perform a Turso cutover.
-For a Turso merchant, the external control plane freezes every writer, copies
+For a Turso merchant, the deployment operator freezes every writer, copies
 and verifies the database, installs `DATABASE_PROVIDER=turso` plus both Turso
 secrets, deploys API and admin, verifies readiness, and only then removes the
 freeze. Adding connection secrets without migrating and fingerprinting the data
@@ -595,7 +595,7 @@ Not every worker has every binding. Wrangler configs are the source of truth for
 
 Turso deployments additionally install the `DATABASE_PROVIDER`,
 `TURSO_DATABASE_URL`, and `TURSO_AUTH_TOKEN` Worker secrets on API and admin.
-Secret values are control-plane state and must never be committed.
+Secret values are deployment state and must never be committed.
 
 ---
 

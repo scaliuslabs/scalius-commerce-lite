@@ -478,7 +478,7 @@ export async function exportD1PortableBundle(
     });
     if (expectedBookmark !== bookmarkBefore) {
       throw new Error(
-        "Current D1 bookmark does not match the control-plane write fence.",
+        "Current D1 bookmark does not match the recorded write fence.",
       );
     }
     const remoteTables = await readRemoteD1TableNames({

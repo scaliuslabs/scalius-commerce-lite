@@ -35,7 +35,7 @@ import type { Product, Order, Customer } from "@scalius/database/schema";
 import { getDb, schema } from "@scalius/database/client";
 import type { Database } from "@scalius/database/client";
 
-// Control-plane migration building blocks
+// Operator-facing migration building blocks
 import { advanceDatabaseMigrationCheckpoint } from "@scalius/database/migration-control";
 import { compileSqliteMigrationForProvider } from "@scalius/database/migration-artifacts";
 import { readDatabaseSchemaState } from "@scalius/database/schema-contract";
@@ -74,9 +74,9 @@ Provider selection is fail-closed:
   `POSTGRES_DATABASE_URL`.
 
 Migration/copy/cutover orchestration does not run in this package or on request
-paths. It belongs to the external control plane and repo-owned migration tools.
+paths. It belongs to deployment operations and repo-owned migration tools.
 The deployed API/admin Workers expose the separate `DATABASE_MIGRATION_FREEZE`
-control-plane secret so a live copy can stop HTTP writes, queue consumption, and
+operations-only secret so a live copy can stop HTTP writes, queue consumption, and
 scheduled mutations while still exposing API health/readiness. Follow
 `audit/OPERATIONAL_RUNBOOK.md`; never copy a live D1 database without binding one
 canonical export to the frozen source's unchanged D1 Time Travel bookmark and
@@ -361,9 +361,9 @@ ledger. Every migration from 0050 onward must:
   source SHA-256 ledger row; and
 - be listed in the runtime release manifest used by `/readyz`.
 
-The current release is `0052_remove_storefront_cache_queue`. It also demonstrates
-that the runner and its tests must handle a contiguous chain of releases rather
-than assuming the ledger contains only its bootstrap row.
+The current release is `0053_checkout_language_authority`. The release chain
+also demonstrates that the runner and its tests must handle contiguous releases
+rather than assuming the ledger contains only its bootstrap row.
 
 Do not delete or squash historical migrations after a release. Existing D1
 installations depend on Wrangler's migration history, while existing Turso and
@@ -381,7 +381,7 @@ pnpm --filter @scalius/database upgrade:schema \
   --acknowledge-target-host '<expected-target-host>' \
   --dry-run --require-current
 
-# Explicit mutation after the control plane has activated and verified its
+# Explicit mutation after the deployment operator has activated and verified its
 # write freeze. Turso uses TURSO_DATABASE_URL and TURSO_AUTH_TOKEN instead.
 POSTGRES_DATABASE_URL='<target-url>' \
 pnpm --filter @scalius/database upgrade:schema \
@@ -441,7 +441,7 @@ The migrator holds an advisory lock, streams per-table `COPY`, persists target
 receipts in a private control schema, reconciles interrupted local state from
 the target, and requires exact source/target row and content fingerprints before
 completion. Provisioning, freeze/cutover, secret installation, deployed smokes,
-rollback retention, and resource deletion remain external control-plane work.
+rollback retention, and resource deletion remain deployment-operations work.
 
 Normalize a trusted full D1 SQL export onto the current portable schema, then
 compile the normalized data-only artifact for Turso:
@@ -470,7 +470,7 @@ clears migration-seeded rows from all current application tables before loading 
 snapshot. It restores the triggers before commit so dependency-sensitive guards
 cannot reject a valid snapshot merely because its parent rows appear later in the
 dump.
-The control plane must run `PRAGMA foreign_key_check` and the deterministic
+The migration operator must run `PRAGMA foreign_key_check` and the deterministic
 portability verifier before cutover; disabling checks without that verification is
 invalid. Export only the current canonical application-table set: retired source
 tables remain in the retained source database and are not part of the portable

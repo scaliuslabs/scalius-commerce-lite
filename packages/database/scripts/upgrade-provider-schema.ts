@@ -420,7 +420,7 @@ function parseArguments(argv: readonly string[]): {
   }
   if (!dryRun && !/^[a-f0-9]{64}$/.test(freezeProofSha256 ?? "")) {
     throw new Error(
-      "Schema mutation requires --freeze-proof-sha256 from the control plane's verified write freeze.",
+      "Schema mutation requires --freeze-proof-sha256 from a verified write freeze.",
     );
   }
   if (dryRun && freezeProofSha256 !== null) {

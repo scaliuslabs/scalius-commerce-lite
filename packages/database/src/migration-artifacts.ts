@@ -133,7 +133,7 @@ export function compileSqliteMigrationForProvider(
 /**
  * Wrap a trusted, data-only D1 export in one offline import transaction.
  * D1 emits tables alphabetically, not in foreign-key order, so the target
- * temporarily defers enforcement. The control plane must run
+ * temporarily defers enforcement. The migration operator must run
  * `PRAGMA foreign_key_check` before accepting the target fingerprint.
  */
 export function compileSqliteDataExportForProvider(

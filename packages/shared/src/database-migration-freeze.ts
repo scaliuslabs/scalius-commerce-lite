@@ -28,7 +28,8 @@ function isAllowedApiProbe(request: Request): boolean {
 }
 
 /**
- * Fail closed while the control plane takes and verifies a database snapshot.
+ * Fail closed while the migration operator takes and verifies a database
+ * snapshot.
  * API health/readiness probes may remain available so cutover can prove the
  * selected provider before buyer and merchant traffic is released.
  */
