@@ -213,7 +213,7 @@ const initialGalleryMobilePreloadUrl = initialGalleryImageSource
   ? getProductImageUrl(initialGalleryImageSource.url, {
       width: GALLERY_CONFIG.imageTransforms.mobileDisplay,
       height: GALLERY_CONFIG.imageTransforms.mobileDisplay,
-      quality: 78,
+      quality: GALLERY_CONFIG.imageTransforms.mobileQuality,
       format: "auto",
       fit: "contain",
       ...(initialGalleryImageSource.trimBorder ? { trim: "border" } : {}),
