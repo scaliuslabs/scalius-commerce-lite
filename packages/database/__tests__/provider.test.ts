@@ -77,11 +77,39 @@ describe("database provider resolution", () => {
     expect(resolveDatabaseConfiguration({
       DB: d1,
       POSTGRES_DATABASE_URL: connectionString,
-    })).toEqual({ provider: "postgres", connectionString });
+    })).toEqual({
+      provider: "postgres",
+      connectionString,
+      transport: "neon-http",
+    });
     expect(resolveDatabaseConfiguration({
       DATABASE_PROVIDER: "postgres",
       POSTGRES_DATABASE_URL: connectionString,
-    })).toEqual({ provider: "postgres", connectionString });
+    })).toEqual({
+      provider: "postgres",
+      connectionString,
+      transport: "neon-http",
+    });
+  });
+
+  it("uses native PostgreSQL for generic URLs and Hyperdrive bindings", () => {
+    const direct = "postgresql://user:secret@postgres.example.com/scalius";
+    expect(resolveDatabaseConfiguration({
+      POSTGRES_DATABASE_URL: direct,
+    })).toEqual({
+      provider: "postgres",
+      connectionString: direct,
+      transport: "native",
+    });
+
+    const hyperdrive = {
+      connectionString: "postgresql://hyperdrive.internal/scalius",
+    };
+    expect(resolveDatabaseConfiguration({ HYPERDRIVE: hyperdrive })).toEqual({
+      provider: "postgres",
+      connectionString: hyperdrive.connectionString,
+      transport: "native",
+    });
   });
 
   it("fails closed when automatic provider selection is ambiguous", () => {

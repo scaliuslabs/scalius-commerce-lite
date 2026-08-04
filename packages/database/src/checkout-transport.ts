@@ -6,6 +6,7 @@ import {
 import type { CheckoutCommitLimits, PortableSqlStatement } from "./checkout-commit";
 import {
   connectNeonPostgres,
+  connectNativePostgres,
   isPostgresSerializationError,
   type PostgresFullResult,
   type PostgresHttpConnection,
@@ -53,6 +54,7 @@ export interface CheckoutSqlTransport {
 export interface CheckoutSqlTransportOptions {
   connectTurso?: typeof connect;
   connectPostgres?: (connectionString: string) => PostgresHttpConnection;
+  connectNativePostgres?: (connectionString: string) => PostgresHttpConnection;
 }
 
 function postgresRows<T>(result: PostgresFullResult): T[] {
@@ -119,9 +121,9 @@ export function createCheckoutSqlTransport(
   }
 
   if (configuration.provider === "postgres") {
-    const connection = (options.connectPostgres ?? connectNeonPostgres)(
-      configuration.connectionString,
-    );
+    const connection = configuration.transport === "neon-http"
+      ? (options.connectPostgres ?? connectNeonPostgres)(configuration.connectionString)
+      : (options.connectNativePostgres ?? connectNativePostgres)(configuration.connectionString);
     const compile = (statement: PortableSqlStatement) => ({
       query: compileSqliteStatementForPostgres(
         statement.sql,

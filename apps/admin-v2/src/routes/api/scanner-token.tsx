@@ -24,6 +24,7 @@ interface CloudflareEnv {
   TURSO_DATABASE_URL?: string;
   TURSO_AUTH_TOKEN?: string;
   POSTGRES_DATABASE_URL?: string;
+  HYPERDRIVE?: { connectionString: string };
   CACHE?: Pick<KVNamespace, "get" | "put" | "delete">;
 }
 

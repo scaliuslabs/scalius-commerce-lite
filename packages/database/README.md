@@ -50,22 +50,28 @@ import type { Database } from "@scalius/database/types";
 `getDb(env)` composes a fresh lightweight client for the current request or
 Worker event. It never stores the active binding or merchant in mutable
 isolate-global state. D1 uses `drizzle-orm/d1`; Turso uses the fetch-only
-`@tursodatabase/serverless` transport; PostgreSQL uses
-`@neondatabase/serverless` through the compatibility adapter. A `turso://`
+`@tursodatabase/serverless` transport. A Neon `*.neon.tech` URL uses Neon's
+one-shot HTTP transport; other PostgreSQL URLs and Cloudflare Hyperdrive use
+the native `pg` transport through the same compatibility adapter. A `turso://`
 endpoint selects concurrent atomic batches, while legacy `libsql://`/HTTPS
-endpoints keep immediate transactions.
+endpoints keep immediate transactions. Native operations own and close their
+client; Hyperdrive provides the regional production pool.
 
 Provider selection is fail-closed:
 
 - no external provider secrets: require `env.DB` and use D1;
 - both Turso secrets: use Turso;
 - only one Turso secret: reject the deployment configuration;
-- `POSTGRES_DATABASE_URL`: use PostgreSQL when Turso credentials are absent;
+- `POSTGRES_DATABASE_URL`: use Neon or generic PostgreSQL when Turso
+  credentials are absent;
+- `HYPERDRIVE`: use its connection string and native PostgreSQL transport;
+  when present it takes precedence over `POSTGRES_DATABASE_URL`;
 - Turso and PostgreSQL credentials together: require an explicit provider;
 - `DATABASE_PROVIDER=d1`: require/use D1 even while Turso secrets are retained
   for a controlled rollback;
 - `DATABASE_PROVIDER=turso`: require/use both Turso secrets;
-- `DATABASE_PROVIDER=postgres`: require/use `POSTGRES_DATABASE_URL`.
+- `DATABASE_PROVIDER=postgres`: require/use either `HYPERDRIVE` or
+  `POSTGRES_DATABASE_URL`.
 
 Migration/copy/cutover orchestration does not run in this package or on request
 paths. It belongs to the external control plane and repo-owned migration tools.
@@ -490,6 +496,7 @@ Drizzle config (`drizzle.config.ts`):
 | Package | Purpose |
 |---------|---------|
 | `@neondatabase/serverless` 1.1.0 | Fetch-only PostgreSQL/Neon transport |
+| `pg` 8.22.0 | Native generic PostgreSQL and Cloudflare Hyperdrive transport |
 | `@tursodatabase/database` ^0.7.2 | Local TursoDB migration artifact handling |
 | `@tursodatabase/serverless` ^1.4.0 | Fetch-only Turso transport and concurrent atomic batches |
 | `@tursodatabase/sync` 0.7.2 | Revision-fenced TursoDB source snapshots |

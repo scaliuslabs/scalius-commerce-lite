@@ -8,6 +8,8 @@ import {
 import { createTursoDatabase } from "./turso-adapter";
 import {
   connectNeonPostgres,
+  connectNativePostgres,
+  connectPostgres,
   createPostgresDatabase,
 } from "./postgres-adapter";
 import type { Database } from "./types";
@@ -48,6 +50,8 @@ export {
 export { createTursoDatabase, isTursoConflictError } from "./turso-adapter";
 export {
   connectNeonPostgres,
+  connectNativePostgres,
+  connectPostgres,
   createPostgresDatabase,
   isPostgresSerializationError,
 } from "./postgres-adapter";
@@ -74,7 +78,9 @@ export function getDb(env?: DatabaseEnvironment): Database {
 
   if (config.provider === "postgres") {
     const database = createPostgresDatabase(config.connectionString, {
-      connect: connectNeonPostgres,
+      connect: config.transport === "neon-http"
+        ? connectNeonPostgres
+        : connectNativePostgres,
     });
     providerByDatabase.set(database as object, "postgres");
     return database;

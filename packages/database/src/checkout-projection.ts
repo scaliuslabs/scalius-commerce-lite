@@ -6,7 +6,11 @@ import type { CheckoutSqlTransport } from "./checkout-transport";
 
 const ORDER_RECEIPT_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 7;
 export const CHECKOUT_PROJECTION_MAX_OUTBOXES = 25;
-export const CHECKOUT_PROJECTION_MAX_ORDERS = 500;
+// Projection must accept every authoritative outbox that the commit kernel is
+// permitted to create. Runtime batching may use a lower target, but recovery
+// cannot reject an already-durable outbox merely because it exceeded that
+// performance target during a burst.
+export const CHECKOUT_PROJECTION_MAX_ORDERS = CHECKOUT_COMMIT_HARD_MAX_ORDERS;
 
 const TARGET_ORDERS_CTE = `target_outboxes AS MATERIALIZED (
     SELECT batch_outbox.*

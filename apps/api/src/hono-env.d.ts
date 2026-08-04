@@ -68,6 +68,7 @@ declare global {
     TURSO_DATABASE_URL?: string;
     TURSO_AUTH_TOKEN?: string;
     POSTGRES_DATABASE_URL?: string;
+    HYPERDRIVE?: Hyperdrive;
     DATABASE_MIGRATION_FREEZE?: string;
 
     // Variables (set in wrangler.jsonc [vars] or dashboard)

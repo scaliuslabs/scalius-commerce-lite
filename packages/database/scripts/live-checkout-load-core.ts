@@ -161,8 +161,10 @@ export function assertDisposableLoadTarget(
 ): URL {
   const parsed = new URL(apiUrl);
   const hostname = parsed.hostname.toLowerCase();
-  if (parsed.protocol !== "https:") {
-    throw new Error("Live checkout load targets must use HTTPS.");
+  const localLoopback = parsed.protocol === "http:"
+    && (hostname === "localhost" || hostname.endsWith(".localhost"));
+  if (parsed.protocol !== "https:" && !localLoopback) {
+    throw new Error("Live checkout load targets must use HTTPS or explicit loopback HTTP.");
   }
   if (
     parsed.username ||

@@ -1,12 +1,20 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  CHECKOUT_PROJECTION_MAX_ORDERS,
   buildCheckoutProjectionBatchStatements,
   projectCheckoutOutboxes,
   recoverPendingCheckoutProjections,
 } from "../src/checkout-projection";
+import { CHECKOUT_COMMIT_HARD_MAX_ORDERS } from "../src/checkout-commit";
 
 describe("checkout projection recovery", () => {
+  it("accepts every durable outbox size the commit kernel permits", () => {
+    expect(CHECKOUT_PROJECTION_MAX_ORDERS).toBe(CHECKOUT_COMMIT_HARD_MAX_ORDERS);
+    expect(buildCheckoutProjectionBatchStatements(["outbox_1"])[0]?.sql)
+      .toContain(`<= ${CHECKOUT_COMMIT_HARD_MAX_ORDERS}`);
+  });
+
   it("avoids target-table aliases in updates for TursoDB compatibility", () => {
     const updateStatements = buildCheckoutProjectionBatchStatements(["outbox_1"])
       .map((statement) => statement.sql)

@@ -8,7 +8,8 @@ const LOCAL_DEVELOPMENT_HOSTNAMES = new Set([
 const HSTS_VALUE = "max-age=31536000; includeSubDomains";
 
 function isLocalDevelopmentUrl(url: URL): boolean {
-  return LOCAL_DEVELOPMENT_HOSTNAMES.has(url.hostname);
+  return LOCAL_DEVELOPMENT_HOSTNAMES.has(url.hostname)
+    || url.hostname.endsWith(".localhost");
 }
 
 /**

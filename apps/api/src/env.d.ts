@@ -205,6 +205,7 @@ interface Env {
   TURSO_DATABASE_URL?: string;
   TURSO_AUTH_TOKEN?: string;
   POSTGRES_DATABASE_URL?: string;
+  HYPERDRIVE?: Hyperdrive;
   DATABASE_MIGRATION_FREEZE?: string;
 
   // Note: Stripe and SSLCommerz credentials are stored in the DB settings table

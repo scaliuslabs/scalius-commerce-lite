@@ -7,7 +7,7 @@ import {
   connect,
 } from "@tursodatabase/serverless";
 
-import { connectNeonPostgres, type PostgresHttpConnection } from "../src/postgres-adapter";
+import { connectPostgres, type PostgresHttpConnection } from "../src/postgres-adapter";
 import {
   CURRENT_DATABASE_SCHEMA,
   DATABASE_SCHEMA_CONTRACT_VERSION,
@@ -483,7 +483,7 @@ async function main(): Promise<void> {
     if (!["postgres:", "postgresql:"].includes(parsed.protocol)) {
       throw new Error("PostgreSQL upgrade URL must use postgres:// or postgresql://.");
     }
-    const connection = connectNeonPostgres(databaseUrl);
+    const connection = connectPostgres(databaseUrl);
     const before = await inspectPostgresSchemaUpgrade(connection, artifacts);
     result = options.dryRun
       ? { before, after: before, applied: [] }

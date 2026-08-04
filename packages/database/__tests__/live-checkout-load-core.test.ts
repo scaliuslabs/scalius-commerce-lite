@@ -68,6 +68,17 @@ describe("live checkout load safety and timing", () => {
     )).toThrow(/HTTPS/);
   });
 
+  it("allows an explicitly named loopback load target for local runtime proof", () => {
+    expect(assertDisposableLoadTarget(
+      "http://scalius-loadtest.localhost:8787",
+      "scalius-loadtest.localhost",
+    ).origin).toBe("http://scalius-loadtest.localhost:8787");
+    expect(() => assertDisposableLoadTarget(
+      "http://scalius-loadtest.example.com",
+      "scalius-loadtest.example.com",
+    )).toThrow(/HTTPS or explicit loopback/);
+  });
+
   it("requires an acknowledged database host and an exact high-entropy sentinel", () => {
     const databaseUrl = "turso://scalius-loadtest-20260802-a1b2.example.turso.io";
     const targetId = "lt_a1b2c3d4e5f60708";

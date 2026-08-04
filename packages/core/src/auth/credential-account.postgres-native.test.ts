@@ -5,7 +5,7 @@ import { eq, inArray } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 
 import {
-  connectNeonPostgres,
+  connectPostgres,
   createPostgresDatabase,
 } from "@scalius/database/postgres-adapter";
 import { safeBatch } from "@scalius/database/client";
@@ -33,7 +33,7 @@ const nativePostgresUrl = process.env.SCALIUS_TEST_POSTGRES_URL?.trim();
 describe.runIf(nativePostgresUrl)("native PostgreSQL credential conformance", () => {
   it("atomically creates a Better Auth-compatible invited administrator", async () => {
     const db = createPostgresDatabase(nativePostgresUrl!, {
-      connect: connectNeonPostgres,
+      connect: connectPostgres,
     });
     const scope = randomUUID().replaceAll("-", "");
     const inviterId = `credential_pg_inviter_${scope}`;
