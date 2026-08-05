@@ -2,8 +2,8 @@ import React from "react";
 import { Link } from "@tanstack/react-router";
 import {
   getOrderArchiveStatusBlockedReason,
-  type OrderListItem,
-} from "@scalius/core/modules/orders";
+} from "@scalius/core/modules/orders/order-archive-policy";
+import type { OrderListItem } from "@scalius/core/modules/orders/orders.types";
 
 /** Minimal shipment shape used in the order list — compatible with ShipmentStatus */
 interface OrderShipment {

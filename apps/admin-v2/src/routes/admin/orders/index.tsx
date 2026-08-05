@@ -24,8 +24,8 @@ import { RouteErrorComponent } from "~/lib/route-error";
 import type { Row } from "@tanstack/react-table";
 import {
   isOrderArchiveStatusEligible,
-  type OrderListItem,
-} from "@scalius/core/modules/orders";
+} from "@scalius/core/modules/orders/order-archive-policy";
+import type { OrderListItem } from "@scalius/core/modules/orders/orders.types";
 import type { DateRange } from "react-day-picker";
 import { formatDateShort } from "@scalius/shared/timestamps";
 import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";

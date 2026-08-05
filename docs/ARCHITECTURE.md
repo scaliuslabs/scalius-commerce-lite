@@ -42,15 +42,22 @@ does not certify a clean tree by itself.
 
 | Layer | May Import | Never Imports |
 |-------|-----------|---------------|
+| Admin browser routes/components | `@scalius/shared`, `@scalius/api-client`, browser-safe `@scalius/core` leaf modules | Relational provider clients or broad server-bearing core module barrels |
 | Routes (apps/api/src/routes/) | @scalius/core, @scalius/database | Nothing imports routes |
 | Services (@scalius/core/modules/) | @scalius/database, @scalius/shared | Never imports routes |
 | Schema (@scalius/database/schema/) | drizzle-orm only | Never imports services or routes |
 | Shared (@scalius/shared/) | Nothing | Pure utility, no dependencies |
 
+The admin production build scans every emitted browser asset for relational
+provider implementation markers. This is a transitive boundary check: it fails
+even when database code reached the browser indirectly through a re-export
+barrel. UI code that needs a pure policy or type imports its leaf module.
+
 ## Database Provider Boundary
 
-D1 remains the zero-configuration starter database. TursoDB is the
-concurrent-writer SQLite tier, and PostgreSQL/Neon is the proven high-throughput
+D1 remains the zero-configuration starter database. TursoDB is the portable
+external SQLite option whose hosted concurrency must be qualified against the
+exact service generation, and PostgreSQL/Neon is the proven high-throughput
 tier; selecting any provider is not by itself an orders-per-second guarantee.
 Routes and domain services receive the same `@scalius/database` surface;
 provider selection, transport adaptation, capability fallbacks, atomic writes,

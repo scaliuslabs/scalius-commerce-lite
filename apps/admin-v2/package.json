@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev",
-    "build": "vite build && node ../../scripts/clean-dist-env-files.mjs apps/admin-v2",
+    "build": "vite build && node ../../scripts/check-admin-client-boundaries.mjs && node ../../scripts/clean-dist-env-files.mjs apps/admin-v2",
     "preview": "vite preview",
     "deploy": "node ../../scripts/deploy.mjs --only admin",
     "typecheck": "../../node_modules/typescript7/bin/tsc --noEmit",
