@@ -2,7 +2,7 @@
 // Admin OpenAPI routes for auth management (users, profile, 2FA, setup).
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { and, desc, eq, gt, isNotNull, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNotNull, ne, or, sql } from "drizzle-orm";
 import { getCookies, parseSetCookieHeader, splitSetCookieHeader } from "better-auth/cookies";
 import {
     buildBatchGuard,
@@ -60,6 +60,7 @@ import {
     presentAccountSession,
 } from "./account-session-presentation";
 const app = new OpenAPIHono<{ Bindings: Env }>();
+const ADMIN_USER_ENRICHMENT_CHUNK_SIZE = 90;
 
 type BetterAuthHeaders = Headers & { getSetCookie?: () => string[] };
 type BetterAuthHeadersResult<T> = { response: T; headers?: Headers };
@@ -192,78 +193,121 @@ app.openapi(listUsersRoute, async (c) => {
             .leftJoin(adminInvitations, eq(adminInvitations.userId, user.id))
             .where(adminPrincipalPredicate());
 
-        const usersWithRoles = await Promise.all(
-            adminUsers.map(async (adminUser) => {
-                const userRoleData = await db
+        const rolesByUserId = new Map<string, Array<{
+            id: string;
+            name: string;
+            displayName: string;
+        }>>();
+        const overridesByUserId = new Map<string, Array<{
+            permissionName: string;
+            granted: boolean;
+        }>>();
+        const adminUserIds = adminUsers.map(({ id }) => id);
+        for (
+            let offset = 0;
+            offset < adminUserIds.length;
+            offset += ADMIN_USER_ENRICHMENT_CHUNK_SIZE
+        ) {
+            const userIds = adminUserIds.slice(
+                offset,
+                offset + ADMIN_USER_ENRICHMENT_CHUNK_SIZE,
+            );
+            const [roleRows = [], overrideRows = []] = await safeBatch(db, [
+                db
                     .select({
+                        userId: userRoles.userId,
                         id: roles.id,
                         name: roles.name,
                         displayName: roles.displayName
                     })
                     .from(userRoles)
                     .innerJoin(roles, eq(userRoles.roleId, roles.id))
-                    .where(eq(userRoles.userId, adminUser.id));
-
-                const overrides = await db
+                    .where(inArray(userRoles.userId, userIds)),
+                db
                     .select({
+                        userId: userPermissions.userId,
                         permissionName: permissions.name,
                         granted: userPermissions.granted
                     })
                     .from(userPermissions)
                     .innerJoin(permissions, eq(userPermissions.permissionId, permissions.id))
-                    .where(eq(userPermissions.userId, adminUser.id));
+                    .where(inArray(userPermissions.userId, userIds)),
+            ] as const);
 
-                const grants = overrides.filter((o) => o.granted).map((o) => o.permissionName);
-                const denials = overrides.filter((o) => !o.granted).map((o) => o.permissionName);
+            for (const row of roleRows) {
+                const existing = rolesByUserId.get(row.userId) ?? [];
+                existing.push({
+                    id: row.id,
+                    name: row.name,
+                    displayName: row.displayName,
+                });
+                rolesByUserId.set(row.userId, existing);
+            }
+            for (const row of overrideRows) {
+                const existing = overridesByUserId.get(row.userId) ?? [];
+                existing.push({
+                    permissionName: row.permissionName,
+                    granted: row.granted,
+                });
+                overridesByUserId.set(row.userId, existing);
+            }
+        }
 
-                const {
-                    banned,
-                    banExpires,
-                    invitationId,
-                    invitationStatus,
-                    invitationDeliveryStatus,
-                    invitationExpiresAt,
-                    invitationLastSentAt,
-                    ...publicAdminUser
-                } = adminUser;
-                const banExpiresAt = banExpires instanceof Date
-                    ? banExpires.getTime()
-                    : Number(banExpires ?? 0) * 1000;
-                const pendingInvitation = invitationId
-                    && invitationStatus === "pending"
-                    && publicAdminUser.mustChangePassword;
-                const invitationExpiryMs = invitationExpiresAt instanceof Date
-                    ? invitationExpiresAt.getTime()
-                    : Number(invitationExpiresAt ?? 0) * 1000;
-                const invitation = pendingInvitation
-                    ? {
-                        status: invitationDeliveryStatus === "failed"
-                            ? "delivery_failed" as const
-                            : invitationExpiresAt && invitationExpiryMs <= Date.now()
-                                ? "expired" as const
-                                : "pending" as const,
-                        expiresAt: invitationExpiresAt
-                            ? new Date(invitationExpiryMs).toISOString()
-                            : null,
-                        lastSentAt: invitationLastSentAt
-                            ? new Date(
-                                invitationLastSentAt instanceof Date
-                                    ? invitationLastSentAt.getTime()
-                                    : Number(invitationLastSentAt) * 1000,
-                            ).toISOString()
-                            : null,
-                    }
-                    : null;
+        const nowMs = Date.now();
+        const usersWithRoles = adminUsers.map((adminUser) => {
+            const userRoleData = rolesByUserId.get(adminUser.id) ?? [];
+            const overrides = overridesByUserId.get(adminUser.id) ?? [];
 
-                return {
-                    ...publicAdminUser,
-                    suspended: Boolean(banned && (!banExpires || banExpiresAt > Date.now())),
-                    invitation,
-                    roles: userRoleData,
-                    overrides: { grants, denials }
-                };
-            })
-        );
+            const grants = overrides.filter((o) => o.granted).map((o) => o.permissionName);
+            const denials = overrides.filter((o) => !o.granted).map((o) => o.permissionName);
+
+            const {
+                banned,
+                banExpires,
+                invitationId,
+                invitationStatus,
+                invitationDeliveryStatus,
+                invitationExpiresAt,
+                invitationLastSentAt,
+                ...publicAdminUser
+            } = adminUser;
+            const banExpiresAt = banExpires instanceof Date
+                ? banExpires.getTime()
+                : Number(banExpires ?? 0) * 1000;
+            const pendingInvitation = invitationId
+                && invitationStatus === "pending"
+                && publicAdminUser.mustChangePassword;
+            const invitationExpiryMs = invitationExpiresAt instanceof Date
+                ? invitationExpiresAt.getTime()
+                : Number(invitationExpiresAt ?? 0) * 1000;
+            const invitation = pendingInvitation
+                ? {
+                    status: invitationDeliveryStatus === "failed"
+                        ? "delivery_failed" as const
+                        : invitationExpiresAt && invitationExpiryMs <= nowMs
+                            ? "expired" as const
+                            : "pending" as const,
+                    expiresAt: invitationExpiresAt
+                        ? new Date(invitationExpiryMs).toISOString()
+                        : null,
+                    lastSentAt: invitationLastSentAt
+                        ? new Date(
+                            invitationLastSentAt instanceof Date
+                                ? invitationLastSentAt.getTime()
+                                : Number(invitationLastSentAt) * 1000,
+                        ).toISOString()
+                        : null,
+                }
+                : null;
+
+            return {
+                ...publicAdminUser,
+                suspended: Boolean(banned && (!banExpires || banExpiresAt > nowMs)),
+                invitation,
+                roles: userRoleData,
+                overrides: { grants, denials }
+            };
+        });
 
         return ok(c, { users: usersWithRoles });
     } catch (error: unknown) {
