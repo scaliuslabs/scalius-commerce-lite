@@ -3,7 +3,7 @@ import {
   getCustomerRequestIntro,
   getCustomerRequestPolicyPreview,
   type CustomerRequestPolicy,
-} from "@scalius/core/modules/settings/customer-request-policy";
+} from "@scalius/core/modules/settings/customer-request-policy.shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, CircleOff, Loader2, RotateCcw, Save } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";

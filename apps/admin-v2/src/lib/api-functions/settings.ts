@@ -4,7 +4,7 @@ import type { StorefrontThemeSettings } from "@scalius/shared/storefront-theme";
 import type {
   CustomerRequestPolicy,
   CustomerRequestPreviewState,
-} from "@scalius/core/modules/settings/customer-request-policy";
+} from "@scalius/core/modules/settings/customer-request-policy.shared";
 import type {
   GetApiV1AdminSettingsCheckoutFlowResponses,
   GetApiV1AdminSettingsCheckoutReadinessResponses,

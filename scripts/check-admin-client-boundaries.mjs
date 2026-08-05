@@ -11,6 +11,8 @@ const SERVER_DATABASE_MARKERS = [
   "x-turso-encryption-key",
   "D1 database binding (env.DB) is not available",
   "DATABASE_PROVIDER must be one of",
+  "drizzle:SQLiteInlineForeignKeys",
+  "SQLiteBlobBuffer",
 ];
 
 async function collectJavaScriptFiles(directory) {
