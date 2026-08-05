@@ -1,4 +1,4 @@
-import type { OrderListItem } from "@scalius/core/modules/orders";
+import type { OrderListItem } from "@scalius/core/modules/orders/orders.types";
 import { Badge } from "~/components/ui/badge";
 import { AlertTriangle, Clock3, RefreshCw, type LucideIcon } from "lucide-react";
 

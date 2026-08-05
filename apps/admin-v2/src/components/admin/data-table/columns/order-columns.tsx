@@ -2,8 +2,8 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { Link } from "@tanstack/react-router";
 import {
   getOrderArchiveStatusBlockedReason,
-  type OrderListItem,
-} from "@scalius/core/modules/orders";
+} from "@scalius/core/modules/orders/order-archive-policy";
+import type { OrderListItem } from "@scalius/core/modules/orders/orders.types";
 import { Badge } from "~/components/ui/badge";
 import {
   FulfillmentStatusBadge,
