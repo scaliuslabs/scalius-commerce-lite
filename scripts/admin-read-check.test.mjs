@@ -510,6 +510,10 @@ describe("authenticated admin read check", () => {
       "settings_theme",
       "settings_notifications",
     ]));
+    expect(complete.routes.find((route) => route.label === "settings_seo"))
+      .toMatchObject({ titleIncludes: "General settings | Scalius Admin" });
+    expect(complete.routes.find((route) => route.label === "settings_notifications"))
+      .toMatchObject({ titleIncludes: "Notifications | Scalius Admin" });
     expect(complete.skipped).toEqual([]);
 
     const empty = buildAdminRoutePlan();

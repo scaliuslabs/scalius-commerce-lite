@@ -237,13 +237,13 @@ export function buildAdminRoutePlan({ orderId, productId, customerId } = {}) {
     {
       label: "settings_seo",
       path: "/admin/settings?section=seo",
-      titleIncludes: "General Settings | Scalius Admin",
+      titleIncludes: "General settings | Scalius Admin",
       expectedSearch: { section: "seo" },
     },
     {
       label: "settings_security",
       path: "/admin/settings?section=security",
-      titleIncludes: "General Settings | Scalius Admin",
+      titleIncludes: "General settings | Scalius Admin",
       expectedSearch: { section: "security" },
     },
     { label: "settings_account", path: "/admin/settings/account", titleIncludes: "Account | Scalius Admin" },
@@ -251,7 +251,7 @@ export function buildAdminRoutePlan({ orderId, productId, customerId } = {}) {
     {
       label: "settings_notifications",
       path: "/admin/settings/notifications",
-      titleIncludes: "Notification Settings | Scalius Admin",
+      titleIncludes: "Notifications | Scalius Admin",
     },
     {
       label: "settings_checkout",
