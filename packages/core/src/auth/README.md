@@ -31,7 +31,7 @@ Customer Auth Flow (storefront):
 
 | File | Purpose |
 |------|---------|
-| `auth.ts` | `createAuth()` / `getAuth()` -- Better Auth factory with Drizzle adapter, email/password, 2FA (TOTP + email OTP), admin plugin. Cached per runtime auth signature: `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `PUBLIC_API_BASE_URL`, and `STOREFRONT_URL`. |
+| `auth.ts` | `createAuth()` / `getAuth()` -- request-scoped Better Auth factory with Drizzle adapter, email/password, 2FA (TOTP + email OTP), and admin plugin. It must not be cached because the instance closes over the request database adapter and Worker bindings. |
 | `admin-setup.ts` | D1-backed first-admin setup coordination. Owns the singleton setup claim, setup attempt rate limit, and guarded admin promotion/claim completion helper used by `/api/v1/setup`. |
 | `scanner-token-claims.ts` | D1-backed scanner QR-token claim helpers. Minting stores only a token hash, exchange atomically consumes an unexpired/unconsumed claim before a scanner KV session is written, and scheduled maintenance prunes expired/old claims. |
 | `index.ts` | Barrel re-export of `createAuth`, `getAuth`, `Auth` type, and setup coordination helpers. |
@@ -42,10 +42,10 @@ Customer Auth Flow (storefront):
 |------|---------|
 | `rbac/types.ts` | TypeScript types: `PermissionName`, `UserPermissionContext`, `PermissionCheckResult`, `ProtectedRouteConfig`, `SystemRole`, `PermissionGroup`, `PermissionCategory`, `PermissionMetadata`, `RoleWithPermissions`, `UserPermissionOverride` |
 | `rbac/permissions.ts` | `PERMISSIONS` constant (78 permissions across 13 categories), `PERMISSION_METADATA` record, helper functions (`getPermissionsByCategory`, `getAllPermissions`, `getAllPermissionNames`, `isSensitivePermission`) |
-| `rbac/helpers.ts` | Core RBAC engine: `getUserPermissions()` (L1 Map + L2 KV + D1 batch query), `hasPermission()`, `hasAnyPermission()`, `hasAllPermissions()`, `checkPermissionDetailed()`, `getUserPermissionContext()`, `isSuperAdmin()`, `hasAdminAccess()`, role/permission CRUD (`assignRoleToUser`, `removeRoleFromUser`, `setUserPermissionOverride`, `removeUserPermissionOverride`, `getAllRolesWithPermissions`, `getRolePermissions`), `clearPermissionCache()`, `clearAllPermissionCache()` |
+| `rbac/helpers.ts` | Core RBAC engine: `getUserPermissions()` (KV + authoritative database batch query), `hasPermission()`, `hasAnyPermission()`, `hasAllPermissions()`, `checkPermissionDetailed()`, `getUserPermissionContext()`, `isSuperAdmin()`, `hasAdminAccess()`, role/permission CRUD (`assignRoleToUser`, `removeRoleFromUser`, `setUserPermissionOverride`, `removeUserPermissionOverride`, `getAllRolesWithPermissions`, `getRolePermissions`), and `clearPermissionCache()` |
 | `rbac/page-permissions.ts` | Maps admin page routes to required permissions. Static map for exact routes, regex array for dynamic routes (e.g., `/admin/products/[id]/edit`). `getPagePermission()` and `hasPageAccess()` functions. |
 | `rbac/route-permissions.ts` | Maps API route patterns to required permissions per HTTP method. Glob-style wildcard matching. `getRoutePermission()` function. `ROUTE_PERMISSIONS` record. |
-| `rbac/auto-seed.ts` | `autoSeedRbacIfNeeded()` -- seeds permissions and five system roles during first-admin setup, and reconciles changed code-owned definitions in idempotent D1 batches. API middleware schedules reconciliation outside the request critical path, deduplicates it per isolate, and uses a versioned six-hour Cloudflare KV marker so fresh isolates normally need one KV read. |
+| `rbac/auto-seed.ts` | `autoSeedRbacIfNeeded()` -- seeds permissions and five system roles during first-admin setup, and reconciles changed code-owned definitions in idempotent database batches. API middleware schedules reconciliation outside the request critical path and uses a versioned six-hour Cloudflare KV marker; it never shares database I/O across Worker requests. |
 | `rbac/api-protection.ts` | Higher-order functions for wrapping API route handlers: `withPermission()`, `withAnyPermission()`, `withAllPermissions()`, `withSuperAdmin()`. Also `checkPermissionForApi()`, `checkAnyPermissionForApi()`, `checkAllPermissionsForApi()` helpers, and `unauthorizedResponse()` / `forbiddenResponse()` factory functions. These are Astro-style wrappers; the Hono API uses middleware instead. |
 | `rbac/index.ts` | Barrel re-export of all RBAC modules. |
 
@@ -115,12 +115,11 @@ Customer Auth Flow (storefront):
 
 ### Permission Caching
 
-- **L1**: In-memory `Map<userId, {permissions, timestamp}>` per Worker isolate, 5-minute TTL
-- **L2**: Cloudflare KV (`rbac:perms:{userId}`), 5-minute TTL
-- **Read order**: `getUserPermissions(db, userId, kv)` uses KV as the cross-isolate source of truth when KV is supplied, then refreshes from D1 on KV miss. Stale local memory must not override a missing/cleared KV entry.
+- **Shared cache**: Cloudflare KV (`rbac:perms:{userId}`), 5-minute TTL
+- **Read order**: `getUserPermissions(db, userId, kv)` reads KV first, then refreshes from the authoritative database on a miss. It intentionally has no isolate-local user cache, so binding changes and revocations cannot be hidden by stale process memory.
 - **D1 batch query**: All 3 queries (user lookup, role permissions, user overrides) run in a single `db.batch()` call
-- **Cache invalidation**: `clearPermissionCache(userId, kv)` deletes both L1 and L2. `clearAllPermissionCache()` clears local Map only (no KV prefix deletion).
-- **Mutation rule**: RBAC mutation routes must delete affected per-user KV entries with `clearPermissionCache(userId, kv)`. `clearAllPermissionCache()` is useful only for the current isolate and must not be treated as cross-isolate invalidation.
+- **Cache invalidation**: `clearPermissionCache(userId, kv)` deletes the affected shared KV entry.
+- **Mutation rule**: RBAC mutation routes enumerate affected users and delete their per-user KV entries. There is no isolate-local authority cache to clear.
 
 ## Admin Middleware Pipeline
 
@@ -254,7 +253,7 @@ Phone numbers normalized to E.164 format via `libphonenumber-js`. New customer r
 
 1. **2FA is optional for existing/manual admins, mandatory for invited admins**. Invited admins are blocked by `mustEnrollTwoFactor` until a verified 2FA method update clears the flag. When 2FA is enabled, the admin middleware redirects browser sessions to `/auth/two-factor`, and the API admin middleware rejects unverified sessions except exact 2FA info/verify/complete-verification/method endpoints.
 
-2. **`clearAllPermissionCache()` is local only**: Cross-isolate RBAC invalidation depends on deleting affected `rbac:perms:{userId}` KV entries with `clearPermissionCache(userId, kv)`. Role/permission mutation routes should enumerate affected users and clear those keys; do not rely on local-only broad cache clearing.
+2. **Permission invalidation is per user**: Cross-isolate RBAC invalidation deletes affected `rbac:perms:{userId}` KV entries with `clearPermissionCache(userId, kv)`. Role/permission mutation routes enumerate affected users and clear those keys.
 
 3. **Route permission map has mixed path prefixes**: Some entries use `/api/products/*` (legacy prefix), others use `/api/v1/admin/categories/*` (current prefix). The API admin-auth middleware normalizes paths by prepending `/api/v1` if not present. Admin page access is handled separately through the TanStack Start guard and `@scalius/core/auth/rbac/page-permissions`.
 

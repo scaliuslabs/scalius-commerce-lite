@@ -20,7 +20,6 @@ export type {
 export {
   registerEmailProvider,
   getEmailProvider,
-  setActiveEmailProvider,
 } from "./email/index";
 
 export {

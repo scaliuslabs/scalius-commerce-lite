@@ -1,7 +1,7 @@
 // src/modules/orders/orders.storefront.ts
 // Storefront order creation — validates and prepares orders for queue dispatch.
 
-import type { Database } from "@scalius/database/client";
+import { safeBatch, type Database } from "@scalius/database/client";
 import { DEFAULT_CURRENCY, normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
 import { roundPrice } from "@scalius/shared/price-utils";
 import {
@@ -331,11 +331,9 @@ export async function createStorefrontOrder(
     if (!checkoutPolicySnapshot) {
         // Compatibility for direct Core callers. The API route supplies its
         // already-fresh policy snapshot and skips this extra database roundtrip.
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
-        const readResults = await storefrontDb.batch([
+        const [settingsList = []] = await safeBatch(storefrontDb, [
             storefrontDb.select().from(siteSettings).limit(1),
-        ] as any);
-        const settingsList = readResults[0] as Record<string, unknown>[];
+        ]);
         fallbackSettings = settingsList.length > 0
             ? settingsList[0] as Record<string, unknown>
             : null;

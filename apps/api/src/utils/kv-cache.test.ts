@@ -31,14 +31,15 @@ describe("KV cache binding isolation", () => {
     });
   });
 
-  it("does not serve local fallback data after a bound KV read fails", async () => {
-    await setCache("merchant", { id: "local-only" }, 60);
+  it("fails closed instead of serving process-local data when KV is unavailable", async () => {
     const unavailable = {
       get: vi.fn(async () => {
         throw new Error("KV unavailable");
       }),
     } as unknown as KVNamespace;
 
-    await expect(getCache("merchant", unavailable)).resolves.toBeNull();
+    await expect(getCache("merchant", unavailable)).rejects.toThrow(
+      "KV unavailable",
+    );
   });
 });

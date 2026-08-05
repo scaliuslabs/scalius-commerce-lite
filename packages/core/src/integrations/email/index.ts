@@ -12,7 +12,6 @@ export type {
 export {
   registerEmailProvider,
   getEmailProvider,
-  setActiveEmailProvider,
 } from "./provider";
 
 export { CloudflareEmailProvider } from "./cloudflare";

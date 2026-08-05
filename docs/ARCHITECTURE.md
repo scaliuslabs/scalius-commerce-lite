@@ -53,6 +53,16 @@ provider implementation markers. This is a transitive boundary check: it fails
 even when database code reached the browser indirectly through a re-export
 barrel. UI code that needs a pure policy or type imports its leaf module.
 
+Worker bindings, database/auth/provider clients, credentials, in-flight I/O,
+and tenant data are request-scoped. The API and admin Workers create them from
+the current request context and never retain them in module variables. Deep
+media projection is the sole implicit request context: both Workers wrap each request in Cloudflare's
+`AsyncLocalStorage` with only the normalized public media base URL, allowing
+concurrent merchant requests to remain isolated without threading presentation
+configuration through every domain-service signature. The API production build
+runs `scripts/check-worker-request-isolation.mjs`, which rejects mutable server
+module variables and the known historical client/cache globals.
+
 ## Database Provider Boundary
 
 D1 remains the zero-configuration starter database. TursoDB is the portable

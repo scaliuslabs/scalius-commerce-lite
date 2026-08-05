@@ -577,25 +577,12 @@ export class FCMMessagingService {
   }
 }
 
-// Singleton instance to prevent re-parsing JSON on every request
-let fcmInstance: FCMMessagingService | null = null;
-
 export function getFirebaseAdminMessaging(
   environment: Record<string, unknown>,
   serviceAccountJson?: string,
 ): FCMMessagingService {
-  // If a specific service account is provided, we might want to bypass singleton or handle it differently.
-  // For now, if provided, we assume it's the intended source and create a new instance if needed,
-  // or just recreate if it differs. To keep it simple and safe for dynamic updates:
-  // If serviceAccountJson is provided, ALWAYS return a new instance or reuse if matches (too complex to check match).
-  // Let's just create a new one if credentials are provided, or fallback to singleton if not (legacy/env var mode).
-
-  if (serviceAccountJson) {
-    return new FCMMessagingService(environment, serviceAccountJson);
-  }
-
-  if (!fcmInstance) {
-    fcmInstance = new FCMMessagingService(environment);
-  }
-  return fcmInstance;
+  // The service retains its environment and access-token lookup state. Create
+  // it per request; encrypted OAuth tokens are already shared safely through
+  // the request's KV binding.
+  return new FCMMessagingService(environment, serviceAccountJson);
 }

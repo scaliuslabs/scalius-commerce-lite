@@ -14,12 +14,6 @@ import {
 import type { PermissionName, UserPermissionContext, PermissionCheckResult } from "./types";
 import { getAllPermissionNames } from "./permissions";
 
-// Simple in-memory cache for user permissions
-// In production, consider using Redis or a more robust caching solution
-const permissionCache = new Map<
-  string,
-  { permissions: Set<string>; timestamp: number }
->();
 const CACHE_TTL = 300; // 5 minutes in KV
 const PERMISSION_CACHE_VERSION = getRbacSeedCacheKey();
 
@@ -36,21 +30,12 @@ function getPermCacheKey(userId: string): string {
 }
 
 /**
- * Clear the permission cache for a specific user.
- * In production, pass the KV namespace to ensure cross-isolate clearing.
+ * Clear the shared permission cache for a specific user.
  */
 export async function clearPermissionCache(userId: string, kv?: KVNamespace): Promise<void> {
-  permissionCache.delete(userId);
   if (kv) {
     await kv.delete(getPermCacheKey(userId));
   }
-}
-
-/**
- * Clear all local permission caches (Note: cannot cleanly wipe KV by prefix without listing keys)
- */
-export function clearAllPermissionCache(): void {
-  permissionCache.clear();
 }
 
 /**
@@ -111,14 +96,7 @@ export async function getUserPermissions(
   if (kv) {
     const kvCached = await kv.get<string[]>(getPermCacheKey(userId), "json");
     if (kvCached) {
-      const permSet = new Set(kvCached);
-      permissionCache.set(userId, { permissions: permSet, timestamp: Date.now() });
-      return permSet;
-    }
-  } else {
-    const cached = permissionCache.get(userId);
-    if (cached && Date.now() - cached.timestamp < CACHE_TTL * 1000) {
-      return cached.permissions;
+      return new Set(kvCached);
     }
   }
 
@@ -127,12 +105,6 @@ export async function getUserPermissions(
     return new Set();
   }
   const effectivePermissions = resolution.permissions;
-
-  // Cache the result in local memory
-  permissionCache.set(userId, {
-    permissions: effectivePermissions,
-    timestamp: Date.now(),
-  });
 
   // Cache the result in KV for other isolates.
   if (kv) {

@@ -9,7 +9,6 @@ import { createAuth } from "@scalius/core/auth";
 import { isTransientD1Error, retryTransientD1, wait } from "@scalius/core/utils/transient-d1";
 import { getDb } from "@scalius/database/client";
 import { session as sessionTable } from "@scalius/database/schema";
-import { initPublicMediaUrl } from "@scalius/core/integrations/storage";
 import { env as cfEnv } from "cloudflare:workers";
 import { and, eq } from "drizzle-orm";
 
@@ -23,17 +22,13 @@ function getCfEnv(): Env {
 }
 
 /**
- * Initialize Cloudflare bindings (DB, KV, Storage).
+ * Validate the request-scoped database binding.
  * Called once per request in the auth middleware.
  */
 export function initBindings(): Env {
   const env = getCfEnv();
 
-  // Initialize DB
   getDb(env);
-
-  initPublicMediaUrl((env.R2_PUBLIC_URL as string) || "");
-
   return env;
 }
 

@@ -29,13 +29,15 @@ describe("RBAC seed cache marker", () => {
     });
   });
 
-  it("keeps reconciliation batched and deduplicated outside request authority", async () => {
+  it("keeps reconciliation batched and request-scoped outside request authority", async () => {
     const source = readFileSync(new URL("./auto-seed.ts", import.meta.url), "utf8");
 
     expect(source).toContain("missingPermissionInserts");
     expect(source).toContain("missingGrantInserts");
     expect(source).toContain("await db.batch(missingGrantInserts as any)");
-    expect(source).toContain("if (seedingPromise) return seedingPromise");
+    expect(source).not.toContain("seedingPromise");
+    expect(source).not.toContain("seedingChecked");
+    expect(source).toContain("await isRbacSeedCacheCurrent(kv)");
     expect(source).toContain(".onConflictDoNothing()");
   });
 });

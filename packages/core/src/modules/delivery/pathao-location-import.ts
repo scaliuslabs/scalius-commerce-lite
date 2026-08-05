@@ -59,39 +59,43 @@ const KV_KEY = "location_import:pathao";
 const ZONES_PER_CHUNK = 30; // Process 30 zones' areas per request
 const MAX_CONCURRENT = 8; // Parallel Pathao API calls
 
-// ─── Token ───────────────────────────────────────────────────────────────────
+// ─── Pathao API (request-scoped token + concurrency limit) ──────────────────
 
-let cachedToken: { token: string; expiresAt: number } | null = null;
+function createPathaoApiClient(creds: PathaoCredentials) {
+  // Concurrent calls within one import chunk share authentication work, while
+  // credentials and fetch I/O never escape the request that created them.
+  let tokenPromise: Promise<string> | null = null;
 
-async function getToken(creds: PathaoCredentials): Promise<string> {
-  if (cachedToken && cachedToken.expiresAt > Date.now()) return cachedToken.token;
+  async function getToken(): Promise<string> {
+    tokenPromise ??= (async () => {
+      const res = await fetch(`${creds.baseUrl}/aladdin/api/v1/issue-token`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          client_id: creds.clientId,
+          client_secret: creds.clientSecret,
+          grant_type: "password",
+          username: creds.username,
+          password: creds.password,
+        }),
+      });
+      if (!res.ok) throw new Error(`Pathao auth failed: ${res.status}`);
+      const data = (await res.json()) as { access_token: string };
+      return data.access_token;
+    })();
+    return tokenPromise;
+  }
 
-  const res = await fetch(`${creds.baseUrl}/aladdin/api/v1/issue-token`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      client_id: creds.clientId,
-      client_secret: creds.clientSecret,
-      grant_type: "password",
-      username: creds.username,
-      password: creds.password,
-    }),
-  });
-  if (!res.ok) throw new Error(`Pathao auth failed: ${res.status}`);
-  const data = (await res.json()) as { access_token: string; expires_in: number };
-  cachedToken = { token: data.access_token, expiresAt: Date.now() + (data.expires_in - 600) * 1000 };
-  return cachedToken.token;
-}
-
-// ─── Pathao API (with concurrency limit) ─────────────────────────────────────
-
-async function fetchJson<T>(creds: PathaoCredentials, path: string): Promise<T> {
-  const token = await getToken(creds);
-  const res = await fetch(`${creds.baseUrl}${path}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw new Error(`Pathao API ${path} failed: ${res.status}`);
-  return res.json() as Promise<T>;
+  return {
+    async fetchJson<T>(path: string): Promise<T> {
+      const token = await getToken();
+      const res = await fetch(`${creds.baseUrl}${path}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(`Pathao API ${path} failed: ${res.status}`);
+      return res.json() as Promise<T>;
+    },
+  };
 }
 
 /** Run promises with max concurrency */
@@ -357,6 +361,7 @@ export async function processPathaoImportChunk(
   creds: PathaoCredentials,
 ): Promise<ImportChunkResult> {
   const progress = await getProgress(kv);
+  const pathao = createPathaoApiClient(creds);
 
   try {
     // ── Phase 1: Cities (one chunk, one API call) ─────────────────────
@@ -365,7 +370,7 @@ export async function processPathaoImportChunk(
       progress.startedAt = progress.startedAt || new Date().toISOString();
 
       type CityResponse = { data: { data: Array<{ city_id: number; city_name: string }> } };
-      const res = await fetchJson<CityResponse>(creds, "/aladdin/api/v1/city-list");
+      const res = await pathao.fetchJson<CityResponse>("/aladdin/api/v1/city-list");
       const pathaoCities = res.data?.data || [];
 
       const existing = await loadExistingByPathaoId(db, "city");
@@ -405,7 +410,7 @@ export async function processPathaoImportChunk(
       // Fetch zones for ALL cities in parallel (limited concurrency)
       const results = await parallelLimit(
         progress.cities.map(city => async () => {
-          const res = await fetchJson<ZoneResponse>(creds, `/aladdin/api/v1/cities/${city.pathaoId}/zone-list`);
+          const res = await pathao.fetchJson<ZoneResponse>(`/aladdin/api/v1/cities/${city.pathaoId}/zone-list`);
           return { city, zones: res.data?.data || [] };
         }),
         MAX_CONCURRENT,
@@ -463,7 +468,7 @@ export async function processPathaoImportChunk(
       const results = await parallelLimit(
         batch.map(zone => async () => {
           try {
-            const res = await fetchJson<AreaResponse>(creds, `/aladdin/api/v1/zones/${zone.pathaoId}/area-list`);
+            const res = await pathao.fetchJson<AreaResponse>(`/aladdin/api/v1/zones/${zone.pathaoId}/area-list`);
             return { zone, areas: res.data?.data || [] };
           } catch (err: unknown) {
             console.error(`[pathao-import] Failed to fetch areas for zone ${zone.name}:`, err);

@@ -18,11 +18,6 @@ import type {
 } from "./provider";
 import { ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
 
-// Module-level singleton — Stripe client is stateless and reusable.
-// Tracks the key used to create it so credential rotations take effect.
-let _stripe: Stripe | null = null;
-let _stripeKey: string | null = null;
-
 function isProviderTimeoutError(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
   const maybeError = error as { name?: unknown; message?: unknown; code?: unknown; type?: unknown };
@@ -43,11 +38,9 @@ function isProviderTimeoutError(error: unknown): boolean {
 }
 
 export function getStripe(secretKey: string): Stripe {
-  if (!_stripe || _stripeKey !== secretKey) {
-    _stripe = new Stripe(secretKey);
-    _stripeKey = secretKey;
-  }
-  return _stripe;
+  // A Stripe client retains credentials and transport state. Keep it inside
+  // the Worker request that performs provider I/O.
+  return new Stripe(secretKey);
 }
 
 /**

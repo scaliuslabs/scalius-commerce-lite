@@ -7,7 +7,6 @@ import { roles, rolePermissions, permissions, userRoles, user } from "@scalius/d
 import {
     hasPermission,
     getAllRolesWithPermissions,
-    clearAllPermissionCache,
     clearPermissionCacheForRole,
     assignRoleToUser,
     removeRoleFromUser,
@@ -195,8 +194,6 @@ app.openapi(createRoleRoute, (async (c: AdminRouteContext<typeof createRoleRoute
             }
         }
 
-    clearAllPermissionCache();
-
         return created(c, {
             role: {
                 id: roleId,
@@ -350,7 +347,6 @@ app.openapi(updateRoleRoute, async (c) => {
         }
 
         await clearPermissionCacheForRole(db, roleId, kv);
-        clearAllPermissionCache();
 
         const updatedRole = await db.select().from(roles).where(eq(roles.id, roleId)).limit(1);
         const updatedPerms = await getRolePermissions(db, roleId);
@@ -426,8 +422,6 @@ app.openapi(deleteRoleRoute, async (c) => {
 
         await db.delete(rolePermissions).where(eq(rolePermissions.roleId, roleId));
         await db.delete(roles).where(eq(roles.id, roleId));
-
-    clearAllPermissionCache();
 
         return ok(c, {});
     } catch (error: unknown) {

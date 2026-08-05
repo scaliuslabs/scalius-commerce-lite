@@ -4,7 +4,7 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import { swaggerUI } from "@hono/swagger-ui";
 import { cors } from "hono/cors";
 import { getDb } from "@scalius/database/client";
-import { initPublicMediaUrl } from "@scalius/core/integrations/storage";
+import { withPublicMediaUrl } from "@scalius/core/integrations/storage";
 import { productRoutes } from "./routes/products";
 import authRoutes from "./routes/auth";
 import { categoryRoutes } from "./routes/categories";
@@ -132,8 +132,10 @@ app.use("*", requestCorrelationMiddleware);
 app.use("*", async (c, next) => {
   const db = getDb(c.env);
   c.set("db", db);
-  initPublicMediaUrl(getR2PublicUrl(c.env, c.req.url));
-  await next();
+  await withPublicMediaUrl(
+    getR2PublicUrl(c.env, c.req.url),
+    () => next(),
+  );
 });
 
 app.use("*", async (c, next) => {
@@ -238,7 +240,7 @@ if (process.env.NODE_ENV === "development") {
 app.get("/health", async (c) => {
   try {
     const { getCacheStats, getCacheType } = await import("./utils/kv-cache");
-    const kv: KVNamespace | undefined = c.env?.CACHE;
+    const kv = c.env.CACHE;
     const cacheStats = await getCacheStats(kv);
 
     return c.json({
