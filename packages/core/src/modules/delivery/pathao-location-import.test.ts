@@ -1,6 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { preparePathaoLocationItems } from "./pathao-location-import";
+import {
+  preparePathaoLocationItems,
+  processPathaoImportChunk,
+} from "./pathao-location-import";
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe("Pathao location import preparation", () => {
   it("normalizes buyer locations and separates provider routing artifacts", () => {
@@ -38,5 +45,59 @@ describe("Pathao location import preparation", () => {
       { name: "Mohakhali Flyover", parentId: "zone_2", pathaoId: 16548 },
     ]);
     expect(result.rejected).toHaveLength(2);
+  });
+
+  it("commits imported locations through bounded database batches", async () => {
+    const selectChain = {
+      from: vi.fn(() => selectChain),
+      where: vi.fn(() => selectChain),
+      all: vi.fn(async () => []),
+    };
+    const statements: object[] = [];
+    const db = {
+      select: vi.fn(() => selectChain),
+      insert: vi.fn(() => ({
+        values: vi.fn((value) => {
+          const statement = { value };
+          statements.push(statement);
+          return statement;
+        }),
+      })),
+      batch: vi.fn(async (batchStatements: object[]) => batchStatements.map(() => ({}))),
+    };
+    const kv = {
+      get: vi.fn(async () => null),
+      put: vi.fn(async () => undefined),
+    };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ access_token: "token" })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        data: {
+          data: [
+            { city_id: 1, city_name: "Dhaka" },
+            { city_id: 2, city_name: "Chattogram" },
+            { city_id: 3, city_name: "Rajshahi" },
+          ],
+        },
+      })));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await processPathaoImportChunk(db as never, kv as never, {
+      baseUrl: "https://pathao.example.test",
+      clientId: "client",
+      clientSecret: "secret",
+      username: "merchant",
+      password: "password",
+    });
+
+    expect(result).toMatchObject({
+      status: "importing",
+      phase: "cities",
+      stats: { citiesCreated: 3, citiesUpdated: 0 },
+    });
+    expect(statements).toHaveLength(3);
+    expect(db.batch).toHaveBeenCalledOnce();
+    expect(db.batch).toHaveBeenCalledWith(statements);
+    expect(kv.put).toHaveBeenCalledOnce();
   });
 });

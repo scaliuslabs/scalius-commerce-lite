@@ -1,6 +1,6 @@
 // src/lib/rbac/helpers.ts
 import { eq, and } from "drizzle-orm";
-import type { Database } from "@scalius/database/client";
+import { safeBatch, type Database } from "@scalius/database/client";
 import { NotFoundError } from "@scalius/core/errors";
 import { getRbacSeedCacheKey } from "./auto-seed";
 import {
@@ -373,24 +373,27 @@ export async function isSuperAdmin(
 export async function getAllRolesWithPermissions(
   db: Database
 ) {
-  const allRoles = await db.select().from(roles);
+  const [allRoles = [], permissionRows = []] = await safeBatch(db, [
+    db.select().from(roles),
+    db
+      .select({
+        roleId: rolePermissions.roleId,
+        name: permissions.name,
+      })
+      .from(rolePermissions)
+      .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id)),
+  ] as const);
+  const permissionNamesByRoleId = new Map<string, string[]>();
+  for (const row of permissionRows) {
+    const names = permissionNamesByRoleId.get(row.roleId) ?? [];
+    names.push(row.name);
+    permissionNamesByRoleId.set(row.roleId, names);
+  }
 
-  const rolesWithPerms = await Promise.all(
-    allRoles.map(async (role) => {
-      const perms = await db
-        .select({ name: permissions.name })
-        .from(rolePermissions)
-        .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id))
-        .where(eq(rolePermissions.roleId, role.id));
-
-      return {
-        ...role,
-        permissions: perms.map((p) => p.name),
-      };
-    })
-  );
-
-  return rolesWithPerms;
+  return allRoles.map((role) => ({
+    ...role,
+    permissions: permissionNamesByRoleId.get(role.id) ?? [],
+  }));
 }
 
 /**
