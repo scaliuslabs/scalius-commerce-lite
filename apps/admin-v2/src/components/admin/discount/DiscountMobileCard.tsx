@@ -1,10 +1,10 @@
-import { formatDateShort } from "@scalius/shared/timestamps";
 import { AlertTriangle, Check, Copy, Pencil, Tag, X } from "lucide-react";
 
 import { DataTableRowActions } from "~/components/admin/data-table/DataTableRowActions";
 import type { DiscountItem } from "~/components/admin/data-table/columns/discount-columns";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Button } from "~/components/ui/button";
+import { formatAdminDate } from "~/lib/admin-time";
 import { DiscountStatusBadge } from "./DiscountStatusBadge";
 import {
   getDiscountLifecycle,
@@ -123,14 +123,14 @@ export function DiscountMobileCard({
         </div>
         <div className="min-w-0 px-2">
           <dt className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Starts</dt>
-          <dd className="mt-0.5 truncate text-[11px] font-medium text-foreground" suppressHydrationWarning>
-            {formatDateShort(discount.startDate)}
+          <dd className="mt-0.5 truncate text-[11px] font-medium text-foreground">
+            {formatAdminDate(discount.startDate) ?? "N/A"}
           </dd>
         </div>
         <div className="min-w-0 px-2">
           <dt className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Ends</dt>
-          <dd className="mt-0.5 truncate text-[11px] font-medium text-foreground" suppressHydrationWarning>
-            {discount.endDate ? formatDateShort(discount.endDate) : "No end"}
+          <dd className="mt-0.5 truncate text-[11px] font-medium text-foreground">
+            {discount.endDate ? formatAdminDate(discount.endDate) ?? "N/A" : "No end"}
           </dd>
         </div>
       </dl>

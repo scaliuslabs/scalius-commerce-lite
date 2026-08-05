@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { formatPrice } from "@scalius/shared/currency";
 import { cn } from "@scalius/shared/utils";
-import { formatDateShort as formatDate } from "@scalius/shared/timestamps";
+import { formatAdminDate } from "~/lib/admin-time";
 import { DataTableColumnHeader } from "../DataTableColumnHeader";
 import { createSelectColumn, createActionsColumn } from "./column-factories";
 import { DiscountStatusBadge } from "../../discount/DiscountStatusBadge";
@@ -180,12 +180,14 @@ export function getDiscountColumns(
       cell: ({ row }) => {
         const discount = row.original;
         return (
-          <div className="py-0.5 text-xs" suppressHydrationWarning>
+          <div className="py-0.5 text-xs">
             <p className="font-medium text-foreground">
-              {formatDate(discount.startDate)}
+              {formatAdminDate(discount.startDate) ?? "N/A"}
             </p>
             <p className="mt-0.5 text-muted-foreground">
-              {discount.endDate ? `Ends ${formatDate(discount.endDate)}` : "No end date"}
+              {discount.endDate
+                ? `Ends ${formatAdminDate(discount.endDate) ?? "N/A"}`
+                : "No end date"}
             </p>
           </div>
         );
