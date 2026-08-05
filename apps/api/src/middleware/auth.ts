@@ -4,7 +4,7 @@ import {
   verifyToken,
   refreshTokenIfNeeded,
 } from "../utils/jwt";
-import { UnauthorizedError } from "../utils/api-error";
+import { AppError, UnauthorizedError } from "../utils/api-error";
 
 // Define the user type for type safety
 interface User {
@@ -46,14 +46,18 @@ export const authMiddleware: MiddlewareHandler = async (c, next) => {
   }
 
   try {
-    // Verify token (async - checks Redis blacklist)
+    // Verify token against the shared KV revocation list.
     const decoded = (await verifyToken(token, { JWT_SECRET: c.env.JWT_SECRET, CACHE: c.env.CACHE })) as User;
 
     // Store user info in context
     c.set("user", decoded);
 
     // Check if token needs to be refreshed
-    const refreshedToken = await refreshTokenIfNeeded(token, 5, { JWT_SECRET: c.env.JWT_SECRET, CACHE: c.env.CACHE });
+    const refreshedToken = await refreshTokenIfNeeded(
+      token,
+      { JWT_SECRET: c.env.JWT_SECRET, CACHE: c.env.CACHE },
+      5,
+    );
 
     // If token was refreshed, set new token in response header
     if (refreshedToken !== token) {
@@ -63,7 +67,7 @@ export const authMiddleware: MiddlewareHandler = async (c, next) => {
     // Continue to next middleware/handler
     await next();
   } catch (error: unknown) {
-    if (error instanceof UnauthorizedError) throw error;
+    if (error instanceof AppError) throw error;
     // SECURITY: Use generic error message to prevent token enumeration
     throw new UnauthorizedError("Invalid or expired token");
   }

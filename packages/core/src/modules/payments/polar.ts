@@ -44,29 +44,18 @@ import {
 } from "./order-currency";
 
 // ---------------------------------------------------------------------------
-// Client factory (one instance per set of credentials)
+// Request-scoped client factory
 // ---------------------------------------------------------------------------
 
-let _cachedClient: Polar | null = null;
-let _cachedClientKey: string | null = null;
 const POLAR_CHECKOUT_RECOVERY_LIMIT = 100;
 const POLAR_ATTEMPT_METADATA_KEY = "scaliusPaymentAttemptKey";
 
 function getPolarClient(settings: PolarSettings): Polar {
     const server = settings.sandbox ? "sandbox" : "production";
-    const clientKey = `${server}:${settings.accessToken}`;
-
-    // Reuse client if credentials haven't changed
-    if (_cachedClient && _cachedClientKey === clientKey) {
-        return _cachedClient;
-    }
-
-    _cachedClient = new Polar({
+    return new Polar({
         accessToken: settings.accessToken,
         server,
     });
-    _cachedClientKey = clientKey;
-    return _cachedClient;
 }
 
 function isProviderTimeoutError(error: unknown, signal?: AbortSignal): boolean {

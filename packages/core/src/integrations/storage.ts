@@ -1,5 +1,6 @@
 // src/lib/storage.ts
 // Cloudflare R2 storage – replaces AWS S3 SDK
+import { AsyncLocalStorage } from "node:async_hooks";
 import { nanoid } from "nanoid";
 import { ValidationError, ServiceUnavailableError } from "@scalius/core/errors";
 import {
@@ -24,13 +25,23 @@ const MULTIPART_UPLOAD_ID_MAX_LENGTH = 512;
 const MULTIPART_ETAG_MAX_LENGTH = 256;
 
 // ---------------------------------------------------------------------------
-// Public media URL presentation state. R2 bindings are always request-scoped.
+// Public media URL presentation context. R2 bindings remain request-scoped.
 // ---------------------------------------------------------------------------
-let _publicUrl: string = "";
+const publicMediaUrlContext = new AsyncLocalStorage<string>();
 
-/** Register the public media URL for response projection in this isolate. */
-export function initPublicMediaUrl(publicUrl: string): void {
-  _publicUrl = publicUrl.replace(/\/$/, ""); // strip trailing slash
+/**
+ * Run one request with its public media URL available to deep projections.
+ * AsyncLocalStorage keeps concurrent Worker requests isolated without passing
+ * presentation configuration through every domain-service signature.
+ */
+export function withPublicMediaUrl<T>(
+  publicUrl: string,
+  callback: () => T,
+): T {
+  return publicMediaUrlContext.run(
+    publicUrl.trim().replace(/\/+$/, ""),
+    callback,
+  );
 }
 
 export function getPublicMediaUrl(baseUrl: string, key: string): string {
@@ -43,7 +54,10 @@ export function getCurrentPublicMediaUrl(
   key: string,
   publicUrl?: string,
 ): string {
-  return getPublicMediaUrl((publicUrl ?? _publicUrl) || "", key);
+  return getPublicMediaUrl(
+    publicUrl ?? publicMediaUrlContext.getStore() ?? "",
+    key,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -254,7 +268,7 @@ function r2ObjectSha256(object: R2Object): ArrayBuffer | undefined {
  *
  * @param file    The file to upload (from FormData)
  * @param bucket  Request-scoped R2 bucket binding
- * @param publicUrl  Public base URL override; falls back to the presentation URL
+ * @param publicUrl  Public base URL override; falls back to request context
  */
 export async function uploadFile(
   file: File,
@@ -270,9 +284,8 @@ export async function uploadFile(
 
   const r2 = requireBucket(bucket);
 
-  // Use the R2_PUBLIC_URL configured via initPublicMediaUrl() in middleware.
-  // If not set, the URL field in the result will just be the bare key.
-  const baseUrl = (publicUrl ?? _publicUrl) || "";
+  // If no request context or explicit URL exists, the result uses the bare key.
+  const baseUrl = publicUrl ?? publicMediaUrlContext.getStore() ?? "";
   const key = validatedObjectKey(
     metadata?.objectKey,
     `media/${nanoid()}.${media.extension}`,

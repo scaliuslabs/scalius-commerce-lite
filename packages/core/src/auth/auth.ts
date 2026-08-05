@@ -321,36 +321,14 @@ export function createAuth(env?: Env | NodeJS.ProcessEnv) {
 // Type for the auth instance
 export type Auth = ReturnType<typeof createAuth>;
 
-// Cached auth instance for reuse within the same environment
-let cachedAuth: Auth | null = null;
-let cachedEnvSignature: string | null = null;
-
-function getAuthEnvSignature(env?: Env | NodeJS.ProcessEnv): string {
-  const source = (env ?? process.env) as Record<string, string | undefined>;
-  return [
-    source.BETTER_AUTH_SECRET ?? "",
-    source.BETTER_AUTH_URL ?? "",
-    source.PUBLIC_API_BASE_URL ?? "",
-    source.STOREFRONT_URL ?? "",
-  ].join("\u0000");
-}
-
 /**
- * Get or create an auth instance.
- * Uses caching to avoid recreating the instance on every request.
+ * Backward-compatible request-scoped auth factory.
+ *
+ * Better Auth closes over the request's database adapter and Worker bindings,
+ * so retaining an instance in module scope can leak stale bindings or I/O
+ * context into a later request. Keep this alias request-scoped like
+ * `createAuth()`.
  */
 export function getAuth(env?: Env | NodeJS.ProcessEnv): Auth {
-  const envSignature = getAuthEnvSignature(env);
-
-  // Return cached instance if env hasn't changed
-  if (cachedAuth && cachedEnvSignature === envSignature) {
-    return cachedAuth;
-  }
-
-  // Create new instance
-  const auth = createAuth(env);
-  cachedAuth = auth;
-  cachedEnvSignature = envSignature;
-
-  return auth;
+  return createAuth(env);
 }

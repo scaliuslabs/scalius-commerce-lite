@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   FCMMessagingService,
   getFirebaseAccessTokenCacheKey,
+  getFirebaseAdminMessaging,
 } from "./admin";
 import { decryptCredentials } from "../../utils/credential-encryption";
 
@@ -45,6 +46,18 @@ describe("FCMMessagingService", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+  });
+
+  it("creates request-scoped messaging services instead of retaining Worker bindings", () => {
+    const firstEnvironment = { PROJECT_CACHE_PREFIX: "first" };
+    const secondEnvironment = { PROJECT_CACHE_PREFIX: "second" };
+
+    const first = getFirebaseAdminMessaging(firstEnvironment, serviceAccountJson);
+    const sameEnvironment = getFirebaseAdminMessaging(firstEnvironment, serviceAccountJson);
+    const second = getFirebaseAdminMessaging(secondEnvironment, serviceAccountJson);
+
+    expect(sameEnvironment).not.toBe(first);
+    expect(second).not.toBe(first);
   });
 
   it("sends multicast messages with bounded concurrency while preserving token response order", async () => {

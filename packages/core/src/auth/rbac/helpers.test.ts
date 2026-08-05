@@ -1,7 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { getAllPermissionNames, PERMISSIONS } from "./permissions";
 import {
-  clearAllPermissionCache,
   clearPermissionCache,
   getFreshUserPermissionsFromD1,
   getUserPermissions,
@@ -19,11 +18,7 @@ function createSelectChain() {
 }
 
 describe("RBAC permission cache", () => {
-  beforeEach(() => {
-    clearAllPermissionCache();
-  });
-
-  it("does not trust stale local memory after a KV permission cache miss", async () => {
+  it("does not retain stale local memory after a KV permission cache miss", async () => {
     const selectChain = createSelectChain();
     const db = {
       select: vi.fn(() => selectChain),

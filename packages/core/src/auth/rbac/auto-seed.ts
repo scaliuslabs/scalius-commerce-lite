@@ -9,10 +9,10 @@ import {
 } from "@scalius/database/schema";
 import { PERMISSIONS, getAllPermissions } from "./permissions";
 
-// Track reconciliation per isolate. A versioned KV marker avoids D1 reads across
-// isolates and must expire or be purged after an intentional manual DB reset.
-let seedingChecked = false;
-let seedingPromise: Promise<void> | null = null;
+// A versioned KV marker avoids database reads across isolates and must expire or
+// be purged after an intentional manual database reset. Do not retain an
+// in-flight reconciliation Promise or binding-derived state in module scope:
+// Workers may reuse this isolate for a later request or after bindings change.
 const RBAC_SEED_CACHE_PREFIX = "rbac:seed-current:v4";
 const RBAC_SEED_CACHE_TTL_SECONDS = 6 * 60 * 60;
 
@@ -366,13 +366,11 @@ async function runRbacSeedReconciliation(
 ): Promise<void> {
   try {
     if (await isRbacSeedCacheCurrent(kv)) {
-      seedingChecked = true;
       return;
     }
 
     const seeded = await isRbacSeeded(db);
     if (seeded && await isRbacSeedCurrent(db)) {
-      seedingChecked = true;
       await markRbacSeedCacheCurrent(kv);
       return;
     }
@@ -392,11 +390,10 @@ async function runRbacSeedReconciliation(
       console.log("RBAC: Permission sync complete.");
     }
 
-    seedingChecked = true;
     await markRbacSeedCacheCurrent(kv);
   } catch (error: unknown) {
     console.error("RBAC: Auto-seeding failed:", error);
-    // Don't set seedingChecked so it retries on next request
+    // The missing marker makes a later request retry reconciliation.
   }
 }
 
@@ -404,11 +401,5 @@ export async function autoSeedRbacIfNeeded(
   db: Database,
   kv?: Pick<KVNamespace, "get" | "put">,
 ): Promise<void> {
-  if (seedingChecked) return;
-  if (seedingPromise) return seedingPromise;
-
-  seedingPromise = runRbacSeedReconciliation(db, kv).finally(() => {
-    seedingPromise = null;
-  });
-  return seedingPromise;
+  await runRbacSeedReconciliation(db, kv);
 }

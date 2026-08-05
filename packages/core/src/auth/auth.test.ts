@@ -431,7 +431,7 @@ describe("createAuth", () => {
     }));
   });
 
-  it("does not reuse the cached auth instance when auth URLs or trusted origins change", () => {
+  it("creates a request-scoped auth instance even when the environment is unchanged", () => {
     const first = getAuth({
       BETTER_AUTH_SECRET: "test-secret",
       BETTER_AUTH_URL: "https://api-one.example.com",
@@ -439,7 +439,7 @@ describe("createAuth", () => {
       STOREFRONT_URL: "https://store-one.example.com",
     } as never);
 
-    const cached = getAuth({
+    const sameEnvironment = getAuth({
       BETTER_AUTH_SECRET: "test-secret",
       BETTER_AUTH_URL: "https://api-one.example.com",
       PUBLIC_API_BASE_URL: "https://api-one.example.com",
@@ -453,9 +453,9 @@ describe("createAuth", () => {
       STOREFRONT_URL: "https://store-two.example.com",
     } as never);
 
-    expect(cached).toBe(first);
+    expect(sameEnvironment).not.toBe(first);
     expect(nextOrigin).not.toBe(first);
-    expect(mocks.betterAuth).toHaveBeenCalledTimes(2);
+    expect(mocks.betterAuth).toHaveBeenCalledTimes(3);
     expect((nextOrigin as { options: { baseURL?: string } }).options.baseURL).toBe(
       "https://api-two.example.com",
     );

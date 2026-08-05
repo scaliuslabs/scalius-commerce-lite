@@ -1,6 +1,7 @@
 // src/server/utils/jwt.ts
 import jwt from "jsonwebtoken";
 import { setCache, getCache } from "./kv-cache";
+import { ServiceUnavailableError } from "./api-error";
 
 // Default JWT expiration time (1 hour)
 const DEFAULT_EXPIRATION = "1h";
@@ -24,17 +25,20 @@ async function hashToken(token: string): Promise<string> {
     .join("");
 }
 
-interface JwtEnv {
+interface JwtSigningEnv {
   JWT_SECRET?: string;
-  CACHE?: KVNamespace;
   [key: string]: unknown;
+}
+
+interface JwtVerificationEnv extends JwtSigningEnv {
+  CACHE: KVNamespace;
 }
 
 /**
  * Retrieve the JWT secret from the Workers env or process.env.
  * Called at request time (not module load) to avoid the missing-env issue.
  */
-function getJwtSecret(env?: JwtEnv): string {
+function getJwtSecret(env?: JwtSigningEnv): string {
   const secret =
     env?.JWT_SECRET ||
     (typeof process !== "undefined" ? process.env.JWT_SECRET : undefined);
@@ -52,7 +56,7 @@ function getJwtSecret(env?: JwtEnv): string {
 export function generateToken(
   payload: Record<string, unknown>,
   expiresIn: string = DEFAULT_EXPIRATION,
-  env?: JwtEnv,
+  env?: JwtSigningEnv,
 ): string {
   try {
     const secret = getJwtSecret(env);
@@ -68,10 +72,10 @@ export function generateToken(
  */
 export async function verifyToken(
   token: string,
-  env?: JwtEnv,
+  env: JwtVerificationEnv,
 ): Promise<jwt.JwtPayload | string> {
   try {
-    if (await isTokenBlacklisted(token, env?.CACHE)) {
+    if (await isTokenBlacklisted(token, env.CACHE)) {
       throw new Error("Token has been revoked");
     }
 
@@ -119,8 +123,8 @@ export function isTokenExpiringSoon(
  */
 export async function refreshTokenIfNeeded(
   token: string,
+  env: JwtVerificationEnv,
   thresholdMinutes = 5,
-  env?: JwtEnv,
 ): Promise<string> {
   try {
     if (isTokenExpiringSoon(token, thresholdMinutes)) {
@@ -131,6 +135,7 @@ export async function refreshTokenIfNeeded(
     }
     return token;
   } catch (error: unknown) {
+    if (error instanceof ServiceUnavailableError) throw error;
     console.error("Error refreshing token:", error);
     throw new Error("Failed to refresh token");
   }
@@ -141,7 +146,7 @@ export async function refreshTokenIfNeeded(
  */
 export async function revokeToken(
   token: string,
-  kv?: KVNamespace,
+  kv: KVNamespace,
 ): Promise<void> {
   try {
     const decoded = jwt.decode(token) as { exp?: number };
@@ -175,7 +180,7 @@ export async function revokeToken(
  */
 export async function isTokenBlacklisted(
   token: string,
-  kv?: KVNamespace,
+  kv: KVNamespace,
 ): Promise<boolean> {
   try {
     const tokenHash = await hashToken(token);
@@ -186,7 +191,9 @@ export async function isTokenBlacklisted(
     return result?.revoked === true;
   } catch (error: unknown) {
     console.error("Error checking token blacklist:", error);
-    return true; // Fail closed — reject token when KV is unavailable
+    throw new ServiceUnavailableError(
+      "Authentication revocation state is temporarily unavailable.",
+    );
   }
 }
 
@@ -206,7 +213,7 @@ export function extractTokenFromHeader(
  * and whether its length/entropy appears sufficient.
  */
 export function getTokenStats(
-  env?: JwtEnv,
+  env?: JwtSigningEnv,
 ): {
   blacklistStorage: string;
   isConfigured: boolean;

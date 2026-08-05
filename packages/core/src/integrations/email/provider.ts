@@ -59,7 +59,7 @@ export interface EmailProvider {
 // ── Provider Registry ───────────────────────────────────────────────
 
 const providers = new Map<string, EmailProvider>();
-let activeProviderName = "cloudflare";
+const DEFAULT_PROVIDER_NAME = "cloudflare";
 
 /**
  * Register an email provider by name.
@@ -69,15 +69,8 @@ export function registerEmailProvider(name: string, provider: EmailProvider): vo
 }
 
 /**
- * Retrieve a provider by name, falling back to the active provider.
+ * Retrieve a provider by name, falling back to the immutable default.
  */
 export function getEmailProvider(name?: string): EmailProvider | undefined {
-  return providers.get(name || activeProviderName);
-}
-
-/**
- * Set the default active email provider by name.
- */
-export function setActiveEmailProvider(name: string): void {
-  activeProviderName = name;
+  return providers.get(name || DEFAULT_PROVIDER_NAME);
 }

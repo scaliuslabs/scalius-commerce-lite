@@ -9,6 +9,7 @@ import {
   createMediaMultipartUpload,
   getCurrentPublicMediaUrl,
   getPublicMediaUrl,
+  withPublicMediaUrl,
   headMediaObject,
   uploadFile,
   uploadMediaMultipartPart,
@@ -144,6 +145,24 @@ describe("R2 media multipart primitives", () => {
       getCurrentPublicMediaUrl("media/med_abcdefghijklmnop.mp4", "/api/v1/media"),
     ).toBe("/api/v1/media/media/med_abcdefghijklmnop.mp4");
     expect(() => buildMediaObjectKey("../escape", "video/mp4")).toThrow();
+  });
+
+  it("isolates public media URLs across concurrent request contexts", async () => {
+    const key = "media/med_abcdefghijklmnop.mp4";
+    const [first, second] = await Promise.all([
+      withPublicMediaUrl("https://first.example.test", async () => {
+        await Promise.resolve();
+        return getCurrentPublicMediaUrl(key);
+      }),
+      withPublicMediaUrl("https://second.example.test", async () => {
+        await Promise.resolve();
+        return getCurrentPublicMediaUrl(key);
+      }),
+    ]);
+
+    expect(first).toBe(`https://first.example.test/${key}`);
+    expect(second).toBe(`https://second.example.test/${key}`);
+    expect(getCurrentPublicMediaUrl(key)).toBe(key);
   });
 
   it("creates a bounded video upload without buffering the object", async () => {
