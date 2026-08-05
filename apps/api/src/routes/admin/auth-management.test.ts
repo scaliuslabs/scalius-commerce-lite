@@ -317,8 +317,8 @@ function createAdminUserListDbMock(options: {
     isSuperAdmin: boolean;
     createdAt: number;
   }>;
-  roleRows?: Array<{ id: string; name: string; displayName: string }>;
-  overrideRows?: Array<{ permissionName: string; granted: boolean }>;
+  roleRows?: Array<{ userId?: string; id: string; name: string; displayName: string }>;
+  overrideRows?: Array<{ userId?: string; permissionName: string; granted: boolean }>;
 } = {}) {
   const adminUsers = options.adminUsers ?? [
     {
@@ -341,13 +341,16 @@ function createAdminUserListDbMock(options: {
       createdAt: 1,
     },
   ];
-  const roleRows = options.roleRows ?? [
+  const roleRows = (options.roleRows ?? [
     { id: "role_1", name: "manager", displayName: "Manager" },
-  ];
-  const overrideRows = options.overrideRows ?? [
+  ]).map((row) => ({ userId: row.userId ?? adminUsers[0]?.id ?? "admin_2", ...row }));
+  const overrideRows = (options.overrideRows ?? [
     { permissionName: "products.view", granted: true },
     { permissionName: "orders.refund", granted: false },
-  ];
+  ]).map((row) => ({ userId: row.userId ?? adminUsers[0]?.id ?? "admin_2", ...row }));
+
+  const batch = vi.fn(async (statements: Array<Promise<unknown>>) =>
+    Promise.all(statements));
 
   return {
     selectDistinct: vi.fn(() => ({
@@ -380,6 +383,8 @@ function createAdminUserListDbMock(options: {
         return { where: vi.fn(async () => []) };
       }),
     })),
+    batch,
+    __batch: batch,
   };
 }
 
@@ -752,6 +757,8 @@ describe("admin auth management user permissions", () => {
         },
       }),
     ]);
+    expect(db.__batch).toHaveBeenCalledOnce();
+    expect(db.select).toHaveBeenCalledTimes(2);
   });
 
   it("lists direct-permission admin principals even when they have no assigned roles", async () => {
@@ -808,6 +815,77 @@ describe("admin auth management user permissions", () => {
         },
       }),
     ]);
+  });
+
+  it("groups batched roles and overrides by administrator without per-user queries", async () => {
+    const commonAdmin = {
+      emailVerified: true,
+      image: null,
+      twoFactorEnabled: true,
+      mustChangePassword: false,
+      mustEnrollTwoFactor: false,
+      banned: false,
+      banExpires: null,
+      invitationId: null,
+      invitationStatus: null,
+      invitationDeliveryStatus: null,
+      invitationExpiresAt: null,
+      invitationLastSentAt: null,
+      isSuperAdmin: false,
+      createdAt: 1,
+    } as const;
+    const db = createAdminUserListDbMock({
+      adminUsers: [
+        {
+          ...commonAdmin,
+          id: "admin_a",
+          name: "Admin A",
+          email: "admin-a@example.com",
+        },
+        {
+          ...commonAdmin,
+          id: "admin_b",
+          name: "Admin B",
+          email: "admin-b@example.com",
+        },
+      ],
+      roleRows: [
+        { userId: "admin_a", id: "role_a", name: "catalog", displayName: "Catalog" },
+        { userId: "admin_b", id: "role_b", name: "orders", displayName: "Orders" },
+      ],
+      overrideRows: [
+        { userId: "admin_a", permissionName: "products.edit", granted: true },
+        { userId: "admin_b", permissionName: "orders.refund", granted: false },
+      ],
+    });
+    const app = createTestApp(db);
+
+    const response = await app.request("/api/v1/admin/auth/users", { method: "GET" });
+    const body = await response.json() as {
+      data?: {
+        users?: Array<{
+          id: string;
+          roles: Array<{ id: string }>;
+          overrides: { grants: string[]; denials: string[] };
+        }>;
+      };
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.data?.users).toEqual([
+      expect.objectContaining({
+        id: "admin_a",
+        roles: [expect.objectContaining({ id: "role_a" })],
+        overrides: { grants: ["products.edit"], denials: [] },
+      }),
+      expect.objectContaining({
+        id: "admin_b",
+        roles: [expect.objectContaining({ id: "role_b" })],
+        overrides: { grants: [], denials: ["orders.refund"] },
+      }),
+    ]);
+    expect(db.__batch).toHaveBeenCalledOnce();
+    expect(db.select).toHaveBeenCalledTimes(2);
   });
 
   it("projects indefinite bans as suspended administrator state", async () => {
@@ -920,6 +998,9 @@ describe("admin auth management user permissions", () => {
     expect(source).toContain("isNotNull(userRoles.id)");
     expect(source).toContain("isNotNull(userPermissions.id)");
     expect(source).toContain("eq(userPermissions.granted, true)");
+    expect(source).toContain("ADMIN_USER_ENRICHMENT_CHUNK_SIZE = 90");
+    expect(source).toContain("await safeBatch(db, [");
+    expect(source).not.toContain("adminUsers.map(async");
     expect(source).not.toContain("Only administrators can create new admin users");
     expect(source).not.toContain("Only administrators can delete admin users");
   });
