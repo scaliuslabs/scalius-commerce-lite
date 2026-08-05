@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { getAllPermissionNames, PERMISSIONS } from "./permissions";
 import {
   clearPermissionCache,
+  getAllRolesWithPermissions,
   getFreshUserPermissionsFromD1,
   getUserPermissions,
 } from "./helpers";
@@ -18,6 +19,50 @@ function createSelectChain() {
 }
 
 describe("RBAC permission cache", () => {
+  it("loads all role permissions in one bounded database batch", async () => {
+    const roleQuery = { from: vi.fn(() => "roles-query") };
+    const permissionQuery = {
+      from: vi.fn(() => ({
+        innerJoin: vi.fn(() => "permissions-query"),
+      })),
+    };
+    const db = {
+      select: vi.fn()
+        .mockReturnValueOnce(roleQuery)
+        .mockReturnValueOnce(permissionQuery),
+      batch: vi.fn().mockResolvedValue([
+        [
+          { id: "role_a", name: "catalog" },
+          { id: "role_b", name: "orders" },
+          { id: "role_empty", name: "support" },
+        ],
+        [
+          { roleId: "role_a", name: PERMISSIONS.PRODUCTS_VIEW },
+          { roleId: "role_a", name: PERMISSIONS.PRODUCTS_EDIT },
+          { roleId: "role_b", name: PERMISSIONS.ORDERS_VIEW },
+        ],
+      ]),
+    };
+
+    const result = await getAllRolesWithPermissions(db as never);
+
+    expect(result).toEqual([
+      {
+        id: "role_a",
+        name: "catalog",
+        permissions: [PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.PRODUCTS_EDIT],
+      },
+      {
+        id: "role_b",
+        name: "orders",
+        permissions: [PERMISSIONS.ORDERS_VIEW],
+      },
+      { id: "role_empty", name: "support", permissions: [] },
+    ]);
+    expect(db.select).toHaveBeenCalledTimes(2);
+    expect(db.batch).toHaveBeenCalledOnce();
+  });
+
   it("does not retain stale local memory after a KV permission cache miss", async () => {
     const selectChain = createSelectChain();
     const db = {

@@ -1,4 +1,4 @@
-import type { Database } from "@scalius/database/client";
+import { safeBatch, type Database } from "@scalius/database/client";
 import { cacheInvalidationState } from "@scalius/database/schema";
 import { and, eq, gt, gte, inArray, lt, sql } from "drizzle-orm";
 
@@ -86,9 +86,9 @@ export async function markCacheInvalidationsApplied(
   db: Database,
   generations: readonly CacheInvalidationGeneration[],
 ): Promise<void> {
+  if (generations.length === 0) return;
   const now = Math.floor(Date.now() / 1000);
-  for (const item of generations) {
-    await db.update(cacheInvalidationState)
+  const statements = generations.map((item) => db.update(cacheInvalidationState)
       .set({
         appliedGeneration: item.generation,
         attemptCount: 0,
@@ -100,9 +100,8 @@ export async function markCacheInvalidationsApplied(
         eq(cacheInvalidationState.group, item.group),
         gte(cacheInvalidationState.requestedGeneration, item.generation),
         lt(cacheInvalidationState.appliedGeneration, item.generation),
-      ))
-      .run();
-  }
+      )));
+  await safeBatch(db, statements);
 }
 
 export async function markCacheInvalidationsFailed(
@@ -110,9 +109,9 @@ export async function markCacheInvalidationsFailed(
   generations: readonly CacheInvalidationGeneration[],
   reason: "api" | "storefront" | "api_and_storefront",
 ): Promise<void> {
+  if (generations.length === 0) return;
   const now = Math.floor(Date.now() / 1000);
-  for (const item of generations) {
-    await db.update(cacheInvalidationState)
+  const statements = generations.map((item) => db.update(cacheInvalidationState)
       .set({
         attemptCount: sql`${cacheInvalidationState.attemptCount} + 1`,
         lastError: reason,
@@ -121,7 +120,6 @@ export async function markCacheInvalidationsFailed(
       .where(and(
         eq(cacheInvalidationState.group, item.group),
         gt(cacheInvalidationState.requestedGeneration, cacheInvalidationState.appliedGeneration),
-      ))
-      .run();
-  }
+      )));
+  await safeBatch(db, statements);
 }

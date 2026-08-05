@@ -1,4 +1,4 @@
-import { DatabaseSync } from "node:sqlite";
+import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import type { Database } from "@scalius/database/client";
 import { drizzle } from "drizzle-orm/sqlite-proxy";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -30,7 +30,7 @@ describe("durable cache invalidation delivery", () => {
         CHECK (attempt_count >= 0)
       );
     `);
-    db = drizzle(async (query, params, method) => {
+    const execute = (query: string, params: SQLInputValue[], method: string) => {
       const statement = sqlite.prepare(query);
       statement.setReturnArrays(true);
       if (method === "run") {
@@ -41,7 +41,22 @@ describe("durable cache invalidation delivery", () => {
         return { rows: statement.get(...params) as unknown as unknown[] };
       }
       return { rows: statement.all(...params) as unknown as unknown[][] };
-    }) as unknown as Database;
+    };
+    db = drizzle(
+      async (query, params, method) => execute(query, params, method),
+      async (batch) => {
+        sqlite.exec("BEGIN");
+        try {
+          const results = batch.map(({ sql: query, params, method }) =>
+            execute(query, params, method));
+          sqlite.exec("COMMIT");
+          return results;
+        } catch (error) {
+          sqlite.exec("ROLLBACK");
+          throw error;
+        }
+      },
+    ) as unknown as Database;
   });
 
   afterEach(() => {

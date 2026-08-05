@@ -13,7 +13,7 @@
 
 import { eq, and, isNull, sql } from "drizzle-orm";
 import { deliveryLocations } from "@scalius/database/schema";
-import type { Database } from "@scalius/database/client";
+import { safeBatch, type Database } from "@scalius/database/client";
 import { createId } from "@paralleldrive/cuid2";
 import {
   normalizeDeliveryLocationName,
@@ -58,6 +58,7 @@ export interface ImportChunkResult {
 const KV_KEY = "location_import:pathao";
 const ZONES_PER_CHUNK = 30; // Process 30 zones' areas per request
 const MAX_CONCURRENT = 8; // Parallel Pathao API calls
+const DB_WRITE_BATCH_SIZE = 50;
 
 // ─── Pathao API (request-scoped token + concurrency limit) ──────────────────
 
@@ -283,33 +284,38 @@ async function bulkUpsert(
     }
   }
 
-  // Execute updates in batches
-  for (const u of updates) {
-    const parsedIds = parseExternalIds(u.externalIds);
-    parsedIds.pathao = String(u.pathaoId);
-
-    await db.update(deliveryLocations).set({
-      name: u.name,
-      parentId: u.parentId,
-      externalIds: JSON.stringify(parsedIds),
-      metadata: u.metadata ? JSON.stringify(u.metadata) : undefined,
-      isActive: true,
-      updatedAt: sql`(unixepoch())`,
-    }).where(eq(deliveryLocations.id, u.id));
+  for (let offset = 0; offset < updates.length; offset += DB_WRITE_BATCH_SIZE) {
+    const statements = updates
+      .slice(offset, offset + DB_WRITE_BATCH_SIZE)
+      .map((update) => {
+        const parsedIds = parseExternalIds(update.externalIds);
+        parsedIds.pathao = String(update.pathaoId);
+        return db.update(deliveryLocations).set({
+          name: update.name,
+          parentId: update.parentId,
+          externalIds: JSON.stringify(parsedIds),
+          metadata: update.metadata ? JSON.stringify(update.metadata) : undefined,
+          isActive: true,
+          updatedAt: sql`(unixepoch())`,
+        }).where(eq(deliveryLocations.id, update.id));
+      });
+    await safeBatch(db, statements);
   }
 
-  // Execute inserts in batches
-  for (const ins of inserts) {
-    await db.insert(deliveryLocations).values({
-      id: ins.id,
-      name: ins.name,
-      type: ins.type as "city" | "zone" | "area",
-      parentId: ins.parentId,
-      externalIds: JSON.stringify({ pathao: String(ins.pathaoId) }),
-      metadata: ins.metadata ? JSON.stringify(ins.metadata) : "{}",
-      isActive: true,
-      sortOrder: 0,
-    });
+  for (let offset = 0; offset < inserts.length; offset += DB_WRITE_BATCH_SIZE) {
+    const statements = inserts
+      .slice(offset, offset + DB_WRITE_BATCH_SIZE)
+      .map((insert) => db.insert(deliveryLocations).values({
+        id: insert.id,
+        name: insert.name,
+        type: insert.type as "city" | "zone" | "area",
+        parentId: insert.parentId,
+        externalIds: JSON.stringify({ pathao: String(insert.pathaoId) }),
+        metadata: insert.metadata ? JSON.stringify(insert.metadata) : "{}",
+        isActive: true,
+        sortOrder: 0,
+      }));
+    await safeBatch(db, statements);
   }
 
   return { created, updated, idMap };
@@ -320,22 +326,24 @@ async function deactivateRejectedPathaoLocations(
   rejected: PathaoLocationImportItem[],
   existing: Map<string, LocationRow>,
 ): Promise<number> {
-  let updated = 0;
-  for (const item of rejected) {
+  const targets = rejected.flatMap((item) => {
     const row = existing.get(String(item.pathaoId));
-    if (!row) continue;
-
-    await db
-      .update(deliveryLocations)
-      .set({
-        name: item.name || row.name,
-        isActive: false,
-        updatedAt: sql`(unixepoch())`,
-      })
-      .where(eq(deliveryLocations.id, row.id));
-    updated += 1;
+    return row ? [{ item, row }] : [];
+  });
+  for (let offset = 0; offset < targets.length; offset += DB_WRITE_BATCH_SIZE) {
+    const statements = targets
+      .slice(offset, offset + DB_WRITE_BATCH_SIZE)
+      .map(({ item, row }) => db
+        .update(deliveryLocations)
+        .set({
+          name: item.name || row.name,
+          isActive: false,
+          updatedAt: sql`(unixepoch())`,
+        })
+        .where(eq(deliveryLocations.id, row.id)));
+    await safeBatch(db, statements);
   }
-  return updated;
+  return targets.length;
 }
 
 // ─── Progress Management ─────────────────────────────────────────────────────
