@@ -1,4 +1,8 @@
 import type { ProductVariant } from "@/lib/api/types";
+import {
+  resolveBuyerAvailabilityBand,
+  type BuyerAvailabilityBand,
+} from "@scalius/shared/buyer-availability";
 
 type BuyerVariant = Pick<
   ProductVariant,
@@ -10,7 +14,21 @@ type BuyerVariant = Pick<
   | "reservedStock"
   | "trackInventory"
   | "lowStockThreshold"
+  | "availabilityBand"
 >;
+
+function availabilityBand(
+  variant: Pick<
+    BuyerVariant,
+    | "stock"
+    | "reservedStock"
+    | "trackInventory"
+    | "lowStockThreshold"
+    | "availabilityBand"
+  >,
+): BuyerAvailabilityBand {
+  return variant.availabilityBand ?? resolveBuyerAvailabilityBand(variant);
+}
 
 export type BuyerProductMode =
   | "simple"
@@ -37,17 +55,21 @@ export function isActivePersistedVariant(
 }
 
 export function isVariantAvailable(
-  variant: Pick<BuyerVariant, "stock" | "reservedStock" | "trackInventory">,
+  variant: Pick<
+    BuyerVariant,
+    "stock" | "reservedStock" | "trackInventory" | "availabilityBand"
+  >,
 ): boolean {
-  return (
-    variant.trackInventory === false ||
-    Math.max(0, variant.stock - (variant.reservedStock ?? 0)) > 0
-  );
+  return availabilityBand({ ...variant, lowStockThreshold: null }) !== "out_of_stock";
 }
 
 export function availableQuantityForVariant(
-  variant: Pick<BuyerVariant, "stock" | "reservedStock" | "trackInventory">,
+  variant: Pick<
+    BuyerVariant,
+    "stock" | "reservedStock" | "trackInventory" | "availabilityBand"
+  >,
 ): number | null {
+  if (variant.availabilityBand !== undefined) return null;
   if (variant.trackInventory === false) return null;
   return Math.max(0, variant.stock - (variant.reservedStock ?? 0));
 }
@@ -101,7 +123,7 @@ export function resolveBuyerVariants<TVariant extends BuyerVariant>(
 export function getBuyerStockSummary(
   variants: readonly Pick<
     BuyerVariant,
-    "stock" | "reservedStock" | "trackInventory" | "lowStockThreshold"
+    "stock" | "reservedStock" | "trackInventory" | "lowStockThreshold" | "availabilityBand"
   >[],
 ): {
   canPurchaseAny: boolean;
@@ -112,26 +134,20 @@ export function getBuyerStockSummary(
     return { canPurchaseAny: false, text: "Unavailable", tone: "unavailable" };
   }
 
-  if (variants.some((variant) => variant.trackInventory === false)) {
+  if (variants.some((variant) => availabilityBand(variant) === "untracked")) {
     return { canPurchaseAny: true, text: "In Stock", tone: "available" };
   }
 
-  const availableVariants = variants
-    .map((variant) => ({
-      ...variant,
-      available: Math.max(0, variant.stock - (variant.reservedStock ?? 0)),
-    }))
-    .filter((variant) => variant.available > 0);
+  const availableBands = variants
+    .map(availabilityBand)
+    .filter((band) => band !== "out_of_stock");
 
-  if (availableVariants.length === 0) {
+  if (availableBands.length === 0) {
     return { canPurchaseAny: false, text: "Out of Stock", tone: "unavailable" };
   }
 
-  const everyAvailableVariantIsLow = availableVariants.every((variant) =>
-    typeof variant.lowStockThreshold === "number"
-    && Number.isFinite(variant.lowStockThreshold)
-    && variant.lowStockThreshold > 0
-    && variant.available <= variant.lowStockThreshold,
+  const everyAvailableVariantIsLow = availableBands.every(
+    (band) => band === "low_stock",
   );
 
   return {

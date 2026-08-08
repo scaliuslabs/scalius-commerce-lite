@@ -4884,6 +4884,8 @@ export type GetApiV1ProductsFeedResponses = {
                     price: number;
                     stock: number;
                     reservedStock: number;
+                    lowStockThreshold: number | null;
+                    availabilityBand: 'untracked' | 'out_of_stock' | 'low_stock' | 'in_stock';
                     isDefault: boolean;
                     trackInventory: boolean;
                     barcode: string | null;

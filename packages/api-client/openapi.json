@@ -16486,6 +16486,20 @@
                                     "reservedStock": {
                                       "type": "number"
                                     },
+                                    "lowStockThreshold": {
+                                      "type": "integer",
+                                      "nullable": true,
+                                      "minimum": 0
+                                    },
+                                    "availabilityBand": {
+                                      "type": "string",
+                                      "enum": [
+                                        "untracked",
+                                        "out_of_stock",
+                                        "low_stock",
+                                        "in_stock"
+                                      ]
+                                    },
                                     "isDefault": {
                                       "type": "boolean"
                                     },
@@ -16529,6 +16543,8 @@
                                     "price",
                                     "stock",
                                     "reservedStock",
+                                    "lowStockThreshold",
+                                    "availabilityBand",
                                     "isDefault",
                                     "trackInventory",
                                     "barcode",

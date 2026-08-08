@@ -121,6 +121,7 @@ function createCatalogSchema(): void {
             price REAL NOT NULL,
             stock INTEGER NOT NULL DEFAULT 0,
             reserved_stock INTEGER NOT NULL DEFAULT 0,
+            low_stock_threshold INTEGER,
             is_default INTEGER NOT NULL DEFAULT 0,
             track_inventory INTEGER NOT NULL DEFAULT 1,
             discount_percentage REAL DEFAULT 0,

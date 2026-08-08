@@ -2,10 +2,12 @@
 /**
  * Product Validation Module
  */
+import type { BuyerAvailabilityBand } from "@scalius/shared/buyer-availability";
+import { PUBLIC_BUYER_QUANTITY_CEILING } from "@scalius/shared/buyer-availability";
 
 export const QUANTITY_CONSTRAINTS = {
   MIN: 1,
-  MAX: 99,
+  MAX: PUBLIC_BUYER_QUANTITY_CEILING,
 } as const;
 
 /**
@@ -219,6 +221,7 @@ export function validateAddToCart(input: {
   stock?: number;
   reservedStock?: number;
   trackInventory?: boolean;
+  availabilityBand?: BuyerAvailabilityBand;
   variantId?: string;
   image?: string;
   imageMediaId?: string;
@@ -248,7 +251,13 @@ export function validateAddToCart(input: {
   }
 
   // Validate stock
-  if (input.trackInventory !== false && input.stock !== undefined) {
+  if (input.availabilityBand === "out_of_stock") {
+    errors.push("Product is out of stock");
+  } else if (
+    input.availabilityBand === undefined
+    && input.trackInventory !== false
+    && input.stock !== undefined
+  ) {
     const availableStock = Math.max(0, input.stock - (input.reservedStock ?? 0));
     const stockValidation = isStockAvailable(
       availableStock,

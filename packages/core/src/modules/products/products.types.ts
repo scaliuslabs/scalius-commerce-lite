@@ -9,6 +9,7 @@ import type {
 } from "./products.option-model";
 import type { ProductCondition } from "@scalius/shared/product-condition";
 import type { ProductMediaProjection } from "./products.media";
+import type { BuyerAvailabilityBand } from "@scalius/shared/buyer-availability";
 
 // ─────────────────────────────────────────
 // Variant Validation Schemas
@@ -142,6 +143,8 @@ export interface StorefrontFeedProductVariant {
     price: number;
     stock: number;
     reservedStock: number;
+    lowStockThreshold: number | null;
+    availabilityBand: BuyerAvailabilityBand;
     isDefault: boolean;
     trackInventory: boolean;
     barcode: string | null;

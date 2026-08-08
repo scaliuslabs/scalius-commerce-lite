@@ -518,6 +518,7 @@ function add(redirect: boolean) {
     stock: validation.variant.stock,
     reservedStock: validation.variant.reservedStock,
     trackInventory: validation.variant.trackInventory,
+    availabilityBand: validation.variant.availabilityBand,
     variantId: validation.variant.id,
     ...cartMedia,
     freeDelivery: cache.container.dataset.productFreeDelivery === "true",

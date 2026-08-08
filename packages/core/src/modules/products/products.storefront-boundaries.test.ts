@@ -292,11 +292,23 @@ describe("storefront product query boundaries", () => {
         expect(variantHelper).toContain("inArray(productVariants.productId, productIdChunk)");
         expect(variantHelper).toContain("isNull(productVariants.deletedAt)");
         expect(variantHelper).toContain("normalizeDefaultSkuOptions({");
+        expect(variantHelper).toContain("maskPublicBuyerAvailability(normalizeDefaultSkuOptions({");
         expect(variantHelper).toContain("loadVariantSelectedOptions(db, rows.map((row) => row.id))");
         expect(variantHelper).toContain("selectedOptions: selectedOptionMap.get(row.id) ?? []");
         expect(variantHelper).not.toContain("createdAt: productVariants.createdAt");
         expect(variantHelper).not.toContain("updatedAt: productVariants.updatedAt");
         expect(feedBody).not.toContain("eq(productVariants.productId, product.id)");
+    });
+
+    it("masks exact inventory in every persistent public variant projection", () => {
+        const source = readFileSync(
+            `${PRODUCTS_MODULE_DIR}/products.storefront.ts`,
+            "utf8",
+        );
+
+        expect(source.match(/maskPublicBuyerAvailability\(normalizeDefaultSkuOptions\(/g)).toHaveLength(3);
+        expect(source.match(/lowStockThreshold: productVariants\.lowStockThreshold/g)).toHaveLength(3);
+        expect(source).toContain('"availabilityBand" | "deletedAt"');
     });
 
     it("keeps admin-only contextual alt overrides out of the public media response", () => {

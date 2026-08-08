@@ -13,6 +13,7 @@ import { and, sql, desc, eq, isNull, inArray, or, lt, type SQL } from "drizzle-o
 import { ftsMatch } from "../../search/fts5";
 import { unixToDate } from "@scalius/shared/utils";
 import { calculateDiscountedPrice } from "@scalius/shared/price-utils";
+import { maskPublicBuyerAvailability } from "@scalius/shared/buyer-availability";
 import type {
     StorefrontFeedProduct,
     StorefrontFeedProductAttribute,
@@ -145,7 +146,7 @@ type StorefrontSitemapProductRow = {
 
 type StorefrontFeedVariantRow = Omit<
     StorefrontFeedProductVariant,
-    "deletedAt" | "selectedOptions" | "imageUrl" | "imageMediaId"
+    "availabilityBand" | "deletedAt" | "selectedOptions" | "imageUrl" | "imageMediaId"
 > & {
     optionCombinationKey: string | null;
     deletedAt: number | null;
@@ -625,6 +626,7 @@ async function readStorefrontFeedVariantMap(
                 price: productVariants.price,
                 stock: productVariants.stock,
                 reservedStock: effectiveRegularReservedStockSql(),
+                lowStockThreshold: productVariants.lowStockThreshold,
                 isDefault: productVariants.isDefault,
                 trackInventory: productVariants.trackInventory,
                 discountType: productVariants.discountType,
@@ -651,13 +653,13 @@ async function readStorefrontFeedVariantMap(
             mediaMap.get(row.productId) ?? [],
             row.imageId,
         );
-        const variant = normalizeDefaultSkuOptions({
+        const variant = maskPublicBuyerAvailability(normalizeDefaultSkuOptions({
             ...row,
             imageMediaId: resolvedImage?.mediaId ?? null,
             imageUrl: resolvedImage?.url ?? null,
             selectedOptions: selectedOptionMap.get(row.id) ?? [],
             deletedAt: row.deletedAt ? unixToDate(row.deletedAt)?.toISOString() ?? null : null,
-        });
+        }));
         const variants = variantMap.get(row.productId) ?? [];
         variants.push(variant);
         variantMap.set(row.productId, variants);
@@ -1281,7 +1283,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
         loadVariantSelectedOptions(db, typedVariants.map((variant) => variant.id)),
     ]);
     const formattedVariants = typedVariants.map((variant) => {
-        const v = normalizeDefaultSkuOptions(variant);
+        const v = maskPublicBuyerAvailability(normalizeDefaultSkuOptions(variant));
         const variantImage = resolveSkuImageRepresentation(mediaItems, v.imageId);
         return {
             ...v,
@@ -1339,6 +1341,8 @@ type StorefrontSearchProductVariant = {
     price: number;
     stock: number;
     reservedStock: number;
+    lowStockThreshold: number | null;
+    availabilityBand: "untracked" | "out_of_stock" | "low_stock" | "in_stock";
     isDefault: boolean;
     trackInventory: boolean;
     discountType: string | null;
@@ -1371,6 +1375,7 @@ async function readStorefrontSearchVariantMap(
                 price: productVariants.price,
                 stock: productVariants.stock,
                 reservedStock: effectiveRegularReservedStockSql(),
+                lowStockThreshold: productVariants.lowStockThreshold,
                 isDefault: productVariants.isDefault,
                 trackInventory: productVariants.trackInventory,
                 discountType: productVariants.discountType,
@@ -1388,10 +1393,10 @@ async function readStorefrontSearchVariantMap(
         const selectedOptionMap = await loadVariantSelectedOptions(db, rows.map((row) => row.id));
         for (const row of rows) {
             const variants = variantMap.get(row.productId) ?? [];
-            variants.push(normalizeDefaultSkuOptions({
+            variants.push(maskPublicBuyerAvailability(normalizeDefaultSkuOptions({
                 ...row,
                 selectedOptions: selectedOptionMap.get(row.id) ?? [],
-            }));
+            })));
             variantMap.set(row.productId, variants);
         }
     }

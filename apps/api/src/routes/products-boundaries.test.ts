@@ -107,6 +107,8 @@ describe("product route query boundaries", () => {
     expect(variantSchema).toContain("price: z.number()");
     expect(variantSchema).toContain("stock: z.number()");
     expect(variantSchema).toContain("reservedStock: z.number()");
+    expect(variantSchema).toContain("lowStockThreshold: z.number().int().nonnegative().nullable()");
+    expect(variantSchema).toContain("availabilityBand: z.enum(BUYER_AVAILABILITY_BANDS)");
     expect(variantSchema).toContain("isDefault: z.boolean()");
     expect(variantSchema).toContain("trackInventory: z.boolean()");
     expect(variantSchema).toContain("barcode: z.string().nullable()");

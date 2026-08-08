@@ -234,6 +234,24 @@ describe("UCP catalog mapping", () => {
     });
   });
 
+  it("does not advertise a compatibility stock sentinel as exact UCP quantity", async () => {
+    const product = productFixture();
+    product.variants![0]!.availabilityBand = "in_stock";
+    product.variants![0]!.stock = 99;
+    product.variants![0]!.reservedStock = 0;
+    mocks.getFeedProducts.mockResolvedValueOnce({
+      data: [product],
+      pagination: { page: 1, limit: 10, total: 1, totalPages: 1 },
+    });
+
+    const result = await searchCatalog({ query: "khaki" }, context);
+
+    expect(result.status).toBe(200);
+    expect(result.body.products[0].variants[0].metadata).not.toHaveProperty(
+      "available_quantity",
+    );
+  });
+
   it("uses exact SKU media and falls back to product media for unsafe exact URLs", async () => {
     const product = productFixture();
     product.variants![0]!.imageId = "pmed_red";
