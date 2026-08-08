@@ -31,6 +31,25 @@ const defaultPagination: ServerTablePagination = {
   totalPages: 0,
 };
 
+export const INTENT_PREFETCH_MOUNT_GRACE_MS = 5_000;
+
+export function shouldRefetchServerTableOnMount(query: {
+  state: { dataUpdatedAt: number; isInvalidated: boolean };
+  isStale: () => boolean;
+}): false | "always" {
+  if (
+    query.state.isInvalidated ||
+    query.state.dataUpdatedAt <= 0 ||
+    query.isStale()
+  ) {
+    return "always";
+  }
+
+  return Date.now() - query.state.dataUpdatedAt > INTENT_PREFETCH_MOUNT_GRACE_MS
+    ? "always"
+    : false;
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyQueryOptions = UseQueryOptions<any, any, any, any>;
 
@@ -85,7 +104,9 @@ export function useServerTable<TData>({
   defaultPageSize = 10,
   initialColumnVisibility = {},
 }: UseServerTableOptions<TData>): UseServerTableReturn<TData> {
-  // Show cached rows immediately, then refresh them in the background on route return.
+  // Show cached rows immediately. Suppress only the immediate duplicate after
+  // an intent preload; ordinary route returns and invalidated rows still
+  // revalidate even when their domain staleTime is relatively long.
   const {
     data: rawData,
     error,
@@ -96,7 +117,7 @@ export function useServerTable<TData>({
   } = useQuery({
     ...qOpts,
     placeholderData: keepPreviousData,
-    refetchOnMount: "always",
+    refetchOnMount: shouldRefetchServerTableOnMount,
   });
 
   // Extract typed data from API response

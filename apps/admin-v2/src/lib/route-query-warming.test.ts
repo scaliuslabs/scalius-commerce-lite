@@ -3,9 +3,9 @@ import { warmRouteQuery } from "./route-query-warming";
 
 function createQueryClientMock() {
   return {
-    ensureQueryData: vi.fn(async () => undefined),
+    ensureQueryData: vi.fn(async (_options?: unknown) => undefined),
     getQueryData: vi.fn(),
-    prefetchQuery: vi.fn(async () => undefined),
+    prefetchQuery: vi.fn(async (_options?: unknown) => undefined),
   };
 }
 
@@ -49,4 +49,5 @@ describe("warmRouteQuery", () => {
     expect(queryClient.ensureQueryData).toHaveBeenCalledWith(options);
     expect(queryClient.prefetchQuery).not.toHaveBeenCalled();
   });
+
 });

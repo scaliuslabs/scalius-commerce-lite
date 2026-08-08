@@ -109,8 +109,11 @@ export function getRouter() {
     scrollToTopSelectors: ["#admin-main-scroll"],
     scrollRestorationBehavior: "instant",
     defaultPreload: false,
-    defaultPendingMs: 200,
-    defaultPendingMinMs: 300,
+    // Keep the current screen interactive for fast route changes. The former
+    // 200/300 split forced 200-500 ms navigations to wait until the pending
+    // screen's minimum display time elapsed.
+    defaultPendingMs: 400,
+    defaultPendingMinMs: 100,
     defaultPendingComponent: DefaultPendingComponent,
     defaultNotFoundComponent: DefaultNotFoundComponent,
     defaultErrorComponent: DefaultErrorComponent,

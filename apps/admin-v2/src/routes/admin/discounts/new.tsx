@@ -7,7 +7,7 @@ import { PageLoadingSpinner } from "~/components/admin/shared/LoadingFallback";
 import {
   discountEditorTypes,
   type DiscountEditorType,
-} from "~/components/admin/discount/discount-editor-model";
+} from "~/components/admin/discount/discount-editor-types";
 import type { SearchValidatorInput } from "~/lib/list-helpers";
 
 const DiscountCodeBuilder = lazy(

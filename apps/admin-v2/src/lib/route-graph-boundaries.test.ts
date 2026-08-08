@@ -1148,6 +1148,17 @@ describe("admin route graph boundaries", () => {
       join(ADMIN_SRC_ROOT, "routes", "admin", "orders", "index.tsx"),
       "utf8",
     );
+    const orderAutoRefreshCountdownSource = readFileSync(
+      join(
+        ADMIN_SRC_ROOT,
+        "components",
+        "admin",
+        "data-table",
+        "toolbars",
+        "OrderAutoRefreshCountdown.tsx",
+      ),
+      "utf8",
+    );
     const adminHeaderSource = readFileSync(
       join(ADMIN_SRC_ROOT, "components", "admin", "layout", "AdminHeader.tsx"),
       "utf8",
@@ -1190,10 +1201,11 @@ describe("admin route graph boundaries", () => {
     expect(orderDetailSource).toContain("refetchInterval: 30_000");
     expect(orderDetailSource).not.toContain("refetchOnWindowFocus: true");
     expect(orderDetailSource).not.toContain("refetchOnReconnect: true");
-    expect(orderListSource).toContain(
+    expect(orderAutoRefreshCountdownSource).toContain(
       'document.addEventListener("visibilitychange"',
     );
-    expect(orderListSource).toContain("isDocumentHidden()");
+    expect(orderAutoRefreshCountdownSource).toContain("isDocumentHidden()");
+    expect(orderListSource).not.toContain("window.setInterval");
     expect(orderListSource).toContain("activeOrderListRefreshRef");
     expect(orderListSource).toContain("orderListRefreshInFlightRef");
     expect(orderListSource).toContain("ORDER_AUTO_REFRESH_DEBOUNCE_MS");

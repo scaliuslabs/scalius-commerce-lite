@@ -1,5 +1,20 @@
-import { lazy, Suspense, useEffect, useRef, useCallback, useState } from "react";
-import { Link, useLocation } from "@tanstack/react-router";
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useRef,
+  useCallback,
+  useState,
+  type FocusEvent,
+  type MouseEvent,
+} from "react";
+import {
+  Link,
+  useLocation,
+  useRouter,
+  type AnyRoute,
+  type AnyRouter,
+} from "@tanstack/react-router";
 import { ChevronDown, Globe } from "lucide-react";
 import {
   Sidebar,
@@ -30,6 +45,23 @@ import logoLightImg from "@/assets/logo-light.png";
 
 const NAV_ICON_CLASSNAME = "size-4 shrink-0";
 const NAV_ICON_STROKE_WIDTH = 1.75;
+const NAV_LINK_CLASSNAME =
+  "data-[transitioning]:bg-[var(--sidebar-accent)] data-[transitioning]:text-[var(--sidebar-accent-foreground)] data-[transitioning]:shadow-sm";
+const ROUTE_CHUNK_PRELOAD_DELAY_MS = 80;
+const ROUTE_DATA_PRELOAD_DELAY_MS = 125;
+const DATA_PRELOAD_PATHS = new Set([
+  "/admin/products",
+  "/admin/categories",
+  "/admin/collections",
+  "/admin/orders",
+  "/admin/customers",
+  "/admin/discounts",
+  "/admin/pages",
+]);
+const routeChunkPreloadTimeouts = new WeakMap<
+  EventTarget,
+  ReturnType<typeof setTimeout>
+>();
 
 const StorefrontFooterLink = lazy(() =>
   import("./StorefrontFooterLink").then((module) => ({
@@ -44,6 +76,98 @@ type IdleSchedulerWindow = Window & {
   ) => number;
   cancelIdleCallback?: (handle: number) => void;
 };
+
+/**
+ * Warm only the code-split UI for a sidebar destination. TanStack's normal
+ * route preload also runs beforeLoad/loaders, which would turn a hover into
+ * authenticated RBAC and API work. Keeping this to loadRouteChunk makes the
+ * optimization safe for an admin surface while still removing the cold JS
+ * request from the click path.
+ */
+async function preloadAdminRouteChunks(
+  router: Pick<AnyRouter, "loadRouteChunk" | "routesByPath">,
+  href: string,
+): Promise<void> {
+  const pathname = normalizeNavigationPath(href);
+  const routesByPath = router.routesByPath as Record<
+    string,
+    AnyRoute | undefined
+  >;
+  const route =
+    (pathname === "/" ? routesByPath[pathname] : routesByPath[`${pathname}/`]) ??
+    routesByPath[pathname];
+
+  if (!route) return;
+
+  const routeChain: AnyRoute[] = [];
+  let currentRoute: AnyRoute | undefined = route;
+  while (currentRoute) {
+    routeChain.push(currentRoute);
+    currentRoute = currentRoute.parentRoute;
+  }
+
+  await Promise.all(routeChain.map((match) => router.loadRouteChunk(match)));
+}
+
+function normalizeNavigationPath(href: string): string {
+  return href.split(/[?#]/, 1)[0]?.replace(/\/+$/, "") || "/";
+}
+
+function startRouteChunkPreload(
+  target: EventTarget,
+  router: Pick<AnyRouter, "loadRouteChunk" | "routesByPath">,
+  href: string,
+) {
+  if (routeChunkPreloadTimeouts.has(target)) return;
+
+  const timeout = setTimeout(() => {
+    routeChunkPreloadTimeouts.delete(target);
+    void preloadAdminRouteChunks(router, href).catch(() => undefined);
+  }, ROUTE_CHUNK_PRELOAD_DELAY_MS);
+  routeChunkPreloadTimeouts.set(target, timeout);
+}
+
+function cancelRouteChunkPreload(target: EventTarget) {
+  const timeout = routeChunkPreloadTimeouts.get(target);
+  if (timeout === undefined) return;
+
+  clearTimeout(timeout);
+  routeChunkPreloadTimeouts.delete(target);
+}
+
+function getSidebarLinkPreloadProps(
+  router: Pick<AnyRouter, "loadRouteChunk" | "routesByPath">,
+  href: string,
+) {
+  if (DATA_PRELOAD_PATHS.has(normalizeNavigationPath(href))) {
+    // These explicit list loaders are read-only, auth/RBAC guarded, and share
+    // their exact TanStack Query keys with the rendered lists. A deliberate
+    // 125 ms hover/focus warms one destination while fly-over hovers cancel.
+    return {
+      preload: "intent" as const,
+      preloadDelay: ROUTE_DATA_PRELOAD_DELAY_MS,
+    };
+  }
+
+  const start = (
+    event: MouseEvent<HTMLAnchorElement> | FocusEvent<HTMLAnchorElement>,
+  ) => startRouteChunkPreload(event.currentTarget, router, href);
+  const cancel = (
+    event: MouseEvent<HTMLAnchorElement> | FocusEvent<HTMLAnchorElement>,
+  ) => cancelRouteChunkPreload(event.currentTarget);
+
+  return {
+    // Reinforce that this uses code-only warming rather than route/data preload.
+    preload: false as const,
+    onFocus: start,
+    onBlur: cancel,
+    onMouseEnter: start,
+    onMouseLeave: cancel,
+    onTouchStart: () => {
+      void preloadAdminRouteChunks(router, href).catch(() => undefined);
+    },
+  };
+}
 
 function isRouteActive(currentPath: string, href: string): boolean {
   if (href === "/admin") return currentPath === href;
@@ -108,9 +232,11 @@ function getActiveSubItemHref(
 }
 
 export function AppSidebar() {
+  const router = useRouter();
   const { permissions, isSuperAdmin } = usePermissions();
-  const location = useLocation();
-  const currentPath = location.pathname;
+  const currentPath = useLocation({
+    select: (location) => location.pathname,
+  });
   const { state, isMobile, setOpenMobile } = useSidebar();
   const isCollapsed = state === "collapsed";
   const sidebarContentRef = useRef<HTMLDivElement>(null);
@@ -141,7 +267,12 @@ export function AppSidebar() {
     <Sidebar collapsible="icon">
       {/* Header — logo, aligned with header bar */}
       <SidebarHeader className="h-14 flex items-center border-b border-sidebar-border px-3 shrink-0">
-        <Link to="/admin" className="flex items-center min-w-0" onClick={closeMobileSidebar}>
+        <Link
+          to="/admin"
+          {...getSidebarLinkPreloadProps(router, "/admin")}
+          className={`flex items-center min-w-0 ${NAV_LINK_CLASSNAME}`}
+          onClick={closeMobileSidebar}
+        >
           {isCollapsed ? (
             <img
               src={faviconImg}
@@ -182,6 +313,7 @@ export function AppSidebar() {
                       key={item.href}
                       item={item}
                       currentPath={currentPath}
+                      router={router}
                       onNavigate={closeMobileSidebar}
                       onOpenChange={(open) => handleCollapsibleOpen(open, item.name)}
                     />
@@ -193,7 +325,12 @@ export function AppSidebar() {
                         tooltip={item.name}
                         className={isRouteActive(currentPath, item.href) ? "bg-[var(--sidebar-accent)] text-[var(--sidebar-accent-foreground)] shadow-sm" : ""}
                       >
-                        <Link to={item.href} onClick={closeMobileSidebar}>
+                        <Link
+                          to={item.href}
+                          {...getSidebarLinkPreloadProps(router, item.href)}
+                          className={NAV_LINK_CLASSNAME}
+                          onClick={closeMobileSidebar}
+                        >
                           <item.icon
                             aria-hidden
                             className={NAV_ICON_CLASSNAME}
@@ -249,11 +386,13 @@ function StorefrontFooterLinkFallback() {
 function CollapsibleNavItem({
   item,
   currentPath,
+  router,
   onNavigate,
   onOpenChange,
 }: {
   item: NavItem;
   currentPath: string;
+  router: Pick<AnyRouter, "loadRouteChunk" | "routesByPath">;
   onNavigate?: () => void;
   onOpenChange?: (open: boolean) => void;
 }) {
@@ -305,7 +444,12 @@ function CollapsibleNavItem({
                     tooltip={subItem.name}
                     className={isSubActive ? "bg-[var(--sidebar-accent)] text-[var(--sidebar-accent-foreground)] shadow-sm" : ""}
                   >
-                    <Link to={subItem.href} onClick={onNavigate}>
+                    <Link
+                      to={subItem.href}
+                      {...getSidebarLinkPreloadProps(router, subItem.href)}
+                      className={NAV_LINK_CLASSNAME}
+                      onClick={onNavigate}
+                    >
                       {subItem.icon && (
                         <subItem.icon
                           aria-hidden

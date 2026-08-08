@@ -192,7 +192,6 @@ interface ShipmentStatus {
   [key: string]: unknown;
 }
 
-const ORDER_AUTO_REFRESH_SECONDS = 60;
 const ORDER_AUTO_REFRESH_DEBOUNCE_MS = 5_000;
 
 function isDocumentHidden() {
@@ -345,8 +344,6 @@ function OrdersPage() {
     }
     return false;
   });
-  const [countdown, setCountdown] = useState(ORDER_AUTO_REFRESH_SECONDS);
-  const countdownIntervalRef = useRef<number | undefined>(undefined);
   const activeOrderListRefreshRef = useRef<(() => Promise<unknown>) | null>(
     null,
   );
@@ -831,40 +828,6 @@ function OrdersPage() {
     }
     if (newValue) {
       refreshActiveOrderList();
-      setCountdown(ORDER_AUTO_REFRESH_SECONDS);
-    }
-  }, [autoRefreshEnabled, refreshActiveOrderList]);
-
-  useEffect(() => {
-    if (autoRefreshEnabled) {
-      setCountdown(ORDER_AUTO_REFRESH_SECONDS);
-      countdownIntervalRef.current = window.setInterval(() => {
-        if (isDocumentHidden()) return;
-        setCountdown((prev) => {
-          if (autoRefreshPausedRef.current) return prev;
-          if (prev <= 1) {
-            refreshActiveOrderList();
-            return ORDER_AUTO_REFRESH_SECONDS;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-
-      const handleVisibilityChange = () => {
-        if (isDocumentHidden()) return;
-        refreshActiveOrderList();
-        setCountdown(ORDER_AUTO_REFRESH_SECONDS);
-      };
-      document.addEventListener("visibilitychange", handleVisibilityChange);
-
-      return () => {
-        if (countdownIntervalRef.current)
-          window.clearInterval(countdownIntervalRef.current);
-        document.removeEventListener("visibilitychange", handleVisibilityChange);
-      };
-    } else {
-      if (countdownIntervalRef.current)
-        window.clearInterval(countdownIntervalRef.current);
     }
   }, [autoRefreshEnabled, refreshActiveOrderList]);
 
@@ -1244,7 +1207,7 @@ function OrdersPage() {
       autoRefreshEnabled={autoRefreshEnabled}
       autoRefreshPauseReason={autoRefreshPauseReason}
       onToggleAutoRefresh={toggleAutoRefresh}
-      countdown={countdown}
+      onAutoRefresh={refreshActiveOrderList}
       orderActions={orderActions}
     />
   );

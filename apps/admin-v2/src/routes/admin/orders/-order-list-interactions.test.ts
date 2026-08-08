@@ -11,6 +11,12 @@ const ORDER_TOOLBAR_SOURCE = fileURLToPath(
     import.meta.url,
   ),
 );
+const ORDER_AUTO_REFRESH_COUNTDOWN_SOURCE = fileURLToPath(
+  new URL(
+    "../../../components/admin/data-table/toolbars/OrderAutoRefreshCountdown.tsx",
+    import.meta.url,
+  ),
+);
 const BULK_SHIP_DIALOG_SOURCE = fileURLToPath(
   new URL(
     "../../../components/admin/order-list/BulkShipDialog.tsx",
@@ -142,6 +148,10 @@ describe("order list interactions", () => {
   it("keeps order auto-refresh scoped to the active list query", () => {
     const routeSource = readFileSync(ORDERS_ROUTE_SOURCE, "utf8");
     const mutationsSource = readFileSync(ORDER_MUTATIONS_SOURCE, "utf8");
+    const countdownSource = readFileSync(
+      ORDER_AUTO_REFRESH_COUNTDOWN_SOURCE,
+      "utf8",
+    );
     const refreshBlock = routeSource.slice(
       routeSource.indexOf("// ── Active-query refresh"),
       routeSource.indexOf("// ── Auto-refresh"),
@@ -158,7 +168,14 @@ describe("order list interactions", () => {
 
     expect(routeSource).toContain("getOrderAutoRefreshPauseReason");
     expect(routeSource).toContain("autoRefreshPauseReason={autoRefreshPauseReason}");
-    expect(routeSource).toContain("if (autoRefreshPausedRef.current) return prev");
+    expect(routeSource).toContain("onAutoRefresh={refreshActiveOrderList}");
+    expect(routeSource).not.toContain("setCountdown");
+    expect(routeSource).not.toContain("window.setInterval");
+    expect(countdownSource).toContain("if (pausedRef.current) return;");
+    expect(countdownSource).not.toContain("setCountdown((");
+    expect(countdownSource).toContain(
+      'document.addEventListener("visibilitychange", handleVisibilityChange)',
+    );
 
     // Mutations may still invalidate all order-list variants; idle resume must not.
     expect(mutationsSource).toContain("queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() })");

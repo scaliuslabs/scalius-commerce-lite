@@ -24,6 +24,15 @@ function write(root, relativePath, content) {
 function createPassingFixture({ dist = true } = {}) {
   const root = createRoot();
 
+  const headers = `/assets/immutable/*.js
+  Cache-Control: public, max-age=31536000, immutable
+
+/assets/immutable/*.css
+  Cache-Control: public, max-age=31536000, immutable
+`;
+  write(root, "apps/admin-v2/public/_headers", headers);
+  write(root, "apps/admin-v2/public/flags/flags.css", ".flag { display: block; }\n");
+
   for (const route of [
     "apps/admin-v2/src/routes/admin/products/index.tsx",
     "apps/admin-v2/src/routes/admin/orders/index.tsx",
@@ -47,11 +56,18 @@ function createPassingFixture({ dist = true } = {}) {
 
   write(root, "apps/admin-v2/src/components/admin/data-table/useServerTable.ts", `
     import { keepPreviousData, useQuery } from "@tanstack/react-query";
+    export const INTENT_PREFETCH_MOUNT_GRACE_MS = 5_000;
+    export function shouldRefetchServerTableOnMount(query) {
+      if (query.state.isInvalidated || query.state.dataUpdatedAt <= 0 || query.isStale()) return "always";
+      return Date.now() - query.state.dataUpdatedAt > INTENT_PREFETCH_MOUNT_GRACE_MS
+        ? "always"
+        : false;
+    }
     export function useServerTable(qOpts) {
       return useQuery({
         ...qOpts,
         placeholderData: keepPreviousData,
-        refetchOnMount: "always",
+        refetchOnMount: shouldRefetchServerTableOnMount,
       });
     }
   `);
@@ -90,10 +106,9 @@ function createPassingFixture({ dist = true } = {}) {
   `);
 
   write(root, "apps/admin-v2/src/components/admin/product-form/ProductImagesSection.tsx", `
-    import { lazy, Suspense } from "react";
-    const DraggableImageGallery = lazy(() => import("../DraggableImageGallery"));
     export function ProductImagesSection() {
-      return <Suspense><DraggableImageGallery /></Suspense>;
+      const field = { value: [] };
+      return field.value.slice(0, 12).map((item) => <img loading="lazy" src={item.url} />);
     }
   `);
 
@@ -116,10 +131,11 @@ function createPassingFixture({ dist = true } = {}) {
   `);
 
   write(root, "apps/admin-v2/src/components/admin/navigation/NavigationBuilder.tsx", `
-    import { lazy, Suspense } from "react";
-    const SortableNavigationEditor = lazy(() => import("./SortableNavigationEditor"));
+    export const NAVIGATION_RENDER_BATCH_SIZE = 80;
     export function NavigationBuilder() {
-      return <Suspense><SortableNavigationEditor /></Suspense>;
+      const outlineRows = [];
+      const renderLimit = NAVIGATION_RENDER_BATCH_SIZE;
+      return outlineRows.slice(0, renderLimit);
     }
   `);
 
@@ -135,11 +151,10 @@ function createPassingFixture({ dist = true } = {}) {
   `);
 
   write(root, "apps/admin-v2/src/components/admin/OrderView.tsx", `
-    import { lazy, Suspense } from "react";
-    const LazyOrderSupportRequestsCard = lazy(() => import("./orderview/OrderSupportRequestsCard"));
-    const LazyOrderNotificationsCard = lazy(() => import("./orderview/OrderNotificationsCard"));
+    import { OrderSupportRequestsCard } from "./orderview/OrderSupportRequestsCard";
+    import { OrderNotificationsCard } from "./orderview/OrderNotificationsCard";
     export function OrderView() {
-      return <Suspense><LazyOrderSupportRequestsCard /><LazyOrderNotificationsCard /></Suspense>;
+      return <><OrderSupportRequestsCard /><OrderNotificationsCard /></>;
     }
   `);
 
@@ -154,10 +169,15 @@ function createPassingFixture({ dist = true } = {}) {
         imports: ["assets/settings-safe.js"],
       },
     }));
-    write(root, "apps/admin-v2/dist/client/assets/ProductForm-fixture.js", `
+    write(root, "apps/admin-v2/dist/client/_headers", headers);
+    write(root, "apps/admin-v2/dist/client/flags/flags.css", ".flag { display: block; }\n");
+    write(root, "apps/admin-v2/dist/client/assets/immutable/global-a1B2c3D4.css", `
+      :root { color-scheme: light; }
+    `);
+    write(root, "apps/admin-v2/dist/client/assets/immutable/ProductForm-a1B2c3D4e.js", `
       import { DeferredTiptapEditor } from "./DeferredTiptapEditor-fixture.js";
-      export async function loadGallery() {
-        return import("./DraggableImageGallery-fixture.js");
+      export async function loadAdditionalInfo() {
+        return import("./AdditionalInfoManager-fixture.js");
       }
     `);
   }
@@ -194,9 +214,10 @@ describe("admin-perf-check", () => {
         return <DndContext />;
       }
     `);
-    write(root, "apps/admin-v2/dist/client/assets/ProductForm-fixture.js", `
-      import { DraggableImageGallery } from "./DraggableImageGallery-fixture.js";
-      export { DraggableImageGallery };
+    write(root, "apps/admin-v2/dist/client/assets/immutable/ProductForm-a1B2c3D4e.js", `
+      export async function restoreObsoleteGallery() {
+        return import("./DraggableImageGallery-fixture.js");
+      }
     `);
 
     const report = runAdminPerfCheck({ rootDir: root });
@@ -213,7 +234,7 @@ describe("admin-perf-check", () => {
     expect(lines.join("\n")).toContain("DraggableImageGallery-fixture.js");
   });
 
-  it("fails when useServerTable omits explicit mount refetch", () => {
+  it("fails when useServerTable omits explicit stale-aware mount refetch", () => {
     const root = createPassingFixture({ dist: false });
     write(root, "apps/admin-v2/src/components/admin/data-table/useServerTable.ts", `
       import { keepPreviousData, useQuery } from "@tanstack/react-query";
@@ -226,8 +247,163 @@ describe("admin-perf-check", () => {
 
     expect(report.ok).toBe(false);
     expect(formatAdminPerfCheckReport(report).join("\n")).toContain(
-      'expected refetchOnMount: "always"',
+      "expected the bounded intent-prefetch mount policy",
     );
+  });
+
+  it("fails when useServerTable forces fresh prefetched data to refetch", () => {
+    const root = createPassingFixture({ dist: false });
+    write(root, "apps/admin-v2/src/components/admin/data-table/useServerTable.ts", `
+      import { keepPreviousData, useQuery } from "@tanstack/react-query";
+      export function useServerTable(qOpts) {
+        return useQuery({
+          ...qOpts,
+          placeholderData: keepPreviousData,
+          refetchOnMount: "always",
+        });
+      }
+    `);
+
+    const report = runAdminPerfCheck({ rootDir: root });
+
+    expect(report.ok).toBe(false);
+    expect(formatAdminPerfCheckReport(report).join("\n")).toContain(
+      "expected the bounded intent-prefetch mount policy",
+    );
+  });
+
+  it("fails when product media restores drag tooling or drops the render cap", () => {
+    const root = createPassingFixture({ dist: false });
+    write(root, "apps/admin-v2/src/components/admin/product-form/ProductImagesSection.tsx", `
+      import { DndContext } from "@dnd-kit/core";
+      import { DraggableImageGallery } from "../DraggableImageGallery";
+      export function ProductImagesSection({ field }) {
+        return <DndContext>{field.value.map((item) => <img src={item.url} />)}</DndContext>;
+      }
+    `);
+
+    const report = runAdminPerfCheck({ rootDir: root });
+    const output = formatAdminPerfCheckReport(report).join("\n");
+
+    expect(report.ok).toBe(false);
+    expect(output).toContain("product media must keep the direct, accessible reorder controls");
+    expect(output).toContain("cap its initial rendered tiles at 12");
+    expect(output).toContain("native lazy loading");
+  });
+
+  it("fails when navigation restores duplicate editors or drops row batching", () => {
+    const root = createPassingFixture({ dist: false });
+    write(root, "apps/admin-v2/src/components/admin/navigation/NavigationBuilder.tsx", `
+      import { MobileNavigationTree } from "./MobileNavigationTree";
+      const SortableNavigationEditor = () => null;
+      export function NavigationBuilder({ outlineRows }) {
+        return <><MobileNavigationTree />{outlineRows.map((row) => row)}</>;
+      }
+    `);
+
+    const report = runAdminPerfCheck({ rootDir: root });
+    const output = formatAdminPerfCheckReport(report).join("\n");
+
+    expect(report.ok).toBe(false);
+    expect(output).toContain("80-row render batch");
+    expect(output).toContain("only the active row batch");
+    expect(output).toContain("duplicate legacy desktop/mobile editors");
+  });
+
+  it("fails when OrderView restores lazy panel hydration", () => {
+    const root = createPassingFixture({ dist: false });
+    write(root, "apps/admin-v2/src/components/admin/OrderView.tsx", `
+      import { lazy, Suspense } from "react";
+      const OrderSupportRequestsCard = lazy(() => import("./orderview/OrderSupportRequestsCard"));
+      const OrderNotificationsCard = lazy(() => import("./orderview/OrderNotificationsCard"));
+      export function OrderView() {
+        return <Suspense><OrderSupportRequestsCard /><OrderNotificationsCard /></Suspense>;
+      }
+    `);
+
+    const report = runAdminPerfCheck({ rootDir: root });
+    const output = formatAdminPerfCheckReport(report).join("\n");
+
+    expect(report.ok).toBe(false);
+    expect(output).toContain("render deterministically");
+    expect(output).toContain("hydration-unstable lazy panel boundary");
+  });
+
+  it("rejects broad immutable header rules", () => {
+    const root = createPassingFixture();
+    const broadHeaders = `/*
+  Cache-Control: public, max-age=31536000, immutable
+`;
+    write(root, "apps/admin-v2/public/_headers", broadHeaders);
+    write(root, "apps/admin-v2/dist/client/_headers", broadHeaders);
+
+    const report = runAdminPerfCheck({ rootDir: root });
+    const output = formatAdminPerfCheckReport(report).join("\n");
+
+    expect(report.ok).toBe(false);
+    expect(output).toContain("long-lived browser caching is only allowed");
+    expect(output).toContain("found /*");
+    expect(output).toContain("expected exactly one /assets/immutable/*.js rule");
+  });
+
+  it("rejects broad long-lived caching even without the immutable directive", () => {
+    const root = createPassingFixture();
+    const broadHeaders = `/*
+  Cache-Control: public, max-age=31536000
+`;
+    write(root, "apps/admin-v2/public/_headers", broadHeaders);
+    write(root, "apps/admin-v2/dist/client/_headers", broadHeaders);
+
+    const report = runAdminPerfCheck({ rootDir: root });
+    const output = formatAdminPerfCheckReport(report).join("\n");
+
+    expect(report.ok).toBe(false);
+    expect(output).toContain("long-lived browser caching is only allowed");
+    expect(output).toContain("found /*");
+  });
+
+  it("fails closed when an existing client build loses its ProductForm chunk", () => {
+    const root = createPassingFixture();
+    const productFormChunk = join(
+      root,
+      "apps/admin-v2/dist/client/assets/immutable/ProductForm-a1B2c3D4e.js",
+    );
+    rmSync(productFormChunk);
+
+    const report = runAdminPerfCheck({ rootDir: root });
+    const output = formatAdminPerfCheckReport(report).join("\n");
+
+    expect(report.ok).toBe(false);
+    expect(output).toContain("expected a ProductForm-*.js artifact");
+  });
+
+  it("rejects unhashed or misplaced generated scripts and styles", () => {
+    const root = createPassingFixture();
+    write(root, "apps/admin-v2/dist/client/assets/immutable/unhashed.js", "export {};\n");
+    write(root, "apps/admin-v2/dist/client/assets/generated-a1B2c3D4.css", ".x {}\n");
+
+    const report = runAdminPerfCheck({ rootDir: root });
+    const output = formatAdminPerfCheckReport(report).join("\n");
+
+    expect(report.ok).toBe(false);
+    expect(output).toContain("immutable scripts/styles require a Vite content hash");
+    expect(output).toContain(
+      "generated scripts/styles must be emitted under assets/immutable/",
+    );
+  });
+
+  it("rejects public files, maps, and HTML in the generated immutable namespace", () => {
+    const root = createPassingFixture();
+    write(root, "apps/admin-v2/public/assets/immutable/copied-a1B2c3D4.js", "export {};\n");
+    write(root, "apps/admin-v2/dist/client/assets/immutable/index.html", "<!doctype html>\n");
+    write(root, "apps/admin-v2/dist/client/assets/immutable/index-a1B2c3D4.js.map", "{}\n");
+
+    const report = runAdminPerfCheck({ rootDir: root });
+    const output = formatAdminPerfCheckReport(report).join("\n");
+
+    expect(report.ok).toBe(false);
+    expect(output).toContain("reserved for generated client assets");
+    expect(output).toContain("source maps and HTML must stay outside");
   });
 
   it("passes and reports dist as skipped when build artifacts are absent", () => {

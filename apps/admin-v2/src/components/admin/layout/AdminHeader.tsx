@@ -170,8 +170,10 @@ function DeferredUserMenu({ user }: { user: AdminHeaderUser }) {
 }
 
 export function AdminHeader({ user }: AdminHeaderProps) {
-  const location = useLocation();
-  const breadcrumbItems = generateAdminBreadcrumbs(location.pathname);
+  const currentPath = useLocation({
+    select: (location) => location.pathname,
+  });
+  const breadcrumbItems = generateAdminBreadcrumbs(currentPath);
   const canManageCache = useHasPermission(
     ADMIN_PERMISSIONS.SETTINGS_CACHE_MANAGE,
   );
