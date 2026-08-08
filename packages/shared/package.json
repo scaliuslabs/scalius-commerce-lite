@@ -25,5 +25,5 @@
     "tailwind-merge": "^3.6.0",
     "zod": "^4.4.3"
   },
-  "license": "UNLICENSED"
+  "license": "AGPL-3.0-only"
 }

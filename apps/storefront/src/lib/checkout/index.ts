@@ -28,6 +28,7 @@ import {
   hideCheckoutLoadingOverlay,
   showCheckoutLoadingOverlay,
 } from "./loading-overlay";
+import { normalizeCheckoutRedirectUrl } from "./redirect-url";
 
 // Register all built-in gateway handlers
 registerGateway(codHandler);
@@ -728,13 +729,20 @@ async function processPayment(): Promise<void> {
     const result = await handler.processPayment(ctx);
 
     if (result.success && result.redirectUrl) {
+      const redirectUrl = normalizeCheckoutRedirectUrl(
+        result.redirectUrl,
+        window.location.origin,
+      );
+      if (!redirectUrl) {
+        throw new Error("Payment could not open because the gateway returned an unsafe redirect URL.");
+      }
       if (shouldClearCheckoutBeforeRedirect(result)) {
         writeHostedPaymentRecoverySession(result.hostedPaymentRecoveryUrl);
         clearCheckoutAndCart();
       } else if (shouldClearCheckoutSessionBeforeRedirect(result)) {
         clearCheckoutSession();
       }
-      window.location.href = result.redirectUrl;
+      window.location.href = redirectUrl;
       return;
     }
 

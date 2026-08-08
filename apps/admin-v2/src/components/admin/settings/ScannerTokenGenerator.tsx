@@ -51,7 +51,7 @@ export function ScannerTokenGenerator() {
       return;
     }
 
-    const url = `${window.location.origin}/scanner?token=${token}`;
+    const url = `${window.location.origin}/scanner#token=${encodeURIComponent(token)}`;
     setScannerUrl(url);
     setQrDataUrl(null);
 

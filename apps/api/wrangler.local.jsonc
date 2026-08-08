@@ -1,7 +1,7 @@
 {
   "name": "scalius-api-local",
   "main": "./src/worker.ts",
-  "compatibility_date": "2026-02-01",
+  "compatibility_date": "2026-07-30",
   "compatibility_flags": [
     "nodejs_compat",
     "global_fetch_strictly_public",

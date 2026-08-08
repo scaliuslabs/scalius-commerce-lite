@@ -20,11 +20,13 @@
 		}
 	],
 	"cache": {
-		"enabled": true
+		"enabled": true,
+		// Never serve HTML produced by a superseded storefront deployment.
+		"cross_version_cache": false
 	},
 	"exports": {
 		"default": { "type": "worker", "cache": { "enabled": false } },
-		"PublicStorefront": { "type": "worker", "cache": { "enabled": true } }
+		"CachedPublicStorefront": { "type": "worker", "cache": { "enabled": true } }
 	},
 	"observability": {
 		"enabled": true,

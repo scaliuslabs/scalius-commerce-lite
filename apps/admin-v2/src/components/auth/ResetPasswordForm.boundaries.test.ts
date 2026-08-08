@@ -6,7 +6,9 @@ const source = readFileSync(new URL("./ResetPasswordForm.tsx", import.meta.url),
 describe("password reset proof handling", () => {
   it("exchanges and removes the one-time fragment before rendering the form", () => {
     expect(source).toContain('window.location.hash.slice(1)');
+    expect(source).not.toContain("window.location.search");
     expect(source).toContain('window.history.replaceState(null, "", window.location.pathname)');
+    expect(source).toContain("resetExchangeRef.current");
     expect(source).toContain('fetch("/api/auth/reset-session"');
   });
 

@@ -3,7 +3,7 @@
 // API docs: https://api.sms.net.bd — single API key auth, form-data POST.
 
 import type { SmsProvider, SendSmsOptions, SendSmsResult } from "../provider";
-import { classifySmsProviderFailure } from "../retryability";
+import { classifySmsProviderFailure, sanitizeSmsProviderDiagnostic } from "../retryability";
 
 export interface SmsNetBdConfig {
   apiKey: string;
@@ -42,23 +42,23 @@ export class SmsNetBdProvider implements SmsProvider {
     } catch {
       return {
         success: false,
-        rawStatus: `HTTP ${res.status}: ${text.slice(0, 200)}`,
+        rawStatus: `HTTP ${res.status}: unreadable provider response`,
         retryable: classifySmsProviderFailure(undefined, res.status),
       };
     }
 
-    if (json.error === 0) {
+    if (res.ok && json.error === 0) {
       return {
         success: true,
         providerRef: String(json.data?.request_id ?? ""),
-        rawStatus: json.msg,
+        rawStatus: sanitizeSmsProviderDiagnostic(json.msg),
       };
     }
     const rawStatus = `error=${json.error}: ${json.msg}`;
     return {
       success: false,
-      rawStatus,
-      retryable: classifySmsProviderFailure(rawStatus),
+      rawStatus: sanitizeSmsProviderDiagnostic(rawStatus),
+      retryable: classifySmsProviderFailure(rawStatus, res.ok ? undefined : res.status),
     };
   }
 }

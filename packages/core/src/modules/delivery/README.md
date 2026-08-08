@@ -121,6 +121,8 @@ Delivery providers are inactive drafts by default on both create and update-as-c
 
 Delivery provider credentials are encrypted before storage with the dedicated `CREDENTIAL_ENCRYPTION_KEY`. `saveDeliveryProvider()` is write-strict and must not be called with `getEncryptionKey()` fallback output; route-facing saves use `requireEncryptionKey()` and fail before DB writes or checkout-cache invalidation when the key is missing. Admin list/get/update paths strict-read existing rows before masking or merging masked fields, including `webhookSecret`, so encrypted rows are never returned as ciphertext and masked placeholders are never persisted as real credentials. Provider runtime reads, webhook verification, Pathao import, shipment creation, status polling, and live tests pass only `getCredentialEncryptionKey()` output; missing/wrong keys fail closed before courier calls while legacy plaintext rows remain readable for migration.
 
+Active provider saves also reject incomplete setup, obvious placeholder values, and base URLs that are not absolute credential-free HTTPS URLs. Provider failures retain only bounded status/field metadata; raw upstream HTML/JSON bodies that may echo buyer details are never logged or returned as shipment diagnostics.
+
 ### Tracking URLs
 - Pathao: `https://merchant.pathao.com/tracking?consignment_id={trackingId}`
 - Steadfast: `https://steadfast.com.bd/t/{trackingId}`

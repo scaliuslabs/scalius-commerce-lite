@@ -135,4 +135,38 @@ describe("Pathao webhook provider authority", () => {
       rawStatus: "order.delivered",
     }));
   });
+
+  it("fails closed instead of returning a public example secret", async () => {
+    mocks.verifyDeliveryWebhook.mockResolvedValue({
+      verified: true,
+      providerId: "provider_pathao",
+      credentials: {},
+    });
+
+    const response = await postWebhook(
+      createApp({}),
+      { event: "webhook_integration" },
+    );
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({
+      success: false,
+      error: "Webhook not configured",
+    });
+    expect(
+      response.headers.get("X-Pathao-Merchant-Webhook-Integration-Secret"),
+    ).toBeNull();
+  });
+
+  it("returns only the configured merchant secret during integration verification", async () => {
+    const response = await postWebhook(
+      createApp({}),
+      { event: "webhook_integration" },
+    );
+
+    expect(response.status).toBe(202);
+    expect(
+      response.headers.get("X-Pathao-Merchant-Webhook-Integration-Secret"),
+    ).toBe("merchant-secret");
+  });
 });

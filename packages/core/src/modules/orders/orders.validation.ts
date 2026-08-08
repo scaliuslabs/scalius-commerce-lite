@@ -5,6 +5,8 @@
 import { z } from "zod";
 import { phoneNumberSchema } from "@scalius/shared/customer-utils";
 
+export const MAX_ORDER_LINE_ITEMS = 99;
+
 const orderBaseContentSchema = z.object({
     customerName: z
         .string()
@@ -52,11 +54,17 @@ const editableOrderItemSchema = sellableOrderItemSchema.extend({
 });
 
 const sellableOrderContentSchema = orderBaseContentSchema.extend({
-    items: z.array(sellableOrderItemSchema).min(1, "Add at least one sellable item"),
+    items: z
+        .array(sellableOrderItemSchema)
+        .min(1, "Add at least one sellable item")
+        .max(MAX_ORDER_LINE_ITEMS, `Add at most ${MAX_ORDER_LINE_ITEMS} sellable items`),
 });
 
 const editableOrderContentSchema = orderBaseContentSchema.extend({
-    items: z.array(editableOrderItemSchema).min(1, "Add at least one sellable item"),
+    items: z
+        .array(editableOrderItemSchema)
+        .min(1, "Add at least one sellable item")
+        .max(MAX_ORDER_LINE_ITEMS, `Add at most ${MAX_ORDER_LINE_ITEMS} sellable items`),
 });
 
 /** Schema for creating a new order (POST /api/orders). */

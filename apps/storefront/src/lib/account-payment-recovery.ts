@@ -1,4 +1,5 @@
 import type { CustomerPaymentRecovery } from "./api/customer-auth";
+import { normalizeHostedCheckoutUrl } from "./checkout/redirect-url";
 
 export type AccountPaymentRecoveryAction = {
   visible: boolean;
@@ -94,14 +95,5 @@ export function getAccountPaymentReturnNotice(
 }
 
 export function normalizeHostedGatewayUrl(url: string | null | undefined): string | null {
-  const raw = url?.trim();
-  if (!raw || !/^https?:\/\//i.test(raw)) return null;
-
-  try {
-    const parsed = new URL(raw);
-    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return null;
-    return parsed.href;
-  } catch {
-    return null;
-  }
+  return normalizeHostedCheckoutUrl(url);
 }

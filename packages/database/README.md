@@ -361,9 +361,14 @@ ledger. Every migration from 0050 onward must:
   source SHA-256 ledger row; and
 - be listed in the runtime release manifest used by `/readyz`.
 
-The current release is `0053_checkout_language_authority`. The release chain
-also demonstrates that the runner and its tests must handle contiguous releases
-rather than assuming the ledger contains only its bootstrap row.
+The current release is `0055_cache_invalidation_postgres_bigint`. The release
+chain also demonstrates that the runner and its tests must handle contiguous
+releases rather than assuming the ledger contains only its bootstrap row.
+Release 0055 is a forward-only PostgreSQL convergence migration: schema-54
+upgrades created 32-bit cache-generation counters while fresh PostgreSQL imports
+correctly used 64-bit counters, so the sidecar widens existing targets and the
+SQLite migration records the same release without changing SQLite's
+integer-affinity schema.
 
 Do not delete or squash historical migrations after a release. Existing D1
 installations depend on Wrangler's migration history, while existing Turso and

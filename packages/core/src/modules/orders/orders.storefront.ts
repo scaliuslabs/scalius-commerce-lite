@@ -47,6 +47,7 @@ import {
     selectActiveDeliveryLocationRows,
     type ActiveDeliveryLocationRow,
 } from "./delivery-location-validation";
+import { MAX_ORDER_LINE_ITEMS } from "./orders.validation";
 
 export interface StorefrontShippingMethodRow {
     id: string;
@@ -271,6 +272,12 @@ export async function createStorefrontOrder(
     checkoutPolicySnapshot?: StorefrontCheckoutPolicySnapshot,
     taxAuthoritySnapshot?: StorefrontTaxAuthoritySnapshot,
 ): Promise<CreateStorefrontOrderResult> {
+    if (data.items.length > MAX_ORDER_LINE_ITEMS) {
+        throw new ValidationError(
+            `Checkout supports at most ${MAX_ORDER_LINE_ITEMS} line items.`,
+        );
+    }
+
     if (prevalidatedCart && !isTrustedStorefrontCartValidationResult(prevalidatedCart)) {
         throw new ValidationError("Checkout cart validation could not be trusted. Please retry checkout.");
     }

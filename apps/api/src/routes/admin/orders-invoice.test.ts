@@ -27,4 +27,9 @@ describe("admin invoice route boundaries", () => {
     expect(routeSource).toContain('z.literal("invoice-v1")');
     expect(routeSource).toContain("orderVersion");
   });
+
+  it("uses OpenAPI path-parameter syntax so generated clients interpolate the order id", () => {
+    expect(routeSource.match(/path: "\/\{id\}\/invoice"/g)).toHaveLength(2);
+    expect(routeSource).not.toContain('path: "/:id/invoice"');
+  });
 });

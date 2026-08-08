@@ -257,6 +257,8 @@ Production order workflows use the claimed transition engine: deterministic move
 
 Production order workflows use either the claimed order transition engine or `releaseReservedStockBatch()`. Both keep deterministic movement claims and stock CAS updates together. `releaseReservedStockBatch()` also proves an outstanding reservation movement exists before releasing it. Partial-batch compensation is itself stock-version guarded; if rollback cannot be proven, the operation stops for manual reconciliation without deleting its evidence claim. The old best-effort sequential helpers remain compatibility-only and have no production caller.
 
+Transition preparation and low-stock projection refreshes use at most four concurrent database tasks, below D1's six-connection invocation ceiling. Low-stock refresh is ancillary after the ledger/CAS batch: a refresh failure is logged without turning an already-committed inventory mutation into a false failure that callers might retry.
+
 ### Restore
 
 `restoreDeductedStock()` -- Restores stock after a post-shipment cancellation or return. For regular pool: increments `stock` (undoes the deduction). For preorder pool: restores `preorderStock`. For backorder pool: no-op on stock counters (backorder never decremented physical stock). `restoreDeductedMultiple()` processes sequentially and checks low stock alerts after each restore.

@@ -109724,7 +109724,7 @@
         ]
       }
     },
-    "/api/v1/admin/orders/:id/invoice": {
+    "/api/v1/admin/orders/{id}/invoice": {
       "get": {
         "tags": [
           "Admin - Orders"
@@ -116154,7 +116154,8 @@
                         "quantity"
                       ]
                     },
-                    "minItems": 1
+                    "minItems": 1,
+                    "maxItems": 99
                   },
                   "requestKey": {
                     "type": "string",
@@ -117692,7 +117693,8 @@
                         "quantity"
                       ]
                     },
-                    "minItems": 1
+                    "minItems": 1,
+                    "maxItems": 99
                   },
                   "discountAmount": {
                     "type": "number",
@@ -120176,7 +120178,8 @@
                         "price"
                       ]
                     },
-                    "minItems": 1
+                    "minItems": 1,
+                    "maxItems": 99
                   },
                   "expectedVersion": {
                     "type": "integer",

@@ -7,16 +7,19 @@
 // credential rotation cannot leave another warm Worker isolate using an old
 // provider instance.
 
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
+import type { BatchItem } from "drizzle-orm/batch";
 import { settings } from "@scalius/database/schema";
-import type { Database } from "@scalius/database/client";
+import { safeBatch, type Database } from "@scalius/database/client";
 import {
-  upsertSetting,
-  upsertEncryptedSetting,
-} from "@scalius/core/modules/payments/gateway-settings";
-import { readStoredCredentialStrict } from "@scalius/core/utils/credential-encryption";
+  encodeEncryptedCredential,
+  encryptCredentials,
+  readStoredCredentialStrict,
+} from "@scalius/core/utils/credential-encryption";
 import { ValidationError } from "@scalius/core/errors";
-import type { SmsProvider, SmsProviderId } from "./provider";
+import { SMS_PROVIDER_IDS, type SmsProvider, type SmsProviderId } from "./provider";
+
+type SQLiteBatchItem = BatchItem<"sqlite">;
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -343,89 +346,59 @@ export async function saveSmsSettings(
   encryptionKey?: string,
 ): Promise<void> {
   validateSmsSettingsInput(data);
-  const ops: Promise<void>[] = [];
+  const values = new Map<string, string>();
 
   // Plain text fields
   if (data.activeProvider !== undefined)
-    ops.push(
-      upsertSetting(db, SMS_CATEGORY, "active_provider", data.activeProvider),
-    );
+    values.set("active_provider", data.activeProvider);
   if (data.mimsmsUsername !== undefined)
-    ops.push(
-      upsertSetting(db, SMS_CATEGORY, "mimsms_username", data.mimsmsUsername),
-    );
+    values.set("mimsms_username", data.mimsmsUsername);
   if (data.mimsmsSenderName !== undefined)
-    ops.push(
-      upsertSetting(
-        db,
-        SMS_CATEGORY,
-        "mimsms_sender_name",
-        data.mimsmsSenderName,
-      ),
-    );
+    values.set("mimsms_sender_name", data.mimsmsSenderName);
   if (data.smsnetbdSenderId !== undefined)
-    ops.push(
-      upsertSetting(
-        db,
-        SMS_CATEGORY,
-        "smsnetbd_sender_id",
-        data.smsnetbdSenderId,
-      ),
-    );
+    values.set("smsnetbd_sender_id", data.smsnetbdSenderId);
   if (data.gennetBaseUrl !== undefined)
-    ops.push(
-      upsertSetting(db, SMS_CATEGORY, "gennet_base_url", data.gennetBaseUrl),
-    );
+    values.set("gennet_base_url", data.gennetBaseUrl);
   if (data.gennetSid !== undefined)
-    ops.push(upsertSetting(db, SMS_CATEGORY, "gennet_sid", data.gennetSid));
+    values.set("gennet_sid", data.gennetSid);
 
-  // Encrypted fields — skip if masked (means user did not change them)
-  if (data.bdbulksmsToken && data.bdbulksmsToken !== MASKED)
-    ops.push(
-      upsertEncryptedSetting(
-        db,
-        SMS_CATEGORY,
-        "bdbulksms_token",
-        data.bdbulksmsToken,
-        encryptionKey,
-      ),
+  const secrets = [
+    ["bdbulksms_token", data.bdbulksmsToken],
+    ["mimsms_api_key", data.mimsmsApiKey],
+    ["smsnetbd_api_key", data.smsnetbdApiKey],
+    ["gennet_api_token", data.gennetApiToken],
+  ] as const;
+  const changedSecrets = secrets.filter(([, value]) => Boolean(value && value !== MASKED));
+  if (changedSecrets.length > 0 && !encryptionKey) {
+    throw new Error("CREDENTIAL_ENCRYPTION_KEY is required to store provider credentials.");
+  }
+  for (const [key, value] of changedSecrets) {
+    if (!value) continue;
+    values.set(
+      key,
+      encodeEncryptedCredential(await encryptCredentials(value, encryptionKey!)),
     );
-  if (data.mimsmsApiKey && data.mimsmsApiKey !== MASKED)
-    ops.push(
-      upsertEncryptedSetting(
-        db,
-        SMS_CATEGORY,
-        "mimsms_api_key",
-        data.mimsmsApiKey,
-        encryptionKey,
-      ),
-    );
-  if (data.smsnetbdApiKey && data.smsnetbdApiKey !== MASKED)
-    ops.push(
-      upsertEncryptedSetting(
-        db,
-        SMS_CATEGORY,
-        "smsnetbd_api_key",
-        data.smsnetbdApiKey,
-        encryptionKey,
-      ),
-    );
-  if (data.gennetApiToken && data.gennetApiToken !== MASKED)
-    ops.push(
-      upsertEncryptedSetting(
-        db,
-        SMS_CATEGORY,
-        "gennet_api_token",
-        data.gennetApiToken,
-        encryptionKey,
-      ),
-    );
+  }
 
-  await Promise.all(ops);
+  if (values.size === 0) return;
+  const statements = [...values].map(([key, value]) =>
+    db.insert(settings).values({
+      id: crypto.randomUUID(),
+      key,
+      value,
+      type: "string",
+      category: SMS_CATEGORY,
+    }).onConflictDoUpdate({
+      target: [settings.key, settings.category],
+      set: { value, updatedAt: sql`unixepoch()` },
+    })
+  );
+  await safeBatch(db, statements as SQLiteBatchItem[]);
 }
 
 function validateSmsSettingsInput(
   data: Partial<{
+    activeProvider: string;
     bdbulksmsToken: string;
     mimsmsUsername: string;
     mimsmsApiKey: string;
@@ -437,6 +410,12 @@ function validateSmsSettingsInput(
     gennetSid: string;
   }>,
 ): void {
+  if (
+    data.activeProvider
+    && !SMS_PROVIDER_IDS.includes(data.activeProvider as SmsProviderId)
+  ) {
+    throw new ValidationError("Unsupported SMS provider.");
+  }
   const placeholderError = firstPlaceholderConfigError([
     ["BDBulkSMS token", data.bdbulksmsToken],
     ["MIM SMS username", data.mimsmsUsername],

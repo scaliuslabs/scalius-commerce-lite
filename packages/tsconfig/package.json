@@ -2,7 +2,7 @@
   "name": "@scalius/tsconfig",
   "version": "0.0.0",
   "private": true,
-  "license": "UNLICENSED",
+  "license": "AGPL-3.0-only",
   "publishConfig": {
     "access": "restricted"
   },

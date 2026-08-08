@@ -386,6 +386,13 @@
       "when": 1785879649936,
       "tag": "0054_cache_invalidation_delivery",
       "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "6",
+      "when": 1786147671003,
+      "tag": "0055_cache_invalidation_postgres_bigint",
+      "breakpoints": true
     }
   ]
 }

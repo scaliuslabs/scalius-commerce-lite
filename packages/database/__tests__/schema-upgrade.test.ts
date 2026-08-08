@@ -15,7 +15,10 @@ import {
   splitSchemaMigrationStatements,
   validateAppliedSchemaMigrations,
 } from "../src/schema-upgrade";
-import { compileSqliteDdlForPostgres } from "../scripts/postgres-schema";
+import {
+  compileCanonicalPostgresSchema,
+  compileSqliteDdlForPostgres,
+} from "../scripts/postgres-schema";
 import {
   POSTGRES_MIGRATION_STATE_REGCLASS,
   POSTGRES_MIGRATION_STATE_TABLE,
@@ -129,6 +132,12 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 2,
         postgresStatements: 2,
       },
+      {
+        version: 55,
+        name: "0055_cache_invalidation_postgres_bigint",
+        sqliteStatements: 2,
+        postgresStatements: 2,
+      },
     ]);
   });
 
@@ -147,6 +156,25 @@ describe("provider-neutral schema upgrades", () => {
         `${compileSqliteDdlForPostgres(statement).replace(/;\s*$/, "")};`,
       ),
     );
+  });
+
+  it("converges upgraded PostgreSQL cache counters with the fresh bigint schema", async () => {
+    const postgres = splitSchemaMigrationStatements(readFileSync(
+      join(migrationsDirectory, "postgres/0055_cache_invalidation_postgres_bigint.sql"),
+      "utf8",
+    ));
+    expect(postgres[0]).toContain('ALTER COLUMN "requested_generation" TYPE bigint');
+    expect(postgres[0]).toContain('ALTER COLUMN "applied_generation" TYPE bigint');
+    expect(postgres[0]).toContain('ALTER COLUMN "attempt_count" TYPE bigint');
+
+    const freshSchema = await compileCanonicalPostgresSchema();
+    const cacheTable = freshSchema.preDataSql.slice(
+      freshSchema.preDataSql.indexOf('CREATE TABLE "cache_invalidation_state"'),
+      freshSchema.preDataSql.indexOf('CREATE TABLE "categories"'),
+    );
+    expect(cacheTable).toContain('"requested_generation" bigint');
+    expect(cacheTable).toContain('"applied_generation" bigint');
+    expect(cacheTable).toContain('"attempt_count" bigint');
   });
 
   it.each([
@@ -219,6 +247,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 52, name: "0052_remove_storefront_cache_queue" },
           { version: 53, name: "0053_checkout_language_authority" },
           { version: 54, name: "0054_cache_invalidation_delivery" },
+          { version: 55, name: "0055_cache_invalidation_postgres_bigint" },
         ],
       });
     } finally {
@@ -368,7 +397,8 @@ describe("provider-neutral schema upgrades", () => {
       { version: 52, name: artifacts[2]!.name, sourceSha256: artifacts[2]!.sourceSha256 },
       { version: 53, name: artifacts[3]!.name, sourceSha256: artifacts[3]!.sourceSha256 },
       { version: 54, name: artifacts[4]!.name, sourceSha256: artifacts[4]!.sourceSha256 },
-      { version: 55, name: "0055_future", sourceSha256: "c".repeat(64) },
+      { version: 55, name: artifacts[5]!.name, sourceSha256: artifacts[5]!.sourceSha256 },
+      { version: 56, name: "0056_future", sourceSha256: "c".repeat(64) },
     ], artifacts)).toThrow(/future row/i);
   });
 

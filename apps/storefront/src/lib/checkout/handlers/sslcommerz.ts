@@ -3,6 +3,7 @@ import { CheckoutOrderError, createOrder } from "../create-order";
 import { resolveCheckoutPaymentRequest } from "../payment-mode";
 import { buildPaymentRecoveryUrl } from "../payment-recovery";
 import { fetchPaymentSessionWithProcessingRetry } from "../payment-session-retry";
+import { normalizeHostedCheckoutUrl } from "../redirect-url";
 
 export const sslcommerzHandler: GatewayHandler = {
   id: "sslcommerz",
@@ -51,7 +52,8 @@ export const sslcommerzHandler: GatewayHandler = {
         }
         gatewayUrl = typeof sessionData.gatewayUrl === "string" ? sessionData.gatewayUrl : undefined;
       }
-      if (!gatewayUrl) throw new Error("No gateway URL received");
+      gatewayUrl = normalizeHostedCheckoutUrl(gatewayUrl) ?? undefined;
+      if (!gatewayUrl) throw new Error("Payment gateway returned an unsafe checkout URL");
       const hostedPaymentRecoveryUrl = buildPaymentRecoveryUrl({
         orderId,
         gateway: "sslcommerz",

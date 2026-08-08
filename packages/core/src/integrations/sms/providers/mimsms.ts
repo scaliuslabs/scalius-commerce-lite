@@ -3,7 +3,7 @@
 // API docs: https://api.mimsms.com — username + API key auth, JSON POST.
 
 import type { SmsProvider, SendSmsOptions, SendSmsResult } from "../provider";
-import { classifySmsProviderFailure } from "../retryability";
+import { classifySmsProviderFailure, sanitizeSmsProviderDiagnostic } from "../retryability";
 
 export interface MimSmsConfig {
   userName: string; // Email address
@@ -50,23 +50,23 @@ export class MimSmsProvider implements SmsProvider {
     } catch {
       return {
         success: false,
-        rawStatus: `HTTP ${res.status}: ${text.slice(0, 200)}`,
+        rawStatus: `HTTP ${res.status}: unreadable provider response`,
         retryable: classifySmsProviderFailure(undefined, res.status),
       };
     }
 
-    if (json.statusCode === "200" && json.status === "Success") {
+    if (res.ok && json.statusCode === "200" && json.status === "Success") {
       return {
         success: true,
         providerRef: json.trxnId,
-        rawStatus: json.responseResult,
+        rawStatus: sanitizeSmsProviderDiagnostic(json.responseResult),
       };
     }
     const rawStatus = `${json.statusCode}: ${json.responseResult}`;
     return {
       success: false,
-      rawStatus,
-      retryable: classifySmsProviderFailure(rawStatus),
+      rawStatus: sanitizeSmsProviderDiagnostic(rawStatus),
+      retryable: classifySmsProviderFailure(rawStatus, res.ok ? undefined : res.status),
     };
   }
 }

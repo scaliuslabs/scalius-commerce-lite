@@ -26,6 +26,7 @@ export const UCP_CATALOG_LOOKUP_CAPABILITY =
 const DEFAULT_SEARCH_LIMIT = 10;
 const MAX_SEARCH_LIMIT = 50;
 const MAX_LOOKUP_IDS = 25;
+const MAX_UCP_BODY_BYTES = 64 * 1024;
 const GID_PREFIX = "gid://scalius/";
 const CATALOG_IMAGE_OPTIONS = {
   width: 1200,
@@ -349,8 +350,41 @@ export function validateUcpRequest(
 }
 
 export async function parseJsonBody<T>(request: Request): Promise<T | null> {
+  const declaredLength = request.headers.get("Content-Length");
+  if (declaredLength) {
+    const parsedLength = Number(declaredLength);
+    if (
+      !Number.isSafeInteger(parsedLength) ||
+      parsedLength < 0 ||
+      parsedLength > MAX_UCP_BODY_BYTES
+    ) {
+      return null;
+    }
+  }
+
   try {
-    const body = await request.json();
+    if (!request.body) return null;
+    const reader = request.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let totalLength = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      totalLength += value.byteLength;
+      if (totalLength > MAX_UCP_BODY_BYTES) {
+        await reader.cancel();
+        return null;
+      }
+      chunks.push(value);
+    }
+
+    const bytes = new Uint8Array(totalLength);
+    let offset = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    const body = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
     return body && typeof body === "object" && !Array.isArray(body)
       ? (body as T)
       : null;
@@ -584,6 +618,15 @@ function variantPrices(
   };
 }
 
+function hasPositiveVariantPricing(
+  product: Product,
+  variant: ProductVariant,
+  context: UcpCatalogContext,
+): boolean {
+  const pricing = variantPrices(product, variant, context);
+  return pricing.listPrice.amount > 0 && pricing.finalPrice.amount > 0;
+}
+
 function variantTitle(product: Product, variant: ProductVariant): string {
   const options = selectedOptions(product, variant);
   if (options.length === 0) return product.name;
@@ -678,7 +721,12 @@ function mapProduct(
   const media = primaryMedia(product, context.baseUrl);
   if (!media) return null;
 
-  const variants = resolution.variants.map((variant, index) => {
+  const pricedVariants = resolution.variants.filter((variant) =>
+    hasPositiveVariantPricing(product, variant, context)
+  );
+  if (pricedVariants.length === 0) return null;
+
+  const variants = pricedVariants.map((variant, index) => {
     const inputs = inputMatches?.get(variant.id);
     const featuredInputs = index === 0 ? inputMatches?.get(product.id) : undefined;
     return mapVariant(
@@ -702,7 +750,7 @@ function mapProduct(
     price_range: priceRange(variants),
     ...(listPriceRange(variants) ? { list_price_range: listPriceRange(variants) } : {}),
     variants,
-    ...(productOptions(product, resolution.variants) ? { options: productOptions(product, resolution.variants) } : {}),
+    ...(productOptions(product, pricedVariants) ? { options: productOptions(product, pricedVariants) } : {}),
     ...(product.category?.name
       ? { categories: [{ value: product.category.name, taxonomy: "merchant" as const }] }
       : {}),

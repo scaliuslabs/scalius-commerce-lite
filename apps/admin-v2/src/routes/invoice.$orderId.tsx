@@ -2,9 +2,9 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { useRef, useState } from "react";
 import type {
-  GetApiV1AdminOrdersIdInvoiceResponse,
-  PostApiV1AdminOrdersIdInvoiceData,
-  PostApiV1AdminOrdersIdInvoiceResponse,
+  GetApiV1AdminOrdersByIdInvoiceResponse,
+  PostApiV1AdminOrdersByIdInvoiceData,
+  PostApiV1AdminOrdersByIdInvoiceResponse,
 } from "@scalius/api-client/types";
 import { InvoiceActions } from "~/components/admin/InvoiceActions";
 import {
@@ -16,9 +16,9 @@ import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
 import { ADMIN_IMAGE_PRESETS } from "~/lib/admin-image-presentation";
 
 type ApiData<T> = T extends { success: true; data: infer Data } ? Data : never;
-type InvoiceData = ApiData<GetApiV1AdminOrdersIdInvoiceResponse>;
+type InvoiceData = ApiData<GetApiV1AdminOrdersByIdInvoiceResponse>;
 type OrderItem = InvoiceData["order"]["items"][number];
-type IssueInvoiceBody = NonNullable<PostApiV1AdminOrdersIdInvoiceData["body"]>;
+type IssueInvoiceBody = NonNullable<PostApiV1AdminOrdersByIdInvoiceData["body"]>;
 
 const getOrderInvoiceData = createServerFn({ method: "GET" })
   .validator((data: { id: string }) => data)
@@ -32,7 +32,7 @@ const issueOrderInvoice = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { apiPost } = await import("~/lib/api.server");
     const { id, ...body } = data;
-    return apiPost<ApiData<PostApiV1AdminOrdersIdInvoiceResponse>>(
+    return apiPost<ApiData<PostApiV1AdminOrdersByIdInvoiceResponse>>(
       `/orders/${id}/invoice`,
       body,
     );

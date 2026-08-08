@@ -12,6 +12,7 @@ import { assertNoActiveRefundAttempt } from "../payments/refund-attempt-guard";
 import { assertNoActivePaymentSessionAttempt } from "../payments/payment-session-attempts";
 import { getExternalLocationIds, isPositiveIntegerExternalLocationId } from "./locations";
 import {
+  assertDeliveryProviderReadyForActivation,
   getDeliveryProviderReadinessSummary,
   getDeliveryProviderSetupFingerprint,
 } from "./provider-readiness";
@@ -276,6 +277,13 @@ export async function saveDeliveryProvider(
     typeof provider.config === "string"
       ? provider.config
       : JSON.stringify(provider.config);
+  if (provider.isActive) {
+    assertDeliveryProviderReadyForActivation({
+      type: provider.type,
+      credentials,
+      config,
+    });
+  }
   const currentFingerprint = await getDeliveryProviderSetupFingerprint({
     type: provider.type,
     credentials,

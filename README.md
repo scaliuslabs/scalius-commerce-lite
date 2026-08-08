@@ -14,7 +14,7 @@
 </h4>
 
 <p align="center">
-  Full-stack e-commerce platform — admin dashboard, storefront, and API — deployed as Cloudflare Workers. Turborepo monorepo with TanStack Start, Astro, Hono, and provider-portable SQLite.
+  Full-stack e-commerce platform — admin dashboard, storefront, and API — deployed as Cloudflare Workers. Turborepo monorepo with TanStack Start, Astro, Hono, and portable D1, TursoDB, or PostgreSQL storage.
 </p>
 
 <p align="center">
@@ -43,12 +43,13 @@
 
 ## Overview
 
-Scalius Commerce Lite is a **Turborepo monorepo** containing three Cloudflare Workers and five shared packages. All workers communicate via **Cloudflare Service Bindings** (zero-latency RPC in production).
+Scalius Commerce Lite is a **Turborepo monorepo** containing four Cloudflare Workers and five shared packages. The admin dashboard and storefront reach the API through **Cloudflare Service Bindings** (zero-latency RPC in production); the scheduled ops monitor checks the deployed API and queue bindings independently.
 
 ```text
 apps/
   admin-v2/       # @scalius/admin-v2 — TanStack Start admin dashboard (Cloudflare Worker)
   api/            # @scalius/api — Hono standalone API + queue consumer (Cloudflare Worker)
+  ops-monitor/    # @scalius/ops-monitor — Scheduled readiness and queue monitor (Cloudflare Worker)
   storefront/     # @scalius/storefront — Astro 7 SSR customer store (Cloudflare Worker)
 packages/
   api-client/     # @scalius/api-client — Generated SDK from OpenAPI spec
@@ -67,7 +68,7 @@ scripts/          # Dev setup, deploy pipeline, dev server wrapper
 | Admin Dashboard | TanStack Start + TanStack Router + TanStack Query + React 19 |
 | Storefront | Astro 7 SSR + React 19 |
 | API | Hono + @hono/zod-openapi (auto-generated OpenAPI/Swagger) |
-| Database | Drizzle ORM + Cloudflare D1 by default; Turso is the concurrent-writer scale tier |
+| Database | Drizzle ORM + Cloudflare D1 by default; TursoDB and PostgreSQL/Neon scale tiers |
 | UI | Tailwind CSS v4 + shadcn/ui + Radix primitives |
 | Auth | Better Auth (email/password + optional 2FA with TOTP/email OTP) |
 | Caching | Native Cloudflare Worker entrypoint caches + bounded tag purges |
@@ -76,7 +77,7 @@ scripts/          # Dev setup, deploy pipeline, dev server wrapper
 | Payments | Stripe, SSLCommerz, Polar, COD |
 | Delivery | Pathao, Steadfast (webhook-driven tracking) |
 | Notifications | Email (Cloudflare Email default, Resend fallback), SMS (4 providers), Firebase Cloud Messaging |
-| CI/CD | GitHub Actions (lint → typecheck → build → test) |
+| CI/CD | GitHub Actions (lint → typecheck → test → build) |
 | Deploy | Cloudflare Workers via Wrangler |
 
 ---
@@ -95,19 +96,19 @@ flowchart TB
     subgraph Storefront ["Storefront (Astro 7 SSR)"]
         direction TB
         AstroPages["SSR Pages<br/>(product, cart, checkout, search)"]
-        EdgeCache["Native PublicStorefront Cache<br/>(5s TTL + domain tags)"]
+        EdgeCache["Native PublicStorefront Cache<br/>(tag-aware freshness)"]
         SDKClient["SDK Client<br/>(@scalius/api-client)"]
     end
 
     subgraph API ["API Worker (Hono)"]
         direction TB
-        HonoApp["275 OpenAPI paths / 373 operations<br/>(@hono/zod-openapi)"]
+        HonoApp["Versioned OpenAPI surface<br/>(@hono/zod-openapi)"]
         QueueConsumer["Queue Consumer<br/>(payments, notifications, OTP)"]
         CoreModules["@scalius/core<br/>(domain services)"]
     end
 
     subgraph Infra ["Platform Resources"]
-        SQLiteDB[(SQLite Authority<br/>D1 starter / Turso scale tier)]
+        RelationalDB[(Relational Authority<br/>D1 / TursoDB / PostgreSQL)]
         KV[(KV Namespaces<br/>cache + sessions + auth)]
         R2[(R2 Bucket<br/>media storage)]
         Queues["6 Queues<br/>(payment, notification, OTP<br/>plus their DLQs)"]
@@ -126,7 +127,7 @@ flowchart TB
 
     AdminV2 -->|"Service Binding (env.API)"| API
     Storefront -->|"Service Binding (env.BACKEND_API)"| API
-    API --> SQLiteDB
+    API --> RelationalDB
     API --> KV
     API --> R2
     API -->|Enqueue| Queues
@@ -150,7 +151,7 @@ flowchart TB
 graph LR
     A["Admin-V2<br/>:4323"] -->|env.API| C["API Worker<br/>:8787"]
     B["Storefront<br/>:4322"] -->|env.BACKEND_API| C
-    C --> D[(SQLite<br/>D1 / Turso)]
+    C --> D[(Relational Database<br/>D1 / TursoDB / PostgreSQL)]
     C --> E[(KV)]
     C --> F[(R2)]
 ```
@@ -165,7 +166,7 @@ In production, service bindings are zero-latency RPC calls (no HTTP overhead). I
 - Products with variants (merchant-defined Option 1/Option 2 axes, SKU, barcode), images, rich content, attributes, and catalog schema mapping that keeps size/color as helpful defaults without forcing every product option to be size/color
 - Categories, collections (manual & dynamic), product attributes
 - Inventory management with stock versioning (CAS), reservations, low-stock alerts
-- Provider-aware catalog search: FTS5 with the Bengali tokenizer on D1 and a bounded indexed fallback on Turso
+- Provider-aware catalog search: FTS5 with the Bengali tokenizer on D1 and a bounded indexed fallback on TursoDB or PostgreSQL
 
 ### Sales
 - Orders with 11-state machine (pending → processing → confirmed → shipped → delivered → completed)
@@ -330,11 +331,13 @@ All error responses: `{ "success": false, "error": { "code": "...", "message": "
 
 ## Database (`packages/database/`)
 
-Drizzle schema and canonical SQLite migrations for Cloudflare D1 and Turso. D1
-is the zero-configuration starter. Turso is selected only after a verified,
-operator-managed migration and provides the concurrent-writer scale tier. The
-schema declarations and migration journal are the source of truth; avoid
-copying volatile table or migration counts into docs.
+Drizzle schema and one provider-neutral commerce model support Cloudflare D1,
+TursoDB, and PostgreSQL/Neon. D1 is the zero-configuration starter; TursoDB is
+the concurrent-writer SQLite tier; PostgreSQL is the high-throughput tier.
+External providers are selected only after a verified, operator-managed
+migration. Schema declarations, canonical migrations, PostgreSQL sidecars, and
+the shared migration journal are the source of truth; avoid copying volatile
+table or migration counts into docs.
 
 See [Database portability and cutover](docs/DATABASE-PORTABILITY.md) for the
 provider boundary, deterministic migration protocol, rollback rule, and current
@@ -353,9 +356,9 @@ verification evidence.
 | Content | pages, heroSections, heroSliders, pageTemplates |
 | System | settings, siteSettings, analytics, adminFcmTokens, shippingMethods, checkoutLanguages |
 
-FTS5 full-text search with the Bengali tokenizer is enabled on D1. Turso's
-provider-compiled migration bundle omits unsupported FTS5 artifacts and domain
-search uses the provider-aware fallback without branching in route code.
+FTS5 full-text search with the Bengali tokenizer is enabled on D1. TursoDB and
+PostgreSQL omit or translate unsupported physical artifacts, and domain search
+uses the provider-aware fallback without branching in route code.
 
 ---
 
@@ -375,6 +378,7 @@ pnpm run deploy             # Typecheck → build → migrate → deploy all wor
 pnpm run deploy:api         # Typecheck → build API → migrate remote D1 → deploy API
 pnpm run deploy:admin       # Typecheck → build admin-v2 → deploy admin-v2
 pnpm run deploy:storefront  # Typecheck → build storefront → deploy storefront
+pnpm run deploy:ops-monitor # Typecheck → build → deploy the scheduled ops monitor
 pnpm ops:check              # Read-only production API ops smoke; add --queues for queue metadata
 pnpm release:check          # Read-only release smoke across API, dashboard, storefront, discovery XML/feed, UCP catalog discovery, and tracker/docs
 
@@ -386,7 +390,7 @@ pnpm --filter @scalius/database normalize:d1-export -- --input <d1.sql> --out <d
 pnpm --filter @scalius/database compile:data-export -- --provider turso --input <data.sql> --out <import.sql>
 
 # Testing & Quality
-pnpm lint               # ESLint all seven code workspaces through Turbo
+pnpm lint               # ESLint all eight code workspaces through Turbo
 pnpm test               # Run all tests via Vitest
 pnpm typecheck          # TypeScript type checking (tsc, NOT esbuild)
 pnpm generate:sdk       # Regenerate API client from OpenAPI spec
@@ -427,7 +431,7 @@ pnpm dev:doctor
 pnpm dev:setup
 ```
 
-Use the current Node 22 LTS line from `.nvmrc` (Node 22.18+ is required by the current toolchain); `pnpm dev:doctor` warns when your active Node version differs. `pnpm dev:doctor` is non-mutating and tells you what local setup is missing before you start changing state. `pnpm dev:setup` generates secrets, creates `.dev.vars` files, applies D1 migrations, starts a temporary API worker, and creates a default local admin if none exists. If some local env files already exist, setup reuses the existing shared secrets for any missing files and fails loudly if API/admin/storefront secrets disagree.
+Use Node 24 from `.nvmrc`; `pnpm dev:doctor` warns when your active Node version differs. `pnpm dev:doctor` is non-mutating and tells you what local setup is missing before you start changing state. `pnpm dev:setup` generates secrets, creates `.dev.vars` files, applies D1 migrations, starts a temporary API worker, and creates a default local admin if none exists. If some local env files already exist, setup reuses the existing shared secrets for any missing files and fails loudly if API/admin/storefront secrets disagree.
 
 Use `pnpm dev:setup --env-only` when `dev:doctor` reports missing, incomplete, or non-local env URL values. It appends missing/blank keys in `.dev.vars` and `.env.development` without installing dependencies, applying migrations, or creating an admin. Use `pnpm dev:setup --force --env-only` only when local env files must be regenerated or shared secrets are out of sync; it still avoids database/admin changes because of `--env-only`.
 
@@ -564,12 +568,12 @@ typechecks, builds the API, applies remote D1 migrations, then deploys the API
 Worker; admin and storefront shortcuts typecheck before their focused build and
 deploy.
 
-The deployment wrapper intentionally does not infer or perform a Turso cutover.
-For a Turso merchant, the deployment operator freezes every writer, copies
-and verifies the database, installs `DATABASE_PROVIDER=turso` plus both Turso
-secrets, deploys API and admin, verifies readiness, and only then removes the
-freeze. Adding connection secrets without migrating and fingerprinting the data
-is not a valid switch.
+The deployment wrapper intentionally does not infer or perform a database
+cutover. For TursoDB or PostgreSQL, the deployment operator freezes every
+writer, copies and verifies the database, installs the explicit provider and
+credentials, deploys API and admin, verifies readiness, and only then removes
+the freeze. Adding connection secrets without migrating and fingerprinting the
+data is not a valid switch.
 
 ### Production Domains
 
@@ -586,16 +590,18 @@ Not every worker has every binding. Wrangler configs are the source of truth for
 
 | Binding | Type | Purpose |
 |---------|------|---------|
-| `DB` | D1 | Starter database and retained rollback archive after a Turso cutover |
+| `DB` | D1 | Starter database and retained rollback archive after an external-provider cutover |
 | `CACHE` | KV | General caching |
 | `SESSION` | KV | Better Auth sessions |
 | `SHARED_AUTH_CACHE` | KV | Cross-worker auth token cache |
 | `BUCKET` | R2 | Media file storage |
 | `API` / `BACKEND_API` | Service Binding | Admin/Storefront → API |
 
-Turso deployments additionally install the `DATABASE_PROVIDER`,
-`TURSO_DATABASE_URL`, and `TURSO_AUTH_TOKEN` Worker secrets on API and admin.
-Secret values are deployment state and must never be committed.
+TursoDB deployments additionally install `DATABASE_PROVIDER=turso`,
+`TURSO_DATABASE_URL`, and `TURSO_AUTH_TOKEN` on API and admin. PostgreSQL
+deployments use `DATABASE_PROVIDER=postgres` plus `POSTGRES_DATABASE_URL` or a
+Cloudflare `HYPERDRIVE` binding. Secret values are deployment state and must
+never be committed.
 
 ---
 
@@ -614,4 +620,4 @@ Secret values are deployment state and must never be committed.
 
 ## License
 
-[AGPL v3](LICENSE)
+Except for the separately licensed MIT storefront in `apps/storefront/`, this repository is licensed under [AGPL v3](LICENSE).

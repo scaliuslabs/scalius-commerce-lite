@@ -15,4 +15,12 @@ describe("collection reorder boundaries", () => {
       "Reordering is available when the complete collection list is shown on one page.",
     );
   });
+
+  it("requires confirmation before single or bulk destructive lifecycle writes", () => {
+    expect(SOURCE).toContain("<ConfirmDialog");
+    expect(SOURCE).toContain("setDeleteRequest({ ids: [id], permanent: false })");
+    expect(SOURCE).toContain("setDeleteRequest({ ids: [id], permanent: true })");
+    expect(SOURCE).toContain("setDeleteRequest({ ids: [...selectedIds], permanent: showTrashed })");
+    expect(SOURCE).toContain("onConfirm={handleConfirmDelete}");
+  });
 });

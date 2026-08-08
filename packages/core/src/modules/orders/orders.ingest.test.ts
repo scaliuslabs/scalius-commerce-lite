@@ -589,6 +589,48 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
     expect(statements.length).toBeGreaterThan(1);
   });
 
+  it("chunks large order line inserts below D1's parameter ceiling", async () => {
+    const db = createDbMock();
+    mocks.safeBatch.mockResolvedValue([]);
+    const items = Array.from({ length: 12 }, (_, index) => ({
+      ...createPayload().items[0]!,
+      id: `item_${index}`,
+      taxAllocationLineId: `cart:${index}:variant_${index}`,
+      productId: `prod_${index}`,
+      variantId: `variant_${index}`,
+    }));
+    const lines = items.map((item) => ({
+      ...createPayload().taxQuote.lines[0]!,
+      lineId: item.taxAllocationLineId,
+      productId: item.productId,
+      variantId: item.variantId,
+    }));
+
+    await commitStorefrontOrderPayload(db, createPayload({
+      items,
+      discountUsage: null,
+      taxQuote: { ...createPayload().taxQuote, lines },
+      orderData: { ...createPayload().orderData, inventoryAction: "none" },
+    }));
+
+    const insertedArrays = db.insertValues.filter(Array.isArray) as Array<Array<Record<string, unknown>>>;
+    const itemChunks = insertedArrays.filter((rows) => rows[0]?.fulfillmentStatus === "pending");
+    const taxChunks = insertedArrays.filter((rows) => "rateSnapshot" in (rows[0] ?? {}));
+    expect(itemChunks.flat()).toHaveLength(12);
+    expect(taxChunks.flat()).toHaveLength(12);
+    expect(Math.max(...itemChunks.map((rows) => rows.length))).toBeLessThanOrEqual(5);
+    expect(Math.max(...taxChunks.map((rows) => rows.length))).toBeLessThanOrEqual(7);
+  });
+
+  it("rejects unbounded checkout line counts before database work", async () => {
+    const db = createDbMock();
+    const item = createPayload().items[0]!;
+    await expect(commitStorefrontOrderPayload(db, createPayload({
+      items: Array.from({ length: 100 }, (_, index) => ({ ...item, id: `item_${index}` })),
+    }))).rejects.toThrow("at most 99 line items");
+    expect(mocks.safeBatch).not.toHaveBeenCalled();
+  });
+
   it("commits a new idempotency candidate with the order and skips the impossible existing-order read", async () => {
     const db = createDbMock();
     const attemptWrite = { kind: "checkout-attempt-insert" };

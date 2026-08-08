@@ -947,7 +947,9 @@ export async function sendOrderNotificationEmail(
                             if (result.success) {
                                 console.log(`[Notifications] WhatsApp sent for ${type} (order ${orderId}), ref=${result.providerMessageId}`);
                             } else {
-                                console.error(`[Notifications] WhatsApp failed for ${type} (order ${orderId}): ${result.rawResponse ?? result.providerStatus}`);
+                                console.error(
+                                    `[Notifications] WhatsApp failed for ${type} (order ${orderId}): ${compactProviderLogDetail(result.providerStatus ?? result.rawResponse ?? "provider_failure")}`,
+                                );
                             }
                         } else {
                             console.warn(`[Notifications] WhatsApp channel enabled for ${type} without a database connection`);

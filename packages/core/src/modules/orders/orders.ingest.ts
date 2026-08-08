@@ -52,6 +52,8 @@ import {
     isCheckoutAttemptCommitConflictError,
     type AtomicCheckoutAttempt,
 } from "./checkout-attempts";
+import { chunkRowsForD1 } from "./d1-write-chunks";
+import { MAX_ORDER_LINE_ITEMS } from "./orders.validation";
 
 type ReservationPool = "regular" | "preorder" | "backorder";
 type SQLiteBatchItem = BatchItem<"sqlite">;
@@ -87,6 +89,9 @@ type ReservationEntry = {
 const CHECKOUT_RESERVATION_KEY = "checkout-ingest:v1";
 const INVENTORY_COMMIT_MAX_CONFLICTS = 3;
 const INVENTORY_COMMIT_BASE_BACKOFF_MS = 5;
+const ORDER_ITEM_INSERT_PARAMETERS_PER_ROW = 18;
+const ORDER_ITEM_TAX_INSERT_PARAMETERS_PER_ROW = 13;
+const ORDER_DISCOUNT_ALLOCATION_INSERT_PARAMETERS_PER_ROW = 18;
 
 function isCustomerPhoneConstraintError(error: unknown): boolean {
     let current = error;
@@ -484,57 +489,61 @@ function buildOrderWriteBatch(
     }
 
     if (payload.items.length > 0) {
-        writes.push(
-            db.insert(orderItems).values(
-                payload.items.map((item) => ({
-                    id: item.id,
-                    orderId: od.id,
-                    productId: item.productId,
-                    variantId: item.variantId,
-                    productImageMediaId: item.productImageMediaId,
-                    quantity: item.quantity,
-                    price: item.price,
-                    productName: item.productName,
-                    variantLabel: item.variantLabel,
-                    inventoryTracked: item.variantId !== null && item.inventoryTracked !== false,
-                    unitPriceMinor: item.unitPriceMinor,
-                    lineSubtotalMinor: item.lineSubtotalMinor,
-                    discountAmountMinor: item.discountAmountMinor,
-                    taxableAmountMinor: item.taxableAmountMinor,
-                    taxAmountMinor: item.taxAmountMinor,
-                    fulfillmentStatus: "pending" as const,
-                    createdAt: sql`unixepoch()`,
-                })),
-            ),
-        );
+        const itemRows = payload.items.map((item) => ({
+            id: item.id,
+            orderId: od.id,
+            productId: item.productId,
+            variantId: item.variantId,
+            productImageMediaId: item.productImageMediaId,
+            quantity: item.quantity,
+            price: item.price,
+            productName: item.productName,
+            variantLabel: item.variantLabel,
+            inventoryTracked: item.variantId !== null && item.inventoryTracked !== false,
+            unitPriceMinor: item.unitPriceMinor,
+            lineSubtotalMinor: item.lineSubtotalMinor,
+            discountAmountMinor: item.discountAmountMinor,
+            taxableAmountMinor: item.taxableAmountMinor,
+            taxAmountMinor: item.taxAmountMinor,
+            fulfillmentStatus: "pending" as const,
+            createdAt: sql`unixepoch()`,
+        }));
+        for (const chunk of chunkRowsForD1(
+            itemRows,
+            ORDER_ITEM_INSERT_PARAMETERS_PER_ROW,
+        )) {
+            writes.push(db.insert(orderItems).values(chunk));
+        }
 
-        writes.push(
-            db.insert(orderItemTaxSnapshots).values(
-                payload.items.map((item) => {
-                    const line = payload.taxQuote.lines.find(
-                        (candidate) => candidate.lineId === item.taxAllocationLineId,
-                    );
-                    if (!line) {
-                        throw new ValidationError("Committed tax allocation is missing an order line.");
-                    }
-                    return {
-                        orderItemId: item.id,
-                        orderId: od.id,
-                        taxClassId: line.taxClassId,
-                        taxClassName: line.taxClassName,
-                        unitPriceMinor: line.unitPriceMinor,
-                        quantity: line.quantity,
-                        grossAmountMinor: line.grossAmountMinor,
-                        discountMinor: line.discountMinor,
-                        taxableAmountMinor: line.taxableAmountMinor,
-                        taxMinor: line.taxMinor,
-                        pricesIncludeTax: payload.taxQuote.pricesIncludeTax,
-                        rateSnapshot: JSON.stringify(line.components),
-                        createdAt: sql`unixepoch()`,
-                    };
-                }),
-            ),
-        );
+        const taxRows = payload.items.map((item) => {
+            const line = payload.taxQuote.lines.find(
+                (candidate) => candidate.lineId === item.taxAllocationLineId,
+            );
+            if (!line) {
+                throw new ValidationError("Committed tax allocation is missing an order line.");
+            }
+            return {
+                orderItemId: item.id,
+                orderId: od.id,
+                taxClassId: line.taxClassId,
+                taxClassName: line.taxClassName,
+                unitPriceMinor: line.unitPriceMinor,
+                quantity: line.quantity,
+                grossAmountMinor: line.grossAmountMinor,
+                discountMinor: line.discountMinor,
+                taxableAmountMinor: line.taxableAmountMinor,
+                taxMinor: line.taxMinor,
+                pricesIncludeTax: payload.taxQuote.pricesIncludeTax,
+                rateSnapshot: JSON.stringify(line.components),
+                createdAt: sql`unixepoch()`,
+            };
+        });
+        for (const chunk of chunkRowsForD1(
+            taxRows,
+            ORDER_ITEM_TAX_INSERT_PARAMETERS_PER_ROW,
+        )) {
+            writes.push(db.insert(orderItemTaxSnapshots).values(chunk));
+        }
     }
 
     writes.push(db.insert(orderTaxSnapshots).values({
@@ -635,32 +644,36 @@ function buildOrderWriteBatch(
             throw new ValidationError("Promotion and shipping tax allocations do not match.");
         }
 
-        writes.push(db.insert(orderDiscountAllocations).values(
-            appliedPromotion.allocations.map((allocation) => {
-                const item = allocation.lineId
-                    ? itemByAllocationLineId.get(allocation.lineId) ?? null
-                    : null;
-                return {
-                    id: `oda_${nanoid()}`,
-                    orderId: od.id,
-                    orderItemId: item?.id ?? null,
-                    promotionId: allocation.promotionId,
-                    effectId: allocation.effectId,
-                    promotionRevision: allocation.promotionRevision,
-                    evaluatorVersion: allocation.evaluatorVersion,
-                    method: allocation.method,
-                    promotionName: allocation.promotionName,
-                    promotionCode: allocation.promotionCode,
-                    effectKind: allocation.effectKind,
-                    target: allocation.target,
-                    currencyCode: allocation.currencyCode,
-                    baseAmountMinor: allocation.baseAmountMinor,
-                    discountAmountMinor: allocation.discountAmountMinor,
-                    quantity: item?.quantity ?? null,
-                    createdAt: sql`unixepoch()`,
-                };
-            }),
-        ));
+        const allocationRows = appliedPromotion.allocations.map((allocation) => {
+            const item = allocation.lineId
+                ? itemByAllocationLineId.get(allocation.lineId) ?? null
+                : null;
+            return {
+                id: `oda_${nanoid()}`,
+                orderId: od.id,
+                orderItemId: item?.id ?? null,
+                promotionId: allocation.promotionId,
+                effectId: allocation.effectId,
+                promotionRevision: allocation.promotionRevision,
+                evaluatorVersion: allocation.evaluatorVersion,
+                method: allocation.method,
+                promotionName: allocation.promotionName,
+                promotionCode: allocation.promotionCode,
+                effectKind: allocation.effectKind,
+                target: allocation.target,
+                currencyCode: allocation.currencyCode,
+                baseAmountMinor: allocation.baseAmountMinor,
+                discountAmountMinor: allocation.discountAmountMinor,
+                quantity: item?.quantity ?? null,
+                createdAt: sql`unixepoch()`,
+            };
+        });
+        for (const chunk of chunkRowsForD1(
+            allocationRows,
+            ORDER_DISCOUNT_ALLOCATION_INSERT_PARAMETERS_PER_ROW,
+        )) {
+            writes.push(db.insert(orderDiscountAllocations).values(chunk));
+        }
         // The immutable allocations precede the claim so the D1 claim trigger
         // can prove their exact sum and identity in this same atomic batch.
         writes.push(db.insert(promotionRedemptions).values({
@@ -713,6 +726,11 @@ export async function commitStorefrontOrderPayload(
     payload: StorefrontOrderCommitPayload,
     checkoutCommit?: StorefrontOrderCheckoutCommit,
 ): Promise<StorefrontOrderCommitResult> {
+    if (payload.items.length > MAX_ORDER_LINE_ITEMS) {
+        throw new ValidationError(
+            `Checkout supports at most ${MAX_ORDER_LINE_ITEMS} line items.`,
+        );
+    }
     if (
         checkoutCommit
         && (

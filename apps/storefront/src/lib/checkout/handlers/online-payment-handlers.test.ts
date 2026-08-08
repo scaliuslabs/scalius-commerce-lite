@@ -173,6 +173,34 @@ describe("hosted online payment handlers", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it.each([
+    { handler: sslcommerzHandler, gateway: "sslcommerz" },
+    { handler: polarHandler, gateway: "polar" },
+  ])("falls back to the private receipt after $gateway returns an unsafe URL", async ({
+    handler,
+    gateway,
+  }) => {
+    mocks.createOrder.mockResolvedValueOnce({
+      orderId: "order_1",
+      totalAmount: 125,
+      paymentMethod: gateway,
+      initialPaymentSession: {
+        gateway,
+        gatewayUrl: "javascript:alert(document.cookie)",
+      },
+    });
+
+    const result = await handler.processPayment(makeContext());
+
+    expect(result).toEqual({
+      success: true,
+      redirectUrl: failedRecoveryUrl(gateway),
+      clearCartOnRedirect: true,
+      hostedPaymentRecoveryUrl: failedRecoveryUrl(gateway),
+    });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("retries SSLCommerz session creation when the committed order is still processing", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(0);

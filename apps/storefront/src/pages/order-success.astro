@@ -148,6 +148,7 @@ const legacySubtotal = order
     data-payment-method={order?.paymentMethod}
   >
     {order && orderSuccessView ? (
+    <>
     <div class="order-success-print-header text-center mb-8 animate-fade-in">
       {showsPositiveOrderState ? (
         <div class="success-checkmark" aria-hidden="true">
@@ -193,7 +194,7 @@ const legacySubtotal = order
     </div>
 
     <div class="order-success-print-grid space-y-6 animate-slide-up">
-      <!-- Order details sections -->
+      {/* Order details sections */}
       <div
         class="order-success-print-card order-success-print-order bg-gray-50 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow"
       >
@@ -442,6 +443,7 @@ const legacySubtotal = order
       supportRequestIntro={order.supportRequestIntro}
       client:load
     />
+    </>
     ) : (
       <div class="mx-auto max-w-lg py-10 text-center">
         <div class="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
@@ -642,6 +644,7 @@ const legacySubtotal = order
 
 <script>
   import { fetchPaymentSessionWithProcessingRetry } from "@/lib/checkout/payment-session-retry";
+  import { normalizeHostedCheckoutUrl } from "@/lib/checkout/redirect-url";
 
   document.addEventListener("DOMContentLoaded", () => {
     const buttons = Array.from(
@@ -696,7 +699,9 @@ const legacySubtotal = order
           const error = typeof data.error === "string" ? data.error : "Could not start payment. Please try again.";
           throw new Error(error);
         }
-        const gatewayUrl = typeof data.gatewayUrl === "string" ? data.gatewayUrl : "";
+        const gatewayUrl = normalizeHostedCheckoutUrl(
+          typeof data.gatewayUrl === "string" ? data.gatewayUrl : "",
+        );
         if (!gatewayUrl) {
           throw new Error("Payment gateway did not return a redirect URL.");
         }

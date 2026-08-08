@@ -2,6 +2,10 @@
 
 Pure utility functions shared across admin, storefront, and API workers. This package has **zero dependencies on other `@scalius/*` packages** -- it sits at the bottom of the dependency graph.
 
+This is an AGPL-3.0-only private workspace package, not a separately published
+npm library. Its modules remain browser/Worker-safe and avoid Node-only runtime
+imports because the admin, storefront, and Workers consume the same sources.
+
 ## Export Map
 
 The package uses a wildcard export map in `package.json`:
@@ -46,7 +50,7 @@ import { getStatusBadgeClass } from "@scalius/shared/status-badges";
 | `request-origin-guard.ts` | Same-origin guard for unsafe cookie-bearing browser requests used by admin/storefront proxy routes before forwarding or mutating session state | `shouldRejectCrossOriginCookieRequest()` |
 | `rate-limit.ts` | KV-based IP rate limiter with automatic TTL expiry | `rateLimit()`, `getClientIp()` |
 | `customer-utils.ts` | Phone validation (E.164), include/exclude country policy checks, customer stats | `validateAndFormatPhone()`, `assertPhoneCountryAllowed()`, `normalizePhoneCountryPolicy()`, `formatPhoneForDisplay()`, `phoneNumberSchema`, `isValidPhoneNumber`, `calculateCustomerStats()` |
-| `order-utils.ts` | Random order ID generation (6 chars, A-Z0-9) | `generateOrderId()` |
+| `order-utils.ts` | Cryptographically random 16-character Crockford-base32 order identity (80 bits) | `generateOrderId()` |
 | `html-escape.ts` | HTML entity escaping for user values in templates | `escapeHtml()` -- escapes `&`, `<`, `>`, `"`, `'` |
 | `html-sanitize.ts` | Defense-in-depth XSS sanitizer for merchant-authored rich HTML | `sanitizeHtml()` -- strips executable/embedded tags, `on*` handlers, and dangerous URL schemes while preserving safe content structure |
 | `shortcodes.ts` | CMS shortcode parsing shared by storefront rendering and API cache invalidation | `parseShortcodes()`, `normalizeShortcodeAttributeQuotes()`, `ShortcodeMatch` |

@@ -1,13 +1,10 @@
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-
-const storefrontSrc = resolve(process.cwd(), "src");
 
 describe("order-success print layout", () => {
   it("uses a compact A4 receipt grid without truncating order items", () => {
-    const page = readFileSync(`${storefrontSrc}/pages/order-success.astro`, "utf8");
-    const styles = readFileSync(`${storefrontSrc}/styles/global.css`, "utf8");
+    const page = readFileSync(new URL("../pages/order-success.astro", import.meta.url), "utf8");
+    const styles = readFileSync(new URL("../styles/global.css", import.meta.url), "utf8");
 
     expect(page).toContain('data-order-success-print={order ? "receipt" : undefined}');
     expect(page).toContain("order-success-print-order");

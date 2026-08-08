@@ -56,10 +56,23 @@ async function generateSpec() {
 function writeSpec(spec: OpenApiDocument) {
   removeLocalOnlyRoutes(spec);
   normalizeNullableAnyOf(spec);
+  assertOpenApiPathTemplates(spec);
   const outputPath = resolve(__dirname, "../openapi.json");
   writeFileSync(outputPath, JSON.stringify(spec, null, 2));
   console.log(`OpenAPI spec written to ${outputPath}`);
   console.log(`Routes documented: ${Object.keys(spec.paths || {}).length}`);
+}
+
+function assertOpenApiPathTemplates(spec: OpenApiDocument) {
+  const honoStylePaths = Object.keys(spec.paths ?? {}).filter((path) =>
+    /(?:^|\/):[A-Za-z_][A-Za-z0-9_]*(?=\/|$)/.test(path)
+  );
+  if (honoStylePaths.length === 0) return;
+
+  throw new Error(
+    "OpenAPI paths must use {parameter} templates, not Hono :parameter syntax: " +
+      honoStylePaths.join(", "),
+  );
 }
 
 function removeLocalOnlyRoutes(spec: OpenApiDocument) {
@@ -102,4 +115,7 @@ function normalizeNullableAnyOf(value: unknown): void {
   }
 }
 
-generateSpec().catch(console.error);
+generateSpec().catch((error: unknown) => {
+  console.error(error);
+  process.exitCode = 1;
+});

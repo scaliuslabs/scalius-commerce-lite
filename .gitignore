@@ -22,12 +22,13 @@ pnpm-debug.log*
 .Docs/
 clerk-docs/
 astro-docs/
-# environment variables
+# environment variables (templates ending in .example remain committable)
 .env
-.env.development
-.env.local
-.env.*.local
+.env.*
+!.env*.example
 .dev.vars
+.dev.vars.*
+!.dev.vars*.example
 
 # private test suite (core team only)
 tests/

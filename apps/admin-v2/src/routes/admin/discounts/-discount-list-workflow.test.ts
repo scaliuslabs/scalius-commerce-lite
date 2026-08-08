@@ -40,6 +40,21 @@ describe("discount list workflow", () => {
     expect(source).toContain("onRetry={() => void refetch()}");
   });
 
+  it("gates mutation controls by exact permissions and confirms destructive writes", () => {
+    expect(source).toContain("ADMIN_PERMISSIONS.DISCOUNTS_CREATE");
+    expect(source).toContain("ADMIN_PERMISSIONS.DISCOUNTS_EDIT");
+    expect(source).toContain("ADMIN_PERMISSIONS.DISCOUNTS_DELETE");
+    expect(source).toContain("enableRowSelection: canDelete");
+    expect(source).toContain("<ConfirmDialog");
+    expect(source).toContain("setDeleteRequest({ ids: [id], permanent: false })");
+    expect(source).toContain("setDeleteRequest({ ids: [id], permanent: true })");
+    expect(source).toContain("onConfirm={handleConfirmDelete}");
+    expect(columnSource).toContain("onEdit: opts.canEdit");
+    expect(columnSource).toContain("onDelete: opts.canDelete");
+    expect(columnSource).toContain("onRestore: opts.canRestore");
+    expect(mobileSource).toContain("disabled={!canDelete}");
+  });
+
   it("renders persisted schedule dates identically during SSR and hydration", () => {
     for (const presentationSource of [columnSource, mobileSource]) {
       expect(presentationSource).toContain("formatAdminDate");

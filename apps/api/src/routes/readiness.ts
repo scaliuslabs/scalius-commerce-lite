@@ -103,16 +103,26 @@ async function runProbe(
   }
 }
 
-function queueBindingCheck(name: string, queue: unknown): CheckResult {
-  const ready = typeof (queue as { send?: unknown } | undefined)?.send === "function";
+function bindingMethodsCheck(
+  name: string,
+  binding: unknown,
+  methods: readonly string[],
+  kind: string,
+): CheckResult {
+  const candidate = binding as Record<string, unknown> | undefined;
+  const ready = methods.every((method) => typeof candidate?.[method] === "function");
   return {
     name,
     required: true,
     check: {
       status: ready ? "ok" : "missing",
-      detail: ready ? undefined : "queue binding is not configured",
+      detail: ready ? undefined : `${kind} binding is not configured`,
     },
   };
+}
+
+function queueBindingCheck(name: string, queue: unknown): CheckResult {
+  return bindingMethodsCheck(name, queue, ["send"], "queue");
 }
 
 async function databaseCheck(env: Env): Promise<CheckResult> {
@@ -175,6 +185,10 @@ async function r2Check(env: Env): Promise<CheckResult> {
 
 function configCheck(env: Env): CheckResult {
   const requiredVars = [
+    "BETTER_AUTH_SECRET",
+    "API_TOKEN",
+    "JWT_SECRET",
+    "CREDENTIAL_ENCRYPTION_KEY",
     "PUBLIC_API_BASE_URL",
     "STOREFRONT_URL",
     "BETTER_AUTH_URL",
@@ -226,6 +240,30 @@ app.get("/readyz", async (c) => {
     queueBindingCheck("payment_events_queue", env.PAYMENT_EVENTS_QUEUE),
     queueBindingCheck("order_notifications_queue", env.ORDER_NOTIFICATIONS_QUEUE),
     queueBindingCheck("auth_otp_queue", env.AUTH_OTP_QUEUE),
+    bindingMethodsCheck(
+      "checkout_coordinator",
+      env.CHECKOUT_COORDINATOR,
+      ["idFromName", "get"],
+      "durable object namespace",
+    ),
+    bindingMethodsCheck(
+      "search_rate_limiter",
+      env.SEARCH_RATE_LIMITER,
+      ["limit"],
+      "rate limit",
+    ),
+    bindingMethodsCheck(
+      "order_ip_rate_limiter",
+      env.ORDER_IP_RATE_LIMITER,
+      ["limit"],
+      "rate limit",
+    ),
+    bindingMethodsCheck(
+      "order_phone_rate_limiter",
+      env.ORDER_PHONE_RATE_LIMITER,
+      ["limit"],
+      "rate limit",
+    ),
     configCheck(env),
   ];
   const ready = isReady(checks);

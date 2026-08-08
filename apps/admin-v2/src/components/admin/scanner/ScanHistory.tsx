@@ -143,6 +143,11 @@ export function ScanHistory({ items, onUndo, onClear, onClose }: ScanHistoryProp
                           <span>{item.newStock}</span>
                         </div>
                       )}
+                      {item.undoError && (
+                        <span className="text-xs text-red-400/70">
+                          {item.undoError}
+                        </span>
+                      )}
                       {isError && (
                         <span className="text-xs text-red-400/70">
                           {item.reason}

@@ -1,10 +1,17 @@
 # @scalius/api-client
 
-Generated TypeScript SDK from the API worker's OpenAPI spec. Provides typed API client methods and response types for consumers (admin dashboard and storefront).
+Generated TypeScript SDK from the API worker's OpenAPI spec. It provides typed
+API client methods and response types to this repository's admin dashboard and
+storefront.
+
+This is currently a private workspace package with TypeScript source exports.
+It is not a published npm package or a supported third-party extension SDK.
+An external management API, SDK, or CLI requires a separate compatibility and
+release contract before it can be advertised.
 
 ## Current State
 
-**The SDK is fully generated and operational.** The source of truth is
+**The internal SDK is fully generated and operational.** The source of truth is
 `openapi.json` plus the generated files in `src/generated/**`; do not rely on
 README prose for endpoint counts because the API surface changes often.
 
@@ -54,29 +61,30 @@ import { createServiceBindingClient, createHttpClient } from "@scalius/api-clien
 
 `src/client-factory.ts` provides transport-agnostic client creation:
 
-### Service Binding Mode (Production)
+### Service Binding Mode
 
-Zero-latency RPC inside Cloudflare Workers. Used by admin (`env.API`) and storefront (`env.BACKEND_API`):
+Worker-to-Worker requests can use a Cloudflare Service Binding. The caller must
+provide authentication appropriate to the requested operation; this factory
+does not exchange or mint credentials:
 
 ```typescript
 import { createServiceBindingClient } from "@scalius/api-client/factory";
 
 const client = createServiceBindingClient({
-  serviceBinding: env.API,  // or env.BACKEND_API
-  headers: { "X-API-Token": env.API_TOKEN },
+  serviceBinding: env.API,
+  headers: request.headers,
 });
 ```
 
-### HTTP Mode (Development)
+### HTTP Mode
 
-Standard fetch for dev mode or external consumers:
+Standard fetch for local development and first-party clients:
 
 ```typescript
 import { createHttpClient } from "@scalius/api-client/factory";
 
 const client = createHttpClient({
   baseUrl: "http://localhost:8787",
-  headers: { Authorization: `Bearer ${token}` },
 });
 ```
 
@@ -85,13 +93,12 @@ const client = createHttpClient({
 To regenerate the SDK after API changes:
 
 ```bash
-# 1. Start the API worker (it serves the OpenAPI spec)
-pnpm --filter @scalius/api dev
-
-# 2. Generate the spec and SDK
 pnpm generate:sdk
-# This runs: node --import tsx scripts/generate-spec.ts && openapi-ts
 ```
+
+This imports the API app directly. If local dependency resolution prevents a
+direct import, start the API worker with `pnpm dev:api` and rerun the command;
+the generator then falls back to `http://localhost:8787`.
 
 ### What `generate:sdk` does
 
@@ -117,10 +124,12 @@ pnpm generate:sdk
 
 ## Consumers
 
-Both admin and storefront import types and SDK methods:
+The admin and storefront consume the generated workspace contract:
 
-- **Admin** (`apps/admin-v2/`) -- imports response types for type annotations and SDK methods for API calls via service binding
+- **Admin** (`apps/admin-v2/`) -- imports generated response types while its
+  server proxy owns authenticated request forwarding
 - **Storefront** (`apps/storefront/`) -- imports response types for its API client layer and L1/L2 cache typing
+  and uses generated SDK methods through its configured fetch clients
 
 ## Dependencies
 
@@ -133,3 +142,9 @@ Both admin and storefront import types and SDK methods:
 
 - Only routes using `@hono/zod-openapi`'s `createRoute()` appear in the generated spec. Any routes using plain Hono `.get()`/`.post()` are invisible to the SDK generator.
 - Generated files are not hand-maintained. Regenerate with `pnpm generate:sdk` after changing an OpenAPI route schema or response contract.
+- Generated operations do not yet have explicit stable `operationId` values.
+  Path-derived method names are safe for current workspace consumers but are
+  not an external compatibility contract.
+- The package is private and source-only. Publishing requires a deliberate
+  build/export map, package contents allow-list, provenance, and compatibility
+  review; do not publish the workspace package as-is.

@@ -1,4 +1,4 @@
-import { useMemo, useCallback } from "react";
+import { useMemo, useCallback, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Button } from "~/components/ui/button";
 import { PlusCircle, Trash2, Layers } from "lucide-react";
@@ -22,6 +22,7 @@ import {
   type CollectionItem,
 } from "~/components/admin/data-table/columns/collection-columns";
 import { useCatalogActionPermissions } from "~/hooks/use-catalog-action-permissions";
+import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 
 const validateCollectionSearch = createListSearchValidator(
   ["name", "presentation", "isActive", "sortOrder", "updatedAt"] as const,
@@ -70,6 +71,14 @@ function CollectionsPage() {
   const restoreMutation = useRestoreCollection();
   const bulkDeleteMutation = useBulkDeleteCollections();
   const reorderMutation = useReorderCollections();
+  const [deleteRequest, setDeleteRequest] = useState<{
+    ids: string[];
+    permanent: boolean;
+  } | null>(null);
+  const isDeletePending =
+    deleteMutation.isPending ||
+    permanentDeleteMutation.isPending ||
+    bulkDeleteMutation.isPending;
 
   // Track which IDs are currently being saved (for inline edit spinner)
   const savingIds = useMemo(() => {
@@ -108,9 +117,9 @@ function CollectionsPage() {
   const handleDelete = useCallback(
     (id: string) => {
       if (!collectionActions.canDelete) return;
-      deleteMutation.mutate(id);
+      setDeleteRequest({ ids: [id], permanent: false });
     },
-    [collectionActions.canDelete, deleteMutation],
+    [collectionActions.canDelete],
   );
 
   const handleRestore = useCallback(
@@ -124,9 +133,9 @@ function CollectionsPage() {
   const handlePermanentDelete = useCallback(
     (id: string) => {
       if (!collectionActions.canPermanentDelete) return;
-      permanentDeleteMutation.mutate(id);
+      setDeleteRequest({ ids: [id], permanent: true });
     },
-    [collectionActions.canPermanentDelete, permanentDeleteMutation],
+    [collectionActions.canPermanentDelete],
   );
 
   // Columns
@@ -222,16 +231,45 @@ function CollectionsPage() {
   // Bulk action handlers
   const handleBulkDelete = useCallback(() => {
     if (!collectionActions.canBulkDelete || selectedIds.length === 0) return;
-    bulkDeleteMutation.mutate(
-      { ids: selectedIds, permanent: showTrashed },
-      { onSuccess: clearSelection },
-    );
+    setDeleteRequest({ ids: [...selectedIds], permanent: showTrashed });
   }, [
     collectionActions.canBulkDelete,
     selectedIds,
     showTrashed,
+  ]);
+
+  const handleConfirmDelete = useCallback(() => {
+    if (!deleteRequest || deleteRequest.ids.length === 0) return;
+    const close = () => setDeleteRequest(null);
+
+    if (deleteRequest.ids.length > 1) {
+      bulkDeleteMutation.mutate(
+        {
+          ids: deleteRequest.ids,
+          permanent: deleteRequest.permanent,
+        },
+        {
+          onSuccess: () => {
+            clearSelection();
+            close();
+          },
+        },
+      );
+      return;
+    }
+
+    const id = deleteRequest.ids[0]!;
+    if (deleteRequest.permanent) {
+      permanentDeleteMutation.mutate(id, { onSuccess: close });
+    } else {
+      deleteMutation.mutate(id, { onSuccess: close });
+    }
+  }, [
     bulkDeleteMutation,
     clearSelection,
+    deleteMutation,
+    deleteRequest,
+    permanentDeleteMutation,
   ]);
 
   const loadedCollectionCount = table.getRowModel().rows.length;
@@ -381,6 +419,23 @@ function CollectionsPage() {
               </Button>
             ) : undefined,
         }}
+      />
+
+      <ConfirmDialog
+        open={deleteRequest !== null}
+        onOpenChange={(open) => {
+          if (!open && !isDeletePending) setDeleteRequest(null);
+        }}
+        title={deleteRequest?.permanent
+          ? `Delete ${deleteRequest.ids.length === 1 ? "collection" : `${deleteRequest.ids.length} collections`} permanently?`
+          : `Move ${deleteRequest?.ids.length === 1 ? "collection" : `${deleteRequest?.ids.length ?? 0} collections`} to trash?`}
+        description={deleteRequest?.permanent
+          ? "This cannot be undone. Collections that are still required by storefront navigation or promotions may be blocked by the server."
+          : "The collection will leave the storefront and can be restored later."}
+        confirmLabel={deleteRequest?.permanent ? "Delete permanently" : "Move to trash"}
+        loadingLabel={deleteRequest?.permanent ? "Deleting…" : "Moving…"}
+        isLoading={isDeletePending}
+        onConfirm={handleConfirmDelete}
       />
     </div>
   );

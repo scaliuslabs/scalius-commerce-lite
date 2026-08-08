@@ -95,6 +95,19 @@ function createQueue() {
   } as unknown as Queue;
 }
 
+function createRateLimiter() {
+  return {
+    limit: vi.fn(async () => ({ success: true })),
+  } as unknown as RateLimit;
+}
+
+function createCheckoutCoordinator() {
+  return {
+    idFromName: vi.fn(() => ({ toString: () => "checkout-coordinator" })),
+    get: vi.fn(() => ({ fetch: vi.fn() })),
+  } as unknown as DurableObjectNamespace;
+}
+
 function createApp() {
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
   app.use("*", requestCorrelationMiddleware);
@@ -111,7 +124,14 @@ function createEnv(overrides: Partial<Env> = {}): Env {
     PAYMENT_EVENTS_QUEUE: createQueue(),
     ORDER_NOTIFICATIONS_QUEUE: createQueue(),
     AUTH_OTP_QUEUE: createQueue(),
+    SEARCH_RATE_LIMITER: createRateLimiter(),
+    ORDER_IP_RATE_LIMITER: createRateLimiter(),
+    ORDER_PHONE_RATE_LIMITER: createRateLimiter(),
+    CHECKOUT_COORDINATOR: createCheckoutCoordinator(),
     BETTER_AUTH_SECRET: "test-secret",
+    API_TOKEN: "test-api-token",
+    JWT_SECRET: "test-jwt-secret",
+    CREDENTIAL_ENCRYPTION_KEY: "test-credential-key",
     PUBLIC_API_BASE_URL: "https://api.example.test",
     STOREFRONT_URL: "https://storefront.example.test",
     BETTER_AUTH_URL: "https://dashboard.example.test",
@@ -150,6 +170,10 @@ describe("API readiness route", () => {
       payment_events_queue: { status: "ok" },
       order_notifications_queue: { status: "ok" },
       auth_otp_queue: { status: "ok" },
+      checkout_coordinator: { status: "ok" },
+      search_rate_limiter: { status: "ok" },
+      order_ip_rate_limiter: { status: "ok" },
+      order_phone_rate_limiter: { status: "ok" },
       runtime_config: { status: "ok" },
     });
   });
@@ -160,8 +184,10 @@ describe("API readiness route", () => {
     const env = createEnv({
       DB: createDb({ fail: true }),
       PAYMENT_EVENTS_QUEUE: undefined as unknown as Queue,
+      SEARCH_RATE_LIMITER: undefined as unknown as RateLimit,
       STOREFRONT_URL: "",
       PURGE_TOKEN: "",
+      JWT_SECRET: "",
     });
 
     const response = await app.request("/api/v1/readyz", {
@@ -188,9 +214,13 @@ describe("API readiness route", () => {
       status: "missing",
       detail: "queue binding is not configured",
     });
+    expect(json.checks?.search_rate_limiter).toMatchObject({
+      status: "missing",
+      detail: "rate limit binding is not configured",
+    });
     expect(json.checks?.runtime_config).toMatchObject({
       status: "missing",
-      detail: "missing STOREFRONT_URL, PURGE_TOKEN",
+      detail: "missing JWT_SECRET, STOREFRONT_URL, PURGE_TOKEN",
     });
     expect(response.headers.get("X-Request-Id")).toBe("req_readyz_1234");
 
@@ -206,6 +236,7 @@ describe("API readiness route", () => {
       degradedChecks: [
         "d1:error",
         "payment_events_queue:missing",
+        "search_rate_limiter:missing",
         "runtime_config:missing",
       ],
     });

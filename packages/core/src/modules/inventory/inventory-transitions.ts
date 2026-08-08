@@ -26,6 +26,7 @@ import {
     parseCheckoutLaneInventoryEdges,
     terminateCheckoutLaneReservations,
 } from "./checkout-lane-transitions";
+import { mapWithBoundedConcurrency } from "../../utils/bounded-concurrency";
 
 // The set of order statuses that mean "this order is dead / returned"
 const STOCK_RESTORE_STATUSES = new Set(["cancelled", "returned", "refunded"]);
@@ -38,6 +39,7 @@ const STOCK_DEDUCT_STATUSES = new Set(["shipped", "delivered"]);
 const STOCK_RESERVABLE_STATUSES = new Set(["incomplete", "pending", "processing", "confirmed"]);
 const MAX_TRANSITION_RETRIES = 3;
 const BASE_TRANSITION_BACKOFF_MS = 50;
+const INVENTORY_DB_CONCURRENCY = 4;
 
 export function isStockRestoreStatus(status: string): boolean {
     return STOCK_RESTORE_STATUSES.has(status);
@@ -745,7 +747,7 @@ async function buildTransitionReservationBatchItems(
 ): Promise<ReservationBatchItem[]> {
     const pool = normalizeInventoryPool(order.inventoryPool);
     const mergedEntries = mergeTransitionEntriesByVariant(entries, pool);
-    return Promise.all(mergedEntries.map(async (entry) => ({
+    return mapWithBoundedConcurrency(mergedEntries, INVENTORY_DB_CONCURRENCY, async (entry) => ({
         variantId: entry.variantId,
         quantity: entry.quantity,
         orderId: order.id,
@@ -756,7 +758,7 @@ async function buildTransitionReservationBatchItems(
             pool,
             generation: await loadTransitionMovementGeneration(db, order.id, entry.variantId, "reserve"),
         }),
-    })));
+    }));
 }
 
 function mergeTransitionEntriesByVariant(
@@ -1352,7 +1354,23 @@ async function checkLowStockForTransitionEntries(
     db: Database,
     entries: ReservationEntry[],
 ): Promise<void> {
-    await Promise.all(entries.map((entry) => checkAndAlertLowStock(db, entry.variantId)));
+    await mapWithBoundedConcurrency(
+        entries,
+        INVENTORY_DB_CONCURRENCY,
+        async (entry) => {
+            try {
+                await checkAndAlertLowStock(db, entry.variantId);
+            } catch (error: unknown) {
+                // Inventory and its ledger edge already committed atomically.
+                // Alert projection failure must not report that mutation as
+                // failed and provoke an unsafe commerce retry.
+                console.error(
+                    `[inventory/transition] Low-stock alert refresh failed for variant ${entry.variantId}:`,
+                    error instanceof Error ? error.message : String(error),
+                );
+            }
+        },
+    );
 }
 
 async function getOrderInventoryEntries(

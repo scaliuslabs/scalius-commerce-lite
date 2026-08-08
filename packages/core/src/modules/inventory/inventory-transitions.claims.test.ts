@@ -148,6 +148,22 @@ describe("applyClaimedInventoryEntryBatch", () => {
         expect(alertMocks.checkAndAlertLowStock).toHaveBeenCalledWith(db, "var_a");
     });
 
+    it("does not report committed inventory as failed when alert projection refresh fails", async () => {
+        const { db, batchCalls } = createClaimBatchDb();
+        alertMocks.checkAndAlertLowStock.mockRejectedValueOnce(new Error("alert table unavailable"));
+
+        await expect(applyClaimedInventoryEntryBatch(db, {
+            orderId: "order_1",
+            operation: "deduct",
+            entries: [{ variantId: "var_a", quantity: 2, pool: "regular" }],
+            claimKey: "admin-edit:v4:deduct-alert-failure",
+            pool: "regular",
+        })).resolves.toHaveLength(1);
+
+        expect(batchCalls).toHaveLength(1);
+        expect(alertMocks.checkAndAlertLowStock).toHaveBeenCalledOnce();
+    });
+
     it("treats an exact duplicate claim as replay success without a second counter write", async () => {
         const claimKey = "admin-edit:v4:deduct-added";
         const id = await claimedMovementId({

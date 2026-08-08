@@ -12,6 +12,14 @@ export interface ApiContext {
   IMAGE_CDN_CANONICAL_HOST_ALIASES?: string[];
   STOREFRONT_URL?: string;
   API_TOKEN?: string;
+  /** Request-local read coalescing. Never share in-flight I/O across requests. */
+  inflightReads?: Map<string, Promise<unknown>>;
+  /** Request-local API credential derived from the current request bindings. */
+  apiJwt?: {
+    token: string | null;
+    expiresAt: number | null;
+    refresh: Promise<string | null> | null;
+  };
 }
 
 // AsyncLocalStorage is only available server-side (Cloudflare Workers / Node).

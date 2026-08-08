@@ -97,6 +97,53 @@ describe("SMS settings readiness", () => {
     }, "credential-key")).rejects.toBeInstanceOf(ValidationError);
   });
 
+  it("fails before writes when changed secrets have no encryption key", async () => {
+    const db = {
+      insert: vi.fn(),
+      batch: vi.fn(),
+    };
+
+    await expect(saveSmsSettings(db as never, {
+      activeProvider: "bdbulksms",
+      bdbulksmsToken: "merchant-token-4821",
+    })).rejects.toThrow("CREDENTIAL_ENCRYPTION_KEY is required");
+    expect(db.insert).not.toHaveBeenCalled();
+    expect(db.batch).not.toHaveBeenCalled();
+  });
+
+  it("commits plaintext settings and encrypted secrets in one D1 batch", async () => {
+    const statements: unknown[] = [];
+    const db = {
+      insert: vi.fn(() => ({
+        values: vi.fn((values: Record<string, unknown>) => ({
+          onConflictDoUpdate: vi.fn(() => {
+            const statement = { values };
+            statements.push(statement);
+            return statement;
+          }),
+        })),
+      })),
+      batch: vi.fn(async (batch: unknown[]) => batch),
+    };
+    const key = Buffer.alloc(32, 11).toString("base64");
+
+    await saveSmsSettings(db as never, {
+      activeProvider: "gennet",
+      gennetBaseUrl: "https://merchant.gennet.com.bd",
+      gennetSid: "SCALIUS",
+      gennetApiToken: "merchant-token-4821",
+    }, key);
+
+    expect(db.batch).toHaveBeenCalledOnce();
+    expect(db.batch).toHaveBeenCalledWith(statements);
+    expect(statements).toHaveLength(4);
+    const tokenWrite = statements
+      .map((statement) => (statement as { values: Record<string, unknown> }).values)
+      .find((values) => values.key === "gennet_api_token");
+    expect(tokenWrite?.value).toEqual(expect.stringMatching(/^enc:/));
+    expect(String(tokenWrite?.value)).not.toContain("merchant-token-4821");
+  });
+
   it("does not treat encrypted secrets as ready when the credential key is unavailable", async () => {
     const key = Buffer.alloc(32, 7).toString("base64");
     const encryptedToken = `enc:${await encryptCredentials("token_123", key)}`;

@@ -2,6 +2,7 @@
   "name": "@scalius/storefront",
   "type": "module",
   "version": "1.0.0",
+  "license": "MIT",
   "private": true,
   "scripts": {
     "dev": "astro dev --host --port 4322",

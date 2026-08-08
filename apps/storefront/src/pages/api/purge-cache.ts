@@ -88,7 +88,7 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
     return json({ error: "groups must contain 1 to 30 bounded strings" }, 400);
   }
 
-  const nativePurger = locals.cfContext.exports?.PublicStorefront;
+  const nativePurger = locals.cfContext.exports?.CachedPublicStorefront;
   if (!nativePurger) return json({ error: "Public cache entrypoint unavailable" }, 503);
 
   try {

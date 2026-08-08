@@ -1,5 +1,4 @@
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const buyerProductImageSurfaces = [
@@ -9,27 +8,27 @@ const buyerProductImageSurfaces = [
   "pages/account/orders/[id].astro",
 ].map((path) => ({
   path,
-  source: readFileSync(resolve(process.cwd(), "src", path), "utf8"),
+  source: readFileSync(new URL(`../${path}`, import.meta.url), "utf8"),
 }));
 
 const productGallerySource = readFileSync(
-  resolve(process.cwd(), "src/components/product/ProductGallery.astro"),
+  new URL("../components/product/ProductGallery.astro", import.meta.url),
   "utf8",
 );
 const categoryRailSource = readFileSync(
-  resolve(process.cwd(), "src/components/homepage/HomepageCategoryRail.astro"),
+  new URL("../components/homepage/HomepageCategoryRail.astro", import.meta.url),
   "utf8",
 );
 const productPageSource = readFileSync(
-  resolve(process.cwd(), "src/pages/products/[slug].astro"),
+  new URL("../pages/products/[slug].astro", import.meta.url),
   "utf8",
 );
 const collectionPageSource = readFileSync(
-  resolve(process.cwd(), "src/pages/collections/[id].astro"),
+  new URL("../pages/collections/[id].astro", import.meta.url),
   "utf8",
 );
 const categoryPageSource = readFileSync(
-  resolve(process.cwd(), "src/pages/categories/[slug].astro"),
+  new URL("../pages/categories/[slug].astro", import.meta.url),
   "utf8",
 );
 

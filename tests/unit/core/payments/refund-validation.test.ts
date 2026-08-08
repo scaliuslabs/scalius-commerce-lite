@@ -299,7 +299,10 @@ async function importRefundServiceWithMocks(options: {
 }) {
   vi.resetModules();
   vi.doMock("../../../../packages/core/src/modules/inventory/inventory-transitions", () => ({
-    applyInventoryForStatusChange: options.applyInventoryForStatusChange,
+    applyInventoryForStatusChangeWithImpact: async (...args: unknown[]) => {
+      await options.applyInventoryForStatusChange(...args);
+      return { availabilityTransitionVariantIds: [] };
+    },
   }));
   vi.doMock("../../../../packages/core/src/modules/payments/factory", () => ({
     createPaymentProvider: vi.fn(() => ({

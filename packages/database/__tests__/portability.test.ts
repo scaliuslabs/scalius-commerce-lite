@@ -198,6 +198,36 @@ describe("SQLite portability manifests", () => {
     expect(source.schemaDigest).toBe(target.schemaDigest);
     expect(verifySqlitePortabilityManifests(source, target).ok).toBe(true);
   });
+
+  it("keeps remote schema inspection below the D1 connection ceiling", async () => {
+    let active = 0;
+    let maximumActive = 0;
+    const schema = ["first", "second", "third"].map((name) => ({
+      type: "table",
+      name,
+      tbl_name: name,
+      sql: `CREATE TABLE ${name} (id TEXT PRIMARY KEY)`,
+    }));
+    const executor: SqlitePortabilityExecutor = {
+      async query(sql) {
+        if (sql.includes("FROM sqlite_schema")) return schema;
+        if (sql.startsWith("PRAGMA")) {
+          active += 1;
+          maximumActive = Math.max(maximumActive, active);
+          await new Promise((resolve) => setTimeout(resolve, 0));
+          active -= 1;
+          return sql.startsWith("PRAGMA table_info")
+            ? [{ cid: 0, name: "id", type: "TEXT", notnull: 1, dflt_value: null, pk: 1 }]
+            : [];
+        }
+        return [];
+      },
+    };
+
+    await createSqlitePortabilityManifest(executor);
+
+    expect(maximumActive).toBe(3);
+  });
 });
 
 describe("SQLite portability executors", () => {

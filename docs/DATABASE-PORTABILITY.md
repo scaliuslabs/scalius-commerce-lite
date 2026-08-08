@@ -52,9 +52,9 @@ Database release compatibility is exact, not a connectivity probe. Migration
 `0050_schema_release_contract` starts one ordered ledger shared by D1, TursoDB,
 and PostgreSQL. Each release row includes the canonical source digest, and API
 `/readyz` rejects missing, extra, renamed, future, or digest-mismatched rows.
-`0053_checkout_language_authority` is the current release. Historical migrations
-are an installed-system contract and must not be deleted or squashed after
-release.
+`0055_cache_invalidation_postgres_bigint` is the current release. Historical
+migrations are an installed-system contract and must not be deleted or squashed
+after release.
 
 D1 continues to use Wrangler's normal migration application. Existing TursoDB
 and PostgreSQL databases use the explicit `upgrade:schema` runner. Every
@@ -82,6 +82,14 @@ translate unsupported physical artifacts, while bounded provider-aware
 search/navigation helpers preserve the public contract. Atomic domain writes
 use the shared commit/transport boundary: TursoDB retries only explicit MVCC
 conflicts, and PostgreSQL retries only serialization/deadlock conflicts.
+PostgreSQL fallback multi-statement writes use `SERIALIZABLE`, including
+projection and reservation-lane guard/update/postcondition batches; the
+collapsed checkout commit uses the same isolation level in one round trip.
+
+Portable SQLite fingerprinting processes schema tables sequentially and issues
+at most the three independent PRAGMA metadata reads for one table concurrently.
+Do not restore an all-table `Promise.all`: it can exceed D1's six simultaneous
+connection limit even though each individual table inspection looks bounded.
 
 Guarded compare-and-swap batches expose one API: a boolean success predicate
 plus an uppercase semantic failure marker. The database package constructs the
@@ -212,10 +220,10 @@ merchant facts. The migration operator must either migrate the Turso delta/full
 state back into a verified D1 target or present rollback as a deliberate restore
 to the cutover snapshot with an explicit data-loss decision.
 
-## Current release portability proof — 2026-08-05
+## Current release portability proof — 2026-08-08
 
-Fresh disposable targets proved release `0053_checkout_language_authority`
-without using production merchant data:
+Fresh disposable targets first proved release
+`0053_checkout_language_authority` without using production merchant data:
 
 - The D1-shaped SQLite source and the Turso native upload each contained 109
   canonical tables and six synthetic rows. Turso matched source and target
@@ -261,6 +269,16 @@ fresh disposable targets:
   zero unvalidated constraints. The content digest intentionally differs from
   the independently created D1-shaped fixture; each PostgreSQL target matched
   its own immutable source exactly.
+
+Release `0055_cache_invalidation_postgres_bigint` is a forward-only convergence
+step discovered during the stable-release audit. The schema-54 PostgreSQL
+sidecar created the three cache-generation counters as 32-bit integers, while a
+fresh PostgreSQL import compiled the same SQLite integer-affinity columns to
+64-bit integers. The 0055 PostgreSQL sidecar widens existing targets to `bigint`;
+D1 and Turso record the identical release ledger row without changing their
+integer-affinity schema. Focused migration tests prove the release chain,
+idempotent Turso replay, transaction-safe PostgreSQL sidecar, and fresh-schema
+type agreement; a live external-provider rehearsal remains an operations gate.
 
 ## Historical verified D1 to TursoDB cutover — 2026-08-01
 

@@ -69,7 +69,7 @@ interface ExecutionContext {
   waitUntil(promise: Promise<unknown>): void;
   passThroughOnException(): void;
   readonly exports: {
-    PublicStorefront: WorkerEntrypointFetcher & {
+    CachedPublicStorefront: WorkerEntrypointFetcher & {
       purgeGroups(groups: string[]): Promise<void>;
     };
   };
@@ -167,9 +167,6 @@ interface GlobalEventHandlersEventMap {
   toggle: ToggleEvent;
   beforetoggle: ToggleEvent;
 }
-
-// SSR-only globalThis properties set by middleware for cross-module access
-declare let __SCALIUS_CDN_DOMAIN__: string | undefined;
 
 // Global window properties injected by the storefront layout at runtime.
 // These are set via <script> tags in the base layout and read by client-side code.

@@ -2,6 +2,12 @@
 
 We take security seriously. Thank you for helping keep Scalius Commerce Lite safe.
 
+## Supported Versions
+
+Security fixes are provided for the latest stable release. Before the first
+stable tag, the default branch is the only supported line. Please reproduce a
+report against the latest supported code when practical.
+
 ## Reporting a Vulnerability
 
 **Do not open a public GitHub issue for security vulnerabilities.**
@@ -13,6 +19,10 @@ Include:
 2. Steps to reproduce or proof-of-concept
 3. Potential impact (data leak, auth bypass, XSS, etc.)
 4. Affected component (Admin dashboard, API worker, Storefront, Database)
+
+Do not include production credentials, raw buyer data, OTPs, receipt proofs, or
+other bearer secrets in the initial report. We will arrange a safer transfer if
+sensitive evidence is required.
 
 ## Response Timeline
 

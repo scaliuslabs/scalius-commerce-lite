@@ -5,6 +5,10 @@ const source = readFileSync(
   new URL("./ScannerTokenGenerator.tsx", import.meta.url),
   "utf8",
 );
+const scannerRouteSource = readFileSync(
+  new URL("../../../routes/scanner.tsx", import.meta.url),
+  "utf8",
+);
 
 describe("scanner access workspace", () => {
   it("uses shared claim and session lifetimes", () => {
@@ -19,6 +23,15 @@ describe("scanner access workspace", () => {
     expect(source).toContain("The first device to open this link claims it");
     expect(source).not.toContain("The QR link can be claimed once");
     expect(source).toContain("expiresAt ?? Date.now() + TOKEN_LIFETIME_MS");
+  });
+
+  it("keeps the one-time claim proof out of request URLs and history", () => {
+    expect(source).toContain("/scanner#token=");
+    expect(source).not.toContain("/scanner?token=");
+    expect(scannerRouteSource).toContain("window.location.hash.slice(1)");
+    expect(scannerRouteSource).toContain("window.history.replaceState");
+    expect(scannerRouteSource).toContain("fragmentReadRef.current");
+    expect(scannerRouteSource).not.toContain("validateSearch");
   });
 
   it("enforces inventory permissions and mobile controls", () => {

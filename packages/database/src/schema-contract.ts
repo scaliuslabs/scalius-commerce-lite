@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 54,
-  name: "0054_cache_invalidation_delivery",
+  version: 55,
+  name: "0055_cache_invalidation_postgres_bigint",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -48,8 +48,13 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     sourceSha256: "eaac242dba1606345bde9433d3d883e56605b44ce3d6f52be3b999aa6a588e9d",
   },
   {
-    ...CURRENT_DATABASE_SCHEMA,
+    version: 54,
+    name: "0054_cache_invalidation_delivery",
     sourceSha256: "79be02aabbc23a8df2d1d249411c3940ae3389d12981b2a0ff81dad7b15476fa",
+  },
+  {
+    ...CURRENT_DATABASE_SCHEMA,
+    sourceSha256: "1fef4f2d630a3dbd5de4255b37b9d4896e325f99f6975d3c486fd1252e47cda4",
   },
 ] as const;
 

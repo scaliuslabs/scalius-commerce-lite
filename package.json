@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "version": "1.0.0",
+  "license": "AGPL-3.0-only",
   "scripts": {
     "dev": "bash scripts/dev.sh",
     "dev:all": "pnpm dev",
@@ -21,7 +22,7 @@
     "release:check": "node scripts/release-check.mjs",
     "repo:check": "node scripts/repository-hygiene.mjs && git show --check --format= --no-renames HEAD",
     "demo:store": "node scripts/demo-store.mjs",
-    "typecheck": "node scripts/turbo-run.mjs typecheck",
+    "typecheck": "node scripts/turbo-run.mjs typecheck --concurrency=1",
     "dev:setup": "node scripts/dev-setup.mjs",
     "dev:reset": "node scripts/dev-reset.mjs",
     "dev:admin:create": "node scripts/dev-admin.mjs create",

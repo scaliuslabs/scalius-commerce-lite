@@ -76,6 +76,24 @@ function isProviderTimeoutError(error: unknown, signal?: AbortSignal): boolean {
     );
 }
 
+function polarErrorLogMetadata(error: unknown): Record<string, unknown> {
+    if (!error || typeof error !== "object") return { kind: typeof error };
+    const candidate = error as {
+        name?: unknown;
+        code?: unknown;
+        status?: unknown;
+        statusCode?: unknown;
+    };
+    return {
+        ...(typeof candidate.name === "string" ? { name: candidate.name } : {}),
+        ...(typeof candidate.code === "string" || typeof candidate.code === "number"
+            ? { code: candidate.code }
+            : {}),
+        ...(typeof candidate.status === "number" ? { status: candidate.status } : {}),
+        ...(typeof candidate.statusCode === "number" ? { statusCode: candidate.statusCode } : {}),
+    };
+}
+
 // ---------------------------------------------------------------------------
 // Create Checkout Session
 // ---------------------------------------------------------------------------
@@ -146,7 +164,7 @@ export async function createPolarCheckout(
                 timedOut: true,
             };
         }
-        console.error("[Polar] Error creating checkout session:", error);
+        console.error("[Polar] Error creating checkout session", polarErrorLogMetadata(error));
         return {
             success: false,
             error:
@@ -199,7 +217,7 @@ export async function findReusablePolarCheckout(
                 timedOut: true,
             };
         }
-        console.error("[Polar] Error looking up reusable checkout session:", error);
+        console.error("[Polar] Error looking up reusable checkout session", polarErrorLogMetadata(error));
         return {
             success: false,
             error: error instanceof Error ? error.message : "Unknown Polar checkout recovery error",
@@ -259,7 +277,7 @@ export async function createPolarRefund(
             refundId: refund.id,
         };
     } catch (error: unknown) {
-        console.error("[Polar] Error creating refund:", error);
+        console.error("[Polar] Error creating refund", polarErrorLogMetadata(error));
         return {
             success: false,
             error: error instanceof Error ? error.message : "Unknown Polar API error",
@@ -307,7 +325,7 @@ export async function listPolarRefunds(
 
         return { success: true, refunds };
     } catch (error: unknown) {
-        console.error("[Polar] Error listing refunds:", error);
+        console.error("[Polar] Error listing refunds", polarErrorLogMetadata(error));
         return {
             success: false,
             error: error instanceof Error ? error.message : "Unknown Polar API error",
@@ -787,7 +805,10 @@ export async function processPolarWebhookRefund(
         };
     } catch (err: unknown) {
         const message = err instanceof Error ? err.message : "Polar webhook refund processing error";
-        console.error(`[Polar] Webhook refund error for order ${params.orderId}:`, err);
+        console.error(
+            `[Polar] Webhook refund error for order ${params.orderId}`,
+            polarErrorLogMetadata(err),
+        );
         return { success: false, error: message };
     }
 }

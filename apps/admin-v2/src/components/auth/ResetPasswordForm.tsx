@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { AlertCircle, CheckCircle2, Loader2, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -35,34 +35,35 @@ export function ResetPasswordForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
   const isHydrated = useHydrated();
+  const resetExchangeRef = useRef<Promise<boolean> | null>(null);
 
   useEffect(() => {
     let active = true;
-    const exchangeResetToken = async () => {
-      const query = new URLSearchParams(window.location.search);
+    if (!resetExchangeRef.current) {
       const fragment = new URLSearchParams(window.location.hash.slice(1));
-      const token = fragment.get("token") ?? query.get("token");
+      const token = fragment.get("token");
 
-      // Remove both current fragment links and legacy query links before any
-      // form, image, analytics, or navigation request can reuse the token.
+      // The reset proof is accepted only from the fragment, which browsers do
+      // not send in the document request or Referer header. Remove it before
+      // exchanging it for the short-lived HttpOnly reset-session cookie.
       window.history.replaceState(null, "", window.location.pathname);
-      if (!token) {
-        if (active) setTokenReady(true);
-        return;
-      }
+      resetExchangeRef.current = token
+        ? fetch("/api/auth/reset-session", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ token }),
+          })
+            .then((response) => response.ok)
+            .catch(() => false)
+        : Promise.resolve(false);
+    }
 
-      try {
-        const response = await fetch("/api/auth/reset-session", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ token }),
-        });
-        if (active) setResetSessionReady(response.ok);
-      } finally {
-        if (active) setTokenReady(true);
-      }
-    };
-    void exchangeResetToken();
+    void resetExchangeRef.current.then((ready) => {
+      if (!active) return;
+      setResetSessionReady(ready);
+      setTokenReady(true);
+    });
+
     return () => {
       active = false;
     };

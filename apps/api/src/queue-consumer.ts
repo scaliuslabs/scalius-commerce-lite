@@ -891,6 +891,10 @@ async function processQueueMessage(
 ): Promise<void> {
   const payload = msg.body;
   console.log(`[Queue] Processing message type=${payload.type} id=${msg.id}`);
+  if ((payload as { type?: unknown }).type === "order.ingest") {
+    console.warn(`[Queue] Ignoring retired order.ingest message id=${msg.id}`);
+    return;
+  }
   let paymentWebhookStatus: PaymentWebhookCompletionStatus | undefined;
   let paymentWebhookResult: Record<string, unknown> | undefined;
 
@@ -1235,7 +1239,9 @@ async function processQueueMessage(
     }
 
     default: {
-      console.warn(`[Queue] Unknown message type:`, (payload as Record<string, unknown>).type);
+      const messageType = (payload as Record<string, unknown>).type;
+      console.warn("[Queue] Unsupported message type:", messageType);
+      throw new Error("Unsupported queue message type");
     }
   }
 

@@ -13,8 +13,8 @@ describe("delivery provider activation readiness", () => {
       type: "pathao",
       credentials: {
         baseUrl: "https://api-hermes.pathao.com",
-        clientSecret: "secret",
-        password: "pass",
+        clientSecret: "pathao-secret-9417",
+        password: "merchant-password-7813",
       },
       config: {},
     });
@@ -31,10 +31,10 @@ describe("delivery provider activation readiness", () => {
       type: "pathao",
       credentials: JSON.stringify({
         baseUrl: "https://api-hermes.pathao.com",
-        clientId: "client",
-        clientSecret: "secret",
+        clientId: "pathao-client-4821",
+        clientSecret: "pathao-secret-9417",
         username: "merchant",
-        password: "pass",
+        password: "merchant-password-7813",
       }),
       config: JSON.stringify({ storeId: "store_1" }),
     })).toEqual([]);
@@ -56,6 +56,22 @@ describe("delivery provider activation readiness", () => {
       credentials: {},
       config: {},
     })).toThrow(ValidationError);
+  });
+
+  it("blocks obvious placeholders and unsafe provider base URLs", () => {
+    expect(getDeliveryProviderActivationBlockers({
+      type: "steadfast",
+      credentials: {
+        baseUrl: "http://localhost:8787/api/v1?token=secret",
+        apiKey: "dummy",
+        secretKey: "your-secret-here",
+      },
+      config: {},
+    }).map((blocker) => blocker.key)).toEqual([
+      "baseUrl",
+      "apiKey",
+      "secretKey",
+    ]);
   });
 
   it("throws a typed validation error with blocker details", () => {
@@ -87,8 +103,8 @@ describe("delivery provider activation readiness", () => {
 describe("delivery provider durable readiness summary", () => {
   const completeSteadfastCredentials = {
     baseUrl: "https://portal.steadfast.com.bd/api/v1",
-    apiKey: "api",
-    secretKey: "secret",
+    apiKey: "steadfast-api-4821",
+    secretKey: "steadfast-secret-9417",
   };
 
   it("does not count a successful test unless the fingerprint matches the current setup", async () => {

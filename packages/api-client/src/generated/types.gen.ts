@@ -31756,7 +31756,7 @@ export type PostApiV1AdminOrdersByIdRefundAttemptsByAttemptIdReconcileResponses 
 
 export type PostApiV1AdminOrdersByIdRefundAttemptsByAttemptIdReconcileResponse = PostApiV1AdminOrdersByIdRefundAttemptsByAttemptIdReconcileResponses[keyof PostApiV1AdminOrdersByIdRefundAttemptsByAttemptIdReconcileResponses];
 
-export type GetApiV1AdminOrdersIdInvoiceData = {
+export type GetApiV1AdminOrdersByIdInvoiceData = {
     body?: never;
     path: {
         /**
@@ -31765,10 +31765,10 @@ export type GetApiV1AdminOrdersIdInvoiceData = {
         id: string;
     };
     query?: never;
-    url: '/api/v1/admin/orders/:id/invoice';
+    url: '/api/v1/admin/orders/{id}/invoice';
 };
 
-export type GetApiV1AdminOrdersIdInvoiceErrors = {
+export type GetApiV1AdminOrdersByIdInvoiceErrors = {
     /**
      * Validation error
      */
@@ -31859,9 +31859,9 @@ export type GetApiV1AdminOrdersIdInvoiceErrors = {
     };
 };
 
-export type GetApiV1AdminOrdersIdInvoiceError = GetApiV1AdminOrdersIdInvoiceErrors[keyof GetApiV1AdminOrdersIdInvoiceErrors];
+export type GetApiV1AdminOrdersByIdInvoiceError = GetApiV1AdminOrdersByIdInvoiceErrors[keyof GetApiV1AdminOrdersByIdInvoiceErrors];
 
-export type GetApiV1AdminOrdersIdInvoiceResponses = {
+export type GetApiV1AdminOrdersByIdInvoiceResponses = {
     /**
      * Immutable issued invoice or live unnumbered draft
      */
@@ -31945,9 +31945,9 @@ export type GetApiV1AdminOrdersIdInvoiceResponses = {
     };
 };
 
-export type GetApiV1AdminOrdersIdInvoiceResponse = GetApiV1AdminOrdersIdInvoiceResponses[keyof GetApiV1AdminOrdersIdInvoiceResponses];
+export type GetApiV1AdminOrdersByIdInvoiceResponse = GetApiV1AdminOrdersByIdInvoiceResponses[keyof GetApiV1AdminOrdersByIdInvoiceResponses];
 
-export type PostApiV1AdminOrdersIdInvoiceData = {
+export type PostApiV1AdminOrdersByIdInvoiceData = {
     body: {
         operationKey: string;
         expectedOrderVersion: number;
@@ -31959,10 +31959,10 @@ export type PostApiV1AdminOrdersIdInvoiceData = {
         id: string;
     };
     query?: never;
-    url: '/api/v1/admin/orders/:id/invoice';
+    url: '/api/v1/admin/orders/{id}/invoice';
 };
 
-export type PostApiV1AdminOrdersIdInvoiceErrors = {
+export type PostApiV1AdminOrdersByIdInvoiceErrors = {
     /**
      * Validation error
      */
@@ -32053,9 +32053,9 @@ export type PostApiV1AdminOrdersIdInvoiceErrors = {
     };
 };
 
-export type PostApiV1AdminOrdersIdInvoiceError = PostApiV1AdminOrdersIdInvoiceErrors[keyof PostApiV1AdminOrdersIdInvoiceErrors];
+export type PostApiV1AdminOrdersByIdInvoiceError = PostApiV1AdminOrdersByIdInvoiceErrors[keyof PostApiV1AdminOrdersByIdInvoiceErrors];
 
-export type PostApiV1AdminOrdersIdInvoiceResponses = {
+export type PostApiV1AdminOrdersByIdInvoiceResponses = {
     /**
      * Issued invoice or exact idempotent replay
      */
@@ -32139,7 +32139,7 @@ export type PostApiV1AdminOrdersIdInvoiceResponses = {
     };
 };
 
-export type PostApiV1AdminOrdersIdInvoiceResponse = PostApiV1AdminOrdersIdInvoiceResponses[keyof PostApiV1AdminOrdersIdInvoiceResponses];
+export type PostApiV1AdminOrdersByIdInvoiceResponse = PostApiV1AdminOrdersByIdInvoiceResponses[keyof PostApiV1AdminOrdersByIdInvoiceResponses];
 
 export type PutApiV1AdminOrdersByIdSupportRequestsByRequestIdStatusData = {
     body: {
