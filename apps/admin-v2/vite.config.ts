@@ -9,6 +9,7 @@ import { dirname, resolve } from "node:path";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const persistStatePath = process.env.SCALIUS_WRANGLER_STATE || "../../.wrangler/state";
+const generatedAssetDir = "assets/immutable";
 
 export default defineConfig({
   environments: {
@@ -16,7 +17,15 @@ export default defineConfig({
       build: {
         // Only content-hashed browser bundles enter the immutable cache namespace.
         // Files copied from public/ keep their stable, non-immutable URLs.
-        assetsDir: "assets/immutable",
+        assetsDir: generatedAssetDir,
+        sourcemap: false,
+      },
+    },
+    ssr: {
+      build: {
+        // SSR renders URLs from its own manifest. Keep those URLs aligned with
+        // the client output so a deploy cannot reference non-existent assets.
+        assetsDir: generatedAssetDir,
         sourcemap: false,
       },
     },

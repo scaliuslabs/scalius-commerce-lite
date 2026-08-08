@@ -571,6 +571,24 @@ function checkServerManifest(context) {
   if (context.failures.length === failureCount) {
     pass(context, "dist: server manifest route chunks", `${hotEntries.length} entries`);
   }
+
+  const clientRoot = resolveFromRoot(context.rootDir, "apps/admin-v2/dist/client");
+  const browserAssetPattern = /\.(?:css|png|jpe?g|webp|svg|gif|ico|woff2?|ttf|otf)$/i;
+  const missingBrowserAssets = Object.entries(manifest)
+    .map(([key, value]) => ({ key, file: value?.file }))
+    .filter(({ file }) => typeof file === "string" && browserAssetPattern.test(file))
+    .filter(({ file }) => !existsSync(resolve(clientRoot, file)))
+    .map(({ key, file }) => `${key} -> ${file}`);
+
+  if (missingBrowserAssets.length > 0) {
+    fail(
+      context,
+      "dist",
+      `server manifest references browser assets missing from dist/client:\n    ${missingBrowserAssets.join("\n    ")}`,
+    );
+  } else {
+    pass(context, "dist: server manifest browser assets", "all references exist");
+  }
 }
 
 function checkProductFormClientChunk(context) {
