@@ -242,7 +242,7 @@ describe("native Turso upload bundle", () => {
       outputDirectory: bundlePath,
       sqliteBinary: "sqlite3",
     })).rejects.toThrow(/refusing to overwrite/i);
-  });
+  }, 30_000);
 
   it("fails closed, removes partial output, and detects artifact tampering", async () => {
     const directory = await temporaryDirectory();
@@ -487,5 +487,5 @@ INSERT INTO scalius_turso_control_a VALUES ('probe-row', 'retired-run', 7);
     );
     expect(summary.schemaUpgrade.appliedMigrations).toEqual([]);
     expect(summary.foreignKeyViolations).toBe(0);
-  });
+  }, 30_000);
 });

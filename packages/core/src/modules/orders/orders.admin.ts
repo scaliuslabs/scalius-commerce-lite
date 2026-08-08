@@ -63,6 +63,7 @@ import type {
     CreateOrderInput,
     QuoteManualOrderInput,
 } from "./orders.validation";
+import { chunkRowsForD1 } from "./d1-write-chunks";
 import { NotFoundError, ValidationError, ConflictError, ServiceUnavailableError } from "@scalius/core/errors";
 import type {
     OrderDetails,
@@ -139,6 +140,8 @@ import { getOrderArchiveStatusBlockedReason } from "./order-archive-policy";
 
 type SQLiteBatchItem = BatchItem<"sqlite">;
 const MAX_ORDER_LIST_LIMIT = 100;
+const ORDER_ITEM_INSERT_PARAMETERS_PER_ROW = 18;
+const ORDER_ITEM_TAX_INSERT_PARAMETERS_PER_ROW = 13;
 
 export interface AdminOrderFullEditSource {
     status: string;
@@ -2060,49 +2063,53 @@ export async function createOrder(
 
     // Order items
     if (preparedOrderItems.length > 0) {
-        writeBatch.push(
-            db.insert(orderItems).values(
-                preparedOrderItems.map(({ id, item, lineTax }) => ({
-                    id,
-                    orderId,
-                    productId: item.productId,
-                    variantId: item.variantId,
-                    productImageMediaId: item.productImageMediaId,
-                    quantity: item.quantity,
-                    price: item.price,
-                    productName: item.productName,
-                    variantLabel: item.variantLabel,
-                    inventoryTracked: item.inventoryTracked,
-                    unitPriceMinor: lineTax.unitPriceMinor,
-                    lineSubtotalMinor: lineTax.grossAmountMinor,
-                    discountAmountMinor: lineTax.discountMinor,
-                    taxableAmountMinor: lineTax.taxableAmountMinor,
-                    taxAmountMinor: lineTax.taxMinor,
-                    fulfillmentStatus: ItemFulfillmentStatus.PENDING,
-                    createdAt: sql`unixepoch()`,
-                })),
-            ),
-        );
+        const itemRows = preparedOrderItems.map(({ id, item, lineTax }) => ({
+            id,
+            orderId,
+            productId: item.productId,
+            variantId: item.variantId,
+            productImageMediaId: item.productImageMediaId,
+            quantity: item.quantity,
+            price: item.price,
+            productName: item.productName,
+            variantLabel: item.variantLabel,
+            inventoryTracked: item.inventoryTracked,
+            unitPriceMinor: lineTax.unitPriceMinor,
+            lineSubtotalMinor: lineTax.grossAmountMinor,
+            discountAmountMinor: lineTax.discountMinor,
+            taxableAmountMinor: lineTax.taxableAmountMinor,
+            taxAmountMinor: lineTax.taxMinor,
+            fulfillmentStatus: ItemFulfillmentStatus.PENDING,
+            createdAt: sql`unixepoch()`,
+        }));
+        for (const chunk of chunkRowsForD1(
+            itemRows,
+            ORDER_ITEM_INSERT_PARAMETERS_PER_ROW,
+        )) {
+            writeBatch.push(db.insert(orderItems).values(chunk));
+        }
 
-        writeBatch.push(
-            db.insert(orderItemTaxSnapshots).values(
-                preparedOrderItems.map(({ id, lineTax }) => ({
-                    orderItemId: id,
-                    orderId,
-                    taxClassId: lineTax.taxClassId,
-                    taxClassName: lineTax.taxClassName,
-                    unitPriceMinor: lineTax.unitPriceMinor,
-                    quantity: lineTax.quantity,
-                    grossAmountMinor: lineTax.grossAmountMinor,
-                    discountMinor: lineTax.discountMinor,
-                    taxableAmountMinor: lineTax.taxableAmountMinor,
-                    taxMinor: lineTax.taxMinor,
-                    pricesIncludeTax: taxQuote.pricesIncludeTax,
-                    rateSnapshot: JSON.stringify(lineTax.components),
-                    createdAt: sql`unixepoch()`,
-                })),
-            ),
-        );
+        const itemTaxRows = preparedOrderItems.map(({ id, lineTax }) => ({
+            orderItemId: id,
+            orderId,
+            taxClassId: lineTax.taxClassId,
+            taxClassName: lineTax.taxClassName,
+            unitPriceMinor: lineTax.unitPriceMinor,
+            quantity: lineTax.quantity,
+            grossAmountMinor: lineTax.grossAmountMinor,
+            discountMinor: lineTax.discountMinor,
+            taxableAmountMinor: lineTax.taxableAmountMinor,
+            taxMinor: lineTax.taxMinor,
+            pricesIncludeTax: taxQuote.pricesIncludeTax,
+            rateSnapshot: JSON.stringify(lineTax.components),
+            createdAt: sql`unixepoch()`,
+        }));
+        for (const chunk of chunkRowsForD1(
+            itemTaxRows,
+            ORDER_ITEM_TAX_INSERT_PARAMETERS_PER_ROW,
+        )) {
+            writeBatch.push(db.insert(orderItemTaxSnapshots).values(chunk));
+        }
     }
 
     writeBatch.push(

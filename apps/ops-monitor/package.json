@@ -2,6 +2,7 @@
   "name": "@scalius/ops-monitor",
   "version": "1.0.0",
   "private": true,
+  "license": "AGPL-3.0-only",
   "type": "module",
   "scripts": {
     "build": "wrangler deploy --dry-run --outdir dist",

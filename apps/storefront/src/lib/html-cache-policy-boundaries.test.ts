@@ -1,9 +1,13 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { storefrontSourcePath } from "./test-source-paths";
+import { storefrontRootPath, storefrontSourcePath } from "./test-source-paths";
 
 const middlewareSource = readFileSync(
   `${storefrontSourcePath()}/middleware.ts`,
+  "utf8",
+);
+const wranglerSource = readFileSync(
+  storefrontRootPath("wrangler.jsonc"),
   "utf8",
 );
 
@@ -32,5 +36,11 @@ describe("storefront response cache boundaries", () => {
     expect(middlewareSource).not.toContain("CACHE_CONTROL");
     expect(middlewareSource).not.toContain("cacheGeneration");
     expect(middlewareSource).not.toContain("cacheVersion");
+  });
+
+  it("isolates native HTML caches between Worker deployments", () => {
+    expect(wranglerSource).toMatch(
+      /"cache"\s*:\s*\{[\s\S]*?"enabled"\s*:\s*true,[\s\S]*?"cross_version_cache"\s*:\s*false/,
+    );
   });
 });

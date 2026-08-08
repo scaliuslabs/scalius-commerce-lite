@@ -17,6 +17,26 @@ describe("scanner inventory idempotency boundaries", () => {
     expect(scannerSource).toContain("operationKey: createInventoryOperationKey()");
   });
 
+  it("undoes with a relative ledger edge instead of overwriting concurrent stock", () => {
+    const undoBlock = scannerSource.slice(
+      scannerSource.indexOf("const handleUndo"),
+      scannerSource.indexOf("// ---- Camera active"),
+    );
+
+    expect(undoBlock).toContain('"/api/v1/admin/inventory/stock-adjust"');
+    expect(undoBlock).toContain("adjustment: item.oldStock - item.newStock");
+    expect(undoBlock).toContain("undoOperationKeysRef.current.get(item.id)");
+    expect(undoBlock).toContain("undoOperationKeysRef.current.delete(item.id)");
+    expect(undoBlock).toContain("undoError:");
+    expect(undoBlock).not.toContain('action: "error" as const');
+    expect(undoBlock).not.toContain("newStock: item.oldStock");
+  });
+
+  it("retains one claim exchange across React StrictMode effect replay", () => {
+    expect(scannerSource).toContain("verificationRequestRef.current?.token !== token");
+    expect(scannerSource).toContain("verificationRequestRef.current.promise");
+  });
+
   it("retains a manual-sheet operation key while the submitted intent is unchanged", () => {
     expect(manualSource).toContain("operationIntentRef");
     expect(manualSource).toContain("fingerprint");

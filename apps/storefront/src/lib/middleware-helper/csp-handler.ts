@@ -9,8 +9,8 @@ import {
  * Parse additional domains from CSP_ALLOWED environment variable
  * and add them with wildcard subdomains to CSP directives.
  *
- * Uses withEdgeCache which handles deduplication via its inflight map,
- * so no per-request caching is needed here.
+ * Uses request-local coalescing so repeated reads within one SSR render share
+ * work without retaining a fetch promise across Worker requests.
  */
 
 /** Subset of the Cloudflare runtime env used by CSP functions */
@@ -24,8 +24,7 @@ interface CspEnv {
   [key: string]: unknown;
 }
 
-// Empty sentinel — returned on fetch failure so withEdgeCache caches it
-// and doesn't re-fetch on every request
+// Empty sentinel keeps a failed read deterministic within the current request.
 const EMPTY_CSP_DATA = { cspAllowedDomains: "" };
 
 async function parseAdditionalDomains(env?: CspEnv): Promise<string[]> {
@@ -49,8 +48,7 @@ async function parseAdditionalDomains(env?: CspEnv): Promise<string[]> {
             if (!response.ok) {
               // Always cancel the response body to prevent stalled deadlocks
               await response.body?.cancel();
-              // Return empty sentinel (NOT null) so this gets cached
-              // and we don't re-fetch on every single request
+              // Return empty sentinel (NOT null) for request-local coalescing.
               return EMPTY_CSP_DATA;
             }
             const json = (await response.json()) as {
@@ -62,7 +60,7 @@ async function parseAdditionalDomains(env?: CspEnv): Promise<string[]> {
                 json.data?.cspAllowedDomains ?? json.cspAllowedDomains ?? "",
             };
           } catch {
-            // Return empty sentinel so failure is cached too
+            // Return empty sentinel for request-local coalescing.
             return EMPTY_CSP_DATA;
           }
         },

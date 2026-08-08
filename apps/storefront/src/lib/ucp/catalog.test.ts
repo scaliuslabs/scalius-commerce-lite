@@ -318,6 +318,43 @@ describe("UCP catalog mapping", () => {
     });
   });
 
+  it("omits variants whose original or effective price is not positive", async () => {
+    const product = productFixture();
+    product.variants![0]!.price = 0;
+    product.variants![1]!.price = 100;
+    product.variants![1]!.discountType = "flat";
+    product.variants![1]!.discountAmount = 100;
+    mocks.getFeedProducts.mockResolvedValueOnce({
+      data: [product],
+      pagination: { page: 1, limit: 10, total: 1, totalPages: 1 },
+    });
+
+    const result = await searchCatalog({ query: "khaki" }, context);
+
+    expect(result.status).toBe(200);
+    expect(result.body.products).toEqual([]);
+  });
+
+  it("keeps only positively priced variants in a mixed-price product", async () => {
+    const product = productFixture();
+    product.variants![0]!.price = 0;
+    mocks.getFeedProducts.mockResolvedValueOnce({
+      data: [product],
+      pagination: { page: 1, limit: 10, total: 1, totalPages: 1 },
+    });
+
+    const result = await searchCatalog({ query: "khaki" }, context);
+
+    expect(result.status).toBe(200);
+    expect(result.body.products[0]?.variants.map((variant) => variant.id)).toEqual([
+      "gid://scalius/product-variant/var_2",
+    ]);
+    expect(result.body.products[0]?.price_range).toEqual({
+      min: { amount: 160000, currency: "BDT" },
+      max: { amount: 160000, currency: "BDT" },
+    });
+  });
+
   it("returns category-matched simple products whose titles omit the query", async () => {
     mocks.getFeedProducts.mockResolvedValueOnce({
       data: [

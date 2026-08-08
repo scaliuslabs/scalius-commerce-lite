@@ -345,9 +345,11 @@ async function readSchemaObjects(
       .map((object) => [object.name, object.sql]),
   );
 
-  return Promise.all(objects.map(async (object) => {
+  const portableObjects: SqlitePortableSchemaObject[] = [];
+  for (const object of objects) {
     if (object.type !== "table") {
-      return { ...object, sql: canonicalSql(object.sql) };
+      portableObjects.push({ ...object, sql: canonicalSql(object.sql) });
+      continue;
     }
 
     const [columnRows, foreignKeyRows, indexRows] = await Promise.all([
@@ -432,8 +434,9 @@ async function readSchemaObjects(
         .filter((name) => explicitIndexSql.has(name))
         .sort(),
     };
-    return { ...object, sql: JSON.stringify(logicalTable) };
-  }));
+    portableObjects.push({ ...object, sql: JSON.stringify(logicalTable) });
+  }
+  return portableObjects;
 }
 
 export async function listSqlitePortableSchemaObjects(

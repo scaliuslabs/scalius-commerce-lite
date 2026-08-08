@@ -42,11 +42,18 @@ app.post("/", async (c) => {
         return c.json({ success: false, error: "Unauthorized" }, 401);
     }
 
-    // Pathao requires this secret in the response header.
-    // Use configured webhookSecret, fall back to the integration test value from Pathao docs.
-    const merchantSecret =
-        (verification.credentials?.webhookSecret as string | undefined) ??
-        "f3992ecc-59da-4cbe-a049-a13da2018d51";
+    // Pathao requires this merchant-owned secret in the response header.
+    // Never fall back to a public documentation/example value.
+    const configuredMerchantSecret =
+        verification.credentials?.webhookSecret ??
+        verification.credentials?.secretKey;
+    const merchantSecret = typeof configuredMerchantSecret === "string"
+        ? configuredMerchantSecret.trim()
+        : "";
+    if (!merchantSecret) {
+        console.warn("[pathao-webhook] Rejected: merchant webhook secret missing");
+        return c.json({ success: false, error: "Webhook not configured" }, 503);
+    }
 
     try {
         const payload = JSON.parse(rawBody) as {

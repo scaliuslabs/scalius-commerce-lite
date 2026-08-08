@@ -60,6 +60,57 @@ const REQUIRED_ACTIVATION_FIELDS: Record<string, DeliveryProviderActivationRequi
   ],
 };
 
+const OBVIOUS_PLACEHOLDER_VALUES = new Set([
+  "api",
+  "changeme",
+  "changeit",
+  "client",
+  "demo",
+  "dummy",
+  "example",
+  "key",
+  "pass",
+  "password",
+  "placeholder",
+  "sample",
+  "secret",
+  "test",
+  "token",
+  "username",
+]);
+
+function looksLikePlaceholderProviderValue(value: unknown): boolean {
+  if (typeof value !== "string") return false;
+  const normalized = value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
+  if (!normalized) return false;
+  if (OBVIOUS_PLACEHOLDER_VALUES.has(normalized)) return true;
+  if (/^([0-9])\1{3,}$/.test(normalized)) return true;
+  if (/^1234567890?$/.test(normalized)) return true;
+  return /^(your|enter|replace)(api|client|key|password|secret|token|username)/.test(normalized);
+}
+
+function getBaseUrlIssue(value: unknown): string | null {
+  if (typeof value !== "string" || !value.trim()) return null;
+  try {
+    const parsed = new URL(value.trim());
+    if (
+      parsed.protocol !== "https:"
+      || parsed.username
+      || parsed.password
+      || parsed.search
+      || parsed.hash
+    ) {
+      return "Base URL must be an absolute HTTPS origin/path without credentials, query parameters, or a fragment.";
+    }
+    if (parsed.hostname === "example.com" || parsed.hostname.endsWith(".example.com")) {
+      return "Base URL looks like a placeholder. Save the real provider URL before activation.";
+    }
+    return null;
+  } catch {
+    return "Base URL must be a valid absolute HTTPS URL.";
+  }
+}
+
 function toRecord(
   value: DeliveryProviderReadinessInput["credentials"],
   source: "credentials" | "config",
@@ -182,6 +233,20 @@ export function getDeliveryProviderActivationBlockers({
       blockers.push({
         ...requirement,
         message: `${requirement.label} is required before this provider can be active.`,
+      });
+      continue;
+    }
+
+    if (requirement.key === "baseUrl") {
+      const urlIssue = getBaseUrlIssue(sourceRecord[requirement.key]);
+      if (urlIssue) blockers.push({ ...requirement, message: urlIssue });
+      continue;
+    }
+
+    if (looksLikePlaceholderProviderValue(sourceRecord[requirement.key])) {
+      blockers.push({
+        ...requirement,
+        message: `${requirement.label} looks like a placeholder. Save a real provider value before activation.`,
       });
     }
   }

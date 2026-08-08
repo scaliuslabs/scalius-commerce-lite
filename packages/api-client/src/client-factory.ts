@@ -2,14 +2,15 @@
  * Transport-agnostic SDK client factory.
  *
  * Two modes:
- * - Service Binding: zero-latency RPC inside Cloudflare Workers (admin env.API, storefront env.BACKEND_API)
- * - HTTP: standard fetch for dev mode or external consumers
+ * - Service Binding: Worker-to-Worker requests through a caller-provided binding
+ * - HTTP: standard fetch for local development and first-party consumers
  */
 import { createClient, createConfig, type Client, type Config } from "./generated/client";
 
 interface ServiceBindingOptions {
-  /** Cloudflare Service Binding (env.API or env.BACKEND_API) */
+  /** Cloudflare Service Binding-compatible fetcher. */
   serviceBinding: { fetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response> };
+  /** Headers accepted by the target operation; the factory does not mint credentials. */
   headers?: Record<string, string>;
 }
 
@@ -20,7 +21,7 @@ interface HttpOptions {
 
 /**
  * Create an SDK client routed through a Cloudflare Service Binding.
- * Used by admin (env.API) and storefront (env.BACKEND_API) in production.
+ * Authentication remains the caller's responsibility.
  */
 export function createServiceBindingClient(options: ServiceBindingOptions): Client {
   return createClient(

@@ -103,7 +103,7 @@ const paramsSchema = z.object({
 
 const getInvoiceRoute = createRoute({
   method: "get",
-  path: "/:id/invoice",
+  path: "/{id}/invoice",
   tags: ["Admin - Orders"],
   summary: "Read an invoice or unnumbered draft without changing state",
   request: { params: paramsSchema },
@@ -120,7 +120,7 @@ const getInvoiceRoute = createRoute({
 
 const issueInvoiceRoute = createRoute({
   method: "post",
-  path: "/:id/invoice",
+  path: "/{id}/invoice",
   tags: ["Admin - Orders"],
   summary: "Issue an immutable invoice with atomic monotonic numbering",
   request: {

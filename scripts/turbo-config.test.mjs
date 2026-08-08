@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 const root = resolve(new URL("..", import.meta.url).pathname);
 const turboConfig = JSON.parse(readFileSync(resolve(root, "turbo.json"), "utf8"));
+const rootPackage = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8"));
 
 describe("turbo cache inputs", () => {
   it("hashes app-local environment files that affect local builds", () => {
@@ -41,5 +42,9 @@ describe("turbo cache inputs", () => {
         "VITE_VAPID_FIREBASE",
       ]),
     );
+  });
+
+  it("runs workspace typechecks sequentially on constrained release hosts", () => {
+    expect(rootPackage.scripts.typecheck).toContain("--concurrency=1");
   });
 });

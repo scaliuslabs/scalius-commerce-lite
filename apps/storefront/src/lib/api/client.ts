@@ -4,9 +4,8 @@
  * Core API Client for Scalius Commerce
  * Handles request creation, authentication, and resilient fetching.
  *
- * Exports two SDK client instances:
- * - sdkClient: public endpoints (no JWT auth)
- * - sdkAuthClient: authenticated endpoints (JWT auto-attached)
+ * Creates request-scoped SDK clients for public and authenticated endpoints so
+ * mutable base URLs and in-flight credentials never cross Worker requests.
  *
  * Both route through service bindings in production and handle retries.
  * Legacy fetchWithRetry/createApiUrl are preserved for modules that need
@@ -14,6 +13,7 @@
  */
 
 import { getRuntimeApiUrl, getRuntimeApiToken } from "./runtime-env";
+import { apiContext } from "./context";
 import { createClient, createConfig } from "@scalius/api-client/factory";
 import type { Client } from "@scalius/api-client/factory";
 
@@ -108,9 +108,30 @@ async function runFetchWithHardTimeout(
 
 // --- JWT Token Management ---
 
-let jwtToken: string | null = null;
-let tokenExpiry: number | null = null;
-let tokenRefreshPromise: Promise<string | null> | null = null;
+type ApiJwtState = NonNullable<ReturnType<typeof apiContext.getStore>>["apiJwt"];
+
+function getRequestJwtState(): NonNullable<ApiJwtState> {
+  return apiContext.getStore()?.apiJwt ?? {
+    token: null,
+    expiresAt: null,
+    refresh: null,
+  };
+}
+
+function readJwtExpiry(token: string): number | null {
+  try {
+    const payload = token.split(".")[1];
+    if (!payload) return null;
+    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+    const decoded = JSON.parse(atob(padded)) as { exp?: unknown };
+    return typeof decoded.exp === "number" && Number.isFinite(decoded.exp)
+      ? decoded.exp * 1000
+      : null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Creates a valid API URL by combining the base URL and a given path.
@@ -128,18 +149,21 @@ export function createApiUrl(path: string): string {
  * @returns A promise that resolves to the JWT token or null if authentication fails.
  */
 async function getJwtToken(): Promise<string | null> {
+  const state = getRequestJwtState();
   const isExpiredOrExpiring =
-    !jwtToken || !tokenExpiry || Date.now() > tokenExpiry - 5 * 60 * 1000;
+    !state.token ||
+    !state.expiresAt ||
+    Date.now() > state.expiresAt - 5 * 60 * 1000;
 
   if (!isExpiredOrExpiring) {
-    return jwtToken;
+    return state.token;
   }
 
-  if (tokenRefreshPromise) {
-    return tokenRefreshPromise;
+  if (state.refresh) {
+    return state.refresh;
   }
 
-  tokenRefreshPromise = (async () => {
+  state.refresh = (async () => {
     try {
       const apiToken = getRuntimeApiToken();
       if (!apiToken) {
@@ -156,29 +180,24 @@ async function getJwtToken(): Promise<string | null> {
 
       if (!response.ok) {
         // Always consume the body to prevent stalled response warnings
-        const errBody = await response.text();
-        console.error("Failed to get JWT token:", errBody);
+        await response.body?.cancel();
+        console.error("Failed to get storefront API credential:", response.status);
         return null;
       }
 
       const json: { success: boolean; data: { token: string } } = await response.json();
-      jwtToken = json.data.token;
-
-      if (jwtToken) {
-        const payload = JSON.parse(atob(jwtToken.split(".")[1]));
-        tokenExpiry = payload.exp * 1000; // Convert to milliseconds
-      }
-
-      return jwtToken;
+      state.token = json.data.token;
+      state.expiresAt = state.token ? readJwtExpiry(state.token) : null;
+      return state.token;
     } catch (error: unknown) {
       console.error("Error getting JWT token:", error);
       return null;
     } finally {
-      tokenRefreshPromise = null;
+      state.refresh = null;
     }
   })();
 
-  return tokenRefreshPromise;
+  return state.refresh;
 }
 
 /**
@@ -287,9 +306,9 @@ export async function fetchWithRetry(
 
     const newToken = response.headers.get("X-New-Token");
     if (newToken) {
-      jwtToken = newToken;
-      const payload = JSON.parse(atob(newToken.split(".")[1]));
-      tokenExpiry = payload.exp * 1000;
+      const state = getRequestJwtState();
+      state.token = newToken;
+      state.expiresAt = readJwtExpiry(newToken);
     }
 
     if (response.status === 401 && requiresAuth && retries > 0) {
@@ -297,8 +316,9 @@ export async function fetchWithRetry(
       // stalled HTTP response deadlocks on Cloudflare Workers
       await response.body?.cancel();
       console.warn("Authentication failed, retrying with new token...");
-      jwtToken = null;
-      tokenExpiry = null;
+      const state = getRequestJwtState();
+      state.token = null;
+      state.expiresAt = null;
       return fetchWithRetry(url, options, retries - 1, timeout, requiresAuth);
     }
 
@@ -348,22 +368,6 @@ function createStorefrontFetch(requiresAuth: boolean): typeof fetch {
   };
 }
 
-/** SDK client for public endpoints (no JWT auth). Used by most storefront calls. */
-export const sdkClient: Client = createClient(
-  createConfig({
-    baseUrl: "", // fetchWithRetry resolves the full URL from the request
-    fetch: createStorefrontFetch(false),
-  }),
-);
-
-/** SDK client for authenticated endpoints (JWT auto-attached). */
-export const sdkAuthClient: Client = createClient(
-  createConfig({
-    baseUrl: "", // fetchWithRetry resolves the full URL from the request
-    fetch: createStorefrontFetch(true),
-  }),
-);
-
 /**
  * Get the SDK base URL (root domain, NOT including /api/v1 prefix).
  * SDK route paths already include /api/v1/, so we need just the origin.
@@ -381,12 +385,14 @@ function getSdkBaseUrl(): string {
  */
 export function getConfiguredSdkClient(): Client {
   const baseUrl = getSdkBaseUrl();
-  sdkClient.setConfig({ baseUrl });
-  return sdkClient;
+  return createClient(
+    createConfig({ baseUrl, fetch: createStorefrontFetch(false) }),
+  );
 }
 
 export function getConfiguredSdkAuthClient(): Client {
   const baseUrl = getSdkBaseUrl();
-  sdkAuthClient.setConfig({ baseUrl });
-  return sdkAuthClient;
+  return createClient(
+    createConfig({ baseUrl, fetch: createStorefrontFetch(true) }),
+  );
 }

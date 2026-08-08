@@ -293,7 +293,9 @@ function getEmailBindingRestriction(binding) {
   };
 }
 
-export function evaluateOpsMonitorAlertConfig(config) {
+export function evaluateOpsMonitorAlertConfig(config, {
+  expectedQueueNames = [],
+} = {}) {
   const errors = [];
   const warnings = [];
   const requiredActions = [];
@@ -310,6 +312,18 @@ export function evaluateOpsMonitorAlertConfig(config) {
   const toConfigured = recipientCount > 0;
   const bindingRestriction = getEmailBindingRestriction(alertEmailBinding);
   const routedEmailReady = Boolean(alertEmailBinding && fromConfigured && toConfigured);
+  const monitoredQueueNames = [...new Set(
+    (config?.queues?.producers ?? [])
+      .map((producer) => producer?.queue)
+      .filter((queue) => typeof queue === "string" && queue),
+  )].sort();
+  const requiredQueueNames = [...new Set(expectedQueueNames)].sort();
+  const missingQueueNames = requiredQueueNames.filter(
+    (queue) => !monitoredQueueNames.includes(queue),
+  );
+  const unexpectedQueueNames = monitoredQueueNames.filter(
+    (queue) => !requiredQueueNames.includes(queue),
+  );
 
   if (!workerName) {
     errors.push("apps/ops-monitor/wrangler.jsonc must declare the ops-monitor Worker name.");
@@ -325,6 +339,16 @@ export function evaluateOpsMonitorAlertConfig(config) {
   }
   if (!alertEmailBinding) {
     errors.push(`apps/ops-monitor/wrangler.jsonc must bind Cloudflare Email Service send_email ${OPS_MONITOR_ALERT_EMAIL_BINDING}.`);
+  }
+  if (requiredQueueNames.length > 0 && missingQueueNames.length > 0) {
+    errors.push(
+      `apps/ops-monitor/wrangler.jsonc is missing API queue metrics bindings: ${missingQueueNames.join(", ")}.`,
+    );
+  }
+  if (requiredQueueNames.length > 0 && unexpectedQueueNames.length > 0) {
+    errors.push(
+      `apps/ops-monitor/wrangler.jsonc has stale queue metrics bindings: ${unexpectedQueueNames.join(", ")}.`,
+    );
   }
 
   if (!routedEmailReady) {
@@ -364,6 +388,10 @@ export function evaluateOpsMonitorAlertConfig(config) {
     toConfigured,
     recipientCount,
     ...bindingRestriction,
+    monitoredQueueNames,
+    requiredQueueNames,
+    missingQueueNames,
+    unexpectedQueueNames,
     warnings,
     requiredActions,
   };
@@ -653,8 +681,11 @@ function checkMonitoringConfig(apiConfig, {
 
 function checkOpsMonitorAlertChannel(opsMonitorConfig, {
   logger,
+  expectedQueueNames,
 }) {
-  const evaluation = evaluateOpsMonitorAlertConfig(opsMonitorConfig);
+  const evaluation = evaluateOpsMonitorAlertConfig(opsMonitorConfig, {
+    expectedQueueNames,
+  });
   if (!evaluation.ok) {
     throw new Error(`Ops-monitor alert-channel config contract failed: ${evaluation.errors.join("; ")}`);
   }
@@ -700,6 +731,8 @@ function checkOpsMonitorAlertChannel(opsMonitorConfig, {
     hasDestinationAddress: evaluation.hasDestinationAddress,
     allowedDestinationAddressCount: evaluation.allowedDestinationAddressCount,
     allowedSenderAddressCount: evaluation.allowedSenderAddressCount,
+    monitoredQueueNames: evaluation.monitoredQueueNames,
+    requiredQueueNames: evaluation.requiredQueueNames,
     warnings: evaluation.warnings,
     requiredActions: evaluation.requiredActions,
   };
@@ -1076,7 +1109,10 @@ export async function runOpsCheck(options, {
     checkMonitoringConfig(apiConfig, { logger }));
 
   const opsMonitorAlertChannel = await runStep(result, "opsMonitorAlertChannel", () =>
-    checkOpsMonitorAlertChannel(opsMonitorConfig, { logger }));
+    checkOpsMonitorAlertChannel(opsMonitorConfig, {
+      logger,
+      expectedQueueNames: monitoringConfig.queues.map((queue) => queue.name),
+    }));
   result.warnings.push(
     ...opsMonitorAlertChannel.warnings.map((warning) => `Ops-monitor alert channel: ${warning}`),
   );

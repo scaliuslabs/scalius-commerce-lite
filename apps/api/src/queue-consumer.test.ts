@@ -317,6 +317,22 @@ describe("handleQueueBatch payment confirmation retries", () => {
     vi.unstubAllGlobals();
   });
 
+  it("retries unsupported message types instead of acknowledging and losing them", async () => {
+    const message = createMessage({ type: "extension.order.created" });
+
+    await handleQueueBatch(
+      createBatch([message]) as unknown as MessageBatch<PaymentQueueMessage>,
+      {} as Env,
+    );
+
+    expect(message.ack).not.toHaveBeenCalled();
+    expect(message.retry).toHaveBeenCalledWith({ delaySeconds: 30 });
+    expect(console.warn).toHaveBeenCalledWith(
+      "[Queue] Unsupported message type:",
+      "extension.order.created",
+    );
+  });
+
   it("retries confirmed payment messages when processing returns an unsuccessful result", async () => {
     mocks.processPaymentConfirmed.mockResolvedValue({ success: false, error: "D1 batch failed" });
 

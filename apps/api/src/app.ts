@@ -55,6 +55,7 @@ import { finalizeOpenApiContract } from "./openapi-contract";
 // Admin routes
 import { adminAuthMiddleware } from "./middleware/admin-auth";
 import { cookieOriginGuardMiddleware } from "./middleware/cookie-origin-guard";
+import { webhookBodyLimitMiddleware } from "./middleware/webhook-body-limit";
 import { adminLocationRoutes } from "./routes/admin/settings/delivery-locations";
 import { adminCategoryRoutes } from "./routes/admin/categories";
 import { adminCollectionRoutes } from "./routes/admin/collections";
@@ -274,6 +275,7 @@ app.route("/__ptproxy", partytownProxyRoutes);
 
 // Webhook routes — NO auth middleware (signature verification IS the auth)
 // Must be registered BEFORE the auth middleware block
+app.use("/webhooks/*", webhookBodyLimitMiddleware);
 app.route("/webhooks/stripe", stripeWebhookRoutes);
 app.route("/webhooks/sslcommerz", sslcommerzWebhookRoutes);
 app.route("/webhooks/polar", polarWebhookRoutes);

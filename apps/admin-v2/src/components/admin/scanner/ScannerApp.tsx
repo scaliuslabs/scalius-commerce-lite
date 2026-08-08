@@ -51,10 +51,11 @@ export interface ScanResult {
   oldStock: number;
   newStock: number;
   reason: string;
+  undoError?: string;
 }
 
 interface ScannerAppProps {
-  token: string;
+  token: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -171,28 +172,46 @@ export function ScannerApp({ token }: ScannerAppProps) {
   const [authError, setAuthError] = useState("");
   const [adminName, setAdminName] = useState("Admin");
   const sessionStart = useRef(Date.now());
+  const undoOperationKeysRef = useRef(new Map<string, string>());
+  const verificationRequestRef = useRef<{
+    token: string;
+    promise: Promise<Record<string, string>>;
+  } | null>(null);
 
   useEffect(() => {
-    const verificationUrl = token
-      ? `/api/scanner-token?token=${encodeURIComponent(token)}`
-      : "/api/scanner-token";
+    if (token === null) return;
 
-    fetch(verificationUrl)
-      .then((res) => {
-        if (!res.ok) throw new Error("Invalid or expired scanner session");
-        return res.json();
-      })
-      .then((json) => {
-        const data = unwrapEnvelope<Record<string, string>>(json);
+    const verificationRequest: RequestInit | undefined = token
+      ? {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token }),
+        }
+      : undefined;
+
+    if (verificationRequestRef.current?.token !== token) {
+      verificationRequestRef.current = {
+        token,
+        promise: fetch("/api/scanner-token", verificationRequest)
+          .then((res) => {
+            if (!res.ok) {
+              throw new Error("Invalid or expired scanner session");
+            }
+            return res.json();
+          })
+          .then((json) => unwrapEnvelope<Record<string, string>>(json)),
+      };
+    }
+
+    let active = true;
+    void verificationRequestRef.current.promise
+      .then((data) => {
+        if (!active) return;
         setAdminName(data.adminName || "Admin");
         setAuthState("ready");
-        if (token) {
-          const url = new URL(window.location.href);
-          url.searchParams.delete("token");
-          window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
-        }
       })
       .catch((err: unknown) => {
+        if (!active) return;
         setAuthState("error");
         setAuthError(
           err instanceof Error
@@ -200,6 +219,10 @@ export function ScannerApp({ token }: ScannerAppProps) {
             : "Scanner verification failed. Ask an admin to generate a new QR code.",
         );
       });
+
+    return () => {
+      active = false;
+    };
   }, [token]);
 
   // ---- Core state ----
@@ -490,14 +513,19 @@ export function ScannerApp({ token }: ScannerAppProps) {
   const handleUndo = useCallback(
     async (item: ScanResult) => {
       if (!item.product) return;
+      const operationKey =
+        undoOperationKeysRef.current.get(item.id) ??
+        createInventoryOperationKey();
+      undoOperationKeysRef.current.set(item.id, operationKey);
 
       try {
-        await postInventoryOperation("/api/v1/admin/inventory/stock-set", {
-          operationKey: createInventoryOperationKey(),
+        await postInventoryOperation("/api/v1/admin/inventory/stock-adjust", {
+          operationKey,
           variantId: item.product.variantId,
-          newStock: item.oldStock,
+          adjustment: item.oldStock - item.newStock,
           reason: "Undo scanner adjustment",
         });
+        undoOperationKeysRef.current.delete(item.id);
 
         haptic("medium");
         beep("success");
@@ -510,6 +538,16 @@ export function ScannerApp({ token }: ScannerAppProps) {
           setLastResult(null);
         }
       } catch {
+        setHistory((current) =>
+          current.map((historyItem) =>
+            historyItem.id === item.id
+              ? {
+                  ...historyItem,
+                  undoError: "Undo did not complete. Retry to safely recover the result.",
+                }
+              : historyItem,
+          ),
+        );
         beep("error");
         haptic("error");
       }

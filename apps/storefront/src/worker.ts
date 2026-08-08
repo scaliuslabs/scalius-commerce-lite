@@ -8,7 +8,7 @@ import {
   normalizePublicStorefrontCacheTags,
 } from "./lib/public-worker-cache";
 
-export class PublicStorefront extends WorkerEntrypoint<Env> {
+export class CachedPublicStorefront extends WorkerEntrypoint<Env> {
   async fetch(request: Request): Promise<Response> {
     const policy = getPublicStorefrontCachePolicy(request);
     if (!policy) {
@@ -44,7 +44,9 @@ export default class StorefrontGateway extends WorkerEntrypoint<Env> {
     const cacheRequest = policy.canonicalUrl === request.url
       ? request
       : new Request(policy.canonicalUrl, request);
-    const response = await this.ctx.exports.PublicStorefront.fetch(cacheRequest);
+    const response = await this.ctx.exports.CachedPublicStorefront.fetch(
+      cacheRequest,
+    );
     return exposePublicStorefrontResponse(response);
   }
 }

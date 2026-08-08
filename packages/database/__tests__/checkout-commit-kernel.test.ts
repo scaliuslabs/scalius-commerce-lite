@@ -7,6 +7,7 @@ import {
   buildCheckoutReservationLaneSnapshotStatement,
   buildEnsureCheckoutReservationLanesStatement,
   buildExistingCheckoutIdentityStatement,
+  buildRebalanceCheckoutReservationLanesStatements,
   type CheckoutCommittedOrderRow,
   type PortableSqlStatement,
   type PreparedCheckoutCommit,
@@ -253,6 +254,41 @@ describe("checkout aggregate commit kernel", () => {
       }),
     ]);
     expect(rows.reduce((sum, row) => sum + row.capacity, 0)).toBe(8);
+  });
+
+  it("rebalances only coordinated capacity while legacy reservations remain", () => {
+    executeRun(database, buildEnsureCheckoutReservationLanesStatement(["variant_hot"]));
+    const statements = buildRebalanceCheckoutReservationLanesStatements([{
+      variantId: "variant_hot",
+      targetLane: 0,
+      sourceStockVersion: 1,
+      lanes: [
+        { capacity: 4, reservedQuantity: 0, laneVersion: 0 },
+        { capacity: 4, reservedQuantity: 0, laneVersion: 0 },
+      ],
+    }]);
+
+    database.exec("BEGIN IMMEDIATE");
+    try {
+      for (const statement of statements) {
+        if (/\bSELECT CASE\b/i.test(statement.sql)) executeAll(database, statement);
+        else executeRun(database, statement);
+      }
+      database.exec("COMMIT");
+    } catch (error) {
+      database.exec("ROLLBACK");
+      throw error;
+    }
+
+    expect(database.prepare(`
+      SELECT lane, capacity, reserved_quantity AS reservedQuantity
+      FROM inventory_reservation_lanes
+      WHERE variant_id = 'variant_hot' AND pool = 'regular'
+      ORDER BY lane
+    `).all()).toEqual([
+      { lane: 0, capacity: 8, reservedQuantity: 0 },
+      { lane: 1, capacity: 0, reservedQuantity: 0 },
+    ]);
   });
 
   it("rejects a stale economic authority snapshot before writing the order or inventory", () => {

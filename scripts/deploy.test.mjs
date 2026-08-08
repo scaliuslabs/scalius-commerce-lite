@@ -11,6 +11,7 @@ import {
   parseStorefrontBuildId,
   sampleApiReadiness,
   resolveDeploymentDatabaseProvider,
+  verifyPostDeployTarget,
   warmStorefrontPath,
 } from "./deploy.mjs";
 
@@ -96,6 +97,21 @@ describe("deploy API readiness sampling", () => {
       sleepImpl: async () => undefined,
     })).rejects.toThrow("1/2 ready");
   });
+
+  it("does not treat an empty readiness dependency set as ready", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      success: true,
+      status: "ready",
+      checks: {},
+    }), { status: 200 }));
+
+    await expect(sampleApiReadiness("https://api.example.test", {
+      sampleCount: 2,
+      delayMs: 0,
+      fetchImpl,
+      sleepImpl: async () => undefined,
+    })).rejects.toThrow("0/2 ready");
+  });
 });
 
 describe("deploy target wiring", () => {
@@ -135,6 +151,19 @@ describe("deploy target wiring", () => {
     expect(command.cmd).toContain("exec wrangler deploy");
     expect(command.label).toBe("Deploy Ops Monitor Worker");
     expect(command.cwd).toMatch(/apps\/ops-monitor$/);
+  });
+
+  it("proves the deployed ops-monitor version after Wrangler returns", async () => {
+    const verifyLatestWorkerDeploymentImpl = vi.fn();
+
+    await verifyPostDeployTarget("ops-monitor", null, null, {
+      verifyLatestWorkerDeploymentImpl,
+    });
+
+    expect(verifyLatestWorkerDeploymentImpl).toHaveBeenCalledWith(
+      expect.stringMatching(/apps\/ops-monitor$/),
+      "Ops Monitor Worker",
+    );
   });
 
   it("passes an explicit provider-specific Wrangler config only to the API deploy", () => {

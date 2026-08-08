@@ -83,6 +83,8 @@ describe("account payment recovery", () => {
     expect(normalizeHostedGatewayUrl("http://localhost:8787/pay")).toBe(
       "http://localhost:8787/pay",
     );
+    expect(normalizeHostedGatewayUrl("http://gateway.example/pay")).toBeNull();
+    expect(normalizeHostedGatewayUrl("https://user:pass@gateway.example/pay")).toBeNull();
     expect(normalizeHostedGatewayUrl("/checkout")).toBeNull();
     expect(normalizeHostedGatewayUrl("javascript:alert(1)")).toBeNull();
     expect(normalizeHostedGatewayUrl("")).toBeNull();

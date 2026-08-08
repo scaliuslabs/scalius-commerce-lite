@@ -140,7 +140,7 @@ describe("checkout SQL transport", () => {
     });
   });
 
-  it("uses one read-committed Neon HTTP transaction with provider-owned limits", async () => {
+  it("uses one serializable Neon HTTP transaction with provider-owned limits", async () => {
     const emptyResult: PostgresFullResult = { rows: [], fields: [] };
     const query = vi.fn(() => Promise.resolve(emptyResult));
     const transaction = vi.fn(async (queries: PromiseLike<PostgresFullResult>[]) =>
@@ -168,7 +168,7 @@ describe("checkout SQL transport", () => {
     expect(transaction).toHaveBeenCalledWith(expect.any(Array), {
       arrayMode: true,
       fullResults: true,
-      isolationLevel: "ReadCommitted",
+      isolationLevel: "Serializable",
       readOnly: false,
     });
   });

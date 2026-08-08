@@ -1,4 +1,4 @@
-import { useMemo, useCallback } from "react";
+import { useMemo, useCallback, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import type { Row } from "@tanstack/react-table";
 import { Button } from "~/components/ui/button";
@@ -31,6 +31,7 @@ import {
 import { usePermissions } from "~/contexts/PermissionContext";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { DiscountMobileCard } from "~/components/admin/discount/DiscountMobileCard";
+import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 
 const baseSearchValidator = createListSearchValidator(
   ["code", "type", "value", "startDate", "endDate", "createdAt", "updatedAt"] as const,
@@ -92,6 +93,10 @@ function DiscountsPage() {
   const navigate = useNavigate();
   const { symbol } = useCurrency();
   const { hasPermission } = usePermissions();
+  const canCreate = hasPermission(ADMIN_PERMISSIONS.DISCOUNTS_CREATE);
+  const canEdit = hasPermission(ADMIN_PERMISSIONS.DISCOUNTS_EDIT);
+  const canDelete = hasPermission(ADMIN_PERMISSIONS.DISCOUNTS_DELETE);
+  const canRestore = canEdit;
   const canToggleStatus = hasPermission(
     ADMIN_PERMISSIONS.DISCOUNTS_TOGGLE_STATUS,
   );
@@ -103,45 +108,58 @@ function DiscountsPage() {
   const restoreMutation = useRestoreDiscount();
   const toggleStatusMutation = useToggleDiscountStatus();
   const bulkDeleteMutation = useBulkDeleteDiscounts();
+  const [deleteRequest, setDeleteRequest] = useState<{
+    ids: string[];
+    permanent: boolean;
+  } | null>(null);
+  const isDeletePending =
+    deleteMutation.isPending ||
+    permanentDeleteMutation.isPending ||
+    bulkDeleteMutation.isPending;
 
   // Column action callbacks
   const handleEdit = useCallback(
     (id: string) => {
+      if (!canEdit) return;
       void navigate({ to: "/admin/discounts/$discountId/edit", params: { discountId: id } });
     },
-    [navigate],
+    [canEdit, navigate],
   );
 
   const handleDuplicate = useCallback(
     (id: string) => {
+      if (!canCreate) return;
       void navigate({
         to: "/admin/discounts/$discountId/edit",
         params: { discountId: id },
         search: { duplicate: true } as Record<string, unknown>,
       });
     },
-    [navigate],
+    [canCreate, navigate],
   );
 
   const handleDelete = useCallback(
     (id: string) => {
-      deleteMutation.mutate(id);
+      if (!canDelete) return;
+      setDeleteRequest({ ids: [id], permanent: false });
     },
-    [deleteMutation],
+    [canDelete],
   );
 
   const handleRestore = useCallback(
     (id: string) => {
+      if (!canRestore) return;
       restoreMutation.mutate(id);
     },
-    [restoreMutation],
+    [canRestore, restoreMutation],
   );
 
   const handlePermanentDelete = useCallback(
     (id: string) => {
-      permanentDeleteMutation.mutate(id);
+      if (!canDelete) return;
+      setDeleteRequest({ ids: [id], permanent: true });
     },
-    [permanentDeleteMutation],
+    [canDelete],
   );
 
   const handleToggleStatus = useCallback(
@@ -157,6 +175,10 @@ function DiscountsPage() {
       getDiscountColumns({
         showTrashed,
         symbol,
+        canCreate,
+        canEdit,
+        canDelete,
+        canRestore,
         canToggleStatus,
         onEdit: handleEdit,
         onDuplicate: handleDuplicate,
@@ -168,6 +190,10 @@ function DiscountsPage() {
     [
       showTrashed,
       symbol,
+      canCreate,
+      canEdit,
+      canDelete,
+      canRestore,
       canToggleStatus,
       handleEdit,
       handleDuplicate,
@@ -251,6 +277,7 @@ function DiscountsPage() {
       currentOrder: search.order,
       onPaginationChange,
       onSortingChange,
+      enableRowSelection: canDelete,
     });
 
   const mobileCardRenderer = useCallback(
@@ -262,6 +289,10 @@ function DiscountsPage() {
           selected={row.getIsSelected()}
           showTrashed={showTrashed}
           symbol={symbol}
+          canCreate={canCreate}
+          canEdit={canEdit}
+          canDelete={canDelete}
+          canRestore={canRestore}
           canToggleStatus={canToggleStatus}
           onSelectedChange={(selected) => row.toggleSelected(selected)}
           onEdit={() => handleEdit(discount.id)}
@@ -278,6 +309,10 @@ function DiscountsPage() {
       );
     }, [
       canToggleStatus,
+      canCreate,
+      canEdit,
+      canDelete,
+      canRestore,
       handleDelete,
       handleDuplicate,
       handleEdit,
@@ -291,12 +326,44 @@ function DiscountsPage() {
 
   // Bulk action handlers
   const handleBulkDelete = useCallback(() => {
-    if (selectedIds.length === 0) return;
-    bulkDeleteMutation.mutate(
-      { discountIds: selectedIds, permanent: showTrashed },
-      { onSuccess: clearSelection },
-    );
-  }, [selectedIds, showTrashed, bulkDeleteMutation, clearSelection]);
+    if (!canDelete || selectedIds.length === 0) return;
+    setDeleteRequest({ ids: [...selectedIds], permanent: showTrashed });
+  }, [canDelete, selectedIds, showTrashed]);
+
+  const handleConfirmDelete = useCallback(() => {
+    if (!deleteRequest || deleteRequest.ids.length === 0 || !canDelete) return;
+    const close = () => setDeleteRequest(null);
+
+    if (deleteRequest.ids.length > 1) {
+      bulkDeleteMutation.mutate(
+        {
+          discountIds: deleteRequest.ids,
+          permanent: deleteRequest.permanent,
+        },
+        {
+          onSuccess: () => {
+            clearSelection();
+            close();
+          },
+        },
+      );
+      return;
+    }
+
+    const id = deleteRequest.ids[0]!;
+    if (deleteRequest.permanent) {
+      permanentDeleteMutation.mutate(id, { onSuccess: close });
+    } else {
+      deleteMutation.mutate(id, { onSuccess: close });
+    }
+  }, [
+    bulkDeleteMutation,
+    canDelete,
+    clearSelection,
+    deleteMutation,
+    deleteRequest,
+    permanentDeleteMutation,
+  ]);
 
   // Toolbar
   const toolbar = (
@@ -306,7 +373,7 @@ function DiscountsPage() {
       selectedCount={selectedIds.length}
       activeType={search.type || null}
       onTypeFilterChange={onTypeFilterChange}
-      bulkActions={
+      bulkActions={canDelete ? (
         <Button
           variant={showTrashed ? "destructive" : "outline"}
           size="sm"
@@ -322,7 +389,7 @@ function DiscountsPage() {
             ? `Delete (${selectedIds.length})`
             : `Trash (${selectedIds.length})`}
         </Button>
-      }
+      ) : undefined}
       actions={
         <div className="flex items-center gap-2">
           <Link
@@ -343,7 +410,7 @@ function DiscountsPage() {
               )}
             </Button>
           </Link>
-          {!showTrashed && (
+          {!showTrashed && canCreate && (
             <Button
               onClick={() =>
                 void navigate({ to: "/admin/discounts/new" })
@@ -389,7 +456,7 @@ function DiscountsPage() {
                 ? "Deleted discounts will appear here."
                 : "Create your first discount to get started.",
           action:
-            !showTrashed && !search.search ? (
+            !showTrashed && canCreate && !search.search ? (
               <Button
                 onClick={() =>
                   void navigate({ to: "/admin/discounts/new" })
@@ -400,6 +467,23 @@ function DiscountsPage() {
               </Button>
             ) : undefined,
         }}
+      />
+
+      <ConfirmDialog
+        open={deleteRequest !== null}
+        onOpenChange={(open) => {
+          if (!open && !isDeletePending) setDeleteRequest(null);
+        }}
+        title={deleteRequest?.permanent
+          ? `Delete ${deleteRequest.ids.length === 1 ? "discount" : `${deleteRequest.ids.length} discounts`} permanently?`
+          : `Move ${deleteRequest?.ids.length === 1 ? "discount" : `${deleteRequest?.ids.length ?? 0} discounts`} to trash?`}
+        description={deleteRequest?.permanent
+          ? "This cannot be undone. The discount definition will be removed permanently."
+          : "The discount will stop applying and can be restored later."}
+        confirmLabel={deleteRequest?.permanent ? "Delete permanently" : "Move to trash"}
+        loadingLabel={deleteRequest?.permanent ? "Deleting…" : "Moving…"}
+        isLoading={isDeletePending}
+        onConfirm={handleConfirmDelete}
       />
     </div>
   );

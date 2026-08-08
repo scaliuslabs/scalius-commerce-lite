@@ -240,6 +240,27 @@ function createDbMock(readResultBatches: unknown[][], validationProducts: Produc
   } as unknown as Database;
 }
 
+it("rejects unbounded storefront carts before database reads", async () => {
+  const db = { select: vi.fn(), batch: vi.fn() } as unknown as Database;
+  const item = createOrderInput().items[0]!;
+
+  await expect(createStorefrontOrder(
+    db,
+    createOrderInput({
+      items: Array.from({ length: 100 }, (_, index) => ({
+        ...item,
+        productId: `product_${index}`,
+        variantId: `variant_${index}`,
+      })),
+    }),
+    "https://shop.example.com/api/v1/orders",
+    vi.fn(),
+    vi.fn(),
+  )).rejects.toThrow("at most 99 line items");
+  expect(db.select).not.toHaveBeenCalled();
+  expect(db.batch).not.toHaveBeenCalled();
+});
+
 async function placeOrder({
   inputOverrides,
   customerIdentity,

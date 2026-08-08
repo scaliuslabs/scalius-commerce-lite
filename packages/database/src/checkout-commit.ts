@@ -894,7 +894,8 @@ export function buildRebalanceCheckoutReservationLanesStatements(
              OR lane1.source_stock_version IS NOT request.source_stock_version
              OR request.new_lane0_capacity < request.lane0_reserved
              OR request.new_lane1_capacity < request.lane1_reserved
-             OR request.new_lane0_capacity + request.new_lane1_capacity IS NOT variant.stock
+             OR request.new_lane0_capacity + request.new_lane1_capacity
+                IS NOT request.lane0_capacity + request.lane1_capacity
         )
         THEN 1
         ELSE json_extract('{}', 'CHECKOUT_RESERVATION_REBALANCE_PRECONDITION_FAILED')

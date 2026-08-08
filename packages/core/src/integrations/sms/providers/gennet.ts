@@ -3,7 +3,7 @@
 // API docs: <domain>/api/v3/ — account-specific domain, api_token auth, JSON POST.
 
 import type { SmsProvider, SendSmsOptions, SendSmsResult } from "../provider";
-import { classifySmsProviderFailure } from "../retryability";
+import { classifySmsProviderFailure, sanitizeSmsProviderDiagnostic } from "../retryability";
 
 export interface GennetConfig {
   apiToken: string;
@@ -20,6 +20,20 @@ export class GennetProvider implements SmsProvider {
     if (!this.config.apiToken) return "Gennet API token is required";
     if (!this.config.baseUrl) return "Gennet base URL is required";
     if (!this.config.sid) return "Gennet SID (sender ID) is required";
+    try {
+      const parsed = new URL(this.config.baseUrl);
+      if (
+        parsed.protocol !== "https:" ||
+        parsed.username ||
+        parsed.password ||
+        parsed.search ||
+        parsed.hash
+      ) {
+        return "Gennet base URL must be an absolute HTTPS URL without credentials, query parameters, or a fragment";
+      }
+    } catch {
+      return "Gennet base URL must be a valid absolute HTTPS URL";
+    }
     return null;
   }
 
@@ -61,17 +75,17 @@ export class GennetProvider implements SmsProvider {
     } catch {
       return {
         success: false,
-        rawStatus: `HTTP ${res.status}: ${text.slice(0, 200)}`,
+        rawStatus: `HTTP ${res.status}: unreadable provider response`,
         retryable: classifySmsProviderFailure(undefined, res.status),
       };
     }
 
     // Duplicate csms_id (4023) means already sent — treat as success on retry
-    if (json.status === "SUCCESS" && json.status_code === 200) {
+    if (res.ok && json.status === "SUCCESS" && json.status_code === 200) {
       const ref = json.smsinfo?.[0]?.reference_id ?? csmsId;
       return { success: true, providerRef: ref, rawStatus: "SUCCESS" };
     }
-    if (json.status_code === 4023) {
+    if (res.ok && json.status_code === 4023) {
       return {
         success: true,
         providerRef: csmsId,
@@ -81,8 +95,8 @@ export class GennetProvider implements SmsProvider {
     const rawStatus = `${json.status_code}: ${json.error_message}`;
     return {
       success: false,
-      rawStatus,
-      retryable: classifySmsProviderFailure(rawStatus),
+      rawStatus: sanitizeSmsProviderDiagnostic(rawStatus),
+      retryable: classifySmsProviderFailure(rawStatus, res.ok ? undefined : res.status),
     };
   }
 }

@@ -1,24 +1,8 @@
+import { useEffect, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { ScannerApp } from "~/components/admin/scanner";
-import {
-  normalizeOptionalSearchString,
-  type SearchValidatorInput,
-} from "~/lib/list-helpers";
-
-type ScannerSearchParams = {
-  token?: string;
-};
-
-function validateScannerSearch(
-  search: SearchValidatorInput<ScannerSearchParams>,
-): ScannerSearchParams {
-  return {
-    token: normalizeOptionalSearchString(search.token),
-  };
-}
 
 export const Route = createFileRoute("/scanner")({
-  validateSearch: validateScannerSearch,
   head: () => ({
     meta: [
       { charSet: "utf-8" },
@@ -36,12 +20,30 @@ export const Route = createFileRoute("/scanner")({
 });
 
 function ScannerPage() {
-  const { token } = Route.useSearch();
+  const [token, setToken] = useState<string | null>(null);
+  const fragmentReadRef = useRef(false);
+
+  useEffect(() => {
+    if (fragmentReadRef.current) return;
+    fragmentReadRef.current = true;
+
+    const fragment = new URLSearchParams(window.location.hash.slice(1));
+    const scannerToken = fragment.get("token") ?? "";
+
+    // Claim proofs live only in the fragment, which is not sent to the server
+    // or in Referer headers. Scrub it before exchanging the proof.
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}${window.location.search}`,
+    );
+    setToken(scannerToken);
+  }, []);
 
   return (
     <div className="dark bg-background text-foreground min-h-screen overflow-hidden">
       <div id="scanner-root">
-        <ScannerApp token={token || ""} />
+        <ScannerApp token={token} />
       </div>
     </div>
   );

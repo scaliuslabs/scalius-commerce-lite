@@ -41,6 +41,12 @@ function readyOpsMonitorConfig() {
         allowed_sender_addresses: ["ops-alerts@example.test"],
       },
     ],
+    queues: {
+      producers: [
+        { binding: "PAYMENT_EVENTS_QUEUE", queue: "payment-events" },
+        { binding: "PAYMENT_EVENTS_DLQ", queue: "payment-events-dlq" },
+      ],
+    },
     triggers: { crons: ["*/2 * * * *"] },
     vars: {
       ALERT_EMAIL_FROM: "ops-alerts@example.test",
@@ -228,6 +234,19 @@ describe("ops-check config helpers", () => {
         expect.stringContaining("KV OPS_MONITOR_STATE"),
         expect.stringContaining("send_email ALERT_EMAIL"),
       ]),
+    });
+  });
+
+  it("requires ops-monitor queue metrics bindings to match the API topology", () => {
+    const config = readyOpsMonitorConfig();
+    config.queues.producers.pop();
+
+    expect(evaluateOpsMonitorAlertConfig(config, {
+      expectedQueueNames: ["payment-events", "payment-events-dlq"],
+    })).toMatchObject({
+      ok: false,
+      missingQueueNames: ["payment-events-dlq"],
+      errors: [expect.stringContaining("missing API queue metrics bindings")],
     });
   });
 });

@@ -154,21 +154,14 @@ export class SteadfastProvider implements DeliveryProviderInterface {
         try {
           responseData = JSON.parse(responseText);
         } catch {
-          // If it's an HTML error page from Laravel, try to extract the error message
-          let errorMessage = "Invalid JSON response";
-          if (responseText.includes("<!DOCTYPE html>")) {
-            const titleMatch = responseText.match(/<title>(.*?)<\/title>/);
-            const messageMatch = responseText.match(/"message"\s*:\s*"([^"]+)"/); // Sometimes embedded in JS
-            if (messageMatch && messageMatch[1]) {
-              errorMessage = `Server Error: ${messageMatch[1]}`;
-            } else if (titleMatch && titleMatch[1]) {
-              errorMessage = `HTML Server Error: ${titleMatch[1]}`;
-            }
-          }
-          console.error(`[SteadfastAPI] Shipment failed. HTML Error:`, responseText);
+          console.error("[SteadfastAPI] Shipment returned an unreadable response", {
+            status: response.status,
+            contentType: response.headers.get("content-type"),
+            responseLength: responseText.length,
+          });
           return {
             success: false,
-            message: `${errorMessage}`,
+            message: `Steadfast returned an unreadable response (HTTP ${response.status})`,
           };
         }
       } catch {
@@ -195,19 +188,15 @@ export class SteadfastProvider implements DeliveryProviderInterface {
           },
         };
       } else {
-        // Include field-level validation errors from Steadfast when available
-        let errorDetail = responseData.message || "Unknown error";
-        if (responseData.errors && typeof responseData.errors === "object") {
-          const fieldErrors = Object.entries(responseData.errors)
-            .map(([field, msgs]) => `${field}: ${Array.isArray(msgs) ? msgs.join(", ") : msgs}`)
-            .join("; ");
-          if (fieldErrors) {
-            errorDetail = `${errorDetail} — ${fieldErrors}`;
-          }
-        }
+        // Provider validation bodies may echo recipient/order values. Surface
+        // only field names and status; never pass raw provider payloads into
+        // logs or persisted shipment diagnostics.
+        const fields = responseData.errors && typeof responseData.errors === "object"
+          ? Object.keys(responseData.errors).slice(0, 12)
+          : [];
         return {
           success: false,
-          message: `Steadfast: ${errorDetail}`,
+          message: `Steadfast rejected the shipment (HTTP ${response.status})${fields.length > 0 ? `; check: ${fields.join(", ")}` : ""}`,
         };
       }
     } catch (error: unknown) {

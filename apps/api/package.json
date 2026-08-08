@@ -2,6 +2,7 @@
   "name": "@scalius/api",
   "version": "1.0.0",
   "private": true,
+  "license": "AGPL-3.0-only",
   "type": "module",
   "scripts": {
     "dev": "wrangler dev --config wrangler.local.jsonc --local --port 8787 --persist-to ${SCALIUS_WRANGLER_STATE:-../../.wrangler/state} --show-interactive-dev-session=false",

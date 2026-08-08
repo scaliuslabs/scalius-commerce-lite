@@ -73,7 +73,7 @@ Injects Cloudflare Worker runtime bindings into AsyncLocalStorage for the reques
 ### 2. Response Policy Middleware (`responsePolicyMiddleware`)
 
 The default Worker entrypoint is an uncached safety gateway. It delegates only
-allowlisted anonymous `GET`/`HEAD` requests to the native `PublicStorefront`
+allowlisted anonymous `GET`/`HEAD` requests to the native `CachedPublicStorefront`
 entrypoint. The public entrypoint owns bounded route TTLs and semantic tags.
 Browser HTML is `no-store`; discovery XML/text is public but must revalidate.
 Requests with authorization, cookies, variant-selection
@@ -101,10 +101,9 @@ version's cached HTML. Keep `cross_version_cache` disabled.
 ## Caching Architecture
 
 - `StorefrontGateway` classifies public requests before cache lookup.
-- `PublicStorefront` renders eligible responses and attaches `Cache-Tag` plus
+- `CachedPublicStorefront` renders eligible responses and attaches `Cache-Tag` plus
   a route-owned `Cloudflare-CDN-Cache-Control` directive. Availability-bearing
-  HTML/feed routes use five seconds; mutation-purged discovery routes use one
-  day.
+  HTML/feed routes use one hour; mutation-purged discovery routes use one day.
 - `StorefrontGateway` removes those two internal directives after the native
   entrypoint lookup so downstream caches cannot reinterpret them. The browser
   still receives `no-store` HTML, while `X-Cache-Status` and
@@ -130,18 +129,18 @@ version's cached HTML. Keep `cross_version_cache` disabled.
 
 When the API triggers `/api/purge-cache` with `Authorization: Bearer
 PURGE_TOKEN`, the storefront validates and deduplicates at most 30 known domain
-groups, then awaits `PublicStorefront.purgeGroups()`. Unknown groups are ignored
+groups, then awaits `CachedPublicStorefront.purgeGroups()`. Unknown groups are ignored
 by the cache owner. `GET` and query-string tokens are rejected. A failed purge
 is observable but never rolls back an already committed database mutation; the
-five-second availability TTL is the high-write correctness bound, while the
-one-day content TTL is the final backstop for low-frequency mutation-purged
-routes. Normal successful merchant writes purge their semantic tags immediately.
+one-hour availability TTL is the failure-only correctness backstop, while the
+one-day content TTL is the final backstop for low-frequency mutation-purged routes.
+Normal successful merchant writes purge their semantic tags immediately.
 
 ### Cache TTL Constants
 
 | Constant | Seconds | Purpose |
 |----------|---------|---------|
-| `CACHE_TTL.AVAILABILITY` | 5 | Maximum cached buyer-visible price/availability staleness without per-order invalidation |
+| `CACHE_TTL.AVAILABILITY` | 3,600 | Failure-only backstop for buyer-visible price and availability; writes normally purge immediately |
 | `CACHE_TTL.LONG` | 86,400 | Edge residency for low-frequency routes whose merchant writes await semantic purges |
 
 `withEdgeCache()` is request-only deduplication. Persistent public TTL policy is

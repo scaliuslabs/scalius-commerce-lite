@@ -56,8 +56,6 @@ export const POST: APIRoute = async ({ request }) => {
             return jsonError("Private receipt proof is missing for this order. Please reopen the receipt from this browser and try again.", 400);
         }
 
-        console.log("[checkout/polar-session] Requesting session for order:", orderId);
-
         const res = await fetchWithRetry(
             createApiUrl("/payment/polar/session"),
             {
@@ -79,18 +77,19 @@ export const POST: APIRoute = async ({ request }) => {
 
         if (!res.ok) {
             const errMsg = getPaymentSessionApiErrorMessage(json, "Payment session creation failed");
-            console.error("[checkout/polar-session] Backend error:", res.status, errMsg);
+            console.error("[checkout/polar-session] Backend error status:", res.status);
             return new Response(JSON.stringify({ error: errMsg }), {
                 status: res.status,
                 headers: { "Content-Type": "application/json" },
             });
         }
 
-        const unwrapped = json.data || json;
-        console.log("[checkout/polar-session] Session response received, gatewayUrl present:", !!(unwrapped as Record<string, unknown>).gatewayUrl);
         return paymentSessionProxySuccessResponse(res, json);
     } catch (err: unknown) {
-        console.error("[checkout/polar-session] Proxy error:", err);
+        console.error(
+            "[checkout/polar-session] Proxy error:",
+            err instanceof Error ? err.name : "unknown",
+        );
         return paymentSessionProxyErrorResponse(err);
     }
 };

@@ -13,7 +13,9 @@ function context(request: Request) {
     url: new URL(request.url),
     locals: {
       cfContext: {
-        exports: { PublicStorefront: { purgeGroups: mocks.purgeGroups } },
+        exports: {
+          CachedPublicStorefront: { purgeGroups: mocks.purgeGroups },
+        },
       },
     },
   } as never;

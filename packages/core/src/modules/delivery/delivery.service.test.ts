@@ -166,10 +166,10 @@ const TEST_FINGERPRINT_KEY = Buffer.alloc(32, 7).toString("base64");
 
 const completePathaoCredentials = {
   baseUrl: "https://api-hermes.pathao.com",
-  clientId: "client",
-  clientSecret: "secret",
+  clientId: "pathao-client-4821",
+  clientSecret: "pathao-secret-9417",
   username: "merchant",
-  password: "pass",
+  password: "merchant-password-7813",
 };
 
 const completePathaoConfig = { storeId: "store_1" };
@@ -361,14 +361,33 @@ describe("saveDeliveryProvider credential storage", () => {
       name: "Pathao",
       type: "pathao",
       isActive: true,
-      credentials: { clientSecret: "secret", password: "pass" },
-      config: { storeId: "store_1" },
+      credentials: completePathaoCredentials,
+      config: completePathaoConfig,
     }, key);
 
     expect(writes).toHaveLength(1);
     expect(writes[0]?.credentials).toEqual(expect.any(String));
-    expect(writes[0]?.credentials).not.toBe(JSON.stringify({ clientSecret: "secret", password: "pass" }));
+    expect(writes[0]?.credentials).not.toBe(JSON.stringify(completePathaoCredentials));
     expect(writes[0]?.credentials).toContain(":");
+  });
+
+  it("rejects active placeholder credentials before persistence", async () => {
+    const { db, writes } = createSaveProviderDb();
+    const key = Buffer.alloc(32, 9).toString("base64");
+
+    await expect(saveDeliveryProvider(db as never, {
+      id: "provider_pathao",
+      name: "Pathao",
+      type: "pathao",
+      isActive: true,
+      credentials: {
+        ...completePathaoCredentials,
+        clientSecret: "dummy",
+      },
+      config: completePathaoConfig,
+    }, key)).rejects.toThrow("cannot be activated");
+
+    expect(writes).toHaveLength(0);
   });
 
   it("preserves successful test proof when the saved setup fingerprint still matches", async () => {

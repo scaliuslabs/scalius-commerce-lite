@@ -207,6 +207,18 @@ describe("UCP storefront routes", () => {
     expect(mocks.getFeedProducts).not.toHaveBeenCalled();
   });
 
+  it("rejects oversized catalog requests before parsing or backend work", async () => {
+    const response = await searchCatalog({
+      request: request(
+        { query: "x".repeat(70 * 1024) },
+        { "UCP-Agent": 'profile="https://agent.example.test/.well-known/ucp"' },
+      ),
+    } as never);
+
+    expect(response.status).toBe(400);
+    expect(mocks.getFeedProducts).not.toHaveBeenCalled();
+  });
+
   it("rejects malformed UCP-Agent headers before catalog work", async () => {
     const response = await searchCatalog({
       request: request(

@@ -8,6 +8,7 @@ import { safeBatch, type Database } from "@scalius/database/client";
 import type { BatchItem } from "drizzle-orm/batch";
 import { recordMovement } from "./movements";
 import { checkAndAlertLowStock } from "./alerts";
+import { mapWithBoundedConcurrency } from "../../utils/bounded-concurrency";
 import type { ReservationEntry, StockOperationResult } from "./types";
 import { validatePositiveQuantity } from "./validation";
 import {
@@ -833,11 +834,16 @@ function getReleasePreviousStock(variant: ReleaseVariantState, pool: Reservation
 }
 
 async function alertLowStockAfterRelease(db: Database, entries: StrictReleaseEntry[]): Promise<void> {
-  await Promise.all(entries.map((entry) =>
-    checkAndAlertLowStock(db, entry.variantId).catch((err: unknown) => {
-      console.error(`[inventory/release] Low-stock alert refresh failed for variant ${entry.variantId}:`, err);
-    }),
-  ));
+  await mapWithBoundedConcurrency(entries, 4, async (entry) => {
+    try {
+      await checkAndAlertLowStock(db, entry.variantId);
+    } catch (err: unknown) {
+      console.error(
+        `[inventory/release] Low-stock alert refresh failed for variant ${entry.variantId}:`,
+        err instanceof Error ? err.message : String(err),
+      );
+    }
+  });
 }
 
 async function waitForStrictReleaseRetry(attempt: number): Promise<void> {

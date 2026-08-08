@@ -9,6 +9,8 @@ import {
 
 import { handleCreateScannerToken, handleExchangeScannerToken } from "./scanner-token";
 
+const SCANNER_CLAIM_TOKEN = "scanner-token-claim-1234567890";
+
 function createRequest() {
   return new Request("http://localhost:4323/api/scanner-token", {
     method: "POST",
@@ -22,6 +24,17 @@ function createCrossOriginCookieRequest() {
       Cookie: "better-auth.session_token=session.signature",
       Origin: "https://evil.example.test",
     },
+  });
+}
+
+function createExchangeRequest(origin = "https://dashboard.example.test") {
+  return new Request("https://dashboard.example.test/api/scanner-token", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Origin: origin,
+    },
+    body: JSON.stringify({ token: SCANNER_CLAIM_TOKEN }),
   });
 }
 
@@ -209,7 +222,7 @@ describe("handleExchangeScannerToken", () => {
     });
 
     const response = await handleExchangeScannerToken(
-      new Request("https://dashboard.example.test/api/scanner-token?token=scanner-token"),
+      createExchangeRequest(),
       {
         getEnv: () => ({ CACHE: kv, DB: {} as D1Database }),
         getDb: () => db as never,
@@ -220,9 +233,10 @@ describe("handleExchangeScannerToken", () => {
     );
 
     expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toContain("no-store");
     expect(response.headers.get("Set-Cookie")).toContain("scanner_sid=scanner-session-1");
     expect(consumeTokenClaim).toHaveBeenCalledWith(db, {
-      token: "scanner-token",
+      token: SCANNER_CLAIM_TOKEN,
       sessionId: "scanner-session-1",
       nowMs: 1_234,
     });
@@ -259,7 +273,7 @@ describe("handleExchangeScannerToken", () => {
     const responses = await Promise.all(
       Array.from({ length: 4 }, () =>
         handleExchangeScannerToken(
-          new Request("https://dashboard.example.test/api/scanner-token?token=scanner-token"),
+          createExchangeRequest(),
           {
             getEnv: () => ({ CACHE: kv, DB: {} as D1Database }),
             getDb: () => db as never,
@@ -275,6 +289,38 @@ describe("handleExchangeScannerToken", () => {
     expect(responses.filter((response) => response.status === 401)).toHaveLength(3);
     expect(responses.filter((response) => response.headers.has("Set-Cookie"))).toHaveLength(1);
     expect(kv.put).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects scanner claim proofs in request URLs before storage work", async () => {
+    const getEnv = vi.fn();
+    const response = await handleExchangeScannerToken(
+      new Request(
+        `https://dashboard.example.test/api/scanner-token?token=${SCANNER_CLAIM_TOKEN}`,
+      ),
+      { getEnv },
+    );
+
+    expect(response.status).toBe(400);
+    expect(await readJson(response)).toMatchObject({
+      success: false,
+      error: "Scanner tokens are not accepted in URLs",
+    });
+    expect(getEnv).not.toHaveBeenCalled();
+  });
+
+  it("rejects cross-origin scanner claim exchanges before storage work", async () => {
+    const getEnv = vi.fn();
+    const response = await handleExchangeScannerToken(
+      createExchangeRequest("https://evil.example.test"),
+      { getEnv },
+    );
+
+    expect(response.status).toBe(403);
+    expect(await readJson(response)).toMatchObject({
+      success: false,
+      error: "Cross-origin scanner exchange denied",
+    });
+    expect(getEnv).not.toHaveBeenCalled();
   });
 
   it("refreshes an existing scanner session when no token is supplied", async () => {

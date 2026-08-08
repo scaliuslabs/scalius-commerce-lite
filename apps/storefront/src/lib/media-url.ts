@@ -2,7 +2,7 @@
  * Storefront media URL resolution.
  *
  * Wraps @scalius/shared's pure resolveMediaUrl with the storefront's
- * runtime CDN base resolution (SSR: middleware-set module store,
+ * runtime CDN base resolution (SSR: request-local runtime context,
  * client: window.__CDN_DOMAIN__ injected by Layout.astro).
  */
 import { resolveMediaUrl as sharedResolveMediaUrl } from "@scalius/shared/media-url";
@@ -18,13 +18,6 @@ function normalizeCdnDomain(value: string | null | undefined): string {
   const raw = value?.trim();
   if (!raw) return "";
   return raw.replace(/^https?:\/\//, "").replace(/\/$/, "");
-}
-
-function readGlobalCdnDomain(): string {
-  return (
-    (globalThis as typeof globalThis & { __SCALIUS_CDN_DOMAIN__?: string })
-      .__SCALIUS_CDN_DOMAIN__ || ""
-  );
 }
 
 function readWindowCdnDomain(): string {
@@ -63,10 +56,9 @@ function readWindowBoolean(
 /**
  * Lazily resolve the CDN base URL (called per-use, not at module init).
  * Resolution order (SSR):
- * 1. getRuntimeCdnDomain() — module-level store set by middleware
- * 2. globalThis.__SCALIUS_CDN_DOMAIN__ — fallback set by middleware
+ * 1. getRuntimeCdnDomain() — request-local context set by middleware
  * Resolution order (Client):
- * 3. window.__CDN_DOMAIN__ — injected by Layout.astro
+ * 2. window.__CDN_DOMAIN__ — injected by Layout.astro
  *
  * All values come from Cloudflare Worker runtime env (wrangler.jsonc vars).
  * No build-time baking — .dev.vars and .env files do NOT affect this.
@@ -80,9 +72,6 @@ export function getCdnBase(): string {
     const domain = normalizeCdnDomain(getRuntimeCdnDomain());
     if (domain) return `https://${domain.replace(/^https?:\/\//, "")}`;
 
-    // Fallback: globalThis store set by middleware (survives across the isolate)
-    const globalDomain = normalizeCdnDomain(readGlobalCdnDomain());
-    if (globalDomain) return `https://${globalDomain}`;
   }
 
   // Client-side: injected by Layout.astro into window
@@ -105,7 +94,6 @@ export function getCdnHosts(): string[] {
   for (const source of [
     getRuntimeImageCdnBaseUrl(),
     getRuntimeCdnDomain(),
-    readGlobalCdnDomain(),
     readWindowString("__IMAGE_CDN_BASE_URL__"),
     readWindowCdnDomain(),
     ...getRuntimeImageCdnAllowedHosts(),

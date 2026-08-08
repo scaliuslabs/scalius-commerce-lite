@@ -254,19 +254,12 @@ export class PathaoProvider implements DeliveryProviderInterface {
             },
           };
         } else {
-          // Include field-level validation errors from Pathao when available
-          let errorDetail = responseData.message || "Unknown error";
-          if (responseData.errors && typeof responseData.errors === "object") {
-            const fieldErrors = Object.entries(responseData.errors)
-              .map(([field, msgs]) => `${field}: ${Array.isArray(msgs) ? msgs.join(", ") : msgs}`)
-              .join("; ");
-            if (fieldErrors) {
-              errorDetail = `${errorDetail} — ${fieldErrors}`;
-            }
-          }
+          const fields = responseData.errors && typeof responseData.errors === "object"
+            ? Object.keys(responseData.errors).slice(0, 12)
+            : [];
           return {
             success: false,
-            message: `Pathao: ${errorDetail}`,
+            message: `Pathao rejected the shipment (HTTP ${response.status})${fields.length > 0 ? `; check: ${fields.join(", ")}` : ""}`,
           };
         }
       } catch (parseError: unknown) {

@@ -88,6 +88,30 @@ describe("manual-order create idempotency", () => {
         }).success).toBe(false);
     });
 
+    it("bounds line count before constructing D1 writes", () => {
+        const item = orderInput(1).items[0]!;
+        const base = {
+            ...orderInput(1),
+            requestKey: crypto.randomUUID(),
+        };
+        expect(createOrderSchema.safeParse({
+            ...base,
+            items: Array.from({ length: 99 }, (_, index) => ({
+                ...item,
+                productId: `product_${index}`,
+                variantId: `variant_${index}`,
+            })),
+        }).success).toBe(true);
+        expect(createOrderSchema.safeParse({
+            ...base,
+            items: Array.from({ length: 100 }, (_, index) => ({
+                ...item,
+                productId: `product_${index}`,
+                variantId: `variant_${index}`,
+            })),
+        }).success).toBe(false);
+    });
+
     it("does not accept a browser-supplied unit price as create authority", () => {
         const parsed = createOrderSchema.parse({
             ...orderInput(1),

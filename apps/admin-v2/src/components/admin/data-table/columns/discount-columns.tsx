@@ -56,6 +56,10 @@ export interface DiscountItem {
 interface DiscountColumnOptions {
   showTrashed: boolean;
   symbol: string;
+  canCreate: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
+  canRestore: boolean;
   canToggleStatus: boolean;
   onEdit: (id: string) => void;
   onDuplicate: (id: string) => void;
@@ -102,7 +106,7 @@ function DiscountStatusCell({
 export function getDiscountColumns(
   opts: DiscountColumnOptions,
 ): ColumnDef<DiscountItem, unknown>[] {
-  return [
+  const columns: ColumnDef<DiscountItem, unknown>[] = [
     createSelectColumn<DiscountItem>({ getLabel: (r) => (r as DiscountItem).code }),
     {
       accessorKey: "code",
@@ -296,16 +300,27 @@ export function getDiscountColumns(
       enableSorting: false,
       size: 90,
     },
-    createActionsColumn<DiscountItem>({
+  ];
+
+  const hasRowActions = opts.showTrashed
+    ? opts.canRestore || opts.canDelete
+    : opts.canEdit || opts.canCreate || opts.canDelete || opts.canToggleStatus;
+
+  if (hasRowActions) {
+    columns.push(createActionsColumn<DiscountItem>({
       showTrashed: opts.showTrashed,
-      onEdit: (d) => opts.onEdit(d.id),
-      onDelete: (d) => opts.onDelete(d.id),
-      onRestore: (d) => opts.onRestore(d.id),
-      onPermanentDelete: (d) => opts.onPermanentDelete(d.id),
+      onEdit: opts.canEdit ? (d) => opts.onEdit(d.id) : undefined,
+      onDelete: opts.canDelete ? (d) => opts.onDelete(d.id) : undefined,
+      onRestore: opts.canRestore ? (d) => opts.onRestore(d.id) : undefined,
+      onPermanentDelete: opts.canDelete
+        ? (d) => opts.onPermanentDelete(d.id)
+        : undefined,
       getExtraActions: (d) =>
         !opts.showTrashed
           ? [
-              { label: "Duplicate", icon: Copy, onClick: () => opts.onDuplicate(d.id) },
+              ...(opts.canCreate
+                ? [{ label: "Duplicate", icon: Copy, onClick: () => opts.onDuplicate(d.id) }]
+                : []),
               ...(opts.canToggleStatus ? [{
                 label: d.isActive ? "Deactivate" : "Activate",
                 icon: d.isActive ? X : Check,
@@ -313,6 +328,8 @@ export function getDiscountColumns(
               }] : []),
             ]
           : undefined,
-    }),
-  ];
+    }));
+  }
+
+  return columns;
 }

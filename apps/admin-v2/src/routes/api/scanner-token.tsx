@@ -86,6 +86,10 @@ interface ExchangeScannerTokenDeps {
   now?: () => number;
 }
 
+interface ScannerExchangeBody {
+  token?: unknown;
+}
+
 function jsonResponse(
   data: Record<string, unknown>,
   status = 200,
@@ -93,6 +97,7 @@ function jsonResponse(
 ): Response {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
+    "Cache-Control": "private, no-store, max-age=0",
     ...extraHeaders,
   };
   return new Response(JSON.stringify(data), { status, headers });
@@ -101,6 +106,37 @@ function jsonResponse(
 function shouldUseSecureCookie(request: Request): boolean {
   const url = new URL(request.url);
   return url.protocol === "https:";
+}
+
+function isCrossOriginScannerExchange(request: Request): boolean {
+  const origin = request.headers.get("Origin");
+  if (!origin) return false;
+  try {
+    return new URL(origin).origin !== new URL(request.url).origin;
+  } catch {
+    return true;
+  }
+}
+
+async function readScannerExchangeBody(
+  request: Request,
+): Promise<ScannerExchangeBody | null> {
+  if (request.method.toUpperCase() !== "POST") return null;
+  try {
+    const body = await request.clone().json();
+    return typeof body === "object" && body !== null
+      ? body as ScannerExchangeBody
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+export async function isScannerTokenExchangeRequest(
+  request: Request,
+): Promise<boolean> {
+  const body = await readScannerExchangeBody(request);
+  return body !== null && Object.hasOwn(body, "token");
 }
 
 function canMintScannerToken(rbac: ScannerRbacContext): boolean {
@@ -253,7 +289,32 @@ export async function handleExchangeScannerToken(
   deps: ExchangeScannerTokenDeps = {},
 ): Promise<Response> {
   const url = new URL(request.url);
-  const token = url.searchParams.get("token");
+  if (url.searchParams.has("token")) {
+    return jsonResponse(
+      { success: false, error: "Scanner tokens are not accepted in URLs" },
+      400,
+    );
+  }
+
+  if (request.method.toUpperCase() === "POST" && isCrossOriginScannerExchange(request)) {
+    return jsonResponse(
+      { success: false, error: "Cross-origin scanner exchange denied" },
+      403,
+    );
+  }
+
+  const body = await readScannerExchangeBody(request);
+  const rawToken = body?.token;
+  if (
+    rawToken !== undefined &&
+    (typeof rawToken !== "string" ||
+      rawToken.length < 20 ||
+      rawToken.length > 128 ||
+      !/^[A-Za-z0-9_-]+$/.test(rawToken))
+  ) {
+    return jsonResponse({ success: false, error: "Scanner token is invalid" }, 400);
+  }
+  const token = typeof rawToken === "string" ? rawToken : null;
   const now = deps.now ? deps.now() : Date.now();
 
   const env = deps.getEnv ? await deps.getEnv() : await defaultGetEnv();
@@ -343,9 +404,13 @@ export const Route = createFileRoute("/api/scanner-token")({
   server: {
     handlers: {
       /**
-       * POST -- Generate scanner token. Requires admin session.
+       * POST -- Exchange a body-carried claim proof, or generate one for an
+       * authenticated inventory admin when no token field is present.
        */
       POST: async ({ request }) => {
+        if (await isScannerTokenExchangeRequest(request)) {
+          return handleExchangeScannerToken(request);
+        }
         return handleCreateScannerToken(request);
       },
 

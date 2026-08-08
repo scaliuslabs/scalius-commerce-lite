@@ -165,9 +165,8 @@ export function getPublicStorefrontCachePolicy(
   if (!canonicalCachePath) return null;
 
   return {
-    // Pass a canonical same-host Request to the cache-enabled entrypoint. Native
-    // Workers Caching then owns the complete URL plus Worker-version key without
-    // requiring the Enterprise-only cf.cacheKey override.
+    // Pass a canonical same-host Request to the cache-enabled entrypoint.
+    // Wrangler isolates the native cache by Worker version.
     canonicalUrl: new URL(canonicalCachePath, url.origin).toString(),
     edgeTtlSeconds: routePolicy.edgeTtlSeconds,
     tags: routePolicy.tags,

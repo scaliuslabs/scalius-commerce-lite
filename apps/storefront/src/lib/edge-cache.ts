@@ -1,21 +1,23 @@
 /**
- * Deduplicate identical backend reads within one Worker isolate while an SSR
- * render is in flight. Persistent public caching belongs to the native Worker
- * entrypoints; this helper never retains data after the fetch settles.
+ * Deduplicate identical backend reads within one SSR request. Persistent public
+ * caching belongs to the native Worker entrypoints; in-flight I/O must never be
+ * retained at module scope because Workers can serve concurrent requests from
+ * the same isolate.
  */
+
+import { apiContext } from "./api/context";
 
 interface EdgeCacheOptions {
   ttlSeconds?: number;
 }
-
-const inflight = new Map<string, Promise<unknown>>();
 
 export async function withEdgeCache<T>(
   key: string,
   fetcher: () => Promise<T | null>,
   _options: EdgeCacheOptions = {},
 ): Promise<T | null> {
-  const existing = inflight.get(key);
+  const inflight = apiContext.getStore()?.inflightReads;
+  const existing = inflight?.get(key);
   if (existing) return existing as Promise<T | null>;
 
   const request = fetcher()
@@ -24,9 +26,9 @@ export async function withEdgeCache<T>(
       return null;
     })
     .finally(() => {
-      inflight.delete(key);
+      inflight?.delete(key);
     });
-  inflight.set(key, request);
+  inflight?.set(key, request);
   return request;
 }
 

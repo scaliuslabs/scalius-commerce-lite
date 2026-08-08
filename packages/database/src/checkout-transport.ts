@@ -177,7 +177,7 @@ export function createCheckoutSqlTransport(
           {
             arrayMode: true,
             fullResults: true,
-            isolationLevel: "ReadCommitted",
+            isolationLevel: "Serializable",
             readOnly: false,
           },
         ));

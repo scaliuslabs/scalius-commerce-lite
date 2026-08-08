@@ -38,3 +38,14 @@ export function classifySmsProviderFailure(rawStatus: string | undefined, httpSt
   if (RETRYABLE_STATUS_PATTERNS.some((pattern) => pattern.test(status))) return true;
   return true;
 }
+
+export function sanitizeSmsProviderDiagnostic(rawStatus: string | undefined): string | undefined {
+  const sanitized = rawStatus
+    ?.replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[email]")
+    .replace(/\+?\d[\d\s().-]{8,}\d/g, "[phone]")
+    .replace(/((?:bearer|token|api[_ -]?key|secret))\s*[:=]\s*[^\s,;]+/gi, "$1=[redacted]")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 240);
+  return sanitized || undefined;
+}

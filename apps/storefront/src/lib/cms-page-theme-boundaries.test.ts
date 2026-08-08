@@ -1,13 +1,12 @@
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const cmsPageSource = readFileSync(
-  resolve(process.cwd(), "src/pages/[slug].astro"),
+  new URL("../pages/[slug].astro", import.meta.url),
   "utf8",
 );
 const productShortcodeSource = readFileSync(
-  resolve(process.cwd(), "src/components/ProductShortcode.tsx"),
+  new URL("../components/ProductShortcode.tsx", import.meta.url),
   "utf8",
 );
 

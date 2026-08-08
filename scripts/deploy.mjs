@@ -358,7 +358,9 @@ function isReadyzPayloadReady(status, payload) {
   }
 
   const checks = payload?.checks;
-  if (!checks || typeof checks !== "object") return false;
+  if (!checks || typeof checks !== "object" || Object.keys(checks).length === 0) {
+    return false;
+  }
   return Object.values(checks).every((check) => check?.status === "ok");
 }
 
@@ -745,20 +747,29 @@ function verifyLatestWorkerDeployment(cwd, label, configPath = null) {
   return deployedVersion.version_id;
 }
 
-async function verifyPostDeployTarget(
+export async function verifyPostDeployTarget(
   target,
   apiConfig,
   apiWranglerConfigPath = null,
   options = {},
 ) {
+  const verifyApiDeployImpl = options.verifyApiDeployImpl ?? verifyApiDeploy;
+  const verifyLatestWorkerDeploymentImpl =
+    options.verifyLatestWorkerDeploymentImpl ?? verifyLatestWorkerDeployment;
+  const verifyStorefrontDeployImpl =
+    options.verifyStorefrontDeployImpl ?? verifyStorefrontDeploy;
+
   if (target === "api") {
-    await verifyApiDeploy(apiConfig, apiWranglerConfigPath, options);
+    await verifyApiDeployImpl(apiConfig, apiWranglerConfigPath, options);
   }
   if (target === "admin") {
-    verifyLatestWorkerDeployment(adminV2Dir, "Admin V2 Worker");
+    verifyLatestWorkerDeploymentImpl(adminV2Dir, "Admin V2 Worker");
   }
   if (target === "storefront") {
-    await verifyStorefrontDeploy();
+    await verifyStorefrontDeployImpl();
+  }
+  if (target === "ops-monitor") {
+    verifyLatestWorkerDeploymentImpl(opsMonitorDir, "Ops Monitor Worker");
   }
 }
 

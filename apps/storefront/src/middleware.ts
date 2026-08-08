@@ -86,11 +86,6 @@ const apiContextMiddleware = defineMiddleware((_context, next) => {
     }
   }
 
-  if (cdnDomain) {
-    (globalThis as typeof globalThis & { __SCALIUS_CDN_DOMAIN__?: string })
-      .__SCALIUS_CDN_DOMAIN__ = cdnDomain;
-  }
-
   return apiContext.run(
     {
       BACKEND_API: env?.BACKEND_API as Fetcher | undefined,
@@ -99,6 +94,8 @@ const apiContextMiddleware = defineMiddleware((_context, next) => {
       CDN_DOMAIN_URL: cdnDomain,
       STOREFRONT_URL: env?.STOREFRONT_URL as string | undefined,
       API_TOKEN: env?.API_TOKEN as string | undefined,
+      inflightReads: new Map<string, Promise<unknown>>(),
+      apiJwt: { token: null, expiresAt: null, refresh: null },
     },
     next,
   );

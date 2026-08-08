@@ -269,7 +269,10 @@ export async function sendWhatsAppTemplateMessage(
   );
 
   if (!response.ok) {
-    const errorText = truncateProviderResponse(await response.text());
+    const errorText = summarizeWhatsAppErrorResponse(
+      await response.text(),
+      response.status,
+    );
     return {
       success: false,
       rawStatus: `HTTP ${response.status}`,
@@ -285,7 +288,11 @@ export async function sendWhatsAppTemplateMessage(
     return {
       success: false,
       rawStatus: "malformed_response",
-      rawResponse: truncateProviderResponse(responseText || "Missing WhatsApp message id"),
+      rawResponse: JSON.stringify({
+        status: response.status,
+        error: "missing_message_id",
+        responseLength: responseText.length,
+      }),
       retryable: true,
     };
   }
@@ -315,8 +322,34 @@ function parseWhatsAppResponse(responseText: string): WhatsAppMessageResponse | 
   }
 }
 
-function truncateProviderResponse(value: string): string {
-  return value.length > 1_000 ? `${value.slice(0, 1_000)}...` : value;
+function summarizeWhatsAppErrorResponse(value: string, status: number): string {
+  let providerError: Record<string, unknown> | undefined;
+  try {
+    const parsed = JSON.parse(value) as { error?: unknown };
+    if (parsed.error && typeof parsed.error === "object" && !Array.isArray(parsed.error)) {
+      providerError = parsed.error as Record<string, unknown>;
+    }
+  } catch {
+    providerError = undefined;
+  }
+
+  const message = typeof providerError?.message === "string"
+    ? providerError.message
+      .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[email]")
+      .replace(/\+?\d[\d\s().-]{8,}\d/g, "[phone]")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 240)
+    : undefined;
+  return JSON.stringify({
+    status,
+    ...(typeof providerError?.type === "string" ? { type: providerError.type } : {}),
+    ...(typeof providerError?.code === "number" ? { code: providerError.code } : {}),
+    ...(typeof providerError?.error_subcode === "number"
+      ? { errorSubcode: providerError.error_subcode }
+      : {}),
+    ...(message ? { message } : { error: "provider_request_failed" }),
+  });
 }
 
 function isRetryableWhatsAppStatus(status: number): boolean {

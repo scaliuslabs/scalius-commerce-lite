@@ -19,6 +19,10 @@ interface DiscountMobileCardProps {
   selected: boolean;
   showTrashed: boolean;
   symbol: string;
+  canCreate: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
+  canRestore: boolean;
   canToggleStatus: boolean;
   onSelectedChange: (selected: boolean) => void;
   onEdit: () => void;
@@ -34,6 +38,10 @@ export function DiscountMobileCard({
   selected,
   showTrashed,
   symbol,
+  canCreate,
+  canEdit,
+  canDelete,
+  canRestore,
   canToggleStatus,
   onSelectedChange,
   onEdit,
@@ -47,6 +55,9 @@ export function DiscountMobileCard({
   const usage = discount.usageCount ?? 0;
   const usageLabel = discount.maxUses ? `${usage} / ${discount.maxUses}` : `${usage}`;
   const readinessIssues = getDiscountReadinessIssues(discount);
+  const hasRowActions = showTrashed
+    ? canRestore || canDelete
+    : canEdit || canCreate || canDelete || canToggleStatus;
 
   return (
     <article className={selected ? "bg-primary/5 px-3 py-3" : "bg-background px-3 py-3"}>
@@ -55,6 +66,7 @@ export function DiscountMobileCard({
           checked={selected}
           onCheckedChange={(value) => onSelectedChange(value === true)}
           aria-label={`Select ${discount.code}`}
+          disabled={!canDelete}
           className="mt-1"
         />
 
@@ -78,28 +90,32 @@ export function DiscountMobileCard({
           </div>
         </div>
 
-        <DataTableRowActions
-          showTrashed={showTrashed}
-          menuLabel={`Open actions for ${discount.code}`}
-          onEdit={!showTrashed ? onEdit : undefined}
-          onDelete={!showTrashed ? onDelete : undefined}
-          onRestore={showTrashed ? onRestore : undefined}
-          onPermanentDelete={showTrashed ? onPermanentDelete : undefined}
-          extraActions={
-            !showTrashed
-              ? [
-                  { label: "Duplicate", icon: Copy, onClick: onDuplicate },
-                  ...(canToggleStatus
-                    ? [{
-                        label: discount.isActive ? "Deactivate" : "Activate",
-                        icon: discount.isActive ? X : Check,
-                        onClick: onToggleStatus,
-                      }]
-                    : []),
-                ]
-              : undefined
-          }
-        />
+        {hasRowActions ? (
+          <DataTableRowActions
+            showTrashed={showTrashed}
+            menuLabel={`Open actions for ${discount.code}`}
+            onEdit={!showTrashed && canEdit ? onEdit : undefined}
+            onDelete={!showTrashed && canDelete ? onDelete : undefined}
+            onRestore={showTrashed && canRestore ? onRestore : undefined}
+            onPermanentDelete={showTrashed && canDelete ? onPermanentDelete : undefined}
+            extraActions={
+              !showTrashed
+                ? [
+                    ...(canCreate
+                      ? [{ label: "Duplicate", icon: Copy, onClick: onDuplicate }]
+                      : []),
+                    ...(canToggleStatus
+                      ? [{
+                          label: discount.isActive ? "Deactivate" : "Activate",
+                          icon: discount.isActive ? X : Check,
+                          onClick: onToggleStatus,
+                        }]
+                      : []),
+                  ]
+                : undefined
+            }
+          />
+        ) : null}
       </div>
 
       {readinessIssues.length > 0 ? (
@@ -135,7 +151,7 @@ export function DiscountMobileCard({
         </div>
       </dl>
 
-      {!showTrashed ? (
+      {!showTrashed && canEdit ? (
         <Button type="button" variant="outline" size="sm" className="mt-2.5 h-11 sm:h-9" onClick={onEdit}>
           <Pencil className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
           Edit discount

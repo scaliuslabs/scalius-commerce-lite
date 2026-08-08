@@ -6,8 +6,18 @@ describe("GennetProvider", () => {
     vi.unstubAllGlobals();
   });
 
+  it("rejects unsafe provider base URLs before dispatch", () => {
+    expect(new GennetProvider({
+      apiToken: "merchant-token",
+      baseUrl: "http://localhost:8787?token=secret",
+      sid: "BRAND",
+    }).validateConfig()).toContain("absolute HTTPS URL");
+  });
+
   it("uses the deterministic client reference as csms_id", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
       text: vi.fn().mockResolvedValue(JSON.stringify({
         status: "SUCCESS",
         status_code: 200,
@@ -44,6 +54,8 @@ describe("GennetProvider", () => {
 
   it("treats duplicate csms_id responses as successful retries", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
       text: vi.fn().mockResolvedValue(JSON.stringify({
         status: "FAILED",
         status_code: 4023,
