@@ -1,4 +1,5 @@
 import type { ProductOptionDefinition, ProductVariant } from "@/lib/api";
+import { isVariantAvailable } from "@/lib/product-sellable-variants";
 
 export type Variant = ProductVariant & {
   discountedPrice?: number;
@@ -8,8 +9,8 @@ export type Variant = ProductVariant & {
 export type VariantOptionAvailability = "available" | "incompatible" | "sold_out";
 export type VariantSelection = Record<string, string>;
 
-export function isVariantPurchasable(variant: Pick<Variant, "trackInventory" | "stock" | "reservedStock">): boolean {
-  return variant.trackInventory === false || variant.stock - (variant.reservedStock ?? 0) > 0;
+export function isVariantPurchasable(variant: Pick<Variant, "trackInventory" | "stock" | "reservedStock" | "availabilityBand">): boolean {
+  return isVariantAvailable(variant);
 }
 
 export function selectedValueMap(variant: Pick<Variant, "selectedOptions">): VariantSelection {

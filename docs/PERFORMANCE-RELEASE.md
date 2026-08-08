@@ -39,6 +39,9 @@ This note records the performance evidence and release decisions for the Commerc
 | Early Hints production repeat | [run `1k7ms6p9x2`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com/1k7ms6p9x2?form_factor=mobile) | 98/100/100/100; FCP 1.8 s; LCP 2.1 s; TBT 0; CLS 0 |
 | Full CSS externalization trial (rejected) | [run `ywvpf3r7fz`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com/ywvpf3r7fz?form_factor=mobile) | 97/100/100/100; FCP 1.7 s; LCP 2.1 s; SI 3.8 s; the second render-blocking layout stylesheet cost 470 ms |
 | Hybrid CSS delivery | [run `kyxhyyehck`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com/kyxhyyehck?form_factor=mobile) | 98/100/100/100; FCP 1.7 s; LCP 2.0 s; SI 1.7 s; TBT 0; CLS 0 |
+| Final cache-safe homepage mobile | [run `4ng4chsvag`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com/4ng4chsvag?form_factor=mobile) | 98/100/100/100; FCP 1.7 s; LCP 2.0 s; SI 1.7 s; TBT 0; CLS 0 |
+| Final cache-safe homepage desktop | [run `fjgkvoc5ni`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com/fjgkvoc5ni?form_factor=desktop) | 100/100/100/100; FCP 0.5 s; LCP 0.5 s; SI 0.5 s; TBT 0; CLS 0.007 |
+| Final deployed homepage mobile | [run `7ty0yncvp0`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com/7ty0yncvp0?form_factor=mobile) | 98/100/100/100; FCP 1.7 s; LCP 2.0 s; SI 1.7 s; TBT 0; CLS 0; Agentic Browsing 3/3 |
 
 These reports contained no CrUX field data; they are repeatable Lighthouse lab evidence, not a claim that real-user p75 LCP is 2.1-2.2 seconds. Cloudflare Web Analytics was not active on the verified live homepage, product, or search routes, so no field-vitals clock or pre/post RUM baseline exists yet. If exactly one Cloudflare collection mode is deliberately enabled later, define `T0` as the first verified beacon POST, treat seven days as provisional and 28 days as final, require adequate cohort samples plus Good LCP/INP/CLS, and label the evidence Chromium-only rather than Safari/Firefox or CrUX.
 
@@ -52,7 +55,7 @@ Remaining PageSpeed diagnostics have no direct score weight. They can still matt
 - Network dependency tree: small application modules and the RUM branch; no missing origin preconnect.
 - LCP phase breakdown and third-party attribution.
 
-The earlier mobile SEO 92 was a transient `robots.txt` fetch timeout, not a mobile-only response branch. The first mobile-UA request took 1.981 s in a pattern consistent with cold/stale edge recovery; immediately repeated desktop, Googlebot, and Lighthouse requests took 67-106 ms and returned the same valid body. Fresh PageSpeed runs report SEO 100. Deployment warming now covers robots, all sitemap children, both feeds, homepage, and search, and the gateway attempts one semantic purge-and-refetch when a cached response carries the wrong build stamp.
+The intermittent mobile SEO 92 is a PageSpeed `robots.txt` fetch timeout, not a mobile-only response branch. It reproduced in [run `sc6enabcnz`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com/sc6enabcnz?form_factor=mobile), while ten deliberately cold unique requests split between mobile and Googlebot user agents all returned the same valid absolute-sitemap body with 200 responses in 158-428 ms. The immediate PageSpeed repeat `4ng4chsvag` reported SEO 100. The route remains merchant-controlled and semantic-purgeable; no unpurgeable zone Cache Rule or inaccurate fallback policy was added to suppress an external audit timeout. Deployment warming covers robots, all sitemap children, both feeds, homepage, and search, and the gateway attempts one semantic purge-and-refetch when a cached response carries the wrong build stamp.
 
 ## Storefront changes retained
 
@@ -82,7 +85,7 @@ gateway, allowlisted cached entrypoint, `cross_version_cache: false`, browser
 does not cover Workers-Cached HTML or transformed images, and provides no
 credible PageSpeed benefit here.
 
-Production build `src-66e4dbe3370b6f78` now emits exactly one stable anonymous
+Current production build `src-87ab183fa40a17a9` emits exactly one stable anonymous
 HTML response hint:
 
 ```http
@@ -109,13 +112,17 @@ presented as the missing route to mobile 100.
 
 The durable invalidation ledger was also read live through Wrangler: all 12
 semantic groups had equal requested/applied generations, zero attempts, and no
-last error. The audit nevertheless found an existing quantity-freshness defect
-that blocks stronger caching: same-availability-band inventory changes avoid a
-purge even though public projections currently expose exact stock quantities.
-Checkout remains authoritative, but a 10-to-9 change can leave buyer-visible
-quantity stale until the one-hour backstop. Scheduled CMS publication boundaries
-and post-purge warming also need dedicated work. None of the zone settings above
-were allowed to mask or lengthen those application-owned gaps.
+last error. The same audit found and closed a quantity-freshness defect before
+any broader caching was considered. Persistent public product, search, and feed
+projections now expose an explicit `availabilityBand` and replace exact stock and
+reservation counts with stable compatibility sentinels. A 10-to-9 change inside
+the same band is therefore byte-stable and needs no purge; transitions between
+untracked, in-stock, low-stock, and out-of-stock still advance the existing
+semantic invalidation ledger. UCP no longer advertises the sentinel as an exact
+quantity, and cart/checkout remain the live authority for requested quantity.
+Scheduled CMS publication boundaries and post-purge warming still need dedicated
+work. None of the zone settings above were allowed to mask or lengthen those
+application-owned gaps.
 
 ## Dashboard evidence and changes
 
@@ -214,11 +221,13 @@ pnpm ops:check --queues
 
 The authenticated admin read smoke additionally covers inventory, orders, order detail/form, all browser routes, and session cleanup. Browser verification covers sign-out/sign-in, desktop/mobile dashboard navigation, inventory and orders, storefront search, product option selection, add/remove cart restoration, checkout form readiness, and validation failure states without placing an order or charging a payment method.
 
-Final deployed versions verified on 2026-08-08:
+Final deployed versions verified on 2026-08-09:
 
-- API Worker `1a2e2266-738f-43a6-b4d1-8de235925ed6`.
+- API Worker `3bfffe69-5d42-40e9-9147-dceb422d028a`.
 - Dashboard Worker `f287784b-1ed1-477b-b408-383006c28b6d`.
-- Storefront Worker `5cb78f4c-2fb6-4725-bbea-40615a214ee8`, build `src-e99915a43a7617a8`.
-- `pnpm release:check`, `pnpm ops:check --queues`, and the authenticated 23-route admin read smoke all passed against those live surfaces.
+- Storefront Worker `79192484-0bad-4d30-aa50-db63da3e5d4c`, build `src-87ab183fa40a17a9`.
+- Live public feed and product-detail variants expose `availabilityBand` and `lowStockThreshold` with stable `99/0` compatibility values instead of exact inventory; a repeated product request was a native HIT and emitted a real HTTP/2 103 before its 200 response.
+- The final authenticated browser smoke passed desktop and 390x844 mobile Orders and Inventory, product option selection, cart add/remove restoration, checkout validation failure, zero horizontal overflow/browser exceptions, and dashboard sign-out without placing an order.
+- `pnpm release:check` and `pnpm ops:check --queues` passed against the deployed surfaces; all local lint, test, typecheck, build, environment, dashboard-performance, secret, and repository gates passed before deployment.
 
 For synthetic 100 work, representative Lighthouse 13.4.1 paired reductions from the 1.826/2.177-second run are approximately 255/632, 464/385, or 759/243 ms for FCP/LCP. These metrics share causes, so their sum is not a physical critical-path duration and one source need not own the entire gap. Reopen storefront work sooner for a real-user RUM regression or a new controllable opportunity worth at least 100 ms p75 even when it cannot create a synthetic 100. Reopen a dashboard architecture rewrite when a measured hot interaction misses p75 100 ms first-feedback/warm-heading or the INP 200 ms release ceiling, and require at least a 15% or 50 ms p75 win without a p95 regression.

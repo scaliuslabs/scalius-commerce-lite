@@ -10,6 +10,7 @@ import {
 } from "@scalius/database/schema";
 import { safeBatch, type Database } from "@scalius/database/client";
 import { buildInventoryLedgerV2Edge, type InventoryLedgerPool } from "./ledger-v2";
+import { resolveTrackedBuyerAvailabilityBand } from "@scalius/shared/buyer-availability";
 
 export const DEFAULT_EXPIRY_SWEEP_LIMIT = 50;
 export const MAX_EXPIRY_SWEEP_LIMIT = 200;
@@ -129,18 +130,6 @@ function isDuplicateExpiryReleaseClaimError(err: unknown): boolean {
     (message.includes("UNIQUE constraint failed") &&
       message.includes("inventory_movements"))
   );
-}
-
-function availabilityBand(
-  available: number,
-  lowStockThreshold: number | null,
-): "out_of_stock" | "low_stock" | "in_stock" {
-  if (available <= 0) return "out_of_stock";
-  return lowStockThreshold !== null
-      && lowStockThreshold > 0
-      && available <= lowStockThreshold
-    ? "low_stock"
-    : "in_stock";
 }
 
 /**
@@ -408,8 +397,8 @@ export async function releaseExpiredReservations(
       const regularBefore = Math.max(0, variant.stock - variant.reservedStock);
       const regularAfter = Math.max(0, variant.stock - reservedAfter);
       const regularBandChanged = variant.trackInventory
-        && availabilityBand(regularBefore, variant.lowStockThreshold)
-          !== availabilityBand(regularAfter, variant.lowStockThreshold);
+        && resolveTrackedBuyerAvailabilityBand(regularBefore, variant.lowStockThreshold)
+          !== resolveTrackedBuyerAvailabilityBand(regularAfter, variant.lowStockThreshold);
       const preorderBecameAvailable = isPreorder
         && variant.trackInventory
         && variant.allowPreorder

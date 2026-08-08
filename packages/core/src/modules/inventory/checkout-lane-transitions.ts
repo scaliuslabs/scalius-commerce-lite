@@ -21,6 +21,7 @@ import {
     productVariants,
 } from "@scalius/database/schema";
 import { ValidationError } from "@scalius/core/errors";
+import { resolveTrackedBuyerAvailabilityBand } from "@scalius/shared/buyer-availability";
 
 export const CHECKOUT_LANE_INVENTORY_AUTHORITY = "checkout_lane_v1" as const;
 
@@ -85,15 +86,6 @@ interface PreparedTerminalEdge {
     laneMovementId: string;
     stockMovementId: string | null;
     availableBefore: number;
-}
-
-function availabilityBand(available: number, lowStockThreshold: number | null) {
-    if (available <= 0) return "out_of_stock";
-    return lowStockThreshold !== null
-        && lowStockThreshold > 0
-        && available <= lowStockThreshold
-        ? "low_stock"
-        : "in_stock";
 }
 
 function isSafeIntegerAtLeast(value: unknown, minimum: number): value is number {
@@ -516,10 +508,10 @@ export async function terminateCheckoutLaneReservations(
                 availabilityTransitionVariantIds: operation === "released"
                     ? prepared
                         .filter((item) => item.variant.trackInventory)
-                        .filter((item) => availabilityBand(
+                        .filter((item) => resolveTrackedBuyerAvailabilityBand(
                             item.availableBefore,
                             item.variant.lowStockThreshold,
-                        ) !== availabilityBand(
+                        ) !== resolveTrackedBuyerAvailabilityBand(
                             item.availableBefore + item.edge.quantity,
                             item.variant.lowStockThreshold,
                         ))

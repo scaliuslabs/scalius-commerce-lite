@@ -186,6 +186,7 @@ export interface ProductVariant {
   price: number;
   stock: number;
   reservedStock?: number;
+  availabilityBand?: import("@scalius/shared/buyer-availability").BuyerAvailabilityBand;
   isDefault?: boolean;
   trackInventory?: boolean;
   lowStockThreshold?: number | null;

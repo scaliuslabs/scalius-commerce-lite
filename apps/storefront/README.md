@@ -172,6 +172,15 @@ one-hour availability TTL is the failure-only correctness backstop, while the
 one-day content TTL is the final backstop for low-frequency mutation-purged routes.
 Normal successful merchant writes purge their semantic tags immediately.
 
+Persistent public product, search, and feed projections are intentionally
+availability-band stable. `availabilityBand` is the buyer-visible inventory
+truth; the retained `stock` and `reservedStock` fields are compatibility
+sentinels, not exact quantities. Same-band mutations therefore do not need a
+purge, while band transitions still purge the relevant API and rendered cache
+groups. Never render or advertise those sentinels as exact inventory. Cart and
+checkout must validate the requested quantity against the live database-backed
+authority.
+
 ### Cache TTL Constants
 
 | Constant | Seconds | Purpose |

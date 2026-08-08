@@ -13,6 +13,7 @@ type TestVariant = {
   reservedStock?: number;
   trackInventory?: boolean;
   lowStockThreshold?: number | null;
+  availabilityBand?: "untracked" | "out_of_stock" | "low_stock" | "in_stock";
 };
 
 function variant(overrides: Partial<TestVariant> = {}): TestVariant {
@@ -169,6 +170,18 @@ describe("product sellable variant resolution", () => {
       variant({ id: "var_low_one", stock: 3, lowStockThreshold: 5 }),
       variant({ id: "var_low_two", stock: 2, reservedStock: 1, lowStockThreshold: 5 }),
       variant({ id: "var_sold_out", stock: 0, lowStockThreshold: null }),
+    ])).toMatchObject({ canPurchaseAny: true, text: "Low Stock" });
+  });
+
+  it("uses the cache-owned availability band instead of compatibility stock sentinels", () => {
+    expect(getBuyerStockSummary([
+      variant({ stock: 99, availabilityBand: "out_of_stock" }),
+    ])).toMatchObject({ canPurchaseAny: false, text: "Out of Stock" });
+    expect(getBuyerStockSummary([
+      variant({ stock: 0, availabilityBand: "in_stock" }),
+    ])).toMatchObject({ canPurchaseAny: true, text: "In Stock" });
+    expect(getBuyerStockSummary([
+      variant({ stock: 99, availabilityBand: "low_stock" }),
     ])).toMatchObject({ canPurchaseAny: true, text: "Low Stock" });
   });
 });

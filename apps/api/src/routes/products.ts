@@ -2,6 +2,7 @@
 // Storefront product routes — thin HTTP layer.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { PRODUCT_CONDITION_VALUES } from "@scalius/shared/product-condition";
+import { BUYER_AVAILABILITY_BANDS } from "@scalius/shared/buyer-availability";
 import {
   getStorefrontFeedProducts,
   getStorefrontSitemapProducts,
@@ -136,6 +137,8 @@ const storefrontFeedVariantSchema = z.object({
   price: z.number(),
   stock: z.number(),
   reservedStock: z.number(),
+  lowStockThreshold: z.number().int().nonnegative().nullable(),
+  availabilityBand: z.enum(BUYER_AVAILABILITY_BANDS),
   isDefault: z.boolean(),
   trackInventory: z.boolean(),
   barcode: z.string().nullable(),

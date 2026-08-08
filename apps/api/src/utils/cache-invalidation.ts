@@ -3,6 +3,7 @@ import { getDb, type Database } from "@scalius/database/client";
 import { productVariants } from "@scalius/database/schema";
 import { effectiveRegularReservedStockSql } from "@scalius/database/inventory-authority";
 import { inArray } from "drizzle-orm";
+import { resolveTrackedBuyerAvailabilityBand } from "@scalius/shared/buyer-availability";
 import {
   CACHE_INVALIDATION_SWEEP_LIMIT,
   hasDatabaseConfiguration,
@@ -67,29 +68,15 @@ interface BuyerAvailabilityRow {
   lowStockThreshold: number | null;
 }
 
-type BuyerAvailabilityBand = "out_of_stock" | "low_stock" | "in_stock";
-
-function buyerAvailabilityBand(
-  available: number,
-  lowStockThreshold: number | null,
-): BuyerAvailabilityBand {
-  if (available <= 0) return "out_of_stock";
-  return lowStockThreshold !== null
-      && lowStockThreshold > 0
-      && available <= lowStockThreshold
-    ? "low_stock"
-    : "in_stock";
-}
-
 export function hasBuyerAvailabilityBandTransition(input: {
   availableBefore: number;
   availableAfter: number;
   lowStockThreshold: number | null;
 }): boolean {
-  return buyerAvailabilityBand(
+  return resolveTrackedBuyerAvailabilityBand(
     input.availableBefore,
     input.lowStockThreshold,
-  ) !== buyerAvailabilityBand(
+  ) !== resolveTrackedBuyerAvailabilityBand(
     input.availableAfter,
     input.lowStockThreshold,
   );

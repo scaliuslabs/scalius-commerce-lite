@@ -36,6 +36,34 @@ describe("validateAddToCart", () => {
     expect(result.errors).toEqual(["Only 1 item available"]);
   });
 
+  it("defers exact quantity checks for band-only public inventory", () => {
+    expect(validateAddToCart({
+      productId: "prod_1",
+      slug: "product-1",
+      name: "Product 1",
+      price: 100,
+      quantity: 5,
+      stock: 1,
+      reservedStock: 0,
+      trackInventory: true,
+      availabilityBand: "low_stock",
+      variantId: "var_1",
+    })).toMatchObject({ valid: true });
+
+    expect(validateAddToCart({
+      productId: "prod_1",
+      slug: "product-1",
+      name: "Product 1",
+      price: 100,
+      quantity: 1,
+      stock: 99,
+      reservedStock: 0,
+      trackInventory: true,
+      availabilityBand: "out_of_stock",
+      variantId: "var_1",
+    })).toMatchObject({ valid: false, errors: ["Product is out of stock"] });
+  });
+
   it("preserves the authoritative cart image identity", () => {
     const result = validateAddToCart({
       ...baseInput,

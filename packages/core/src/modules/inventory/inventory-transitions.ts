@@ -27,6 +27,7 @@ import {
     terminateCheckoutLaneReservations,
 } from "./checkout-lane-transitions";
 import { mapWithBoundedConcurrency } from "../../utils/bounded-concurrency";
+import { resolveTrackedBuyerAvailabilityBand } from "@scalius/shared/buyer-availability";
 
 // The set of order statuses that mean "this order is dead / returned"
 const STOCK_RESTORE_STATUSES = new Set(["cancelled", "returned", "refunded"]);
@@ -132,15 +133,6 @@ type InventoryTransitionMovementClaim = {
     createdBy: string | null;
 } & InventoryLedgerV2EdgeFields;
 
-function availabilityBand(available: number, lowStockThreshold: number | null) {
-    if (available <= 0) return "out_of_stock";
-    return lowStockThreshold !== null
-        && lowStockThreshold > 0
-        && available <= lowStockThreshold
-        ? "low_stock"
-        : "in_stock";
-}
-
 function buyerCapacity(
     state: InventoryVariantState,
     pool: InventoryPoolName,
@@ -167,8 +159,8 @@ function hasBuyerCapacityTransition(
     const afterCapacity = buyerCapacity(after, pool);
     if (!Number.isFinite(beforeCapacity) && !Number.isFinite(afterCapacity)) return false;
     if (pool !== "regular") return (beforeCapacity > 0) !== (afterCapacity > 0);
-    return availabilityBand(beforeCapacity, before.lowStockThreshold)
-        !== availabilityBand(afterCapacity, after.lowStockThreshold);
+    return resolveTrackedBuyerAvailabilityBand(beforeCapacity, before.lowStockThreshold)
+        !== resolveTrackedBuyerAvailabilityBand(afterCapacity, after.lowStockThreshold);
 }
 
 /**
