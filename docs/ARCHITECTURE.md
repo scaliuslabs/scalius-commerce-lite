@@ -83,12 +83,11 @@ target import, and exact logical schema/data fingerprints. See
 [Database portability and cutover](DATABASE-PORTABILITY.md).
 
 The current root deploy command is a single-merchant operational deployment: it
-deploys API, admin, storefront, and a supplemental Cloudflare ops-monitor Worker
-from fixed Wrangler configuration. Automated deployment systems should consume
-versioned manifests and idempotently reconcile isolated bindings, domains,
-secrets, resource identities, and release digests. External monitoring remains
-authoritative during a Cloudflare outage; the optional Cloudflare monitor
-provides inside-provider telemetry only.
+deploys API, admin, and storefront Workers from fixed Wrangler configuration.
+Automated deployment systems should consume versioned manifests and
+idempotently reconcile isolated bindings, domains, secrets, resource identities,
+and release digests. Monitoring belongs outside this per-merchant runtime so it
+can remain authoritative during a provider or deployment outage.
 
 ---
 

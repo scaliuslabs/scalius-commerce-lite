@@ -43,13 +43,12 @@
 
 ## Overview
 
-Scalius Commerce Lite is a **Turborepo monorepo** containing four Cloudflare Workers and five shared packages. The admin dashboard and storefront reach the API through **Cloudflare Service Bindings** (zero-latency RPC in production); the scheduled ops monitor checks the deployed API and queue bindings independently.
+Scalius Commerce Lite is a **Turborepo monorepo** containing three Cloudflare Workers and five shared packages. The admin dashboard and storefront reach the API through **Cloudflare Service Bindings** (zero-latency RPC in production).
 
 ```text
 apps/
   admin-v2/       # @scalius/admin-v2 — TanStack Start admin dashboard (Cloudflare Worker)
   api/            # @scalius/api — Hono standalone API + queue consumer (Cloudflare Worker)
-  ops-monitor/    # @scalius/ops-monitor — Scheduled readiness and queue monitor (Cloudflare Worker)
   storefront/     # @scalius/storefront — Astro 7 SSR customer store (Cloudflare Worker)
 packages/
   api-client/     # @scalius/api-client — Generated SDK from OpenAPI spec
@@ -378,7 +377,6 @@ pnpm run deploy             # Typecheck → build → migrate → deploy all wor
 pnpm run deploy:api         # Typecheck → build API → migrate remote D1 → deploy API
 pnpm run deploy:admin       # Typecheck → build admin-v2 → deploy admin-v2
 pnpm run deploy:storefront  # Typecheck → build storefront → deploy storefront
-pnpm run deploy:ops-monitor # Typecheck → build → deploy the scheduled ops monitor
 pnpm ops:check              # Read-only production API ops smoke; add --queues for queue metadata
 pnpm release:check          # Read-only release smoke across API, dashboard, storefront, discovery XML/feed, UCP catalog discovery, and tracker/docs
 

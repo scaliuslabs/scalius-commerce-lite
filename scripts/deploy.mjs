@@ -7,7 +7,6 @@
  *   node scripts/deploy.mjs --only api       # typecheck + build/deploy API and migrate D1
  *   node scripts/deploy.mjs --only admin     # typecheck + build/deploy admin
  *   node scripts/deploy.mjs --only storefront # typecheck + build/deploy storefront
- *   node scripts/deploy.mjs --only ops-monitor # typecheck + build/deploy ops monitor
  *   node scripts/deploy.mjs --only api --dry-run # typecheck + build + dist checks only
  *   node scripts/deploy.mjs --only api --wrangler-config path/to/wrangler.jsonc
  *     --health-only # isolated custom config: verify deployment + /health, not production bindings
@@ -19,7 +18,7 @@
  * Runs in order (full deploy):
  *   1. turbo build       — builds all workspaces
  *   2. D1 migration, or read-only external schema compatibility preflight
- *   3. wrangler deploy   — deploys the API, Admin, Storefront, and Ops Monitor Workers
+ *   3. wrangler deploy   — deploys the API, Admin, and Storefront Workers
  *
  * The database name is read from apps/api/wrangler.jsonc (API worker owns D1).
  */
@@ -34,7 +33,6 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");
 const apiDir = resolve(root, "apps", "api");
 const adminV2Dir = resolve(root, "apps", "admin-v2");
-const opsMonitorDir = resolve(root, "apps", "ops-monitor");
 const args = process.argv.slice(2);
 const migrateOnly = args.includes("--migrate-only");
 const local = args.includes("--local");
@@ -49,13 +47,12 @@ const databaseTargetHost = databaseTargetHostArgIndex === -1
   ? null
   : args[databaseTargetHostArgIndex + 1] || null;
 const localPersistPath = process.env.SCALIUS_WRANGLER_STATE || "../../.wrangler/state";
-const deployTargets = ["api", "admin", "storefront", "ops-monitor"];
+const deployTargets = ["api", "admin", "storefront"];
 const selectableDeployTargets = deployTargets;
 const appDirsByTarget = {
   api: "apps/api",
   admin: "apps/admin-v2",
   storefront: "apps/storefront",
-  "ops-monitor": "apps/ops-monitor",
 };
 const storefrontStaticPostDeployWarmPaths = ["/", "/search"];
 const STOREFRONT_DYNAMIC_WARM_LIMIT = 4;
@@ -202,8 +199,6 @@ export function getBuildCommandForTarget(target) {
       return `${pnpm} --filter @scalius/admin-v2 build`;
     case "storefront":
       return `${pnpm} --filter @scalius/storefront build`;
-    case "ops-monitor":
-      return `${pnpm} --filter @scalius/ops-monitor build`;
     default:
       throw new Error(`Unknown deploy target: ${target}`);
   }
@@ -214,7 +209,6 @@ export function getTypecheckCommandForTarget(target) {
     api: "@scalius/api",
     admin: "@scalius/admin-v2",
     storefront: "@scalius/storefront",
-    "ops-monitor": "@scalius/ops-monitor",
   }[target];
   if (!workspace) throw new Error(`Unknown deploy target: ${target}`);
   return `${pnpm} --filter ${workspace} typecheck`;
@@ -272,8 +266,6 @@ export function getDeployCommandForTarget(target, apiWranglerConfigPath = null) 
         label: "Deploy Storefront Worker",
         cwd: resolve(root, "apps", "storefront"),
       };
-    case "ops-monitor":
-      return { cmd: `${pnpm} exec wrangler deploy`, label: "Deploy Ops Monitor Worker", cwd: opsMonitorDir };
     default:
       throw new Error(`Unknown deploy target: ${target}`);
   }
@@ -284,7 +276,6 @@ function buildTarget(target) {
     api: "Build API workspace",
     admin: "Build Admin V2 workspace",
     storefront: "Build Storefront workspace",
-    "ops-monitor": "Build Ops Monitor workspace",
   };
   run(getBuildCommandForTarget(target), labels[target]);
 }
@@ -767,9 +758,6 @@ export async function verifyPostDeployTarget(
   }
   if (target === "storefront") {
     await verifyStorefrontDeployImpl();
-  }
-  if (target === "ops-monitor") {
-    verifyLatestWorkerDeploymentImpl(opsMonitorDir, "Ops Monitor Worker");
   }
 }
 
