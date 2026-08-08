@@ -8,7 +8,7 @@ import {
   normalizeThemeWorkspaceSection,
   type ThemePreviewDevice,
   type ThemeWorkspaceSection,
-} from "~/components/admin/settings/theme-workspace";
+} from "~/components/admin/settings/theme-route-state";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { useWorkspaceScrollMemory } from "~/hooks/use-workspace-scroll-memory";
 

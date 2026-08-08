@@ -21,6 +21,7 @@ import {
   X,
 } from "lucide-react";
 import { DataTableToolbar } from "../DataTableToolbar";
+import { OrderAutoRefreshCountdown } from "./OrderAutoRefreshCountdown";
 import type { DateRange } from "react-day-picker";
 import type { OrderActionPermissions } from "~/lib/order-action-permissions";
 
@@ -121,7 +122,7 @@ interface OrderToolbarProps {
   autoRefreshEnabled: boolean;
   autoRefreshPauseReason: string | null;
   onToggleAutoRefresh: () => void;
-  countdown: number;
+  onAutoRefresh: () => boolean;
   orderActions: OrderActionPermissions;
 }
 
@@ -270,7 +271,7 @@ export function OrderToolbar({
   autoRefreshEnabled,
   autoRefreshPauseReason,
   onToggleAutoRefresh,
-  countdown,
+  onAutoRefresh,
   orderActions,
 }: OrderToolbarProps) {
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -454,12 +455,10 @@ export function OrderToolbar({
           />
           <span>Auto-refresh</span>
           {autoRefreshEnabled && (
-            <span
-              aria-live="polite"
-              className="font-mono font-medium text-primary"
-            >
-              {autoRefreshPauseReason ? "Paused" : `${countdown}s`}
-            </span>
+            <OrderAutoRefreshCountdown
+              paused={autoRefreshPauseReason !== null}
+              onRefresh={onAutoRefresh}
+            />
           )}
         </label>
       </div>

@@ -52,6 +52,12 @@ describe("unified discount builder workflow", () => {
     expect(createRoute).toContain("validateDiscountCreateSearch");
     expect(createRoute).toContain("Route.useSearch().type");
     expect(createRoute).toContain("discountEditorTypes.includes");
+    expect(createRoute).toContain(
+      "~/components/admin/discount/discount-editor-types",
+    );
+    expect(createRoute).not.toContain(
+      "~/components/admin/discount/discount-editor-model",
+    );
     expect(createRoute).toContain("search: (previous) => ({ ...previous, type })");
     expect(createRoute).not.toContain("useState<DiscountEditorType");
   });

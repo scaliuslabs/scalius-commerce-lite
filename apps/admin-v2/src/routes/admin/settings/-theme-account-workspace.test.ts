@@ -65,6 +65,12 @@ describe("theme and account settings workspace", () => {
 
     const routeSource = readSource("routes/admin/settings/theme.tsx");
     expect(routeSource).toContain("validateSearch: validateThemeSearch");
+    expect(routeSource).toContain(
+      "~/components/admin/settings/theme-route-state",
+    );
+    expect(routeSource).not.toContain(
+      "~/components/admin/settings/theme-workspace",
+    );
     expect(routeSource).toContain("onSectionChange={handleSectionChange}");
     expect(routeSource).toContain("onPreviewLocationChange={handlePreviewLocationChange}");
   });

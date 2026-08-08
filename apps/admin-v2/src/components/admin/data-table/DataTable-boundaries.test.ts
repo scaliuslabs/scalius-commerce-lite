@@ -5,6 +5,9 @@ import { fileURLToPath } from "node:url";
 const DATA_TABLE_SOURCE = fileURLToPath(
   new URL("./DataTable.tsx", import.meta.url),
 );
+const DATA_TABLE_BODY_ROW_SOURCE = fileURLToPath(
+  new URL("./DataTableBodyRow.tsx", import.meta.url),
+);
 const LOADING_OVERLAY_SOURCE = fileURLToPath(
   new URL("./DataTableLoadingOverlay.tsx", import.meta.url),
 );
@@ -31,6 +34,16 @@ const COLUMN_FACTORIES_SOURCE = fileURLToPath(
 );
 
 describe("DataTable boundaries", () => {
+  it("memoizes stable desktop rows independently from fetch-state updates", () => {
+    const dataTableSource = readFileSync(DATA_TABLE_SOURCE, "utf8");
+    const bodyRowSource = readFileSync(DATA_TABLE_BODY_ROW_SOURCE, "utf8");
+
+    expect(dataTableSource).toContain("<DataTableBodyRow");
+    expect(bodyRowSource).toContain("memo(");
+    expect(bodyRowSource).toContain("cells.map((cell)");
+    expect(bodyRowSource).toContain("isSelected");
+  });
+
   it("renders an explicit retryable error state instead of stale rows", () => {
     const source = readFileSync(DATA_TABLE_SOURCE, "utf8");
 

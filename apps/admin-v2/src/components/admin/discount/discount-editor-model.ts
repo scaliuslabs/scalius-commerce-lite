@@ -7,14 +7,15 @@ import {
   normalizeDiscountStartDate,
 } from "./shared-validation";
 import { formatDiscountRequirement } from "./discount-rule-presentation";
+import {
+  discountEditorTypes,
+  type DiscountEditorType,
+} from "./discount-editor-types";
 
-export const discountEditorTypes = [
-  "amount_off_products",
-  "amount_off_order",
-  "free_shipping",
-] as const;
-
-export type DiscountEditorType = (typeof discountEditorTypes)[number];
+export {
+  discountEditorTypes,
+  type DiscountEditorType,
+} from "./discount-editor-types";
 export type DiscountEditorValueType = "percentage" | "fixed_amount" | "free";
 
 const optionalPositiveAmount = z

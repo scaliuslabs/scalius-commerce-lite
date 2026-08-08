@@ -11,6 +11,16 @@ const __dirname = dirname(__filename);
 const persistStatePath = process.env.SCALIUS_WRANGLER_STATE || "../../.wrangler/state";
 
 export default defineConfig({
+  environments: {
+    client: {
+      build: {
+        // Only content-hashed browser bundles enter the immutable cache namespace.
+        // Files copied from public/ keep their stable, non-immutable URLs.
+        assetsDir: "assets/immutable",
+        sourcemap: false,
+      },
+    },
+  },
   server: {
     port: 4323,
     proxy: {

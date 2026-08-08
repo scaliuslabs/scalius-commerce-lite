@@ -19,6 +19,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { DataTablePagination } from "./DataTablePagination";
 import { DataTableLoadingOverlay } from "./DataTableLoadingOverlay";
 import { DataTableEmptyState, type EmptyStateConfig } from "./DataTableEmptyState";
+import { DataTableBodyRow } from "./DataTableBodyRow";
 import type { SortableDataTableContentProps } from "./SortableDataTableContent";
 
 const SortableDataTableContent = lazy(async () => {
@@ -127,22 +128,17 @@ export function DataTable<TData>({
             </TableCell>
           </TableRow>
         ) : hasRows ? (
-          rows.map((row) => (
-            <TableRow
-              key={row.id}
-              data-state={row.getIsSelected() ? "selected" : undefined}
-            >
-              {includeDragColumn && <TableCell className="w-[40px] px-2" />}
-              {row.getVisibleCells().map((cell) => (
-                <TableCell key={cell.id}>
-                  {flexRender(
-                    cell.column.columnDef.cell,
-                    cell.getContext(),
-                  )}
-                </TableCell>
-              ))}
-            </TableRow>
-          ))
+          rows.map((row) => {
+            const cells = row.getVisibleCells();
+            return (
+              <DataTableBodyRow
+                key={row.id}
+                cells={cells}
+                isSelected={row.getIsSelected()}
+                includeDragColumn={includeDragColumn}
+              />
+            );
+          })
         ) : (
           <TableRow>
             <TableCell

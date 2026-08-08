@@ -3,6 +3,10 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "fs";
 import { dirname, extname, join, relative, resolve } from "path";
 import { fileURLToPath } from "url";
+import {
+  ADMIN_IMMUTABLE_ASSET_DIR,
+  inspectAdminStaticAssets,
+} from "./admin-static-assets.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const defaultRootDir = resolve(__dirname, "..");
@@ -80,6 +84,23 @@ function collectSourceFiles(directory) {
     if (stat.isFile() && sourceExtensions.has(extname(entry))) {
       found.push(absolutePath);
     }
+  }
+
+  return found.sort();
+}
+
+function collectMatchingFiles(directory, predicate) {
+  const found = [];
+  if (!existsSync(directory)) return found;
+
+  for (const entry of readdirSync(directory)) {
+    const absolutePath = join(directory, entry);
+    const stat = statSync(absolutePath);
+    if (stat.isDirectory()) {
+      found.push(...collectMatchingFiles(absolutePath, predicate));
+      continue;
+    }
+    if (stat.isFile() && predicate(entry)) found.push(absolutePath);
   }
 
   return found.sort();
@@ -285,7 +306,7 @@ function checkWarmRouteQueries(context) {
 }
 
 function checkUseServerTableFreshness(context) {
-  runCheck(context, "source: useServerTable preserves rows and mount freshness", () => {
+  runCheck(context, "source: useServerTable preserves rows and stale-aware mount freshness", () => {
     const file = "apps/admin-v2/src/components/admin/data-table/useServerTable.ts";
     if (!requireFile(context, file, "source")) return;
     const source = readFile(context.rootDir, file);
@@ -293,8 +314,23 @@ function checkUseServerTableFreshness(context) {
     if (!/placeholderData:\s*keepPreviousData\b/.test(source)) {
       fail(context, "source", `${file}: expected placeholderData: keepPreviousData.`);
     }
-    if (!/refetchOnMount\s*:\s*["']always["']/.test(source)) {
-      fail(context, "source", `${file}: expected refetchOnMount: "always".`);
+    if (!/refetchOnMount\s*:\s*shouldRefetchServerTableOnMount\b/.test(source)) {
+      fail(
+        context,
+        "source",
+        `${file}: expected the bounded intent-prefetch mount policy.`,
+      );
+    }
+    for (const marker of [
+      "INTENT_PREFETCH_MOUNT_GRACE_MS = 5_000",
+      "query.state.isInvalidated",
+      "query.state.dataUpdatedAt",
+      "query.isStale()",
+      'return "always"',
+    ]) {
+      if (!source.includes(marker)) {
+        fail(context, "source", `${file}: missing mount freshness marker ${marker}.`);
+      }
     }
     if (/staleTime\s*:\s*(?:Infinity|Number\.POSITIVE_INFINITY)\b/.test(source)) {
       fail(context, "source", `${file}: infinite staleTime would suppress mount freshness.`);
@@ -346,21 +382,28 @@ function checkProductFormTiptapBoundary(context) {
 }
 
 function checkProductImagesBoundary(context) {
-  runCheck(context, "source: product images reorder UI is lazy", () => {
+  runCheck(context, "source: product media stays bounded without drag tooling", () => {
     const file = "apps/admin-v2/src/components/admin/product-form/ProductImagesSection.tsx";
+    requireLacksMarkers(
+      context,
+      file,
+      [...dndMarkers, "DraggableImageGallery"],
+      "source",
+      "product media must keep the direct, accessible reorder controls instead of restoring drag tooling",
+    );
     requireContains(
       context,
       file,
-      /lazy\s*\(\s*\(\)\s*=>\s*[\s\n]*import\(["']\.\.\/DraggableImageGallery["']\)/,
+      /field\.value\.slice\(0,\s*12\)/,
       "source",
-      "expected DraggableImageGallery to be lazy-loaded.",
+      "expected the product media grid to cap its initial rendered tiles at 12.",
     );
-    requireNoStaticImports(
+    requireContains(
       context,
       file,
-      /(?:^|\/)DraggableImageGallery$/,
+      /loading=["']lazy["']/,
       "source",
-      "DraggableImageGallery must not be statically imported",
+      "expected product media previews to use native lazy loading.",
     );
   });
 }
@@ -401,21 +444,28 @@ function checkVariantToolBoundaries(context) {
 }
 
 function checkNavigationBuilderBoundary(context) {
-  runCheck(context, "source: NavigationBuilder reorder UI is lazy", () => {
+  runCheck(context, "source: NavigationBuilder keeps one bounded editor", () => {
     const file = "apps/admin-v2/src/components/admin/navigation/NavigationBuilder.tsx";
     requireContains(
       context,
       file,
-      /lazy\s*\(\s*\(\)\s*=>\s*[\s\n]*import\(["']\.\/SortableNavigationEditor["']\)/,
+      /NAVIGATION_RENDER_BATCH_SIZE\s*=\s*80/,
       "source",
-      "expected SortableNavigationEditor to be lazy-loaded.",
+      "expected the navigation editor to keep its 80-row render batch.",
     );
-    requireNoStaticImports(
+    requireContains(
       context,
       file,
-      /(?:^|\/)SortableNavItem$/,
+      /outlineRows\.slice\(0,\s*renderLimit\)/,
       "source",
-      "NavigationBuilder must not directly import SortableNavItem",
+      "expected the navigation editor to render only the active row batch.",
+    );
+    requireLacksMarkers(
+      context,
+      file,
+      ["SortableNavigationEditor", "MobileNavigationTree"],
+      "source",
+      "navigation must not restore the duplicate legacy desktop/mobile editors",
     );
   });
 }
@@ -448,28 +498,28 @@ function checkGeneralSettingsBoundary(context) {
 }
 
 function checkOrderViewBoundary(context) {
-  runCheck(context, "source: OrderView secondary cards are lazy", () => {
+  runCheck(context, "source: OrderView keeps deterministic route-owned panels", () => {
     const file = "apps/admin-v2/src/components/admin/OrderView.tsx";
     requireContains(
       context,
       file,
-      /lazy\s*\(\s*\(\)\s*=>\s*[\s\n]*import\(["']\.\/orderview\/OrderSupportRequestsCard["']\)/,
+      /import\s*\{\s*OrderSupportRequestsCard\s*\}\s*from\s*["']\.\/orderview\/OrderSupportRequestsCard["']/,
       "source",
-      "expected support requests card to be lazy-loaded.",
+      "expected the route-owned support requests card to render deterministically.",
     );
     requireContains(
       context,
       file,
-      /lazy\s*\(\s*\(\)\s*=>\s*[\s\n]*import\(["']\.\/orderview\/OrderNotificationsCard["']\)/,
+      /import\s*\{\s*OrderNotificationsCard\s*\}\s*from\s*["']\.\/orderview\/OrderNotificationsCard["']/,
       "source",
-      "expected notification history card to be lazy-loaded.",
+      "expected the route-owned notification history card to render deterministically.",
     );
-    requireNoStaticImports(
+    requireLacksMarkers(
       context,
       file,
-      /(?:OrderSupportRequestsCard|OrderNotificationsCard)$/,
+      ["lazy(", "<Suspense"],
       "source",
-      "OrderView must not statically import secondary order cards",
+      "OrderView must not restore the hydration-unstable lazy panel boundary",
     );
   });
 }
@@ -524,34 +574,43 @@ function checkServerManifest(context) {
 }
 
 function checkProductFormClientChunk(context) {
-  const assetsPath = "apps/admin-v2/dist/client/assets";
+  const assetsPath = `apps/admin-v2/dist/client/${ADMIN_IMMUTABLE_ASSET_DIR}`;
   const absoluteAssetsPath = resolveFromRoot(context.rootDir, assetsPath);
   if (!existsSync(absoluteAssetsPath)) {
     skip(context, "dist: ProductForm client chunk", `${assetsPath} not found`);
     return;
   }
 
-  const files = readdirSync(absoluteAssetsPath)
-    .filter((file) => /^ProductForm-.*\.js$/.test(file))
-    .sort();
+  const files = collectMatchingFiles(
+    absoluteAssetsPath,
+    (file) => /^ProductForm-.*\.js$/.test(file),
+  );
   if (files.length === 0) {
-    skip(context, "dist: ProductForm client chunk", "no ProductForm-*.js artifact found");
+    fail(
+      context,
+      "dist",
+      `${assetsPath}: expected a ProductForm-*.js artifact once the client build exists.`,
+    );
     return;
   }
 
   const failureCount = context.failures.length;
   const bad = [];
   for (const file of files) {
-    const source = readFileSync(join(absoluteAssetsPath, file), "utf8");
+    const source = readFileSync(file, "utf8");
     const imports = staticImportSpecifiers(source).map((item) => item.specifier);
-    const forbidden = imports.filter(
+    const forbiddenStatic = imports.filter(
       (specifier) =>
-        /sortable|AdditionalInfoManager|DraggableImageGallery|TiptapEditor|prosemirror/i.test(
+        /sortable|AdditionalInfoManager|TiptapEditor|prosemirror/i.test(
           specifier,
         ) && !/DeferredTiptapEditor/i.test(specifier),
     );
+    const obsoleteGalleryImports = allImportSpecifiers(source)
+      .map((item) => item.specifier)
+      .filter((specifier) => /DraggableImageGallery/i.test(specifier));
+    const forbidden = [...new Set([...forbiddenStatic, ...obsoleteGalleryImports])];
     if (forbidden.length > 0) {
-      bad.push(`${assetsPath}/${file}: ${forbidden.join(", ")}`);
+      bad.push(`${relativeFromRoot(context.rootDir, file)}: ${forbidden.join(", ")}`);
     }
   }
 
@@ -566,6 +625,28 @@ function checkProductFormClientChunk(context) {
   if (context.failures.length === failureCount) {
     pass(context, "dist: ProductForm client chunk", `${files.length} chunk(s)`);
   }
+}
+
+function checkStaticAssetCaching(context) {
+  const report = inspectAdminStaticAssets({ rootDir: context.rootDir });
+  const failureCount = context.failures.length;
+
+  for (const error of report.errors) {
+    fail(context, "static-assets", error);
+  }
+
+  if (context.failures.length !== failureCount) return;
+
+  if (!report.distPresent) {
+    pass(context, "static assets: narrow immutable cache policy", "source policy");
+    return;
+  }
+
+  pass(
+    context,
+    "static assets: narrow immutable cache policy",
+    `${report.scripts} hashed JS, ${report.styles} hashed CSS, ${report.copiedPublicScriptsAndStyles} public script/style preserved`,
+  );
 }
 
 function checkAdminDist(context) {
@@ -598,6 +679,7 @@ export function runAdminPerfCheck({ rootDir = defaultRootDir } = {}) {
   checkNavigationBuilderBoundary(context);
   checkGeneralSettingsBoundary(context);
   checkOrderViewBoundary(context);
+  checkStaticAssetCaching(context);
   checkAdminDist(context);
 
   return {

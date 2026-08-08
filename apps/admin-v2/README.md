@@ -2,6 +2,11 @@
 
 Modern admin dashboard built with **TanStack Start** (full-stack React framework) deployed as a Cloudflare Worker.
 
+Generated client JavaScript and CSS live under `/assets/immutable/` with Vite
+content hashes and narrow one-year immutable headers. HTML, source maps, and
+copied stable public assets must remain outside that namespace; the admin
+performance and client/server boundary gates enforce this contract.
+
 ## Tech Stack
 
 - **Framework**: TanStack Start + TanStack Router (file-based routing) + Vite 8
@@ -39,6 +44,8 @@ The exact number of server functions, query wrappers, and mutation hooks changes
 **Auth Guard Performance**: Auth/setup/2FA success paths use TanStack Router navigation instead of full document reloads so the hydrated app survives post-login transitions. The login form must not pass a Better Auth `callbackURL` when it also navigates after success; router-owned replace navigation prevents duplicate `/admin` transitions and aborted `adminRouteGuard()` server-function fetches. The setup guard caches only positive "admin exists" D1 reads for a short isolate TTL; missing-admin results are not cached. Empty-cookie auth routes skip Better Auth binding initialization and session lookup: `getSessionInfo()` / `redirectIfAuthenticated()` return `null`, `loginPageGuard()` renders login after setup detection, and `adminRouteGuard()` redirects to `/auth/login` before RBAC work. Invited-admin onboarding gates come from the direct D1 session lookup too: `mustChangePassword` redirects to `/auth/forgot-password` before RBAC, and `mustEnrollTwoFactor` redirects to `/auth/setup-2fa` until 2FA is enabled. `adminRouteGuard()` reuses the fresh Better Auth `user.isSuperAdmin` field when loading RBAC context, avoiding a duplicate super-admin D1 read while preserving a fallback query if the auth payload omits the field.
 
 **Order Detail Polling**: Order detail polls order and shipment data every 30 seconds for webhook-driven updates, but it intentionally inherits the global focus/reconnect defaults. Do not re-add focus or reconnect refetches there; the interval is enough, and idle-tab resume should not refresh the old order while the merchant navigates away.
+
+**Navigation Performance**: The sidebar intent-preloads data only for the seven principal read-only list routes whose loaders and rendered components share exact Query keys. Other destinations warm route code only with `router.loadRouteChunk()` so a hover cannot speculate authenticated RBAC or form reads. `useServerTable()` suppresses only the immediate duplicate within a five-second intent-prefetch grace period; invalidated data and ordinary route returns must revalidate even while the domain query remains nominally fresh. Do not speculatively warm adjacent Orders or Customers pages: abandoned hovers must not amplify reads or retain extra buyer PII in the client cache. Keep one-second clocks inside their smallest rendered control, keep persistent shell location subscriptions selected to pathname, and preserve the memoized desktop row boundary. Route search validation must import lightweight discriminator/state leaves rather than pulling full editor models into the global registry. See [the measured release audit](../../docs/PERFORMANCE-RELEASE.md) before changing router pending timings, adopting Table v9, adding virtualization, or broadening preload behavior.
 
 **Read Timeout Behavior**: Admin read-only API transport (`GET`/`HEAD`) is bounded by `ADMIN_API_READ_TIMEOUT_MS` in `src/lib/admin-api-timeout.ts`, including slow JSON/text body reads. Write methods are deliberately unbounded so committed mutations and long-running imports are not reported as timed-out guesses.
 
