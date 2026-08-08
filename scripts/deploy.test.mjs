@@ -11,6 +11,7 @@ import {
   parseStorefrontBuildId,
   sampleApiReadiness,
   resolveDeploymentDatabaseProvider,
+  storefrontStaticPostDeployWarmPaths,
   verifyPostDeployTarget,
   warmStorefrontPath,
 } from "./deploy.mjs";
@@ -199,6 +200,15 @@ describe("storefront post-deploy warming", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it("warms crawler discovery before buyer HTML", () => {
+    expect(storefrontStaticPostDeployWarmPaths.slice(0, 2)).toEqual([
+      "/robots.txt",
+      "/sitemap.xml",
+    ]);
+    expect(storefrontStaticPostDeployWarmPaths).toContain("/");
+    expect(storefrontStaticPostDeployWarmPaths).toContain("/api/product-feed.xml");
   });
 
   it("parses the generated build and cache-status contracts", () => {

@@ -5,6 +5,7 @@ import { getLayoutData } from "@/lib/api";
 import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime-env";
 import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 import { optimizeRichContentImages } from "@/lib/rich-content-media";
+import { applyStorefrontPrefetchPolicyToHtml } from "@/lib/prefetch-policy";
 import { processShortcodes } from "@/lib/shortcodes";
 import {
   buildAbsoluteStorefrontSeoUrl,
@@ -65,7 +66,10 @@ try {
 } catch (error: unknown) {
   console.error(`Error processing article shortcodes for "${slug}":`, error);
 }
-processedContent = optimizeRichContentImages(processedContent);
+processedContent = applyStorefrontPrefetchPolicyToHtml(
+  optimizeRichContentImages(processedContent),
+  Astro.url,
+);
 const hasProductShortcode = processedContent.includes(
   'class="product-shortcode-container"',
 );

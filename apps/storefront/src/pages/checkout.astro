@@ -14,6 +14,7 @@ import Layout from "@/layouts/Layout.astro";
 import CheckoutLoadingOverlay from "@/components/CheckoutLoadingOverlay.astro";
 import { getLayoutData, getCheckoutConfig } from "@/lib/api";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
+import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
 
 const [layoutData, checkoutConfig] = await Promise.all([
   getLayoutData(),
@@ -28,6 +29,7 @@ const serializedCheckoutConfig = serializeJsonForInlineScript(checkoutConfig);
     <!-- Back link -->
     <a
       href="/cart"
+      data-astro-prefetch={getStorefrontPrefetchAttribute("/cart", Astro.url)}
       id="backToCart"
       class="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-6 transition-colors"
     >

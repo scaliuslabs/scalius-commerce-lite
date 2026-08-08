@@ -113,7 +113,8 @@ function itemFromButton(button: HTMLButtonElement): GalleryItem | null {
     productMediaId: optional(button.dataset.productMediaId),
     mediaId: optional(button.dataset.mediaId),
     url,
-    mobileUrl: kind === "image" ? optional(button.dataset.mobileMediaUrl) : null,
+    mobileUrl:
+      kind === "image" ? optional(button.dataset.mobileMediaUrl) : null,
     previewUrl: kind === "image" ? optional(button.dataset.previewUrl) : null,
     posterUrl: optional(button.dataset.posterUrl),
     zoomUrl: kind === "image" ? optional(button.dataset.zoomUrl) : null,
@@ -224,7 +225,10 @@ function dispatchChange(item: GalleryItem): void {
 function sameDocumentUrl(left: string | null, right: string): boolean {
   if (!left) return false;
   try {
-    return new URL(left, document.baseURI).href === new URL(right, document.baseURI).href;
+    return (
+      new URL(left, document.baseURI).href ===
+      new URL(right, document.baseURI).href
+    );
   } catch {
     return left === right;
   }
@@ -235,7 +239,10 @@ function sameDocumentUrl(left: string | null, right: string): boolean {
  * controller state without rewriting that media immediately before LCP. The
  * full mutation path remains the fallback for stale or client-constructed DOM.
  */
-function adoptRenderedInitialItem(root: HTMLElement, item: GalleryItem): boolean {
+function adoptRenderedInitialItem(
+  root: HTMLElement,
+  item: GalleryItem,
+): boolean {
   const currentKey = `${item.kind}:${item.productMediaId ?? item.mediaId ?? item.url}`;
 
   if (item.kind === "image") {
@@ -250,7 +257,8 @@ function adoptRenderedInitialItem(root: HTMLElement, item: GalleryItem): boolean
       !mobileImage ||
       mobileStage?.classList.contains("hidden") ||
       !sameDocumentUrl(mobileImage.getAttribute("src"), renderedUrl)
-    ) return false;
+    )
+      return false;
 
     root.dataset.activeMediaKey = currentKey;
     root.dataset.activeMediaUrl = item.url;
@@ -267,7 +275,8 @@ function adoptRenderedInitialItem(root: HTMLElement, item: GalleryItem): boolean
     !video ||
     videoStage?.classList.contains("hidden") ||
     !sameDocumentUrl(video.getAttribute("src"), item.url)
-  ) return false;
+  )
+    return false;
 
   root.dataset.activeMediaKey = currentKey;
   root.dataset.activeMediaUrl = item.url;
@@ -343,7 +352,8 @@ function setSelectedItem(
     placeholder?.classList.add("hidden");
 
     const useMobileImage = !window.matchMedia("(min-width: 1024px)").matches;
-    const targetUrl = useMobileImage && item.mobileUrl ? item.mobileUrl : item.url;
+    const targetUrl =
+      useMobileImage && item.mobileUrl ? item.mobileUrl : item.url;
     const shouldUsePreview =
       source !== "initial" &&
       Boolean(item.previewUrl) &&
@@ -762,9 +772,43 @@ export function initProductMediaGallery(
     if (item && !adoptRenderedInitialItem(root, item)) {
       setSelectedItem(root, item, "initial");
     }
-  }
-  else {
+  } else {
     const fallback = fallbackItem(root);
     if (fallback) setSelectedItem(root, fallback, "initial");
   }
+  bindDesktopZoomWhenEligible(root, signal);
+}
+
+type DesktopZoomModule = typeof import("./product-desktop-zoom-controller");
+
+export function bindDesktopZoomWhenEligible(
+  root: HTMLElement,
+  signal: AbortSignal,
+  loadController: () => Promise<DesktopZoomModule> = () =>
+    import("./product-desktop-zoom-controller"),
+): void {
+  const desktopQuery = window.matchMedia("(min-width: 1024px)");
+  let requested = false;
+  let removeChangeListener: () => void = () => {};
+
+  const requestController = () => {
+    if (requested || signal.aborted || !desktopQuery.matches) return;
+    requested = true;
+    removeChangeListener();
+    void loadController()
+      .then(({ bindDesktopZoom }) => {
+        if (!signal.aborted) bindDesktopZoom(root, signal);
+      })
+      .catch(() => undefined);
+  };
+
+  const handleChange = () => requestController();
+  if (typeof desktopQuery.addEventListener === "function") {
+    desktopQuery.addEventListener("change", handleChange);
+    removeChangeListener = () =>
+      desktopQuery.removeEventListener("change", handleChange);
+  }
+
+  signal.addEventListener("abort", removeChangeListener, { once: true });
+  requestController();
 }

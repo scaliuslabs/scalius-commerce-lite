@@ -1,7 +1,6 @@
 ---
 import type { Product, ProductMedia } from "@/lib/api";
 import { GALLERY_CONFIG } from "./config";
-import { ProductImageZoom } from "./ProductImageZoom";
 import {
   ChevronDown,
   ChevronUp,
@@ -177,7 +176,7 @@ const hasMultipleMedia = optimizedMedia.length > 1;
         ? "lg:grid lg:grid-cols-[80px_1fr] xl:grid-cols-[100px_1fr]"
         : "lg:block",
     ]}
-  style={`top: 5rem; --gallery-mobile-max-height: ${GALLERY_CONFIG.mainImage.maxHeightMobile};`}
+    style={`top: 5rem; --gallery-mobile-max-height: ${GALLERY_CONFIG.mainImage.maxHeightMobile};`}
   >
     {
       hasMultipleMedia && (
@@ -209,9 +208,9 @@ const hasMultipleMedia = optimizedMedia.length > 1;
                 data-media-kind={itemData.item.kind}
                 data-media-url={itemData.mainUrl}
                 data-mobile-media-url={itemData.mobileUrl}
-                data-preview-url={itemData.item.kind === "image"
-                  ? itemData.thumbUrl
-                  : undefined}
+                data-preview-url={
+                  itemData.item.kind === "image" ? itemData.thumbUrl : undefined
+                }
                 data-poster-url={itemData.posterUrl ?? undefined}
                 data-zoom-url={itemData.zoomUrl ?? undefined}
                 data-alt-text={itemData.altText}
@@ -295,13 +294,34 @@ const hasMultipleMedia = optimizedMedia.length > 1;
               initialMedia?.item.kind === "video" && "lg:!hidden",
             ]}
           >
-            <ProductImageZoom
-              client:media="(min-width: 1024px)"
-              initialImage={initialImageUrl}
-              initialZoomImage={initialImageZoomUrl}
-              alt={initialImageAlt}
-              aspectRatio="aspect-square"
-            />
+            <div
+              data-desktop-image-zoom
+              class="group relative aspect-square w-full cursor-crosshair overflow-hidden rounded-xl border border-gray-100 bg-white"
+              style="contain: layout style;"
+            >
+              <img
+                data-desktop-main-image
+                src={initialImageUrl}
+                alt={initialImageAlt}
+                width={imageTransforms.display}
+                height={imageTransforms.display}
+                class="h-full w-full object-contain object-center transition-opacity duration-150 motion-reduce:transition-none"
+                loading="lazy"
+                fetchpriority="low"
+                decoding="async"
+              />
+              <div
+                data-desktop-zoom-layer
+                class="pointer-events-none absolute inset-0 bg-white bg-no-repeat opacity-0 transition-opacity duration-150 motion-reduce:transition-none"
+                aria-hidden="true"
+              >
+              </div>
+              <div
+                class="pointer-events-none absolute right-3 bottom-3 rounded-full bg-white/80 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-gray-600 opacity-0 shadow-sm backdrop-blur transition-opacity group-hover:opacity-100 motion-reduce:transition-none"
+              >
+                Zoom
+              </div>
+            </div>
           </div>
 
           <button
@@ -413,9 +433,11 @@ const hasMultipleMedia = optimizedMedia.length > 1;
                       data-media-kind={itemData.item.kind}
                       data-media-url={itemData.mainUrl}
                       data-mobile-media-url={itemData.mobileUrl}
-                      data-preview-url={itemData.item.kind === "image"
-                        ? itemData.thumbUrl
-                        : undefined}
+                      data-preview-url={
+                        itemData.item.kind === "image"
+                          ? itemData.thumbUrl
+                          : undefined
+                      }
                       data-poster-url={itemData.posterUrl ?? undefined}
                       data-zoom-url={itemData.zoomUrl ?? undefined}
                       data-alt-text={itemData.altText}

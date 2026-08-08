@@ -10,6 +10,7 @@ import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime-env";
 import { buildResourceCanonicalSeoUrl } from "@/lib/seo-base-url";
 import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 import { optimizeRichContentImages } from "@/lib/rich-content-media";
+import { applyStorefrontPrefetchPolicyToHtml } from "@/lib/prefetch-policy";
 import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-response";
 import { sanitizeHtml } from "@scalius/shared/html-sanitize";
 
@@ -87,7 +88,10 @@ if (sanitizedPageContent) {
     processedContent = sanitizedPageContent;
   }
 }
-processedContent = optimizeRichContentImages(processedContent);
+processedContent = applyStorefrontPrefetchPolicyToHtml(
+  optimizeRichContentImages(processedContent),
+  Astro.url,
+);
 
 const hasProductShortcode = processedContent.includes(
   'class="product-shortcode-container"',

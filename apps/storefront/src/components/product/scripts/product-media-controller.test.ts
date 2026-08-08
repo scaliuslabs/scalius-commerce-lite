@@ -4,9 +4,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { storefrontSourcePath } from "@/lib/test-source-paths";
 import {
+  bindDesktopZoomWhenEligible,
   initProductMediaGallery,
   type ProductMediaChangeDetail,
 } from "./product-media-controller";
+import { bindDesktopZoom } from "./product-desktop-zoom-controller";
 
 const GALLERY_SOURCE = storefrontSourcePath(
   "components/product/ProductGallery.astro",
@@ -15,9 +17,6 @@ const PRODUCT_PAGE_SOURCE = storefrontSourcePath("pages/products/[slug].astro");
 const API_TYPES_SOURCE = storefrontSourcePath("lib/api/types.ts");
 const PRODUCT_CONTROLLER_SOURCE = storefrontSourcePath(
   "components/product/scripts/product-controller.ts",
-);
-const PRODUCT_ZOOM_SOURCE = storefrontSourcePath(
-  "components/product/ProductImageZoom.tsx",
 );
 const GLOBAL_STYLE_SOURCE = storefrontSourcePath("styles/global.css");
 
@@ -71,7 +70,10 @@ function renderGallery(initial = "pmed_video") {
         data-fallback-alt="Fallback image"
       >
         <div data-image-stage="desktop" class="hidden lg:block">
-          <img data-desktop-main-image src="/fallback-main.jpg" />
+          <div data-desktop-image-zoom>
+            <img data-desktop-main-image src="/fallback-main.jpg" />
+            <div data-desktop-zoom-layer></div>
+          </div>
         </div>
         <button data-image-stage="mobile" data-mobile-image-trigger>
           <img data-mobile-main-image src="/fallback-main.jpg" />
@@ -483,6 +485,109 @@ describe("mixed product media gallery", () => {
     expect(document.activeElement).toBe(trigger);
     expect(document.body.style.overflow).toBe("clip");
   });
+
+  it("loads desktop zoom detail only after hover and restores the base image", async () => {
+    const requests: Array<{
+      src: string;
+      fetchPriority: string;
+      onload: (() => void) | null;
+    }> = [];
+    class DeferredImage {
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      fetchPriority = "auto";
+      decode = vi.fn().mockResolvedValue(undefined);
+      private value = "";
+      set src(value: string) {
+        this.value = value;
+        requests.push(this);
+      }
+      get src() {
+        return this.value;
+      }
+    }
+    vi.stubGlobal("Image", DeferredImage);
+
+    const root = renderGallery("pmed_image");
+    root.querySelector<HTMLImageElement>("[data-desktop-main-image]")!.src =
+      "/image-main.jpg";
+    root.querySelector<HTMLImageElement>("[data-mobile-main-image]")!.src =
+      "/image-mobile.jpg";
+    initProductMediaGallery(root);
+    bindDesktopZoom(root, new AbortController().signal);
+
+    expect(requests).toHaveLength(0);
+    const zoom = root.querySelector<HTMLElement>("[data-desktop-image-zoom]")!;
+    const layer = root.querySelector<HTMLElement>("[data-desktop-zoom-layer]")!;
+    const image = root.querySelector<HTMLImageElement>(
+      "[data-desktop-main-image]",
+    )!;
+    zoom.dispatchEvent(new MouseEvent("mouseenter"));
+
+    expect(requests).toHaveLength(1);
+    expect(requests[0]).toMatchObject({
+      src: "/image-zoom.jpg",
+      fetchPriority: "high",
+    });
+    expect(image.classList.contains("opacity-0")).toBe(true);
+    expect(layer.classList.contains("opacity-0")).toBe(false);
+
+    requests[0]!.onload?.();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(layer.style.backgroundImage).toContain("image-zoom.jpg");
+
+    zoom.dispatchEvent(new MouseEvent("mouseleave"));
+    expect(image.classList.contains("opacity-0")).toBe(false);
+    expect(layer.classList.contains("opacity-0")).toBe(true);
+  });
+
+  it("uses the desktop base image for zoom fallback on Save-Data", () => {
+    vi.stubGlobal("navigator", { connection: { saveData: true } });
+    const root = renderGallery("pmed_image");
+    root.dataset.activeMediaKey = "image:pmed_image";
+    root.dataset.activeMediaUrl = "/slow-main.jpg";
+    root.dataset.activeMediaDisplayUrl = "/slow-preview.jpg";
+    root.dataset.activeMediaZoomUrl = "/slow-zoom.jpg";
+    bindDesktopZoom(root, new AbortController().signal);
+
+    root
+      .querySelector<HTMLElement>("[data-desktop-image-zoom]")!
+      .dispatchEvent(new MouseEvent("mouseenter"));
+
+    expect(
+      root.querySelector<HTMLElement>("[data-desktop-zoom-layer]")!.style
+        .backgroundImage,
+    ).toContain("slow-main.jpg");
+  });
+
+  it("loads desktop zoom once when a resized viewport first crosses 1024px", async () => {
+    const query = new EventTarget() as MediaQueryList;
+    Object.defineProperty(query, "matches", { configurable: true, value: false });
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: vi.fn(() => query),
+    });
+    const bindDesktopZoomMock = vi.fn();
+    const loadController = vi.fn(async () => ({
+      bindDesktopZoom: bindDesktopZoomMock,
+    }));
+    const root = renderGallery("pmed_image");
+
+    bindDesktopZoomWhenEligible(
+      root,
+      new AbortController().signal,
+      loadController,
+    );
+    expect(loadController).not.toHaveBeenCalled();
+
+    Object.defineProperty(query, "matches", { configurable: true, value: true });
+    query.dispatchEvent(new Event("change"));
+    await vi.waitFor(() => expect(bindDesktopZoomMock).toHaveBeenCalledOnce());
+    query.dispatchEvent(new Event("change"));
+
+    expect(loadController).toHaveBeenCalledOnce();
+  });
 });
 
 describe("storefront mixed-media source boundaries", () => {
@@ -517,7 +622,9 @@ describe("storefront mixed-media source boundaries", () => {
       "utf8",
     );
     expect(controller).toContain('import("@player.style/microvideo")');
-    expect(controller).toContain('customElements.whenDefined("media-theme-microvideo")');
+    expect(controller).toContain(
+      'customElements.whenDefined("media-theme-microvideo")',
+    );
     expect(controller).toContain("video.controls = false");
     expect(controller).toContain("video.controls = true");
     const styles = readFileSync(GLOBAL_STYLE_SOURCE, "utf8");
@@ -527,7 +634,9 @@ describe("storefront mixed-media source boundaries", () => {
 
   it("keeps the closed mobile zoom dialog inert until the controller opens it", () => {
     const gallery = readFileSync(GALLERY_SOURCE, "utf8");
-    expect(gallery).toMatch(/data-mobile-zoom-modal[\s\S]*?aria-hidden="true"[\s\S]*?\binert\b/);
+    expect(gallery).toMatch(
+      /data-mobile-zoom-modal[\s\S]*?aria-hidden="true"[\s\S]*?\binert\b/,
+    );
   });
 
   it("passes the ordered media contract directly and removes the image adapter type", () => {
@@ -540,7 +649,9 @@ describe("storefront mixed-media source boundaries", () => {
     expect(controller).toContain('new CustomEvent("product-media-select"');
     expect(controller).toContain("resolveVariantImageForSelection(");
     expect(controller).toContain("resolveVariantCartMedia(validation.variant");
-    expect(controller).toContain("imageMediaId: cache.container.dataset.productImageMediaId");
+    expect(controller).toContain(
+      "imageMediaId: cache.container.dataset.productImageMediaId",
+    );
     expect(controller).not.toContain("currentDisplayedImage");
     expect(controller).not.toContain("product-image-change");
     expect(controller).not.toContain("controller-image-update");
@@ -554,21 +665,28 @@ describe("storefront mixed-media source boundaries", () => {
       ),
       "utf8",
     );
-    const zoom = readFileSync(PRODUCT_ZOOM_SOURCE, "utf8");
     expect(gallery).not.toContain("data-variant-image");
     expect(gallery).not.toContain("variantImageIds");
     expect(gallery).toContain("data-preview-url");
     expect(gallery).toContain("imageTransforms.preview");
     expect(controller).toContain("const shouldUsePreview =");
-    expect(controller).toContain("source !== \"initial\"");
+    expect(controller).toContain('source !== "initial"');
     expect(controller).toContain("root.dataset.activeMediaKey !== currentKey");
     expect(controller).toContain("activeMediaDisplayUrl");
     expect(controller).toContain("imagePreloads");
     expect(controller).not.toContain("scheduleVariantImagePreload");
     expect(controller).not.toContain("[data-variant-image='true']");
     expect(controller).not.toContain("scheduleInitialImagePreload");
-    expect(zoom).not.toContain("scheduleZoomImagePreload");
-    expect(zoom).toContain("requestZoomImage");
-    expect(zoom).toContain("imagePreloads");
+    expect(gallery).not.toContain("client:media");
+    expect(gallery).not.toContain("ProductImageZoom");
+    expect(gallery).toContain("data-desktop-image-zoom");
+    expect(gallery).toMatch(
+      /data-desktop-main-image[\s\S]*?loading="lazy"[\s\S]*?fetchpriority="low"/,
+    );
+    expect(gallery).toMatch(
+      /data-mobile-main-image[\s\S]*?loading="eager"[\s\S]*?fetchpriority="high"/,
+    );
+    expect(controller).toContain('import("./product-desktop-zoom-controller")');
+    expect(controller).toContain(".catch(() => undefined)");
   });
 });

@@ -71,13 +71,12 @@ const collectionHref = `/collections/${encodeURIComponent(collection.id)}`;
             data-product-rail-track
             class="flex snap-x snap-mandatory gap-3 overflow-x-auto py-2 [scrollbar-width:none] md:gap-4 [&::-webkit-scrollbar]:hidden"
           >
-            {products.map((product, index) => (
+            {products.map((product) => (
               <div class="w-[72%] shrink-0 snap-start sm:w-[calc((100%_-_2rem)/3)] lg:w-[calc((100%_-_3rem)/4)] xl:w-[calc((100%_-_4rem)/5)]">
                 <ProductCard
                   product={product}
                   currencySymbol={currencySymbol}
                   currencyCode={currencyCode}
-                  priority={index === 0}
                 />
               </div>
             ))}

@@ -6,6 +6,10 @@ const source = readFileSync(
   resolve(import.meta.dirname, "CustomCarousel.astro"),
   "utf8",
 );
+const homepageProductRailSource = readFileSync(
+  resolve(import.meta.dirname, "../collection2.astro"),
+  "utf8",
+);
 
 describe("homepage carousel media boundaries", () => {
   it("requests only the hero source for the active viewport", () => {
@@ -23,10 +27,14 @@ describe("homepage carousel media boundaries", () => {
     expect(source).toContain("width={presentation.width}");
     expect(source).toContain("height={height}");
     expect(source).toContain("getHeroSlideObjectPosition(focalPoint)");
-    expect(source).toContain(
-      'index === 0 ? (type === "desktop" ? 90 : 85) : 80',
+    expect(source).toMatch(
+      /type === "desktop"\s*\?\s*index === 0\s*\?\s*90\s*:\s*80\s*:\s*index === 0\s*\?\s*75\s*:\s*70/,
     );
-    expect(source).not.toContain("quality: index === 0 ? 90 : 80");
+    expect(source).not.toContain('type === "desktop" ? (index === 0 ? 75');
+  });
+
+  it("reserves high image priority for the hero during the critical load", () => {
+    expect(homepageProductRailSource).not.toContain("priority={index === 0}");
   });
 
   it("uses full touch targets without inflating the visible carousel dots", () => {
@@ -40,7 +48,7 @@ describe("homepage carousel media boundaries", () => {
 
   it("warms later slides just in time and tears timers down on navigation", () => {
     expect(source).toContain("async prepareSlide(index: number)");
-    expect(source).toContain("this.interval - 1000");
+    expect(source).toContain("Math.max(6_000, this.interval - 2_000)");
     expect(source).toContain("source[data-srcset]");
     expect(source).toContain('document.addEventListener("astro:before-swap"');
     expect(source).toContain("carousel.__carouselController?.dispose()");

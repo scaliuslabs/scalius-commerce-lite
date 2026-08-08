@@ -54,14 +54,29 @@ const appDirsByTarget = {
   admin: "apps/admin-v2",
   storefront: "apps/storefront",
 };
-const storefrontStaticPostDeployWarmPaths = ["/", "/search"];
+export const storefrontStaticPostDeployWarmPaths = [
+  "/robots.txt",
+  "/sitemap.xml",
+  "/sitemap-static.xml",
+  "/sitemap-products.xml",
+  "/sitemap-categories.xml",
+  "/sitemap-collections.xml",
+  "/sitemap-pages.xml",
+  "/sitemap-articles.xml",
+  "/api/product-feed.xml",
+  "/api/facebook-feed.xml",
+  "/",
+  "/search",
+];
 const STOREFRONT_DYNAMIC_WARM_LIMIT = 4;
 const STOREFRONT_DYNAMIC_WARM_TIMEOUT_MS = 8_000;
 const STOREFRONT_WARM_CONCURRENCY = 4;
 // Custom-domain routing can trail a 100%-reported Worker deployment briefly.
-// Bound verification at 30 seconds; /health is no-store, so an old health build
-// is route propagation evidence rather than a cache-purge instruction.
-const STOREFRONT_WARM_MAX_ATTEMPTS = 20;
+// Bound verification at 90 seconds; /health is no-store, so an old health build
+// is route propagation evidence rather than a cache-purge instruction. A live
+// release rehearsal observed a healthy custom-domain update just after the old
+// 30-second bound while Wrangler already reported the new version at 100%.
+const STOREFRONT_WARM_MAX_ATTEMPTS = 60;
 const STOREFRONT_WARM_RETRY_DELAY_MS = 1_500;
 const API_READYZ_SAMPLE_COUNT = 4;
 const API_READYZ_SAMPLE_DELAY_MS = 1_000;
@@ -647,7 +662,7 @@ async function collectStorefrontWarmPaths(generatedConfig) {
 async function warmStorefrontAfterDeploy(storefrontUrl, generatedConfig, expectedBuildId) {
   const warmPaths = await collectStorefrontWarmPaths(generatedConfig);
 
-  console.log("\n▶ Warm Storefront critical HTML caches");
+  console.log("\n▶ Warm Storefront critical public caches");
   console.log(`  ${warmPaths.join(", ")}\n`);
 
   for (let index = 0; index < warmPaths.length; index += STOREFRONT_WARM_CONCURRENCY) {

@@ -1,5 +1,12 @@
 const PRIVATE_SESSION_COOKIE_NAMES = ["cs_tok", "cs_auth", "stp_theme_preview"];
 
+export const PRIVATE_STOREFRONT_PATHNAME_RE =
+  /^\/(?:account|buy|cart|checkout|order-success|payment-recovery|theme-preview)(?:\/|$)/;
+
+export function isPrivateStorefrontPathname(pathname: string): boolean {
+  return PRIVATE_STOREFRONT_PATHNAME_RE.test(pathname);
+}
+
 function hasNamedCookie(cookieHeader: string, cookieNames: readonly string[]): boolean {
   const names = new Set(cookieNames);
 
@@ -33,6 +40,15 @@ export function requestHasPrivateSession(headers: Headers): boolean {
   if (!cookieHeader) return false;
 
   return hasNamedCookie(cookieHeader, PRIVATE_SESSION_COOKIE_NAMES);
+}
+
+/** Mirrors the native public-cache admission boundary for request metadata. */
+export function requestBypassesPublicStorefrontCache(headers: Headers): boolean {
+  return (
+    Boolean(headers.get("Authorization")) ||
+    Boolean(headers.get("Cookie")) ||
+    Boolean(headers.get("X-API-Token"))
+  );
 }
 
 const CACHEABLE_PUBLIC_CONTENT_TYPES = [

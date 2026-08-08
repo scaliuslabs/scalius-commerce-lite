@@ -1,6 +1,7 @@
 ---
 import { RotateCcw, Truck } from "lucide-react";
 import type { HomepageData } from "@/lib/api/storefront";
+import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
 
 type TrustStrip = HomepageData["presentation"]["trustStrip"];
 
@@ -33,7 +34,7 @@ const items = strip.enabled ? strip.items : [];
           return (
             <li>
               {item.href ? (
-                <a href={item.href} class="flex min-h-20 items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/40 md:px-5">
+                <a href={item.href} data-astro-prefetch={getStorefrontPrefetchAttribute(item.href, Astro.url)} class="flex min-h-20 items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/40 md:px-5">
                   {content}
                 </a>
               ) : (

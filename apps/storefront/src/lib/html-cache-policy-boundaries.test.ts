@@ -13,7 +13,7 @@ const wranglerSource = readFileSync(
 
 describe("storefront response cache boundaries", () => {
   it("keeps private and variant-specific responses out of shared caching", () => {
-    expect(middlewareSource).toContain("requestHasPrivateSession");
+    expect(middlewareSource).toContain("requestBypassesPublicStorefrontCache");
     expect(middlewareSource).toContain(
       "hasStorefrontProductVariantSelectionParams(url)",
     );

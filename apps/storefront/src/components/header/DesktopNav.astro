@@ -2,6 +2,7 @@
 import type { NavigationItem } from "@/lib/api";
 import { ChevronDown } from "lucide-react";
 import RecursiveDesktopNav from "./RecursiveDesktopNav.astro";
+import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
 
 interface Props {
   navigation: NavigationItem[];
@@ -32,6 +33,7 @@ const dropdownPanelClass =
           {item.href ? (
           <a
             href={item.href}
+            data-astro-prefetch={getStorefrontPrefetchAttribute(item.href, Astro.url)}
             target={item.openInNewTab ? "_blank" : undefined}
             rel={item.openInNewTab ? "noopener noreferrer" : undefined}
             class="flex items-center gap-1.5 w-full h-full"

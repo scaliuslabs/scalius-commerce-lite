@@ -1,6 +1,7 @@
 ---
 // src/components/recursive-footer-link.astro
 import type { FooterMenuLink } from "@/lib/api";
+import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
 
 interface Props {
   links: FooterMenuLink[];
@@ -19,7 +20,7 @@ const paddingLeft = depth > 0 ? `${depth * 12}px` : "0";
       links.map((link) => (
         <li>
           {link.href ? (
-          <a href={link.href} target={link.openInNewTab ? "_blank" : undefined} rel={link.openInNewTab ? "noopener noreferrer" : undefined} class="inline-flex items-center gap-2 text-base font-medium text-white/70 hover:text-white transition-colors duration-200 group" style={`padding-left: ${paddingLeft}`}>
+          <a href={link.href} data-astro-prefetch={getStorefrontPrefetchAttribute(link.href, Astro.url)} target={link.openInNewTab ? "_blank" : undefined} rel={link.openInNewTab ? "noopener noreferrer" : undefined} class="inline-flex items-center gap-2 text-base font-medium text-white/70 hover:text-white transition-colors duration-200 group" style={`padding-left: ${paddingLeft}`}>
             {depth > 0 && (
               <span class="w-1.5 h-1.5 bg-white/40 rounded-full group-hover:bg-white transition-colors shrink-0" />
             )}
