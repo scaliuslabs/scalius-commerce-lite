@@ -31,6 +31,10 @@ This note records the performance evidence and release decisions for the Commerc
 | Homepage mobile second-pass | [run `hcqj0yu9dn`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com/hcqj0yu9dn?form_factor=mobile) | 98/100/100/100; FCP 1.826 s; LCP 2.177 s; TBT 0; CLS 0 |
 | Homepage desktop | [run `shwlqeh8ip`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com/shwlqeh8ip?form_factor=desktop) | 100/100/100/100; FCP 0.506 s; LCP 0.563 s; TBT 0; CLS 0.00026 |
 | Product mobile | [run `3wqcg6981u`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com-products-rider-court-trainers/3wqcg6981u?form_factor=mobile) | 98/100/100/100; FCP 1.832 s; LCP 1.983 s; TBT 0; CLS 0 |
+| Final homepage mobile | [run `b28zxipsn7`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com/b28zxipsn7?form_factor=mobile) | 98/100/100/100; FCP 1.8 s; LCP 2.2 s; TBT 0; CLS 0 |
+| Final homepage desktop | [run `b28zxipsn7`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com/b28zxipsn7?form_factor=desktop) | 100/100/100/100; FCP 0.5 s; LCP 0.6 s; TBT 0; CLS 0.005 |
+| Final optioned product mobile | [run `esq7kzpb0q`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com-products-echo-mini-bluetooth-speaker/esq7kzpb0q?form_factor=mobile) | 98/100/100/100; FCP 1.9 s; LCP 2.0 s; TBT 0; CLS 0 |
+| Final reference product desktop | [run `bkcaistikn`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com-products-rider-court-trainers/bkcaistikn?form_factor=desktop) | 100/100/100/100; FCP 0.5 s; LCP 0.5 s; TBT 0; CLS 0 |
 
 These reports contained no CrUX field data; they are repeatable Lighthouse lab evidence, not a claim that real-user p75 LCP is 2.1-2.2 seconds. Cloudflare Web Analytics was not active on the verified live homepage, product, or search routes, so no field-vitals clock or pre/post RUM baseline exists yet. If exactly one Cloudflare collection mode is deliberately enabled later, define `T0` as the first verified beacon POST, treat seven days as provisional and 28 days as final, require adequate cohort samples plus Good LCP/INP/CLS, and label the evidence Chromium-only rather than Safari/Firefox or CrUX.
 
@@ -56,7 +60,21 @@ The earlier mobile SEO 92 was a transient `robots.txt` fetch timeout, not a mobi
 
 ## Dashboard evidence and changes
 
-Production authentication, desktop and mobile shell navigation, data-heavy inventory/orders screens, and session cleanup were exercised with the demo account. After route code and data had been warmed by intent, the seven principal list destinations updated their headings inside the audit's 100 ms warm-navigation target. This is DOM response—not a claim about background-tab paint—and final deployment verification must repeat the interaction before it is treated as release evidence.
+Production authentication, desktop and mobile shell navigation, data-heavy inventory/orders screens, and session cleanup were exercised with the demo account. The final fresh-profile smoke passed all 23 authenticated routes with zero console errors and zero page exceptions. Mobile inventory rendered the bounded variant list and all inventory aggregates; mobile orders rendered the paginated 10-of-17 order list without a console warning or error.
+
+The final production repeat-navigation measurements below record click-to-heading DOM response after the route had been visited. They are not background-tab paint or field INP measurements.
+
+| Route | Repeat click-to-heading |
+| --- | ---: |
+| Products | 27.2 ms |
+| Orders | 47.3 ms |
+| Customers | 22.3 ms |
+| Inventory | 49.6 ms |
+| Media | 29.1 ms |
+| Discounts | 20.3 ms |
+| Analytics | 24.0 ms |
+
+All seven repeat destinations meet the 100 ms responsiveness target. The preceding first visit measured 25.2-66.5 ms for Products, Orders, Customers, Inventory, and Discounts, while Media and Analytics were 356.0 ms and 263.6 ms before their route code/data was resident. That distinction is retained instead of presenting warm navigation as cold-start performance.
 
 Retained changes:
 
@@ -68,6 +86,7 @@ Retained changes:
 - Narrow persistent sidebar/header location subscriptions to pathname and isolate the orders countdown from the 1,342-line route so one-second ticks do not reconstruct the route and table.
 - Keep route-search discriminators independent from full editor models. Disposable before/after builds showed a material reduction in the root and login critical closures; the structural boundary tests, rather than untracked raw samples, are the durable regression guard.
 - Emit generated dashboard JS/CSS only beneath `/assets/immutable/` with content hashes and one-year immutable caching. HTML, source maps, and copied stable public assets are excluded by a fail-closed build gate, eliminating conditional revalidation for unchanged route chunks on repeat visits.
+- Keep the SSR and client Vite asset directories identical. The first live dashboard deploy exposed that a client-only `assetsDir` change left the SSR manifest pointing at three missing legacy URLs. The release gate now resolves every CSS/image/font URL in the server manifest against `dist/client`, so this class of deploy can no longer pass locally.
 
 TanStack Table v9.1.0 was evaluated after v9.0.0 became stable on 2026-08-04. Scalius stays on v8 for this release: v9 had only four days of stable-channel exposure, its headline gains target client row models and very large tables, while Scalius uses authoritative server pagination with a 10-row default and a 100-row cap. A disposable native-v9 explicit-feature comparison was larger and slower for this bounded workload, while the checked-in v8 row-boundary test already proves the relevant reactivity gain. Reassess after four to six weeks only if a real table crosses 250 rendered rows/2,000 cells, a table action exceeds 16 ms, or a reproducible native-v9 benchmark saves at least 5 KiB gzip or 20% and 10 ms p95 CPU without behavior regressions.
 
@@ -135,5 +154,12 @@ pnpm ops:check --queues
 ```
 
 The authenticated admin read smoke additionally covers inventory, orders, order detail/form, all browser routes, and session cleanup. Browser verification covers sign-out/sign-in, desktop/mobile dashboard navigation, inventory and orders, storefront search, product option selection, add/remove cart restoration, checkout form readiness, and validation failure states without placing an order or charging a payment method.
+
+Final deployed versions verified on 2026-08-08:
+
+- API Worker `1a2e2266-738f-43a6-b4d1-8de235925ed6`.
+- Dashboard Worker `f287784b-1ed1-477b-b408-383006c28b6d`.
+- Storefront Worker `3716fdb4-db2d-4af2-9c67-cc97200e8578`, build `src-a0f24aecce3cede5`.
+- `pnpm release:check`, `pnpm ops:check --queues`, and the authenticated 23-route admin read smoke all passed against those live surfaces.
 
 For synthetic 100 work, representative Lighthouse 13.4.1 paired reductions from the 1.826/2.177-second run are approximately 255/632, 464/385, or 759/243 ms for FCP/LCP. These metrics share causes, so their sum is not a physical critical-path duration and one source need not own the entire gap. Reopen storefront work sooner for a real-user RUM regression or a new controllable opportunity worth at least 100 ms p75 even when it cannot create a synthetic 100. Reopen a dashboard architecture rewrite when a measured hot interaction misses p75 100 ms first-feedback/warm-heading or the INP 200 ms release ceiling, and require at least a 15% or 50 ms p75 win without a p95 regression.
