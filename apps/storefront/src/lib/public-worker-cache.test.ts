@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  applyPublicStorefrontPreconnectHint,
   decoratePublicStorefrontResponse,
   exposePublicStorefrontResponse,
   getPublicStorefrontCachePolicy,
@@ -10,6 +11,30 @@ import {
 } from "./public-worker-cache";
 
 describe("public storefront Worker cache policy", () => {
+  it("adds only a stable HTTPS CDN preconnect candidate", () => {
+    const response = new Response("page", {
+      headers: { Link: "</_astro/app.js>; rel=preload; as=script" },
+    });
+
+    applyPublicStorefrontPreconnectHint(response, "cloud.example.com/media");
+    applyPublicStorefrontPreconnectHint(response, "https://cloud.example.com");
+
+    expect(response.headers.get("Link")).toBe(
+      "</_astro/app.js>; rel=preload; as=script, <https://cloud.example.com>; rel=preconnect; crossorigin",
+    );
+  });
+
+  it.each([
+    "http://cloud.example.com",
+    "https://user:secret@cloud.example.com",
+    "not a host",
+    "",
+  ])("rejects unsafe Early Hints origin %j", (configuredCdnUrl) => {
+    const response = new Response("page");
+    applyPublicStorefrontPreconnectHint(response, configuredCdnUrl);
+    expect(response.headers.get("Link")).toBeNull();
+  });
+
   it("maps equivalent CMS query forms to one native cache URL", () => {
     const left = getPublicStorefrontCachePolicy(
       new Request("https://shop.example/about/?ref=footer&campaign=sale"),
@@ -29,7 +54,7 @@ describe("public storefront Worker cache policy", () => {
   it.each([
     ["https://shop.example", "https://shop.example/products/fish"],
     ["https://preview.example", "https://preview.example/products/fish"],
-  ])("retains host isolation for %s", (origin, canonicalUrl) => {
+  ])("retains the request host in the canonical inner request for %s", (origin, canonicalUrl) => {
     expect(getPublicStorefrontCachePolicy(
       new Request(`${origin}/products/fish`),
     )?.canonicalUrl).toBe(canonicalUrl);

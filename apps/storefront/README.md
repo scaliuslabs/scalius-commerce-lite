@@ -82,11 +82,12 @@ private and never reach the shared cache.
 
 The gateway maps tracking-decorated, default-valued, and permuted query forms
 to a canonical same-host internal Request. This prevents equivalent-query cache
-amplification without an Enterprise-only custom cache-key dependency.
-Cloudflare's native key retains the complete canonical URL,
-so custom domains and preview hosts do not share responses, and its default
-Worker-version component prevents a new deployment from serving an older
-version's cached HTML. Keep `cross_version_cache` disabled.
+amplification without an Enterprise-only custom cache-key dependency. Workers
+Caching keys by entrypoint, Worker version, path/query, and service-call props;
+it does not include the hostname. This deployment therefore exposes exactly one
+custom domain and disables `workers.dev` plus preview URLs. Add an explicit
+tenant/host partition before ever routing another hostname to this Worker. Keep
+`cross_version_cache` disabled so a new deployment cannot serve older HTML.
 
 The gateway also verifies the cached inner response's `X-Storefront-Build`
 stamp. A mismatch triggers one bounded semantic-tag purge and retry so a stale
@@ -136,11 +137,23 @@ catalog intent prefetch globally for truly anonymous pages.
 
 - `src/lib/canonical-query.ts` owns canonical query handling for API read keys.
 - `@scalius/shared/storefront-cache-path` owns rendered public-path canonicalization.
-- The native cache owns the complete canonical Request URL and Worker-version
-  key. Equivalent safe query forms share that URL; product variant-selection
-  parameters bypass public caching entirely.
+- The native cache owns the canonical path/query and Worker-version key, but not
+  the hostname. Equivalent safe query forms share that key; product
+  variant-selection parameters bypass public caching entirely. The one-domain
+  deployment boundary above is part of the cache-isolation contract.
 - Do not pass `cf.cacheKey` to the native entrypoint. It is unnecessary for
-  version/host isolation and is an Enterprise-only CDN feature.
+  this one-host deployment and is an Enterprise-only zone-CDN feature that does
+  not configure Workers Caching.
+
+### Early Hints
+
+Anonymous public HTML includes only a deployment-stable CDN `preconnect` in its
+HTTP `Link` header. Cloudflare may cache that header separately and emit it as a
+`103 Early Hints` response before the Worker runs. Never add merchant hero,
+product, query-specific, private, or build-version asset URLs to that header:
+the separate URI-only hints cache is not part of semantic `ctx.cache.purge()`
+and a stale preload can waste constrained mobile bandwidth. The stable
+preconnect transfers no asset bytes and does not alter commerce freshness.
 
 ### Cache Invalidation
 

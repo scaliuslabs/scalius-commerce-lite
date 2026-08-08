@@ -48,6 +48,46 @@ export interface PublicStorefrontCachePolicy {
   tags: readonly string[];
 }
 
+const PUBLIC_PRECONNECT_REL = "rel=preconnect";
+
+function normalizeHttpsOrigin(value: string | null | undefined): string | null {
+  const raw = value?.trim();
+  if (!raw) return null;
+
+  try {
+    const url = new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`);
+    if (
+      url.protocol !== "https:" ||
+      url.username ||
+      url.password ||
+      !url.hostname
+    ) {
+      return null;
+    }
+    return url.origin;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Expose one deployment-stable Early Hints candidate for public HTML. A
+ * preconnect transfers no merchant asset bytes, so Cloudflare's separate,
+ * URI-only 103 cache cannot serve stale price, inventory, or hero content.
+ */
+export function applyPublicStorefrontPreconnectHint(
+  response: Response,
+  configuredCdnUrl: string | null | undefined,
+): void {
+  const origin = normalizeHttpsOrigin(configuredCdnUrl);
+  if (!origin) return;
+
+  const candidate = `<${origin}>; ${PUBLIC_PRECONNECT_REL}; crossorigin`;
+  const current = response.headers.get("Link");
+  if (current?.includes(candidate)) return;
+  response.headers.append("Link", candidate);
+}
+
 interface PublicStorefrontRoutePolicy {
   edgeTtlSeconds: number;
   tags: readonly string[];

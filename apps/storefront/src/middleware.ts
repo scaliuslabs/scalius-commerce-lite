@@ -17,7 +17,10 @@ import {
   applyBrowserCachePolicyForPublicResponse,
   isSuccessfulPublicDiscoveryResponse,
 } from "@/lib/public-discovery-cache";
-import { getPublicStorefrontCachePolicy } from "@/lib/public-worker-cache";
+import {
+  applyPublicStorefrontPreconnectHint,
+  getPublicStorefrontCachePolicy,
+} from "@/lib/public-worker-cache";
 import { BUILD_ID } from "@/config/build-id";
 
 function getEnv(): Env | null {
@@ -45,6 +48,7 @@ function setPrivateResponse(response: Response, status: string): void {
 const responsePolicyMiddleware = defineMiddleware(async (context, next) => {
   const { request, url } = context;
   const response = await next();
+  const env = getEnv();
   response.headers.set("X-Storefront-Build", BUILD_ID);
   const isGet = request.method === "GET" || request.method === "HEAD";
   const hasVariantSelection = hasStorefrontProductVariantSelectionParams(url);
@@ -78,13 +82,18 @@ const responsePolicyMiddleware = defineMiddleware(async (context, next) => {
 
     if (publicPolicy && publicResponse) {
       applyBrowserCachePolicyForPublicResponse(response, url.pathname);
+      if (
+        response.headers.get("Content-Type")?.toLowerCase().includes("text/html")
+      ) {
+        applyPublicStorefrontPreconnectHint(response, env?.CDN_DOMAIN_URL);
+      }
       response.headers.set("X-Cache-Status", "NATIVE");
     } else if (!response.headers.has("Cache-Control")) {
       setPrivateResponse(response, "BYPASS");
     }
   }
 
-  return setPageCspHeader(response, getEnv() ?? undefined);
+  return setPageCspHeader(response, env ?? undefined);
 });
 
 const apiContextMiddleware = defineMiddleware((_context, next) => {
