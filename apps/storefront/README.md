@@ -115,6 +115,12 @@ catalog intent prefetch globally for truly anonymous pages.
 - The generated build ID is validated as a path-safe token before Astro config
   uses it. Cloudflare may deduplicate identical file bodies internally; the
   public URL still remains build-scoped.
+- `global.css` limits Tailwind source detection to `src/`. Astro uses
+  `inlineStylesheets: "auto"` with an 8 KiB asset threshold: the large shared
+  Tailwind output remains an immutable, cross-page browser asset while compact
+  layout and route chunks stay inline. Do not change this boundary based on raw
+  bytes alone; the full-externalization production trial improved FCP but added
+  a second render-blocking request and regressed mobile Speed Index.
 
 ## Caching Architecture
 

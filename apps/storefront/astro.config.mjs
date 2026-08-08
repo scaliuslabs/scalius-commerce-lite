@@ -41,11 +41,10 @@ export default defineConfig({
     // changes. Scope the whole asset directory to BUILD_ID so a browser can safely
     // cache deployed JS/CSS as immutable without executing a previous build.
     assets: buildAssetsDirectory,
-    // Storefront HTML is edge-cached and compressed. Inlining the compact shared
-    // stylesheet removes a render-blocking request from cold mobile navigations.
-    // A cold mobile visit is faster with the compressed stylesheet in the
-    // document than with two render-blocking stylesheet round trips.
-    inlineStylesheets: "always",
+    // Keep only genuinely small route styles inline. The shared Tailwind output
+    // is large enough that forcing it into every edge-cached HTML response delays
+    // body discovery and prevents browsers from reusing it across navigations.
+    inlineStylesheets: "auto",
   },
 
   output: "server",
@@ -88,6 +87,9 @@ export default defineConfig({
     },
     build: {
       cssCodeSplit: true,
+      // With inlineStylesheets:auto, keep compact layout/route CSS in the HTML
+      // while externalizing the much larger shared Tailwind stylesheet.
+      assetsInlineLimit: 8_192,
       minify: true,
     },
     server: {
