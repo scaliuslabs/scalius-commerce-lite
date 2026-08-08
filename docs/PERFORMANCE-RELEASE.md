@@ -35,12 +35,14 @@ This note records the performance evidence and release decisions for the Commerc
 | Final homepage desktop | [run `b28zxipsn7`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com/b28zxipsn7?form_factor=desktop) | 100/100/100/100; FCP 0.5 s; LCP 0.6 s; TBT 0; CLS 0.005 |
 | Final optioned product mobile | [run `esq7kzpb0q`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com-products-echo-mini-bluetooth-speaker/esq7kzpb0q?form_factor=mobile) | 98/100/100/100; FCP 1.9 s; LCP 2.0 s; TBT 0; CLS 0 |
 | Final reference product desktop | [run `bkcaistikn`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com-products-rider-court-trainers/bkcaistikn?form_factor=desktop) | 100/100/100/100; FCP 0.5 s; LCP 0.5 s; TBT 0; CLS 0 |
+| Early Hints production trial | [run `93ky6dhwf3`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com/93ky6dhwf3?form_factor=mobile) | 98/100/100/100; FCP 1.8 s; LCP 2.0 s; TBT 0; CLS 0 |
+| Early Hints production repeat | [run `1k7ms6p9x2`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com/1k7ms6p9x2?form_factor=mobile) | 98/100/100/100; FCP 1.8 s; LCP 2.1 s; TBT 0; CLS 0 |
 
 These reports contained no CrUX field data; they are repeatable Lighthouse lab evidence, not a claim that real-user p75 LCP is 2.1-2.2 seconds. Cloudflare Web Analytics was not active on the verified live homepage, product, or search routes, so no field-vitals clock or pre/post RUM baseline exists yet. If exactly one Cloudflare collection mode is deliberately enabled later, define `T0` as the first verified beacon POST, treat seven days as provisional and 28 days as final, require adequate cohort samples plus Good LCP/INP/CLS, and label the evidence Chromium-only rather than Safari/Firefox or CrUX.
 
 The live homepage lab result is repeatably 98, not a defensible 100. Lighthouse 13.4.1 gives the representative run a weighted raw score of about 97.65. With that version's curves/weights and SI/TBT/CLS remaining perfect, reaching a displayed 100 requires a large paired FCP/LCP movement—for example about FCP <= 1.57 s and LCP <= 1.55 s—not merely removal of remaining diagnostics. Three additional CLI runs varied from 95 to 97 despite zero TBT/CLS and tiny observed LCP phases, so a lone 100 would be lab variance rather than release evidence.
 
-The first mobile hero is already discovered in initial SSR HTML, media-qualified, preloaded, eager, high priority, and synchronously decoded. Its observed LCP phases improved from roughly 250 ms before deployment to 180 ms after image work, while the scored simulated metrics stayed essentially unchanged. More compression, more priority hints, or commerce-JavaScript removal has no measured path to the missing two displayed points.
+The first mobile hero is already discovered in initial SSR HTML, media-qualified, preloaded, eager, high priority, and synchronously decoded. Its observed LCP phases improved from roughly 250 ms before deployment to 180 ms after image work, while the scored simulated metrics stayed essentially unchanged. More image compression, more hero priority hints, or commerce-JavaScript removal has no measured path to the missing two displayed points. A later live byte audit did expose a different FCP candidate: roughly 177 KiB of inline CSS precedes `<body>` in the 373 KiB uncompressed homepage. Splitting that into a small measured critical subset plus a cacheable stylesheet is now a higher-value experiment than further image tuning.
 
 Remaining PageSpeed diagnostics have no direct score weight. They can still matter if changing an underlying cause improves a weighted metric, but these items expose no such measured opportunity here:
 
@@ -57,6 +59,60 @@ The earlier mobile SEO 92 was a transient `robots.txt` fetch timeout, not a mobi
 - Replaced the 281-line product-gallery React island with the SSR base interaction plus a desktop-only dynamic zoom controller. Mobile no longer downloads that island/runtime path, while desktop zoom is loaded only when the desktop media query matches and remains responsive to viewport changes.
 - Prevent private/no-store links from participating in broad Astro intent prefetch while retaining intent prefetch for public catalog discovery.
 - Preserve Partytown isolation, sparse priority hints, existing CDN preconnect, deferred below-fold regions, fail-closed checkout readiness, and MPA semantics.
+
+## Cloudflare zone and cache audit
+
+Wrangler 4.116.0 verified the deployed Worker cache configuration and active
+versions. Wrangler has no zone-settings, Cache Rules, Early Hints, Tiered Cache,
+or Cache Reserve command, so the authenticated Cloudflare dashboard supplied
+the read-only zone inventory. `scalius.com` is on the Free Website plan, with no
+visible Cache Rules. HTTP/2, HTTP/3, HTTP/2-to-origin, and TLS 1.3 are active;
+live responses negotiate Brotli, Zstandard, and gzip.
+
+The storefront uses Workers Caching, not the zone CDN cache. It already receives
+Cloudflare's generic tiering and can be invalidated only by the owning cached
+entrypoint's `ctx.cache.purge({ tags })`. Zone Cache Everything, Edge TTL,
+custom cache keys, Smart Tiered topology, Cache Reserve, and dashboard/zone
+purges cannot safely improve or invalidate that SSR lane. Keep the uncached
+gateway, allowlisted cached entrypoint, `cross_version_cache: false`, browser
+`no-store`, and semantic tag purges. Do not enable Cache Reserve: it is metered,
+does not cover Workers-Cached HTML or transformed images, and provides no
+credible PageSpeed benefit here.
+
+Production build `src-66e4dbe3370b6f78` now emits exactly one stable anonymous
+HTML response hint:
+
+```http
+Link: <https://cloud.scalius.com>; rel=preconnect; crossorigin
+```
+
+Cloudflare Early Hints is enabled on the zone at no additional feature charge.
+After one learning request, three of five fresh HTTP/2 probes received a real
+`103 Early Hints` response with that preconnect before the final `200`. The
+homepage subsequently returned a native HIT with the new build and header;
+checkout and option-selected product responses remained private/no-store with
+no final `Link`, while robots remained public revalidation content without the
+hint. No hero, product, query-specific, private, or build-hashed URL is eligible,
+so Cloudflare's separate URI-only hints cache cannot transfer stale commerce
+bytes. This is a cold-connection experiment, not yet a measured claim of a
+PageSpeed score increase.
+
+The two immediate PageSpeed website repeats preserved 98/100/100/100 and
+reported 2.0-2.1 s LCP versus 2.1-2.2 s in the preceding retained runs. The
+rounded samples are compatible with a small improvement but do not establish
+causality or meet the 20-run multi-colo retention threshold. The invariant
+preconnect remains safe and free while that evidence accumulates; it is not
+presented as the missing route to mobile 100.
+
+The durable invalidation ledger was also read live through Wrangler: all 12
+semantic groups had equal requested/applied generations, zero attempts, and no
+last error. The audit nevertheless found an existing quantity-freshness defect
+that blocks stronger caching: same-availability-band inventory changes avoid a
+purge even though public projections currently expose exact stock quantities.
+Checkout remains authoritative, but a 10-to-9 change can leave buyer-visible
+quantity stale until the one-hour backstop. Scheduled CMS publication boundaries
+and post-purge warming also need dedicated work. None of the zone settings above
+were allowed to mask or lengthen those application-owned gaps.
 
 ## Dashboard evidence and changes
 
@@ -116,7 +172,7 @@ Measured post-release spikes, not release rewrites:
 - TanStack Table v9 native explicit features plus narrow Store subscriptions after stable-channel soak.
 - Route-local virtualization only for a future workflow that truly renders hundreds of continuous rows.
 - Header-logo priority and hero decoding A/B only if a repeated trace attributes a stable, controllable FCP/LCP delay.
-- Cloudflare 103 Early Hints on a staging homepage only. Adopt after at least 20 paired cold runs across three colos show at least 100 ms median or 150 ms p75 LCP improvement, no duplicate or stale hero download, and unchanged hot-hit latency. Current Dhaka cache-hit TTFB is 56 ms median versus 218 ms for deliberate misses, so this is a cold-cache experiment—not a credible path from the current hot PageSpeed 98 to 100.
+- Cloudflare 103 Early Hints measurement across at least 20 paired cold runs and three colos. The production trial is limited to an invariant CDN preconnect that transfers no speculative asset bytes. Retain it only with at least 100 ms median or 150 ms p75 LCP improvement and unchanged hot-hit latency; never extend it to dynamic hero/build URLs without a separate invalidation proof.
 
 Rejected for this release:
 
@@ -159,7 +215,7 @@ Final deployed versions verified on 2026-08-08:
 
 - API Worker `1a2e2266-738f-43a6-b4d1-8de235925ed6`.
 - Dashboard Worker `f287784b-1ed1-477b-b408-383006c28b6d`.
-- Storefront Worker `3716fdb4-db2d-4af2-9c67-cc97200e8578`, build `src-a0f24aecce3cede5`.
+- Storefront Worker `370d540e-e8e6-4995-b5f3-e703f8c479dd`, build `src-66e4dbe3370b6f78`.
 - `pnpm release:check`, `pnpm ops:check --queues`, and the authenticated 23-route admin read smoke all passed against those live surfaces.
 
 For synthetic 100 work, representative Lighthouse 13.4.1 paired reductions from the 1.826/2.177-second run are approximately 255/632, 464/385, or 759/243 ms for FCP/LCP. These metrics share causes, so their sum is not a physical critical-path duration and one source need not own the entire gap. Reopen storefront work sooner for a real-user RUM regression or a new controllable opportunity worth at least 100 ms p75 even when it cannot create a synthetic 100. Reopen a dashboard architecture rewrite when a measured hot interaction misses p75 100 ms first-feedback/warm-heading or the INP 200 ms release ceiling, and require at least a 15% or 50 ms p75 win without a p95 regression.
