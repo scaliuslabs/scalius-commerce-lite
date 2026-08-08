@@ -2,6 +2,9 @@
 
 > How everything works, how modules talk to each other, and where the boundaries are.
 
+The measured stable-release performance baseline, retained optimizations, and
+rewrite thresholds are recorded in [PERFORMANCE-RELEASE.md](./PERFORMANCE-RELEASE.md).
+
 
 ## System Overview
 
