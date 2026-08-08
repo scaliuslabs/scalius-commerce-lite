@@ -58,12 +58,6 @@ const apps = [
       "PURGE_TOKEN",
     ],
   },
-  {
-    name: "ops-monitor",
-    configs: ["apps/ops-monitor/wrangler.jsonc"],
-    envFiles: ["apps/ops-monitor/src/env.d.ts"],
-    extraEnv: [],
-  },
 ];
 
 function readText(path) {

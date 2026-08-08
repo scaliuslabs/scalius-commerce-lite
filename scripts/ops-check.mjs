@@ -12,9 +12,7 @@ const execFileAsync = promisify(execFileCallback);
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const defaultRootDir = resolve(__dirname, "..");
 const defaultApiDir = "apps/api";
-const defaultOpsMonitorDir = "apps/ops-monitor";
 const defaultApiConfigPath = resolve(defaultRootDir, defaultApiDir, "wrangler.jsonc");
-const defaultOpsMonitorConfigPath = resolve(defaultRootDir, defaultOpsMonitorDir, "wrangler.jsonc");
 
 const DEFAULT_API_BASE_URL = "https://api.scalius.com";
 const DEFAULT_READYZ_SAMPLES = 4;
@@ -22,10 +20,6 @@ const DEFAULT_TIMEOUT_MS = 10_000;
 const READYZ_SAMPLE_DELAY_MS = 1_000;
 const MAX_BODY_PREVIEW_LENGTH = 240;
 const EXPECTED_API_CRON = "*/15 * * * *";
-const EXPECTED_OPS_MONITOR_CRON = "*/2 * * * *";
-const OPS_MONITOR_STATE_BINDING = "OPS_MONITOR_STATE";
-const OPS_MONITOR_ALERT_EMAIL_BINDING = "ALERT_EMAIL";
-const ALLOWED_QUEUE_ACTORS = new Set(["worker:scalius-ops-monitor"]);
 
 const booleanOptions = new Set(["help", "json", "skip-wrangler", "queues"]);
 const stringOptions = new Set(["api-base-url", "samples", "timeout-ms"]);
@@ -145,10 +139,6 @@ export function readApiWranglerConfig(configPath = defaultApiConfigPath) {
   return JSON.parse(stripJsonComments(readFileSync(configPath, "utf8")));
 }
 
-export function readOpsMonitorWranglerConfig(configPath = defaultOpsMonitorConfigPath) {
-  return JSON.parse(stripJsonComments(readFileSync(configPath, "utf8")));
-}
-
 export function getKnownQueueNames(config) {
   return getQueueMonitoringExpectations(config).map((queue) => queue.name);
 }
@@ -249,151 +239,6 @@ export function evaluateMonitoringConfig(config) {
     normalQueueCount: queues.filter((queue) => queue.expectedProducers.length > 0).length,
     deadLetterQueueCount: queues.filter((queue) => queue.deadLetterFor.length > 0).length,
     queues,
-  };
-}
-
-function getBindingByName(bindings, bindingName, nameKey = "binding") {
-  if (!Array.isArray(bindings)) return null;
-  return bindings.find((binding) =>
-    typeof binding?.[nameKey] === "string" && binding[nameKey].trim() === bindingName) ?? null;
-}
-
-function getTrimmedVar(config, name) {
-  return typeof config?.vars?.[name] === "string" ? config.vars[name].trim() : "";
-}
-
-function splitCommaList(value) {
-  if (typeof value !== "string" || !value.trim()) return [];
-  return value.split(",").map((item) => item.trim()).filter(Boolean);
-}
-
-function getStringListCount(value) {
-  return Array.isArray(value)
-    ? value.filter((item) => typeof item === "string" && item.trim()).length
-    : 0;
-}
-
-function getEmailBindingRestriction(binding) {
-  const hasDestinationAddress =
-    typeof binding?.destination_address === "string" && Boolean(binding.destination_address.trim());
-  const allowedDestinationAddressCount = getStringListCount(binding?.allowed_destination_addresses);
-  const allowedSenderAddressCount = getStringListCount(binding?.allowed_sender_addresses);
-
-  const restrictionTypes = [];
-  if (hasDestinationAddress) restrictionTypes.push("destination_address");
-  if (allowedDestinationAddressCount > 0) restrictionTypes.push("allowed_destination_addresses");
-  if (allowedSenderAddressCount > 0) restrictionTypes.push("allowed_sender_addresses");
-
-  return {
-    emailBindingRestricted: restrictionTypes.length > 0,
-    restrictionTypes,
-    hasDestinationAddress,
-    allowedDestinationAddressCount,
-    allowedSenderAddressCount,
-  };
-}
-
-export function evaluateOpsMonitorAlertConfig(config, {
-  expectedQueueNames = [],
-} = {}) {
-  const errors = [];
-  const warnings = [];
-  const requiredActions = [];
-  const workerName = typeof config?.name === "string" ? config.name.trim() : "";
-  const crons = Array.isArray(config?.triggers?.crons)
-    ? config.triggers.crons.filter((cron) => typeof cron === "string")
-    : [];
-  const observabilityEnabled = config?.observability?.enabled === true;
-  const requiredCronPresent = crons.includes(EXPECTED_OPS_MONITOR_CRON);
-  const stateKvBinding = getBindingByName(config?.kv_namespaces, OPS_MONITOR_STATE_BINDING);
-  const alertEmailBinding = getBindingByName(config?.send_email, OPS_MONITOR_ALERT_EMAIL_BINDING, "name");
-  const fromConfigured = Boolean(getTrimmedVar(config, "ALERT_EMAIL_FROM"));
-  const recipientCount = splitCommaList(getTrimmedVar(config, "ALERT_EMAIL_TO")).slice(0, 50).length;
-  const toConfigured = recipientCount > 0;
-  const bindingRestriction = getEmailBindingRestriction(alertEmailBinding);
-  const routedEmailReady = Boolean(alertEmailBinding && fromConfigured && toConfigured);
-  const monitoredQueueNames = [...new Set(
-    (config?.queues?.producers ?? [])
-      .map((producer) => producer?.queue)
-      .filter((queue) => typeof queue === "string" && queue),
-  )].sort();
-  const requiredQueueNames = [...new Set(expectedQueueNames)].sort();
-  const missingQueueNames = requiredQueueNames.filter(
-    (queue) => !monitoredQueueNames.includes(queue),
-  );
-  const unexpectedQueueNames = monitoredQueueNames.filter(
-    (queue) => !requiredQueueNames.includes(queue),
-  );
-
-  if (!workerName) {
-    errors.push("apps/ops-monitor/wrangler.jsonc must declare the ops-monitor Worker name.");
-  }
-  if (!observabilityEnabled) {
-    errors.push("apps/ops-monitor/wrangler.jsonc must keep observability.enabled true for Worker logs/alerts.");
-  }
-  if (!requiredCronPresent) {
-    errors.push(`apps/ops-monitor/wrangler.jsonc must keep the scheduled monitor cron ${EXPECTED_OPS_MONITOR_CRON}.`);
-  }
-  if (!stateKvBinding) {
-    errors.push(`apps/ops-monitor/wrangler.jsonc must bind KV ${OPS_MONITOR_STATE_BINDING} for alert streak/cooldown state.`);
-  }
-  if (!alertEmailBinding) {
-    errors.push(`apps/ops-monitor/wrangler.jsonc must bind Cloudflare Email Service send_email ${OPS_MONITOR_ALERT_EMAIL_BINDING}.`);
-  }
-  if (requiredQueueNames.length > 0 && missingQueueNames.length > 0) {
-    errors.push(
-      `apps/ops-monitor/wrangler.jsonc is missing API queue metrics bindings: ${missingQueueNames.join(", ")}.`,
-    );
-  }
-  if (requiredQueueNames.length > 0 && unexpectedQueueNames.length > 0) {
-    errors.push(
-      `apps/ops-monitor/wrangler.jsonc has stale queue metrics bindings: ${unexpectedQueueNames.join(", ")}.`,
-    );
-  }
-
-  if (!routedEmailReady) {
-    warnings.push("Routed Cloudflare Email alerts are not configured; ops-monitor remains logs-only.");
-  }
-  if (!fromConfigured) {
-    warnings.push("ALERT_EMAIL_FROM is empty.");
-    requiredActions.push("Set ALERT_EMAIL_FROM to a verified Cloudflare Email Service sender.");
-  }
-  if (!toConfigured) {
-    warnings.push("ALERT_EMAIL_TO is empty.");
-    requiredActions.push("Set ALERT_EMAIL_TO to one or more verified Cloudflare Email Service destinations.");
-  }
-  if (alertEmailBinding && !bindingRestriction.emailBindingRestricted) {
-    warnings.push("ALERT_EMAIL send_email binding is unrestricted.");
-    requiredActions.push(
-      "Restrict ALERT_EMAIL with destination_address, allowed_destination_addresses, or allowed_sender_addresses once verified aliases are known.",
-    );
-  }
-
-  return {
-    ok: errors.length === 0,
-    errors,
-    workerName,
-    workerActor: workerName ? `worker:${workerName}` : null,
-    observabilityEnabled,
-    requiredCron: EXPECTED_OPS_MONITOR_CRON,
-    requiredCronPresent,
-    crons,
-    stateKvBindingPresent: Boolean(stateKvBinding),
-    requiredStateKvBinding: OPS_MONITOR_STATE_BINDING,
-    alertEmailBindingPresent: Boolean(alertEmailBinding),
-    requiredAlertEmailBinding: OPS_MONITOR_ALERT_EMAIL_BINDING,
-    routedEmailReady,
-    alertMode: routedEmailReady ? "routed_email" : "logs_only",
-    fromConfigured,
-    toConfigured,
-    recipientCount,
-    ...bindingRestriction,
-    monitoredQueueNames,
-    requiredQueueNames,
-    missingQueueNames,
-    unexpectedQueueNames,
-    warnings,
-    requiredActions,
   };
 }
 
@@ -679,65 +524,6 @@ function checkMonitoringConfig(apiConfig, {
   };
 }
 
-function checkOpsMonitorAlertChannel(opsMonitorConfig, {
-  logger,
-  expectedQueueNames,
-}) {
-  const evaluation = evaluateOpsMonitorAlertConfig(opsMonitorConfig, {
-    expectedQueueNames,
-  });
-  if (!evaluation.ok) {
-    throw new Error(`Ops-monitor alert-channel config contract failed: ${evaluation.errors.join("; ")}`);
-  }
-
-  const status = evaluation.warnings.length > 0 ? "warning" : "passed";
-  const modeLabel = evaluation.routedEmailReady ? "routed Email ready" : "logs-only";
-  const restrictionLabel = evaluation.emailBindingRestricted ? "restricted" : "unrestricted";
-
-  if (status === "warning") {
-    logger?.warn(
-      `⚠ Ops-monitor alert channel: ${modeLabel}; ` +
-      `ALERT_EMAIL binding ${restrictionLabel}.`,
-    );
-    for (const warning of evaluation.warnings) {
-      logger?.warn(`  ⚠ ${warning}`);
-    }
-  } else {
-    logger?.log(
-      `✓ Ops-monitor alert channel: ${modeLabel}; ` +
-      `ALERT_EMAIL binding ${restrictionLabel}.`,
-    );
-  }
-
-  return {
-    status,
-    workerName: evaluation.workerName,
-    workerActor: evaluation.workerActor,
-    observabilityEnabled: evaluation.observabilityEnabled,
-    requiredCron: evaluation.requiredCron,
-    requiredCronPresent: evaluation.requiredCronPresent,
-    crons: evaluation.crons,
-    stateKvBindingPresent: evaluation.stateKvBindingPresent,
-    requiredStateKvBinding: evaluation.requiredStateKvBinding,
-    alertEmailBindingPresent: evaluation.alertEmailBindingPresent,
-    requiredAlertEmailBinding: evaluation.requiredAlertEmailBinding,
-    routedEmailReady: evaluation.routedEmailReady,
-    alertMode: evaluation.alertMode,
-    fromConfigured: evaluation.fromConfigured,
-    toConfigured: evaluation.toConfigured,
-    recipientCount: evaluation.recipientCount,
-    emailBindingRestricted: evaluation.emailBindingRestricted,
-    restrictionTypes: evaluation.restrictionTypes,
-    hasDestinationAddress: evaluation.hasDestinationAddress,
-    allowedDestinationAddressCount: evaluation.allowedDestinationAddressCount,
-    allowedSenderAddressCount: evaluation.allowedSenderAddressCount,
-    monitoredQueueNames: evaluation.monitoredQueueNames,
-    requiredQueueNames: evaluation.requiredQueueNames,
-    warnings: evaluation.warnings,
-    requiredActions: evaluation.requiredActions,
-  };
-}
-
 export function buildWranglerDeploymentsCommand({
   pnpmExecutable = "pnpm",
   rootDir = defaultRootDir,
@@ -896,7 +682,7 @@ function parseOptionalInteger(value) {
   return Number.isInteger(parsed) && parsed >= 0 ? parsed : null;
 }
 
-function getUnexpectedActors(actualActors, expectedActors, allowedActors = ALLOWED_QUEUE_ACTORS) {
+function getUnexpectedActors(actualActors, expectedActors, allowedActors = new Set()) {
   return actualActors.filter((actor) => !expectedActors.includes(actor) && !allowedActors.has(actor));
 }
 
@@ -935,7 +721,7 @@ export function evaluateQueueInfoOutput(queueName, output, expectation = {}) {
   const expectedConsumers = expectation.expectedConsumers ?? [];
   const allowedActors = expectation.allowedActors instanceof Set
     ? expectation.allowedActors
-    : new Set(expectation.allowedActors ?? ALLOWED_QUEUE_ACTORS);
+    : new Set(expectation.allowedActors ?? []);
   const unexpectedProducers = getUnexpectedActors(info.producers, expectedProducers, allowedActors);
   const unexpectedConsumers = getUnexpectedActors(info.consumers, expectedConsumers, allowedActors);
   const errors = [];
@@ -1071,7 +857,6 @@ async function runStep(result, name, fn) {
 
 export async function runOpsCheck(options, {
   apiConfig = {},
-  opsMonitorConfig = readOpsMonitorWranglerConfig(),
   fetchImpl = fetch,
   execFileImpl = execFileAsync,
   sleepImpl = sleep,
@@ -1107,18 +892,6 @@ export async function runOpsCheck(options, {
 
   const monitoringConfig = await runStep(result, "monitoringConfig", () =>
     checkMonitoringConfig(apiConfig, { logger }));
-
-  const opsMonitorAlertChannel = await runStep(result, "opsMonitorAlertChannel", () =>
-    checkOpsMonitorAlertChannel(opsMonitorConfig, {
-      logger,
-      expectedQueueNames: monitoringConfig.queues.map((queue) => queue.name),
-    }));
-  result.warnings.push(
-    ...opsMonitorAlertChannel.warnings.map((warning) => `Ops-monitor alert channel: ${warning}`),
-  );
-  result.requiredActions.push(
-    ...opsMonitorAlertChannel.requiredActions.map((action) => `Ops-monitor alert channel: ${action}`),
-  );
 
   if (options.skipWrangler) {
     result.checks.deployment = {
@@ -1170,7 +943,6 @@ Options:
 
 export async function main(rawArgs = process.argv.slice(2), {
   configPath = defaultApiConfigPath,
-  opsMonitorConfigPath = defaultOpsMonitorConfigPath,
   stdout = console.log,
   stderr = console.error,
   fetchImpl = fetch,
@@ -1190,14 +962,12 @@ export async function main(rawArgs = process.argv.slice(2), {
     }
 
     const apiConfig = readApiWranglerConfig(configPath);
-    const opsMonitorConfig = readOpsMonitorWranglerConfig(opsMonitorConfigPath);
     options = parseOpsCheckArgs(rawArgs, {
       defaultApiBaseUrl: apiConfig.vars?.PUBLIC_API_BASE_URL ?? DEFAULT_API_BASE_URL,
     });
 
     const result = await runOpsCheck(options, {
       apiConfig,
-      opsMonitorConfig,
       fetchImpl,
       execFileImpl,
       sleepImpl,

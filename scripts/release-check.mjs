@@ -1714,7 +1714,6 @@ async function checkApiOps(options, {
   pnpmExecutable,
   rootDir,
   logger,
-  opsMonitorConfig,
 }) {
   const opsArgs = [
     "--api-base-url", options.apiBaseUrl,
@@ -1739,7 +1738,6 @@ async function checkApiOps(options, {
     rootDir,
     logger: null,
     requestId: "release-check",
-    opsMonitorConfig,
   });
 
   const deployment = result.checks.deployment;
@@ -1768,7 +1766,6 @@ async function checkApiOps(options, {
     queueCount: queues?.queueCount ?? 0,
     queues,
     monitoringConfigStatus: result.checks.monitoringConfig.status,
-    opsMonitorAlertChannel: result.checks.opsMonitorAlertChannel,
     warnings: result.warnings,
     requiredActions: result.requiredActions,
   };
@@ -2489,7 +2486,6 @@ export async function runReleaseCheck(options, {
   pnpmExecutable = resolvePnpmExecutable(),
   rootDir = defaultRootDir,
   fileExistsImpl = existsSync,
-  opsMonitorConfig,
 } = {}) {
   const result = {
     status: "running",
@@ -2525,7 +2521,6 @@ export async function runReleaseCheck(options, {
       pnpmExecutable,
       rootDir,
       logger,
-      opsMonitorConfig,
     }));
   appendUnique(result.warnings, apiOps.warnings ?? []);
   appendUnique(result.requiredActions, apiOps.requiredActions ?? []);

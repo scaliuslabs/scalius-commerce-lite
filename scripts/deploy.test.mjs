@@ -132,38 +132,14 @@ describe("deploy target wiring", () => {
   });
 
   it("accepts only the platform Workers that remain", () => {
-    for (const target of ["api", "admin", "storefront", "ops-monitor"]) {
+    for (const target of ["api", "admin", "storefront"]) {
       expect(parseOnlyTarget(["--only", target])).toEqual({ ok: true, target });
     }
 
     expect(parseOnlyTarget(["--only", "removed-worker"])).toMatchObject({
       ok: false,
-      message: expect.stringContaining("api, admin, storefront, ops-monitor"),
+      message: expect.stringContaining("api, admin, storefront"),
     });
-  });
-
-  it("builds and deploys ops-monitor from its app workspace", () => {
-    expect(getBuildCommandForTarget("ops-monitor")).toContain(
-      "--filter @scalius/ops-monitor build",
-    );
-
-    const command = getDeployCommandForTarget("ops-monitor");
-    expect(command.cmd).toContain("exec wrangler deploy");
-    expect(command.label).toBe("Deploy Ops Monitor Worker");
-    expect(command.cwd).toMatch(/apps\/ops-monitor$/);
-  });
-
-  it("proves the deployed ops-monitor version after Wrangler returns", async () => {
-    const verifyLatestWorkerDeploymentImpl = vi.fn();
-
-    await verifyPostDeployTarget("ops-monitor", null, null, {
-      verifyLatestWorkerDeploymentImpl,
-    });
-
-    expect(verifyLatestWorkerDeploymentImpl).toHaveBeenCalledWith(
-      expect.stringMatching(/apps\/ops-monitor$/),
-      "Ops Monitor Worker",
-    );
   });
 
   it("passes an explicit provider-specific Wrangler config only to the API deploy", () => {
