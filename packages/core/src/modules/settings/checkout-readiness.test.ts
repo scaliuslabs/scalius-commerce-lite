@@ -16,7 +16,19 @@ vi.mock("../../integrations/whatsapp", () => ({
     getWhatsAppCloudApiSettings: mocks.getWhatsAppCloudApiSettings,
 }));
 
-import { getCustomerSignInReadiness } from "./checkout-readiness";
+import {
+    CHECKOUT_READINESS_CUSTOMER_SIGN_IN_ISSUE,
+    getCheckoutReadiness,
+    getCustomerSignInReadiness,
+} from "./checkout-readiness";
+
+function deferred<T>() {
+    let resolve!: (value: T) => void;
+    const promise = new Promise<T>((resolvePromise) => {
+        resolve = resolvePromise;
+    });
+    return { promise, resolve };
+}
 
 function createAuthDb(options: {
     guestCheckoutEnabled: boolean;
@@ -57,6 +69,53 @@ describe("customer checkout sign-in readiness", () => {
         mocks.getEmailProviderReadiness.mockResolvedValue({ configured: false });
         mocks.getSmsProviderReadiness.mockResolvedValue({ configured: false });
         mocks.getWhatsAppCloudApiSettings.mockResolvedValue({});
+    });
+
+    it("starts delivery and sign-in reads together while preserving fail-closed readiness", async () => {
+        const shipping = deferred<Array<{ id: string }>>();
+        const hierarchy = deferred<Array<{ id: string }>>();
+        const site = deferred<{
+            guestCheckoutEnabled: boolean;
+            authVerificationMethod: string;
+        }>();
+        const select = vi.fn()
+            .mockReturnValueOnce({
+                from: () => ({
+                    where: () => ({ limit: () => shipping.promise }),
+                }),
+            })
+            .mockReturnValueOnce({
+                from: () => ({
+                    where: () => ({ limit: () => hierarchy.promise }),
+                }),
+            })
+            .mockReturnValueOnce({
+                from: () => ({
+                    limit: () => ({ get: () => site.promise }),
+                }),
+            });
+
+        const resultPromise = getCheckoutReadiness({ select } as never, {});
+
+        expect(select).toHaveBeenCalledTimes(3);
+        shipping.resolve([{ id: "shipping_1" }]);
+        hierarchy.resolve([{ id: "zone_1" }]);
+        site.resolve({
+            guestCheckoutEnabled: false,
+            authVerificationMethod: "email",
+        });
+
+        await expect(resultPromise).resolves.toEqual({
+            ready: false,
+            hasActiveShippingMethod: true,
+            hasActiveDeliveryHierarchy: true,
+            customerSignInRequired: true,
+            hasUsableCustomerSignIn: false,
+            issues: [CHECKOUT_READINESS_CUSTOMER_SIGN_IN_ISSUE],
+        });
+        expect(mocks.getEmailProviderReadiness).not.toHaveBeenCalled();
+        expect(mocks.getSmsProviderReadiness).not.toHaveBeenCalled();
+        expect(mocks.getWhatsAppCloudApiSettings).not.toHaveBeenCalled();
     });
 
     it("fails closed when accounts are required without the credential encryption key", async () => {

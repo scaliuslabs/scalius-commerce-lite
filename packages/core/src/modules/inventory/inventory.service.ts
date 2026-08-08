@@ -414,7 +414,7 @@ export async function getInventoryOverview(db: Database, params: {
                     ? sortDirection === "desc" ? desc(productVariants.sku) : asc(productVariants.sku)
                     : sortDirection === "desc" ? desc(availableSql) : asc(availableSql);
 
-        const variants = await db
+        const variantsQuery = db
             .select({
                 id: productVariants.id,
                 productId: productVariants.productId,
@@ -435,24 +435,22 @@ export async function getInventoryOverview(db: Database, params: {
             .where(and(...conditions))
             .orderBy(orderBy, asc(productVariants.id))
             .limit(limit)
-            .offset(offset)
-            .all();
+            .offset(offset);
 
-        const countResult = await db
+        const countQuery = db
             .select({ count: sql<number>`count(*)` })
             .from(productVariants)
             .innerJoin(products, eq(products.id, productVariants.productId))
-            .where(and(...conditions))
-            .get();
+            .where(and(...conditions));
 
-        const statsResult = await db
+        const statsQuery = db
             .select({
                 totalVariants: sql<number>`count(*)`,
                 totalOnHand: sql<number>`COALESCE(SUM(${productVariants.stock}), 0)`,
                 totalReserved: sql<number>`COALESCE(SUM(${effectiveRegularReservedStockSql()}), 0)`,
                 totalAvailable: sql<number>`COALESCE(SUM(${availableRegularStockSql()}), 0)`,
-                outOfStockCount: sql<number>`SUM(CASE WHEN ${availableRegularStockSql()} <= 0 THEN 1 ELSE 0 END)`,
-                lowStockCount: sql<number>`SUM(CASE WHEN ${buildInventoryLowStockCondition()} THEN 1 ELSE 0 END)`,
+                outOfStockCount: sql<number>`COALESCE(SUM(CASE WHEN ${availableRegularStockSql()} <= 0 THEN 1 ELSE 0 END), 0)`,
+                lowStockCount: sql<number>`COALESCE(SUM(CASE WHEN ${buildInventoryLowStockCondition()} THEN 1 ELSE 0 END), 0)`,
             })
             .from(productVariants)
             .innerJoin(products, eq(products.id, productVariants.productId))
@@ -461,8 +459,15 @@ export async function getInventoryOverview(db: Database, params: {
                 isNull(products.deletedAt),
                 eq(productVariants.trackInventory, true),
                 operationalSkuRowPredicate(),
-            ))
-            .get();
+            ));
+
+        const [variants, countRows, statsRows] = await db.batch([
+            variantsQuery,
+            countQuery,
+            statsQuery,
+        ]);
+        const countResult = countRows[0];
+        const statsResult = statsRows[0];
 
         return {
             variants,

@@ -232,8 +232,9 @@ describe("inventory overview query boundaries", () => {
     expect(bindings[0]?.length).toBeLessThanOrEqual(90);
   });
 
-  it("qualifies the correlated variant id in the normalized option-label projection", async () => {
+  it("batches the variant page, count, and stats without changing their projections", async () => {
     const queries: string[] = [];
+    const batchSizes: number[] = [];
     const d1 = {
       prepare(query: string) {
         queries.push(query);
@@ -244,6 +245,35 @@ describe("inventory overview query boundaries", () => {
           first: async () => null,
         };
         return statement;
+      },
+      batch: async (statements: unknown[]) => {
+        batchSizes.push(statements.length);
+        return [
+          { results: [{
+            id: "variant_1",
+            productId: "product_1",
+            productName: "Measured product",
+            sku: "SKU-1",
+            barcode: null,
+            barcodeType: null,
+            optionLabel: "Medium / Blue",
+            price: 1500,
+            stock: 8,
+            reservedStock: 2,
+            available: 6,
+            lowStockThreshold: 3,
+            version: 5,
+          }] },
+          { results: [{ count: 17 }] },
+          { results: [{
+            totalVariants: 31,
+            totalOnHand: 120,
+            totalReserved: 11,
+            totalAvailable: 109,
+            outOfStockCount: 2,
+            lowStockCount: 4,
+          }] },
+        ];
       },
     };
     const db = drizzle(d1 as unknown as D1Database, { schema });
@@ -257,10 +287,27 @@ describe("inventory overview query boundaries", () => {
       sort: "available",
       order: "asc",
     })).resolves.toMatchObject({
-      variants: [],
-      pagination: { total: 0 },
+      variants: [{
+        id: "variant_1",
+        productId: "product_1",
+        productName: "Measured product",
+        sku: "SKU-1",
+        optionLabel: "Medium / Blue",
+        reservedStock: 2,
+        available: 6,
+      }],
+      pagination: { total: 17, totalPages: 1 },
+      stats: {
+        totalVariants: 31,
+        totalOnHand: 120,
+        totalReserved: 11,
+        totalAvailable: 109,
+        outOfStockCount: 2,
+        lowStockCount: 4,
+      },
     });
 
+    expect(batchSizes).toEqual([3]);
     expect(queries).toHaveLength(3);
     expect(queries[0]).toContain(
       'pvov.variant_id = "product_variants"."id"',
@@ -270,6 +317,59 @@ describe("inventory overview query boundaries", () => {
       expect(query.toLowerCase()).toContain('inner join "products"');
       expect(query.toLowerCase()).toContain('"products"."deleted_at" is null');
     }
+  });
+
+  it("returns numeric zero status counts for an empty tracked catalog", async () => {
+    const queries: string[] = [];
+    const d1 = {
+      prepare(query: string) {
+        queries.push(query);
+        const statement = {
+          bind: () => statement,
+          all: async () => ({ results: [] }),
+          raw: async () => [],
+          first: async () => null,
+        };
+        return statement;
+      },
+      batch: async () => [
+        { results: [] },
+        { results: [{ count: 0 }] },
+        { results: [{
+          totalVariants: 0,
+          totalOnHand: 0,
+          totalReserved: 0,
+          totalAvailable: 0,
+          outOfStockCount: 0,
+          lowStockCount: 0,
+        }] },
+      ],
+    };
+    const db = drizzle(d1 as unknown as D1Database, { schema });
+
+    await expect(getInventoryOverview(db, {
+      section: "variants",
+      search: "",
+      status: "all",
+      page: 1,
+      limit: 50,
+      sort: "available",
+      order: "asc",
+    })).resolves.toMatchObject({
+      pagination: { total: 0, totalPages: 0 },
+      stats: {
+        totalVariants: 0,
+        totalOnHand: 0,
+        totalReserved: 0,
+        totalAvailable: 0,
+        outOfStockCount: 0,
+        lowStockCount: 0,
+      },
+    });
+
+    expect(
+      queries[2]?.toLowerCase().match(/coalesce\(sum\(case when/g),
+    ).toHaveLength(2);
   });
 
   it("keeps low-stock alert search and history bounded and paginated", async () => {

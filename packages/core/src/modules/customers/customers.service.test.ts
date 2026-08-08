@@ -13,10 +13,143 @@ import {
   encodeCustomerOrdersCursor,
   getCustomerSpendContribution,
   getCustomerVisibleBalanceDue,
+  listCustomers,
   permanentlyDeleteCustomer,
   projectCustomerOrderNotifications,
   summarizeCustomerAccountOrders,
 } from "./customers.service";
+
+interface CapturedListQuery {
+  fields: Record<string, unknown>;
+  joins: unknown[];
+  limit?: number;
+  offset?: number;
+}
+
+function createListCustomersDb(options: {
+  count: number;
+  rows: Record<string, unknown>[];
+}) {
+  const queries: CapturedListQuery[] = [];
+  const select = vi.fn((fields: Record<string, unknown>) => {
+    const query: CapturedListQuery = { fields, joins: [] };
+    const builder = {} as {
+      from: ReturnType<typeof vi.fn>;
+      leftJoin: ReturnType<typeof vi.fn>;
+      where: ReturnType<typeof vi.fn>;
+      groupBy: ReturnType<typeof vi.fn>;
+      limit: ReturnType<typeof vi.fn>;
+      offset: ReturnType<typeof vi.fn>;
+      orderBy: ReturnType<typeof vi.fn>;
+    };
+    builder.from = vi.fn(() => builder);
+    builder.leftJoin = vi.fn((_table: unknown, condition: unknown) => {
+      query.joins.push(condition);
+      return builder;
+    });
+    builder.where = vi.fn(() => builder);
+    builder.groupBy = vi.fn(() => builder);
+    builder.limit = vi.fn((value: number) => {
+      query.limit = value;
+      return builder;
+    });
+    builder.offset = vi.fn((value: number) => {
+      query.offset = value;
+      return builder;
+    });
+    builder.orderBy = vi.fn(() => builder);
+    queries.push(query);
+    return builder;
+  });
+  const batch = vi.fn(async (_statements: unknown[]) => [
+    [{ count: options.count }],
+    options.rows,
+  ]);
+
+  return { db: { select, batch }, batch, queries };
+}
+
+const customerListRow = {
+  id: "cust_list_1",
+  name: "Buyer",
+  email: null,
+  phone: "+8801712345678",
+  address: null,
+  city: "city_nondeleted",
+  zone: "zone_deleted",
+  area: "area_missing",
+  cityName: "Dhaka",
+  zoneName: "zone_deleted",
+  areaName: "area_missing",
+  accountClaimedAt: null,
+  totalOrders: 2,
+  totalSpent: 250,
+  lastOrderAt: 1_780_000_100,
+  createdAt: 1_780_000_000,
+  updatedAt: 1_780_000_200,
+};
+
+describe("admin customer list location projection", () => {
+  it("resolves non-deleted location names and falls back for deleted or missing rows", async () => {
+    const { db, batch, queries } = createListCustomersDb({
+      count: 1,
+      rows: [customerListRow],
+    });
+
+    const result = await listCustomers(db as never);
+
+    expect(batch).toHaveBeenCalledTimes(1);
+    expect(batch.mock.calls[0]?.[0]).toHaveLength(2);
+    expect(result.customers[0]).toMatchObject({
+      city: "city_nondeleted",
+      cityName: "Dhaka",
+      zone: "zone_deleted",
+      zoneName: "zone_deleted",
+      area: "area_missing",
+      areaName: "area_missing",
+    });
+
+    const resultQuery = queries[1]!;
+    expect(resultQuery.joins).toHaveLength(4);
+    const dialect = new SQLiteSyncDialect();
+    for (const [field, aliasName, idColumn] of [
+      ["cityName", "customer_city_location", "city"],
+      ["zoneName", "customer_zone_location", "zone"],
+      ["areaName", "customer_area_location", "area"],
+    ] as const) {
+      const projectionSql = dialect.sqlToQuery(resultQuery.fields[field] as never).sql.toLowerCase();
+      expect(projectionSql).toContain("coalesce");
+      expect(projectionSql).toContain(`"${aliasName}"."name"`);
+      expect(projectionSql).toContain(`"customers"."${idColumn}"`);
+    }
+
+    const locationJoinSql = resultQuery.joins.slice(1)
+      .map((condition) => dialect.sqlToQuery(condition as never).sql.toLowerCase())
+      .join(" ");
+    expect(locationJoinSql).toContain('"customer_city_location"."deleted_at" is null');
+    expect(locationJoinSql).toContain('"customer_zone_location"."deleted_at" is null');
+    expect(locationJoinSql).toContain('"customer_area_location"."deleted_at" is null');
+  });
+
+  it("keeps the count and page window independent from paged location resolution", async () => {
+    const { db, batch, queries } = createListCustomersDb({
+      count: 25,
+      rows: [customerListRow],
+    });
+
+    const result = await listCustomers(db as never, { page: 2, limit: 10 });
+
+    expect(batch.mock.calls[0]?.[0]).toHaveLength(2);
+    expect(queries[0]?.joins).toHaveLength(0);
+    expect(queries[1]).toMatchObject({ limit: 10, offset: 10 });
+    expect(result.pagination).toEqual({
+      total: 25,
+      page: 2,
+      limit: 10,
+      totalPages: 3,
+    });
+  });
+});
 
 describe("admin customer commerce metrics", () => {
   it("derives lifetime value from paid value while retaining unpaid orders in the count", () => {

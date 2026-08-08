@@ -20,6 +20,7 @@ import {
     products,
 } from "@scalius/database/schema";
 import { sql, isNull, inArray, asc, desc, eq, and, or, type SQL } from "drizzle-orm";
+import { alias } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid";
 import { addPrices, roundPrice } from "@scalius/shared/price-utils";
 import { ftsMatch } from "../../search/fts5";
@@ -60,6 +61,10 @@ const timestampToIso = (timestamp: number | null): string | null => {
     if (!timestamp) return null;
     return new Date(timestamp * 1000).toISOString();
 };
+
+const customerCityLocation = alias(deliveryLocations, "customer_city_location");
+const customerZoneLocation = alias(deliveryLocations, "customer_zone_location");
+const customerAreaLocation = alias(deliveryLocations, "customer_area_location");
 
 interface CustomerOrderShipmentSummary {
     id: string;
@@ -425,6 +430,9 @@ export async function listCustomers(
             city: customers.city,
             zone: customers.zone,
             area: customers.area,
+            cityName: sql<string | null>`COALESCE(${customerCityLocation.name}, ${customers.city})`,
+            zoneName: sql<string | null>`COALESCE(${customerZoneLocation.name}, ${customers.zone})`,
+            areaName: sql<string | null>`COALESCE(${customerAreaLocation.name}, ${customers.area})`,
             accountClaimedAt: sql<number | null>`CAST(${customers.accountClaimedAt} AS INTEGER)`,
             totalOrders: metrics.totalOrders,
             totalSpent: metrics.totalSpent,
@@ -437,31 +445,37 @@ export async function listCustomers(
             eq(orders.customerId, customers.id),
             isNull(orders.deletedAt),
         ))
+        .leftJoin(customerCityLocation, and(
+            eq(customerCityLocation.id, customers.city),
+            isNull(customerCityLocation.deletedAt),
+        ))
+        .leftJoin(customerZoneLocation, and(
+            eq(customerZoneLocation.id, customers.zone),
+            isNull(customerZoneLocation.deletedAt),
+        ))
+        .leftJoin(customerAreaLocation, and(
+            eq(customerAreaLocation.id, customers.area),
+            isNull(customerAreaLocation.deletedAt),
+        ))
         .where(whereClause)
-        .groupBy(customers.id)
+        .groupBy(
+            customers.id,
+            customerCityLocation.name,
+            customerZoneLocation.name,
+            customerAreaLocation.name,
+        )
         .limit(limit)
         .offset(offset)
         .orderBy(order === "asc" ? asc(sortField) : desc(sortField));
 
-    // Batch customer count, results, and all location names in a single D1 round-trip
-    const locationQuery = db
-        .select({ id: deliveryLocations.id, name: deliveryLocations.name })
-        .from(deliveryLocations)
-        .where(isNull(deliveryLocations.deletedAt));
-
-    const [countArr, results, locationResults] = await db.batch([
+    const [countArr, results] = await db.batch([
         countQuery,
         resultsQuery,
-        locationQuery,
     ] as Parameters<Database["batch"]>[0]) as [
         { count: number }[],
-        { id: string; name: string; email: string | null; phone: string; address: string | null; city: string | null; zone: string | null; area: string | null; accountClaimedAt: number | null; totalOrders: number; totalSpent: number; lastOrderAt: number | null; createdAt: number; updatedAt: number }[],
-        { id: string; name: string }[],
+        { id: string; name: string; email: string | null; phone: string; address: string | null; city: string | null; zone: string | null; area: string | null; cityName: string | null; zoneName: string | null; areaName: string | null; accountClaimedAt: number | null; totalOrders: number; totalSpent: number; lastOrderAt: number | null; createdAt: number; updatedAt: number }[],
     ];
     const count = countArr[0]?.count ?? 0;
-
-    const locationMap = new Map<string, string>();
-    locationResults.forEach((loc) => locationMap.set(loc.id, loc.name));
 
     const formattedCustomers = results.map((c) => ({
         ...c,
@@ -471,15 +485,8 @@ export async function listCustomers(
         updatedAt: new Date(c.updatedAt * 1000).toISOString(),
     }));
 
-    const enhanced = formattedCustomers.map((c) => ({
-        ...c,
-        cityName: c.city ? locationMap.get(c.city) ?? c.city : null,
-        zoneName: c.zone ? locationMap.get(c.zone) ?? c.zone : null,
-        areaName: c.area ? locationMap.get(c.area) ?? c.area : null,
-    }));
-
     return {
-        customers: enhanced,
+        customers: formattedCustomers,
         pagination: { total: count, page, limit, totalPages: Math.ceil(count / limit) },
     };
 }

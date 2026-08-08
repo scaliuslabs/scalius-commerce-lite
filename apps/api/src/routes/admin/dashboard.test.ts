@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
     getDashboardStats: vi.fn(),
+    getDashboardHomeSummary: vi.fn(),
     getDashboardSummaryStats: vi.fn(),
     getRecentOrders: vi.fn(),
     getDailyActivityData: vi.fn(),
@@ -10,6 +11,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@scalius/core/modules/analytics", () => ({
     getDashboardStats: mocks.getDashboardStats,
+    getDashboardHomeSummary: mocks.getDashboardHomeSummary,
     getDashboardSummaryStats: mocks.getDashboardSummaryStats,
     getRecentOrders: mocks.getRecentOrders,
     getDailyActivityData: mocks.getDailyActivityData,
@@ -85,8 +87,7 @@ describe("admin dashboard routes", () => {
     });
 
     it("serves lightweight home summary data without lifetime revenue or activity queries", async () => {
-        mocks.getDashboardSummaryStats.mockResolvedValue(homeStats);
-        mocks.getRecentOrders.mockResolvedValue(recentOrders);
+        mocks.getDashboardHomeSummary.mockResolvedValue({ stats: homeStats, recentOrders });
         const { app, db } = createTestApp();
 
         const response = await app.request("/api/v1/admin/dashboard/home-summary");
@@ -97,8 +98,9 @@ describe("admin dashboard routes", () => {
             success: true,
             data: { stats: homeStats, recentOrders },
         });
-        expect(mocks.getDashboardSummaryStats).toHaveBeenCalledWith(db);
-        expect(mocks.getRecentOrders).toHaveBeenCalledWith(db, 11);
+        expect(mocks.getDashboardHomeSummary).toHaveBeenCalledWith(db, 11);
+        expect(mocks.getDashboardSummaryStats).not.toHaveBeenCalled();
+        expect(mocks.getRecentOrders).not.toHaveBeenCalled();
         expect(mocks.getDashboardStats).not.toHaveBeenCalled();
         expect(mocks.getDailyActivityData).not.toHaveBeenCalled();
     });
