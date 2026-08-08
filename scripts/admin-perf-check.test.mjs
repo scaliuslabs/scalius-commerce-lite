@@ -168,6 +168,9 @@ function createPassingFixture({ dist = true } = {}) {
         file: "assets/settings.js",
         imports: ["assets/settings-safe.js"],
       },
+      "src/styles/global.css": {
+        file: "assets/immutable/global-a1B2c3D4.css",
+      },
     }));
     write(root, "apps/admin-v2/dist/client/_headers", headers);
     write(root, "apps/admin-v2/dist/client/flags/flags.css", ".flag { display: block; }\n");
@@ -375,6 +378,25 @@ describe("admin-perf-check", () => {
 
     expect(report.ok).toBe(false);
     expect(output).toContain("expected a ProductForm-*.js artifact");
+  });
+
+  it("rejects server-rendered asset URLs missing from the client deployment", () => {
+    const root = createPassingFixture();
+    write(root, "apps/admin-v2/dist/server/.vite/manifest.json", JSON.stringify({
+      "src/routes/admin/index.tsx?tsr-split=component": {
+        file: "assets/admin.js",
+      },
+      "src/styles/global.css": {
+        file: "assets/global-missing1.css",
+      },
+    }));
+
+    const report = runAdminPerfCheck({ rootDir: root });
+    const output = formatAdminPerfCheckReport(report).join("\n");
+
+    expect(report.ok).toBe(false);
+    expect(output).toContain("server manifest references browser assets missing from dist/client");
+    expect(output).toContain("assets/global-missing1.css");
   });
 
   it("rejects unhashed or misplaced generated scripts and styles", () => {
