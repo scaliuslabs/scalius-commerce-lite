@@ -4,6 +4,7 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import {
     getDashboardStats,
+    getDashboardHomeSummary,
     getDashboardSummaryStats,
     getRecentOrders,
     getDailyActivityData,
@@ -95,13 +96,8 @@ const dashboardHomeSummaryRoute = createRoute({
 
 app.openapi(dashboardHomeSummaryRoute, async (c) => {
     const db = c.get("db");
-
-    const [stats, recentOrders] = await Promise.all([
-        getDashboardSummaryStats(db),
-        getRecentOrders(db, 11),
-    ]);
-
-    return ok(c, { stats, recentOrders });
+    const summary = await getDashboardHomeSummary(db, 11);
+    return ok(c, summary);
 });
 
 const dashboardMetricsSummaryRoute = createRoute({

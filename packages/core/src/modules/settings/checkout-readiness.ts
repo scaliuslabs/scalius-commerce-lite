@@ -116,8 +116,10 @@ export async function getCheckoutReadiness(
     db: Database,
     options: CheckoutReadinessOptions = {},
 ): Promise<CheckoutReadiness> {
-    const delivery = await getCheckoutDeliveryReadiness(db, options);
-    const signIn = await getCustomerSignInReadiness(db, options);
+    const [delivery, signIn] = await Promise.all([
+        getCheckoutDeliveryReadiness(db, options),
+        getCustomerSignInReadiness(db, options),
+    ]);
     const issues = [...delivery.issues];
     if (signIn.customerSignInRequired && !signIn.hasUsableCustomerSignIn) {
         issues.push(CHECKOUT_READINESS_CUSTOMER_SIGN_IN_ISSUE);

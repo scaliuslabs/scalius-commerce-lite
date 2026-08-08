@@ -79,6 +79,13 @@ type DailyCustomerRow = {
     date: string;
     customerCount: number;
 };
+type RecentOrderRow = {
+    id: string;
+    customerName: string;
+    totalAmount: number;
+    status: string;
+    createdAt: string;
+};
 
 function getDashboardMonthBounds() {
     const now = new Date();
@@ -149,6 +156,28 @@ function getDashboardTotalRevenueQuery(db: Database) {
         );
 }
 
+function getRecentOrdersQuery(db: Database, limit: number) {
+    return db
+        .select({
+            id: orders.id,
+            customerName: orders.customerName,
+            totalAmount: orders.totalAmount,
+            status: orders.status,
+            createdAt: sql<string>`datetime(${orders.createdAt}, 'unixepoch')`,
+        })
+        .from(orders)
+        .where(sql`${orders.deletedAt} is null`)
+        .orderBy(desc(orders.createdAt))
+        .limit(limit);
+}
+
+function mapRecentOrders(recentOrders: RecentOrderRow[]) {
+    return recentOrders.map((order) => ({
+        ...order,
+        createdAt: new Date(order.createdAt),
+    }));
+}
+
 function mapDashboardSummaryStats([
     totalProductsArr,
     totalCustomersArr,
@@ -214,6 +243,43 @@ export async function getDashboardSummaryStats(db: Database) {
     return mapDashboardSummaryStats(rows);
 }
 
+/**
+ * Dashboard home projection in one provider batch. D1 executes batch statements
+ * sequentially in a single call, avoiding a second connection and round trip;
+ * the same provider-neutral batch contract is used by TursoDB and PostgreSQL.
+ */
+export async function getDashboardHomeSummary(db: Database, recentOrderLimit = 5) {
+    const monthBounds = getDashboardMonthBounds();
+    const [
+        totalProductsArr,
+        totalCustomersArr,
+        currentMonthArr,
+        lastMonthArr,
+        recentOrders,
+    ] = await runDashboardQuery("home_summary", () =>
+        safeBatch(db, [
+            ...getDashboardSummaryQueries(db, monthBounds),
+            getRecentOrdersQuery(db, recentOrderLimit),
+        ]) as Promise<[
+            CountRow[],
+            CountRow[],
+            CurrentMonthRow[],
+            MonthComparisonRow[],
+            RecentOrderRow[],
+        ]>,
+    );
+
+    return {
+        stats: mapDashboardSummaryStats([
+            totalProductsArr,
+            totalCustomersArr,
+            currentMonthArr,
+            lastMonthArr,
+        ]),
+        recentOrders: mapRecentOrders(recentOrders),
+    };
+}
+
 /** Full dashboard metrics for legacy callers that still need lifetime revenue. */
 export async function getDashboardStats(db: Database) {
     const monthBounds = getDashboardMonthBounds();
@@ -253,23 +319,12 @@ export async function getDashboardStats(db: Database) {
 
 /** Returns the N most recent orders for the dashboard feed. */
 export async function getRecentOrders(db: Database, limit = 5) {
-    const recentOrders = await runDashboardQuery("recent_orders", () => db
-        .select({
-            id: orders.id,
-            customerName: orders.customerName,
-            totalAmount: orders.totalAmount,
-            status: orders.status,
-            createdAt: sql<string>`datetime(${orders.createdAt}, 'unixepoch')`,
-        })
-        .from(orders)
-        .where(sql`${orders.deletedAt} is null`)
-        .orderBy(desc(orders.createdAt))
-        .limit(limit));
+    const recentOrders = await runDashboardQuery(
+        "recent_orders",
+        () => getRecentOrdersQuery(db, limit),
+    );
 
-    return recentOrders.map((order) => ({
-        ...order,
-        createdAt: new Date(order.createdAt),
-    }));
+    return mapRecentOrders(recentOrders);
 }
 
 /**
