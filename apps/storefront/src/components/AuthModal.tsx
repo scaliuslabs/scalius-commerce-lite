@@ -527,6 +527,7 @@ export default function AuthModal() {
             <div className="flex gap-3">
               <a
                 href="/account"
+                data-astro-prefetch="false"
                 className="flex-1 flex justify-center items-center h-10 rounded-lg border border-border bg-background text-sm font-medium hover:bg-muted transition-colors"
               >
                 Go to Dashboard

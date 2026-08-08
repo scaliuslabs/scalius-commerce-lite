@@ -1,6 +1,7 @@
 ---
 import Layout from "@/layouts/Layout.astro";
 import { getLayoutData } from "@/lib/api";
+import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
 
 const layoutData = await getLayoutData();
 const orderId = Astro.params.id ?? "";
@@ -20,7 +21,7 @@ const orderId = Astro.params.id ?? "";
       <div class="mx-auto max-w-md text-center">
         <h1 class="mb-3 text-2xl font-bold text-foreground">Sign in to view this order</h1>
         <p class="mb-6 text-muted-foreground">Your order timeline is protected by your customer account.</p>
-        <a href="/account" class="inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90">Open Account</a>
+        <a href="/account" data-astro-prefetch={getStorefrontPrefetchAttribute("/account", Astro.url)} class="inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90">Open Account</a>
       </div>
     </section>
 
@@ -33,7 +34,7 @@ const orderId = Astro.params.id ?? "";
         <p id="orderErrorMessage" class="mb-6 text-muted-foreground">We could not load this order right now.</p>
         <div class="flex flex-col justify-center gap-3 sm:flex-row">
           <button type="button" id="orderRetry" class="inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90">Try Again</button>
-          <a href="/account" class="inline-flex min-h-11 items-center justify-center rounded-lg border border-border px-5 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted">Back to Account</a>
+          <a href="/account" data-astro-prefetch={getStorefrontPrefetchAttribute("/account", Astro.url)} class="inline-flex min-h-11 items-center justify-center rounded-lg border border-border px-5 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted">Back to Account</a>
         </div>
       </div>
     </section>
@@ -41,7 +42,7 @@ const orderId = Astro.params.id ?? "";
     <section id="orderContent" class="hidden space-y-6" aria-live="polite">
       <div class="flex flex-col gap-4 border-b border-border pb-6 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <a href="/account" class="mb-3 inline-flex text-sm font-semibold text-primary hover:text-primary/80">Back to account</a>
+          <a href="/account" data-astro-prefetch={getStorefrontPrefetchAttribute("/account", Astro.url)} class="mb-3 inline-flex text-sm font-semibold text-primary hover:text-primary/80">Back to account</a>
           <h1 id="orderTitle" class="text-3xl font-bold text-foreground">Order Details</h1>
           <p id="orderSubtitle" class="mt-2 text-sm text-muted-foreground"></p>
         </div>
@@ -817,7 +818,7 @@ const orderId = Astro.params.id ?? "";
               ${shipment.trackingId ? `<div class="text-left sm:text-right">
                 <p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Tracking ID</p>
                 <p class="mt-1 font-mono text-sm text-foreground">${escapeHtml(shipment.trackingId)}</p>
-                ${url ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" class="mt-2 inline-flex min-h-11 items-center text-sm font-semibold text-primary hover:text-primary/80">Open courier tracking</a>` : ""}
+                ${url ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" data-astro-prefetch="false" class="mt-2 inline-flex min-h-11 items-center text-sm font-semibold text-primary hover:text-primary/80">Open courier tracking</a>` : ""}
               </div>` : ""}
             </div>
             <p class="mt-3 text-xs text-muted-foreground">Updated ${escapeHtml(formatDateTime(shipment.lastChecked || shipment.updatedAt || shipment.createdAt))}</p>

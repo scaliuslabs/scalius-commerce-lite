@@ -88,6 +88,23 @@ so custom domains and preview hosts do not share responses, and its default
 Worker-version component prevents a new deployment from serving an older
 version's cached HTML. Keep `cross_version_cache` disabled.
 
+The gateway also verifies the cached inner response's `X-Storefront-Build`
+stamp. A mismatch triggers one bounded semantic-tag purge and retry so a stale
+cross-build response cannot keep pointing at superseded assets. Deployment
+verification allows up to 90 seconds for custom-domain propagation, then warms
+robots, sitemap children, catalog feeds, homepage, search, and bounded dynamic
+catalog paths before reporting success.
+
+Astro prefetch remains enabled for anonymous public discovery, but
+`src/lib/prefetch-policy.ts` is the shared deny boundary for private/no-store
+routes and uncached product option URLs. Keep account, buy, cart, checkout,
+order-success, payment-recovery, theme-preview, and product `size`/`color`
+destinations opted out across configurable navigation and merchant-authored
+content. Any request metadata that bypasses the native public cache (including
+auth, receipt, and attribution cookies) suppresses speculative prefetch for the
+document lifetime, including cookies created after load. Do not disable public
+catalog intent prefetch globally for truly anonymous pages.
+
 **Generated browser assets**:
 - Astro emits generated JS/CSS beneath `/_astro/{BUILD_ID}/...`. Do not flatten
   this back to a shared `/_astro/...` directory: an Astro entry filename can stay

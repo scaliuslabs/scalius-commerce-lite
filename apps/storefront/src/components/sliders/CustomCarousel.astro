@@ -1,6 +1,7 @@
 ---
 // Optimized carousel component for best performance and LCP
 import { getOptimizedImageUrl } from "@/lib/image-optimizer";
+import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
 import {
   HERO_SLIDE_DEFAULT_FOCAL_POINT,
   HERO_SLIDE_PRESENTATION,
@@ -57,7 +58,14 @@ if (images.length === 0) return;
           const focalPoint = image.focalPoint ?? HERO_SLIDE_DEFAULT_FOCAL_POINT;
           const source = getOptimizedImageUrl(image.url, {
             ...getHeroSlideImageTransform(type, focalPoint, {
-              quality: index === 0 ? (type === "desktop" ? 90 : 85) : 80,
+              quality:
+                type === "desktop"
+                  ? index === 0
+                    ? 90
+                    : 80
+                  : index === 0
+                    ? 75
+                    : 70,
             }),
           });
           return (
@@ -67,6 +75,7 @@ if (images.length === 0) return;
             >
               <SlideFrame
                 href={image.link || undefined}
+                data-astro-prefetch={getStorefrontPrefetchAttribute(image.link, Astro.url)}
                 class={`slide-link group block h-full w-full ${image.link ? "cursor-pointer" : "cursor-default"}`}
                 aria-label={
                   image.link ? image.title || `Slide ${index + 1}` : undefined
@@ -394,7 +403,10 @@ if (images.length === 0) return;
       scheduleNextWarm() {
         if (this.warmTimer) clearTimeout(this.warmTimer);
         if (this.disposed || !this.isVisible()) return;
-        const delay = Math.max(250, this.interval - 1000);
+        // The first slide remains visible for at least eight seconds. Keep the
+        // hidden follow-up request out of the critical load window while still
+        // leaving enough time for a seamless automatic transition.
+        const delay = Math.max(6_000, this.interval - 2_000);
         this.warmTimer = setTimeout(() => {
           this.warmTimer = null;
           const nextIndex = (this.currentIndex + 1) % this.slides.length;

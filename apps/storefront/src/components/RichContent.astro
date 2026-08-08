@@ -2,6 +2,7 @@
 // src/components/RichContent.astro
 import { processShortcodes } from "@/lib/shortcodes";
 import { optimizeRichContentImages } from "@/lib/rich-content-media";
+import { applyStorefrontPrefetchPolicyToHtml } from "@/lib/prefetch-policy";
 import { sanitizeHtml } from "@scalius/shared/html-sanitize";
 
 interface Props {
@@ -28,7 +29,10 @@ if (shouldProcessShortcodes && content) {
 }
 
 if (processedContent) {
-  processedContent = optimizeRichContentImages(processedContent);
+  processedContent = applyStorefrontPrefetchPolicyToHtml(
+    optimizeRichContentImages(processedContent),
+    Astro.url,
+  );
 }
 
 const allClasses = `prose dark:prose-invert max-w-none ${className}`;

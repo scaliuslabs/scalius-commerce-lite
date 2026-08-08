@@ -1,6 +1,7 @@
 ---
 import Layout from "@/layouts/Layout.astro";
 import { getLayoutData, type LayoutData } from "@/lib/api";
+import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
 
 const orderId = Astro.url.searchParams.get("orderId")?.trim() ?? "";
 const layoutData: LayoutData | null = await getLayoutData();
@@ -80,7 +81,7 @@ const layoutData: LayoutData | null = await getLayoutData();
       )}
 
       <div class="mt-5 flex flex-wrap gap-2 border-t border-border pt-4 text-sm">
-        <a href="/account" class="text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">View account orders</a>
+        <a href="/account" data-astro-prefetch={getStorefrontPrefetchAttribute("/account", Astro.url)} class="text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">View account orders</a>
         <span class="text-muted-foreground">/</span>
         <a href="/" class="text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">Continue shopping</a>
       </div>

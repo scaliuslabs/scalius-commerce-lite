@@ -3,6 +3,7 @@ import {
   hasStorefrontProductVariantSelectionParams,
 } from "@scalius/shared/storefront-cache-path";
 import { CACHE_TTL } from "@/lib/edge-cache";
+import { requestBypassesPublicStorefrontCache } from "@/lib/cache-policy";
 const MAX_PUBLIC_QUERY_ENTRIES = 30;
 const MAX_PUBLIC_QUERY_KEY_LENGTH = 64;
 const MAX_PUBLIC_QUERY_VALUE_LENGTH = 512;
@@ -53,11 +54,7 @@ interface PublicStorefrontRoutePolicy {
 }
 
 function hasPrivateRequestSignals(request: Request): boolean {
-  return (
-    Boolean(request.headers.get("Authorization")) ||
-    Boolean(request.headers.get("Cookie")) ||
-    Boolean(request.headers.get("X-API-Token"))
-  );
+  return requestBypassesPublicStorefrontCache(request.headers);
 }
 
 function isCmsPagePath(pathname: string): boolean {
@@ -181,6 +178,35 @@ export function normalizePublicStorefrontCacheTags(
       tags.filter((tag) => PUBLIC_STOREFRONT_CACHE_TAGS.has(tag)),
     ),
   ];
+}
+
+export function responseHasStorefrontBuild(
+  response: Response,
+  expectedBuildId: string,
+): boolean {
+  return response.headers.get("X-Storefront-Build") === expectedBuildId;
+}
+
+export async function recoverCurrentStorefrontBuild({
+  response,
+  expectedBuildId,
+  purge,
+  refetch,
+  renderDirect,
+}: {
+  response: Response;
+  expectedBuildId: string;
+  purge: () => Promise<void>;
+  refetch: () => Promise<Response>;
+  renderDirect: () => Promise<Response>;
+}): Promise<Response> {
+  if (responseHasStorefrontBuild(response, expectedBuildId)) return response;
+
+  await purge();
+  const retried = await refetch();
+  return responseHasStorefrontBuild(retried, expectedBuildId)
+    ? retried
+    : renderDirect();
 }
 
 export function decoratePublicStorefrontResponse(

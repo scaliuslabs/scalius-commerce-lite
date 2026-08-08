@@ -2,6 +2,7 @@
 import type { NavigationItem, SocialLink } from "@/lib/api";
 import { X, ChevronDown, Phone, ChevronRight } from "lucide-react";
 import { getOptimizedImageUrl } from "@/lib/image-optimizer";
+import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
 
 interface Props {
   navigation: NavigationItem[];
@@ -67,7 +68,7 @@ function generateMenuId(item: NavigationItem, prefix: string = ""): string {
                   <div class="group/item">
                     <div class="flex items-center justify-between">
                       {item.href ? (
-                        <a href={item.href} target={item.openInNewTab ? "_blank" : undefined} rel={item.openInNewTab ? "noopener noreferrer" : undefined} class="flex-1 text-[16px] font-bold text-foreground hover:text-primary transition-colors py-2.5">
+                        <a href={item.href} data-astro-prefetch={getStorefrontPrefetchAttribute(item.href, Astro.url)} target={item.openInNewTab ? "_blank" : undefined} rel={item.openInNewTab ? "noopener noreferrer" : undefined} class="flex-1 text-[16px] font-bold text-foreground hover:text-primary transition-colors py-2.5">
                           {item.title}
                         </a>
                       ) : (
@@ -106,7 +107,7 @@ function generateMenuId(item: NavigationItem, prefix: string = ""): string {
                                   <div>
                                     <div class="flex items-center justify-between group/sub">
                                       {level2Item.href ? (
-                                        <a href={level2Item.href} target={level2Item.openInNewTab ? "_blank" : undefined} rel={level2Item.openInNewTab ? "noopener noreferrer" : undefined} class="flex-1 text-[14px] font-semibold text-foreground hover:text-foreground transition-colors py-2">
+                                        <a href={level2Item.href} data-astro-prefetch={getStorefrontPrefetchAttribute(level2Item.href, Astro.url)} target={level2Item.openInNewTab ? "_blank" : undefined} rel={level2Item.openInNewTab ? "noopener noreferrer" : undefined} class="flex-1 text-[14px] font-semibold text-foreground hover:text-foreground transition-colors py-2">
                                           {level2Item.title}
                                         </a>
                                       ) : (
@@ -138,7 +139,7 @@ function generateMenuId(item: NavigationItem, prefix: string = ""): string {
                                             return (
                                               <li>
                                                 {level3Item.href ? (
-                                                  <a href={level3Item.href} target={level3Item.openInNewTab ? "_blank" : undefined} rel={level3Item.openInNewTab ? "noopener noreferrer" : undefined} class="flex min-h-11 items-center py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">
+                                                  <a href={level3Item.href} data-astro-prefetch={getStorefrontPrefetchAttribute(level3Item.href, Astro.url)} target={level3Item.openInNewTab ? "_blank" : undefined} rel={level3Item.openInNewTab ? "noopener noreferrer" : undefined} class="flex min-h-11 items-center py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">
                                                     {level3Item.title}
                                                   </a>
                                                 ) : (
@@ -154,7 +155,7 @@ function generateMenuId(item: NavigationItem, prefix: string = ""): string {
                                     </div>
                                   </div>
                                 ) : level2Item.href ? (
-                                    <a href={level2Item.href} target={level2Item.openInNewTab ? "_blank" : undefined} rel={level2Item.openInNewTab ? "noopener noreferrer" : undefined} class="flex min-h-11 items-center py-2 text-sm font-semibold text-foreground transition-colors hover:text-foreground">
+                                    <a href={level2Item.href} data-astro-prefetch={getStorefrontPrefetchAttribute(level2Item.href, Astro.url)} target={level2Item.openInNewTab ? "_blank" : undefined} rel={level2Item.openInNewTab ? "noopener noreferrer" : undefined} class="flex min-h-11 items-center py-2 text-sm font-semibold text-foreground transition-colors hover:text-foreground">
                                       {level2Item.title}
                                     </a>
                                   ) : (
@@ -170,7 +171,7 @@ function generateMenuId(item: NavigationItem, prefix: string = ""): string {
                     </div>
                   </div>
                 ) : item.href ? (
-                    <a href={item.href} target={item.openInNewTab ? "_blank" : undefined} rel={item.openInNewTab ? "noopener noreferrer" : undefined} class="block text-[16px] font-bold text-foreground hover:text-primary transition-colors py-2.5">
+                    <a href={item.href} data-astro-prefetch={getStorefrontPrefetchAttribute(item.href, Astro.url)} target={item.openInNewTab ? "_blank" : undefined} rel={item.openInNewTab ? "noopener noreferrer" : undefined} class="block text-[16px] font-bold text-foreground hover:text-primary transition-colors py-2.5">
                       {item.title}
                     </a>
                   ) : (
@@ -225,6 +226,7 @@ function generateMenuId(item: NavigationItem, prefix: string = ""): string {
             return (
               <a
                 href={href}
+                data-astro-prefetch={getStorefrontPrefetchAttribute(href, Astro.url)}
                 class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-input bg-card text-muted-foreground transition-all hover:border-primary/50 hover:text-foreground hover:shadow-sm"
                 target="_blank"
                 rel="noopener noreferrer"

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   isCacheablePublicResponse,
+  requestBypassesPublicStorefrontCache,
   requestHasPrivateSession,
 } from "./cache-policy";
 
@@ -31,6 +32,28 @@ describe("storefront cache policy", () => {
       Cookie: "other=1; stp_theme_preview=tpv_secret",
     }))).toBe(true);
     expect(requestHasPrivateSession(new Headers({ Cookie: "other=1" }))).toBe(false);
+  });
+
+  it("aligns speculative prefetch suppression with every public-cache bypass signal", () => {
+    expect(requestBypassesPublicStorefrontCache(new Headers())).toBe(false);
+    expect(
+      requestBypassesPublicStorefrontCache(new Headers({ Cookie: "_fbc=click" })),
+    ).toBe(true);
+    expect(
+      requestBypassesPublicStorefrontCache(
+        new Headers({ Cookie: "order_receipt=proof" }),
+      ),
+    ).toBe(true);
+    expect(
+      requestBypassesPublicStorefrontCache(
+        new Headers({ Authorization: "Bearer token" }),
+      ),
+    ).toBe(true);
+    expect(
+      requestBypassesPublicStorefrontCache(
+        new Headers({ "X-API-Token": "token" }),
+      ),
+    ).toBe(true);
   });
 
   it("allows public HTML, XML, XSLT, and text responses", () => {

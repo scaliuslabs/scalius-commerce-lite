@@ -15,6 +15,10 @@ import {
   type SerializedSocialLink,
 } from "@/lib/serialized-media";
 import { sanitizeHtml } from "@scalius/shared/html-sanitize";
+import {
+  applyStorefrontPrefetchPolicyToHtml,
+  getStorefrontPrefetchAttribute,
+} from "@/lib/prefetch-policy";
 
 interface Props {
   footerData: FooterData;
@@ -25,7 +29,10 @@ const { footerData } = Astro.props;
 const logo = footerData?.logo || { src: "/logo.svg", alt: "Store Logo" };
 const tagline = footerData?.tagline || "";
 const description = footerData?.description || "";
-const optimizedDescription = optimizeRichContentImages(sanitizeHtml(description));
+const optimizedDescription = applyStorefrontPrefetchPolicyToHtml(
+  optimizeRichContentImages(sanitizeHtml(description)),
+  Astro.url,
+);
 const copyrightText = footerData?.copyrightText || "";
 const rawMenus: FooterMenu[] = footerData?.menus || [];
 const socialRaw: SocialLink[] = footerData?.social || [];
@@ -167,6 +174,7 @@ if (menuCount >= 4) menuGridCols = "grid-cols-2 lg:grid-cols-4";
                 return (
                   <a
                     href={href}
+                    data-astro-prefetch={getStorefrontPrefetchAttribute(href, Astro.url)}
                     class="group text-white transition-all duration-300"
                     target="_blank"
                     rel="noopener noreferrer"
@@ -218,6 +226,7 @@ if (menuCount >= 4) menuGridCols = "grid-cols-2 lg:grid-cols-4";
                 return (
                   <a
                     href={href}
+                    data-astro-prefetch={getStorefrontPrefetchAttribute(href, Astro.url)}
                     class="group text-white transition-all duration-300"
                     target="_blank"
                     rel="noopener noreferrer"

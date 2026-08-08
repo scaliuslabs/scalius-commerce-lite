@@ -7,7 +7,11 @@ import {
 } from "@scalius/shared/http-security";
 
 import { apiContext } from "@/lib/api/context";
-import { requestHasPrivateSession } from "@/lib/cache-policy";
+import {
+  isPrivateStorefrontPathname,
+  requestBypassesPublicStorefrontCache,
+  requestHasPrivateSession,
+} from "@/lib/cache-policy";
 import { setPageCspHeader } from "@/lib/middleware-helper/csp-handler";
 import {
   applyBrowserCachePolicyForPublicResponse,
@@ -45,14 +49,22 @@ const responsePolicyMiddleware = defineMiddleware(async (context, next) => {
   const isGet = request.method === "GET" || request.method === "HEAD";
   const hasVariantSelection = hasStorefrontProductVariantSelectionParams(url);
   const hasPrivateSession = requestHasPrivateSession(request.headers);
-  const explicitlyPrivatePath = /^\/(?:account|buy|cart|checkout|order-success|payment-recovery|theme-preview)(?:\/|$)/.test(
-    url.pathname,
+  const bypassesPublicCache = requestBypassesPublicStorefrontCache(
+    request.headers,
   );
+  const explicitlyPrivatePath = isPrivateStorefrontPathname(url.pathname);
 
   if (isGet && hasVariantSelection) {
     setPrivateResponse(response, "BYPASS_VARIANT_SELECTION");
-  } else if (isGet && (hasPrivateSession || explicitlyPrivatePath)) {
-    setPrivateResponse(response, hasPrivateSession ? "BYPASS_AUTH" : "NO_CACHE");
+  } else if (isGet && (bypassesPublicCache || explicitlyPrivatePath)) {
+    setPrivateResponse(
+      response,
+      hasPrivateSession
+        ? "BYPASS_AUTH"
+        : explicitlyPrivatePath
+          ? "NO_CACHE"
+          : "BYPASS",
+    );
   } else {
     const publicPolicy = getPublicStorefrontCachePolicy(request);
     const publicResponse =

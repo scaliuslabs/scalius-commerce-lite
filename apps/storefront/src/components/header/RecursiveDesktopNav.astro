@@ -1,6 +1,7 @@
 ---
 import type { NavigationItem } from "@/lib/api";
 import { ChevronRight } from "lucide-react";
+import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
 
 interface Props {
   items: NavigationItem[];
@@ -20,6 +21,7 @@ const { items = [], depth = 0 } = Astro.props;
           {item.href ? (
           <a
             href={item.href}
+            data-astro-prefetch={getStorefrontPrefetchAttribute(item.href, Astro.url)}
             target={item.openInNewTab ? "_blank" : undefined}
             rel={item.openInNewTab ? "noopener noreferrer" : undefined}
             class="flex items-center justify-between px-4 py-2.5 mx-1.5 rounded-lg text-sm font-medium text-foreground transition-colors duration-200 outline-none hover:text-foreground hover:bg-muted focus-visible:bg-muted"

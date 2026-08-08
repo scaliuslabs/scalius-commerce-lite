@@ -132,6 +132,8 @@ describe("renderEmptyCartState", () => {
     expect(links[0]?.getAttribute("href")).toBe(
       "/order-success?orderId=order_1&payment=sslcommerz",
     );
+    expect(links[0]?.getAttribute("data-astro-prefetch")).toBe("false");
+    expect(links[1]?.getAttribute("data-astro-prefetch")).toBeNull();
     expect(links[0]?.textContent).toBe("View payment status");
     links[0]?.dispatchEvent(new Event("click"));
     expect(onClick).toHaveBeenCalledTimes(1);

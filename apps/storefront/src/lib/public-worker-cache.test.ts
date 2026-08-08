@@ -1,10 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   decoratePublicStorefrontResponse,
   exposePublicStorefrontResponse,
   getPublicStorefrontCachePolicy,
   normalizePublicStorefrontCacheTags,
+  recoverCurrentStorefrontBuild,
+  responseHasStorefrontBuild,
 } from "./public-worker-cache";
 
 describe("public storefront Worker cache policy", () => {
@@ -157,5 +159,51 @@ describe("public storefront Worker cache policy", () => {
         "pages",
       ]),
     ).toEqual(["pages", "products", "layout"]);
+  });
+
+  it("detects a response produced by a superseded storefront build", () => {
+    expect(responseHasStorefrontBuild(
+      new Response("current", {
+        headers: { "X-Storefront-Build": "src-current" },
+      }),
+      "src-current",
+    )).toBe(true);
+    expect(responseHasStorefrontBuild(
+      new Response("old", {
+        headers: { "X-Storefront-Build": "src-old" },
+      }),
+      "src-current",
+    )).toBe(false);
+    expect(responseHasStorefrontBuild(new Response("unstamped"), "src-current"))
+      .toBe(false);
+  });
+
+  it("purges once, retries once, then renders directly on a repeated build mismatch", async () => {
+    const purge = vi.fn(async () => undefined);
+    const refetch = vi.fn(async () =>
+      new Response("still stale", {
+        headers: { "X-Storefront-Build": "src-old" },
+      }),
+    );
+    const renderDirect = vi.fn(async () =>
+      new Response("current direct", {
+        headers: { "X-Storefront-Build": "src-current" },
+      }),
+    );
+
+    const response = await recoverCurrentStorefrontBuild({
+      response: new Response("stale", {
+        headers: { "X-Storefront-Build": "src-old" },
+      }),
+      expectedBuildId: "src-current",
+      purge,
+      refetch,
+      renderDirect,
+    });
+
+    expect(purge).toHaveBeenCalledOnce();
+    expect(refetch).toHaveBeenCalledOnce();
+    expect(renderDirect).toHaveBeenCalledOnce();
+    await expect(response.text()).resolves.toBe("current direct");
   });
 });

@@ -15,6 +15,7 @@ import {
   resolveOrderSuccessRetryPaymentType,
 } from "@/lib/order-success-payment-retry";
 import { readOrderReceiptCookie } from "@/lib/order-receipt-cookie";
+import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
 import {
   formatSavedMinorAmount,
   resolveSavedOrderLineMoney,
@@ -458,12 +459,12 @@ const legacySubtotal = order
         )}
         <div class="flex flex-col justify-center gap-3 sm:flex-row">
           {recoveryState?.recoveryUrl && (
-            <a href={recoveryState.recoveryUrl} class="inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90">Verify payment recovery</a>
+            <a href={recoveryState.recoveryUrl} data-astro-prefetch={getStorefrontPrefetchAttribute(recoveryState.recoveryUrl, Astro.url)} class="inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90">Verify payment recovery</a>
           )}
           {recoveryState?.showRetry && (
-            <a href={Astro.url.pathname + Astro.url.search} class="inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90">Retry Receipt</a>
+            <a href={Astro.url.pathname + Astro.url.search} data-astro-prefetch={getStorefrontPrefetchAttribute(Astro.url.pathname + Astro.url.search, Astro.url)} class="inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90">Retry Receipt</a>
           )}
-          <a href="/account" class="inline-flex min-h-11 items-center justify-center rounded-lg border border-border px-5 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted">View Account Orders</a>
+          <a href="/account" data-astro-prefetch={getStorefrontPrefetchAttribute("/account", Astro.url)} class="inline-flex min-h-11 items-center justify-center rounded-lg border border-border px-5 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted">View Account Orders</a>
           <a href="/" class="inline-flex min-h-11 items-center justify-center rounded-lg border border-border px-5 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted">Continue Shopping</a>
         </div>
       </div>

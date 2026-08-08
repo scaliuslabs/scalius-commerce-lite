@@ -26,6 +26,8 @@ import {
   clearThemePreviewCookieHeader,
   readThemePreviewCookie,
 } from "@/lib/theme-preview-cookie";
+import { requestBypassesPublicStorefrontCache } from "@/lib/cache-policy";
+import { buildPrivateSessionPrefetchGuardScript } from "@/lib/private-session-prefetch-guard";
 
 interface Props {
   title: string;
@@ -272,6 +274,10 @@ const runtimeGlobalsScript = [
   `window.__META_CAPI_BROWSER_EVENTS_ENABLED__=${serializeJsonForInlineScript(!isThemePreview && layoutData?.metaCapi?.browserEventsEnabled === true)};`,
   `window.__TIKTOK_PIXEL_ENABLED__=${serializeJsonForInlineScript(tiktokPixelEnabled)};`,
 ].join("");
+const privateSessionPrefetchGuardScript =
+  buildPrivateSessionPrefetchGuardScript(
+    requestBypassesPublicStorefrontCache(Astro.request.headers),
+  );
 ---
 
 <!doctype html>
@@ -292,6 +298,9 @@ const runtimeGlobalsScript = [
 
     <!-- Runtime API URL, CDN domain, and currency for client-side JS (Cloudflare Worker env vars aren't available to Vite client bundles) -->
     <script is:inline set:html={runtimeGlobalsScript} />
+
+    <!-- This must run before Astro's deferred prefetch module scans the page. -->
+    <script is:inline set:html={privateSessionPrefetchGuardScript} />
 
     <!-- Stale Asset Detector -->
     <script is:inline>
@@ -441,6 +450,7 @@ const runtimeGlobalsScript = [
           };
           const persistClickId = (cookieName, storageName, value) => {
             document.cookie = `${cookieName}=${encodeURIComponent(value)}${cookieSuffix}`;
+            window.dispatchEvent(new CustomEvent("storefront-cookie-created"));
             try {
               sessionStorage.setItem(storageName, value);
             } catch {

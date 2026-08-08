@@ -293,7 +293,7 @@ const layoutData = await getLayoutData();
           ? `<div class="text-left sm:text-right">
               <p class="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Tracking ID</p>
               <p class="mt-1 font-mono text-xs text-foreground">${escapeHtml(shipment.trackingId)}</p>
-              ${trackingUrl ? `<a class="mt-1 inline-flex text-xs font-semibold text-primary hover:text-primary/80" href="${escapeHtml(trackingUrl)}" target="_blank" rel="noopener noreferrer">View courier tracking</a>` : ""}
+              ${trackingUrl ? `<a class="mt-1 inline-flex text-xs font-semibold text-primary hover:text-primary/80" href="${escapeHtml(trackingUrl)}" target="_blank" rel="noopener noreferrer" data-astro-prefetch="false">View courier tracking</a>` : ""}
             </div>`
           : ""}
       </div>
@@ -335,7 +335,7 @@ const layoutData = await getLayoutData();
           <p class="font-semibold text-foreground">${escapeHtml(title)}</p>
           <p class="mt-0.5 text-muted-foreground">${escapeHtml(message)}</p>
         </div>
-        <a class="inline-flex min-h-10 items-center text-xs font-semibold text-primary hover:text-primary/80" href="${escapeHtml(`/account/orders/${encodeURIComponent(order.id)}`)}">Open timeline</a>
+        <a class="inline-flex min-h-10 items-center text-xs font-semibold text-primary hover:text-primary/80" href="${escapeHtml(`/account/orders/${encodeURIComponent(order.id)}`)}" data-astro-prefetch="false">Open timeline</a>
       </div>
     </div>`;
   }
@@ -388,7 +388,7 @@ const layoutData = await getLayoutData();
              <p class="text-xl font-bold text-foreground">${formatCurrency(order.totalAmount)}</p>
              <div class="flex flex-wrap items-center justify-end gap-3">
                <button type="button" class="min-h-11 text-[11px] tracking-wide uppercase font-bold text-primary hover:text-primary/80 transition-colors" data-order-toggle="${escapeHtml(detailsId)}" aria-expanded="false" aria-controls="${escapeHtml(detailsId)}">Quick View</button>
-               <a class="inline-flex min-h-11 items-center text-[11px] tracking-wide uppercase font-bold text-primary hover:text-primary/80 transition-colors" href="${escapeHtml(detailHref)}">Full Timeline</a>
+               <a class="inline-flex min-h-11 items-center text-[11px] tracking-wide uppercase font-bold text-primary hover:text-primary/80 transition-colors" href="${escapeHtml(detailHref)}" data-astro-prefetch="false">Full Timeline</a>
              </div>
            </div>
          </div>

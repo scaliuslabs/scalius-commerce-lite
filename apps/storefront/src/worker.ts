@@ -6,7 +6,9 @@ import {
   exposePublicStorefrontResponse,
   getPublicStorefrontCachePolicy,
   normalizePublicStorefrontCacheTags,
+  recoverCurrentStorefrontBuild,
 } from "./lib/public-worker-cache";
+import { BUILD_ID } from "./config/build-id";
 
 export class CachedPublicStorefront extends WorkerEntrypoint<Env> {
   async fetch(request: Request): Promise<Response> {
@@ -47,6 +49,21 @@ export default class StorefrontGateway extends WorkerEntrypoint<Env> {
     const response = await this.ctx.exports.CachedPublicStorefront.fetch(
       cacheRequest,
     );
-    return exposePublicStorefrontResponse(response);
+
+    // Versioned native cache entries should be isolated by Cloudflare. Keep a
+    // defensive recovery path because a stale entry must never survive a
+    // successful deployment or expose HTML that references superseded assets.
+    const currentResponse = await recoverCurrentStorefrontBuild({
+      response,
+      expectedBuildId: BUILD_ID,
+      purge: () =>
+        this.ctx.exports.CachedPublicStorefront.purgeGroups([...policy.tags]),
+      refetch: () => this.ctx.exports.CachedPublicStorefront.fetch(cacheRequest),
+      // A repeated mismatch must not expose stale HTML. Bypass the native lane
+      // and render through the currently executing Worker as the bounded fallback.
+      renderDirect: () => handle(request, this.env, this.ctx),
+    });
+
+    return exposePublicStorefrontResponse(currentResponse);
   }
 }

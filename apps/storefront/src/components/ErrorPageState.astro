@@ -1,4 +1,6 @@
 ---
+import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
+
 interface Props {
   code: "404" | "500";
   title: string;
@@ -47,6 +49,7 @@ const {
     <div class="mt-7 flex flex-col justify-center gap-3 sm:flex-row">
       <a
         href={primaryHref}
+        data-astro-prefetch={getStorefrontPrefetchAttribute(primaryHref, Astro.url)}
         data-theme-component="button"
         data-theme-variant="default"
         class="inline-flex min-h-11 items-center justify-center rounded-md bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
@@ -55,6 +58,7 @@ const {
       </a>
       <a
         href={secondaryHref}
+        data-astro-prefetch={getStorefrontPrefetchAttribute(secondaryHref, Astro.url)}
         data-theme-component="button"
         data-theme-variant="outline"
         class="inline-flex min-h-11 items-center justify-center rounded-md border border-border bg-background px-5 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"

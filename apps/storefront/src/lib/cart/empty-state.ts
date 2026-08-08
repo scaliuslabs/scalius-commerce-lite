@@ -55,6 +55,7 @@ export function renderEmptyCartState(
   if (recoveryAction) {
     const recoveryLink = document.createElement("a");
     recoveryLink.href = recoveryAction.href;
+    recoveryLink.dataset.astroPrefetch = "false";
     recoveryLink.className =
       "inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-primary-foreground bg-primary hover:bg-primary/90";
     recoveryLink.textContent = "View payment status";
