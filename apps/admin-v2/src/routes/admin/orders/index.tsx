@@ -21,7 +21,7 @@ import {
   type SearchValidatorInput,
 } from "~/lib/list-helpers";
 import { RouteErrorComponent } from "~/lib/route-error";
-import type { Row } from "@tanstack/react-table";
+import type { Row } from "@/components/admin/data-table/table-config";
 import {
   isOrderArchiveStatusEligible,
 } from "@scalius/core/modules/orders/order-archive-policy";

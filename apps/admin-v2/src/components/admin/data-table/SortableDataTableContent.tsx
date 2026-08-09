@@ -1,5 +1,10 @@
 import { useCallback, useMemo, type ReactNode } from "react";
-import { flexRender, type Row, type Table } from "@tanstack/react-table";
+import {
+  flexRender,
+  type Row,
+  type Table,
+  type TableRowData,
+} from "./table-config";
 import {
   DndContext,
   closestCenter,
@@ -28,7 +33,7 @@ import {
 import { DataTableEmptyState, type EmptyStateConfig } from "./DataTableEmptyState";
 import { getSortableStyle } from "../shared/sortable-style";
 
-export interface SortableDataTableContentProps<TData> {
+export interface SortableDataTableContentProps<TData extends TableRowData> {
   table: Table<TData>;
   rows: Row<TData>[];
   hasRows: boolean;
@@ -37,7 +42,7 @@ export interface SortableDataTableContentProps<TData> {
   onReorder?: (oldIndex: number, newIndex: number) => void;
 }
 
-function SortableTableRow<TData>({
+function SortableTableRow<TData extends TableRowData>({
   row,
   children,
 }: {
@@ -78,7 +83,7 @@ function SortableTableRow<TData>({
   );
 }
 
-export function SortableDataTableContent<TData>({
+export function SortableDataTableContent<TData extends TableRowData>({
   table,
   rows,
   hasRows,

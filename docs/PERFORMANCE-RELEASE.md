@@ -11,6 +11,35 @@ This note records the performance evidence and release decisions for the Commerc
 - The API is a Hono Worker backed by D1. Request bindings are passed from `Env`, commerce writes stay authoritative in the relational provider, and independent reads use bounded D1 batches where that removes network round trips.
 - Hosted-service and multi-merchant control-plane concerns remain outside this repository.
 
+## Dependency and framework audit
+
+Every direct workspace dependency was compared with the public registry and
+advanced to its current release on 2026-08-09. The resulting stack includes
+Astro 7.2.0, the Astro Cloudflare adapter 14.2.0, Vite 8.2.1, the Cloudflare
+Vite plugin 1.51.1, Wrangler 4.120.0, Hono 4.13.1, TanStack Start 1.168.40,
+TanStack Router 1.170.23, TanStack Table 9.1.0, React 19.2.8, pnpm 11.20.0,
+Turbo 2.10.9, and the latest compatible direct commerce, editor, form, schema,
+lint, test, and Cloudflare packages. `pnpm outdated -r` is empty except for two
+intentional compatibility lanes:
+
+- Node remains on the supported Node 24 LTS runtime, so `@types/node` stays on
+  its current 24.x line instead of advertising Node 26 Current APIs that do not
+  exist in CI or production tooling.
+- TypeScript 7.0.2 is the actual compiler for API, dashboard, core, database,
+  shared, and API-client checks. A side-by-side TypeScript 6.0.3 package remains
+  as the programmatic compiler API required by stable `typescript-eslint` and
+  `@astrojs/check`; this is the migration shape recommended by the TypeScript 7
+  release itself, not a stale compiler path.
+
+The complete peer-dependency check and both full and production-only package
+audits pass with zero findings. Astro 7.2 can remove its SSR session runtime
+when `session: false` is safe, but the storefront deliberately keeps its
+Cloudflare KV-backed session driver because cart and customer behavior use it.
+The Cloudflare adapter's new build-time image-binding path and Astro's
+incremental static build mode do not replace this storefront's dynamic SSR,
+custom CDN image policy, or semantic cache invalidation. They were therefore
+not enabled merely because the packages now expose them.
+
 ## Storefront evidence
 
 ### Before the release changes
@@ -75,7 +104,7 @@ The intermittent mobile SEO 92 is a PageSpeed `robots.txt` fetch timeout, not a 
 
 ## Cloudflare zone and cache audit
 
-Wrangler 4.116.0 verified the deployed Worker cache configuration and active
+Wrangler 4.120.0 verified the deployed Worker cache configuration and active
 versions. Wrangler has no zone-settings, Cache Rules, Early Hints, Tiered Cache,
 or Cache Reserve command, so the authenticated Cloudflare dashboard supplied
 the read-only zone inventory. `scalius.com` is on the Free Website plan, with no
@@ -161,7 +190,18 @@ Retained changes:
 - Emit generated dashboard JS/CSS only beneath `/assets/immutable/` with content hashes and one-year immutable caching. HTML, source maps, and copied stable public assets are excluded by a fail-closed build gate, eliminating conditional revalidation for unchanged route chunks on repeat visits.
 - Keep the SSR and client Vite asset directories identical. The first live dashboard deploy exposed that a client-only `assetsDir` change left the SSR manifest pointing at three missing legacy URLs. The release gate now resolves every CSS/image/font URL in the server manifest against `dist/client`, so this class of deploy can no longer pass locally.
 
-TanStack Table v9.1.0 was evaluated after v9.0.0 became stable on 2026-08-04. Scalius stays on v8 for this release: v9 had only four days of stable-channel exposure, its headline gains target client row models and very large tables, while Scalius uses authoritative server pagination with a 10-row default and a 100-row cap. A disposable native-v9 explicit-feature comparison was larger and slower for this bounded workload, while the checked-in v8 row-boundary test already proves the relevant reactivity gain. Reassess after four to six weeks only if a real table crosses 250 rendered rows/2,000 cells, a table action exceeds 16 ms, or a reproducible native-v9 benchmark saves at least 5 KiB gzip or 20% and 10 ms p95 CPU without behavior regressions.
+TanStack Table 9.1.0 is now native rather than hidden behind the v8 compatibility
+adapter. One typed table configuration registers only pagination, selection,
+sorting, visibility, and sizing; server-owned filtering and client row-model
+features are absent. The 100-row rendering regression test still proves that a
+fetch overlay rerenders zero unchanged cells and one selection rerenders only
+the selected row. This is a maintainability and future reactivity foundation,
+not a fabricated bundle win: the representative table entry fell from 12.18 to
+8.53 KiB gzip, but its associated column-factory chunk grew enough that the two
+measured chunks together increased from 16.96 to 20.17 KiB gzip. Scalius's
+10-row default and 100-row cap also mean v9's large-table memory headline is not
+a meaningful current dashboard claim. Retention depends on the post-deployment
+interaction measurements and complete behavior gates, not the version number.
 
 ## API evidence and changes
 
@@ -186,7 +226,8 @@ Measured post-release spikes, not release rewrites:
 
 - React 19.2 `Activity` around already-visited settings panes, gated on preserved draft state, focus, effects, and lower p75 interaction cost.
 - Native cross-document `@view-transition` for public browse routes only; this targets continuity, not Lighthouse score, and that MPA opt-in remains limited availability/not Baseline.
-- TanStack Table v9 native explicit features plus narrow Store subscriptions after stable-channel soak.
+- Narrow TanStack Table v9 Store selectors/leaf subscriptions, but only after a
+  trace proves table-wide state notification is a remaining hot interaction.
 - Route-local virtualization only for a future workflow that truly renders hundreds of continuous rows.
 - Header-logo priority and hero decoding A/B only if a repeated trace attributes a stable, controllable FCP/LCP delay.
 - Cloudflare 103 Early Hints measurement across at least 20 paired cold runs and three colos. The production trial is limited to an invariant CDN preconnect that transfers no speculative asset bytes. Retain it only with at least 100 ms median or 150 ms p75 LCP improvement and unchanged hot-hit latency; never extend it to dynamic hero/build URLs without a separate invalidation proof.

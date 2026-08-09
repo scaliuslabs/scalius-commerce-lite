@@ -6,7 +6,7 @@ import {
   type ComponentType,
   type KeyboardEvent,
 } from "react";
-import type { Table } from "@tanstack/react-table";
+import type { Table, TableRowData } from "./table-config";
 import { Button } from "@/components/ui/button";
 import {
   ChevronLeft,
@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import type { DataTablePaginationPageSizeMenuProps } from "./DataTablePaginationPageSizeMenu";
 
-interface DataTablePaginationProps<TData> {
+interface DataTablePaginationProps<TData extends TableRowData> {
   table: Table<TData>;
   itemLabel?: string;
   pageSizeOptions?: number[];
@@ -35,12 +35,12 @@ function isMenuOpenKey(key: string) {
   return key === "Enter" || key === " " || key === "ArrowDown";
 }
 
-export function DataTablePagination<TData>({
+export function DataTablePagination<TData extends TableRowData>({
   table,
   itemLabel = "items",
   pageSizeOptions = [10, 20, 50, 100],
 }: DataTablePaginationProps<TData>) {
-  const { pageIndex, pageSize } = table.getState().pagination;
+  const { pageIndex, pageSize } = table.state.pagination;
   const rowCount = table.getRowCount();
   const pageCount = table.getPageCount();
   const [isPageSizeMenuRequested, setIsPageSizeMenuRequested] = useState(false);
@@ -74,7 +74,7 @@ export function DataTablePagination<TData>({
 
   const start = pageIndex * pageSize + 1;
   const end = Math.min((pageIndex + 1) * pageSize, rowCount);
-  const selectedCount = table.getFilteredSelectedRowModel().rows.length;
+  const selectedCount = table.getSelectedRowModel().rows.length;
   const pageSizeTrigger = (
     <Button
       variant="outline"

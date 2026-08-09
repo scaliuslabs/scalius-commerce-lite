@@ -7,7 +7,7 @@ import {
   QueryClientProvider,
   queryOptions,
 } from "@tanstack/react-query";
-import type { ColumnDef } from "@tanstack/react-table";
+import type { ColumnDef } from "./table-config";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   INTENT_PREFETCH_MOUNT_GRACE_MS,

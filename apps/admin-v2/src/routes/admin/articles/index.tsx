@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useMemo, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Eye, EyeOff, Newspaper, Plus, RotateCcw, Trash2 } from "lucide-react";
-import type { Row } from "@tanstack/react-table";
+import type { Row } from "@/components/admin/data-table/table-config";
 import { createDataSelector } from "~/lib/list-helpers";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { Button } from "~/components/ui/button";

@@ -1,4 +1,4 @@
-import type { ColumnDef } from "@tanstack/react-table";
+import type { ColumnDef } from "../table-config";
 import { Badge } from "~/components/ui/badge";
 import { Image as ImageIcon, Copy } from "lucide-react";
 import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";

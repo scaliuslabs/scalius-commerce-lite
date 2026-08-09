@@ -7,13 +7,13 @@ import {
   type ComponentType,
   type KeyboardEvent,
 } from "react";
-import type { Column } from "@tanstack/react-table";
+import type { Column, TableRowData } from "./table-config";
 import { cn } from "@scalius/shared/utils";
 import { Button } from "@/components/ui/button";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import type { DataTableColumnHeaderMenuProps } from "./DataTableColumnHeaderMenu";
 
-interface DataTableColumnHeaderProps<TData, TValue> {
+interface DataTableColumnHeaderProps<TData extends TableRowData, TValue> {
   column: Column<TData, TValue>;
   title: string;
   className?: string;
@@ -23,7 +23,7 @@ const LazyDataTableColumnHeaderMenu = lazy(async () => {
   const module = await import("./DataTableColumnHeaderMenu");
   return {
     default: module.DataTableColumnHeaderMenu as ComponentType<
-      DataTableColumnHeaderMenuProps<unknown, unknown>
+      DataTableColumnHeaderMenuProps<TableRowData, unknown>
     >,
   };
 });
@@ -32,7 +32,7 @@ function isMenuOpenKey(key: string) {
   return key === "Enter" || key === " " || key === "ArrowDown";
 }
 
-function DataTableColumnHeaderInner<TData, TValue>({
+function DataTableColumnHeaderInner<TData extends TableRowData, TValue>({
   column,
   title,
   className,
@@ -97,7 +97,7 @@ function DataTableColumnHeaderInner<TData, TValue>({
       {isMenuRequested ? (
         <Suspense fallback={trigger}>
           <LazyDataTableColumnHeaderMenu
-            column={column as Column<unknown, unknown>}
+            column={column as unknown as Column<TableRowData, unknown>}
             open={open}
             onOpenChange={handleOpenChange}
             trigger={trigger}

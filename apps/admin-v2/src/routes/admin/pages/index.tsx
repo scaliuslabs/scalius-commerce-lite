@@ -38,7 +38,7 @@ import { DataTableRowActions } from "~/components/admin/data-table/DataTableRowA
 import { PagePublicationBadge } from "~/components/admin/pages/PagePublicationBadge";
 import { getPagePublicationMode, isPageLive } from "~/lib/page-publication";
 import { formatDate, formatDateShort } from "@scalius/shared/timestamps";
-import type { Row } from "@tanstack/react-table";
+import type { Row } from "@/components/admin/data-table/table-config";
 import {
   pageListQueryParams,
   validatePageSearch,

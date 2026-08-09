@@ -1,6 +1,6 @@
 import { useMemo, useCallback, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import type { Row } from "@tanstack/react-table";
+import type { Row } from "@/components/admin/data-table/table-config";
 import { Button } from "~/components/ui/button";
 import { Plus, Trash2, Tag } from "lucide-react";
 import {

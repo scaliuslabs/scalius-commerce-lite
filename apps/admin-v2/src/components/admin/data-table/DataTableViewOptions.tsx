@@ -1,5 +1,5 @@
 import { memo } from "react";
-import type { Table } from "@tanstack/react-table";
+import type { Table, TableRowData } from "./table-config";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -11,11 +11,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { SlidersHorizontal } from "lucide-react";
 
-interface DataTableViewOptionsProps<TData> {
+interface DataTableViewOptionsProps<TData extends TableRowData> {
   table: Table<TData>;
 }
 
-function DataTableViewOptionsInner<TData>({
+function DataTableViewOptionsInner<TData extends TableRowData>({
   table,
 }: DataTableViewOptionsProps<TData>) {
   return (

@@ -1,6 +1,6 @@
 import { lazy, Suspense, useState, useMemo, useCallback } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import type { Row } from "@tanstack/react-table";
+import type { Row } from "@/components/admin/data-table/table-config";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { Users, UserPlus, Trash2 } from "lucide-react";
 import { createListSearchValidator, createDataSelector } from "~/lib/list-helpers";

@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  useReactTable,
-  getCoreRowModel,
   type ColumnDef,
-  type Table,
   type PaginationState,
-  type SortingState,
-  type VisibilityState,
-  type RowSelectionState,
   type Row,
-} from "@tanstack/react-table";
+  type RowSelectionState,
+  type SortingState,
+  type Table,
+  type TableRowData,
+  type VisibilityState,
+  serverTableFeatures,
+  useTable,
+} from "./table-config";
 import {
   hashKey,
   keepPreviousData,
@@ -53,7 +54,7 @@ export function shouldRefetchServerTableOnMount(query: {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyQueryOptions = UseQueryOptions<any, any, any, any>;
 
-export interface UseServerTableOptions<TData> {
+export interface UseServerTableOptions<TData extends TableRowData> {
   columns: ColumnDef<TData, unknown>[];
   queryOptions: AnyQueryOptions;
   dataSelector: (raw: unknown) => {
@@ -74,7 +75,7 @@ export interface UseServerTableOptions<TData> {
   initialColumnVisibility?: Record<string, boolean>;
 }
 
-export interface UseServerTableReturn<TData> {
+export interface UseServerTableReturn<TData extends TableRowData> {
   table: Table<TData>;
   rawData: unknown;
   error: unknown;
@@ -89,7 +90,7 @@ export interface UseServerTableReturn<TData> {
   deselectIds: (ids: readonly string[]) => void;
 }
 
-export function useServerTable<TData>({
+export function useServerTable<TData extends TableRowData>({
   columns,
   queryOptions: qOpts,
   dataSelector,
@@ -150,13 +151,13 @@ export function useServerTable<TData>({
     ? [{ id: currentSort, desc: currentOrder === "desc" }]
     : [];
 
-  const table = useReactTable({
+  const table = useTable({
+    features: serverTableFeatures,
     data,
     columns,
     // Server-side modes
     manualPagination: true,
     manualSorting: true,
-    manualFiltering: true,
     // State
     state: {
       pagination: paginationState,
@@ -183,17 +184,14 @@ export function useServerTable<TData>({
     },
     onRowSelectionChange: setRowSelection,
     onColumnVisibilityChange: setColumnVisibility,
-    // Features
+    // Feature options
     enableRowSelection,
     enableSorting,
-    getCoreRowModel: getCoreRowModel(),
     getRowId: (row) => (row as { id: string }).id,
   });
 
   // Derived
-  const selectedRows = table
-    .getFilteredSelectedRowModel()
-    .rows.map((r) => r.original);
+  const selectedRows = table.getSelectedRowModel().rows.map((r) => r.original);
   const selectedIds = selectedRows.map((r) => (r as { id: string }).id);
   const clearSelection = useCallback(() => setRowSelection({}), []);
   const deselectIds = useCallback((ids: readonly string[]) => {

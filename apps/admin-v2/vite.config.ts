@@ -11,7 +11,7 @@ const __dirname = dirname(__filename);
 const persistStatePath = process.env.SCALIUS_WRANGLER_STATE || "../../.wrangler/state";
 const generatedAssetDir = "assets/immutable";
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   environments: {
     client: {
       build: {
@@ -49,12 +49,16 @@ export default defineConfig({
   plugins: [
     // Official TanStack Start + Cloudflare plugin order:
     // cloudflare → tanstackStart → react
-    cloudflare({
-      viteEnvironment: { name: "ssr" },
-      persistState: { path: persistStatePath },
-    }),
+    // Unit tests run in Vitest's Node environment rather than workerd. Vite
+    // 8.2 injects Node built-ins into that environment's `resolve.external`,
+    // which Cloudflare Vite 1.51 correctly rejects for a Worker build.
+    mode !== "test" &&
+      cloudflare({
+        viteEnvironment: { name: "ssr" },
+        persistState: { path: persistStatePath },
+      }),
     tanstackStart(),
     viteReact(),
     tailwindcss(),
   ],
-});
+}));
