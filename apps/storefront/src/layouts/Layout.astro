@@ -43,6 +43,9 @@ interface Props {
   ogPrice?: string;
   ogCurrency?: string;
   noindex?: boolean;
+  /** Build-generated phone shell CSS used when the complete shared sheet is non-blocking. */
+  criticalCss?: string;
+  criticalCssMedia?: string;
 }
 
 const {
@@ -57,6 +60,8 @@ const {
   ogPrice,
   ogCurrency,
   noindex,
+  criticalCss,
+  criticalCssMedia,
 } = Astro.props;
 
 // Use provided layout data when pages load it in parallel; otherwise fetch here.
@@ -296,6 +301,17 @@ const privateSessionPrefetchGuardScript =
       )
     }
 
+    {
+      criticalCss && (
+        <style
+          is:inline
+          media={criticalCssMedia}
+          data-product-critical
+          set:html={criticalCss}
+        />
+      )
+    }
+
     <!-- Runtime API URL, CDN domain, and currency for client-side JS (Cloudflare Worker env vars aren't available to Vite client bundles) -->
     <script is:inline set:html={runtimeGlobalsScript} />
 
@@ -402,18 +418,6 @@ const privateSessionPrefetchGuardScript =
       )
     }
 
-    {/* Global JSON-LD: Organization + WebSite — per SEO-05, SEO-06 */}
-    {
-      orgJsonLd && (
-        <script is:inline type="application/ld+json" set:html={orgJsonLd} />
-      )
-    }
-    {
-      websiteJsonLd && (
-        <script is:inline type="application/ld+json" set:html={websiteJsonLd} />
-      )
-    }
-
     {headScripts.map((script) => <Fragment set:html={script.config} />)}
 
     <script is:inline>
@@ -511,6 +515,19 @@ const privateSessionPrefetchGuardScript =
         <div class="storefront-deferred-region">
           <Footer footerData={footerData} />
         </div>
+      )
+    }
+
+    {/* Google accepts JSON-LD in body. Keep it in initial SSR HTML while
+        placing machine-only bytes after buyer-visible content. */}
+    {
+      orgJsonLd && (
+        <script is:inline type="application/ld+json" set:html={orgJsonLd} />
+      )
+    }
+    {
+      websiteJsonLd && (
+        <script is:inline type="application/ld+json" set:html={websiteJsonLd} />
       )
     }
 

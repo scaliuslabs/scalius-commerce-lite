@@ -5,6 +5,8 @@ import {
   getShippingMethods,
 } from "@/lib/api";
 import Layout from "@/layouts/Layout.astro";
+import productCriticalCss from "@/styles/product-critical.css?inline";
+import { PRODUCT_CRITICAL_CSS_MEDIA } from "@/lib/product-style-delivery";
 import ProductBreadcrumbs from "@/components/product/ProductBreadcrumbs.astro";
 import ProductGallery from "@/components/product/ProductGallery.astro";
 import ProductSummary from "@/components/product/ProductSummary.astro";
@@ -583,6 +585,8 @@ const productCategoryAnalytics = productCategory
   ogPrice={formatMetadataPrice(buyerDisplayedPrice)}
   ogCurrency={currencyCode}
   noindex={product.noIndex === true}
+  criticalCss={productCriticalCss}
+  criticalCssMedia={PRODUCT_CRITICAL_CSS_MEDIA}
 >
   <Fragment slot="head">
     {
@@ -604,20 +608,6 @@ const productCategoryAnalytics = productCategory
           href={initialGalleryDesktopPreloadUrl}
           media="(min-width: 1024px)"
           fetchpriority="high"
-        />
-      )
-    }
-    {
-      productJsonLd && (
-        <script is:inline type="application/ld+json" set:html={productJsonLd} />
-      )
-    }
-    {
-      breadcrumbJsonLd && (
-        <script
-          is:inline
-          type="application/ld+json"
-          set:html={breadcrumbJsonLd}
         />
       )
     }
@@ -676,6 +666,23 @@ const productCategoryAnalytics = productCategory
       currencySymbol={currencySymbol}
     />
   </div>
+
+  {/* Product discovery data stays server-rendered but follows visible buyer
+      content so it cannot delay parser discovery of the product UI. */}
+  {
+    productJsonLd && (
+      <script is:inline type="application/ld+json" set:html={productJsonLd} />
+    )
+  }
+  {
+    breadcrumbJsonLd && (
+      <script
+        is:inline
+        type="application/ld+json"
+        set:html={breadcrumbJsonLd}
+      />
+    )
+  }
 </Layout>
 
 <script>
