@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { Column } from "@tanstack/react-table";
+import type { Column, TableRowData } from "./table-config";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -9,14 +9,20 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ArrowDown, ArrowUp, EyeOff } from "lucide-react";
 
-export interface DataTableColumnHeaderMenuProps<TData, TValue> {
+export interface DataTableColumnHeaderMenuProps<
+  TData extends TableRowData,
+  TValue,
+> {
   column: Column<TData, TValue>;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   trigger: ReactNode;
 }
 
-export function DataTableColumnHeaderMenu<TData, TValue>({
+export function DataTableColumnHeaderMenu<
+  TData extends TableRowData,
+  TValue,
+>({
   column,
   open,
   onOpenChange,

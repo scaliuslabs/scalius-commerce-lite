@@ -1,4 +1,4 @@
-import type { ColumnDef } from "@tanstack/react-table";
+import type { ColumnDef, TableRowData } from "../table-config";
 import { Checkbox } from "~/components/ui/checkbox";
 import { formatDateShort as formatDate } from "@scalius/shared/timestamps";
 import { DataTableColumnHeader } from "../DataTableColumnHeader";
@@ -20,7 +20,7 @@ interface SelectColumnOptions {
   getLabel?: (row: unknown) => string;
 }
 
-export function createSelectColumn<T>(
+export function createSelectColumn<T extends TableRowData>(
   opts?: SelectColumnOptions,
 ): ColumnDef<T, unknown> {
   const getLabel = opts?.getLabel ?? (() => "row");
@@ -65,7 +65,7 @@ interface DateColumnOptions {
   size?: number;
 }
 
-export function createDateColumn<T>(
+export function createDateColumn<T extends TableRowData>(
   field: keyof T & string,
   title: string,
   opts?: DateColumnOptions,
@@ -103,7 +103,7 @@ interface ActionsColumnCallbacks<T> {
   size?: number;
 }
 
-export function createActionsColumn<T>(
+export function createActionsColumn<T extends TableRowData>(
   callbacks: ActionsColumnCallbacks<T>,
 ): ColumnDef<T, unknown> {
   return {

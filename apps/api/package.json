@@ -24,22 +24,22 @@
     "@scalius/database": "workspace:*",
     "@scalius/shared": "workspace:*",
     "bcryptjs": "^3.0.3",
-    "better-auth": "^1.6.25",
+    "better-auth": "^1.6.26",
     "drizzle-orm": "^0.45.2",
-    "hono": "^4.12.32",
+    "hono": "4.13.1",
     "jsonwebtoken": "^9.0.3",
     "mimetext": "^3.0.28",
-    "nanoid": "^6.0.0",
+    "nanoid": "^6.0.1",
     "standardwebhooks": "^1.0.0",
-    "stripe": "^22.3.2",
+    "stripe": "^22.4.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20260730.1",
+    "@cloudflare/workers-types": "^5.20260808.1",
     "@scalius/tsconfig": "workspace:*",
     "@types/jsonwebtoken": "^9.0.10",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10",
-    "wrangler": "4.116.0"
+    "wrangler": "4.120.0"
   }
 }

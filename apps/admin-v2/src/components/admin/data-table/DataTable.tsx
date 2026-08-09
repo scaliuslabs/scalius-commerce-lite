@@ -4,7 +4,12 @@ import {
   type ComponentType,
   type ReactNode,
 } from "react";
-import { flexRender, type Table, type Row } from "@tanstack/react-table";
+import {
+  flexRender,
+  type Row,
+  type Table,
+  type TableRowData,
+} from "./table-config";
 import { AlertTriangle } from "lucide-react";
 import {
   Table as UITable,
@@ -26,12 +31,12 @@ const SortableDataTableContent = lazy(async () => {
   const module = await import("./SortableDataTableContent");
   return {
     default: module.SortableDataTableContent as ComponentType<
-      SortableDataTableContentProps<unknown>
+      SortableDataTableContentProps<TableRowData>
     >,
   };
 });
 
-interface DataTableProps<TData> {
+interface DataTableProps<TData extends TableRowData> {
   table: Table<TData>;
   isFetching: boolean;
   isLoading: boolean;
@@ -49,7 +54,7 @@ interface DataTableProps<TData> {
   onReorder?: (oldIndex: number, newIndex: number) => void;
 }
 
-export function DataTable<TData>({
+export function DataTable<TData extends TableRowData>({
   table,
   isFetching,
   isLoading,
@@ -188,8 +193,8 @@ export function DataTable<TData>({
         ) : sortable ? (
           <Suspense fallback={renderDesktopTable(true)}>
             <SortableDataTableContent
-              table={table as unknown as Table<unknown>}
-              rows={rows as unknown as Row<unknown>[]}
+              table={table as unknown as Table<TableRowData>}
+              rows={rows as unknown as Row<TableRowData>[]}
               hasRows={hasRows}
               showInitialLoading={showInitialLoading}
               emptyState={emptyState}

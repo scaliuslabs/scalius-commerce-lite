@@ -12,7 +12,7 @@
     "typecheck": "../../node_modules/typescript7/bin/tsc --noEmit"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20260730.1",
+    "@cloudflare/workers-types": "^5.20260808.1",
     "@scalius/tsconfig": "workspace:*",
     "vitest": "^4.1.10"
   },
@@ -21,7 +21,7 @@
     "currency.js": "^2.0.4",
     "domhandler": "6.0.1",
     "htmlparser2": "12.0.0",
-    "libphonenumber-js": "^1.13.9",
+    "libphonenumber-js": "^1.13.10",
     "tailwind-merge": "^3.6.0",
     "zod": "^4.4.3"
   },

@@ -1,15 +1,15 @@
 import { memo } from "react";
-import { flexRender, type Cell } from "@tanstack/react-table";
+import { flexRender, type Cell, type TableRowData } from "./table-config";
 
 import { TableCell, TableRow } from "../../ui/table";
 
-interface DataTableBodyRowProps<TData> {
+interface DataTableBodyRowProps<TData extends TableRowData> {
   cells: Cell<TData, unknown>[];
   isSelected: boolean;
   includeDragColumn: boolean;
 }
 
-function DataTableBodyRowInner<TData>({
+function DataTableBodyRowInner<TData extends TableRowData>({
   cells,
   isSelected,
   includeDragColumn,

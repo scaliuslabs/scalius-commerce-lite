@@ -52,26 +52,28 @@
     "test:watch": "vitest"
   },
   "devDependencies": {
+    "@emnapi/core": "^1.11.3",
+    "@emnapi/runtime": "^1.11.3",
     "@eslint/js": "^10.0.1",
     "@scalius/tsconfig": "workspace:*",
-    "@types/pg": "8.20.3",
+    "@types/pg": "8.21.0",
     "@types/pg-copy-streams": "1.2.5",
     "country-flag-icons": "1.6.20",
     "domhandler": "6.0.1",
     "drizzle-kit": "^0.31.10",
-    "eslint": "^10.8.0",
-    "eslint-plugin-astro": "^3.0.1",
+    "eslint": "^10.8.1",
+    "eslint-plugin-astro": "^3.1.0",
     "eslint-plugin-jsx-a11y": "^6.10.2",
     "eslint-plugin-react-hooks": "^7.1.1",
-    "globals": "^17.8.0",
+    "globals": "^17.9.0",
     "htmlparser2": "12.0.0",
     "pg": "8.22.0",
     "pg-copy-streams": "7.0.0",
-    "turbo": "^2.10.7",
+    "turbo": "^2.10.9",
     "typescript": "^6.0.3",
-    "typescript-eslint": "8.65.0",
+    "typescript-eslint": "8.66.0",
     "typescript7": "npm:typescript@7.0.2",
     "vitest": "^4.1.10"
   },
-  "packageManager": "pnpm@11.18.0"
+  "packageManager": "pnpm@11.20.0"
 }

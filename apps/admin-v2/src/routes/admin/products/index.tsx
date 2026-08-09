@@ -43,7 +43,7 @@ import { Card, CardContent, CardHeader, CardDescription } from "~/components/ui/
 import { Button } from "~/components/ui/button";
 import { StatCard } from "~/components/admin/shared/StatCard";
 import { ProductMobileRow } from "~/components/admin/product-list/ProductMobileRow";
-import type { Row } from "@tanstack/react-table";
+import type { Row } from "@/components/admin/data-table/table-config";
 
 const ProductDeleteDialog = lazy(() =>
   import("./-ProductDeleteDialog").then((module) => ({

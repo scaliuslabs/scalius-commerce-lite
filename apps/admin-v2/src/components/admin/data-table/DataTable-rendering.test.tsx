@@ -3,11 +3,11 @@
 import { act, useMemo } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import {
-  getCoreRowModel,
-  useReactTable,
   type ColumnDef,
   type RowSelectionState,
-} from "@tanstack/react-table";
+  serverTableFeatures,
+  useTable,
+} from "./table-config";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DataTableBodyRow } from "./DataTableBodyRow";
@@ -49,10 +49,10 @@ function TableHarness({
   const rowSelection: RowSelectionState = selectedId
     ? { [selectedId]: true }
     : {};
-  const table = useReactTable({
+  const table = useTable({
+    features: serverTableFeatures,
     data: rows,
     columns,
-    getCoreRowModel: getCoreRowModel(),
     getRowId: (row) => row.id,
     enableRowSelection: true,
     state: {

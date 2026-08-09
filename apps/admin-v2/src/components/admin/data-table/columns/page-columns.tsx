@@ -1,4 +1,4 @@
-import type { ColumnDef } from "@tanstack/react-table";
+import type { ColumnDef } from "../table-config";
 import { ExternalLink } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { DataTableColumnHeader } from "../DataTableColumnHeader";
