@@ -138,23 +138,46 @@ const headerData: HeaderData = {
     let bodyOverflowBeforeMenu = "";
     let menuVisibilityTimer: number | undefined;
     const backgroundInertStates = new Map<HTMLElement, boolean>();
+    const desktopBreakpoint = window.matchMedia("(min-width: 1024px)");
+
+    const hydrateDeferredHeaderImages = (selector: string) => {
+      document.querySelectorAll<HTMLImageElement>(selector).forEach((image) => {
+        if (image.hasAttribute("src")) return;
+        const source = image.dataset.deferredSrc;
+        if (source) image.src = source;
+      });
+    };
+
+    if (desktopBreakpoint.matches) {
+      hydrateDeferredHeaderImages("[data-desktop-header-image]");
+    }
 
     const menuBackgroundElements = () => {
       const siteHeader = document.getElementById("site-header");
       const siteWrapper = siteHeader?.parentElement;
       const elements = new Set<HTMLElement>();
 
-      siteHeader?.querySelectorAll<HTMLElement>(":scope > *").forEach((element) => {
-        if (element !== menuPanel && element !== menuOverlay) elements.add(element);
-      });
-      siteWrapper?.querySelectorAll<HTMLElement>(":scope > *").forEach((element) => {
-        if (element !== siteHeader) elements.add(element);
-      });
-      document.body.querySelectorAll<HTMLElement>(":scope > *").forEach((element) => {
-        if (element !== siteWrapper && !["SCRIPT", "STYLE", "NOSCRIPT"].includes(element.tagName)) {
-          elements.add(element);
-        }
-      });
+      siteHeader
+        ?.querySelectorAll<HTMLElement>(":scope > *")
+        .forEach((element) => {
+          if (element !== menuPanel && element !== menuOverlay)
+            elements.add(element);
+        });
+      siteWrapper
+        ?.querySelectorAll<HTMLElement>(":scope > *")
+        .forEach((element) => {
+          if (element !== siteHeader) elements.add(element);
+        });
+      document.body
+        .querySelectorAll<HTMLElement>(":scope > *")
+        .forEach((element) => {
+          if (
+            element !== siteWrapper &&
+            !["SCRIPT", "STYLE", "NOSCRIPT"].includes(element.tagName)
+          ) {
+            elements.add(element);
+          }
+        });
 
       return elements;
     };
@@ -209,6 +232,7 @@ const headerData: HeaderData = {
       menuPanel.setAttribute("aria-hidden", String(!show));
       menuTrigger?.setAttribute("aria-expanded", String(show));
       if (show) {
+        hydrateDeferredHeaderImages("[data-mobile-header-image]");
         setMenuBackgroundInert(true);
         bodyOverflowBeforeMenu = document.body.style.overflow;
         menuPanel.classList.remove("invisible");
@@ -311,13 +335,12 @@ const headerData: HeaderData = {
       };
     }
 
-    const desktopBreakpoint = window.matchMedia("(min-width: 1024px)");
     desktopBreakpoint.onchange = (event) => {
-      if (
-        event.matches &&
-        menuTrigger?.getAttribute("aria-expanded") === "true"
-      ) {
-        toggleMenu(false);
+      if (event.matches) {
+        hydrateDeferredHeaderImages("[data-desktop-header-image]");
+        if (menuTrigger?.getAttribute("aria-expanded") === "true") {
+          toggleMenu(false);
+        }
       }
     };
 

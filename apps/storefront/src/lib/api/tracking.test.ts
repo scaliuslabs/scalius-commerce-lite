@@ -52,20 +52,21 @@ describe("sendMetaCapiEvent", () => {
       0,
       2500,
       false,
+      false,
     );
   });
 
   it("keeps analytics failures out of buyer flows", async () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     clientMocks.fetchWithRetry.mockRejectedValueOnce(new Error("network down"));
 
     await expect(sendMetaCapiEvent(payload)).resolves.toBeUndefined();
 
     expect(clientMocks.fetchWithRetry).toHaveBeenCalledTimes(1);
-    expect(warnSpy).toHaveBeenCalledWith(
-      "Meta browser event skipped after one bounded dispatch attempt:",
-      expect.any(Error),
-    );
+    expect(warnSpy).not.toHaveBeenCalled();
+    expect(errorSpy).not.toHaveBeenCalled();
     warnSpy.mockRestore();
+    errorSpy.mockRestore();
   });
 });

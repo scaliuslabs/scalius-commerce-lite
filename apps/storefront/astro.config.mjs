@@ -3,8 +3,8 @@
 // @ts-check
 import { defineConfig } from "astro/config";
 import react from "@astrojs/react";
-import partytown from "@astrojs/partytown";
 import tailwindcss from "@tailwindcss/vite";
+import deferredPartytown from "./integrations/deferred-partytown.mjs";
 import { partytownConfig } from "./src/lib/partytown-config.ts";
 import { CDN_DOMAINS } from "./src/lib/image-config.ts";
 import cloudflare from "@astrojs/cloudflare";
@@ -52,7 +52,7 @@ export default defineConfig({
 
   integrations: [
     react(),
-    partytown({
+    deferredPartytown({
       config: partytownConfig,
     }),
   ],

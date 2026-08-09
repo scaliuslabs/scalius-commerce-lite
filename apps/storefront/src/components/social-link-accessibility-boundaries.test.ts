@@ -26,7 +26,7 @@ describe("icon-only social links", () => {
   it("keeps icon images and fallback glyphs decorative", () => {
     for (const source of sources) {
       expect(source).toMatch(/alt=""\s+aria-hidden="true"/u);
-      expect(source).toMatch(/<span aria-hidden="true"/u);
+      expect(source).toMatch(/<span\s+aria-hidden="true"/u);
     }
   });
 

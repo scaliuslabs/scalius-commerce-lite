@@ -208,6 +208,7 @@ async function getJwtToken(): Promise<string | null> {
  * @param retries Number of retries on failure.
  * @param timeout Request timeout in milliseconds.
  * @param requiresAuth Whether the request requires a JWT token.
+ * @param logTerminalFailure Whether to log after the final failed attempt.
  * @returns A promise that resolves to the Response object.
  */
 export async function fetchWithRetry(
@@ -216,6 +217,7 @@ export async function fetchWithRetry(
   retries = 2,
   timeout = 8000,
   requiresAuth = true,
+  logTerminalFailure = true,
 ): Promise<Response> {
   try {
     const headers = new Headers(options.headers || {});
@@ -319,7 +321,14 @@ export async function fetchWithRetry(
       const state = getRequestJwtState();
       state.token = null;
       state.expiresAt = null;
-      return fetchWithRetry(url, options, retries - 1, timeout, requiresAuth);
+      return fetchWithRetry(
+        url,
+        options,
+        retries - 1,
+        timeout,
+        requiresAuth,
+        logTerminalFailure,
+      );
     }
 
     return response;
@@ -327,9 +336,18 @@ export async function fetchWithRetry(
     if (retries > 0) {
       console.warn(`Fetch to ${url} failed. Retrying... (${retries} left)`);
       await new Promise((resolve) => setTimeout(resolve, 300 * (3 - retries)));
-      return fetchWithRetry(url, options, retries - 1, timeout, requiresAuth);
+      return fetchWithRetry(
+        url,
+        options,
+        retries - 1,
+        timeout,
+        requiresAuth,
+        logTerminalFailure,
+      );
     }
-    console.error(`Fetch failed for ${url} after multiple retries.`, error);
+    if (logTerminalFailure) {
+      console.error(`Fetch failed for ${url} after multiple retries.`, error);
+    }
     throw error;
   }
 }

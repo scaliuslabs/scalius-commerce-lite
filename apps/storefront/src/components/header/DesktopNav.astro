@@ -31,25 +31,28 @@ const dropdownPanelClass =
       items.map((item, index) => (
         <li class={navItemClass} data-index={index}>
           {item.href ? (
-          <a
-            href={item.href}
-            data-astro-prefetch={getStorefrontPrefetchAttribute(item.href, Astro.url)}
-            target={item.openInNewTab ? "_blank" : undefined}
-            rel={item.openInNewTab ? "noopener noreferrer" : undefined}
-            class="flex items-center gap-1.5 w-full h-full"
-          >
-            <span>{item.title}</span>
-            {item.subMenu && item.subMenu.length > 0 && (
-              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground group-hover/nav:text-foreground transition-transform duration-200 group-hover/nav:-rotate-180" />
-            )}
-          </a>
+            <a
+              href={item.href}
+              data-astro-prefetch={getStorefrontPrefetchAttribute(
+                item.href,
+                Astro.url,
+              )}
+              target={item.openInNewTab ? "_blank" : undefined}
+              rel={item.openInNewTab ? "noopener noreferrer" : undefined}
+              class="flex items-center gap-1.5 w-full h-full"
+            >
+              <span>{item.title}</span>
+              {item.subMenu && item.subMenu.length > 0 && (
+                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground group-hover/nav:text-foreground transition-transform duration-200 group-hover/nav:-rotate-180" />
+              )}
+            </a>
           ) : (
-          <span class="flex items-center gap-1.5 w-full h-full">
-            <span>{item.title}</span>
-            {item.subMenu && item.subMenu.length > 0 && (
-              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground group-hover/nav:text-foreground transition-transform duration-200 group-hover/nav:-rotate-180" />
-            )}
-          </span>
+            <span class="flex items-center gap-1.5 w-full h-full">
+              <span>{item.title}</span>
+              {item.subMenu && item.subMenu.length > 0 && (
+                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground group-hover/nav:text-foreground transition-transform duration-200 group-hover/nav:-rotate-180" />
+              )}
+            </span>
           )}
 
           {item.subMenu && item.subMenu.length > 0 && (
@@ -94,16 +97,16 @@ const dropdownPanelClass =
       this.container = container;
       this.navList = container.querySelector("[data-nav-list]") as HTMLElement;
       this.moreItem = container.querySelector(
-        "[data-more-nav-item]"
+        "[data-more-nav-item]",
       ) as HTMLElement;
       this.moreContainer = container.querySelector(
-        "[data-more-nav-container]"
+        "[data-more-nav-container]",
       ) as HTMLElement;
 
       if (!this.navList || !this.moreItem || !this.moreContainer) return;
 
       this.originalItems = Array.from(
-        this.navList.querySelectorAll(".nav-item:not([data-more-nav-item])")
+        this.navList.querySelectorAll(".nav-item:not([data-more-nav-item])"),
       ) as HTMLElement[];
 
       this.updateNav = this.updateNav.bind(this);
@@ -151,7 +154,7 @@ const dropdownPanelClass =
           "rounded-full",
           "text-sm",
           "font-bold",
-          "bg-muted"
+          "bg-muted",
         );
         item.classList.remove(
           "w-full",
@@ -159,7 +162,7 @@ const dropdownPanelClass =
           "py-2.5",
           "hover:bg-accent",
           "text-foreground",
-          "rounded-lg"
+          "rounded-lg",
         );
       });
 
@@ -175,7 +178,7 @@ const dropdownPanelClass =
       this.moreItem.classList.add("hidden");
 
       // OPTIMIZATION: Batch ALL DOM reads before any DOM writes to prevent Forced Reflow
-      const itemsWidths = this.originalItems.map(item => item.offsetWidth);
+      const itemsWidths = this.originalItems.map((item) => item.offsetWidth);
 
       let currentWidth = 0;
       const gap = 4; // gap-1 is 4px
@@ -212,7 +215,7 @@ const dropdownPanelClass =
             "rounded-full",
             "text-sm",
             "font-bold",
-            "bg-muted"
+            "bg-muted",
           );
           item.classList.add(
             "w-full",
@@ -222,7 +225,7 @@ const dropdownPanelClass =
             "hover:bg-accent",
             "text-foreground",
             "rounded-lg",
-            "text-sm"
+            "text-sm",
           );
           this.moreContainer.appendChild(item);
         });
@@ -232,47 +235,26 @@ const dropdownPanelClass =
     }
   }
 
-  function initDynamicNavs() {
-    const navs = document.querySelectorAll(".data-nav-container");
-    navs.forEach((nav) => {
-      new DynamicNav(nav as HTMLElement);
-    });
+  const desktopNavMedia = window.matchMedia("(min-width: 1024px)");
 
-    // Special handling for the sticky/compact nav which might start hidden
-    // We need to re-calculate when it becomes visible.
-    // Using IntersectionObserver or MutationObserver on the header class could work.
-    // Simpler: observe body/header logic?
-    // Actually, the header scroll logic adds classes.
-    // Let's listen for that custom scroll event if possible, or just poll/observer.
-    // Since HeaderLayout toggles opacity/pointer-events but NOT display:none (it uses absolute positioning tricks),
-    // wait... in HeaderLayout.astro:
-    // The compact nav is inside a div with:
-    // class="... opacity-0 scale-95 ... absolute"
-    // It is rendered, but it might have layout issues if parent has 0 width or absolute?
-    // "absolute" elements have width determined by content or specific width.
-    // Center Morphing Zone is flex flex-1.
-    // If we want it to verify size, we might need to rely on ResizeObserver on the container document.
-    const header = document.getElementById("main-header");
-    if (header) {
-      const observer = new MutationObserver(() => {
-        // When classes change (like is-scrolled), force update
-        // specifically for instances that might have been hidden/zero-width
-        navs.forEach((_nav) => {
-          // @ts-ignore
-          // We can't easily access the instance from here without storing it.
-          // Re-instantiating is bad.
-          // Ideally we trigger a window resize event which they listen to.
-          window.dispatchEvent(new Event("resize"));
-        });
+  function initDynamicNavs() {
+    // Do not create observers, animation frames, or the one-second safety
+    // timer for a subtree that cannot render on this viewport.
+    if (!desktopNavMedia.matches) return;
+
+    document
+      .querySelectorAll<HTMLElement>(".data-nav-container")
+      .forEach((nav) => {
+        if (nav.dataset.dynamicNavReady === "true") return;
+        nav.dataset.dynamicNavReady = "true";
+        new DynamicNav(nav);
       });
-      observer.observe(header, {
-        attributes: true,
-        attributeFilter: ["class"],
-      });
-    }
   }
 
   initDynamicNavs();
+  desktopNavMedia.addEventListener("change", (event) => {
+    if (event.matches) initDynamicNavs();
+  });
   document.addEventListener("astro:page-load", initDynamicNavs);
 </script>
 

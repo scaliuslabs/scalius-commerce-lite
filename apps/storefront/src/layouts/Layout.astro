@@ -28,6 +28,7 @@ import {
 } from "@/lib/theme-preview-cookie";
 import { requestBypassesPublicStorefrontCache } from "@/lib/cache-policy";
 import { buildPrivateSessionPrefetchGuardScript } from "@/lib/private-session-prefetch-guard";
+import { optimizeAnalyticsScriptDelivery } from "@/lib/analytics-script-delivery";
 
 interface Props {
   title: string;
@@ -90,7 +91,7 @@ if (themePreviewToken) {
 
 const analyticsScripts: AnalyticsConfig[] = isThemePreview
   ? []
-  : layoutData?.analytics || [];
+  : (layoutData?.analytics || []).map(optimizeAnalyticsScriptDelivery);
 const tiktokPixelEnabled = analyticsScripts.some((script) => {
   const type = script.type.trim().toLowerCase();
   return (
@@ -301,6 +302,11 @@ const privateSessionPrefetchGuardScript =
       )
     }
 
+    {/* Resource hints must precede large inline paint CSS so their requests can
+        overlap the rest of the streamed HTML. Keep metadata in the normal head
+        slot below. */}
+    <slot name="preload" />
+
     {
       criticalCss && (
         <style
@@ -314,52 +320,6 @@ const privateSessionPrefetchGuardScript =
 
     <!-- Runtime API URL, CDN domain, and currency for client-side JS (Cloudflare Worker env vars aren't available to Vite client bundles) -->
     <script is:inline set:html={runtimeGlobalsScript} />
-
-    <!-- This must run before Astro's deferred prefetch module scans the page. -->
-    <script is:inline set:html={privateSessionPrefetchGuardScript} />
-
-    <!-- Stale Asset Detector -->
-    <script is:inline>
-      (function () {
-        const r = sessionStorage.getItem("_ar");
-        if (r && Date.now() - parseInt(r, 10) < 30000) return;
-
-        window.addEventListener(
-          "error",
-          function (e) {
-            const t = e.target;
-            if (!(
-              t instanceof HTMLScriptElement || t instanceof HTMLLinkElement
-            ))
-              return;
-            const tag = t.tagName.toUpperCase();
-            const url = t instanceof HTMLScriptElement ? t.src : t.href;
-            if (
-              (tag === "SCRIPT" || tag === "LINK") &&
-              url.indexOf("/_astro/") > -1
-            ) {
-              console.warn("[StaleAsset] 404:", url);
-              sessionStorage.setItem("_ar", Date.now().toString());
-              location.reload();
-            }
-          },
-          true,
-        );
-
-        window.addEventListener("unhandledrejection", function (e) {
-          if (
-            e.reason &&
-            e.reason.message &&
-            e.reason.message.indexOf("dynamically imported") > -1 &&
-            e.reason.message.indexOf("/_astro/") > -1
-          ) {
-            console.warn("[StaleAsset] Import failed");
-            sessionStorage.setItem("_ar", Date.now().toString());
-            location.reload();
-          }
-        });
-      })();
-    </script>
 
     <!-- Prevent browser from caching this HTML -->
     <meta
@@ -420,24 +380,57 @@ const privateSessionPrefetchGuardScript =
 
     {headScripts.map((script) => <Fragment set:html={script.config} />)}
 
-    <script is:inline>
-      // Stub for Facebook Pixel on the main thread
-      window.fbq =
-        window.fbq ||
-        function (...args) {
-          (window.fbq.q = window.fbq.q || []).push(args);
-        };
-    </script>
-    <script type="text/partytown" is:inline>
-      // Stub for Facebook Pixel INSIDE the Partytown Web Worker
-      // Prevents "TypeError: Cannot read properties of undefined (reading 'apply')"
-      // when Partytown proxies fbq() calls here but the real script hasn't loaded.
-      self.fbq =
-        self.fbq ||
-        function (...args) {
-          (self.fbq.q = self.fbq.q || []).push(args);
-        };
-    </script>
+    {themeStyleBlock && <style set:html={themeStyleBlock} />}
+
+    <slot name="head" />
+  </head>
+  <body
+    class="flex flex-col min-h-screen site-root"
+    data-theme-density={storefrontTheme.density}
+    data-theme-button-style={storefrontTheme.components.buttons}
+    data-theme-input-style={storefrontTheme.components.inputs}
+    data-theme-card-style={storefrontTheme.components.cards}
+    data-storefront-route={storefrontRouteKind}
+  >
+    {bodyStartScripts.map((script) => <Fragment set:html={script.config} />)}
+
+    <div class="site-wrapper grow">
+      {
+        !hideHeader && (
+          <Header headerData={headerData} navigation={navigationData} />
+        )
+      }
+      <main class="w-full h-full mb-3">
+        <slot />
+      </main>
+    </div>
+
+    {
+      !hideFooter && (
+        <div class="storefront-deferred-region">
+          <Footer footerData={footerData} />
+        </div>
+      )
+    }
+
+    {/* Google accepts JSON-LD in body. Keep it in initial SSR HTML while
+        placing machine-only bytes after buyer-visible content. */}
+    {
+      orgJsonLd && (
+        <script is:inline type="application/ld+json" set:html={orgJsonLd} />
+      )
+    }
+    {
+      websiteJsonLd && (
+        <script is:inline type="application/ld+json" set:html={websiteJsonLd} />
+      )
+    }
+
+    {/* These scripts must precede deferred Astro modules and DOMContentLoaded,
+        but keeping them after visible HTML lets the parser discover the buyer
+        UI first. The guard is installed before click IDs can create a private
+        session signal. */}
+    <script is:inline set:html={privateSessionPrefetchGuardScript} />
     <script is:inline>
       if (document.documentElement.dataset.themePreview !== "true") {
         try {
@@ -485,51 +478,48 @@ const privateSessionPrefetchGuardScript =
       }
     </script>
 
-    {themeStyleBlock && <style set:html={themeStyleBlock} />}
+    <!-- Install stale-asset recovery before deferred module execution. -->
+    <script is:inline>
+      (function () {
+        const r = sessionStorage.getItem("_ar");
+        if (r && Date.now() - parseInt(r, 10) < 30000) return;
 
-    <slot name="head" />
-  </head>
-  <body
-    class="flex flex-col min-h-screen site-root"
-    data-theme-density={storefrontTheme.density}
-    data-theme-button-style={storefrontTheme.components.buttons}
-    data-theme-input-style={storefrontTheme.components.inputs}
-    data-theme-card-style={storefrontTheme.components.cards}
-    data-storefront-route={storefrontRouteKind}
-  >
-    {bodyStartScripts.map((script) => <Fragment set:html={script.config} />)}
+        window.addEventListener(
+          "error",
+          function (e) {
+            const t = e.target;
+            if (!(
+              t instanceof HTMLScriptElement || t instanceof HTMLLinkElement
+            ))
+              return;
+            const tag = t.tagName.toUpperCase();
+            const url = t instanceof HTMLScriptElement ? t.src : t.href;
+            if (
+              (tag === "SCRIPT" || tag === "LINK") &&
+              url.indexOf("/_astro/") > -1
+            ) {
+              console.warn("[StaleAsset] 404:", url);
+              sessionStorage.setItem("_ar", Date.now().toString());
+              location.reload();
+            }
+          },
+          true,
+        );
 
-    <div class="site-wrapper grow">
-      {
-        !hideHeader && (
-          <Header headerData={headerData} navigation={navigationData} />
-        )
-      }
-      <main class="w-full h-full mb-3">
-        <slot />
-      </main>
-    </div>
-
-    {
-      !hideFooter && (
-        <div class="storefront-deferred-region">
-          <Footer footerData={footerData} />
-        </div>
-      )
-    }
-
-    {/* Google accepts JSON-LD in body. Keep it in initial SSR HTML while
-        placing machine-only bytes after buyer-visible content. */}
-    {
-      orgJsonLd && (
-        <script is:inline type="application/ld+json" set:html={orgJsonLd} />
-      )
-    }
-    {
-      websiteJsonLd && (
-        <script is:inline type="application/ld+json" set:html={websiteJsonLd} />
-      )
-    }
+        window.addEventListener("unhandledrejection", function (e) {
+          if (
+            e.reason &&
+            e.reason.message &&
+            e.reason.message.indexOf("dynamically imported") > -1 &&
+            e.reason.message.indexOf("/_astro/") > -1
+          ) {
+            console.warn("[StaleAsset] Import failed");
+            sessionStorage.setItem("_ar", Date.now().toString());
+            location.reload();
+          }
+        });
+      })();
+    </script>
 
     {bodyEndScripts.map((script) => <Fragment set:html={script.config} />)}
 

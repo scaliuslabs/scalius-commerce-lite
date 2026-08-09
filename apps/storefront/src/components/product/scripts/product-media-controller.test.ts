@@ -563,7 +563,10 @@ describe("mixed product media gallery", () => {
 
   it("loads desktop zoom once when a resized viewport first crosses 1024px", async () => {
     const query = new EventTarget() as MediaQueryList;
-    Object.defineProperty(query, "matches", { configurable: true, value: false });
+    Object.defineProperty(query, "matches", {
+      configurable: true,
+      value: false,
+    });
     Object.defineProperty(window, "matchMedia", {
       configurable: true,
       value: vi.fn(() => query),
@@ -581,7 +584,10 @@ describe("mixed product media gallery", () => {
     );
     expect(loadController).not.toHaveBeenCalled();
 
-    Object.defineProperty(query, "matches", { configurable: true, value: true });
+    Object.defineProperty(query, "matches", {
+      configurable: true,
+      value: true,
+    });
     query.dispatchEvent(new Event("change"));
     await vi.waitFor(() => expect(bindDesktopZoomMock).toHaveBeenCalledOnce());
     query.dispatchEvent(new Event("change"));
@@ -684,7 +690,13 @@ describe("storefront mixed-media source boundaries", () => {
       /data-desktop-main-image[\s\S]*?loading="lazy"[\s\S]*?fetchpriority="low"/,
     );
     expect(gallery).toMatch(
-      /data-mobile-main-image[\s\S]*?loading="eager"[\s\S]*?fetchpriority="high"/,
+      /data-mobile-main-image[\s\S]*?loading="eager"[\s\S]*?fetchpriority="high"[\s\S]*?decoding="sync"/,
+    );
+    expect(gallery.indexOf("data-mobile-main-image")).toBeLessThan(
+      gallery.indexOf('data-thumbnail-rail="desktop"'),
+    );
+    expect(gallery.indexOf("data-desktop-main-image")).toBeLessThan(
+      gallery.indexOf('data-thumbnail-rail="desktop"'),
     );
     expect(controller).toContain('import("./product-desktop-zoom-controller")');
     expect(controller).toContain(".catch(() => undefined)");

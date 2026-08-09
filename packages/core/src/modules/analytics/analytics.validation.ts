@@ -99,7 +99,7 @@ function isValidCloudflareWebAnalyticsConfig(config: string): boolean {
 }
 
 function buildCloudflareWebAnalyticsScript(token: string): string {
-    return `<script defer src="${CLOUDFLARE_WEB_ANALYTICS_SCRIPT_SRC}" data-cf-beacon='${JSON.stringify({ token })}'></script>`;
+    return `<script type="module" fetchpriority="low" src="${CLOUDFLARE_WEB_ANALYTICS_SCRIPT_SRC}" data-cf-beacon='${JSON.stringify({ token })}'></script>`;
 }
 
 function extractCloudflareWebAnalyticsToken(config: string): string | null {
