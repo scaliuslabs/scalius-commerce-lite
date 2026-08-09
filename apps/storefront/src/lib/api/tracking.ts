@@ -76,11 +76,10 @@ export async function sendMetaCapiEvent(payload: MetaCapiEventPayload): Promise<
       0,
       2500,
       false,
+      false,
     );
-  } catch (error: unknown) {
-    console.warn(
-      "Meta browser event skipped after one bounded dispatch attempt:",
-      error,
-    );
+  } catch {
+    // Buyer telemetry is best-effort. The API circuit breaker owns provider
+    // diagnostics; page teardown or a blocked beacon must stay console-silent.
   }
 }

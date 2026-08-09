@@ -11,6 +11,7 @@ function respondsWithHtml(response: Response): boolean {
 /**
  * Dashboard documents must pick up the current hashed asset manifest after a
  * deploy. Hashed assets and JSON/RPC responses keep their own cache policy.
+ * Do not add `no-transform`: Cloudflare then stops compressing the document.
  */
 export function applyAdminDocumentCachePolicy(
   request: Request,

@@ -178,115 +178,44 @@ const hasMultipleMedia = optimizedMedia.length > 1;
     ]}
     style={`top: 5rem; --gallery-mobile-max-height: ${GALLERY_CONFIG.mainImage.maxHeightMobile};`}
   >
-    {
-      hasMultipleMedia && (
-        <div class="relative hidden h-full w-full lg:block">
-          <button
-            type="button"
-            data-scroll-control="desktop-up"
-            class="pointer-events-none absolute -top-1 left-0 right-0 z-10 flex h-11 items-start justify-center opacity-0 transition-opacity duration-300 focus-visible:outline-2 focus-visible:outline-black motion-reduce:transition-none"
-            aria-label="Scroll product media up"
-            tabindex="-1"
-          >
-            <span class="rounded-full border border-gray-100 bg-white p-0.5 text-gray-500 shadow-xs">
-              <ChevronUp className="h-4 w-4" />
-            </span>
-          </button>
-
-          <div
-            data-thumbnail-rail="desktop"
-            class="custom-scrollbar absolute inset-0 flex flex-col gap-3 overflow-y-auto scroll-smooth pr-1 pb-4 snap-y snap-mandatory motion-reduce:scroll-auto"
-            aria-label="Product media"
-          >
-            {optimizedMedia.map((itemData, index) => (
-              <button
-                type="button"
-                class="thumbnail-btn snap-start group relative aspect-square w-full min-h-11 shrink-0 overflow-hidden rounded-lg border border-gray-100 bg-white transition-all duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black active:scale-95 motion-reduce:transition-none"
-                data-gallery-thumbnail
-                data-product-media-id={itemData.item.id}
-                data-media-id={itemData.item.mediaId}
-                data-media-kind={itemData.item.kind}
-                data-media-url={itemData.mainUrl}
-                data-mobile-media-url={itemData.mobileUrl}
-                data-preview-url={
-                  itemData.item.kind === "image" ? itemData.thumbUrl : undefined
-                }
-                data-poster-url={itemData.posterUrl ?? undefined}
-                data-zoom-url={itemData.zoomUrl ?? undefined}
-                data-alt-text={itemData.altText}
-                aria-label={
-                  itemData.item.kind === "video"
-                    ? `Play video ${index + 1}: ${itemData.altText}`
-                    : `View image ${index + 1}: ${itemData.altText}`
-                }
-                aria-current={
-                  itemData.item.id === featuredMedia?.id ? "true" : "false"
-                }
-                tabindex={itemData.item.id === featuredMedia?.id ? 0 : -1}
-              >
-                {itemData.thumbUrl ? (
-                  <img
-                    src={itemData.thumbUrl}
-                    alt=""
-                    width={desktopThumb.imageSize}
-                    height={desktopThumb.imageSize}
-                    class="h-full w-full object-contain object-center transition-transform duration-500 group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100"
-                    loading="lazy"
-                    fetchpriority="low"
-                  />
-                ) : (
-                  <span
-                    class="flex h-full w-full items-center justify-center bg-gray-100 text-gray-500"
-                    aria-hidden="true"
-                  >
-                    <Video className="h-5 w-5" />
-                  </span>
-                )}
-                {itemData.item.kind === "video" && (
-                  <>
-                    <span
-                      class="absolute inset-0 flex items-center justify-center bg-black/12 text-white"
-                      aria-hidden="true"
-                    >
-                      <span class="flex h-8 w-8 items-center justify-center rounded-full bg-black/65 shadow-sm">
-                        <Play className="ml-0.5 h-4 w-4 fill-current" />
-                      </span>
-                    </span>
-                    <span class="absolute bottom-1 left-1 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white">
-                      Video{itemData.duration ? ` · ${itemData.duration}` : ""}
-                    </span>
-                  </>
-                )}
-                <span
-                  data-thumb-ring
-                  class:list={[
-                    "thumb-ring pointer-events-none absolute inset-0 rounded-lg border-2 border-transparent transition-colors duration-200 motion-reduce:transition-none",
-                    itemData.item.id === featuredMedia?.id && "!border-black",
-                  ]}
-                  aria-hidden="true"
-                />
-              </button>
-            ))}
-          </div>
-
-          <button
-            type="button"
-            data-scroll-control="desktop-down"
-            class="pointer-events-none absolute bottom-0 left-0 right-0 z-10 flex h-11 items-end justify-center pb-1 opacity-0 transition-opacity duration-300 focus-visible:outline-2 focus-visible:outline-black motion-reduce:transition-none"
-            aria-label="Scroll product media down"
-            tabindex="-1"
-          >
-            <span class="rounded-full border border-gray-100 bg-white p-0.5 text-gray-500 shadow-xs">
-              <ChevronDown className="h-4 w-4" />
-            </span>
-          </button>
-        </div>
-      )
-    }
-
-    <div class="relative z-10 min-w-0 flex-1">
+    <div
+      class:list={[
+        "relative z-10 min-w-0 flex-1",
+        hasMultipleMedia && "lg:col-start-2 lg:row-start-1",
+      ]}
+    >
       <div class="flex items-stretch gap-2">
         <div class="group/main relative flex-1">
+          <button
+            type="button"
+            data-image-stage="mobile"
+            data-mobile-image-trigger
+            class:list={[
+              "mobile-media-stage relative aspect-square w-full cursor-zoom-in overflow-hidden rounded-lg bg-gray-50 text-left transition-transform duration-200 active:scale-[0.99] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black lg:hidden motion-reduce:transition-none",
+              initialMedia?.item.kind === "video" && "hidden",
+            ]}
+            aria-label="Open product image zoom"
+          >
+            <img
+              data-mobile-main-image
+              src={initialMobileImageUrl}
+              data-zoom-url={initialImageZoomUrl}
+              alt={initialImageAlt}
+              width="600"
+              height="600"
+              class="h-full w-full object-contain object-center"
+              loading="eager"
+              fetchpriority="high"
+              decoding="sync"
+            />
+            <span
+              class="pointer-events-none absolute right-3 bottom-3 flex items-center gap-1 rounded-full bg-black/40 p-2 text-xs font-medium text-white opacity-0 backdrop-blur-md transition-opacity duration-300 group-hover/main:opacity-100 motion-reduce:transition-none"
+            >
+              <Maximize2 className="h-3 w-3" />
+              Zoom
+            </span>
+          </button>
+
           <div
             data-image-stage="desktop"
             class:list={[
@@ -323,35 +252,6 @@ const hasMultipleMedia = optimizedMedia.length > 1;
               </div>
             </div>
           </div>
-
-          <button
-            type="button"
-            data-image-stage="mobile"
-            data-mobile-image-trigger
-            class:list={[
-              "mobile-media-stage relative aspect-square w-full cursor-zoom-in overflow-hidden rounded-lg bg-gray-50 text-left transition-transform duration-200 active:scale-[0.99] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black lg:hidden motion-reduce:transition-none",
-              initialMedia?.item.kind === "video" && "hidden",
-            ]}
-            aria-label="Open product image zoom"
-          >
-            <img
-              data-mobile-main-image
-              src={initialMobileImageUrl}
-              data-zoom-url={initialImageZoomUrl}
-              alt={initialImageAlt}
-              width="600"
-              height="600"
-              class="h-full w-full object-contain object-center"
-              loading="eager"
-              fetchpriority="high"
-            />
-            <span
-              class="pointer-events-none absolute right-3 bottom-3 flex items-center gap-1 rounded-full bg-black/40 p-2 text-xs font-medium text-white opacity-0 backdrop-blur-md transition-opacity duration-300 group-hover/main:opacity-100 motion-reduce:transition-none"
-            >
-              <Maximize2 className="h-3 w-3" />
-              Zoom
-            </span>
-          </button>
 
           <div
             data-video-stage
@@ -461,6 +361,7 @@ const hasMultipleMedia = optimizedMedia.length > 1;
                           height={mobileThumb.imageSize}
                           class="h-full w-full object-contain object-center"
                           loading="lazy"
+                          decoding="async"
                           fetchpriority="low"
                         />
                       ) : (
@@ -517,6 +418,113 @@ const hasMultipleMedia = optimizedMedia.length > 1;
         }
       </div>
     </div>
+
+    {
+      hasMultipleMedia && (
+        <div class="relative hidden h-full w-full lg:col-start-1 lg:row-start-1 lg:block">
+          <button
+            type="button"
+            data-scroll-control="desktop-up"
+            class="pointer-events-none absolute -top-1 left-0 right-0 z-10 flex h-11 items-start justify-center opacity-0 transition-opacity duration-300 focus-visible:outline-2 focus-visible:outline-black motion-reduce:transition-none"
+            aria-label="Scroll product media up"
+            tabindex="-1"
+          >
+            <span class="rounded-full border border-gray-100 bg-white p-0.5 text-gray-500 shadow-xs">
+              <ChevronUp className="h-4 w-4" />
+            </span>
+          </button>
+
+          <div
+            data-thumbnail-rail="desktop"
+            class="custom-scrollbar absolute inset-0 flex flex-col gap-3 overflow-y-auto scroll-smooth pr-1 pb-4 snap-y snap-mandatory motion-reduce:scroll-auto"
+            aria-label="Product media"
+          >
+            {optimizedMedia.map((itemData, index) => (
+              <button
+                type="button"
+                class="thumbnail-btn snap-start group relative aspect-square w-full min-h-11 shrink-0 overflow-hidden rounded-lg border border-gray-100 bg-white transition-all duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black active:scale-95 motion-reduce:transition-none"
+                data-gallery-thumbnail
+                data-product-media-id={itemData.item.id}
+                data-media-id={itemData.item.mediaId}
+                data-media-kind={itemData.item.kind}
+                data-media-url={itemData.mainUrl}
+                data-mobile-media-url={itemData.mobileUrl}
+                data-preview-url={
+                  itemData.item.kind === "image" ? itemData.thumbUrl : undefined
+                }
+                data-poster-url={itemData.posterUrl ?? undefined}
+                data-zoom-url={itemData.zoomUrl ?? undefined}
+                data-alt-text={itemData.altText}
+                aria-label={
+                  itemData.item.kind === "video"
+                    ? `Play video ${index + 1}: ${itemData.altText}`
+                    : `View image ${index + 1}: ${itemData.altText}`
+                }
+                aria-current={
+                  itemData.item.id === featuredMedia?.id ? "true" : "false"
+                }
+                tabindex={itemData.item.id === featuredMedia?.id ? 0 : -1}
+              >
+                {itemData.thumbUrl ? (
+                  <img
+                    src={itemData.thumbUrl}
+                    alt=""
+                    width={desktopThumb.imageSize}
+                    height={desktopThumb.imageSize}
+                    class="h-full w-full object-contain object-center transition-transform duration-500 group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100"
+                    loading="lazy"
+                    decoding="async"
+                    fetchpriority="low"
+                  />
+                ) : (
+                  <span
+                    class="flex h-full w-full items-center justify-center bg-gray-100 text-gray-500"
+                    aria-hidden="true"
+                  >
+                    <Video className="h-5 w-5" />
+                  </span>
+                )}
+                {itemData.item.kind === "video" && (
+                  <>
+                    <span
+                      class="absolute inset-0 flex items-center justify-center bg-black/12 text-white"
+                      aria-hidden="true"
+                    >
+                      <span class="flex h-8 w-8 items-center justify-center rounded-full bg-black/65 shadow-sm">
+                        <Play className="ml-0.5 h-4 w-4 fill-current" />
+                      </span>
+                    </span>
+                    <span class="absolute bottom-1 left-1 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white">
+                      Video{itemData.duration ? ` · ${itemData.duration}` : ""}
+                    </span>
+                  </>
+                )}
+                <span
+                  data-thumb-ring
+                  class:list={[
+                    "thumb-ring pointer-events-none absolute inset-0 rounded-lg border-2 border-transparent transition-colors duration-200 motion-reduce:transition-none",
+                    itemData.item.id === featuredMedia?.id && "!border-black",
+                  ]}
+                  aria-hidden="true"
+                />
+              </button>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            data-scroll-control="desktop-down"
+            class="pointer-events-none absolute bottom-0 left-0 right-0 z-10 flex h-11 items-end justify-center pb-1 opacity-0 transition-opacity duration-300 focus-visible:outline-2 focus-visible:outline-black motion-reduce:transition-none"
+            aria-label="Scroll product media down"
+            tabindex="-1"
+          >
+            <span class="rounded-full border border-gray-100 bg-white p-0.5 text-gray-500 shadow-xs">
+              <ChevronDown className="h-4 w-4" />
+            </span>
+          </button>
+        </div>
+      )
+    }
   </div>
 
   <div

@@ -9,6 +9,7 @@ import {
   shouldInjectAnalyticsScript,
   shouldUsePartytown
 } from "@scalius/core/integrations/analytics";
+import { normalizeCloudflareWebAnalyticsConfig } from "@scalius/core/modules/analytics/analytics.validation";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -53,9 +54,12 @@ app.openapi(getConfigurationsRoute, async (c) => {
   const processedScripts = activeAnalyticsScriptsFromDB
     .filter(shouldInjectAnalyticsScript)
     .map((script) => {
-      let processedConfig = script.config;
-      if (shouldUsePartytown(script)) {
-        processedConfig = processAnalyticsScript(script);
+      let processedConfig = script.type === "cloudflare_web_analytics"
+        ? normalizeCloudflareWebAnalyticsConfig(script.config)
+        : script.config;
+      const processedScript = { ...script, config: processedConfig };
+      if (shouldUsePartytown(processedScript)) {
+        processedConfig = processAnalyticsScript(processedScript);
       }
       return {
         id: script.id,

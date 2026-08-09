@@ -38,9 +38,7 @@ function generateMenuId(item: NavigationItem, prefix: string = ""): string {
   <div
     class="flex items-center justify-between px-5 py-3 border-b border-border shrink-0 bg-card shadow-[0_1px_2px_rgba(0,0,0,0.03)] z-10"
   >
-    <h2 class="text-base font-bold tracking-tight text-foreground">
-      Menu
-    </h2>
+    <h2 class="text-base font-bold tracking-tight text-foreground">Menu</h2>
     <button
       id="mobile-menu-close"
       type="button"
@@ -68,7 +66,20 @@ function generateMenuId(item: NavigationItem, prefix: string = ""): string {
                   <div class="group/item">
                     <div class="flex items-center justify-between">
                       {item.href ? (
-                        <a href={item.href} data-astro-prefetch={getStorefrontPrefetchAttribute(item.href, Astro.url)} target={item.openInNewTab ? "_blank" : undefined} rel={item.openInNewTab ? "noopener noreferrer" : undefined} class="flex-1 text-[16px] font-bold text-foreground hover:text-primary transition-colors py-2.5">
+                        <a
+                          href={item.href}
+                          data-astro-prefetch={getStorefrontPrefetchAttribute(
+                            item.href,
+                            Astro.url,
+                          )}
+                          target={item.openInNewTab ? "_blank" : undefined}
+                          rel={
+                            item.openInNewTab
+                              ? "noopener noreferrer"
+                              : undefined
+                          }
+                          class="flex-1 text-[16px] font-bold text-foreground hover:text-primary transition-colors py-2.5"
+                        >
                           {item.title}
                         </a>
                       ) : (
@@ -107,7 +118,24 @@ function generateMenuId(item: NavigationItem, prefix: string = ""): string {
                                   <div>
                                     <div class="flex items-center justify-between group/sub">
                                       {level2Item.href ? (
-                                        <a href={level2Item.href} data-astro-prefetch={getStorefrontPrefetchAttribute(level2Item.href, Astro.url)} target={level2Item.openInNewTab ? "_blank" : undefined} rel={level2Item.openInNewTab ? "noopener noreferrer" : undefined} class="flex-1 text-[14px] font-semibold text-foreground hover:text-foreground transition-colors py-2">
+                                        <a
+                                          href={level2Item.href}
+                                          data-astro-prefetch={getStorefrontPrefetchAttribute(
+                                            level2Item.href,
+                                            Astro.url,
+                                          )}
+                                          target={
+                                            level2Item.openInNewTab
+                                              ? "_blank"
+                                              : undefined
+                                          }
+                                          rel={
+                                            level2Item.openInNewTab
+                                              ? "noopener noreferrer"
+                                              : undefined
+                                          }
+                                          class="flex-1 text-[14px] font-semibold text-foreground hover:text-foreground transition-colors py-2"
+                                        >
                                           {level2Item.title}
                                         </a>
                                       ) : (
@@ -139,7 +167,24 @@ function generateMenuId(item: NavigationItem, prefix: string = ""): string {
                                             return (
                                               <li>
                                                 {level3Item.href ? (
-                                                  <a href={level3Item.href} data-astro-prefetch={getStorefrontPrefetchAttribute(level3Item.href, Astro.url)} target={level3Item.openInNewTab ? "_blank" : undefined} rel={level3Item.openInNewTab ? "noopener noreferrer" : undefined} class="flex min-h-11 items-center py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">
+                                                  <a
+                                                    href={level3Item.href}
+                                                    data-astro-prefetch={getStorefrontPrefetchAttribute(
+                                                      level3Item.href,
+                                                      Astro.url,
+                                                    )}
+                                                    target={
+                                                      level3Item.openInNewTab
+                                                        ? "_blank"
+                                                        : undefined
+                                                    }
+                                                    rel={
+                                                      level3Item.openInNewTab
+                                                        ? "noopener noreferrer"
+                                                        : undefined
+                                                    }
+                                                    class="flex min-h-11 items-center py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+                                                  >
                                                     {level3Item.title}
                                                   </a>
                                                 ) : (
@@ -155,14 +200,31 @@ function generateMenuId(item: NavigationItem, prefix: string = ""): string {
                                     </div>
                                   </div>
                                 ) : level2Item.href ? (
-                                    <a href={level2Item.href} data-astro-prefetch={getStorefrontPrefetchAttribute(level2Item.href, Astro.url)} target={level2Item.openInNewTab ? "_blank" : undefined} rel={level2Item.openInNewTab ? "noopener noreferrer" : undefined} class="flex min-h-11 items-center py-2 text-sm font-semibold text-foreground transition-colors hover:text-foreground">
-                                      {level2Item.title}
-                                    </a>
-                                  ) : (
-                                    <span class="flex min-h-11 items-center py-2 text-sm font-semibold text-foreground">
-                                      {level2Item.title}
-                                    </span>
-                                  )}
+                                  <a
+                                    href={level2Item.href}
+                                    data-astro-prefetch={getStorefrontPrefetchAttribute(
+                                      level2Item.href,
+                                      Astro.url,
+                                    )}
+                                    target={
+                                      level2Item.openInNewTab
+                                        ? "_blank"
+                                        : undefined
+                                    }
+                                    rel={
+                                      level2Item.openInNewTab
+                                        ? "noopener noreferrer"
+                                        : undefined
+                                    }
+                                    class="flex min-h-11 items-center py-2 text-sm font-semibold text-foreground transition-colors hover:text-foreground"
+                                  >
+                                    {level2Item.title}
+                                  </a>
+                                ) : (
+                                  <span class="flex min-h-11 items-center py-2 text-sm font-semibold text-foreground">
+                                    {level2Item.title}
+                                  </span>
+                                )}
                               </li>
                             );
                           })}
@@ -171,14 +233,23 @@ function generateMenuId(item: NavigationItem, prefix: string = ""): string {
                     </div>
                   </div>
                 ) : item.href ? (
-                    <a href={item.href} data-astro-prefetch={getStorefrontPrefetchAttribute(item.href, Astro.url)} target={item.openInNewTab ? "_blank" : undefined} rel={item.openInNewTab ? "noopener noreferrer" : undefined} class="block text-[16px] font-bold text-foreground hover:text-primary transition-colors py-2.5">
-                      {item.title}
-                    </a>
-                  ) : (
-                    <span class="block text-[16px] font-bold text-foreground py-2.5">
-                      {item.title}
-                    </span>
-                  )}
+                  <a
+                    href={item.href}
+                    data-astro-prefetch={getStorefrontPrefetchAttribute(
+                      item.href,
+                      Astro.url,
+                    )}
+                    target={item.openInNewTab ? "_blank" : undefined}
+                    rel={item.openInNewTab ? "noopener noreferrer" : undefined}
+                    class="block text-[16px] font-bold text-foreground hover:text-primary transition-colors py-2.5"
+                  >
+                    {item.title}
+                  </a>
+                ) : (
+                  <span class="block text-[16px] font-bold text-foreground py-2.5">
+                    {item.title}
+                  </span>
+                )}
               </li>
             );
           })
@@ -188,7 +259,9 @@ function generateMenuId(item: NavigationItem, prefix: string = ""): string {
     <div class="h-4"></div>
   </nav>
 
-  <div class="z-20 shrink-0 space-y-3 border-t border-border bg-muted p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[0_-8px_24px_-20px_rgba(0,0,0,0.55)]">
+  <div
+    class="z-20 shrink-0 space-y-3 border-t border-border bg-muted p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[0_-8px_24px_-20px_rgba(0,0,0,0.55)]"
+  >
     {
       contact.phone && (
         <a
@@ -226,7 +299,10 @@ function generateMenuId(item: NavigationItem, prefix: string = ""): string {
             return (
               <a
                 href={href}
-                data-astro-prefetch={getStorefrontPrefetchAttribute(href, Astro.url)}
+                data-astro-prefetch={getStorefrontPrefetchAttribute(
+                  href,
+                  Astro.url,
+                )}
                 class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-input bg-card text-muted-foreground transition-all hover:border-primary/50 hover:text-foreground hover:shadow-sm"
                 target="_blank"
                 rel="noopener noreferrer"
@@ -235,7 +311,8 @@ function generateMenuId(item: NavigationItem, prefix: string = ""): string {
               >
                 {item.iconUrl ? (
                   <img
-                    src={getOptimizedImageUrl(item.iconUrl, {
+                    data-mobile-header-image
+                    data-deferred-src={getOptimizedImageUrl(item.iconUrl, {
                       width: 32,
                       height: 32,
                       fit: "contain",
@@ -244,9 +321,14 @@ function generateMenuId(item: NavigationItem, prefix: string = ""): string {
                     aria-hidden="true"
                     class="w-4 h-4 object-contain"
                     loading="lazy"
+                    decoding="async"
+                    fetchpriority="low"
                   />
                 ) : (
-                  <span aria-hidden="true" class="text-[10px] font-bold uppercase">
+                  <span
+                    aria-hidden="true"
+                    class="text-[10px] font-bold uppercase"
+                  >
                     {displayTitle.charAt(0)}
                   </span>
                 )}

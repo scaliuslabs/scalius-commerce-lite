@@ -20,6 +20,17 @@ describe("mobile menu accessibility boundaries", () => {
     expect(controller).toContain('classList.add("invisible")');
   });
 
+  it("does not fetch hidden social media before its matching header is visible", () => {
+    expect(layout).toContain("data-desktop-header-image");
+    expect(menu).toContain("data-mobile-header-image");
+    expect(layout).toContain("data-deferred-src=");
+    expect(menu).toContain("data-deferred-src=");
+    expect(controller).toContain("hydrateDeferredHeaderImages");
+    expect(controller).toContain(
+      'hydrateDeferredHeaderImages("[data-mobile-header-image]")',
+    );
+  });
+
   it("synchronizes dialog state, restores focus, and supports Escape", () => {
     expect(controller).toContain('setAttribute("aria-expanded"');
     expect(controller).toContain('setAttribute("aria-hidden"');
@@ -75,9 +86,9 @@ describe("mobile menu accessibility boundaries", () => {
   });
 
   it("exposes nested disclosure relationships", () => {
-    expect(menu).toContain('aria-controls={`submenu-${menuId}`}');
-    expect(menu).toContain('aria-controls={`submenu-${level2Id}`}');
-    expect(menu).toContain('id={`submenu-${menuId}`}');
+    expect(menu).toContain("aria-controls={`submenu-${menuId}`}");
+    expect(menu).toContain("aria-controls={`submenu-${level2Id}`}");
+    expect(menu).toContain("id={`submenu-${menuId}`}");
     expect(menu).toContain('aria-hidden="true"');
   });
 });

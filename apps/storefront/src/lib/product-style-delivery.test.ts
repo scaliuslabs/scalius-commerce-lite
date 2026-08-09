@@ -28,15 +28,15 @@ describe("product stylesheet delivery", () => {
     }
   });
 
-  it("uses a non-render-blocking preload with a no-lag priority", () => {
+  it("uses one naturally low-priority phone sheet and a blocking desktop branch", () => {
     expect(PRODUCT_STYLESHEET_DEFERRAL).toEqual({
-      rel: "preload",
-      as: "style",
-      fetchpriority: "high",
+      rel: "stylesheet",
       marker: "data-product-shared-styles",
       mobileMedia: "(max-width: 39.999rem)",
       desktopMedia: "(min-width: 40rem)",
-      onload: "this.onload=null;this.rel='stylesheet'",
+      initialMedia: "print, (min-width: 40rem)",
+      onload:
+        "this.onload=null;if(matchMedia('(max-width: 39.999rem)').matches){const a=()=>requestAnimationFrame(()=>requestAnimationFrame(()=>{this.media='(max-width: 39.999rem)'}));document.readyState==='complete'?a():window.addEventListener('load',a,{once:true})}",
     });
   });
 
@@ -49,5 +49,21 @@ describe("product stylesheet delivery", () => {
     expect(criticalSource).not.toContain('@plugin "@tailwindcss/typography"');
     expect(criticalSource).toContain(".prose-sm");
     expect(criticalSource).toContain("margin-block: 1.25em");
+  });
+
+  it("discovers the product image before parsing the phone paint sheet", () => {
+    const layout = readFileSync(
+      storefrontSourcePath("layouts", "Layout.astro"),
+      "utf8",
+    );
+    const product = readFileSync(
+      storefrontSourcePath("pages", "products", "[slug].astro"),
+      "utf8",
+    );
+
+    expect(product).toContain('<Fragment slot="preload">');
+    expect(layout.indexOf('<slot name="preload" />')).toBeLessThan(
+      layout.indexOf("criticalCss &&"),
+    );
   });
 });

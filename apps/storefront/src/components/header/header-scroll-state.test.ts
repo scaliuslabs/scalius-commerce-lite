@@ -42,9 +42,7 @@ describe("header scroll state", () => {
     expect(source).not.toContain("visibility 0s linear 200ms");
     expect(source).not.toContain("transition-delay: 80ms, 80ms, 0ms");
     expect(source).not.toContain("transition-delay: 40ms, 40ms, 0ms");
-    expect(source).toContain(
-      "#main-header.is-scrolled .header-full-nav-row",
-    );
+    expect(source).toContain("#main-header.is-scrolled .header-full-nav-row");
     expect(source).toContain("transition-[max-height,transform]");
     expect(source).not.toContain(
       "group-[.is-scrolled]/header:opacity-100 group-[.is-scrolled]/header:scale-100",
@@ -55,6 +53,12 @@ describe("header scroll state", () => {
       "utf8",
     );
     expect(navSource).toContain("relative flex shrink-0 items-center");
+    expect(navSource).toContain("if (!desktopNavMedia.matches) return");
+    expect(navSource).toContain("nav.dataset.dynamicNavReady");
+    expect(navSource).not.toContain("new MutationObserver");
+    expect(navSource).not.toContain(
+      'window.dispatchEvent(new Event("resize"))',
+    );
   });
 
   it("morphs desktop secondary actions without a display-driven layout jump", () => {

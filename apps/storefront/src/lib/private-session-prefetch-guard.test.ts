@@ -1,7 +1,9 @@
 import { Window } from "happy-dom";
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 
 import { buildPrivateSessionPrefetchGuardScript } from "./private-session-prefetch-guard";
+import { storefrontSourcePath } from "./test-source-paths";
 
 function createPage(initiallySuppressed: boolean): Window {
   const page = new Window();
@@ -19,6 +21,33 @@ function getAnchor(page: Window, selector: string): HTMLAnchorElement {
 }
 
 describe("private session prefetch guard", () => {
+  it("runs after buyer-visible HTML but before attribution and deferred modules", () => {
+    const layout = readFileSync(
+      storefrontSourcePath("layouts", "Layout.astro"),
+      "utf8",
+    );
+    const head = layout.slice(layout.indexOf("<head>"), layout.indexOf("</head>"));
+    const visibleContent = layout.indexOf("<slot />");
+    const guard = layout.indexOf(
+      "<script is:inline set:html={privateSessionPrefetchGuardScript} />",
+    );
+    const attribution = layout.indexOf(
+      "const urlParams = new URLSearchParams(window.location.search)",
+    );
+    const staleAssetRecovery = layout.indexOf(
+      "Install stale-asset recovery before deferred module execution",
+    );
+    const deferredModule = layout.indexOf(
+      'import { installLazyGlobalUi } from "@/scripts/lazy-global-ui"',
+    );
+
+    expect(head).not.toContain("privateSessionPrefetchGuardScript");
+    expect(guard).toBeGreaterThan(visibleContent);
+    expect(attribution).toBeGreaterThan(guard);
+    expect(staleAssetRecovery).toBeGreaterThan(attribution);
+    expect(deferredModule).toBeGreaterThan(staleAssetRecovery);
+  });
+
   it("suppresses initial and dynamically added anchors before Astro can scan them", async () => {
     const page = createPage(true);
     const publicAnchor = getAnchor(page, "#public");

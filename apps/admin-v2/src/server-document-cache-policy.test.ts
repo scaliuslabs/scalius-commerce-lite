@@ -34,6 +34,7 @@ describe("admin document cache policy", () => {
     expect(response.status).toBe(307);
     expect(response.headers.get("Location")).toBe("/auth/login");
     expect(response.headers.get("Cache-Control")).toContain("no-store");
+    expect(response.headers.get("Cache-Control")).not.toContain("no-transform");
   });
 
   it("leaves hashed assets and JSON/RPC responses on their existing policy", () => {

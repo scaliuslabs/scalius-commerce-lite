@@ -164,7 +164,7 @@ describe("analytics validation", () => {
 
   it("normalizes a Cloudflare Web Analytics token into the beacon snippet", () => {
     expect(normalizeCloudflareWebAnalyticsConfig("site_token_123")).toBe(
-      `<script defer src="${CLOUDFLARE_WEB_ANALYTICS_SCRIPT_SRC}" data-cf-beacon='{"token":"site_token_123"}'></script>`,
+      `<script type="module" fetchpriority="low" src="${CLOUDFLARE_WEB_ANALYTICS_SCRIPT_SRC}" data-cf-beacon='{"token":"site_token_123"}'></script>`,
     );
   });
 
@@ -174,7 +174,7 @@ describe("analytics validation", () => {
         <script defer data-extra="ignored" src="${CLOUDFLARE_WEB_ANALYTICS_SCRIPT_SRC}" data-cf-beacon='{"token":"site_token_123"}'></script>
       `),
     ).toBe(
-      `<script defer src="${CLOUDFLARE_WEB_ANALYTICS_SCRIPT_SRC}" data-cf-beacon='{"token":"site_token_123"}'></script>`,
+      `<script type="module" fetchpriority="low" src="${CLOUDFLARE_WEB_ANALYTICS_SCRIPT_SRC}" data-cf-beacon='{"token":"site_token_123"}'></script>`,
     );
   });
 

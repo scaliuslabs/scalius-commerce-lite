@@ -111,9 +111,7 @@ const expandedActionsXlWidth =
       <div
         class="hidden lg:flex flex-1 items-center justify-center px-8 min-w-0 relative h-full z-10"
       >
-        <div
-          class="header-expanded-center absolute w-full max-w-lg"
-        >
+        <div class="header-expanded-center absolute w-full max-w-lg">
           <SearchBar />
         </div>
         <!-- Compact Nav (Visible on Scroll) -->
@@ -140,7 +138,9 @@ const expandedActionsXlWidth =
             <Search className="h-5 w-5 stroke-[1.5]" />
           </button>
 
-          <div class="header-expanded-actions absolute inset-y-0 left-0 flex items-center gap-3">
+          <div
+            class="header-expanded-actions absolute inset-y-0 left-0 flex items-center gap-3"
+          >
             {
               socialLinks.length > 0 && (
                 <div class="flex items-center gap-1">
@@ -154,7 +154,10 @@ const expandedActionsXlWidth =
                     return (
                       <a
                         href={href}
-                        data-astro-prefetch={getStorefrontPrefetchAttribute(href, Astro.url)}
+                        data-astro-prefetch={getStorefrontPrefetchAttribute(
+                          href,
+                          Astro.url,
+                        )}
                         class="group flex items-center justify-center h-9 w-9 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-200"
                         target="_blank"
                         rel="noopener noreferrer"
@@ -163,18 +166,27 @@ const expandedActionsXlWidth =
                       >
                         {item.iconUrl ? (
                           <img
-                            src={getOptimizedImageUrl(item.iconUrl, {
-                              width: 32,
-                              height: 32,
-                              fit: "contain",
-                            })}
+                            data-desktop-header-image
+                            data-deferred-src={getOptimizedImageUrl(
+                              item.iconUrl,
+                              {
+                                width: 32,
+                                height: 32,
+                                fit: "contain",
+                              },
+                            )}
                             alt=""
                             aria-hidden="true"
                             class="w-4 h-4 object-contain"
                             loading="lazy"
+                            decoding="async"
+                            fetchpriority="low"
                           />
                         ) : (
-                          <span aria-hidden="true" class="w-4 h-4 flex items-center justify-center text-xs font-bold uppercase">
+                          <span
+                            aria-hidden="true"
+                            class="w-4 h-4 flex items-center justify-center text-xs font-bold uppercase"
+                          >
                             {displayTitle.charAt(0)}
                           </span>
                         )}
@@ -225,7 +237,10 @@ const expandedActionsXlWidth =
           <a
             id="account-link"
             href="/account"
-            data-astro-prefetch={getStorefrontPrefetchAttribute("/account", Astro.url)}
+            data-astro-prefetch={getStorefrontPrefetchAttribute(
+              "/account",
+              Astro.url,
+            )}
             class="flex h-11 w-11 items-center justify-center rounded-full text-card/80 transition-colors duration-200 hover:bg-card/10 hover:text-card lg:mr-1"
             aria-label="My Account"
             title="My Account"
@@ -278,9 +293,7 @@ const expandedActionsXlWidth =
       </div>
     </div>
 
-    <div
-      class="header-full-nav-row hidden border-t border-border lg:block"
-    >
+    <div class="header-full-nav-row hidden border-t border-border lg:block">
       <div class="py-2 flex justify-center relative z-50">
         <slot name="desktop-nav-full" />
       </div>
@@ -467,7 +480,10 @@ const expandedActionsXlWidth =
   let headerResizeObserver: ResizeObserver | null = null;
 
   function setHeaderHeight(height: number) {
-    document.documentElement.style.setProperty("--header-height", `${height}px`);
+    document.documentElement.style.setProperty(
+      "--header-height",
+      `${height}px`,
+    );
   }
 
   function updateHeaderHeight() {

@@ -23,6 +23,7 @@ import {
   shouldInjectAnalyticsScript,
   shouldUsePartytown,
 } from "../../integrations/analytics";
+import { normalizeCloudflareWebAnalyticsConfig } from "../analytics/analytics.validation";
 import { readStoredCredentialStrict } from "../../utils/credential-encryption";
 import { resolveCollectionProductsBatch } from "../collections/collections.service";
 import { normalizeCollectionConfig, publicCollectionConfig } from "../collections/collection-config";
@@ -480,10 +481,18 @@ export async function getLayoutData(
   const processedAnalytics = analyticsResults
     .filter(shouldInjectAnalyticsScript)
     .map((script) => {
-      let processedConfig = script.config;
-      const usePartytown = shouldUsePartytown(script);
+      let processedConfig = script.type === "cloudflare_web_analytics"
+        ? normalizeCloudflareWebAnalyticsConfig(script.config)
+        : script.config;
+      const usePartytown = shouldUsePartytown({
+        ...script,
+        config: processedConfig,
+      });
       if (usePartytown)
-        processedConfig = processAnalyticsScript(script);
+        processedConfig = processAnalyticsScript({
+          ...script,
+          config: processedConfig,
+        });
       return {
         id: script.id,
         type: script.type,
