@@ -100,4 +100,11 @@ describe("cart page presentation contract", () => {
     expect(cartPageSource).not.toContain("    .h-9 {\n      height: 2rem;");
     expect(cartPageSource).not.toContain("    .h-10 {\n      height: 2.25rem;");
   });
+
+  it("reserves the empty-cart result height before storage hydration", () => {
+    expect(cartPageSource).toContain(
+      'class="min-h-72 divide-y divide-gray-50 p-3 sm:p-4 block"',
+    );
+    expect(cartPageSource).toContain('aria-busy="true"');
+  });
 });

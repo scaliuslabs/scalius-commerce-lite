@@ -22,6 +22,7 @@ import {
   getPublicStorefrontCachePolicy,
 } from "@/lib/public-worker-cache";
 import { BUILD_ID } from "@/config/build-id";
+import { deferProductGlobalStylesheet } from "@/lib/product-style-delivery";
 
 function getEnv(): Env | null {
   try {
@@ -93,7 +94,8 @@ const responsePolicyMiddleware = defineMiddleware(async (context, next) => {
     }
   }
 
-  return setPageCspHeader(response, env ?? undefined);
+  const securedResponse = await setPageCspHeader(response, env ?? undefined);
+  return deferProductGlobalStylesheet(securedResponse, url.pathname);
 });
 
 const apiContextMiddleware = defineMiddleware((_context, next) => {

@@ -110,7 +110,9 @@ const featuredImageUrl = featuredImage?.url
   : "";
 const featuredImageSrcSet = featuredImage?.url
   ? [
+      [384, 192],
       [640, 320],
+      [768, 384],
       [960, 480],
       [1280, 640],
     ]
@@ -119,7 +121,7 @@ const featuredImageSrcSet = featuredImage?.url
           `${getOptimizedImageUrl(featuredImage.url, {
             width,
             height,
-            quality: width === 1280 ? 85 : 80,
+            quality: width <= 768 ? 72 : width === 960 ? 78 : 82,
             format: "auto",
             fit: "cover",
             gravity: "auto",

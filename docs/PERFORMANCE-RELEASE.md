@@ -1,6 +1,6 @@
 # Stable Release Performance Audit
 
-Last reviewed: 2026-08-08
+Last reviewed: 2026-08-09
 
 This note records the performance evidence and release decisions for the Commerce Lite stable-release audit. It is intentionally evidence-led: repeatable buyer and merchant behavior outranks a single synthetic score, and an unscored Lighthouse diagnostic is not treated as a release blocker by itself.
 
@@ -42,10 +42,14 @@ This note records the performance evidence and release decisions for the Commerc
 | Final cache-safe homepage mobile | [run `4ng4chsvag`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com/4ng4chsvag?form_factor=mobile) | 98/100/100/100; FCP 1.7 s; LCP 2.0 s; SI 1.7 s; TBT 0; CLS 0 |
 | Final cache-safe homepage desktop | [run `fjgkvoc5ni`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com/fjgkvoc5ni?form_factor=desktop) | 100/100/100/100; FCP 0.5 s; LCP 0.5 s; SI 0.5 s; TBT 0; CLS 0.007 |
 | Final deployed homepage mobile | [run `7ty0yncvp0`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com/7ty0yncvp0?form_factor=mobile) | 98/100/100/100; FCP 1.7 s; LCP 2.0 s; SI 1.7 s; TBT 0; CLS 0; Agentic Browsing 3/3 |
+| Phone-critical homepage mobile | [run `0n8727pz0r`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com/0n8727pz0r?form_factor=mobile) | 99/100/100/100; FCP 1.7 s; LCP 2.0 s; SI 1.7 s; TBT 0; CLS 0 |
+| Phone-critical product mobile | [run `x9ujro18af`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com-products-orbit-gan-charger-65w/x9ujro18af?form_factor=mobile) | 99/100/100/100; FCP 1.7 s; LCP 1.9 s; SI 1.7 s; TBT 0; CLS 0 |
+| Stabilized cart mobile | [run `aza5e3mdhr`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com-cart/aza5e3mdhr?form_factor=mobile) | Performance 99; FCP 1.7 s; LCP 2.0 s; SI 1.7 s; TBT 0; CLS 0. The prior cart baseline was 94 with CLS 0.12. Accessibility remains 98 for heading order, while `noindex` intentionally prevents a private cart from receiving a public-page SEO score. |
+| Optimized CMS page mobile | [run `ibx0gy7agx`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com-about/ibx0gy7agx?form_factor=mobile) | 98/100/100/100; FCP 1.7 s; LCP 2.1 s; SI 1.7 s; TBT 0; CLS 0; the prior 14 KiB image-delivery opportunity is gone |
 
 These reports contained no CrUX field data; they are repeatable Lighthouse lab evidence, not a claim that real-user p75 LCP is 2.1-2.2 seconds. Cloudflare Web Analytics was not active on the verified live homepage, product, or search routes, so no field-vitals clock or pre/post RUM baseline exists yet. If exactly one Cloudflare collection mode is deliberately enabled later, define `T0` as the first verified beacon POST, treat seven days as provisional and 28 days as final, require adequate cohort samples plus Good LCP/INP/CLS, and label the evidence Chromium-only rather than Safari/Firefox or CrUX.
 
-The live homepage lab result is repeatably 98, not a defensible 100. Lighthouse 13.4.1 gives the representative run a weighted raw score of about 97.65. With that version's curves/weights and SI/TBT/CLS remaining perfect, reaching a displayed 100 requires a large paired FCP/LCP movement—for example about FCP <= 1.57 s and LCP <= 1.55 s—not merely removal of remaining diagnostics. Three additional CLI runs varied from 95 to 97 despite zero TBT/CLS and tiny observed LCP phases, so a lone 100 would be lab variance rather than release evidence.
+The latest live homepage and product lab results round to 99, not yet a repeatable 100. All public samples retain zero TBT and CLS, and each remaining point follows the shared 1.7-second simulated first-paint floor rather than React work or a product-image bottleneck. With Lighthouse 13.4.1 curves/weights and SI/TBT/CLS remaining perfect, a defensible displayed 100 still needs a substantial paired FCP/LCP movement—for example about FCP <= 1.57 s and LCP <= 1.55 s—not merely removal of an unscored diagnostic. CLI runs remain variable despite tiny observed paint phases, so one isolated 100 would be reported as variance rather than release evidence.
 
 The first mobile hero is already discovered in initial SSR HTML, media-qualified, preloaded, eager, high priority, and synchronously decoded. Its observed LCP phases improved from roughly 250 ms before deployment to 180 ms after image work, while the scored simulated metrics stayed essentially unchanged. More image compression, more hero priority hints, or commerce-JavaScript removal has no measured path to the missing two displayed points. A later live byte audit found roughly 177 KiB of inline CSS before `<body>` in the 373 KiB uncompressed homepage. The retained hybrid split externalizes only the 167.7 KiB shared Tailwind output (18.3 KiB Brotli) and keeps sub-8 KiB layout/route chunks inline. Live HTML fell to 211.4 KiB, `<body>` moved from byte 190,924 to byte 23,262, the Worker entry dropped from about 3.88 MB to 1.18 MB, and PageSpeed improved FCP by 0.1 s while preserving the rounded 98. Fully externalizing the compact chunks regressed Speed Index and was rejected.
 
@@ -64,6 +68,9 @@ The intermittent mobile SEO 92 is a PageSpeed `robots.txt` fetch timeout, not a 
 - Replaced the 281-line product-gallery React island with the SSR base interaction plus a desktop-only dynamic zoom controller. Mobile no longer downloads that island/runtime path, while desktop zoom is loaded only when the desktop media query matches and remains responsive to viewport changes.
 - Prevent private/no-store links from participating in broad Astro intent prefetch while retaining intent prefetch for public catalog discovery.
 - Scope Tailwind source detection to storefront source files and use Astro's hybrid CSS threshold: cache the large build-scoped shared stylesheet across pages while leaving compressed sub-8 KiB route/layout CSS in the first response.
+- Give product phones a build-generated first-viewport Tailwind sheet while loading the immutable complete shared sheet without blocking first paint; keep the complete sheet render-blocking at desktop widths and in a `noscript` fallback. The focused visual comparison found no first-viewport geometry or computed-style differences, and the live product retained zero CLS.
+- Reserve the empty-cart result height before its client controller resolves, removing the prior 0.12 cart CLS and raising its live mobile PageSpeed result from 94 to 99.
+- Add 384/768-pixel CMS image candidates with bounded mobile quality so the prior 14 KiB image-delivery diagnostic disappears without changing CMS-page CLS.
 - Preserve Partytown isolation, sparse priority hints, existing CDN preconnect, deferred below-fold regions, fail-closed checkout readiness, and MPA semantics.
 
 ## Cloudflare zone and cache audit
@@ -225,7 +232,7 @@ Final deployed versions verified on 2026-08-09:
 
 - API Worker `3bfffe69-5d42-40e9-9147-dceb422d028a`.
 - Dashboard Worker `f287784b-1ed1-477b-b408-383006c28b6d`.
-- Storefront Worker `79192484-0bad-4d30-aa50-db63da3e5d4c`, build `src-87ab183fa40a17a9`.
+- Storefront Worker `b043be9b-949e-4173-8e45-71773c2b6d5e`, build `src-3cd12f6edda65a0d`.
 - Live public feed and product-detail variants expose `availabilityBand` and `lowStockThreshold` with stable `99/0` compatibility values instead of exact inventory; a repeated product request was a native HIT and emitted a real HTTP/2 103 before its 200 response.
 - The final authenticated browser smoke passed desktop and 390x844 mobile Orders and Inventory, product option selection, cart add/remove restoration, checkout validation failure, zero horizontal overflow/browser exceptions, and dashboard sign-out without placing an order.
 - `pnpm release:check` and `pnpm ops:check --queues` passed against the deployed surfaces; all local lint, test, typecheck, build, environment, dashboard-performance, secret, and repository gates passed before deployment.
