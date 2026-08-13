@@ -23,7 +23,7 @@
   "type": "module",
   "license": "AGPL-3.0-only",
   "bin": {
-    "scalius": "./dist/cli.js"
+    "scalius": "dist/cli.js"
   },
   "files": [
     "dist",
