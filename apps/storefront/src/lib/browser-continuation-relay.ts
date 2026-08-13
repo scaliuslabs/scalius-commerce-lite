@@ -63,7 +63,7 @@ export function browserContinuationRelayResponse(
       form.append(input);
     }
     document.body.replaceChildren(form);
-    form.requestSubmit();
+    form.submit();
   } catch {
     fail();
   }
@@ -77,4 +77,3 @@ export function browserContinuationRelayResponse(
     },
   });
 }
-
