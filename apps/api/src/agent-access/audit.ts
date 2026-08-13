@@ -1,6 +1,11 @@
 import { nanoid } from "nanoid";
-import { agentAuditEvents } from "@scalius/database/schema";
-import type { Database } from "@scalius/database/client";
+import { eq } from "drizzle-orm";
+import {
+  agentAuditEvents,
+  agentCredentials,
+  agentGrants,
+} from "@scalius/database/schema";
+import { safeBatch, type Database } from "@scalius/database/client";
 import type { AgentAuditInput } from "./types";
 
 const MAX_METADATA_KEYS = 16;
@@ -48,13 +53,15 @@ export async function writeAgentAuditEvent(
   db: Database,
   input: AgentAuditInput,
 ): Promise<void> {
-  await db.insert(agentAuditEvents).values({
+  const now = new Date();
+  const operationId = input.operationId.slice(0, 160);
+  const auditInsert = db.insert(agentAuditEvents).values({
     id: input.eventId ?? `aae_${nanoid(20)}`,
     grantId: input.grantId,
     credentialId: input.credentialId ?? null,
     ownerUserId: input.ownerUserId ?? null,
     resource: input.resource ?? null,
-    operationId: input.operationId.slice(0, 160),
+    operationId,
     risk: input.risk,
     outcome: input.outcome,
     httpStatus: input.httpStatus ?? null,
@@ -64,6 +71,24 @@ export async function writeAgentAuditEvent(
     idempotencyKeyHashPrefix: clampText(input.idempotencyKeyHashPrefix, 24),
     resourceIdsJson: JSON.stringify(sanitizeResourceIds(input.resourceIds)),
     metadataJson: JSON.stringify(sanitizeMetadata(input.metadata)),
-    createdAt: new Date(),
+    createdAt: now,
   });
+  if (!input.grantId) {
+    await safeBatch(db, [auditInsert]);
+    return;
+  }
+
+  const grantUpdate = db.update(agentGrants).set({
+    lastUsedAt: now,
+    lastOperationId: operationId,
+    updatedAt: now,
+  }).where(eq(agentGrants.id, input.grantId));
+  if (input.credentialId) {
+    const credentialUpdate = db.update(agentCredentials)
+      .set({ lastUsedAt: now, updatedAt: now })
+      .where(eq(agentCredentials.id, input.credentialId));
+    await safeBatch(db, [auditInsert, grantUpdate, credentialUpdate]);
+    return;
+  }
+  await safeBatch(db, [auditInsert, grantUpdate]);
 }
