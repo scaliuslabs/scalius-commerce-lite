@@ -63151,7 +63151,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "type": "string",
                   "nullable": true,
                   "minLength": 7,
-                  "maxLength": 16
+                  "maxLength": 16,
+                  "description": "Customer phone number. Use international E.164 form to avoid country ambiguity (for example, +8801712345678).",
+                  "example": "+8801712345678"
                 }
               },
               "additionalProperties": false
@@ -63396,7 +63398,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "customerPhone": {
                   "type": "string",
                   "minLength": 7,
-                  "maxLength": 16
+                  "maxLength": 16,
+                  "description": "Customer phone number. Use international E.164 form to avoid country ambiguity (for example, +8801712345678).",
+                  "example": "+8801712345678"
                 },
                 "customerEmail": {
                   "type": "string",
@@ -63569,7 +63573,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "type": "string",
                   "nullable": true,
                   "minLength": 7,
-                  "maxLength": 16
+                  "maxLength": 16,
+                  "description": "Customer phone number. Use international E.164 form to avoid country ambiguity (for example, +8801712345678).",
+                  "example": "+8801712345678"
                 }
               },
               "additionalProperties": false
