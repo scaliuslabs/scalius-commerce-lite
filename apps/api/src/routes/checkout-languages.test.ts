@@ -27,6 +27,7 @@ const languageRecord = {
 
 function createTestApp(options: {
   selectedRows?: Array<typeof languageRecord | null>;
+  mutationRows?: Array<typeof languageRecord>;
   batchError?: Error;
 } = {}) {
   const env = {
@@ -36,7 +37,8 @@ function createTestApp(options: {
   } as unknown as Env;
   const selectedRows = [...(options.selectedRows ?? [])];
   const insertReturning = vi.fn().mockResolvedValue([languageRecord]);
-  const updateReturning = vi.fn().mockResolvedValue([languageRecord]);
+  const updateReturning = vi.fn().mockResolvedValue(options.mutationRows ?? [languageRecord]);
+  const deleteReturning = vi.fn().mockResolvedValue(options.mutationRows ?? [languageRecord]);
   const batch = vi.fn(async (statements: unknown[]) => {
     if (options.batchError) throw options.batchError;
     if (statements.length === 2) return [[], [languageRecord]];
@@ -46,7 +48,9 @@ function createTestApp(options: {
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
   app.onError((error, c) => c.json(
     { message: error.message },
-    (error as { status?: number }).status === 409 ? 409 : 500,
+    (error as { status?: number }).status === 404
+      ? 404
+      : (error as { status?: number }).status === 409 ? 409 : 500,
   ));
   app.use("*", async (c, next) => {
     const db = {
@@ -69,6 +73,11 @@ function createTestApp(options: {
           returning: insertReturning,
         }),
       }),
+      delete: () => ({
+        where: () => ({
+          returning: deleteReturning,
+        }),
+      }),
       batch,
     } as unknown as Database;
     c.set("db", db);
@@ -77,7 +86,7 @@ function createTestApp(options: {
   app.route("/checkout-languages", publicCheckoutLanguageRoutes);
   app.route("/admin/settings/checkout-languages", checkoutLanguageRoutes);
   mocks.invalidateApiAndScheduleStorefrontGroups.mockResolvedValue(undefined);
-  return { app, env, batch, insertReturning, updateReturning };
+  return { app, env, batch, insertReturning, updateReturning, deleteReturning };
 }
 
 describe("checkout language route boundaries", () => {
@@ -262,6 +271,20 @@ describe("checkout language route boundaries", () => {
     expect(response.status).toBe(200);
     expect(batch).not.toHaveBeenCalled();
     expect(updateReturning).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ["PATCH", "/api/v1/admin/settings/checkout-languages/missing"],
+    ["DELETE", "/api/v1/admin/settings/checkout-languages/missing"],
+    ["POST", "/api/v1/admin/settings/checkout-languages/missing/restore"],
+  ])("returns 404 and skips invalidation when %s targets a missing language", async (method, path) => {
+    const { app, env } = createTestApp({ mutationRows: [] });
+
+    const response = await app.request(path, { method }, env);
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ message: "Not found" });
+    expect(mocks.invalidateApiAndScheduleStorefrontGroups).not.toHaveBeenCalled();
   });
 
   it("returns a conflict when a concurrent promotion reaches the unique fence", async () => {

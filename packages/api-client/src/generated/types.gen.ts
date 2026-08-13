@@ -52881,6 +52881,17 @@ export type DeleteApiV1AdminSettingsCheckoutLanguagesByIdErrors = {
         };
     };
     /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Server error
      */
     500: {
@@ -53070,6 +53081,17 @@ export type PatchApiV1AdminSettingsCheckoutLanguagesByIdErrors = {
      * Forbidden
      */
     403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
         success: false;
         error: {
             code: string;
@@ -53337,6 +53359,17 @@ export type PostApiV1AdminSettingsCheckoutLanguagesByIdRestoreErrors = {
      * Forbidden
      */
     403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
         success: false;
         error: {
             code: string;
