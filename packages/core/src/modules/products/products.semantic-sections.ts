@@ -340,9 +340,10 @@ export async function getProductSemanticSection(
         const limit = Math.min(query.limit, PRODUCT_SEMANTIC_MEDIA_PAGE_MAX);
         const header = await readProductRevisionAndTotal(db, productId, sql<number>`(
             SELECT count(*) FROM ${productMedia}
-            INNER JOIN ${media} ON ${media.id} = ${productMedia.mediaId}
-            WHERE ${productMedia.productId} = ${sql.raw('"products"."id"')}
-              AND ${media.status} IN ('ready', 'trashed')
+            INNER JOIN ${media}
+              ON ${sql.raw('"media"."id"')} = ${sql.raw('"product_media"."media_id"')}
+            WHERE ${sql.raw('"product_media"."product_id"')} = ${sql.raw('"products"."id"')}
+              AND ${sql.raw('"media"."status"')} IN ('ready', 'trashed')
         )`);
         if (!header) return null;
         const items = await db.select({

@@ -147,6 +147,13 @@ function seedMaximumProduct(sqlite: DatabaseSync) {
     sqlite.prepare(`INSERT INTO product_rich_content VALUES (?, ?, ?, ?, ?, ?, ?)`).run(
         "prc_semantic", "prod_semantic", "t".repeat(100_000), "c".repeat(100_000), 0, 1, 1,
     );
+    sqlite.prepare(`INSERT INTO media(id, status) VALUES (?, ?), (?, ?)`).run(
+        "media_semantic_primary", "ready", "media_semantic_secondary", "trashed",
+    );
+    sqlite.prepare(`INSERT INTO product_media VALUES (?, ?, ?, ?, ?, ?, ?, ?), (?, ?, ?, ?, ?, ?, ?, ?)`).run(
+        "pmed_semantic_primary", "prod_semantic", "media_semantic_primary", "Primary", 1, 0, 1, 1,
+        "pmed_semantic_secondary", "prod_semantic", "media_semantic_secondary", "Secondary", 0, 1, 1, 1,
+    );
     sqlite.prepare(`INSERT INTO product_option_definitions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
         "popt_size", "prod_semantic", "Size", "size", 0, "size", 1, 1, null,
     );
@@ -235,6 +242,26 @@ describe("product semantic sections", () => {
         expect(variantCalls).toBe(15);
         expect(statements).toHaveLength(45);
         expect(statements.filter((statement) => /limit \?/i.test(statement))).toHaveLength(15);
+    });
+
+    it("reads the bounded media section through object-shaped D1 results", async () => {
+        const result = await getProductSemanticSection(db, "prod_semantic", "media", query(0, 20));
+
+        expect(result).toMatchObject({
+            section: "media",
+            aggregateRevision: 7,
+            total: 2,
+            offset: 0,
+            limit: 20,
+            nextOffset: null,
+            items: [
+                { id: "pmed_semantic_primary", mediaId: "media_semantic_primary", isPrimary: true },
+                { id: "pmed_semantic_secondary", mediaId: "media_semantic_secondary", isPrimary: false },
+            ],
+        });
+        expect(statements).toHaveLength(2);
+        expect(statements[0]).toContain('ON "media"."id" = "product_media"."media_id"');
+        expect(serializedBytes(result)).toBeLessThanOrEqual(PRODUCT_SEMANTIC_RESULT_MAX_BYTES);
     });
 
     it("updates only the requested text column and bumps the aggregate once", async () => {
