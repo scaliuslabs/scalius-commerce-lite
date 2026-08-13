@@ -109,32 +109,46 @@ export async function rethrowCategoryRevisionConflict(
     requiredState: CategoryLifecycleState,
 ): Promise<never> {
     if (isCategoryRevisionGuardError(error)) {
-        const rows = await db
-            .select({
-                id: categories.id,
-                revision: categories.revision,
-                deletedAt: categories.deletedAt,
-            })
-            .from(categories)
-            .where(categoryClaimIdsCondition(claims))
-            .all();
-        const currentById = new Map(rows.map((row) => [row.id, row.revision]));
-        const stale = claims.find((claim) => currentById.get(claim.id) !== claim.expectedRevision);
-        if (stale) {
-            throw new CategoryRevisionConflictError(
-                stale.id,
-                stale.expectedRevision,
-                currentById.get(stale.id) ?? null,
-            );
-        }
-        const stateMismatch = rows.find((row) =>
-            requiredState === "active" ? row.deletedAt !== null : row.deletedAt === null
-        );
-        if (stateMismatch) {
-            throw new CategoryStateConflictError(stateMismatch.id, requiredState);
-        }
+        await assertCategoryClaimsCurrent(db, claims, requiredState);
     }
     throw error;
+}
+
+/**
+ * Re-checks optimistic category claims after a conditional statement affected
+ * no rows. Unlike rethrowCategoryRevisionConflict(), a current claim is a
+ * valid outcome here: it means another lifecycle predicate rejected the
+ * write, and the caller can return its domain-specific validation error.
+ */
+export async function assertCategoryClaimsCurrent(
+    db: Database,
+    claims: readonly CategoryRevisionClaim[],
+    requiredState: CategoryLifecycleState,
+): Promise<void> {
+    const rows = await db
+        .select({
+            id: categories.id,
+            revision: categories.revision,
+            deletedAt: categories.deletedAt,
+        })
+        .from(categories)
+        .where(categoryClaimIdsCondition(claims))
+        .all();
+    const currentById = new Map(rows.map((row) => [row.id, row.revision]));
+    const stale = claims.find((claim) => currentById.get(claim.id) !== claim.expectedRevision);
+    if (stale) {
+        throw new CategoryRevisionConflictError(
+            stale.id,
+            stale.expectedRevision,
+            currentById.get(stale.id) ?? null,
+        );
+    }
+    const stateMismatch = rows.find((row) =>
+        requiredState === "active" ? row.deletedAt !== null : row.deletedAt === null
+    );
+    if (stateMismatch) {
+        throw new CategoryStateConflictError(stateMismatch.id, requiredState);
+    }
 }
 
 export function revisionResult(rows: unknown): number {
