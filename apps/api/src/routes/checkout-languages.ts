@@ -43,6 +43,7 @@ const checkoutLanguageUpdateErrorResponses = {
 const checkoutLanguageSideEffectErrorResponses = {
   401: errorResponses[401],
   403: errorResponses[403],
+  404: errorResponses[404],
   500: errorResponses[500],
 } as const;
 
@@ -671,7 +672,11 @@ const softDeleteRoute = createRoute({
 adminApp.openapi(softDeleteRoute, async (c) => {
   const db = c.get("db");
   const { id } = c.req.valid("param");
-  await db.update(checkoutLanguages).set({ deletedAt: sql`(cast(strftime('%s','now') as int))` }).where(eq(checkoutLanguages.id, id));
+  const [trashed] = await db.update(checkoutLanguages)
+    .set({ deletedAt: sql`(cast(strftime('%s','now') as int))` })
+    .where(eq(checkoutLanguages.id, id))
+    .returning({ id: checkoutLanguages.id });
+  if (!trashed) throw new NotFoundError("Not found");
   await invalidateApiAndScheduleStorefrontGroups(CHECKOUT_CACHE_GROUPS, c);
   return ok(c, {});
 });
@@ -697,7 +702,10 @@ const hardDeleteRoute = createRoute({
 adminApp.openapi(hardDeleteRoute, async (c) => {
   const db = c.get("db");
   const { id } = c.req.valid("param");
-  await db.delete(checkoutLanguages).where(eq(checkoutLanguages.id, id));
+  const [deleted] = await db.delete(checkoutLanguages)
+    .where(eq(checkoutLanguages.id, id))
+    .returning({ id: checkoutLanguages.id });
+  if (!deleted) throw new NotFoundError("Not found");
   await invalidateApiAndScheduleStorefrontGroups(CHECKOUT_CACHE_GROUPS, c);
   return noContent(c);
 });
@@ -726,7 +734,11 @@ const restoreRoute = createRoute({
 adminApp.openapi(restoreRoute, async (c) => {
   const db = c.get("db");
   const { id } = c.req.valid("param");
-  await db.update(checkoutLanguages).set({ deletedAt: null }).where(eq(checkoutLanguages.id, id));
+  const [restored] = await db.update(checkoutLanguages)
+    .set({ deletedAt: null })
+    .where(eq(checkoutLanguages.id, id))
+    .returning({ id: checkoutLanguages.id });
+  if (!restored) throw new NotFoundError("Not found");
   await invalidateApiAndScheduleStorefrontGroups(CHECKOUT_CACHE_GROUPS, c);
   return ok(c, {});
 });
