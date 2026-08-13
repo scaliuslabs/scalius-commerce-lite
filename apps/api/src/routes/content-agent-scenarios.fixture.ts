@@ -23,6 +23,9 @@ export const contentAgentScenarios = {
     "storefront.articles.get_by_slug",
   ],
   mediaUploadSessionControl: [
+    // Shell-less MCP clients can import public HTTPS assets without raw file
+    // transport; local-only files still use the reviewed direct action.
+    "dashboard.media.import_url",
     "dashboard.media.upload_initiate",
     "dashboard.media.upload_get",
     // MCP names the required direct-client action; the CLI streams this exact

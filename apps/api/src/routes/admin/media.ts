@@ -40,6 +40,7 @@ import {
 import { ValidationError } from "@scalius/core/errors";
 import { invalidateMediaDependentProductCaches } from "../../utils/media-cache-invalidation";
 import { readExactMediaPart } from "./media-upload-body";
+import { importMediaFromUrl } from "./media-url-import";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const mediaErrorResponses = { ...errorResponses, 409: conflictResponse };
@@ -109,6 +110,35 @@ const initiateRoute = createRoute({
     },
 });
 app.openapi(initiateRoute, async (c) => created(c, { session: await initiateMediaUpload(c.get("db"), c.req.valid("json"), c.env.BUCKET) }));
+
+const importUrlRoute = createRoute({
+    method: "post",
+    path: "/uploads/import-url",
+    tags: ["Admin - Media"],
+    summary: "Import supported media from a public HTTPS URL",
+    description: "Fetch one credential-free public HTTPS asset into the same durable, signature-checked media authority used by direct uploads. Redirects are revalidated, Content-Type and Content-Length must be exact, and the source is never persisted as authority.",
+    operationId: "dashboard.media.import_url",
+    request: { body: { content: { "application/json": { schema: z.object({
+        sourceUrl: z.string().url().max(2_048),
+        filename: z.string().trim().min(1).max(255).optional(),
+        folderId: z.string().min(8).max(160).nullable().optional(),
+    }) } } } },
+    responses: {
+        201: { description: "Remote media committed", content: { "application/json": { schema: successEnvelope(z.object({ file: mediaSchema })) } } },
+        ...mediaErrorResponses,
+        503: serviceUnavailableResponse,
+    },
+});
+app.openapi(importUrlRoute, async (c) => {
+    const input = c.req.valid("json");
+    return created(c, { file: await importMediaFromUrl({
+        db: c.get("db"),
+        bucket: c.env.BUCKET,
+        sourceUrl: input.sourceUrl,
+        filename: input.filename,
+        folderId: input.folderId,
+    }) });
+});
 
 const getUploadRoute = createRoute({
     method: "get",
