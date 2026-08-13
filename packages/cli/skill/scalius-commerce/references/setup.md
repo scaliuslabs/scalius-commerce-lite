@@ -9,3 +9,10 @@ scalius setup --harness <agents|codex|claude|opencode|pi> --server https://api.e
 `agents` installs the cross-client Agent Skills convention. The named harnesses install their native user-level skill path. Codex, Claude Code, and OpenCode receive exact remote-MCP install and OAuth login commands. Pi receives the skill and can use the full CLI immediately; its core agent has no native MCP client, so setup prints the `pi-mcp-adapter` package listed in Pi's catalog, exact shared config, and `/mcp-auth` commands. It never silently installs third-party executable code; review that package before opting in.
 
 Dashboard and storefront are separate OAuth audiences. Install and authenticate both. Never copy an OAuth access token, PAT, continuation code, OTP, receipt proof, or payment secret into MCP configuration. After setup, restart or reload the harness if it does not live-discover the skill, then search and describe a harmless read through each server before mutating anything.
+
+The operating model is identical in every harness: search, compactly describe
+one operation, request the full schema only while constructing its input,
+execute, then verify through a bounded read. Do not look for harness-specific
+commerce tools or load the complete OpenAPI document into model context. MCP
+and CLI both consume the same live finalized contract; use CLI when local files
+or saved artifacts are involved.
