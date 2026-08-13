@@ -62041,6 +62041,40 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
       "Categories"
     ],
     "surface": "storefront",
+    "exposure": "excluded",
+    "principals": [
+      "customer",
+      "visitor"
+    ],
+    "risk": "read",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "forbidden",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 16384,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "exclusionReason": "Unbounded browser category aggregate; use storefront.categories.get_section for reconstructable bounded detail.",
+    "rbac": {
+      "type": "public"
+    },
+    "inputSchema": null,
+    "outputSchema": null
+  },
+  {
+    "operationId": "storefront.categories.get_section",
+    "method": "GET",
+    "pathTemplate": "/api/v1/categories/{slug}/sections/{section}",
+    "summary": "Get a bounded category section",
+    "tags": [
+      "Categories"
+    ],
+    "surface": "storefront",
     "exposure": "execute",
     "principals": [
       "customer",
@@ -62052,7 +62086,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "revision": "none",
     "batch": "parallel",
     "transport": "json",
-    "maxResponseBytes": 65536,
+    "maxResponseBytes": 32768,
     "maxRequestBytes": 16384,
     "sensitiveOutput": false,
     "oneTimeSecretOutput": false,
@@ -62074,6 +62108,42 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           "required": true,
           "name": "slug",
           "in": "path"
+        },
+        {
+          "schema": {
+            "type": "string",
+            "enum": [
+              "summary",
+              "text"
+            ]
+          },
+          "required": true,
+          "name": "section",
+          "in": "path"
+        },
+        {
+          "schema": {
+            "type": "string",
+            "enum": [
+              "description",
+              "content"
+            ]
+          },
+          "required": false,
+          "name": "field",
+          "in": "query"
+        },
+        {
+          "schema": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 0,
+            "maximum": 100000,
+            "default": 0
+          },
+          "required": false,
+          "name": "offset",
+          "in": "query"
         }
       ]
     },
@@ -62087,78 +62157,136 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           ]
         },
         "data": {
-          "type": "object",
-          "properties": {
-            "category": {
+          "anyOf": [
+            {
               "type": "object",
               "properties": {
-                "id": {
-                  "type": "string"
-                },
-                "name": {
-                  "type": "string"
-                },
-                "slug": {
-                  "type": "string"
-                },
-                "description": {
+                "section": {
                   "type": "string",
-                  "nullable": true
+                  "enum": [
+                    "summary"
+                  ]
                 },
-                "imageUrl": {
-                  "type": "string",
-                  "nullable": true
-                },
-                "createdAt": {
-                  "type": "string",
-                  "nullable": true
-                },
-                "updatedAt": {
-                  "type": "string",
-                  "nullable": true
-                },
-                "metaTitle": {
-                  "type": "string",
-                  "nullable": true
-                },
-                "metaDescription": {
-                  "type": "string",
-                  "nullable": true
-                },
-                "canonicalPath": {
-                  "type": "string",
-                  "nullable": true
-                },
-                "noIndex": {
-                  "type": "boolean"
-                },
-                "excludeFromSitemap": {
-                  "type": "boolean"
-                },
-                "content": {
-                  "type": "string",
-                  "nullable": true
+                "category": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "slug": {
+                      "type": "string"
+                    },
+                    "imageUrl": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "metaTitle": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "metaDescription": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "canonicalPath": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "noIndex": {
+                      "type": "boolean"
+                    },
+                    "excludeFromSitemap": {
+                      "type": "boolean"
+                    },
+                    "descriptionCharacters": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "contentCharacters": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "updatedAt": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "slug",
+                    "imageUrl",
+                    "metaTitle",
+                    "metaDescription",
+                    "canonicalPath",
+                    "noIndex",
+                    "excludeFromSitemap",
+                    "descriptionCharacters",
+                    "contentCharacters",
+                    "createdAt",
+                    "updatedAt"
+                  ]
                 }
               },
               "required": [
-                "id",
-                "name",
-                "slug",
-                "description",
-                "imageUrl",
-                "createdAt",
-                "updatedAt",
-                "metaTitle",
-                "metaDescription",
-                "canonicalPath",
-                "noIndex",
-                "excludeFromSitemap",
-                "content"
+                "section",
+                "category"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "section": {
+                  "type": "string",
+                  "enum": [
+                    "text"
+                  ]
+                },
+                "field": {
+                  "type": "string",
+                  "enum": [
+                    "description",
+                    "content"
+                  ]
+                },
+                "value": {
+                  "type": "string",
+                  "maxLength": 12000
+                },
+                "totalCharacters": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "offset": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "nextOffset": {
+                  "type": "integer",
+                  "nullable": true,
+                  "minimum": 0
+                },
+                "isNull": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "section",
+                "field",
+                "value",
+                "totalCharacters",
+                "offset",
+                "nextOffset",
+                "isNull"
               ]
             }
-          },
-          "required": [
-            "category"
           ]
         }
       },

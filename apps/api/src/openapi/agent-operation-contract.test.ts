@@ -134,6 +134,7 @@ describe("agent operation contract", () => {
   it("uses bounded foundational storefront reads and excludes superseded aggregates", () => {
     for (const [operationId, maxResponseBytes] of [
       ["storefront.products.get_section", 61_440],
+      ["storefront.categories.get_section", 32_768],
       ["storefront.search.predict", 32_768],
       ["storefront.locations.areas", 32_768],
       ["storefront.checkout.get_config", 16_384],
@@ -154,6 +155,7 @@ describe("agent operation contract", () => {
 
     for (const operationId of [
       "storefront.products.get",
+      "storefront.categories.get",
       "storefront.products.search_legacy",
       "storefront.attributes.category_id_alias",
       "storefront.layout.header_alias",
