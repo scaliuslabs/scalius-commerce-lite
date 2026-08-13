@@ -180,7 +180,6 @@ describe("manifest-driven artifact delivery", () => {
     expect(env.AGENT_ARTIFACTS.put).toHaveBeenCalledWith(
       expect.any(String),
       expect.any(ArrayBuffer),
-      expect.any(Object),
     );
     expect(mocks.create).toHaveBeenCalledWith(
       { marker: "db" },
