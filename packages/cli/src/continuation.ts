@@ -31,6 +31,31 @@ function readPointer(value: unknown, pointer: string): unknown {
   return current;
 }
 
+function pointerSegments(pointer: string): string[] {
+  if (!pointer.startsWith("/") || /~(?:[^01]|$)/.test(pointer)) {
+    throw new CliError(8, "invalid_continuation", "Continuation metadata contains an invalid JSON Pointer.");
+  }
+  return pointer.slice(1).split("/").map((raw) => raw.replace(/~1/g, "/").replace(/~0/g, "~"));
+}
+
+function removePointer(value: unknown, pointer: string): void {
+  const segments = pointerSegments(pointer);
+  const leaf = segments.pop();
+  let current = value;
+  for (const segment of segments) {
+    if (FORBIDDEN_POINTER_SEGMENTS.has(segment) || !isObject(current) || !Object.hasOwn(current, segment)) return;
+    current = current[segment];
+  }
+  if (leaf && !FORBIDDEN_POINTER_SEGMENTS.has(leaf) && isObject(current)) delete current[leaf];
+}
+
+function safeContinuationResult(response: unknown, policy: AgentContinuationOutput): unknown {
+  const safe = structuredClone(response);
+  removePointer(safe, policy.urlJsonPointer);
+  removePointer(safe, policy.fieldsJsonPointer);
+  return safe;
+}
+
 function continuationAction(
   response: unknown,
   policy: AgentContinuationOutput,
@@ -155,5 +180,6 @@ export async function openBrowserContinuation(
     status: "browser_continuation_opened",
     method: "POST",
     origin: target.origin,
+    result: safeContinuationResult(response, policy),
   };
 }

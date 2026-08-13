@@ -200,10 +200,14 @@ describe("CLI program", () => {
     const fetch = vi.fn(async (input: string | URL | Request) => {
       if (String(input).endsWith("/openapi.json")) return Response.json(specWithContinuations());
       operationCalls += 1;
-      return Response.json({ data: { continuation: {
-        url: "https://storefront.example.test/theme-preview/continue",
-        fields: { continuationCode: secret },
-      } } });
+      return Response.json({ data: {
+        id: "acn_safe_correlation",
+        status: "pending",
+        continuation: {
+          url: "https://storefront.example.test/theme-preview/continue",
+          fields: { continuationCode: secret },
+        },
+      } });
     });
     let relayHtml = "";
     const directory = await mkdtemp(join(tmpdir(), "scalius-cli-continuation-"));
@@ -240,6 +244,13 @@ describe("CLI program", () => {
       status: "browser_continuation_opened",
       method: "POST",
       origin: "https://storefront.example.test",
+      result: {
+        data: {
+          id: "acn_safe_correlation",
+          status: "pending",
+          continuation: {},
+        },
+      },
     });
   });
 
