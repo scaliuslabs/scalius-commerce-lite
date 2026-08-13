@@ -103,6 +103,8 @@ function noStore(c: { header(name: string, value: string): void }) {
 const listConnectionsRoute = createRoute({
   method: "get", path: "/connections", tags: ["Admin - Agent Access"],
   operationId: "dashboard.agent_access.connections.list",
+  summary: "List agent connections",
+  description: "Lists bounded agent grants and credentials visible to the current administrator or agent principal.",
   request: { query: pageQuerySchema.extend({
     status: z.enum(["pending", "active", "revoked", "expired"]).optional(),
     resource: resourceSchema.optional(),
@@ -121,6 +123,8 @@ app.openapi(listConnectionsRoute, async (c) => {
 const getConnectionRoute = createRoute({
   method: "get", path: "/connections/{grantId}", tags: ["Admin - Agent Access"],
   operationId: "dashboard.agent_access.connections.get",
+  summary: "Get an agent connection",
+  description: "Returns one safe agent grant projection without exposing bearer credentials.",
   request: { params: z.object({ grantId: z.string() }) },
   responses: { 200: { description: "Agent connection", content: { "application/json": { schema: passthroughResponse } } }, ...errorResponses },
 });
@@ -133,6 +137,8 @@ app.openapi(getConnectionRoute, async (c) => {
 const listEventsRoute = createRoute({
   method: "get", path: "/connections/{grantId}/events", tags: ["Admin - Agent Access"],
   operationId: "dashboard.agent_access.connections.events_list",
+  summary: "List agent connection audit events",
+  description: "Lists bounded, redacted audit events for one agent grant.",
   request: { params: z.object({ grantId: z.string() }), query: pageQuerySchema },
   responses: { 200: { description: "Safe agent audit events", content: { "application/json": { schema: passthroughResponse } } }, ...errorResponses },
 });
@@ -147,6 +153,8 @@ app.openapi(listEventsRoute, async (c) => {
 const createTokenRoute = createRoute({
   method: "post", path: "/tokens", tags: ["Admin - Agent Access"],
   operationId: "dashboard.agent_access.tokens.create",
+  summary: "Create an agent personal access token",
+  description: "Creates a scoped subordinate grant and returns its bearer token exactly once.",
   request: { body: { required: true, content: { "application/json": { schema: tokenBodySchema } } } },
   responses: { 201: { description: "PAT created; token is shown once", content: { "application/json": { schema: passthroughResponse } } }, ...errorResponses },
 });
@@ -190,6 +198,8 @@ app.openapi(createTokenRoute, async (c) => {
 const rotateRoute = createRoute({
   method: "post", path: "/tokens/{credentialId}/rotate", tags: ["Admin - Agent Access"],
   operationId: "dashboard.agent_access.tokens.rotate",
+  summary: "Rotate an agent credential",
+  description: "Atomically replaces an active credential and returns the replacement bearer token exactly once.",
   request: {
     params: z.object({ credentialId: z.string() }),
     body: { required: true, content: { "application/json": { schema: z.object({ expiresInDays: z.number().int().min(1).max(365).optional() }).strict() } } },
@@ -238,6 +248,8 @@ app.openapi(rotateRoute, async (c) => {
 const updateGrantRoute = createRoute({
   method: "patch", path: "/grants/{grantId}", tags: ["Admin - Agent Access"],
   operationId: "dashboard.agent_access.grants.update",
+  summary: "Narrow an agent grant",
+  description: "Narrows a grant's label, permissions, risk ceiling, or expiry; widening requires new approval.",
   request: {
     params: z.object({ grantId: z.string() }),
     body: { required: true, content: { "application/json": { schema: z.object({
@@ -268,6 +280,8 @@ app.openapi(updateGrantRoute, async (c) => {
 const revokeGrantRoute = createRoute({
   method: "delete", path: "/grants/{grantId}", tags: ["Admin - Agent Access"],
   operationId: "dashboard.agent_access.grants.revoke",
+  summary: "Revoke an agent grant",
+  description: "Revokes one active agent grant and its effective credentials.",
   request: {
     params: z.object({ grantId: z.string() }),
     body: { required: true, content: { "application/json": { schema: z.object({ reason: z.string().trim().max(240).optional() }).strict() } } },
@@ -287,6 +301,8 @@ app.openapi(revokeGrantRoute, async (c) => {
 
 const revokeAllRoute = createRoute({
   method: "post", path: "/revoke-all", tags: ["Admin - Agent Access"],
+  summary: "Revoke all agent grants",
+  description: "Emergency browser-only ceremony that revokes all matching agent grants.",
   request: { body: { required: true, content: { "application/json": { schema: z.object({ resource: resourceSchema.optional(), reason: z.string().trim().max(240).optional() }).strict() } } } },
   responses: { 200: { description: "Connections revoked", content: { "application/json": { schema: passthroughResponse } } }, ...errorResponses },
 });
@@ -298,6 +314,8 @@ app.openapi(revokeAllRoute, async (c) => {
 
 const getAuthorizationRoute = createRoute({
   method: "get", path: "/authorization-requests/{requestId}", tags: ["Admin - Agent Access"],
+  summary: "Review an OAuth authorization request",
+  description: "Returns the bounded safe details needed for a human OAuth consent decision.",
   request: { params: z.object({ requestId: z.string() }) },
   responses: { 200: { description: "Safe OAuth request", content: { "application/json": { schema: passthroughResponse } } }, ...errorResponses },
 });
@@ -305,6 +323,8 @@ app.openapi(getAuthorizationRoute, async (c) => ok(c, { authorizationRequest: aw
 
 const approveAuthorizationRoute = createRoute({
   method: "post", path: "/authorization-requests/{requestId}/approve", tags: ["Admin - Agent Access"],
+  summary: "Approve an OAuth authorization request",
+  description: "Human-only consent ceremony that creates the selected grant and completes OAuth authorization.",
   request: { params: z.object({ requestId: z.string() }), body: { required: true, content: { "application/json": { schema: selectionBodySchema } } } },
   responses: { 200: { description: "OAuth request approved", content: { "application/json": { schema: passthroughResponse } } }, ...errorResponses },
 });
@@ -322,6 +342,8 @@ app.openapi(approveAuthorizationRoute, async (c) => {
 
 const denyAuthorizationRoute = createRoute({
   method: "post", path: "/authorization-requests/{requestId}/deny", tags: ["Admin - Agent Access"],
+  summary: "Deny an OAuth authorization request",
+  description: "Human-only consent ceremony that denies a pending OAuth authorization request.",
   request: { params: z.object({ requestId: z.string() }), body: { required: true, content: { "application/json": { schema: z.object({ reason: z.string().max(240).optional() }).strict() } } } },
   responses: { 200: { description: "OAuth request denied", content: { "application/json": { schema: passthroughResponse } } }, ...errorResponses },
 });
@@ -336,6 +358,8 @@ app.openapi(denyAuthorizationRoute, async (c) => {
 
 const lookupDeviceRoute = createRoute({
   method: "post", path: "/device-authorizations/lookup", tags: ["Admin - Agent Access"],
+  summary: "Look up a CLI device pairing",
+  description: "Looks up a short-lived pairing request by the human-entered user code without exposing its device credential.",
   request: { body: { required: true, content: { "application/json": { schema: z.object({ userCode: z.string().trim().min(8).max(12) }).strict() } } } },
   responses: { 200: { description: "Safe device authorization", content: { "application/json": { schema: passthroughResponse } } }, ...errorResponses },
 });
@@ -360,6 +384,8 @@ app.openapi(lookupDeviceRoute, async (c) => {
 
 const approveDeviceRoute = createRoute({
   method: "post", path: "/device-authorizations/{deviceId}/approve", tags: ["Admin - Agent Access"],
+  summary: "Approve a CLI device pairing",
+  description: "Human-only ceremony that approves a scoped CLI grant and prepares one-time credential delivery.",
   request: { params: z.object({ deviceId: z.string() }), body: { required: true, content: { "application/json": { schema: selectionBodySchema } } } },
   responses: { 200: { description: "Device approved", content: { "application/json": { schema: passthroughResponse } } }, ...errorResponses },
 });
@@ -384,6 +410,8 @@ app.openapi(approveDeviceRoute, async (c) => {
 
 const denyDeviceRoute = createRoute({
   method: "post", path: "/device-authorizations/{deviceId}/deny", tags: ["Admin - Agent Access"],
+  summary: "Deny a CLI device pairing",
+  description: "Human-only ceremony that denies a pending CLI pairing request.",
   request: { params: z.object({ deviceId: z.string() }), body: { required: true, content: { "application/json": { schema: z.object({ reason: z.string().max(240).optional() }).strict() } } } },
   responses: { 200: { description: "Device denied", content: { "application/json": { schema: passthroughResponse } } }, ...errorResponses },
 });

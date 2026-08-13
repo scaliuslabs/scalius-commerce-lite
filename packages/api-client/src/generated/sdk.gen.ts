@@ -71,6 +71,11 @@ export const getApiV1AuthTokenStats = <ThrowOnError extends boolean = false>(opt
     ...options
 });
 
+/**
+ * Start CLI device pairing
+ *
+ * Starts a short-lived dashboard pairing ceremony and returns one-time device and user codes.
+ */
 export const postApiV1AgentAuthDeviceStart = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AgentAuthDeviceStartData, ThrowOnError>): RequestResult<PostApiV1AgentAuthDeviceStartResponses, unknown, ThrowOnError> => (options.client ?? client).post<PostApiV1AgentAuthDeviceStartResponses, unknown, ThrowOnError>({
     url: '/api/v1/agent-auth/device/start',
     ...options,
@@ -80,6 +85,11 @@ export const postApiV1AgentAuthDeviceStart = <ThrowOnError extends boolean = fal
     }
 });
 
+/**
+ * Poll CLI device pairing
+ *
+ * Polls a pairing ceremony and returns the credential once after a Super Admin approves it.
+ */
 export const postApiV1AgentAuthDeviceToken = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AgentAuthDeviceTokenData, ThrowOnError>): RequestResult<PostApiV1AgentAuthDeviceTokenResponses, PostApiV1AgentAuthDeviceTokenErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AgentAuthDeviceTokenResponses, PostApiV1AgentAuthDeviceTokenErrors, ThrowOnError>({
     url: '/api/v1/agent-auth/device/token',
     ...options,
@@ -89,6 +99,11 @@ export const postApiV1AgentAuthDeviceToken = <ThrowOnError extends boolean = fal
     }
 });
 
+/**
+ * Acknowledge a paired CLI credential
+ *
+ * Confirms that the CLI stored its one-time credential so the encrypted delivery envelope can be destroyed.
+ */
 export const postApiV1AgentAuthDeviceAck = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AgentAuthDeviceAckData, ThrowOnError>): RequestResult<PostApiV1AgentAuthDeviceAckResponses, unknown, ThrowOnError> => (options.client ?? client).post<PostApiV1AgentAuthDeviceAckResponses, unknown, ThrowOnError>({
     url: '/api/v1/agent-auth/device/ack',
     ...options,
@@ -98,6 +113,11 @@ export const postApiV1AgentAuthDeviceAck = <ThrowOnError extends boolean = false
     }
 });
 
+/**
+ * Revoke the current agent connection
+ *
+ * Revokes the credential and grant represented by the current agent bearer token.
+ */
 export const postApiV1AgentAuthRevoke = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AgentAuthRevokeData, ThrowOnError>): RequestResult<PostApiV1AgentAuthRevokeResponses, unknown, ThrowOnError> => (options.client ?? client).post<PostApiV1AgentAuthRevokeResponses, unknown, ThrowOnError>({
     security: [{
             key: 'agentBearer',
@@ -3001,15 +3021,23 @@ export const postApiV1AdminInventoryByVariantIdAdjust = <ThrowOnError extends bo
  * Look up a product variant by barcode or SKU (scanner workflow)
  */
 export const getApiV1AdminInventoryScannerLookup = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminInventoryScannerLookupData, ThrowOnError>): RequestResult<GetApiV1AdminInventoryScannerLookupResponses, GetApiV1AdminInventoryScannerLookupErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminInventoryScannerLookupResponses, GetApiV1AdminInventoryScannerLookupErrors, ThrowOnError>({
-    security: [{
+    security: [
+        {
             in: 'cookie',
             name: 'better-auth.session_token',
             type: 'apiKey'
-        }, {
+        },
+        {
+            in: 'cookie',
+            name: 'scanner_sid',
+            type: 'apiKey'
+        },
+        {
             key: 'agentBearer',
             scheme: 'bearer',
             type: 'http'
-        }],
+        }
+    ],
     url: '/api/v1/admin/inventory/scanner/lookup',
     ...options
 });
@@ -3018,15 +3046,23 @@ export const getApiV1AdminInventoryScannerLookup = <ThrowOnError extends boolean
  * Adjust stock by a relative amount (+/-)
  */
 export const postApiV1AdminInventoryStockAdjust = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminInventoryStockAdjustData, ThrowOnError>): RequestResult<PostApiV1AdminInventoryStockAdjustResponses, PostApiV1AdminInventoryStockAdjustErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminInventoryStockAdjustResponses, PostApiV1AdminInventoryStockAdjustErrors, ThrowOnError>({
-    security: [{
+    security: [
+        {
             in: 'cookie',
             name: 'better-auth.session_token',
             type: 'apiKey'
-        }, {
+        },
+        {
+            in: 'cookie',
+            name: 'scanner_sid',
+            type: 'apiKey'
+        },
+        {
             key: 'agentBearer',
             scheme: 'bearer',
             type: 'http'
-        }],
+        }
+    ],
     url: '/api/v1/admin/inventory/stock-adjust',
     ...options,
     headers: {
@@ -3039,15 +3075,23 @@ export const postApiV1AdminInventoryStockAdjust = <ThrowOnError extends boolean 
  * Set stock to an absolute value (stocktaking)
  */
 export const postApiV1AdminInventoryStockSet = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminInventoryStockSetData, ThrowOnError>): RequestResult<PostApiV1AdminInventoryStockSetResponses, PostApiV1AdminInventoryStockSetErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminInventoryStockSetResponses, PostApiV1AdminInventoryStockSetErrors, ThrowOnError>({
-    security: [{
+    security: [
+        {
             in: 'cookie',
             name: 'better-auth.session_token',
             type: 'apiKey'
-        }, {
+        },
+        {
+            in: 'cookie',
+            name: 'scanner_sid',
+            type: 'apiKey'
+        },
+        {
             key: 'agentBearer',
             scheme: 'bearer',
             type: 'http'
-        }],
+        }
+    ],
     url: '/api/v1/admin/inventory/stock-set',
     ...options,
     headers: {
@@ -7647,6 +7691,11 @@ export const postApiV1AdminTaxesPreview = <ThrowOnError extends boolean = false>
     }
 });
 
+/**
+ * List agent connections
+ *
+ * Lists bounded agent grants and credentials visible to the current administrator or agent principal.
+ */
 export const getApiV1AdminAgentAccessConnections = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminAgentAccessConnectionsData, ThrowOnError>): RequestResult<GetApiV1AdminAgentAccessConnectionsResponses, GetApiV1AdminAgentAccessConnectionsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminAgentAccessConnectionsResponses, GetApiV1AdminAgentAccessConnectionsErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
@@ -7661,6 +7710,11 @@ export const getApiV1AdminAgentAccessConnections = <ThrowOnError extends boolean
     ...options
 });
 
+/**
+ * Get an agent connection
+ *
+ * Returns one safe agent grant projection without exposing bearer credentials.
+ */
 export const getApiV1AdminAgentAccessConnectionsByGrantId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminAgentAccessConnectionsByGrantIdData, ThrowOnError>): RequestResult<GetApiV1AdminAgentAccessConnectionsByGrantIdResponses, GetApiV1AdminAgentAccessConnectionsByGrantIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminAgentAccessConnectionsByGrantIdResponses, GetApiV1AdminAgentAccessConnectionsByGrantIdErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
@@ -7675,6 +7729,11 @@ export const getApiV1AdminAgentAccessConnectionsByGrantId = <ThrowOnError extend
     ...options
 });
 
+/**
+ * List agent connection audit events
+ *
+ * Lists bounded, redacted audit events for one agent grant.
+ */
 export const getApiV1AdminAgentAccessConnectionsByGrantIdEvents = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminAgentAccessConnectionsByGrantIdEventsData, ThrowOnError>): RequestResult<GetApiV1AdminAgentAccessConnectionsByGrantIdEventsResponses, GetApiV1AdminAgentAccessConnectionsByGrantIdEventsErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminAgentAccessConnectionsByGrantIdEventsResponses, GetApiV1AdminAgentAccessConnectionsByGrantIdEventsErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
@@ -7689,6 +7748,11 @@ export const getApiV1AdminAgentAccessConnectionsByGrantIdEvents = <ThrowOnError 
     ...options
 });
 
+/**
+ * Create an agent personal access token
+ *
+ * Creates a scoped subordinate grant and returns its bearer token exactly once.
+ */
 export const postApiV1AdminAgentAccessTokens = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminAgentAccessTokensData, ThrowOnError>): RequestResult<PostApiV1AdminAgentAccessTokensResponses, PostApiV1AdminAgentAccessTokensErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminAgentAccessTokensResponses, PostApiV1AdminAgentAccessTokensErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
@@ -7707,6 +7771,11 @@ export const postApiV1AdminAgentAccessTokens = <ThrowOnError extends boolean = f
     }
 });
 
+/**
+ * Rotate an agent credential
+ *
+ * Atomically replaces an active credential and returns the replacement bearer token exactly once.
+ */
 export const postApiV1AdminAgentAccessTokensByCredentialIdRotate = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminAgentAccessTokensByCredentialIdRotateData, ThrowOnError>): RequestResult<PostApiV1AdminAgentAccessTokensByCredentialIdRotateResponses, PostApiV1AdminAgentAccessTokensByCredentialIdRotateErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminAgentAccessTokensByCredentialIdRotateResponses, PostApiV1AdminAgentAccessTokensByCredentialIdRotateErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
@@ -7725,6 +7794,11 @@ export const postApiV1AdminAgentAccessTokensByCredentialIdRotate = <ThrowOnError
     }
 });
 
+/**
+ * Revoke an agent grant
+ *
+ * Revokes one active agent grant and its effective credentials.
+ */
 export const deleteApiV1AdminAgentAccessGrantsByGrantId = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminAgentAccessGrantsByGrantIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminAgentAccessGrantsByGrantIdResponses, DeleteApiV1AdminAgentAccessGrantsByGrantIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminAgentAccessGrantsByGrantIdResponses, DeleteApiV1AdminAgentAccessGrantsByGrantIdErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
@@ -7743,6 +7817,11 @@ export const deleteApiV1AdminAgentAccessGrantsByGrantId = <ThrowOnError extends 
     }
 });
 
+/**
+ * Narrow an agent grant
+ *
+ * Narrows a grant's label, permissions, risk ceiling, or expiry; widening requires new approval.
+ */
 export const patchApiV1AdminAgentAccessGrantsByGrantId = <ThrowOnError extends boolean = false>(options: Options<PatchApiV1AdminAgentAccessGrantsByGrantIdData, ThrowOnError>): RequestResult<PatchApiV1AdminAgentAccessGrantsByGrantIdResponses, PatchApiV1AdminAgentAccessGrantsByGrantIdErrors, ThrowOnError> => (options.client ?? client).patch<PatchApiV1AdminAgentAccessGrantsByGrantIdResponses, PatchApiV1AdminAgentAccessGrantsByGrantIdErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
@@ -7761,6 +7840,11 @@ export const patchApiV1AdminAgentAccessGrantsByGrantId = <ThrowOnError extends b
     }
 });
 
+/**
+ * Revoke all agent grants
+ *
+ * Emergency browser-only ceremony that revokes all matching agent grants.
+ */
 export const postApiV1AdminAgentAccessRevokeAll = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminAgentAccessRevokeAllData, ThrowOnError>): RequestResult<PostApiV1AdminAgentAccessRevokeAllResponses, PostApiV1AdminAgentAccessRevokeAllErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminAgentAccessRevokeAllResponses, PostApiV1AdminAgentAccessRevokeAllErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
@@ -7775,6 +7859,11 @@ export const postApiV1AdminAgentAccessRevokeAll = <ThrowOnError extends boolean 
     }
 });
 
+/**
+ * Review an OAuth authorization request
+ *
+ * Returns the bounded safe details needed for a human OAuth consent decision.
+ */
 export const getApiV1AdminAgentAccessAuthorizationRequestsByRequestId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminAgentAccessAuthorizationRequestsByRequestIdData, ThrowOnError>): RequestResult<GetApiV1AdminAgentAccessAuthorizationRequestsByRequestIdResponses, GetApiV1AdminAgentAccessAuthorizationRequestsByRequestIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminAgentAccessAuthorizationRequestsByRequestIdResponses, GetApiV1AdminAgentAccessAuthorizationRequestsByRequestIdErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
@@ -7785,6 +7874,11 @@ export const getApiV1AdminAgentAccessAuthorizationRequestsByRequestId = <ThrowOn
     ...options
 });
 
+/**
+ * Approve an OAuth authorization request
+ *
+ * Human-only consent ceremony that creates the selected grant and completes OAuth authorization.
+ */
 export const postApiV1AdminAgentAccessAuthorizationRequestsByRequestIdApprove = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminAgentAccessAuthorizationRequestsByRequestIdApproveData, ThrowOnError>): RequestResult<PostApiV1AdminAgentAccessAuthorizationRequestsByRequestIdApproveResponses, PostApiV1AdminAgentAccessAuthorizationRequestsByRequestIdApproveErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminAgentAccessAuthorizationRequestsByRequestIdApproveResponses, PostApiV1AdminAgentAccessAuthorizationRequestsByRequestIdApproveErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
@@ -7799,6 +7893,11 @@ export const postApiV1AdminAgentAccessAuthorizationRequestsByRequestIdApprove = 
     }
 });
 
+/**
+ * Deny an OAuth authorization request
+ *
+ * Human-only consent ceremony that denies a pending OAuth authorization request.
+ */
 export const postApiV1AdminAgentAccessAuthorizationRequestsByRequestIdDeny = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminAgentAccessAuthorizationRequestsByRequestIdDenyData, ThrowOnError>): RequestResult<PostApiV1AdminAgentAccessAuthorizationRequestsByRequestIdDenyResponses, PostApiV1AdminAgentAccessAuthorizationRequestsByRequestIdDenyErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminAgentAccessAuthorizationRequestsByRequestIdDenyResponses, PostApiV1AdminAgentAccessAuthorizationRequestsByRequestIdDenyErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
@@ -7813,6 +7912,11 @@ export const postApiV1AdminAgentAccessAuthorizationRequestsByRequestIdDeny = <Th
     }
 });
 
+/**
+ * Look up a CLI device pairing
+ *
+ * Looks up a short-lived pairing request by the human-entered user code without exposing its device credential.
+ */
 export const postApiV1AdminAgentAccessDeviceAuthorizationsLookup = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminAgentAccessDeviceAuthorizationsLookupData, ThrowOnError>): RequestResult<PostApiV1AdminAgentAccessDeviceAuthorizationsLookupResponses, PostApiV1AdminAgentAccessDeviceAuthorizationsLookupErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminAgentAccessDeviceAuthorizationsLookupResponses, PostApiV1AdminAgentAccessDeviceAuthorizationsLookupErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
@@ -7827,6 +7931,11 @@ export const postApiV1AdminAgentAccessDeviceAuthorizationsLookup = <ThrowOnError
     }
 });
 
+/**
+ * Approve a CLI device pairing
+ *
+ * Human-only ceremony that approves a scoped CLI grant and prepares one-time credential delivery.
+ */
 export const postApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdApprove = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdApproveData, ThrowOnError>): RequestResult<PostApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdApproveResponses, PostApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdApproveErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdApproveResponses, PostApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdApproveErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
@@ -7841,6 +7950,11 @@ export const postApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdApprove = <T
     }
 });
 
+/**
+ * Deny a CLI device pairing
+ *
+ * Human-only ceremony that denies a pending CLI pairing request.
+ */
 export const postApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdDeny = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdDenyData, ThrowOnError>): RequestResult<PostApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdDenyResponses, PostApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdDenyErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdDenyResponses, PostApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdDenyErrors, ThrowOnError>({
     security: [{
             in: 'cookie',

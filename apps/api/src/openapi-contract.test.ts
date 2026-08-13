@@ -73,7 +73,6 @@ describe("finalizeOpenApiContract", () => {
 
     expect(operation(spec, "/api/v1/admin/products", "get").security).toEqual([
       { adminSession: [] },
-      { agentBearer: [] },
     ]);
     expect(operation(spec, "/api/v1/admin/agent-access/connections", "get").security).toEqual([
       { adminSession: [] },
@@ -100,7 +99,7 @@ describe("finalizeOpenApiContract", () => {
     expect(operation(spec, "/api/v1/auth/me", "get").security).toEqual([
       { bearerAuth: [] },
     ]);
-    expect(operation(spec, "/api/v1/agent-auth/device/start", "post").security).toBeUndefined();
+    expect(operation(spec, "/api/v1/agent-auth/device/start", "post").security).toEqual([]);
     expect(operation(spec, "/api/v1/agent-auth/revoke", "post").security).toEqual([
       { agentBearer: [] },
     ]);
@@ -121,12 +120,12 @@ describe("finalizeOpenApiContract", () => {
       },
       "x-scalius-rbac": { type: "unmapped" },
     });
-    expect(operation(spec, "/api/v1/customer-auth/send-otp", "post").security).toBeUndefined();
+    expect(operation(spec, "/api/v1/customer-auth/send-otp", "post").security).toEqual([]);
     expect(operation(spec, "/api/v1/customer-auth/me", "get").security).toEqual([
       { customerSession: [] },
     ]);
-    expect(operation(spec, "/api/v1/orders/status/{token}", "get").security).toBeUndefined();
-    expect(operation(spec, "/api/v1/products", "get").security).toBeUndefined();
+    expect(operation(spec, "/api/v1/orders/status/{token}", "get").security).toEqual([]);
+    expect(operation(spec, "/api/v1/products", "get").security).toEqual([]);
     expect(operation(spec, "/api/v1/admin/explicit-public", "get").security).toEqual([]);
   });
 
@@ -219,7 +218,7 @@ describe("finalizeOpenApiContract", () => {
 
     expect(operation(spec, "/api/v1/admin/products", "get")).toMatchObject({
       operationId: "dashboard.products.list",
-      "x-scalius-agent": { exposure: "execute", risk: "read" },
+      "x-scalius-agent": { exposure: "excluded", risk: "read" },
       "x-scalius-rbac": { type: "permission", permission: "products.view" },
     });
     expect(operation(spec, "/api/v1/admin/products", "post")).toMatchObject({
@@ -233,7 +232,7 @@ describe("finalizeOpenApiContract", () => {
       "x-scalius-agent": { exposure: "execute", surface: "storefront" },
       "x-scalius-rbac": { type: "public" },
     });
-    expect(operation(spec, "/api/v1/products", "get").security).toBeUndefined();
+    expect(operation(spec, "/api/v1/products", "get").security).toEqual([]);
     expect(operation(spec, "/api/v1/storefront/agent-contexts", "post")).toMatchObject({
       operationId: "storefront.context.create",
       security: [{ agentBearer: [] }],
