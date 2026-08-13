@@ -52,6 +52,44 @@ describe("authentication", () => {
     ]);
   });
 
+  it("uses each merchant API and dashboard origin without a Scalius demo-domain dependency", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "scalius-custom-domain-"));
+    const token = validToken();
+    const requestedUrls: string[] = [];
+    let poll = 0;
+    const runtime = createTestRuntime({
+      directory,
+      fetch: async (input) => {
+        const url = String(input);
+        requestedUrls.push(url);
+        if (url.endsWith("/device/start")) return Response.json({
+          deviceCode: "merchant-device-secret",
+          userCode: "SHOP1234",
+          verificationUri: "https://control.merchant.example/connect",
+          intervalSeconds: 1,
+          expiresInSeconds: 60,
+        });
+        if (url.endsWith("/device/token")) {
+          poll += 1;
+          return poll === 1
+            ? Response.json({ status: "pending", intervalSeconds: 1 }, { status: 202 })
+            : Response.json({ status: "approved", token, credentialId: `agc_${"A".repeat(20)}` });
+        }
+        return Response.json({ status: "acknowledged" });
+      },
+    });
+
+    await login(runtime, {
+      server: "https://commerce-api.merchant.example",
+      profileName: "merchant-store",
+      openBrowser: true,
+    });
+
+    expect(requestedUrls.every((url) => url.startsWith("https://commerce-api.merchant.example/api/v1/"))).toBe(true);
+    expect(runtime.openedUrls).toEqual(["https://control.merchant.example/connect"]);
+    expect(JSON.stringify({ requestedUrls, openedUrls: runtime.openedUrls })).not.toContain("scalius.com");
+  });
+
   it("revokes remotely before deleting the disk credential", async () => {
     const directory = await mkdtemp(join(tmpdir(), "scalius-cli-"));
     const token = validToken();
