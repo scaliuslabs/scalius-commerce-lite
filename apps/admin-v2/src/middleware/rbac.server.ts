@@ -28,7 +28,10 @@ export async function loadUserPermissions(
   knownIsSuperAdmin?: boolean | null,
 ): Promise<RbacContext> {
   if (knownIsSuperAdmin === true) {
-    return createRbacContext(new Set<string>(), true);
+    const { getAllPermissionNames } = await import(
+      "@scalius/core/auth/rbac/permissions"
+    );
+    return createRbacContext(new Set(getAllPermissionNames()), true);
   }
 
   const [
