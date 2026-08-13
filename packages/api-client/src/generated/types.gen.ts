@@ -12121,6 +12121,241 @@ export type PostApiV1AdminCategoriesResponses = {
 
 export type PostApiV1AdminCategoriesResponse = PostApiV1AdminCategoriesResponses[keyof PostApiV1AdminCategoriesResponses];
 
+export type GetApiV1AdminCategoriesSummariesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        page?: number;
+        limit?: number;
+        search?: string;
+        status?: 'draft' | 'published' | 'internal';
+        trashed?: 'true' | 'false';
+        sort?: 'name' | 'status' | 'createdAt' | 'updatedAt';
+        order?: 'asc' | 'desc';
+    };
+    url: '/api/v1/admin/categories/summaries';
+};
+
+export type GetApiV1AdminCategoriesSummariesErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminCategoriesSummariesError = GetApiV1AdminCategoriesSummariesErrors[keyof GetApiV1AdminCategoriesSummariesErrors];
+
+export type GetApiV1AdminCategoriesSummariesResponses = {
+    /**
+     * Bounded category summaries with pagination
+     */
+    200: {
+        success: true;
+        data: {
+            categories: Array<{
+                id: string;
+                name: string;
+                slug: string;
+                status: 'draft' | 'published' | 'internal';
+                revision: number;
+                productCount: number;
+                publishReady: boolean;
+            }>;
+            pagination: {
+                page: number;
+                limit: number;
+                total: number;
+                totalPages: number;
+            };
+        };
+    };
+};
+
+export type GetApiV1AdminCategoriesSummariesResponse = GetApiV1AdminCategoriesSummariesResponses[keyof GetApiV1AdminCategoriesSummariesResponses];
+
+export type GetApiV1AdminCategoriesByIdSectionsBySectionData = {
+    body?: never;
+    path: {
+        id: string;
+        section: 'summary' | 'text';
+    };
+    query?: {
+        field?: 'description' | 'content';
+        offset?: number | null;
+    };
+    url: '/api/v1/admin/categories/{id}/sections/{section}';
+};
+
+export type GetApiV1AdminCategoriesByIdSectionsBySectionErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminCategoriesByIdSectionsBySectionError = GetApiV1AdminCategoriesByIdSectionsBySectionErrors[keyof GetApiV1AdminCategoriesByIdSectionsBySectionErrors];
+
+export type GetApiV1AdminCategoriesByIdSectionsBySectionResponses = {
+    /**
+     * Bounded category section
+     */
+    200: {
+        success: true;
+        data: {
+            section: 'summary';
+            category: {
+                id: string;
+                name: string;
+                slug: string;
+                imageUrl: string | null;
+                metaTitle: string | null;
+                metaDescription: string | null;
+                canonicalPath: string | null;
+                noIndex: boolean;
+                excludeFromSitemap: boolean;
+                status: 'draft' | 'published' | 'internal';
+                revision: number;
+                descriptionCharacters: number;
+                contentCharacters: number;
+            };
+        } | {
+            section: 'text';
+            field: 'description' | 'content';
+            value: string;
+            totalCharacters: number;
+            offset: number;
+            nextOffset: number | null;
+            isNull: boolean;
+        };
+    };
+};
+
+export type GetApiV1AdminCategoriesByIdSectionsBySectionResponse = GetApiV1AdminCategoriesByIdSectionsBySectionResponses[keyof GetApiV1AdminCategoriesByIdSectionsBySectionResponses];
+
 export type GetApiV1AdminCategoriesByIdPublishReadinessData = {
     body?: never;
     path: {

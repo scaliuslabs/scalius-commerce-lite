@@ -828,8 +828,10 @@ const CATALOG_READ_OPERATION_IDS = [
   "dashboard.product_variants.list",
   "dashboard.categories.form_options",
   "dashboard.categories.list",
+  "dashboard.categories.list_summaries",
   "dashboard.categories.publish_readiness",
   "dashboard.categories.get",
+  "dashboard.categories.get_section",
   "dashboard.attributes.list",
   "dashboard.attribute_values.list",
   "dashboard.collections.form_options",
@@ -1945,6 +1947,24 @@ const REVIEWED_AGENT_OPERATIONS_BY_ID: Readonly<
       exposure: "excluded",
       exclusionReason:
         "Legacy dashboard list may include oversized rich text and media projections; use dashboard.products.list_summaries.",
+    },
+  ),
+  "dashboard.categories.list": dashboardOperationMetadata(
+    "dashboard.categories.list",
+    {
+      risk: "read",
+      exposure: "excluded",
+      exclusionReason:
+        "Legacy dashboard list may include oversized category rich text; use dashboard.categories.list_summaries.",
+    },
+  ),
+  "dashboard.categories.get": dashboardOperationMetadata(
+    "dashboard.categories.get",
+    {
+      risk: "read",
+      exposure: "excluded",
+      exclusionReason:
+        "Legacy oversized category aggregate; use dashboard.categories.get_section.",
     },
   ),
   "dashboard.collections.get": dashboardOperationMetadata(

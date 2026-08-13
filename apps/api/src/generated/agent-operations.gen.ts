@@ -5677,6 +5677,40 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
       "Admin - Categories"
     ],
     "surface": "dashboard",
+    "exposure": "excluded",
+    "principals": [
+      "admin"
+    ],
+    "risk": "read",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "forbidden",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "exclusionReason": "Legacy oversized category aggregate; use dashboard.categories.get_section.",
+    "rbac": {
+      "type": "permission",
+      "permission": "categories.view"
+    },
+    "inputSchema": null,
+    "outputSchema": null
+  },
+  {
+    "operationId": "dashboard.categories.get_section",
+    "method": "GET",
+    "pathTemplate": "/api/v1/admin/categories/{id}/sections/{section}",
+    "summary": "Get a bounded category section",
+    "tags": [
+      "Admin - Categories"
+    ],
+    "surface": "dashboard",
     "exposure": "execute",
     "principals": [
       "admin"
@@ -5709,6 +5743,42 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           "required": true,
           "name": "id",
           "in": "path"
+        },
+        {
+          "schema": {
+            "type": "string",
+            "enum": [
+              "summary",
+              "text"
+            ]
+          },
+          "required": true,
+          "name": "section",
+          "in": "path"
+        },
+        {
+          "schema": {
+            "type": "string",
+            "enum": [
+              "description",
+              "content"
+            ]
+          },
+          "required": false,
+          "name": "field",
+          "in": "query"
+        },
+        {
+          "schema": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 0,
+            "maximum": 100000,
+            "default": 0
+          },
+          "required": false,
+          "name": "offset",
+          "in": "query"
         }
       ]
     },
@@ -5722,142 +5792,147 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           ]
         },
         "data": {
-          "type": "object",
-          "properties": {
-            "id": {
-              "type": "string"
-            },
-            "name": {
-              "type": "string"
-            },
-            "slug": {
-              "type": "string"
-            },
-            "description": {
-              "type": "string",
-              "nullable": true
-            },
-            "content": {
-              "type": "string",
-              "nullable": true
-            },
-            "imageUrl": {
-              "type": "string",
-              "nullable": true
-            },
-            "metaTitle": {
-              "type": "string",
-              "nullable": true
-            },
-            "metaDescription": {
-              "type": "string",
-              "nullable": true
-            },
-            "canonicalPath": {
-              "type": "string",
-              "nullable": true
-            },
-            "noIndex": {
-              "type": "boolean"
-            },
-            "excludeFromSitemap": {
-              "type": "boolean"
-            },
-            "deletedAt": {
-              "type": "number",
-              "nullable": true
-            },
-            "createdAt": {
-              "type": "number"
-            },
-            "updatedAt": {
-              "type": "number"
-            },
-            "status": {
-              "type": "string",
-              "enum": [
-                "draft",
-                "published",
-                "internal"
-              ]
-            },
-            "revision": {
-              "type": "integer",
-              "minimum": 1
-            },
-            "publishReadiness": {
+          "anyOf": [
+            {
               "type": "object",
               "properties": {
-                "ready": {
-                  "type": "boolean"
+                "section": {
+                  "type": "string",
+                  "enum": [
+                    "summary"
+                  ]
                 },
-                "eligibleProductCount": {
-                  "type": "integer",
-                  "minimum": 0
-                },
-                "blockers": {
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "code": {
-                        "type": "string"
-                      },
-                      "message": {
-                        "type": "string"
-                      }
+                "category": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "maxLength": 180
                     },
-                    "required": [
-                      "code",
-                      "message"
-                    ]
-                  }
-                },
-                "warnings": {
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "code": {
-                        "type": "string"
-                      },
-                      "message": {
-                        "type": "string"
-                      }
+                    "name": {
+                      "type": "string",
+                      "maxLength": 100
                     },
-                    "required": [
-                      "code",
-                      "message"
-                    ]
-                  }
+                    "slug": {
+                      "type": "string",
+                      "maxLength": 100
+                    },
+                    "imageUrl": {
+                      "type": "string",
+                      "nullable": true,
+                      "maxLength": 2048
+                    },
+                    "metaTitle": {
+                      "type": "string",
+                      "nullable": true,
+                      "maxLength": 70
+                    },
+                    "metaDescription": {
+                      "type": "string",
+                      "nullable": true,
+                      "maxLength": 200
+                    },
+                    "canonicalPath": {
+                      "type": "string",
+                      "nullable": true,
+                      "maxLength": 120
+                    },
+                    "noIndex": {
+                      "type": "boolean"
+                    },
+                    "excludeFromSitemap": {
+                      "type": "boolean"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "draft",
+                        "published",
+                        "internal"
+                      ]
+                    },
+                    "revision": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "descriptionCharacters": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "contentCharacters": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "slug",
+                    "imageUrl",
+                    "metaTitle",
+                    "metaDescription",
+                    "canonicalPath",
+                    "noIndex",
+                    "excludeFromSitemap",
+                    "status",
+                    "revision",
+                    "descriptionCharacters",
+                    "contentCharacters"
+                  ]
                 }
               },
               "required": [
-                "ready",
-                "eligibleProductCount",
-                "blockers",
-                "warnings"
+                "section",
+                "category"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "section": {
+                  "type": "string",
+                  "enum": [
+                    "text"
+                  ]
+                },
+                "field": {
+                  "type": "string",
+                  "enum": [
+                    "description",
+                    "content"
+                  ]
+                },
+                "value": {
+                  "type": "string",
+                  "maxLength": 12000
+                },
+                "totalCharacters": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "offset": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "nextOffset": {
+                  "type": "integer",
+                  "nullable": true,
+                  "minimum": 0
+                },
+                "isNull": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "section",
+                "field",
+                "value",
+                "totalCharacters",
+                "offset",
+                "nextOffset",
+                "isNull"
               ]
             }
-          },
-          "required": [
-            "id",
-            "name",
-            "slug",
-            "description",
-            "content",
-            "imageUrl",
-            "metaTitle",
-            "metaDescription",
-            "canonicalPath",
-            "noIndex",
-            "excludeFromSitemap",
-            "deletedAt",
-            "createdAt",
-            "updatedAt",
-            "status",
-            "revision",
-            "publishReadiness"
           ]
         }
       },
@@ -5872,6 +5947,40 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "method": "GET",
     "pathTemplate": "/api/v1/admin/categories",
     "summary": "List all categories",
+    "tags": [
+      "Admin - Categories"
+    ],
+    "surface": "dashboard",
+    "exposure": "excluded",
+    "principals": [
+      "admin"
+    ],
+    "risk": "read",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "forbidden",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "exclusionReason": "Legacy dashboard list may include oversized category rich text; use dashboard.categories.list_summaries.",
+    "rbac": {
+      "type": "permission",
+      "permission": "categories.view"
+    },
+    "inputSchema": null,
+    "outputSchema": null
+  },
+  {
+    "operationId": "dashboard.categories.list_summaries",
+    "method": "GET",
+    "pathTemplate": "/api/v1/admin/categories/summaries",
+    "summary": "List bounded category summaries",
     "tags": [
       "Admin - Categories"
     ],
@@ -5904,11 +6013,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "type": "integer",
             "minimum": 1,
             "maximum": 100000,
-            "default": 1,
-            "description": "Page number"
+            "default": 1
           },
           "required": false,
-          "description": "Page number",
           "name": "page",
           "in": "query"
         },
@@ -5916,12 +6023,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           "schema": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 500,
-            "default": 10,
-            "description": "Items per page (max 500 for selector dropdowns)"
+            "maximum": 50,
+            "default": 20
           },
           "required": false,
-          "description": "Items per page (max 500 for selector dropdowns)",
           "name": "limit",
           "in": "query"
         },
@@ -5929,11 +6034,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           "schema": {
             "type": "string",
             "maxLength": 100,
-            "default": "",
-            "description": "Search term"
+            "default": ""
           },
           "required": false,
-          "description": "Search term",
           "name": "search",
           "in": "query"
         },
@@ -5944,11 +6047,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "draft",
               "published",
               "internal"
-            ],
-            "description": "Publication status"
+            ]
           },
           "required": false,
-          "description": "Publication status",
           "name": "status",
           "in": "query"
         },
@@ -5958,11 +6059,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "enum": [
               "true",
               "false"
-            ],
-            "description": "Show trashed items"
+            ]
           },
           "required": false,
-          "description": "Show trashed items",
           "name": "trashed",
           "in": "query"
         },
@@ -5975,11 +6074,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "createdAt",
               "updatedAt"
             ],
-            "default": "updatedAt",
-            "description": "Sort field"
+            "default": "updatedAt"
           },
           "required": false,
-          "description": "Sort field",
           "name": "sort",
           "in": "query"
         },
@@ -5990,11 +6087,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "asc",
               "desc"
             ],
-            "default": "desc",
-            "description": "Sort order"
+            "default": "desc"
           },
           "required": false,
-          "description": "Sort order",
           "name": "order",
           "in": "query"
         }
@@ -6018,54 +6113,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "type": "object",
                 "properties": {
                   "id": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 180
                   },
                   "name": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 100
                   },
                   "slug": {
-                    "type": "string"
-                  },
-                  "description": {
                     "type": "string",
-                    "nullable": true
-                  },
-                  "imageUrl": {
-                    "type": "string",
-                    "nullable": true
-                  },
-                  "metaTitle": {
-                    "type": "string",
-                    "nullable": true
-                  },
-                  "metaDescription": {
-                    "type": "string",
-                    "nullable": true
-                  },
-                  "canonicalPath": {
-                    "type": "string",
-                    "nullable": true
-                  },
-                  "noIndex": {
-                    "type": "boolean"
-                  },
-                  "excludeFromSitemap": {
-                    "type": "boolean"
-                  },
-                  "createdAt": {
-                    "type": "string",
-                    "nullable": true
-                  },
-                  "updatedAt": {
-                    "type": "string",
-                    "nullable": true
-                  },
-                  "deletedAt": {
-                    "type": "string",
-                    "nullable": true
-                  },
-                  "productCount": {
-                    "type": "number"
+                    "maxLength": 100
                   },
                   "status": {
                     "type": "string",
@@ -6079,6 +6136,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "type": "integer",
                     "minimum": 1
                   },
+                  "productCount": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
                   "publishReady": {
                     "type": "boolean"
                   }
@@ -6087,19 +6148,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "id",
                   "name",
                   "slug",
-                  "description",
-                  "imageUrl",
-                  "metaTitle",
-                  "metaDescription",
-                  "canonicalPath",
-                  "noIndex",
-                  "excludeFromSitemap",
-                  "createdAt",
-                  "updatedAt",
-                  "deletedAt",
-                  "productCount",
                   "status",
                   "revision",
+                  "productCount",
                   "publishReady"
                 ]
               }

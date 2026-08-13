@@ -21,6 +21,10 @@ import {
     categoryRevisionClaimSchema,
     getCategoryPublishReadiness,
     CATEGORY_BATCH_LIMIT,
+    categorySectionValues,
+    categoryTextFieldValues,
+    getCategorySection,
+    listCategoryAgentSummaries,
 } from "@scalius/core/modules/categories";
 import { categories } from "@scalius/database/schema";
 import { asc, isNull } from "drizzle-orm";
@@ -50,6 +54,17 @@ const categoryPublishReadinessSchema = z.object({
     eligibleProductCount: z.number().int().min(0),
     blockers: z.array(z.object({ code: z.string(), message: z.string() })),
     warnings: z.array(z.object({ code: z.string(), message: z.string() })),
+});
+const categorySectionSchema = z.enum(categorySectionValues);
+const categoryTextFieldSchema = z.enum(categoryTextFieldValues);
+const categoryAgentSummarySchema = z.object({
+    id: z.string().max(180),
+    name: z.string().max(100),
+    slug: z.string().max(100),
+    status: categoryStatusSchema,
+    revision: z.number().int().min(1),
+    productCount: z.number().int().nonnegative(),
+    publishReady: z.boolean(),
 });
 
 // ── Form Options (lightweight for dropdowns) ──
@@ -125,6 +140,102 @@ app.openapi(listRoute, async (c) => {
         sort: query.sort,
         order: query.order as "asc" | "desc" | undefined
     });
+    return ok(c, result);
+});
+
+const listAgentSummariesRoute = createRoute({
+    method: "get",
+    path: "/summaries",
+    operationId: "dashboard.categories.list_summaries",
+    tags: ["Admin - Categories"],
+    summary: "List bounded category summaries",
+    request: {
+        query: z.object({
+            page: z.coerce.number().int().min(1).max(100_000).default(1),
+            limit: z.coerce.number().int().min(1).max(50).default(20),
+            search: z.string().trim().max(100).optional().default(""),
+            status: categoryStatusSchema.optional(),
+            trashed: z.enum(["true", "false"]).optional(),
+            sort: z.enum(["name", "status", "createdAt", "updatedAt"]).optional().default("updatedAt"),
+            order: z.enum(["asc", "desc"]).optional().default("desc"),
+        }),
+    },
+    responses: {
+        200: {
+            description: "Bounded category summaries with pagination",
+            content: { "application/json": { schema: paginatedEnvelope("categories", categoryAgentSummarySchema) } },
+        },
+        ...errorResponses,
+    },
+});
+
+app.openapi(listAgentSummariesRoute, async (c) => {
+    const query = c.req.valid("query");
+    return ok(c, await listCategoryAgentSummaries(c.get("db"), {
+        page: query.page,
+        limit: query.limit,
+        search: query.search,
+        status: query.status,
+        showTrashed: query.trashed === "true",
+        sort: query.sort,
+        order: query.order,
+    }));
+});
+
+const getCategorySectionRoute = createRoute({
+    method: "get",
+    path: "/{id}/sections/{section}",
+    operationId: "dashboard.categories.get_section",
+    tags: ["Admin - Categories"],
+    summary: "Get a bounded category section",
+    request: {
+        params: z.object({ id: categoryIdSchema, section: categorySectionSchema }),
+        query: z.object({
+            field: categoryTextFieldSchema.optional(),
+            offset: z.coerce.number().int().min(0).max(100_000).optional().default(0),
+        }),
+    },
+    responses: {
+        200: {
+            description: "Bounded category section",
+            content: { "application/json": { schema: successEnvelope(z.union([
+                z.object({
+                    section: z.literal("summary"),
+                    category: z.object({
+                        id: z.string().max(180),
+                        name: z.string().max(100),
+                        slug: z.string().max(100),
+                        imageUrl: z.string().max(2048).nullable(),
+                        metaTitle: z.string().max(70).nullable(),
+                        metaDescription: z.string().max(200).nullable(),
+                        canonicalPath: z.string().max(120).nullable(),
+                        noIndex: z.boolean(),
+                        excludeFromSitemap: z.boolean(),
+                        status: categoryStatusSchema,
+                        revision: z.number().int().min(1),
+                        descriptionCharacters: z.number().int().nonnegative(),
+                        contentCharacters: z.number().int().nonnegative(),
+                    }),
+                }),
+                z.object({
+                    section: z.literal("text"),
+                    field: categoryTextFieldSchema,
+                    value: z.string().max(12_000),
+                    totalCharacters: z.number().int().nonnegative(),
+                    offset: z.number().int().nonnegative(),
+                    nextOffset: z.number().int().nonnegative().nullable(),
+                    isNull: z.boolean(),
+                }),
+            ])) } },
+        },
+        ...errorResponses,
+    },
+});
+
+app.openapi(getCategorySectionRoute, async (c) => {
+    const { id, section } = c.req.valid("param");
+    const result = await getCategorySection(c.get("db"), id, section, c.req.valid("query"));
+    if (!result) throw new NotFoundError("Category not found");
     return ok(c, result);
 });
 
