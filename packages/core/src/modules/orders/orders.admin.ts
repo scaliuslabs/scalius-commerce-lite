@@ -249,6 +249,31 @@ function adminOrderFullEditEvidenceSelection() {
     };
 }
 
+type AdminOrderFullEditEvidence = Pick<
+    AdminOrderFullEditSource,
+    | "hasTaxSnapshot"
+    | "hasPaymentHistory"
+    | "hasShipmentHistory"
+    | "hasRefundHistory"
+    | "hasReturnHistory"
+    | "hasInvoiceHistory"
+>;
+
+function omitAdminOrderFullEditEvidence<T extends AdminOrderFullEditEvidence>(
+    order: T,
+): Omit<T, keyof AdminOrderFullEditEvidence> {
+    const {
+        hasTaxSnapshot: _hasTaxSnapshot,
+        hasPaymentHistory: _hasPaymentHistory,
+        hasShipmentHistory: _hasShipmentHistory,
+        hasRefundHistory: _hasRefundHistory,
+        hasReturnHistory: _hasReturnHistory,
+        hasInvoiceHistory: _hasInvoiceHistory,
+        ...publicOrder
+    } = order;
+    return publicOrder;
+}
+
 export async function getAdminOrderFullEditReadiness(
     db: Database,
     orderId: string,
@@ -1445,8 +1470,9 @@ export async function listOrders(db: Database, options: {
 
     const formattedResults = results.map((order) => {
         const latestShipment = shipmentMap.get(order.id) || null;
+        const publicOrder = omitAdminOrderFullEditEvidence(order);
         return {
-            ...order,
+            ...publicOrder,
             createdAt: new Date(order.createdAt * 1000),
             updatedAt: new Date(order.updatedAt * 1000),
             itemCount: itemCountMap.get(order.id)?.count || 0,
@@ -1807,9 +1833,10 @@ async function getOrderDetailsOnce(
         }
         : null;
     const nowSeconds = Math.floor(Date.now() / 1000);
+    const publicOrder = omitAdminOrderFullEditEvidence(order);
 
     return {
-        ...order,
+        ...publicOrder,
         createdAt: new Date(order.createdAt * 1000),
         updatedAt: new Date(order.updatedAt * 1000),
         deletedAt: order.deletedAt ? new Date(order.deletedAt * 1000) : null,
