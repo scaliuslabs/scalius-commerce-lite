@@ -28,11 +28,6 @@ const reactSingletonDeps = [
 export default defineConfig({
   devToolbar: { enabled: false },
 
-  // The storefront middleware preserves Astro's origin check for every route
-  // except the two reviewed, body-only browser continuation endpoints. Those
-  // endpoints enforce their own exact same-origin/dashboard/loopback policy.
-  security: { checkOrigin: false },
-
   image: {
     domains: CDN_DOMAINS,
   },

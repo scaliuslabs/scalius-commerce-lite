@@ -17,38 +17,49 @@ const CONTINUATION = {
 describe("theme preview continuation window", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("opens only a secret-free blank placeholder synchronously", () => {
-    const previewWindow = { focus: vi.fn() } as unknown as Window;
+  it("opens only the secret-free storefront relay synchronously", () => {
+    const previewWindow = { focus: vi.fn(), postMessage: vi.fn() } as unknown as Window;
     const open = vi.spyOn(window, "open").mockReturnValue(previewWindow);
     expect(prepareThemePreviewWindow({
       storefrontUrl: "https://storefront.example.test",
     })).toBe(previewWindow);
     expect(open).toHaveBeenCalledWith(
-      "about:blank",
+      "https://storefront.example.test/theme-preview/continue",
       expect.stringMatching(/^scalius-theme-preview-/),
     );
   });
 
-  it("posts the one-time code directly to the exact storefront continuation", async () => {
-    const previewDocument = document;
-    const submit = vi.spyOn(HTMLFormElement.prototype, "submit").mockImplementation(() => {});
+  it("hands the one-time code to the exact-origin storefront opener relay", async () => {
+    const postMessage = vi.fn();
     const previewWindow = {
-      name: "scalius-theme-preview-test",
-      document: previewDocument,
+      focus: vi.fn(),
+      postMessage,
     } as unknown as Window;
+    vi.spyOn(window, "open").mockReturnValue(previewWindow);
+    expect(prepareThemePreviewWindow({
+      storefrontUrl: "https://storefront.example.test",
+    })).toBe(previewWindow);
 
-    await expect(submitThemePreview({
+    const submitted = submitThemePreview({
       previewWindow,
       storefrontUrl: "https://storefront.example.test",
       continuation: CONTINUATION,
-    })).resolves.toBeUndefined();
-    expect(submit).toHaveBeenCalledOnce();
-    const form = previewDocument.querySelector("form");
-    expect(form?.method.toLowerCase()).toBe("post");
-    expect(form?.action).toBe(CONTINUATION.url);
-    expect(Object.fromEntries(
-      [...previewDocument.querySelectorAll("input")].map((input) => [input.name, input.value]),
-    )).toEqual(CONTINUATION.fields);
+    });
+    window.dispatchEvent(new MessageEvent("message", {
+      origin: "https://storefront.example.test",
+      source: previewWindow as WindowProxy,
+      data: { type: "scalius-continuation-ready-v1" },
+    }));
+    expect(postMessage).toHaveBeenCalledWith({
+      type: "scalius-continuation-fields-v1",
+      fields: CONTINUATION.fields,
+    }, "https://storefront.example.test");
+    window.dispatchEvent(new MessageEvent("message", {
+      origin: "https://storefront.example.test",
+      source: previewWindow as WindowProxy,
+      data: { type: "scalius-continuation-accepted-v1" },
+    }));
+    await expect(submitted).resolves.toBeUndefined();
   });
 
   it("rejects URL-carried, off-origin, and malformed continuation codes", async () => {
@@ -58,7 +69,7 @@ describe("theme preview continuation window", () => {
       { ...CONTINUATION, fields: { ...CONTINUATION.fields, continuationCode: "bad" } },
     ]) {
       await expect(submitThemePreview({
-        previewWindow: { document } as unknown as Window,
+        previewWindow: { postMessage: vi.fn() } as unknown as Window,
         storefrontUrl: "https://storefront.example.test",
         continuation,
       })).rejects.toThrow("Invalid storefront preview destination");
