@@ -31,7 +31,7 @@ export function isBrowserContinuationRelayPathname(pathname: string): boolean {
 
 const PRIVATE_HEADERS = {
   "Cache-Control": "private, no-cache, no-store, must-revalidate",
-  "Content-Security-Policy": "default-src 'none'; script-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+  "Content-Security-Policy": "default-src 'none'; script-src 'unsafe-inline'; connect-src 'self'; form-action 'none'; base-uri 'none'; frame-ancestors 'none'",
   "Cross-Origin-Resource-Policy": "same-origin",
   "Referrer-Policy": "no-referrer",
   "X-Content-Type-Options": "nosniff",
@@ -65,7 +65,7 @@ export function browserContinuationRelayResponse(
       return ${allowed}.includes(origin.origin);
     } catch { return false; }
   };
-  const receive = (event) => {
+  const receive = async (event) => {
     if (event.source !== window.opener || !trustedParentOrigin(event.origin)) return;
     const message = event.data;
     if (!message || typeof message !== "object" || message.type !== ${scriptJson(FIELDS_MESSAGE)}) return;
@@ -75,27 +75,26 @@ export function browserContinuationRelayResponse(
       if (!payload || typeof payload !== "object" || Array.isArray(payload)) return fail();
       const keys = Object.keys(payload);
       if (keys.length !== fields.length || !fields.every((field) => keys.includes(field.name))) return fail();
-      const form = document.createElement("form");
-      form.method = "post";
-      form.action = window.location.pathname;
-      form.hidden = true;
+      const body = new URLSearchParams();
       for (const field of fields) {
         const value = payload[field.name];
         if (typeof value !== "string" || new TextEncoder().encode(value).byteLength > field.maxBytes || !(new RegExp(field.pattern)).test(value)) return fail();
-        const input = document.createElement("input");
-        input.type = "hidden";
-        input.name = field.name;
-        input.value = value;
-        form.append(input);
+        body.set(field.name, value);
       }
-      const button = document.createElement("button");
-      button.type = "submit";
-      button.textContent = "Continue securely";
-      form.append(button);
-      document.body.replaceChildren(form);
+      const response = await fetch(window.location.pathname, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+        body,
+        cache: "no-store",
+        credentials: "same-origin",
+        redirect: "follow",
+        referrerPolicy: "no-referrer",
+      });
+      const destination = new URL(response.url);
+      if (!response.ok || !response.redirected || destination.origin !== window.location.origin) return fail();
       window.opener.postMessage({ type: ${scriptJson(ACCEPTED_MESSAGE)} }, event.origin);
       window.removeEventListener("message", receive);
-      form.submit();
+      window.location.replace(destination.toString());
     } catch { fail(); }
   };
   if (!window.opener) return fail();

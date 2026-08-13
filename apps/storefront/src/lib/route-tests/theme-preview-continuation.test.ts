@@ -129,7 +129,8 @@ describe("theme preview continuation route", () => {
     const html = await response.text();
     expect(response.status).toBe(200);
     expect(response.headers.get("Cache-Control")).toContain("no-store");
-    expect(response.headers.get("Content-Security-Policy")).toContain("form-action 'self'");
+    expect(response.headers.get("Content-Security-Policy")).toContain("connect-src 'self'");
+    expect(response.headers.get("Content-Security-Policy")).toContain("form-action 'none'");
     expect(html).not.toContain("window.name");
     expect(html).toContain("window.opener");
     expect(html).toContain("scalius-continuation-ready-v1");
