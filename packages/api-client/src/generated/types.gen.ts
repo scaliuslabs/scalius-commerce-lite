@@ -10155,6 +10155,60 @@ export type GetApiV1CategoriesResponses = {
 
 export type GetApiV1CategoriesResponse = GetApiV1CategoriesResponses[keyof GetApiV1CategoriesResponses];
 
+export type GetApiV1CategoriesSummariesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        page?: number;
+        limit?: number;
+    };
+    url: '/api/v1/categories/summaries';
+};
+
+export type GetApiV1CategoriesSummariesErrors = {
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1CategoriesSummariesError = GetApiV1CategoriesSummariesErrors[keyof GetApiV1CategoriesSummariesErrors];
+
+export type GetApiV1CategoriesSummariesResponses = {
+    /**
+     * Bounded public category summaries
+     */
+    200: {
+        success: true;
+        data: {
+            categories: Array<{
+                id: string;
+                name: string;
+                slug: string;
+                imageUrl: string | null;
+                descriptionCharacters: number;
+                contentCharacters: number;
+                updatedAt: string | null;
+            }>;
+            pagination: {
+                page: number;
+                limit: number;
+                total: number;
+                totalPages: number;
+            };
+        };
+    };
+};
+
+export type GetApiV1CategoriesSummariesResponse = GetApiV1CategoriesSummariesResponses[keyof GetApiV1CategoriesSummariesResponses];
+
 export type GetApiV1CategoriesBySlugData = {
     body?: never;
     path: {

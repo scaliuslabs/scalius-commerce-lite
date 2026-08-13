@@ -1,6 +1,7 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import {
   getPublicCategories,
+  getPublicCategorySummaries,
   getPublicCategoryBySlug,
   getPublicCategorySection,
 } from "@scalius/core/modules/categories/categories.storefront";
@@ -164,6 +165,43 @@ app.openapi(listCategoriesRoute, async (c) => {
   const db = c.get("db");
   const categoriesList = await getPublicCategories(db);
   return ok(c, { categories: categoriesList });
+});
+
+const listCategorySummariesRoute = createRoute({
+  method: "get",
+  path: "/summaries",
+  operationId: "storefront.categories.list_summaries",
+  tags: ["Categories"],
+  summary: "List bounded public category summaries",
+  request: {
+    query: z.object({
+      page: z.coerce.number().int().min(1).max(100_000).default(1),
+      limit: z.coerce.number().int().min(1).max(50).default(20),
+    }),
+  },
+  responses: {
+    200: {
+      description: "Bounded public category summaries",
+      content: { "application/json": { schema: successEnvelope(z.object({
+        categories: z.array(z.object({
+          id: z.string().max(180),
+          name: z.string().max(100),
+          slug: z.string().max(100),
+          imageUrl: z.string().max(2048).nullable(),
+          descriptionCharacters: z.number().int().min(0),
+          contentCharacters: z.number().int().min(0),
+          updatedAt: z.string().nullable(),
+        })).max(50),
+        pagination: paginationSchema,
+      })) } },
+    },
+    500: errorResponses[500],
+  },
+});
+
+app.openapi(listCategorySummariesRoute, async (c) => {
+  const query = c.req.valid("query");
+  return ok(c, await getPublicCategorySummaries(c.get("db"), query));
 });
 
 // GET /categories/:slug — get category by slug
