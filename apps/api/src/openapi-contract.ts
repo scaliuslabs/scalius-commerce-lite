@@ -835,6 +835,7 @@ const CATALOG_READ_OPERATION_IDS = [
   "dashboard.collections.list",
   "dashboard.collections.get_by_ids",
   "dashboard.collections.get",
+  "dashboard.collections.get_section",
   "dashboard.inventory.list",
   "dashboard.inventory_alerts.list",
   "dashboard.inventory_labels.preview",
@@ -1907,7 +1908,8 @@ const REVIEWED_AGENT_OPERATIONS_BY_ID: Readonly<
     dashboardOperationMetadata(operationId, {
       risk: "read",
       maximumResponseBytes:
-        operationId === "dashboard.products.get_section" ? 65_536 : undefined,
+        operationId === "dashboard.products.get_section" ||
+          operationId === "dashboard.collections.get_section" ? 65_536 : undefined,
     })),
   ...reviewedEntries(CATALOG_WRITE_OPERATION_IDS, (operationId) =>
     dashboardOperationMetadata(operationId, {
@@ -1931,6 +1933,15 @@ const REVIEWED_AGENT_OPERATIONS_BY_ID: Readonly<
       exposure: "excluded",
       exclusionReason:
         "Legacy oversized aggregate projection; use dashboard.products.get_section.",
+    },
+  ),
+  "dashboard.collections.get": dashboardOperationMetadata(
+    "dashboard.collections.get",
+    {
+      risk: "read",
+      exposure: "excluded",
+      exclusionReason:
+        "Legacy oversized aggregate projection; use dashboard.collections.get_section.",
     },
   ),
   "dashboard.inventory_labels.generate_artifact": dashboardOperationMetadata(
