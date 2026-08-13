@@ -1197,7 +1197,7 @@ const FOUNDATION_STOREFRONT_READ_BOUNDS = [
   ["storefront.products.get_section", 61_440],
   ["storefront.categories.list", 65_536],
   ["storefront.categories.get_section", 32_768],
-  ["storefront.categories.list_products", 65_536],
+  ["storefront.categories.list_product_summaries", 65_536],
   ["storefront.collections.list", 65_536],
   ["storefront.collections.get", 65_536],
   ["storefront.search.predict", 32_768],
@@ -1218,6 +1218,8 @@ const FOUNDATION_STOREFRONT_READ_BOUNDS = [
 const FOUNDATION_STOREFRONT_EXCLUSIONS = {
   "storefront.categories.get":
     "Unbounded browser category aggregate; use storefront.categories.get_section for reconstructable bounded detail.",
+  "storefront.categories.list_products":
+    "Browser category listing embeds the unbounded category aggregate; use storefront.categories.list_product_summaries plus storefront.categories.get_section.",
   "storefront.products.get":
     "Unbounded browser page aggregate; use storefront.products.get_section for reconstructable bounded detail.",
   "storefront.products.search_legacy":
