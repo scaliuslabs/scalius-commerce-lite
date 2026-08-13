@@ -20,6 +20,10 @@ vi.mock("@scalius/core/auth/rbac/helpers", () => ({
   isSuperAdmin: mocks.isSuperAdmin,
 }));
 
+vi.mock("@scalius/core/auth/rbac/permissions", () => ({
+  getAllPermissionNames: () => ["orders.read", "agent_access.manage"],
+}));
+
 vi.mock("@scalius/core/utils/transient-d1", () => ({
   retryTransientD1: mocks.retryTransientD1,
 }));
@@ -40,7 +44,9 @@ describe("loadUserPermissions", () => {
 
     expect(context.isSuperAdmin).toBe(true);
     expect(context.hasAdminAccess).toBe(true);
-    expect(context.permissions).toEqual(new Set());
+    expect(context.permissions).toEqual(
+      new Set(["orders.read", "agent_access.manage"]),
+    );
     expect(mocks.getDb).not.toHaveBeenCalled();
     expect(mocks.retryTransientD1).not.toHaveBeenCalled();
     expect(mocks.getUserPermissions).not.toHaveBeenCalled();
