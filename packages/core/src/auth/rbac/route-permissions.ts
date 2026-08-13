@@ -164,6 +164,9 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   "/api/v1/admin/categories/*/status": {
     PATCH: { permission: PERMISSIONS.CATEGORIES_EDIT },
   },
+  "/api/v1/admin/categories/*/sections/*": {
+    GET: { permission: PERMISSIONS.CATEGORIES_VIEW },
+  },
   "/api/v1/admin/categories/*": {
     GET: { permission: PERMISSIONS.CATEGORIES_VIEW },
     PUT: { permission: PERMISSIONS.CATEGORIES_EDIT },

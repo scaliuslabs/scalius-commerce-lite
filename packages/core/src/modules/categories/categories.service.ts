@@ -35,6 +35,12 @@ import {
     assertCategoryClaimsCurrent,
 } from "./categories.revision";
 
+export const CATEGORY_TEXT_CHUNK_SIZE = 12_000;
+export const categorySectionValues = ["summary", "text"] as const;
+export const categoryTextFieldValues = ["description", "content"] as const;
+export type CategorySection = (typeof categorySectionValues)[number];
+export type CategoryTextField = (typeof categoryTextFieldValues)[number];
+
 type SQLiteBatchItem = BatchItem<"sqlite">;
 
 function categoryDeleteUsageGuard(
@@ -208,6 +214,8 @@ export async function listCategories(
         showTrashed?: boolean;
         sort?: "name" | "status" | "createdAt" | "updatedAt";
         order?: "asc" | "desc";
+        /** Avoid selecting merchant rich text and long discovery fields. */
+        agentSummary?: boolean;
     } = {},
 ) {
     const {
@@ -218,6 +226,7 @@ export async function listCategories(
         showTrashed = false,
         sort = "updatedAt",
         order = "desc",
+        agentSummary = false,
     } = options;
     const page = Number.isSafeInteger(rawPage) && rawPage > 0 ? rawPage : 1;
     const limit = Number.isSafeInteger(rawLimit)
@@ -260,11 +269,11 @@ export async function listCategories(
             id: categories.id,
             name: categories.name,
             slug: categories.slug,
-            description: categories.description,
-            imageUrl: categories.imageUrl,
-            metaTitle: categories.metaTitle,
-            metaDescription: categories.metaDescription,
-            canonicalPath: categories.canonicalPath,
+            description: agentSummary ? sql<string | null>`NULL` : categories.description,
+            imageUrl: agentSummary ? sql<string | null>`NULL` : categories.imageUrl,
+            metaTitle: agentSummary ? sql<string | null>`NULL` : categories.metaTitle,
+            metaDescription: agentSummary ? sql<string | null>`NULL` : categories.metaDescription,
+            canonicalPath: agentSummary ? sql<string | null>`NULL` : categories.canonicalPath,
             noIndex: categories.noIndex,
             excludeFromSitemap: categories.excludeFromSitemap,
             status: categories.status,
@@ -307,6 +316,97 @@ export async function listCategories(
             limit,
             totalPages: Math.ceil(count / limit),
         },
+    };
+}
+
+export async function listCategoryAgentSummaries(
+    db: Database,
+    options: {
+        page?: number;
+        limit?: number;
+        search?: string;
+        status?: "draft" | "published" | "internal";
+        showTrashed?: boolean;
+        sort?: "name" | "status" | "createdAt" | "updatedAt";
+        order?: "asc" | "desc";
+    } = {},
+) {
+    const result = await listCategories(db, { ...options, agentSummary: true });
+    return {
+        categories: result.categories.map((category) => ({
+            id: category.id,
+            name: category.name.slice(0, 100),
+            slug: category.slug.slice(0, 100),
+            status: category.status,
+            revision: category.revision,
+            productCount: category.productCount,
+            publishReady: category.publishReady,
+        })),
+        pagination: result.pagination,
+    };
+}
+
+/** Bounded category editor projection for the two 100k text fields. */
+export async function getCategorySection(
+    db: Database,
+    id: string,
+    section: CategorySection,
+    options: { field?: CategoryTextField; offset?: number } = {},
+) {
+    if (section === "summary") {
+        const category = await db
+            .select({
+                id: categories.id,
+                name: categories.name,
+                slug: categories.slug,
+                imageUrl: categories.imageUrl,
+                metaTitle: categories.metaTitle,
+                metaDescription: categories.metaDescription,
+                canonicalPath: categories.canonicalPath,
+                noIndex: categories.noIndex,
+                excludeFromSitemap: categories.excludeFromSitemap,
+                status: categories.status,
+                revision: categories.revision,
+                descriptionCharacters: sql<number>`length(coalesce(${categories.description}, ''))`,
+                contentCharacters: sql<number>`length(coalesce(${categories.content}, ''))`,
+            })
+            .from(categories)
+            .where(and(eq(categories.id, id), isNull(categories.deletedAt)))
+            .get();
+        if (!category) return null;
+        return {
+            section,
+            category: {
+                ...category,
+                descriptionCharacters: Number(category.descriptionCharacters ?? 0),
+                contentCharacters: Number(category.contentCharacters ?? 0),
+            },
+        };
+    }
+
+    const field = options.field ?? "description";
+    const offset = options.offset ?? 0;
+    const column = field === "content" ? categories.content : categories.description;
+    const category = await db
+        .select({
+            value: sql<string>`substr(coalesce(${column}, ''), ${offset + 1}, ${CATEGORY_TEXT_CHUNK_SIZE})`,
+            totalCharacters: sql<number>`length(coalesce(${column}, ''))`,
+            isNull: sql<number>`CASE WHEN ${column} IS NULL THEN 1 ELSE 0 END`,
+        })
+        .from(categories)
+        .where(and(eq(categories.id, id), isNull(categories.deletedAt)))
+        .get();
+    if (!category) return null;
+    const totalCharacters = Number(category.totalCharacters ?? 0);
+    const value = category.value ?? "";
+    return {
+        section,
+        field,
+        value,
+        totalCharacters,
+        offset,
+        nextOffset: offset + value.length < totalCharacters ? offset + value.length : null,
+        isNull: Boolean(category.isNull),
     };
 }
 

@@ -20,8 +20,10 @@ const operationClassifications = {
     "dashboard.product_variants.list",
     "dashboard.categories.form_options",
     "dashboard.categories.list",
+    "dashboard.categories.list_summaries",
     "dashboard.categories.publish_readiness",
     "dashboard.categories.get",
+    "dashboard.categories.get_section",
     "dashboard.attributes.list",
     "dashboard.attribute_values.list",
     "dashboard.collections.form_options",
@@ -182,7 +184,7 @@ describe("dashboard catalog agent operation identity", () => {
       ?.map((match) => match.match(/"([^"]+)"/)![1]!) ?? [];
     const classified = Object.values(operationClassifications).flat();
 
-    expect(routeOperationIds).toHaveLength(70);
+    expect(routeOperationIds).toHaveLength(72);
     expect(new Set(routeOperationIds).size).toBe(routeOperationIds.length);
     expect(new Set(classified).size).toBe(classified.length);
     expect([...classified].sort()).toEqual([...routeOperationIds].sort());
