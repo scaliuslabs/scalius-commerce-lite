@@ -47,6 +47,24 @@ type ContextRow = typeof agentStorefrontContexts.$inferSelect;
 const PAYMENT_CONTINUATION_TTL_MS = 30 * 60 * 1_000;
 const CHECKOUT_ATTEMPT_REQUEST_KEY_PREFIX = "checkout_submit:v1:";
 
+async function withCheckoutStage<T>(
+  infrastructureCode: string,
+  operation: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    if (error instanceof Error && !("code" in error)) {
+      Object.defineProperty(error, "code", {
+        configurable: true,
+        enumerable: false,
+        value: infrastructureCode,
+      });
+    }
+    throw error;
+  }
+}
+
 export interface AgentStorefrontCheckoutSubmitInput {
   expectedRevision: number;
   idempotencyKey: string;
@@ -260,18 +278,20 @@ export async function submitAgentStorefrontCheckout(
   if (!owned.cityId || !owned.zoneId || !owned.shippingMethodId) {
     throw new ValidationError("Select a city, zone, and shipping method before checkout.");
   }
+  const { cityId, zoneId, shippingMethodId } = owned;
 
   const cart = await resolveContextCartIdentities(db, owned);
-  const authority = await loadStorefrontCheckoutAuthority(db, {
-    items: cart,
-    inventoryPool: InventoryPool.REGULAR,
-    city: owned.cityId,
-    zone: owned.zoneId,
-    area: owned.areaId,
-    shippingMethodId: owned.shippingMethodId,
-    customerEmail: input.customerEmail,
-    customerPhone: input.customerPhone,
-  }, options.credentialEncryptionKey);
+  const authority = await withCheckoutStage("AGENT_CHECKOUT_AUTHORITY", () =>
+    loadStorefrontCheckoutAuthority(db, {
+      items: cart,
+      inventoryPool: InventoryPool.REGULAR,
+      city: cityId,
+      zone: zoneId,
+      area: owned.areaId,
+      shippingMethodId,
+      customerEmail: input.customerEmail,
+      customerPhone: input.customerPhone,
+    }, options.credentialEncryptionKey));
   if (!authority.cartValidation.valid) {
     throw new ValidationError("Some items in the storefront cart need attention.", {
       itemIssues: authority.cartValidation.issues,
@@ -295,8 +315,8 @@ export async function submitAgentStorefrontCheckout(
     customerPhone: input.customerPhone,
     customerEmail: input.customerEmail?.trim().toLowerCase() ?? null,
     shippingAddress: input.shippingAddress.trim(),
-    city: owned.cityId,
-    zone: owned.zoneId,
+    city: cityId,
+    zone: zoneId,
     area: owned.areaId,
     cityName: authority.deliveryPreflight.cityName,
     zoneName: authority.deliveryPreflight.zoneName,
@@ -313,12 +333,14 @@ export async function submitAgentStorefrontCheckout(
     discountAmount: 0,
     discountCode: owned.discountCode,
     shippingCharge: authority.deliveryPreflight.shippingCharge,
-    shippingMethodId: owned.shippingMethodId,
+    shippingMethodId,
     paymentMethod: input.paymentMethod,
     inventoryPool: InventoryPool.REGULAR,
   };
-  const attemptIdentity = await buildCheckoutAttemptIdentity(data);
-  const existing = await resolveExistingCheckoutAttempt<AgentStorefrontCheckoutSubmitView>(db, attemptIdentity);
+  const attemptIdentity = await withCheckoutStage("AGENT_CHECKOUT_IDENTITY", () =>
+    buildCheckoutAttemptIdentity(data));
+  const existing = await withCheckoutStage("AGENT_CHECKOUT_REPLAY", () =>
+    resolveExistingCheckoutAttempt<AgentStorefrontCheckoutSubmitView>(db, attemptIdentity));
   if (existing?.status === "replay") {
     return { response: existing.response, postCommitPayload: null, availabilityVariantIds: [] };
   }
@@ -339,7 +361,7 @@ export async function submitAgentStorefrontCheckout(
     : createAtomicCheckoutAttempt(attemptIdentity);
 
   type DiscountCartItem = { id: string; price: number; quantity: number; variantId: string };
-  const prepared = await createStorefrontOrder(
+  const prepared = await withCheckoutStage("AGENT_CHECKOUT_PREPARE", () => createStorefrontOrder(
     db,
     data,
     options.requestUrl,
@@ -376,7 +398,7 @@ export async function submitAgentStorefrontCheckout(
       metaPurchaseEnabled: authority.sideEffects.metaPurchase,
     }),
     authority.taxAuthority,
-  );
+  ));
 
   if (input.paymentMethod === PaymentMethod.SSLCOMMERZ) {
     const configuredDeposit = checkoutSettings.partialPaymentAmount;
@@ -410,7 +432,7 @@ export async function submitAgentStorefrontCheckout(
   };
 
   try {
-    await commitStorefrontOrderPayload(db, prepared.commitPayload, {
+    await withCheckoutStage("AGENT_CHECKOUT_COMMIT", () => commitStorefrontOrderPayload(db, prepared.commitPayload, {
       attempt,
       response,
       agentContext: {
@@ -419,7 +441,7 @@ export async function submitAgentStorefrontCheckout(
         expectedRevision: owned.revision,
         expiresAt: owned.expiresAt,
       },
-    });
+    }));
   } catch (error) {
     const recovered = await resolveExistingCheckoutAttempt<AgentStorefrontCheckoutSubmitView>(
       db,
