@@ -74486,7 +74486,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "method": "POST",
     "pathTemplate": "/api/v1/agent-auth/device/start",
     "summary": "Start CLI device pairing",
-    "description": "Starts a short-lived dashboard pairing ceremony and returns one-time device and user codes.",
+    "description": "Starts a short-lived merchant pairing ceremony for the selected dashboard or storefront audience and returns one-time device and user codes.",
     "tags": [
       "Agent Authentication"
     ],
@@ -74528,6 +74528,14 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "type": "string",
                   "minLength": 1,
                   "maxLength": 80
+                },
+                "resource": {
+                  "type": "string",
+                  "enum": [
+                    "dashboard",
+                    "storefront"
+                  ],
+                  "default": "dashboard"
                 }
               },
               "required": [
@@ -74557,6 +74565,13 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
         },
         "expiresInSeconds": {
           "type": "number"
+        },
+        "resource": {
+          "type": "string",
+          "enum": [
+            "dashboard",
+            "storefront"
+          ]
         }
       },
       "required": [
@@ -74564,7 +74579,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
         "userCode",
         "verificationUri",
         "intervalSeconds",
-        "expiresInSeconds"
+        "expiresInSeconds",
+        "resource"
       ]
     }
   },
@@ -74637,13 +74653,21 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
         },
         "expiresAt": {
           "type": "string"
+        },
+        "resource": {
+          "type": "string",
+          "enum": [
+            "dashboard",
+            "storefront"
+          ]
         }
       },
       "required": [
         "status",
         "token",
         "credentialId",
-        "expiresAt"
+        "expiresAt",
+        "resource"
       ]
     }
   },

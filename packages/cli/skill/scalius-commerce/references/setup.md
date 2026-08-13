@@ -10,6 +10,8 @@ scalius setup --harness <agents|codex|claude|opencode|pi> --server https://api.e
 
 Dashboard and storefront are separate OAuth audiences. Install and authenticate both. Never copy an OAuth access token, PAT, continuation code, OTP, receipt proof, or payment secret into MCP configuration. After setup, restart or reload the harness if it does not live-discover the skill, then search and describe a harmless read through each server before mutating anything.
 
+CLI credentials are audience-scoped too. Pair a normal merchant-operations profile with `scalius auth login --server <api-origin> --resource dashboard`, and pair a separate buyer-workflow profile with `--resource storefront --profile-name <store>-storefront`. The browser approval page shows the requested audience before the Super Admin approves it. Use `--profile <name>` to select the intended connection; one credential never silently crosses audiences.
+
 The operating model is identical in every harness: search, compactly describe
 one operation, request the full schema only while constructing its input,
 execute, then verify through a bounded read. Do not look for harness-specific

@@ -473,6 +473,7 @@ export type PostApiV1AgentAuthDeviceStartData = {
     body: {
         clientName: string;
         profileName?: string;
+        resource?: 'dashboard' | 'storefront';
     };
     path?: never;
     query?: never;
@@ -489,6 +490,7 @@ export type PostApiV1AgentAuthDeviceStartResponses = {
         verificationUri: string;
         intervalSeconds: number;
         expiresInSeconds: number;
+        resource: 'dashboard' | 'storefront';
     };
 };
 
@@ -527,6 +529,7 @@ export type PostApiV1AgentAuthDeviceTokenResponses = {
         token: string;
         credentialId: string;
         expiresAt: string;
+        resource: 'dashboard' | 'storefront';
     };
     /**
      * Approval pending

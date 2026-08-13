@@ -59,6 +59,7 @@ describe("finalized agent-auth route contract", () => {
       server: "https://api.example.com",
       profileName: "contract",
       openBrowser: false,
+      resource: "dashboard",
     });
     expect(result).toMatchObject({ status: "authenticated", profile: "contract", credentialId });
     expect(acknowledged).toBe(true);
@@ -104,6 +105,7 @@ describe("finalized agent-auth route contract", () => {
       server: "https://api.example.com",
       profileName: "contract",
       openBrowser: false,
+      resource: "dashboard",
     });
     expect(result).toMatchObject({ status: "authenticated", recoveredAcknowledgement: true });
     expect((await new ConfigStore(runtime).loadCredentials()).credentials.contract?.pendingAcknowledgement).toBeUndefined();

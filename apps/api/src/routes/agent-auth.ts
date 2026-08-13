@@ -71,14 +71,15 @@ const startRoute = createRoute({
   method: "post", path: "/device/start", tags: ["Agent Authentication"],
   operationId: "system.agent_auth.device_start",
   summary: "Start CLI device pairing",
-  description: "Starts a short-lived dashboard pairing ceremony and returns one-time device and user codes.",
+  description: "Starts a short-lived merchant pairing ceremony for the selected dashboard or storefront audience and returns one-time device and user codes.",
   request: { body: { required: true, content: { "application/json": { schema: z.object({
     clientName: z.string().trim().min(1).max(80),
     profileName: z.string().trim().min(1).max(80).optional(),
+    resource: z.enum(["dashboard", "storefront"]).default("dashboard"),
   }).strict() } } } },
   responses: { 200: { description: "Pairing started", content: { "application/json": { schema: z.object({
     deviceCode: z.string(), userCode: z.string(), verificationUri: z.string().url(),
-    intervalSeconds: z.number(), expiresInSeconds: z.number(),
+    intervalSeconds: z.number(), expiresInSeconds: z.number(), resource: z.enum(["dashboard", "storefront"]),
   }) } } } },
 });
 app.openapi(startRoute, async (c) => {
@@ -94,7 +95,7 @@ app.openapi(startRoute, async (c) => {
     userCodeHmac: await hmacAgentOpaqueValue("device-user-code", userCode, pepper),
     clientName: body.clientName,
     profileName: body.profileName ?? null,
-    requestedResource: "dashboard",
+    requestedResource: body.resource,
     requestedPreset: "full",
     requestedPermissionsJson: "[]",
     status: "pending",
@@ -110,6 +111,7 @@ app.openapi(startRoute, async (c) => {
     verificationUri: verificationUri(c.env),
     intervalSeconds: POLL_INTERVAL_SECONDS,
     expiresInSeconds: DEVICE_TTL_SECONDS,
+    resource: body.resource,
   });
 });
 
@@ -121,7 +123,7 @@ const tokenRoute = createRoute({
   description: "Polls a pairing ceremony and returns the credential once after a Super Admin approves it.",
   request: { body: { required: true, content: { "application/json": { schema: deviceCodeBody } } } },
   responses: {
-    200: { description: "Credential delivered", content: { "application/json": { schema: z.object({ status: z.literal("approved"), token: z.string(), credentialId: z.string(), expiresAt: z.string() }) } } },
+    200: { description: "Credential delivered", content: { "application/json": { schema: z.object({ status: z.literal("approved"), token: z.string(), credentialId: z.string(), expiresAt: z.string(), resource: z.enum(["dashboard", "storefront"]) }) } } },
     202: { description: "Approval pending", content: { "application/json": { schema: z.object({ status: z.literal("pending"), intervalSeconds: z.number() }) } } },
     400: { description: "Pairing denied" },
     410: { description: "Pairing expired" },
@@ -187,6 +189,7 @@ app.openapi(tokenRoute, async (c) => {
     token: decrypted.value,
     credentialId: device.credentialId,
     expiresAt: credential.expiresAt.toISOString(),
+    resource: device.requestedResource,
   });
 });
 

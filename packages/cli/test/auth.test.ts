@@ -36,7 +36,7 @@ describe("authentication", () => {
       return Response.json({ message: "not found" }, { status: 404 });
     });
     const runtime = createTestRuntime({ directory, fetch: fetch as typeof globalThis.fetch });
-    const result = await login(runtime, { server: "https://api.example.com", profileName: "default", openBrowser: true });
+    const result = await login(runtime, { server: "https://api.example.com", profileName: "default", openBrowser: true, resource: "dashboard" });
     expect(result.status).toBe("authenticated");
     expect(runtime.openedUrls).toEqual(["https://dashboard.example.com/connect"]);
     expect(runtime.stdoutText()).not.toContain(token);
@@ -83,11 +83,78 @@ describe("authentication", () => {
       server: "https://commerce-api.merchant.example",
       profileName: "merchant-store",
       openBrowser: true,
+      resource: "dashboard",
     });
 
     expect(requestedUrls.every((url) => url.startsWith("https://commerce-api.merchant.example/api/v1/"))).toBe(true);
     expect(runtime.openedUrls).toEqual(["https://control.merchant.example/connect"]);
     expect(JSON.stringify({ requestedUrls, openedUrls: runtime.openedUrls })).not.toContain("scalius.com");
+  });
+
+  it("requests and records a separate storefront audience without changing the merchant origin", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "scalius-storefront-profile-"));
+    const token = validToken();
+    const requestBodies: unknown[] = [];
+    const runtime = createTestRuntime({
+      directory,
+      fetch: async (input, init) => {
+        const url = String(input);
+        requestBodies.push(init?.body ? JSON.parse(String(init.body)) : undefined);
+        if (url.endsWith("/device/start")) return Response.json({
+          deviceCode: "storefront-device-secret",
+          userCode: "BUYER234",
+          verificationUri: "https://dashboard.merchant.example/connect",
+          intervalSeconds: 1,
+          expiresInSeconds: 60,
+          resource: "storefront",
+        });
+        if (url.endsWith("/device/token")) return Response.json({
+          status: "approved",
+          token,
+          credentialId: `agc_${"A".repeat(20)}`,
+          resource: "storefront",
+        });
+        return Response.json({ status: "acknowledged" });
+      },
+    });
+
+    const result = await login(runtime, {
+      server: "https://api.merchant.example",
+      profileName: "merchant-storefront",
+      openBrowser: false,
+      resource: "storefront",
+    });
+
+    expect(requestBodies[0]).toEqual({
+      clientName: "Scalius CLI",
+      profileName: "merchant-storefront",
+      resource: "storefront",
+    });
+    expect(result).toMatchObject({ resource: "storefront", profile: "merchant-storefront" });
+    expect((await new ConfigStore(runtime).loadCredentials()).credentials["merchant-storefront"]?.resource).toBe("storefront");
+  });
+
+  it("rejects a pairing response that changes the requested audience", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "scalius-audience-mismatch-"));
+    const runtime = createTestRuntime({
+      directory,
+      fetch: async () => Response.json({
+        deviceCode: "audience-device-secret",
+        userCode: "SHOP2345",
+        verificationUri: "https://dashboard.merchant.example/connect",
+        intervalSeconds: 1,
+        expiresInSeconds: 60,
+        resource: "dashboard",
+      }),
+    });
+
+    await expect(login(runtime, {
+      server: "https://api.merchant.example",
+      profileName: "merchant-storefront",
+      openBrowser: false,
+      resource: "storefront",
+    })).rejects.toMatchObject({ exitCode: 8, errorCode: "invalid_server_response" });
+    expect((await new ConfigStore(runtime).loadConfig()).profiles).toEqual({});
   });
 
   it("revokes remotely before deleting the disk credential", async () => {

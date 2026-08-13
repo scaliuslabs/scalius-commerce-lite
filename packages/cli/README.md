@@ -10,6 +10,7 @@ Requires Node.js 22.12 or newer.
 npm install --global scalius
 
 scalius auth login --server https://api.example.com
+scalius auth login --server https://api.example.com --resource storefront --profile-name my-store-storefront
 scalius operations search products
 scalius operations describe dashboard.products.create
 scalius operations run dashboard.products.create --input @product.json --yes
@@ -28,7 +29,7 @@ For CI, configure `SCALIUS_SERVER` and `SCALIUS_TOKEN`. The environment credenti
 ## Commands
 
 ```text
-scalius auth login --server <api-origin>
+scalius auth login --server <api-origin> [--resource dashboard|storefront] [--profile-name <name>]
 scalius auth token import --server <api-origin>
 scalius auth status
 scalius auth logout
