@@ -156,29 +156,14 @@ async function stageAgentArtifactInternal(
       controller.enqueue(chunk);
     },
   }));
-  const [r2Body, digestBody] = bounded.tee();
   let bytes: ArrayBuffer;
   try {
-    const [, buffered] = await Promise.all([
-      env.AGENT_ARTIFACTS.put(r2Key, r2Body, {
-        httpMetadata: {
-          contentType: mediaType,
-          contentDisposition: `attachment; filename="${filename}"`,
-        },
-      }),
-      new Response(digestBody).arrayBuffer(),
-    ]);
-    bytes = buffered;
+    bytes = await new Response(bounded).arrayBuffer();
   } catch (error) {
-    try {
-      await env.AGENT_ARTIFACTS.delete(r2Key);
-    } catch {
-      // Best-effort cleanup of a failed or partial write.
-    }
     if (error instanceof AgentArtifactDeliveryError) throw error;
     throw new AgentArtifactDeliveryError(
-      "artifact_storage_failed",
-      "Artifact storage is temporarily unavailable",
+      "artifact_read_failed",
+      "Artifact generation is temporarily unavailable",
       502,
     );
   }
@@ -207,6 +192,25 @@ async function stageAgentArtifactInternal(
     );
   }
   const sha256 = await sha256Hex(bytes);
+  try {
+    await env.AGENT_ARTIFACTS.put(r2Key, bytes, {
+      httpMetadata: {
+        contentType: mediaType,
+        contentDisposition: `attachment; filename="${filename}"`,
+      },
+    });
+  } catch {
+    try {
+      await env.AGENT_ARTIFACTS.delete(r2Key);
+    } catch {
+      // Best-effort cleanup of a failed or partial write.
+    }
+    throw new AgentArtifactDeliveryError(
+      "artifact_storage_failed",
+      "Artifact storage is temporarily unavailable",
+      502,
+    );
+  }
   try {
     const handle = await createAgentArtifact(getDb(env), {
       grantId: principal.grantId,

@@ -86,9 +86,9 @@ function artifactEnv(options: { createFails?: boolean; storageFails?: boolean } 
   const env = {
     PUBLIC_API_BASE_URL: "https://api.example.test",
     AGENT_ARTIFACTS: {
-      put: vi.fn(async (_key: string, value: ReadableStream) => {
+      put: vi.fn(async (_key: string, value: ArrayBuffer) => {
         if (options.storageFails) throw new Error("R2 unavailable");
-        stored.push(await new Response(value).arrayBuffer());
+        stored.push(value.slice(0));
         return {};
       }),
       delete: vi.fn(async (key: string) => { deleted.push(key); }),
@@ -177,6 +177,11 @@ describe("manifest-driven artifact delivery", () => {
       env,
     );
     expect(new TextDecoder().decode(stored[0])).toContain("ord_1");
+    expect(env.AGENT_ARTIFACTS.put).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(ArrayBuffer),
+      expect.any(Object),
+    );
     expect(mocks.create).toHaveBeenCalledWith(
       { marker: "db" },
       expect.objectContaining({
