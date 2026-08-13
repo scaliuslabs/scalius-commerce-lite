@@ -40,6 +40,9 @@ import {
 
 const ALLOWED_COLLECTION_SORT_FIELDS = ["name", "presentation", "isActive", "updatedAt", "sortOrder"] as const;
 const COLLECTION_MUTATION_ID_LIMIT = 90;
+export const COLLECTION_TEXT_CHUNK_SIZE = 12_000;
+export type CollectionSection = "summary" | "text";
+export type CollectionTextField = "description" | "content";
 type CollectionSortField = typeof ALLOWED_COLLECTION_SORT_FIELDS[number];
 
 export async function listCollections(
@@ -142,6 +145,78 @@ export async function getCollectionById(db: Database, id: string) {
         .where(and(eq(collections.id, id), isNull(collections.deletedAt)))
         .limit(1)
         .then((rows: (typeof collections.$inferSelect)[]) => rows[0] ?? null);
+}
+
+/**
+ * Bounded admin projection for collections whose editor text may contain up to
+ * 100,000 characters per field. The summary reads only lengths; text is
+ * reconstructed in fixed chunks without loading the full aggregate.
+ */
+export async function getCollectionSection(
+    db: Database,
+    id: string,
+    section: CollectionSection,
+    options: { field?: CollectionTextField; offset?: number } = {},
+) {
+    if (section === "summary") {
+        const collection = await db
+            .select({
+                id: collections.id,
+                name: collections.name,
+                presentation: collections.presentation,
+                config: collections.config,
+                sortOrder: collections.sortOrder,
+                isActive: collections.isActive,
+                version: collections.version,
+                canonicalPath: collections.canonicalPath,
+                noIndex: collections.noIndex,
+                excludeFromSitemap: collections.excludeFromSitemap,
+                createdAt: collections.createdAt,
+                updatedAt: collections.updatedAt,
+                deletedAt: collections.deletedAt,
+                metaTitle: collections.metaTitle,
+                metaDescription: collections.metaDescription,
+                descriptionCharacters: sql<number>`length(coalesce(${collections.description}, ''))`,
+                contentCharacters: sql<number>`length(coalesce(${collections.content}, ''))`,
+            })
+            .from(collections)
+            .where(and(eq(collections.id, id), isNull(collections.deletedAt)))
+            .get();
+        if (!collection) return null;
+        return {
+            section,
+            collection: {
+                ...collection,
+                descriptionCharacters: Number(collection.descriptionCharacters ?? 0),
+                contentCharacters: Number(collection.contentCharacters ?? 0),
+            },
+        };
+    }
+
+    const field = options.field ?? "description";
+    const offset = options.offset ?? 0;
+    const column = field === "content" ? collections.content : collections.description;
+    const collection = await db
+        .select({
+            value: sql<string>`substr(coalesce(${column}, ''), ${offset + 1}, ${COLLECTION_TEXT_CHUNK_SIZE})`,
+            totalCharacters: sql<number>`length(coalesce(${column}, ''))`,
+            isNull: sql<number>`CASE WHEN ${column} IS NULL THEN 1 ELSE 0 END`,
+        })
+        .from(collections)
+        .where(and(eq(collections.id, id), isNull(collections.deletedAt)))
+        .get();
+    if (!collection) return null;
+    const totalCharacters = Number(collection.totalCharacters ?? 0);
+    const value = collection.value ?? "";
+    return {
+        section,
+        field,
+        value,
+        totalCharacters,
+        offset,
+        nextOffset: offset + value.length < totalCharacters ? offset + value.length : null,
+        isNull: Boolean(collection.isNull),
+    };
 }
 
 function normalizeLookupIds(ids: string[]): string[] {

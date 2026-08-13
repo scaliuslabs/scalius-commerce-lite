@@ -5,6 +5,7 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import {
     listCollections,
     getCollectionById,
+    getCollectionSection,
     getCollectionCategoryOptions,
     listCollectionProductOptions,
     getCollectionsByIds,
@@ -64,6 +65,16 @@ function parseLookupIds(ids: string | undefined): string[] {
 }
 
 const collectionIdsSchema = z.array(z.string().trim().min(1).max(180)).min(1).max(90);
+const collectionSectionSchema = z.enum(["summary", "text"]);
+const collectionTextFieldSchema = z.enum(["description", "content"]);
+const collectionMutationResultSchema = z.object({
+    id: z.string(),
+    version: z.number().int().min(1),
+});
+
+function toCollectionMutationResult(collection: { id: string; version: number }) {
+    return { id: collection.id, version: collection.version };
+}
 
 function parseProductOptionCategoryIds(ids: string | undefined): string[] {
     return Array.from(
@@ -284,7 +295,7 @@ const createCollectionRoute = createRoute({
     responses: {
         201: {
             description: "Collection created",
-            content: { "application/json": { schema: successEnvelope(collectionSchema) } },
+            content: { "application/json": { schema: successEnvelope(collectionMutationResultSchema) } },
         },
         ...errorResponses,
     }
@@ -295,7 +306,7 @@ app.openapi(createCollectionRoute, async (c) => {
     const data = c.req.valid("json");
     const collection = await createCollection(db, data);
     await invalidateCatalogCaches("collections", c);
-    return created(c, collection);
+    return created(c, toCollectionMutationResult(collection));
 });
 
 // ── Bulk Delete Collections ──
@@ -481,6 +492,57 @@ app.openapi(reorderRoute, async (c) => {
     return ok(c, {});
 });
 
+// ── Get Bounded Collection Section ──
+
+const getCollectionSectionRoute = createRoute({
+    method: "get",
+    path: "/{id}/sections/{section}",
+    operationId: "dashboard.collections.get_section",
+    tags: ["Admin - Collections"],
+    summary: "Get a bounded collection section",
+    request: {
+        params: z.object({ id: z.string(), section: collectionSectionSchema }),
+        query: z.object({
+            field: collectionTextFieldSchema.optional(),
+            offset: z.coerce.number().int().min(0).max(100_000).optional().default(0),
+        }),
+    },
+    responses: {
+        200: {
+            description: "Bounded collection section",
+            content: { "application/json": { schema: successEnvelope(z.union([
+                z.object({
+                    section: z.literal("summary"),
+                    collection: collectionSummarySchema.extend({
+                        metaTitle: z.string().nullable(),
+                        metaDescription: z.string().nullable(),
+                        descriptionCharacters: z.number().int().min(0),
+                        contentCharacters: z.number().int().min(0),
+                    }),
+                }),
+                z.object({
+                    section: z.literal("text"),
+                    field: collectionTextFieldSchema,
+                    value: z.string().max(12_000),
+                    totalCharacters: z.number().int().min(0),
+                    offset: z.number().int().min(0),
+                    nextOffset: z.number().int().min(0).nullable(),
+                    isNull: z.boolean(),
+                }),
+            ])) } },
+        },
+        404: errorResponses[404],
+    },
+});
+
+app.openapi(getCollectionSectionRoute, async (c) => {
+    const { id, section } = c.req.valid("param");
+    const query = c.req.valid("query");
+    const result = await getCollectionSection(c.get("db"), id, section, query);
+    if (!result) throw new NotFoundError("Collection not found");
+    return ok(c, result);
+});
+
 // ── Get Collection By ID ──
 
 const getByIdRoute = createRoute({
@@ -524,7 +586,7 @@ const updateCollectionRoute = createRoute({
     responses: {
         200: {
             description: "Collection updated",
-            content: { "application/json": { schema: successEnvelope(collectionSchema) } },
+            content: { "application/json": { schema: successEnvelope(collectionMutationResultSchema) } },
         },
         409: conflictResponse,
         ...errorResponses,
@@ -536,7 +598,7 @@ app.openapi(updateCollectionRoute, async (c) => {
     const { id } = c.req.valid("param");
     const result = await updateCollection(db, id, c.req.valid("json"));
     await invalidateCatalogCaches("collections", c);
-    return ok(c, result);
+    return ok(c, toCollectionMutationResult(result));
 });
 
 // ── Delete Collection ──

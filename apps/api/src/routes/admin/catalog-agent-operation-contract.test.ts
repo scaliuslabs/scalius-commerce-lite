@@ -29,6 +29,7 @@ const operationClassifications = {
     "dashboard.collections.list",
     "dashboard.collections.get_by_ids",
     "dashboard.collections.get",
+    "dashboard.collections.get_section",
     "dashboard.inventory.list",
     "dashboard.inventory.movements_export",
     "dashboard.inventory_alerts.list",
@@ -146,6 +147,7 @@ const scenarioInventory = {
     "dashboard.attribute_values.delete",
   ],
   collectionMembershipStatusAndOrder: [
+    "dashboard.collections.get_section",
     "dashboard.collections.update",
     "dashboard.collections.bulk_activate",
     "dashboard.collections.bulk_deactivate",
@@ -179,7 +181,7 @@ describe("dashboard catalog agent operation identity", () => {
       ?.map((match) => match.match(/"([^"]+)"/)![1]!) ?? [];
     const classified = Object.values(operationClassifications).flat();
 
-    expect(routeOperationIds).toHaveLength(68);
+    expect(routeOperationIds).toHaveLength(69);
     expect(new Set(routeOperationIds).size).toBe(routeOperationIds.length);
     expect(new Set(classified).size).toBe(classified.length);
     expect([...classified].sort()).toEqual([...routeOperationIds].sort());

@@ -9727,113 +9727,14 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "id": {
               "type": "string"
             },
-            "name": {
-              "type": "string"
-            },
-            "presentation": {
-              "type": "string",
-              "enum": [
-                "grid",
-                "carousel"
-              ]
-            },
-            "config": {
-              "type": "string"
-            },
-            "sortOrder": {
-              "type": "number"
-            },
-            "isActive": {
-              "type": "boolean"
-            },
             "version": {
               "type": "integer",
               "minimum": 1
-            },
-            "canonicalPath": {
-              "type": "string",
-              "nullable": true
-            },
-            "noIndex": {
-              "type": "boolean"
-            },
-            "excludeFromSitemap": {
-              "type": "boolean"
-            },
-            "createdAt": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "number"
-                },
-                {
-                  "nullable": true
-                }
-              ]
-            },
-            "updatedAt": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "number"
-                },
-                {
-                  "nullable": true
-                }
-              ]
-            },
-            "deletedAt": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "number"
-                },
-                {
-                  "nullable": true
-                }
-              ]
-            },
-            "description": {
-              "type": "string",
-              "nullable": true
-            },
-            "content": {
-              "type": "string",
-              "nullable": true
-            },
-            "metaTitle": {
-              "type": "string",
-              "nullable": true
-            },
-            "metaDescription": {
-              "type": "string",
-              "nullable": true
             }
           },
           "required": [
             "id",
-            "name",
-            "presentation",
-            "config",
-            "sortOrder",
-            "isActive",
-            "version",
-            "canonicalPath",
-            "noIndex",
-            "excludeFromSitemap",
-            "createdAt",
-            "updatedAt",
-            "deletedAt",
-            "description",
-            "content",
-            "metaTitle",
-            "metaDescription"
+            "version"
           ]
         }
       },
@@ -10006,7 +9907,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
       "Admin - Collections"
     ],
     "surface": "dashboard",
-    "exposure": "execute",
+    "exposure": "excluded",
     "principals": [
       "admin"
     ],
@@ -10014,7 +9915,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "openWorld": false,
     "idempotency": "none",
     "revision": "none",
-    "batch": "parallel",
+    "batch": "forbidden",
     "transport": "json",
     "maxResponseBytes": 65536,
     "maxRequestBytes": 1048576,
@@ -10023,152 +9924,13 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "requiredClientAction": null,
     "artifactOutput": null,
     "continuationOutput": null,
+    "exclusionReason": "Legacy oversized aggregate projection; use dashboard.collections.get_section.",
     "rbac": {
       "type": "permission",
       "permission": "collections.view"
     },
-    "inputSchema": {
-      "parameters": [
-        {
-          "schema": {
-            "type": "string"
-          },
-          "required": true,
-          "name": "id",
-          "in": "path"
-        }
-      ]
-    },
-    "outputSchema": {
-      "type": "object",
-      "properties": {
-        "success": {
-          "type": "boolean",
-          "enum": [
-            true
-          ]
-        },
-        "data": {
-          "type": "object",
-          "properties": {
-            "id": {
-              "type": "string"
-            },
-            "name": {
-              "type": "string"
-            },
-            "presentation": {
-              "type": "string",
-              "enum": [
-                "grid",
-                "carousel"
-              ]
-            },
-            "config": {
-              "type": "string"
-            },
-            "sortOrder": {
-              "type": "number"
-            },
-            "isActive": {
-              "type": "boolean"
-            },
-            "version": {
-              "type": "integer",
-              "minimum": 1
-            },
-            "canonicalPath": {
-              "type": "string",
-              "nullable": true
-            },
-            "noIndex": {
-              "type": "boolean"
-            },
-            "excludeFromSitemap": {
-              "type": "boolean"
-            },
-            "createdAt": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "number"
-                },
-                {
-                  "nullable": true
-                }
-              ]
-            },
-            "updatedAt": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "number"
-                },
-                {
-                  "nullable": true
-                }
-              ]
-            },
-            "deletedAt": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "number"
-                },
-                {
-                  "nullable": true
-                }
-              ]
-            },
-            "description": {
-              "type": "string",
-              "nullable": true
-            },
-            "content": {
-              "type": "string",
-              "nullable": true
-            },
-            "metaTitle": {
-              "type": "string",
-              "nullable": true
-            },
-            "metaDescription": {
-              "type": "string",
-              "nullable": true
-            }
-          },
-          "required": [
-            "id",
-            "name",
-            "presentation",
-            "config",
-            "sortOrder",
-            "isActive",
-            "version",
-            "canonicalPath",
-            "noIndex",
-            "excludeFromSitemap",
-            "createdAt",
-            "updatedAt",
-            "deletedAt",
-            "description",
-            "content",
-            "metaTitle",
-            "metaDescription"
-          ]
-        }
-      },
-      "required": [
-        "success",
-        "data"
-      ]
-    }
+    "inputSchema": null,
+    "outputSchema": null
   },
   {
     "operationId": "dashboard.collections.get_by_ids",
@@ -10256,6 +10018,281 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           },
           "required": [
             "collections"
+          ]
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    }
+  },
+  {
+    "operationId": "dashboard.collections.get_section",
+    "method": "GET",
+    "pathTemplate": "/api/v1/admin/collections/{id}/sections/{section}",
+    "summary": "Get a bounded collection section",
+    "tags": [
+      "Admin - Collections"
+    ],
+    "surface": "dashboard",
+    "exposure": "execute",
+    "principals": [
+      "admin"
+    ],
+    "risk": "read",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "parallel",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "rbac": {
+      "type": "permission",
+      "permission": "collections.view"
+    },
+    "inputSchema": {
+      "parameters": [
+        {
+          "schema": {
+            "type": "string"
+          },
+          "required": true,
+          "name": "id",
+          "in": "path"
+        },
+        {
+          "schema": {
+            "type": "string",
+            "enum": [
+              "summary",
+              "text"
+            ]
+          },
+          "required": true,
+          "name": "section",
+          "in": "path"
+        },
+        {
+          "schema": {
+            "type": "string",
+            "enum": [
+              "description",
+              "content"
+            ]
+          },
+          "required": false,
+          "name": "field",
+          "in": "query"
+        },
+        {
+          "schema": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 0,
+            "maximum": 100000,
+            "default": 0
+          },
+          "required": false,
+          "name": "offset",
+          "in": "query"
+        }
+      ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "data": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "section": {
+                  "type": "string",
+                  "enum": [
+                    "summary"
+                  ]
+                },
+                "collection": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "presentation": {
+                      "type": "string",
+                      "enum": [
+                        "grid",
+                        "carousel"
+                      ]
+                    },
+                    "config": {
+                      "type": "string"
+                    },
+                    "sortOrder": {
+                      "type": "number"
+                    },
+                    "isActive": {
+                      "type": "boolean"
+                    },
+                    "version": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "canonicalPath": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "noIndex": {
+                      "type": "boolean"
+                    },
+                    "excludeFromSitemap": {
+                      "type": "boolean"
+                    },
+                    "createdAt": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "nullable": true
+                        }
+                      ]
+                    },
+                    "updatedAt": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "nullable": true
+                        }
+                      ]
+                    },
+                    "deletedAt": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "nullable": true
+                        }
+                      ]
+                    },
+                    "metaTitle": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "metaDescription": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "descriptionCharacters": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "contentCharacters": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "presentation",
+                    "config",
+                    "sortOrder",
+                    "isActive",
+                    "version",
+                    "canonicalPath",
+                    "noIndex",
+                    "excludeFromSitemap",
+                    "createdAt",
+                    "updatedAt",
+                    "deletedAt",
+                    "metaTitle",
+                    "metaDescription",
+                    "descriptionCharacters",
+                    "contentCharacters"
+                  ]
+                }
+              },
+              "required": [
+                "section",
+                "collection"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "section": {
+                  "type": "string",
+                  "enum": [
+                    "text"
+                  ]
+                },
+                "field": {
+                  "type": "string",
+                  "enum": [
+                    "description",
+                    "content"
+                  ]
+                },
+                "value": {
+                  "type": "string",
+                  "maxLength": 12000
+                },
+                "totalCharacters": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "offset": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "nextOffset": {
+                  "type": "integer",
+                  "nullable": true,
+                  "minimum": 0
+                },
+                "isNull": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "section",
+                "field",
+                "value",
+                "totalCharacters",
+                "offset",
+                "nextOffset",
+                "isNull"
+              ]
+            }
           ]
         }
       },
@@ -11086,113 +11123,14 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "id": {
               "type": "string"
             },
-            "name": {
-              "type": "string"
-            },
-            "presentation": {
-              "type": "string",
-              "enum": [
-                "grid",
-                "carousel"
-              ]
-            },
-            "config": {
-              "type": "string"
-            },
-            "sortOrder": {
-              "type": "number"
-            },
-            "isActive": {
-              "type": "boolean"
-            },
             "version": {
               "type": "integer",
               "minimum": 1
-            },
-            "canonicalPath": {
-              "type": "string",
-              "nullable": true
-            },
-            "noIndex": {
-              "type": "boolean"
-            },
-            "excludeFromSitemap": {
-              "type": "boolean"
-            },
-            "createdAt": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "number"
-                },
-                {
-                  "nullable": true
-                }
-              ]
-            },
-            "updatedAt": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "number"
-                },
-                {
-                  "nullable": true
-                }
-              ]
-            },
-            "deletedAt": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "number"
-                },
-                {
-                  "nullable": true
-                }
-              ]
-            },
-            "description": {
-              "type": "string",
-              "nullable": true
-            },
-            "content": {
-              "type": "string",
-              "nullable": true
-            },
-            "metaTitle": {
-              "type": "string",
-              "nullable": true
-            },
-            "metaDescription": {
-              "type": "string",
-              "nullable": true
             }
           },
           "required": [
             "id",
-            "name",
-            "presentation",
-            "config",
-            "sortOrder",
-            "isActive",
-            "version",
-            "canonicalPath",
-            "noIndex",
-            "excludeFromSitemap",
-            "createdAt",
-            "updatedAt",
-            "deletedAt",
-            "description",
-            "content",
-            "metaTitle",
-            "metaDescription"
+            "version"
           ]
         }
       },

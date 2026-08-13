@@ -206,6 +206,9 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
     PATCH: { permission: PERMISSIONS.COLLECTIONS_EDIT },
     DELETE: { permission: PERMISSIONS.COLLECTIONS_DELETE },
   },
+  "/api/v1/admin/collections/*/sections/*": {
+    GET: { permission: PERMISSIONS.COLLECTIONS_VIEW },
+  },
   "/api/v1/admin/collections/*/restore": {
     POST: { permission: PERMISSIONS.COLLECTIONS_RESTORE },
   },

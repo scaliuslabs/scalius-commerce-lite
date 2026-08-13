@@ -13657,22 +13657,7 @@ export type PostApiV1AdminCollectionsResponses = {
         success: true;
         data: {
             id: string;
-            name: string;
-            presentation: 'grid' | 'carousel';
-            config: string;
-            sortOrder: number;
-            isActive: boolean;
             version: number;
-            canonicalPath: string | null;
-            noIndex: boolean;
-            excludeFromSitemap: boolean;
-            createdAt: string | number | null;
-            updatedAt: string | number | null;
-            deletedAt: string | number | null;
-            description: string | null;
-            content: string | null;
-            metaTitle: string | null;
-            metaDescription: string | null;
         };
     };
 };
@@ -14373,6 +14358,76 @@ export type PostApiV1AdminCollectionsReorderResponses = {
 
 export type PostApiV1AdminCollectionsReorderResponse = PostApiV1AdminCollectionsReorderResponses[keyof PostApiV1AdminCollectionsReorderResponses];
 
+export type GetApiV1AdminCollectionsByIdSectionsBySectionData = {
+    body?: never;
+    path: {
+        id: string;
+        section: 'summary' | 'text';
+    };
+    query?: {
+        field?: 'description' | 'content';
+        offset?: number | null;
+    };
+    url: '/api/v1/admin/collections/{id}/sections/{section}';
+};
+
+export type GetApiV1AdminCollectionsByIdSectionsBySectionErrors = {
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminCollectionsByIdSectionsBySectionError = GetApiV1AdminCollectionsByIdSectionsBySectionErrors[keyof GetApiV1AdminCollectionsByIdSectionsBySectionErrors];
+
+export type GetApiV1AdminCollectionsByIdSectionsBySectionResponses = {
+    /**
+     * Bounded collection section
+     */
+    200: {
+        success: true;
+        data: {
+            section: 'summary';
+            collection: {
+                id: string;
+                name: string;
+                presentation: 'grid' | 'carousel';
+                config: string;
+                sortOrder: number;
+                isActive: boolean;
+                version: number;
+                canonicalPath: string | null;
+                noIndex: boolean;
+                excludeFromSitemap: boolean;
+                createdAt: string | number | null;
+                updatedAt: string | number | null;
+                deletedAt: string | number | null;
+                metaTitle: string | null;
+                metaDescription: string | null;
+                descriptionCharacters: number;
+                contentCharacters: number;
+            };
+        } | {
+            section: 'text';
+            field: 'description' | 'content';
+            value: string;
+            totalCharacters: number;
+            offset: number;
+            nextOffset: number | null;
+            isNull: boolean;
+        };
+    };
+};
+
+export type GetApiV1AdminCollectionsByIdSectionsBySectionResponse = GetApiV1AdminCollectionsByIdSectionsBySectionResponses[keyof GetApiV1AdminCollectionsByIdSectionsBySectionResponses];
+
 export type DeleteApiV1AdminCollectionsByIdData = {
     body?: never;
     path: {
@@ -14638,22 +14693,7 @@ export type PutApiV1AdminCollectionsByIdResponses = {
         success: true;
         data: {
             id: string;
-            name: string;
-            presentation: 'grid' | 'carousel';
-            config: string;
-            sortOrder: number;
-            isActive: boolean;
             version: number;
-            canonicalPath: string | null;
-            noIndex: boolean;
-            excludeFromSitemap: boolean;
-            createdAt: string | number | null;
-            updatedAt: string | number | null;
-            deletedAt: string | number | null;
-            description: string | null;
-            content: string | null;
-            metaTitle: string | null;
-            metaDescription: string | null;
         };
     };
 };

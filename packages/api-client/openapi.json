@@ -51169,107 +51169,14 @@
                         "id": {
                           "type": "string"
                         },
-                        "name": {
-                          "type": "string"
-                        },
-                        "presentation": {
-                          "type": "string",
-                          "enum": [
-                            "grid",
-                            "carousel"
-                          ]
-                        },
-                        "config": {
-                          "type": "string"
-                        },
-                        "sortOrder": {
-                          "type": "number"
-                        },
-                        "isActive": {
-                          "type": "boolean"
-                        },
                         "version": {
                           "type": "integer",
                           "minimum": 1
-                        },
-                        "canonicalPath": {
-                          "type": "string",
-                          "nullable": true
-                        },
-                        "noIndex": {
-                          "type": "boolean"
-                        },
-                        "excludeFromSitemap": {
-                          "type": "boolean"
-                        },
-                        "createdAt": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            }
-                          ],
-                          "nullable": true
-                        },
-                        "updatedAt": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            }
-                          ],
-                          "nullable": true
-                        },
-                        "deletedAt": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            }
-                          ],
-                          "nullable": true
-                        },
-                        "description": {
-                          "type": "string",
-                          "nullable": true
-                        },
-                        "content": {
-                          "type": "string",
-                          "nullable": true
-                        },
-                        "metaTitle": {
-                          "type": "string",
-                          "nullable": true
-                        },
-                        "metaDescription": {
-                          "type": "string",
-                          "nullable": true
                         }
                       },
                       "required": [
                         "id",
-                        "name",
-                        "presentation",
-                        "config",
-                        "sortOrder",
-                        "isActive",
-                        "version",
-                        "canonicalPath",
-                        "noIndex",
-                        "excludeFromSitemap",
-                        "createdAt",
-                        "updatedAt",
-                        "deletedAt",
-                        "description",
-                        "content",
-                        "metaTitle",
-                        "metaDescription"
+                        "version"
                       ]
                     }
                   },
@@ -53970,6 +53877,329 @@
         }
       }
     },
+    "/api/v1/admin/collections/{id}/sections/{section}": {
+      "get": {
+        "operationId": "dashboard.collections.get_section",
+        "tags": [
+          "Admin - Collections"
+        ],
+        "summary": "Get a bounded collection section",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "summary",
+                "text"
+              ]
+            },
+            "required": true,
+            "name": "section",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "description",
+                "content"
+              ]
+            },
+            "required": false,
+            "name": "field",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "nullable": true,
+              "minimum": 0,
+              "maximum": 100000,
+              "default": 0
+            },
+            "required": false,
+            "name": "offset",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bounded collection section",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "section": {
+                              "type": "string",
+                              "enum": [
+                                "summary"
+                              ]
+                            },
+                            "collection": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "presentation": {
+                                  "type": "string",
+                                  "enum": [
+                                    "grid",
+                                    "carousel"
+                                  ]
+                                },
+                                "config": {
+                                  "type": "string"
+                                },
+                                "sortOrder": {
+                                  "type": "number"
+                                },
+                                "isActive": {
+                                  "type": "boolean"
+                                },
+                                "version": {
+                                  "type": "integer",
+                                  "minimum": 1
+                                },
+                                "canonicalPath": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
+                                "noIndex": {
+                                  "type": "boolean"
+                                },
+                                "excludeFromSitemap": {
+                                  "type": "boolean"
+                                },
+                                "createdAt": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "number"
+                                    }
+                                  ],
+                                  "nullable": true
+                                },
+                                "updatedAt": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "number"
+                                    }
+                                  ],
+                                  "nullable": true
+                                },
+                                "deletedAt": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "number"
+                                    }
+                                  ],
+                                  "nullable": true
+                                },
+                                "metaTitle": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
+                                "metaDescription": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
+                                "descriptionCharacters": {
+                                  "type": "integer",
+                                  "minimum": 0
+                                },
+                                "contentCharacters": {
+                                  "type": "integer",
+                                  "minimum": 0
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "name",
+                                "presentation",
+                                "config",
+                                "sortOrder",
+                                "isActive",
+                                "version",
+                                "canonicalPath",
+                                "noIndex",
+                                "excludeFromSitemap",
+                                "createdAt",
+                                "updatedAt",
+                                "deletedAt",
+                                "metaTitle",
+                                "metaDescription",
+                                "descriptionCharacters",
+                                "contentCharacters"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "section",
+                            "collection"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "section": {
+                              "type": "string",
+                              "enum": [
+                                "text"
+                              ]
+                            },
+                            "field": {
+                              "type": "string",
+                              "enum": [
+                                "description",
+                                "content"
+                              ]
+                            },
+                            "value": {
+                              "type": "string",
+                              "maxLength": 12000
+                            },
+                            "totalCharacters": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "offset": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "nextOffset": {
+                              "type": "integer",
+                              "nullable": true,
+                              "minimum": 0
+                            },
+                            "isNull": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "section",
+                            "field",
+                            "value",
+                            "totalCharacters",
+                            "offset",
+                            "nextOffset",
+                            "isNull"
+                          ]
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "collections.view"
+        }
+      }
+    },
     "/api/v1/admin/collections/{id}": {
       "get": {
         "operationId": "dashboard.collections.get",
@@ -54163,14 +54393,11 @@
         "security": [
           {
             "adminSession": []
-          },
-          {
-            "agentBearer": []
           }
         ],
         "x-scalius-agent": {
           "surface": "dashboard",
-          "exposure": "execute",
+          "exposure": "excluded",
           "principals": [
             "admin"
           ],
@@ -54178,12 +54405,13 @@
           "openWorld": false,
           "idempotency": "none",
           "revision": "none",
-          "batch": "parallel",
+          "batch": "forbidden",
           "transport": "json",
           "maximumResponseBytes": 65536,
           "maxRequestBytes": 1048576,
           "sensitiveOutput": false,
-          "oneTimeSecretOutput": false
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "Legacy oversized aggregate projection; use dashboard.collections.get_section."
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -54340,107 +54568,14 @@
                         "id": {
                           "type": "string"
                         },
-                        "name": {
-                          "type": "string"
-                        },
-                        "presentation": {
-                          "type": "string",
-                          "enum": [
-                            "grid",
-                            "carousel"
-                          ]
-                        },
-                        "config": {
-                          "type": "string"
-                        },
-                        "sortOrder": {
-                          "type": "number"
-                        },
-                        "isActive": {
-                          "type": "boolean"
-                        },
                         "version": {
                           "type": "integer",
                           "minimum": 1
-                        },
-                        "canonicalPath": {
-                          "type": "string",
-                          "nullable": true
-                        },
-                        "noIndex": {
-                          "type": "boolean"
-                        },
-                        "excludeFromSitemap": {
-                          "type": "boolean"
-                        },
-                        "createdAt": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            }
-                          ],
-                          "nullable": true
-                        },
-                        "updatedAt": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            }
-                          ],
-                          "nullable": true
-                        },
-                        "deletedAt": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            }
-                          ],
-                          "nullable": true
-                        },
-                        "description": {
-                          "type": "string",
-                          "nullable": true
-                        },
-                        "content": {
-                          "type": "string",
-                          "nullable": true
-                        },
-                        "metaTitle": {
-                          "type": "string",
-                          "nullable": true
-                        },
-                        "metaDescription": {
-                          "type": "string",
-                          "nullable": true
                         }
                       },
                       "required": [
                         "id",
-                        "name",
-                        "presentation",
-                        "config",
-                        "sortOrder",
-                        "isActive",
-                        "version",
-                        "canonicalPath",
-                        "noIndex",
-                        "excludeFromSitemap",
-                        "createdAt",
-                        "updatedAt",
-                        "deletedAt",
-                        "description",
-                        "content",
-                        "metaTitle",
-                        "metaDescription"
+                        "version"
                       ]
                     }
                   },
