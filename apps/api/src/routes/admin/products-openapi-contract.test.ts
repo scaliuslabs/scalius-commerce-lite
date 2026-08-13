@@ -102,6 +102,36 @@ describe("admin product mutation OpenAPI responses", () => {
         expect(list).not.toContain('"imageCount"');
     });
 
+    it("publishes a separate bounded agent summary without rich text or media URLs", () => {
+        const spec = buildAdminProductsSpec();
+        const operation = spec.paths?.["/api/v1/admin/products/summaries"]?.get;
+        const serialized = JSON.stringify(operation);
+
+        expect(operation?.operationId).toBe("dashboard.products.list_summaries");
+        expect(serialized).toContain('"maximum":50');
+        expect(serialized).not.toContain('"description":{"type"');
+        expect(serialized).not.toContain('"primaryImage"');
+
+        const largestDocument = JSON.stringify({
+            success: true,
+            data: {
+                products: Array.from({ length: 50 }, () => ({
+                    id: "p".repeat(180),
+                    name: "n".repeat(100),
+                    slug: "s".repeat(100),
+                    price: 1_000_000_000_000,
+                    isActive: true,
+                    aggregateRevision: 999_999,
+                    category: { name: "c".repeat(100) },
+                    variantCount: 999_999,
+                    sku: "k".repeat(100),
+                })),
+                pagination: { total: 999_999, page: 1, limit: 50, totalPages: 20_000 },
+            },
+        });
+        expect(Buffer.byteLength(largestDocument, "utf8")).toBeLessThan(65_536);
+    });
+
     it("documents bounded semantic reads and revision-guarded range writes", () => {
         const spec = buildAdminProductsSpec();
         const path = spec.paths?.["/api/v1/admin/products/{id}/sections/{section}"];

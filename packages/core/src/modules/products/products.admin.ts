@@ -54,6 +54,7 @@ import {
     PRODUCT_MEDIA_REORDER_OFFSET,
     resolveProductImageRepresentation,
 } from "./products.media";
+import type { ProductMediaProjection } from "./products.media";
 
 type SQLiteBatchItem = BatchItem<"sqlite">;
 
@@ -408,6 +409,8 @@ export async function listProducts(db: Database, options: {
     activeOnly?: boolean;
     sort?: "name" | "price" | "category" | "createdAt" | "updatedAt";
     order?: "asc" | "desc";
+    /** Agent summaries omit large text/media projections before they leave SQL. */
+    agentSummary?: boolean;
 }) {
     const {
         search,
@@ -418,6 +421,7 @@ export async function listProducts(db: Database, options: {
         activeOnly = false,
         sort = "updatedAt",
         order = "desc",
+        agentSummary = false,
     } = options;
     const offset = (page - 1) * limit;
 
@@ -495,7 +499,7 @@ export async function listProducts(db: Database, options: {
             name: products.name,
             slug: products.slug,
             price: products.price,
-            description: products.description,
+            description: agentSummary ? sql<string | null>`NULL` : products.description,
             isActive: products.isActive,
             discountPercentage: products.discountPercentage,
             discountType: products.discountType,
@@ -593,7 +597,9 @@ export async function listProducts(db: Database, options: {
             )
             .orderBy(productVariants.productId, asc(productVariants.createdAt)),
     ]);
-    const mediaByProduct = await loadProductMediaProjections(db, productIds);
+    const mediaByProduct = agentSummary
+        ? new Map<string, ProductMediaProjection[]>()
+        : await loadProductMediaProjections(db, productIds);
 
     const variantCountMap = new Map<string, number>(
         variantCounts.map((vc: { productId: string; count: number }) => [vc.productId, vc.count]),
@@ -648,6 +654,37 @@ export async function listProducts(db: Database, options: {
             limit,
             totalPages: Math.ceil(count / limit),
         },
+    };
+}
+
+/**
+ * Bounded operation projection for MCP/CLI product discovery. Rich text and
+ * media URLs stay behind the section/detail operations, so a page cannot echo
+ * merchant-authored 100k fields into a 64 KiB structured result.
+ */
+export async function listProductAgentSummaries(db: Database, options: {
+    search?: string;
+    categoryId?: string;
+    page?: number;
+    limit?: number;
+    showTrashed?: boolean;
+    sort?: "name" | "price" | "category" | "createdAt" | "updatedAt";
+    order?: "asc" | "desc";
+}) {
+    const result = await listProducts(db, { ...options, agentSummary: true });
+    return {
+        products: result.products.map((product) => ({
+            id: product.id,
+            name: product.name.slice(0, 100),
+            slug: product.slug.slice(0, 100),
+            price: product.price,
+            isActive: product.isActive,
+            aggregateRevision: product.aggregateRevision,
+            category: { name: product.category.name.slice(0, 100) },
+            variantCount: product.variantCount,
+            sku: product.sku?.slice(0, 100),
+        })),
+        pagination: result.pagination,
     };
 }
 

@@ -41861,6 +41861,124 @@ export type PostApiV1AdminProductsResponses = {
 
 export type PostApiV1AdminProductsResponse = PostApiV1AdminProductsResponses[keyof PostApiV1AdminProductsResponses];
 
+export type GetApiV1AdminProductsSummariesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        page?: number;
+        limit?: number;
+        search?: string;
+        category?: string;
+        trashed?: 'true' | 'false';
+        sort?: 'name' | 'price' | 'category' | 'createdAt' | 'updatedAt';
+        order?: 'asc' | 'desc';
+    };
+    url: '/api/v1/admin/products/summaries';
+};
+
+export type GetApiV1AdminProductsSummariesErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminProductsSummariesError = GetApiV1AdminProductsSummariesErrors[keyof GetApiV1AdminProductsSummariesErrors];
+
+export type GetApiV1AdminProductsSummariesResponses = {
+    /**
+     * Bounded product summaries with pagination
+     */
+    200: {
+        success: true;
+        data: {
+            products: Array<{
+                id: string;
+                name: string;
+                slug: string;
+                price: number;
+                isActive: boolean;
+                aggregateRevision: number;
+                category: {
+                    name: string;
+                };
+                variantCount: number;
+                sku?: string;
+            }>;
+            pagination: {
+                page: number;
+                limit: number;
+                total: number;
+                totalPages: number;
+            };
+        };
+    };
+};
+
+export type GetApiV1AdminProductsSummariesResponse = GetApiV1AdminProductsSummariesResponses[keyof GetApiV1AdminProductsSummariesResponses];
+
 export type GetApiV1AdminProductsByIdsData = {
     body?: never;
     path?: never;

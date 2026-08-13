@@ -44184,6 +44184,40 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
       "Admin - Products"
     ],
     "surface": "dashboard",
+    "exposure": "excluded",
+    "principals": [
+      "admin"
+    ],
+    "risk": "read",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "forbidden",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "exclusionReason": "Legacy dashboard list may include oversized rich text and media projections; use dashboard.products.list_summaries.",
+    "rbac": {
+      "type": "permission",
+      "permission": "products.view"
+    },
+    "inputSchema": null,
+    "outputSchema": null
+  },
+  {
+    "operationId": "dashboard.products.list_summaries",
+    "method": "GET",
+    "pathTemplate": "/api/v1/admin/products/summaries",
+    "summary": "List bounded product summaries",
+    "tags": [
+      "Admin - Products"
+    ],
+    "surface": "dashboard",
     "exposure": "execute",
     "principals": [
       "admin"
@@ -44211,11 +44245,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           "schema": {
             "type": "integer",
             "minimum": 1,
-            "default": 1,
-            "description": "Page number"
+            "default": 1
           },
           "required": false,
-          "description": "Page number",
           "name": "page",
           "in": "query"
         },
@@ -44223,33 +44255,28 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           "schema": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 100,
-            "default": 10,
-            "description": "Items per page"
+            "maximum": 50,
+            "default": 20
           },
           "required": false,
-          "description": "Items per page",
           "name": "limit",
           "in": "query"
         },
         {
           "schema": {
             "type": "string",
-            "maxLength": 120,
-            "description": "Search term"
+            "maxLength": 120
           },
           "required": false,
-          "description": "Search term",
           "name": "search",
           "in": "query"
         },
         {
           "schema": {
             "type": "string",
-            "description": "Category ID filter"
+            "maxLength": 180
           },
           "required": false,
-          "description": "Category ID filter",
           "name": "category",
           "in": "query"
         },
@@ -44259,11 +44286,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "enum": [
               "true",
               "false"
-            ],
-            "description": "Show trashed items"
+            ]
           },
           "required": false,
-          "description": "Show trashed items",
           "name": "trashed",
           "in": "query"
         },
@@ -44277,11 +44302,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "createdAt",
               "updatedAt"
             ],
-            "default": "updatedAt",
-            "description": "Sort field"
+            "default": "updatedAt"
           },
           "required": false,
-          "description": "Sort field",
           "name": "sort",
           "in": "query"
         },
@@ -44292,11 +44315,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "asc",
               "desc"
             ],
-            "default": "desc",
-            "description": "Sort order"
+            "default": "desc"
           },
           "required": false,
-          "description": "Sort order",
           "name": "order",
           "in": "query"
         }
@@ -44320,65 +44341,33 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "type": "object",
                 "properties": {
                   "id": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 180
                   },
                   "name": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 100
                   },
                   "slug": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 100
                   },
                   "price": {
                     "type": "number"
                   },
-                  "description": {
-                    "type": "string",
-                    "nullable": true
-                  },
                   "isActive": {
-                    "type": "boolean"
-                  },
-                  "discountPercentage": {
-                    "type": "number"
-                  },
-                  "discountType": {
-                    "type": "string"
-                  },
-                  "discountAmount": {
-                    "type": "number"
-                  },
-                  "freeDelivery": {
                     "type": "boolean"
                   },
                   "aggregateRevision": {
                     "type": "integer",
                     "minimum": 1
                   },
-                  "createdAt": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      }
-                    ]
-                  },
-                  "updatedAt": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      }
-                    ]
-                  },
                   "category": {
                     "type": "object",
                     "properties": {
                       "name": {
-                        "type": "string"
+                        "type": "string",
+                        "maxLength": 100
                       }
                     },
                     "required": [
@@ -44386,17 +44375,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     ]
                   },
                   "variantCount": {
-                    "type": "number"
-                  },
-                  "mediaCount": {
-                    "type": "number"
-                  },
-                  "primaryImage": {
-                    "type": "string",
-                    "nullable": true
+                    "type": "integer",
+                    "minimum": 0
                   },
                   "sku": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 100
                   }
                 },
                 "required": [
@@ -44404,19 +44388,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "name",
                   "slug",
                   "price",
-                  "description",
                   "isActive",
-                  "discountPercentage",
-                  "discountType",
-                  "discountAmount",
-                  "freeDelivery",
                   "aggregateRevision",
-                  "createdAt",
-                  "updatedAt",
                   "category",
-                  "variantCount",
-                  "mediaCount",
-                  "primaryImage"
+                  "variantCount"
                 ]
               }
             },
