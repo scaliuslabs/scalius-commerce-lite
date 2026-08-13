@@ -87,3 +87,8 @@ minimumReleaseAgeExclude:
   - react-is@19.2.8
   - '@tanstack/react-start-rsc@0.1.32'
   - '@tanstack/react-start@1.168.33'
+
+patchedDependencies:
+  # Upstream 0.10.3 accepts a previous refresh token repeatedly (cloudflare/workers-oauth-provider#43).
+  # Fail closed with strict single-use rotation until the provider ships an equivalent fix.
+  '@cloudflare/workers-oauth-provider@0.10.3': patches/@cloudflare__workers-oauth-provider@0.10.3.patch

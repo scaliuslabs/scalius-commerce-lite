@@ -1,0 +1,36 @@
+diff --git a/dist/oauth-provider.js b/dist/oauth-provider.js
+index c15348c226f1064f6c277f45f10740b9266219e9..a9e43e9ea5eab7c667c146c6af144732dbf8f8b8 100644
+--- a/dist/oauth-provider.js
++++ b/dist/oauth-provider.js
+@@ -2011,8 +2011,7 @@ var OAuthProviderImpl = class {
+ 		const grantData = await env.OAUTH_KV.get(grantKey, { type: "json" });
+ 		if (!grantData) return this.createErrorResponse("invalid_grant", { description: "Grant not found" });
+ 		const isCurrentToken = grantData.refreshTokenId === providedTokenHash;
+-		const isPreviousToken = grantData.previousRefreshTokenId === providedTokenHash;
+-		if (!isCurrentToken && !isPreviousToken) return this.createErrorResponse("invalid_grant", { description: "Invalid refresh token" });
++		if (!isCurrentToken) return this.createErrorResponse("invalid_grant", { description: "Invalid refresh token" });
+ 		if (grantData.clientId !== clientInfo.clientId) return this.createErrorResponse("invalid_grant", { description: "Client ID mismatch" });
+ 		if (grantData.expiresAt !== void 0) {
+ 			const now$1 = Math.floor(Date.now() / 1e3);
+@@ -2022,9 +2021,7 @@ var OAuthProviderImpl = class {
+ 		const newAccessToken = `${userId}:${grantId}:${generateRandomString(TOKEN_LENGTH)}`;
+ 		const accessTokenId = await generateTokenId(newAccessToken);
+ 		let accessTokenTTL = this.options.accessTokenTTL;
+-		let wrappedKeyToUse;
+-		if (isCurrentToken) wrappedKeyToUse = grantData.refreshTokenWrappedKey;
+-		else wrappedKeyToUse = grantData.previousRefreshTokenWrappedKey;
++		let wrappedKeyToUse = grantData.refreshTokenWrappedKey;
+ 		const encryptionKey = await unwrapKeyWithToken(refreshToken, wrappedKeyToUse);
+ 		let grantEncryptionKey = encryptionKey;
+ 		let accessTokenEncryptionKey = encryptionKey;
+@@ -2085,8 +2082,8 @@ var OAuthProviderImpl = class {
+ 		const newRefreshToken = `${userId}:${grantId}:${generateRandomString(TOKEN_LENGTH)}`;
+ 		const newRefreshTokenId = await generateTokenId(newRefreshToken);
+ 		const newRefreshTokenWrappedKey = await wrapKeyWithToken(newRefreshToken, grantEncryptionKey);
+-		grantData.previousRefreshTokenId = providedTokenHash;
+-		grantData.previousRefreshTokenWrappedKey = wrappedKeyToUse;
++		grantData.previousRefreshTokenId = void 0;
++		grantData.previousRefreshTokenWrappedKey = void 0;
+ 		grantData.refreshTokenId = newRefreshTokenId;
+ 		grantData.refreshTokenWrappedKey = newRefreshTokenWrappedKey;
+ 		await this.saveGrantWithTTL(env, grantKey, grantData, now);

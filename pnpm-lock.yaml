@@ -37,6 +37,9 @@ overrides:
   prosemirror-model: 1.25.11
   sharp: 0.35.3
 
+patchedDependencies:
+  '@cloudflare/workers-oauth-provider@0.10.3': b35459eacb3658af36342b4ca814f19e1d420c2ee6bc39754b718f1291cebbeb
+
 importers:
 
   .:
@@ -362,7 +365,7 @@ importers:
     dependencies:
       '@cloudflare/workers-oauth-provider':
         specifier: 0.10.3
-        version: 0.10.3
+        version: 0.10.3(patch_hash=b35459eacb3658af36342b4ca814f19e1d420c2ee6bc39754b718f1291cebbeb)
       '@hono/swagger-ui':
         specifier: ^0.6.1
         version: 0.6.1(hono@4.13.1)
@@ -7849,7 +7852,7 @@ snapshots:
   '@cloudflare/workerd-windows-64@1.20260801.1':
     optional: true
 
-  '@cloudflare/workers-oauth-provider@0.10.3': {}
+  '@cloudflare/workers-oauth-provider@0.10.3(patch_hash=b35459eacb3658af36342b4ca814f19e1d420c2ee6bc39754b718f1291cebbeb)': {}
 
   '@cloudflare/workers-types@5.20260808.1': {}
 
