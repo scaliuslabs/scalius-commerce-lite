@@ -10,6 +10,13 @@ function matchPathTemplate(template: string, pathname: string): boolean {
   );
 }
 
+function pathTemplateSpecificity(template: string): number {
+  return template.split("/").filter(Boolean).reduce(
+    (score, segment) => score + (/^\{[^}]+\}$/.test(segment) ? 0 : 1),
+    0,
+  );
+}
+
 export function resolveDirectAgentOperation(
   method: string,
   pathname: string,
@@ -18,7 +25,14 @@ export function resolveDirectAgentOperation(
   const matches = AGENT_OPERATIONS.filter((operation) =>
     operation.method === normalizedMethod && matchPathTemplate(operation.pathTemplate, pathname),
   );
-  return matches.length === 1 ? (matches[0] ?? null) : null;
+  if (matches.length === 0) return null;
+  const highestSpecificity = Math.max(
+    ...matches.map((operation) => pathTemplateSpecificity(operation.pathTemplate)),
+  );
+  const mostSpecific = matches.filter((operation) =>
+    pathTemplateSpecificity(operation.pathTemplate) === highestSpecificity,
+  );
+  return mostSpecific.length === 1 ? (mostSpecific[0] ?? null) : null;
 }
 
 export function resolveAgentOperationById(

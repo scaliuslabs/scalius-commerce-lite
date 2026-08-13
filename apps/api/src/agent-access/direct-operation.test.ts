@@ -23,4 +23,19 @@ describe("direct agent operation manifest matching", () => {
       exposure: "excluded",
     });
   });
+
+  it.each([
+    ["/api/v1/admin/categories/form-options", "dashboard.categories.form_options"],
+    ["/api/v1/admin/collections/form-options", "dashboard.collections.form_options"],
+    ["/api/v1/admin/collections/category-options", "dashboard.collections.category_options"],
+    [
+      "/api/v1/admin/settings/checkout-languages/active",
+      "dashboard.checkout_languages.active_get",
+    ],
+  ])("prefers the exact static route over an overlapping parameter route", (path, operationId) => {
+    expect(resolveDirectAgentOperation("GET", path)).toMatchObject({
+      operationId,
+      exposure: "execute",
+    });
+  });
 });
