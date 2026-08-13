@@ -292,7 +292,7 @@ function noStore(c: { header(name: string, value: string): void }): void {
 function continuationBootstrap(env: Env, continuationCode: string) {
   const base = env.STOREFRONT_URL?.trim();
   if (!base) throw new ForbiddenError("The storefront continuation origin is not configured.");
-  const url = new URL("/agent/continue", base);
+  const url = new URL("/checkout/continue", base);
   if (!/^https?:$/.test(url.protocol) || url.username || url.password) {
     throw new ForbiddenError("The storefront continuation origin is invalid.");
   }

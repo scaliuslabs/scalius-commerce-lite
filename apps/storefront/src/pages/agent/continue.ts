@@ -84,7 +84,7 @@ export const POST: APIRoute = async ({ request }) => {
     return new Response(null, {
       status: 303,
       headers: {
-        Location: `/agent/continue/${encodeURIComponent(id)}`,
+        Location: `/checkout/continue/${encodeURIComponent(id)}`,
         "Set-Cookie": cookie,
         "Cache-Control": "private, no-store",
         "Referrer-Policy": "no-referrer",
