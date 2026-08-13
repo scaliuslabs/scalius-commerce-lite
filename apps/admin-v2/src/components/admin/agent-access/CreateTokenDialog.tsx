@@ -105,6 +105,7 @@ export function CreateTokenDialog({
           </DialogHeader>
 
           <form
+            method="post"
             className="space-y-4"
             onSubmit={(event) => {
               event.preventDefault();
