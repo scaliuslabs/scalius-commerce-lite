@@ -77,9 +77,18 @@ export function resolveGrantSelection(
   expiresAt: Date;
 } {
   const caller = canonicalPermissions(callerPermissions);
-  const requested = input.permissions === undefined ? caller : canonicalPermissions(input.permissions);
+  const requested = canonicalPermissions(
+    input.preset === "custom"
+      ? input.permissions ?? []
+      : input.permissions?.length
+        ? input.permissions
+        : caller,
+  );
   if (requested.some((permission) => !caller.includes(permission))) {
     throw new ForbiddenError("A connection cannot receive permissions its owner lacks");
+  }
+  if (input.preset === "custom" && requested.length === 0) {
+    throw new ValidationError("Custom access requires at least one permission");
   }
 
   let permissions: string[];
