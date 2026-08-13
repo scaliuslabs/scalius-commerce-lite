@@ -134362,17 +134362,167 @@
                 "properties": {
                   "channels": {
                     "type": "object",
-                    "additionalProperties": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
+                    "properties": {
+                      "order_created": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "push"
+                          ]
+                        }
+                      },
+                      "order_confirmed": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "push"
+                          ]
+                        }
+                      },
+                      "order_processing": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "push"
+                          ]
+                        }
+                      },
+                      "order_shipped": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "push"
+                          ]
+                        }
+                      },
+                      "order_delivered": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "push"
+                          ]
+                        }
+                      },
+                      "order_completed": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "push"
+                          ]
+                        }
+                      },
+                      "order_cancelled": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "push"
+                          ]
+                        }
+                      },
+                      "order_returned": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "push"
+                          ]
+                        }
+                      },
+                      "refund_processing": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "push"
+                          ]
+                        }
+                      },
+                      "refund_failed": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "push"
+                          ]
+                        }
+                      },
+                      "order_refunded": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "push"
+                          ]
+                        }
+                      },
+                      "order_partially_refunded": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "push"
+                          ]
+                        }
+                      },
+                      "payment_balance_paid": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "push"
+                          ]
+                        }
+                      },
+                      "support_request_submitted": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "push"
+                          ]
+                        }
+                      },
+                      "support_request_status_updated": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "push"
+                          ]
+                        }
                       }
-                    }
+                    },
+                    "required": [
+                      "order_created",
+                      "order_confirmed",
+                      "order_processing",
+                      "order_shipped",
+                      "order_delivered",
+                      "order_completed",
+                      "order_cancelled",
+                      "order_returned",
+                      "refund_processing",
+                      "refund_failed",
+                      "order_refunded",
+                      "order_partially_refunded",
+                      "payment_balance_paid",
+                      "support_request_submitted",
+                      "support_request_status_updated"
+                    ],
+                    "additionalProperties": false
                   }
                 },
                 "required": [
                   "channels"
-                ]
+                ],
+                "additionalProperties": false
               }
             }
           }
