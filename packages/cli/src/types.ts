@@ -32,6 +32,7 @@ export interface PendingAcknowledgement {
 
 export interface StoredCredential {
   token: string;
+  resource?: "dashboard" | "storefront";
   createdAt: string;
   credentialId?: string;
   expiresAt?: string;

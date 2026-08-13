@@ -107,13 +107,14 @@ export function createProgram(runtime: Runtime): Command {
 
   const auth = program.command("auth").description("authenticate the CLI");
   auth.command("login")
-    .description("pair with the dashboard")
+    .description("pair with a merchant dashboard or storefront audience")
     .requiredOption("--server <origin>", "Scalius API origin")
     .option("--profile-name <name>", "profile to create")
+    .addOption(new Option("--resource <audience>", "credential audience").choices(["dashboard", "storefront"]).default("dashboard"))
     .option("--no-open", "do not open the browser")
-    .action(async (options: { server: string; profileName?: string; open: boolean }, command) => {
+    .action(async (options: { server: string; profileName?: string; open: boolean; resource: "dashboard" | "storefront" }, command) => {
       const profileName = options.profileName ?? globalOptions(command).profile ?? "default";
-      const result = await login(runtime, { server: options.server, profileName, openBrowser: options.open });
+      const result = await login(runtime, { server: options.server, profileName, openBrowser: options.open, resource: options.resource });
       writeResult(runtime, globalOptions(command).output, result, `Authenticated profile '${profileName}'.`);
     });
 

@@ -1,4 +1,4 @@
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
@@ -64,8 +64,9 @@ describe("CLI program", () => {
   it("reports the version from the published package manifest", async () => {
     const directory = await mkdtemp(join(tmpdir(), "scalius-version-test-"));
     const runtime = createTestRuntime({ directory });
+    const manifest = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8")) as { version: string };
     expect(await runProgram(runtime, ["--version"])).toBe(0);
-    expect(runtime.stdoutText().trim()).toBe("0.2.2");
+    expect(runtime.stdoutText().trim()).toBe(manifest.version);
   });
 
   it("searches the live OpenAPI contract with deterministic JSON stdout", async () => {

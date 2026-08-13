@@ -11,6 +11,7 @@ interface DeviceStartResponse {
   verificationUri: string;
   intervalSeconds: number;
   expiresInSeconds: number;
+  resource?: "dashboard" | "storefront";
 }
 
 interface DeviceTokenResponse {
@@ -19,6 +20,7 @@ interface DeviceTokenResponse {
   token?: string;
   credentialId?: string;
   expiresAt?: string;
+  resource?: "dashboard" | "storefront";
 }
 
 function object(value: unknown): Record<string, unknown> {
@@ -53,6 +55,13 @@ async function postJson(runtime: Runtime, url: string, body: unknown, headers?: 
   });
 }
 
+function resourceField(source: Record<string, unknown>): "dashboard" | "storefront" | undefined {
+  const value = source.resource;
+  if (value === undefined) return undefined;
+  if (value === "dashboard" || value === "storefront") return value;
+  throw new CliError(8, "invalid_server_response", "Pairing response contains an invalid resource audience.");
+}
+
 function parseStart(value: Record<string, unknown>): DeviceStartResponse {
   const deviceCode = stringField(value, "deviceCode", "device_code");
   const userCode = stringField(value, "userCode", "user_code");
@@ -77,7 +86,7 @@ function parseStart(value: Record<string, unknown>): DeviceStartResponse {
   if (intervalSeconds < 1 || intervalSeconds > 60 || expiresInSeconds < 30 || expiresInSeconds > 3_600) {
     throw new CliError(8, "invalid_server_response", "Pairing response contains invalid timing limits.");
   }
-  return { deviceCode, userCode, verificationUri: verificationUrl.toString(), intervalSeconds, expiresInSeconds };
+  return { deviceCode, userCode, verificationUri: verificationUrl.toString(), intervalSeconds, expiresInSeconds, resource: resourceField(value) };
 }
 
 function parseToken(value: Record<string, unknown>): DeviceTokenResponse {
@@ -89,6 +98,7 @@ function parseToken(value: Record<string, unknown>): DeviceTokenResponse {
     token: stringField(value, "token", "access_token"),
     credentialId: stringField(value, "credentialId", "credential_id"),
     expiresAt: stringField(value, "expiresAt", "expires_at"),
+    resource: resourceField(value),
   };
 }
 
@@ -113,6 +123,7 @@ export interface LoginOptions {
   server: string;
   profileName: string;
   openBrowser: boolean;
+  resource: "dashboard" | "storefront";
 }
 
 export async function login(runtime: Runtime, options: LoginOptions): Promise<Record<string, unknown>> {
@@ -120,7 +131,11 @@ export async function login(runtime: Runtime, options: LoginOptions): Promise<Re
   const name = validateProfileName(options.profileName);
   const server = normalizeServer(options.server);
   const existing = await store.resolveProfile(name, false).catch(() => undefined);
-  if (existing?.server === server && existing.credential?.pendingAcknowledgement) {
+  if (
+    existing?.server === server &&
+    existing.credential?.pendingAcknowledgement &&
+    (existing.credential.resource ?? "dashboard") === options.resource
+  ) {
     try {
       await acknowledge(runtime, existing, existing.credential.pendingAcknowledgement.deviceCode);
       const recovered = { ...existing.credential };
@@ -143,9 +158,13 @@ export async function login(runtime: Runtime, options: LoginOptions): Promise<Re
   const response = await postJson(runtime, `${server}/api/v1/agent-auth/device/start`, {
     clientName: "Scalius CLI",
     profileName: name,
+    ...(options.resource === "storefront" ? { resource: options.resource } : {}),
   });
-  if (!response.ok) throw await responseError(response, "Unable to start dashboard pairing.");
+  if (!response.ok) throw await responseError(response, "Unable to start merchant pairing.");
   const start = parseStart(await parseJson(response));
+  if (start.resource && start.resource !== options.resource) {
+    throw new CliError(8, "invalid_server_response", "Pairing response selected a different resource audience.");
+  }
   await store.putProfile(name, server);
 
   writeDiagnostic(runtime, `Open ${start.verificationUri}`);
@@ -191,8 +210,12 @@ export async function login(runtime: Runtime, options: LoginOptions): Promise<Re
     if (approved.expiresAt && !Number.isFinite(Date.parse(approved.expiresAt))) {
       throw new CliError(8, "invalid_server_response", "Paired credential has an invalid expiry.");
     }
+    if (approved.resource && approved.resource !== options.resource) {
+      throw new CliError(8, "invalid_server_response", "Paired credential has a different resource audience.");
+    }
     const credential: StoredCredential = {
       token: approvedToken,
+      resource: approved.resource ?? start.resource ?? options.resource,
       createdAt: new Date(runtime.now()).toISOString(),
       credentialId: derivedCredentialId,
       expiresAt: approved.expiresAt,
@@ -209,9 +232,10 @@ export async function login(runtime: Runtime, options: LoginOptions): Promise<Re
       server,
       credentialId: derivedCredentialId,
       expiresAt: approved.expiresAt,
+      resource: credential.resource,
     };
   }
-  throw new CliError(3, "pairing_expired", "Dashboard pairing expired before approval.");
+  throw new CliError(3, "pairing_expired", "Merchant pairing expired before approval.");
 }
 
 async function readNonTtySecret(runtime: Runtime): Promise<string> {
@@ -295,6 +319,7 @@ export async function authStatus(runtime: Runtime, profileName?: string): Promis
     authenticated: Boolean(profile.token) && !expired,
     source: profile.tokenSource ?? null,
     credentialId: profile.credential?.credentialId,
+    resource: profile.credential?.resource,
     expiresAt,
     expired,
   };

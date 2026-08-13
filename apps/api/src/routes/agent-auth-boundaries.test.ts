@@ -19,6 +19,12 @@ describe("agent-auth protocol boundaries", () => {
     expect(source).not.toContain("?deviceCode=");
   });
 
+  it("pairs CLI credentials to an explicit dashboard or storefront audience", () => {
+    expect(source).toContain('resource: z.enum(["dashboard", "storefront"]).default("dashboard")');
+    expect(source).toContain("requestedResource: body.resource");
+    expect(source).toContain("resource: device.requestedResource");
+  });
+
   it("makes acknowledgement retry-safe and clears the delivery envelope", () => {
     expect(source).toContain('existing?.status === "consumed"');
     expect(source).toContain("encryptedDeliveryEnvelope: null");

@@ -74,7 +74,7 @@ export const getApiV1AuthTokenStats = <ThrowOnError extends boolean = false>(opt
 /**
  * Start CLI device pairing
  *
- * Starts a short-lived dashboard pairing ceremony and returns one-time device and user codes.
+ * Starts a short-lived merchant pairing ceremony for the selected dashboard or storefront audience and returns one-time device and user codes.
  */
 export const postApiV1AgentAuthDeviceStart = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AgentAuthDeviceStartData, ThrowOnError>): RequestResult<PostApiV1AgentAuthDeviceStartResponses, unknown, ThrowOnError> => (options.client ?? client).post<PostApiV1AgentAuthDeviceStartResponses, unknown, ThrowOnError>({
     url: '/api/v1/agent-auth/device/start',

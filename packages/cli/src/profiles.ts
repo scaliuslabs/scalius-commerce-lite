@@ -12,6 +12,7 @@ export async function listProfiles(runtime: Runtime): Promise<Record<string, unk
       server: profile.server,
       active: config.activeProfile === name,
       authenticated: Boolean(credentials.credentials[name]) || Boolean(runtime.env.SCALIUS_TOKEN?.trim()),
+      resource: credentials.credentials[name]?.resource ?? null,
     }));
   return { activeProfile: config.activeProfile ?? null, profiles };
 }
@@ -35,6 +36,7 @@ export async function showProfile(runtime: Runtime, requested?: string): Promise
     authenticated: Boolean(profile.token),
     credentialSource: profile.tokenSource ?? null,
     credentialId: profile.credential?.credentialId,
+    resource: profile.credential?.resource ?? null,
     expiresAt: profile.credential?.expiresAt,
   };
 }
