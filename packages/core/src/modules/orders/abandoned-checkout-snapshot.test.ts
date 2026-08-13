@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { normalizeAbandonedCheckoutSnapshot } from "./abandoned-checkout-snapshot";
+import {
+    normalizeAbandonedCheckoutSnapshot,
+    projectAbandonedCheckoutAgentSummary,
+} from "./abandoned-checkout-snapshot";
 
 const CHECKOUT_ID = "chk_session_1234567890abcdef";
 
@@ -82,5 +85,65 @@ describe("abandoned checkout snapshot normalization", () => {
             checkoutId: "checkout_1",
             checkoutData: {},
         })).toThrow("Invalid checkout session identifier");
+    });
+});
+
+describe("abandoned checkout agent summaries", () => {
+    it("summarizes a cart without returning buyer or item fields", () => {
+        const summary = projectAbandonedCheckoutAgentSummary(JSON.stringify({
+            customerName: "Private Buyer",
+            customerPhone: "+8801700000000",
+            shippingAddress: "Private address",
+            notes: "Private note",
+            cart: {
+                totalAmount: 1234,
+                items: [{ id: "variant_1", name: "Private item" }],
+            },
+        }), false);
+
+        expect(summary).toEqual({
+            kind: "cart",
+            stage: "info_captured",
+            itemCount: 1,
+            total: 1234,
+            hasCustomerContact: true,
+            orderId: null,
+            paymentMethod: null,
+            paymentStatus: null,
+        });
+        expect(JSON.stringify(summary)).not.toContain("Private");
+        expect(JSON.stringify(summary)).not.toContain("+880");
+    });
+
+    it("summarizes a hosted-payment archive", () => {
+        expect(projectAbandonedCheckoutAgentSummary(JSON.stringify({
+            id: "order_1",
+            paymentMethod: "stripe",
+            paymentStatus: "failed",
+            totalAmount: 500,
+            customerEmail: "buyer@example.com",
+        }), false)).toEqual({
+            kind: "stale_hosted_payment_order",
+            stage: "archived_hosted_payment",
+            itemCount: 0,
+            total: 500,
+            hasCustomerContact: true,
+            orderId: "order_1",
+            paymentMethod: "stripe",
+            paymentStatus: "failed",
+        });
+    });
+
+    it("fails closed for unreadable persisted data", () => {
+        expect(projectAbandonedCheckoutAgentSummary("{bad-json", true)).toEqual({
+            kind: "unknown",
+            stage: "unreadable",
+            itemCount: 0,
+            total: 0,
+            hasCustomerContact: true,
+            orderId: null,
+            paymentMethod: null,
+            paymentStatus: null,
+        });
     });
 });

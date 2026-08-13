@@ -24,6 +24,27 @@ describe("admin system utility safe methods", () => {
     expect(source).not.toContain("List abandoned checkouts with cleanup");
   });
 
+  it("publishes a bounded PII-minimized agent summary route", () => {
+    const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1/admin");
+    app.route("/", adminSystemUtilsRoutes);
+    const spec = app.getOpenAPIDocument({
+      openapi: "3.0.0",
+      info: { title: "System utility operation identities", version: "test" },
+    }) as unknown as { paths: Record<string, Record<string, {
+      operationId?: string;
+      responses?: Record<string, { content?: Record<string, { schema?: unknown }> }>;
+    }>> };
+    const summary = spec.paths["/api/v1/admin/abandoned-checkouts/summaries"]?.get;
+    const serializedSchema = JSON.stringify(summary?.responses?.["200"]?.content?.["application/json"]?.schema);
+
+    expect(summary?.operationId).toBe("dashboard.abandoned_checkouts.summaries_list");
+    expect(serializedSchema).toContain("itemCount");
+    expect(serializedSchema).toContain("hasCustomerContact");
+    expect(serializedSchema).not.toContain("checkoutData");
+    expect(serializedSchema).not.toContain("customerPhone");
+    expect(serializedSchema).not.toContain("shippingAddress");
+  });
+
   it("publishes bounded explicit identities for browser FCM device maintenance", () => {
     const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1/admin");
     app.route("/", adminSystemUtilsRoutes);
