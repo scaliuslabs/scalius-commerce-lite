@@ -10216,6 +10216,83 @@ export type GetApiV1CategoriesBySlugResponses = {
 
 export type GetApiV1CategoriesBySlugResponse = GetApiV1CategoriesBySlugResponses[keyof GetApiV1CategoriesBySlugResponses];
 
+export type GetApiV1CategoriesBySlugSectionsBySectionData = {
+    body?: never;
+    path: {
+        slug: string;
+        section: 'summary' | 'text';
+    };
+    query?: {
+        field?: 'description' | 'content';
+        offset?: number | null;
+    };
+    url: '/api/v1/categories/{slug}/sections/{section}';
+};
+
+export type GetApiV1CategoriesBySlugSectionsBySectionErrors = {
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1CategoriesBySlugSectionsBySectionError = GetApiV1CategoriesBySlugSectionsBySectionErrors[keyof GetApiV1CategoriesBySlugSectionsBySectionErrors];
+
+export type GetApiV1CategoriesBySlugSectionsBySectionResponses = {
+    /**
+     * Bounded category section
+     */
+    200: {
+        success: true;
+        data: {
+            section: 'summary';
+            category: {
+                id: string;
+                name: string;
+                slug: string;
+                imageUrl: string | null;
+                metaTitle: string | null;
+                metaDescription: string | null;
+                canonicalPath: string | null;
+                noIndex: boolean;
+                excludeFromSitemap: boolean;
+                descriptionCharacters: number;
+                contentCharacters: number;
+                createdAt: string | null;
+                updatedAt: string | null;
+            };
+        } | {
+            section: 'text';
+            field: 'description' | 'content';
+            value: string;
+            totalCharacters: number;
+            offset: number;
+            nextOffset: number | null;
+            isNull: boolean;
+        };
+    };
+};
+
+export type GetApiV1CategoriesBySlugSectionsBySectionResponse = GetApiV1CategoriesBySlugSectionsBySectionResponses[keyof GetApiV1CategoriesBySlugSectionsBySectionResponses];
+
 export type GetApiV1CategoriesBySlugProductsData = {
     body?: never;
     path: {

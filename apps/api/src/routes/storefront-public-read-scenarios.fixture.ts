@@ -8,7 +8,7 @@ export const storefrontPublicReadScenarios = {
     "storefront.products.list",
     "storefront.search.predict",
     "storefront.categories.list",
-    "storefront.categories.get",
+    "storefront.categories.get_section",
     "storefront.categories.list_products",
     "storefront.collections.list",
     "storefront.collections.get",
@@ -36,6 +36,7 @@ export const storefrontPublicReadScenarios = {
  * routes stay documented but must not become a second execution authority.
  */
 export const storefrontPublicReadExcludedOperations = {
+  unboundedCategoryAggregate: "storefront.categories.get",
   unboundedProductAggregate: "storefront.products.get",
   legacyVariantSearch: "storefront.products.search_legacy",
   categoryIdAttributeAlias: "storefront.attributes.category_id_alias",

@@ -1,5 +1,9 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { getPublicCategories, getPublicCategoryBySlug } from "@scalius/core/modules/categories/categories.storefront";
+import {
+  getPublicCategories,
+  getPublicCategoryBySlug,
+  getPublicCategorySection,
+} from "@scalius/core/modules/categories/categories.storefront";
 import { resolvePublicAttributeFilters } from "@scalius/core/modules/attributes/attributes.public";
 import { getStorefrontCategoryProducts } from "@scalius/core/modules/products/products.storefront";
 import { NotFoundError } from "../utils/api-error";
@@ -119,6 +123,9 @@ const publicCategorySlugSchema = z
   .max(100)
   .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
 
+const storefrontCategorySectionSchema = z.enum(["summary", "text"]);
+const storefrontCategoryTextFieldSchema = z.enum(["description", "content"]);
+
 // GET /categories — list all categories
 const listCategoriesRoute = createRoute({
   method: "get",
@@ -173,6 +180,68 @@ app.openapi(getCategoryBySlugRoute, async (c) => {
   const category = await getPublicCategoryBySlug(db, slug);
   if (!category) throw new NotFoundError("Category not found");
   return ok(c, { category });
+});
+
+const getCategorySectionRoute = createRoute({
+  method: "get",
+  path: "/{slug}/sections/{section}",
+  operationId: "storefront.categories.get_section",
+  tags: ["Categories"],
+  summary: "Get a bounded category section",
+  request: {
+    params: z.object({
+      slug: publicCategorySlugSchema,
+      section: storefrontCategorySectionSchema,
+    }),
+    query: z.object({
+      field: storefrontCategoryTextFieldSchema.optional(),
+      offset: z.coerce.number().int().min(0).max(100_000).optional().default(0),
+    }),
+  },
+  responses: {
+    200: {
+      description: "Bounded category section",
+      content: { "application/json": { schema: successEnvelope(z.union([
+        z.object({
+          section: z.literal("summary"),
+          category: z.object({
+            id: z.string(),
+            name: z.string(),
+            slug: z.string(),
+            imageUrl: z.string().nullable(),
+            metaTitle: z.string().nullable(),
+            metaDescription: z.string().nullable(),
+            canonicalPath: z.string().nullable(),
+            noIndex: z.boolean(),
+            excludeFromSitemap: z.boolean(),
+            descriptionCharacters: z.number().int().min(0),
+            contentCharacters: z.number().int().min(0),
+            createdAt: z.string().nullable(),
+            updatedAt: z.string().nullable(),
+          }),
+        }),
+        z.object({
+          section: z.literal("text"),
+          field: storefrontCategoryTextFieldSchema,
+          value: z.string().max(12_000),
+          totalCharacters: z.number().int().min(0),
+          offset: z.number().int().min(0),
+          nextOffset: z.number().int().min(0).nullable(),
+          isNull: z.boolean(),
+        }),
+      ])) } },
+    },
+    404: errorResponses[404],
+    500: errorResponses[500],
+  },
+});
+
+app.openapi(getCategorySectionRoute, async (c) => {
+  const { slug, section } = c.req.valid("param");
+  const query = c.req.valid("query");
+  const result = await getPublicCategorySection(c.get("db"), slug, section, query);
+  if (!result) throw new NotFoundError("Category not found");
+  return ok(c, result);
 });
 
 // GET /categories/:slug/products — get products in a category

@@ -6,6 +6,11 @@ import { sql, eq, and } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { publicCategoryConditions } from "./categories.publication";
 
+export const STOREFRONT_CATEGORY_TEXT_CHUNK = 12_000;
+
+export type StorefrontCategorySection = "summary" | "text";
+export type StorefrontCategoryTextField = "description" | "content";
+
 /**
  * Returns all active categories for the storefront (navigation, listing).
  * No pagination — categories are typically <100 rows and cached aggressively.
@@ -69,6 +74,77 @@ export async function getPublicCategoryBySlug(db: Database, slug: string) {
         ...category,
         createdAt: category.createdAt ? new Date(category.createdAt * 1000).toISOString() : null,
         updatedAt: category.updatedAt ? new Date(category.updatedAt * 1000).toISOString() : null,
+    };
+}
+
+/**
+ * Bounded agent projection for categories whose buyer-facing rich text can be
+ * up to 100,000 characters. Browser aggregates keep their existing contract;
+ * agents reconstruct the same content through explicit text chunks.
+ */
+export async function getPublicCategorySection(
+    db: Database,
+    slug: string,
+    section: StorefrontCategorySection,
+    options: { field?: StorefrontCategoryTextField; offset?: number } = {},
+) {
+    if (section === "summary") {
+        const category = await db
+            .select({
+                id: categories.id,
+                name: categories.name,
+                slug: categories.slug,
+                imageUrl: categories.imageUrl,
+                metaTitle: categories.metaTitle,
+                metaDescription: categories.metaDescription,
+                canonicalPath: categories.canonicalPath,
+                noIndex: categories.noIndex,
+                excludeFromSitemap: categories.excludeFromSitemap,
+                descriptionCharacters: sql<number>`length(coalesce(${categories.description}, ''))`,
+                contentCharacters: sql<number>`length(coalesce(${categories.content}, ''))`,
+                createdAt: sql<number>`CAST(${categories.createdAt} AS INTEGER)`,
+                updatedAt: sql<number>`CAST(${categories.updatedAt} AS INTEGER)`,
+            })
+            .from(categories)
+            .where(and(eq(categories.slug, slug), ...publicCategoryConditions()))
+            .get();
+        if (!category) return null;
+        return {
+            section,
+            category: {
+                ...category,
+                descriptionCharacters: Number(category.descriptionCharacters ?? 0),
+                contentCharacters: Number(category.contentCharacters ?? 0),
+                createdAt: category.createdAt ? new Date(category.createdAt * 1000).toISOString() : null,
+                updatedAt: category.updatedAt ? new Date(category.updatedAt * 1000).toISOString() : null,
+            },
+        };
+    }
+
+    const field = options.field ?? "description";
+    const offset = options.offset ?? 0;
+    const column = field === "content" ? categories.content : categories.description;
+    const category = await db
+        .select({
+            value: sql<string>`substr(coalesce(${column}, ''), ${offset + 1}, ${STOREFRONT_CATEGORY_TEXT_CHUNK})`,
+            totalCharacters: sql<number>`length(coalesce(${column}, ''))`,
+            isNull: sql<number>`CASE WHEN ${column} IS NULL THEN 1 ELSE 0 END`,
+        })
+        .from(categories)
+        .where(and(eq(categories.slug, slug), ...publicCategoryConditions()))
+        .get();
+    if (!category) return null;
+    const totalCharacters = Number(category.totalCharacters ?? 0);
+    const value = category.value ?? "";
+    const nextOffset = offset + value.length < totalCharacters ? offset + value.length : null;
+    return {
+        section,
+        field,
+        value,
+        totalCharacters,
+        offset,
+        nextOffset,
+        isNull: Boolean(category.isNull),
     };
 }
 
