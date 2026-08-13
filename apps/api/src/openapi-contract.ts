@@ -1218,9 +1218,9 @@ const FOUNDATION_STOREFRONT_READ_BOUNDS = [
   ["storefront.attributes.list_filterable", 65_536],
   ["storefront.attributes.list_for_category", 65_536],
   ["storefront.attributes.list_for_search", 65_536],
-  ["storefront.locations.cities", 32_768],
-  ["storefront.locations.zones", 32_768],
-  ["storefront.locations.areas", 32_768],
+  ["storefront.locations.city_summaries", 32_768],
+  ["storefront.locations.zone_summaries", 32_768],
+  ["storefront.locations.area_summaries", 32_768],
   ["storefront.shipping_methods.list", 32_768],
   ["storefront.homepage.get", 65_536],
   ["storefront.layout.get", 65_536],
@@ -1230,6 +1230,12 @@ const FOUNDATION_STOREFRONT_READ_BOUNDS = [
 ] as const;
 
 const FOUNDATION_STOREFRONT_EXCLUSIONS = {
+  "storefront.locations.cities":
+    "Unbounded browser location aggregate; use storefront.locations.city_summaries.",
+  "storefront.locations.zones":
+    "Unbounded browser location aggregate; use storefront.locations.zone_summaries.",
+  "storefront.locations.areas":
+    "Unbounded browser location aggregate; use storefront.locations.area_summaries.",
   "storefront.categories.list":
     "Unbounded browser category aggregate can exceed the structured-result ceiling; use storefront.categories.list_summaries plus storefront.categories.get_section.",
   "storefront.categories.get":

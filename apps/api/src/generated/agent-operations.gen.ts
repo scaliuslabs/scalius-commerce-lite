@@ -69091,10 +69091,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "outputSchema": null
   },
   {
-    "operationId": "storefront.locations.areas",
+    "operationId": "storefront.locations.area_summaries",
     "method": "GET",
-    "pathTemplate": "/api/v1/locations/areas",
-    "summary": "Get all active areas for a given zone",
+    "pathTemplate": "/api/v1/locations/areas/summaries",
+    "summary": "Search bounded active area summaries for a zone",
     "tags": [
       "Locations"
     ],
@@ -69124,13 +69124,43 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
       "parameters": [
         {
           "schema": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100000,
+            "default": 1
+          },
+          "required": false,
+          "name": "page",
+          "in": "query"
+        },
+        {
+          "schema": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 50
+          },
+          "required": false,
+          "name": "limit",
+          "in": "query"
+        },
+        {
+          "schema": {
+            "type": "string",
+            "maxLength": 120,
+            "default": ""
+          },
+          "required": false,
+          "name": "search",
+          "in": "query"
+        },
+        {
+          "schema": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 128,
-            "description": "Zone ID to get areas for"
+            "maxLength": 128
           },
           "required": true,
-          "description": "Zone ID to get areas for",
           "name": "zoneId",
           "in": "query"
         }
@@ -69146,50 +69176,82 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           ]
         },
         "data": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "id": {
-                "type": "string",
-                "maxLength": 128
-              },
-              "name": {
-                "type": "string",
-                "maxLength": 120
-              },
-              "type": {
-                "type": "string",
-                "enum": [
-                  "city",
-                  "zone",
-                  "area"
+          "type": "object",
+          "properties": {
+            "locations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "maxLength": 128
+                  },
+                  "name": {
+                    "type": "string",
+                    "maxLength": 120
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "city",
+                      "zone",
+                      "area"
+                    ]
+                  },
+                  "parentId": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 128
+                  },
+                  "isActive": {
+                    "type": "boolean"
+                  },
+                  "sortOrder": {
+                    "type": "integer",
+                    "minimum": -100000,
+                    "maximum": 100000
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "type",
+                  "parentId",
+                  "isActive",
+                  "sortOrder"
                 ]
               },
-              "parentId": {
-                "type": "string",
-                "nullable": true,
-                "maxLength": 128
-              },
-              "isActive": {
-                "type": "boolean"
-              },
-              "sortOrder": {
-                "type": "integer",
-                "minimum": -100000,
-                "maximum": 100000
-              }
+              "maxItems": 100
             },
-            "required": [
-              "id",
-              "name",
-              "type",
-              "parentId",
-              "isActive",
-              "sortOrder"
-            ]
+            "pagination": {
+              "type": "object",
+              "properties": {
+                "page": {
+                  "type": "integer"
+                },
+                "limit": {
+                  "type": "integer"
+                },
+                "total": {
+                  "type": "integer"
+                },
+                "totalPages": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "page",
+                "limit",
+                "total",
+                "totalPages"
+              ]
+            }
           },
-          "maxItems": 1000
+          "required": [
+            "locations",
+            "pagination"
+          ]
         }
       },
       "required": [
@@ -69199,10 +69261,78 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     }
   },
   {
+    "operationId": "storefront.locations.areas",
+    "method": "GET",
+    "pathTemplate": "/api/v1/locations/areas",
+    "summary": "Get all active areas for a given zone",
+    "tags": [
+      "Locations"
+    ],
+    "surface": "storefront",
+    "exposure": "excluded",
+    "principals": [
+      "customer",
+      "visitor"
+    ],
+    "risk": "read",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "forbidden",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 16384,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "exclusionReason": "Unbounded browser location aggregate; use storefront.locations.area_summaries.",
+    "rbac": {
+      "type": "public"
+    },
+    "inputSchema": null,
+    "outputSchema": null
+  },
+  {
     "operationId": "storefront.locations.cities",
     "method": "GET",
     "pathTemplate": "/api/v1/locations/cities",
     "summary": "Get all active cities",
+    "tags": [
+      "Locations"
+    ],
+    "surface": "storefront",
+    "exposure": "excluded",
+    "principals": [
+      "customer",
+      "visitor"
+    ],
+    "risk": "read",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "forbidden",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 16384,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "exclusionReason": "Unbounded browser location aggregate; use storefront.locations.city_summaries.",
+    "rbac": {
+      "type": "public"
+    },
+    "inputSchema": null,
+    "outputSchema": null
+  },
+  {
+    "operationId": "storefront.locations.city_summaries",
+    "method": "GET",
+    "pathTemplate": "/api/v1/locations/cities/summaries",
+    "summary": "Search bounded active city summaries",
     "tags": [
       "Locations"
     ],
@@ -69228,7 +69358,42 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "rbac": {
       "type": "public"
     },
-    "inputSchema": {},
+    "inputSchema": {
+      "parameters": [
+        {
+          "schema": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100000,
+            "default": 1
+          },
+          "required": false,
+          "name": "page",
+          "in": "query"
+        },
+        {
+          "schema": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 50
+          },
+          "required": false,
+          "name": "limit",
+          "in": "query"
+        },
+        {
+          "schema": {
+            "type": "string",
+            "maxLength": 120,
+            "default": ""
+          },
+          "required": false,
+          "name": "search",
+          "in": "query"
+        }
+      ]
+    },
     "outputSchema": {
       "type": "object",
       "properties": {
@@ -69239,50 +69404,252 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           ]
         },
         "data": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "id": {
-                "type": "string",
-                "maxLength": 128
-              },
-              "name": {
-                "type": "string",
-                "maxLength": 120
-              },
-              "type": {
-                "type": "string",
-                "enum": [
-                  "city",
-                  "zone",
-                  "area"
+          "type": "object",
+          "properties": {
+            "locations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "maxLength": 128
+                  },
+                  "name": {
+                    "type": "string",
+                    "maxLength": 120
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "city",
+                      "zone",
+                      "area"
+                    ]
+                  },
+                  "parentId": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 128
+                  },
+                  "isActive": {
+                    "type": "boolean"
+                  },
+                  "sortOrder": {
+                    "type": "integer",
+                    "minimum": -100000,
+                    "maximum": 100000
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "type",
+                  "parentId",
+                  "isActive",
+                  "sortOrder"
                 ]
               },
-              "parentId": {
-                "type": "string",
-                "nullable": true,
-                "maxLength": 128
-              },
-              "isActive": {
-                "type": "boolean"
-              },
-              "sortOrder": {
-                "type": "integer",
-                "minimum": -100000,
-                "maximum": 100000
-              }
+              "maxItems": 100
             },
-            "required": [
-              "id",
-              "name",
-              "type",
-              "parentId",
-              "isActive",
-              "sortOrder"
-            ]
+            "pagination": {
+              "type": "object",
+              "properties": {
+                "page": {
+                  "type": "integer"
+                },
+                "limit": {
+                  "type": "integer"
+                },
+                "total": {
+                  "type": "integer"
+                },
+                "totalPages": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "page",
+                "limit",
+                "total",
+                "totalPages"
+              ]
+            }
           },
-          "maxItems": 1000
+          "required": [
+            "locations",
+            "pagination"
+          ]
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    }
+  },
+  {
+    "operationId": "storefront.locations.zone_summaries",
+    "method": "GET",
+    "pathTemplate": "/api/v1/locations/zones/summaries",
+    "summary": "Search bounded active zone summaries for a city",
+    "tags": [
+      "Locations"
+    ],
+    "surface": "storefront",
+    "exposure": "execute",
+    "principals": [
+      "customer",
+      "visitor"
+    ],
+    "risk": "read",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "parallel",
+    "transport": "json",
+    "maxResponseBytes": 32768,
+    "maxRequestBytes": 16384,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "rbac": {
+      "type": "public"
+    },
+    "inputSchema": {
+      "parameters": [
+        {
+          "schema": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100000,
+            "default": 1
+          },
+          "required": false,
+          "name": "page",
+          "in": "query"
+        },
+        {
+          "schema": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 50
+          },
+          "required": false,
+          "name": "limit",
+          "in": "query"
+        },
+        {
+          "schema": {
+            "type": "string",
+            "maxLength": 120,
+            "default": ""
+          },
+          "required": false,
+          "name": "search",
+          "in": "query"
+        },
+        {
+          "schema": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "required": true,
+          "name": "cityId",
+          "in": "query"
+        }
+      ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "locations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "maxLength": 128
+                  },
+                  "name": {
+                    "type": "string",
+                    "maxLength": 120
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "city",
+                      "zone",
+                      "area"
+                    ]
+                  },
+                  "parentId": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 128
+                  },
+                  "isActive": {
+                    "type": "boolean"
+                  },
+                  "sortOrder": {
+                    "type": "integer",
+                    "minimum": -100000,
+                    "maximum": 100000
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "type",
+                  "parentId",
+                  "isActive",
+                  "sortOrder"
+                ]
+              },
+              "maxItems": 100
+            },
+            "pagination": {
+              "type": "object",
+              "properties": {
+                "page": {
+                  "type": "integer"
+                },
+                "limit": {
+                  "type": "integer"
+                },
+                "total": {
+                  "type": "integer"
+                },
+                "totalPages": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "page",
+                "limit",
+                "total",
+                "totalPages"
+              ]
+            }
+          },
+          "required": [
+            "locations",
+            "pagination"
+          ]
         }
       },
       "required": [
@@ -69300,7 +69667,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
       "Locations"
     ],
     "surface": "storefront",
-    "exposure": "execute",
+    "exposure": "excluded",
     "principals": [
       "customer",
       "visitor"
@@ -69309,95 +69676,21 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "openWorld": false,
     "idempotency": "none",
     "revision": "none",
-    "batch": "parallel",
+    "batch": "forbidden",
     "transport": "json",
-    "maxResponseBytes": 32768,
+    "maxResponseBytes": 65536,
     "maxRequestBytes": 16384,
     "sensitiveOutput": false,
     "oneTimeSecretOutput": false,
     "requiredClientAction": null,
     "artifactOutput": null,
     "continuationOutput": null,
+    "exclusionReason": "Unbounded browser location aggregate; use storefront.locations.zone_summaries.",
     "rbac": {
       "type": "public"
     },
-    "inputSchema": {
-      "parameters": [
-        {
-          "schema": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 128,
-            "description": "City ID to get zones for"
-          },
-          "required": true,
-          "description": "City ID to get zones for",
-          "name": "cityId",
-          "in": "query"
-        }
-      ]
-    },
-    "outputSchema": {
-      "type": "object",
-      "properties": {
-        "success": {
-          "type": "boolean",
-          "enum": [
-            true
-          ]
-        },
-        "data": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "id": {
-                "type": "string",
-                "maxLength": 128
-              },
-              "name": {
-                "type": "string",
-                "maxLength": 120
-              },
-              "type": {
-                "type": "string",
-                "enum": [
-                  "city",
-                  "zone",
-                  "area"
-                ]
-              },
-              "parentId": {
-                "type": "string",
-                "nullable": true,
-                "maxLength": 128
-              },
-              "isActive": {
-                "type": "boolean"
-              },
-              "sortOrder": {
-                "type": "integer",
-                "minimum": -100000,
-                "maximum": 100000
-              }
-            },
-            "required": [
-              "id",
-              "name",
-              "type",
-              "parentId",
-              "isActive",
-              "sortOrder"
-            ]
-          },
-          "maxItems": 1000
-        }
-      },
-      "required": [
-        "success",
-        "data"
-      ]
-    }
+    "inputSchema": null,
+    "outputSchema": null
   },
   {
     "operationId": "storefront.meta_events.events",
