@@ -78,6 +78,40 @@ describe("agent in-process request construction", () => {
     expect(request.headers.get("Content-Type")).toBe("application/json");
   });
 
+  it("builds the JSON request that initiates a reviewed continuation", async () => {
+    const source = operation({
+      operationId: "storefront.orders.payment.begin",
+      pathTemplate: "/api/v1/storefront/agent-contexts/{contextId}/orders/{orderId}/payment",
+      surface: "storefront",
+      exposure: "continuation",
+      principals: ["visitor", "customer"],
+      transport: "continuation",
+      sensitiveOutput: true,
+      oneTimeSecretOutput: false,
+      continuationOutput: {
+        method: "POST",
+        urlJsonPointer: "/data/browser/url",
+        fieldsJsonPointer: "/data/browser/fields",
+        sensitiveFields: ["continuationCode"],
+      },
+      rbac: { type: "agentGrant" },
+    });
+    const request = buildInternalRequest(
+      source,
+      {
+        path: { contextId: "asc_123", orderId: "order_123" },
+        body: {},
+      },
+      { PUBLIC_API_BASE_URL: "https://api.example.test" } as Env,
+      "request-continuation",
+    );
+    expect(request.method).toBe("POST");
+    expect(new URL(request.url).pathname)
+      .toBe("/api/v1/storefront/agent-contexts/asc_123/orders/order_123/payment");
+    expect(request.headers.get("Content-Type")).toBe("application/json");
+    expect(await request.json()).toEqual({});
+  });
+
   it("fails closed on missing and arbitrary path parameters", () => {
     expect(() => buildAgentOperationPath("/api/v1/admin/products/{id}", {}))
       .toThrowError(AgentDispatchError);

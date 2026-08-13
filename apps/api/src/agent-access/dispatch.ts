@@ -204,7 +204,10 @@ export function buildInternalRequest(
   env: Env,
   requestId: string,
 ): Request {
-  if (operation.transport !== "json") {
+  // `continuation` describes a typed response handoff. Its initiating HTTP
+  // request is still the operation's ordinary JSON request; only raw uploads
+  // require a separate request transport.
+  if (operation.transport !== "json" && operation.transport !== "continuation") {
     throw new AgentDispatchError(
       "unsupported_transport",
       "This operation requires a dedicated transport flow",
