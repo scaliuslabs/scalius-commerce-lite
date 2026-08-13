@@ -73,6 +73,23 @@ describe("CLI program", () => {
     expect(runtime.stderrText()).toBe("");
   });
 
+  it("keeps search and describe compact unless full responses are requested", async () => {
+    const fetch = vi.fn(async () => Response.json(executableSpec(), { headers: { ETag: '"v1"' } }));
+    const runtime = await authenticatedRuntime(fetch as typeof globalThis.fetch);
+    expect(await runProgram(runtime, ["--output", "json", "operations", "search", "product", "--limit", "1"])).toBe(0);
+    expect(JSON.parse(runtime.stdoutText())).toMatchObject({ count: 1 });
+
+    const compact = await authenticatedRuntime(fetch as typeof globalThis.fetch);
+    expect(await runProgram(compact, ["--output", "json", "operations", "describe", "dashboard.products.create"])).toBe(0);
+    const compactResult = JSON.parse(compact.stdoutText()) as Record<string, unknown>;
+    expect(compactResult).not.toHaveProperty("responses");
+    expect(compactResult.responseStatuses).toEqual(["201"]);
+
+    const full = await authenticatedRuntime(fetch as typeof globalThis.fetch);
+    expect(await runProgram(full, ["--output", "json", "operations", "describe", "dashboard.products.create", "--full"])).toBe(0);
+    expect(JSON.parse(full.stdoutText())).toHaveProperty("responses.201");
+  });
+
   it("executes only the fixed method and path from OpenAPI", async () => {
     const calls: Array<{ url: string; init?: RequestInit }> = [];
     const fetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {

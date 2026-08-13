@@ -2570,6 +2570,8 @@ export const getApiV1AdminMedia = <ThrowOnError extends boolean = false>(options
 
 /**
  * Initiate a durable image or video upload
+ *
+ * Start one resumable upload. Supported images: JPEG, PNG, GIF, WebP, and AVIF up to 20 MiB. Supported video: MP4 and WebM up to 100 MiB. File extension, declared MIME type, and signature must agree. Upload exactly session.expectedParts chunks of at most session.partSize bytes with dashboard.media.upload_part, then call dashboard.media.upload_complete. Resume with dashboard.media.upload_get or clean up with dashboard.media.upload_abort.
  */
 export const postApiV1AdminMediaUploads = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminMediaUploadsData, ThrowOnError>): RequestResult<PostApiV1AdminMediaUploadsResponses, PostApiV1AdminMediaUploadsErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminMediaUploadsResponses, PostApiV1AdminMediaUploadsErrors, ThrowOnError>({
     security: [{
@@ -2625,6 +2627,8 @@ export const getApiV1AdminMediaUploadsById = <ThrowOnError extends boolean = fal
 
 /**
  * Stream one bounded media upload part
+ *
+ * Upload one exact raw application/octet-stream chunk for an initiated media session. Use the session ID and 1-based part number returned by dashboard.media.upload_initiate. Send an exact Content-Length; every non-final chunk must equal session.partSize and the final chunk carries the remainder.
  */
 export const putApiV1AdminMediaUploadsByIdPartsByPartNumber = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminMediaUploadsByIdPartsByPartNumberData, ThrowOnError>): RequestResult<PutApiV1AdminMediaUploadsByIdPartsByPartNumberResponses, PutApiV1AdminMediaUploadsByIdPartsByPartNumberErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminMediaUploadsByIdPartsByPartNumberResponses, PutApiV1AdminMediaUploadsByIdPartsByPartNumberErrors, ThrowOnError>({
     bodySerializer: null,
@@ -2647,6 +2651,8 @@ export const putApiV1AdminMediaUploadsByIdPartsByPartNumber = <ThrowOnError exte
 
 /**
  * Complete and reconcile a media upload
+ *
+ * Commit an upload only after every expected part is present. The returned file.id is the media asset ID used by product media associations. If completion fails, inspect dashboard.media.upload_get and resume missing parts instead of initiating a duplicate session.
  */
 export const postApiV1AdminMediaUploadsByIdComplete = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminMediaUploadsByIdCompleteData, ThrowOnError>): RequestResult<PostApiV1AdminMediaUploadsByIdCompleteResponses, PostApiV1AdminMediaUploadsByIdCompleteErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminMediaUploadsByIdCompleteResponses, PostApiV1AdminMediaUploadsByIdCompleteErrors, ThrowOnError>({
     security: [{
@@ -6541,6 +6547,8 @@ export const getApiV1AdminProducts = <ThrowOnError extends boolean = false>(opti
 
 /**
  * Create a product
+ *
+ * Create the complete product atomically. Discover categoryId with dashboard.categories.form_options and attributeId with dashboard.attributes.list_summaries. Media must first be committed through dashboard.media.upload_initiate, upload_part, and upload_complete. Product-media IDs (pmed_*) are caller-local association IDs; option/value/variant draft IDs only correlate this request. Each variant selectedOptionValueIds must follow option order, and variant imageId references a pmed_* association rather than a media_* asset.
  */
 export const postApiV1AdminProducts = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminProductsData, ThrowOnError>): RequestResult<PostApiV1AdminProductsResponses, PostApiV1AdminProductsErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminProductsResponses, PostApiV1AdminProductsErrors, ThrowOnError>({
     security: [{

@@ -13,6 +13,8 @@ scalius auth login --server https://api.example.com
 scalius operations search products
 scalius operations describe dashboard.products.create
 scalius operations run dashboard.products.create --input @product.json --yes
+scalius media upload hero.jpg orange.jpg blue.jpg --yes
+scalius setup --harness codex --server https://api.example.com
 ```
 
 You can also try it without a global install:
@@ -34,11 +36,18 @@ scalius auth revoke
 scalius profile list
 scalius profile use <name>
 scalius profile show [name]
-scalius operations search [query]
-scalius operations describe <operationId>
+scalius operations search [query] [--limit <1-100>]
+scalius operations describe <operationId> [--full]
 scalius operations run <operationId> --input <json|@file|->
 scalius operations batch --input <json|@file|->
+scalius media upload <files...> --yes
+scalius setup --harness <agents|codex|claude|opencode|pi> [--server <origin>] [--force]
+scalius skill install [--harness <name>] [--force]
 ```
+
+Run `scalius setup` before operating a store. The bundled `scalius-commerce` skill follows the open Agent Skills format and installs to the native user location for Codex, Claude Code, OpenCode, Pi, or the cross-client `.agents/skills` convention. Setup prints exact credential-free instructions for both audience-specific MCP servers; it never writes tokens into harness configuration. Pi supports the skill and full CLI natively; because Pi's core has no MCP client, setup prints the separately installed `pi-mcp-adapter` package from Pi's catalog and shared MCP configuration but never silently installs executable third-party code.
+
+The skill teaches one compact discovery and safety loop, then loads only the relevant domain guide. `media upload` validates signatures, extensions, and byte limits, reuses one live contract in-process, performs the resumable initiate/part/complete sequence, aborts an incomplete session on failure, and returns committed media IDs. Supported images are JPEG, PNG, GIF, WebP, and AVIF up to 20 MiB; supported video is MP4 and WebM up to 100 MiB.
 
 `operations run` input has three fields: `path`, `query`, and `body`. JSON bodies are measured after serialization as UTF-8 and rejected locally when they exceed the live operation's reviewed request limit; the same check applies to each resolved batch step. Multipart operations accept repeatable `--file field=@path` arguments for binary fields declared by OpenAPI. Reviewed raw upload operations accept exactly one `--file path`; the CLI streams it as `application/octet-stream` with an exact `Content-Length` and enforces matching live schema and operation byte bounds. Raw file input never accepts stdin and never runs in a batch. `--save path` is enabled only for contract-declared artifact output; those downloads enforce the reviewed media type, disposition, filename, declared length, and actual byte limit before atomically publishing the destination. Mutating operations require `--yes`; operations marked as requiring idempotency also require `--idempotency-key`.
 

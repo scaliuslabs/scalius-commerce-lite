@@ -140,6 +140,7 @@ describe("OpenAPI operation indexing", () => {
   it("searches identifiers, summaries, and tags", () => {
     const operations = indexOperations(executableSpec());
     expect(searchOperations(operations, "get product").map(({ id }) => id)).toEqual(["dashboard.products.get"]);
+    expect(searchOperations(operations, "create product").map(({ id }) => id)).toEqual(["dashboard.products.create"]);
     expect(searchOperations(operations, "Products")).toHaveLength(2);
   });
 
@@ -237,5 +238,26 @@ describe("OpenAPI operation indexing", () => {
     const profile = await store.resolveProfile();
     expect(indexOperations(await loadOpenApi(runtime, profile))).toHaveLength(6);
     expect(indexOperations(await loadOpenApi(runtime, profile))).toHaveLength(6);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("revalidates a contract after the five-minute local freshness window", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "scalius-openapi-"));
+    let calls = 0;
+    const fetch = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+      calls += 1;
+      if (calls === 1) return Response.json(executableSpec(), { headers: { ETag: '"contract-1"' } });
+      expect(new Headers(init?.headers).get("If-None-Match")).toBe('"contract-1"');
+      return new Response(null, { status: 304 });
+    });
+    const runtime = createTestRuntime({ directory, fetch: fetch as typeof globalThis.fetch });
+    const store = new ConfigStore(runtime);
+    await store.putProfile("default", "https://api.example.com");
+    await store.putCredential("default", { token: validToken(), createdAt: "2026-08-13T00:00:00.000Z" });
+    const profile = await store.resolveProfile();
+    expect(indexOperations(await loadOpenApi(runtime, profile))).toHaveLength(6);
+    await runtime.sleep(5 * 60 * 1_000);
+    expect(indexOperations(await loadOpenApi(runtime, profile))).toHaveLength(6);
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
 });

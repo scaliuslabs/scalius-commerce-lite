@@ -30,6 +30,7 @@ function manifestOperation(
 ) {
   return {
     operationId,
+    description: "Use this operation to create a complete product with variants.",
     responses: {
       200: {
         content: {
@@ -46,6 +47,20 @@ function manifestOperation(
 }
 
 describe("stable manifest identity", () => {
+  it("retains bounded on-demand guidance without adding it to metadata", () => {
+    const [operation] = buildAgentOperationManifest({
+      paths: { "/api/v1/admin/a": { post: manifestOperation("dashboard.a.create") } },
+    });
+    expect(operation?.description).toContain("complete product");
+    expect(() => buildAgentOperationManifest({
+      paths: {
+        "/api/v1/admin/a": {
+          post: { ...manifestOperation("dashboard.a.create"), description: "x".repeat(4_097) },
+        },
+      },
+    })).toThrowError(/description of at most 4096/);
+  });
+
   it("sorts records deterministically and renders without timestamps", () => {
     const manifest = buildAgentOperationManifest({
       paths: {

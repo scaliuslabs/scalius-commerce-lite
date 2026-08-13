@@ -24350,6 +24350,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "method": "POST",
     "pathTemplate": "/api/v1/admin/media/uploads/{id}/complete",
     "summary": "Complete and reconcile a media upload",
+    "description": "Commit an upload only after every expected part is present. The returned file.id is the media asset ID used by product media associations. If completion fails, inspect dashboard.media.upload_get and resume missing parts instead of initiating a duplicate session.",
     "tags": [
       "Admin - Media"
     ],
@@ -24727,6 +24728,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "method": "POST",
     "pathTemplate": "/api/v1/admin/media/uploads",
     "summary": "Initiate a durable image or video upload",
+    "description": "Start one resumable upload. Supported images: JPEG, PNG, GIF, WebP, and AVIF up to 20 MiB. Supported video: MP4 and WebM up to 100 MiB. File extension, declared MIME type, and signature must agree. Upload exactly session.expectedParts chunks of at most session.partSize bytes with dashboard.media.upload_part, then call dashboard.media.upload_complete. Resume with dashboard.media.upload_get or clean up with dashboard.media.upload_abort.",
     "tags": [
       "Admin - Media"
     ],
@@ -24925,6 +24927,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "method": "PUT",
     "pathTemplate": "/api/v1/admin/media/uploads/{id}/parts/{partNumber}",
     "summary": "Stream one bounded media upload part",
+    "description": "Upload one exact raw application/octet-stream chunk for an initiated media session. Use the session ID and 1-based part number returned by dashboard.media.upload_initiate. Send an exact Content-Length; every non-final chunk must equal session.partSize and the final chunk carries the remainder.",
     "tags": [
       "Admin - Media"
     ],
@@ -42601,6 +42604,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "method": "POST",
     "pathTemplate": "/api/v1/admin/products",
     "summary": "Create a product",
+    "description": "Create the complete product atomically. Discover categoryId with dashboard.categories.form_options and attributeId with dashboard.attributes.list_summaries. Media must first be committed through dashboard.media.upload_initiate, upload_part, and upload_complete. Product-media IDs (pmed_*) are caller-local association IDs; option/value/variant draft IDs only correlate this request. Each variant selectedOptionValueIds must follow option order, and variant imageId references a pmed_* association rather than a media_* asset.",
     "tags": [
       "Admin - Products"
     ],
