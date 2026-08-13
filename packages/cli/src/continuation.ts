@@ -8,6 +8,7 @@ const FORBIDDEN_POINTER_SEGMENTS = new Set(["__proto__", "prototype", "construct
 const MAX_FIELDS = 16;
 const MAX_FIELD_BYTES = 4_096;
 const RELAY_TIMEOUT_MS = 30_000;
+const RELAY_PREFIX = "scalius-continuation-v1:";
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -26,16 +27,6 @@ function readPointer(value: unknown, pointer: string): unknown {
     current = current[segment];
   }
   return current;
-}
-
-function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/g, (character) => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#39;",
-  })[character]!);
 }
 
 function continuationAction(
@@ -73,11 +64,18 @@ function continuationAction(
   return { target, fields };
 }
 
+function scriptJson(value: string): string {
+  return JSON.stringify(value)
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
+    .replace(/&/g, "\\u0026")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
+}
+
 function relayHtml(target: URL, fields: Record<string, string>): string {
-  const inputs = Object.entries(fields)
-    .map(([name, value]) => `<input type="hidden" name="${escapeHtml(name)}" value="${escapeHtml(value)}">`)
-    .join("");
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="referrer" content="no-referrer"><title>Continue securely</title></head><body><form id="continuation" method="post" action="${escapeHtml(target.toString())}">${inputs}<noscript><button type="submit">Continue securely</button></noscript></form><script>document.getElementById("continuation").requestSubmit();</script></body></html>`;
+  const payload = `${RELAY_PREFIX}${Buffer.from(JSON.stringify(fields), "utf8").toString("base64url")}`;
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="referrer" content="no-referrer"><title>Continue securely</title></head><body><noscript>JavaScript is required to continue securely.</noscript><script>window.name=${scriptJson(payload)};window.location.replace(${scriptJson(target.toString())});</script></body></html>`;
 }
 
 async function openRelay(runtime: Runtime, target: URL, fields: Record<string, string>): Promise<void> {
@@ -106,7 +104,7 @@ async function openRelay(runtime: Runtime, target: URL, fields: Record<string, s
         "Content-Type": "text/html; charset=utf-8",
         "Content-Length": String(body.byteLength),
         "Cache-Control": "private, no-store",
-        "Content-Security-Policy": `default-src 'none'; script-src 'unsafe-inline'; form-action ${target.origin}; base-uri 'none'; frame-ancestors 'none'`,
+        "Content-Security-Policy": "default-src 'none'; script-src 'unsafe-inline'; form-action 'none'; base-uri 'none'; frame-ancestors 'none'",
         "Referrer-Policy": "no-referrer",
         "X-Content-Type-Options": "nosniff",
         "X-Frame-Options": "DENY",

@@ -58,21 +58,12 @@ export function submitThemePreview({
     ) {
       throw new Error("Invalid storefront preview destination");
     }
-    const form = document.createElement("form");
-    form.method = "post";
-    form.action = destination.toString();
-    form.target = previewWindow.name;
-    form.hidden = true;
-    for (const [name, value] of Object.entries(continuation.fields)) {
-      const input = document.createElement("input");
-      input.type = "hidden";
-      input.name = name;
-      input.value = value;
-      form.append(input);
-    }
-    document.body.append(form);
-    form.submit();
-    form.remove();
+    const bytes = new TextEncoder().encode(JSON.stringify(continuation.fields));
+    let binary = "";
+    for (const byte of bytes) binary += String.fromCharCode(byte);
+    const payload = btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    previewWindow.name = `scalius-continuation-v1:${payload}`;
+    previewWindow.location.replace(destination.toString());
     return Promise.resolve();
   } catch {
     return Promise.reject(new Error("Invalid storefront preview destination"));

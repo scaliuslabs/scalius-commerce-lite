@@ -1,10 +1,9 @@
-import { env as cfEnv } from "cloudflare:workers";
 import type { APIRoute } from "astro";
 
 import { createApiUrl, fetchWithRetry } from "@/lib/api/client";
 import { createThemePreviewCookieHeader } from "@/lib/theme-preview-cookie";
+import { browserContinuationRelayResponse } from "@/lib/browser-continuation-relay";
 import {
-  normalizeThemePreviewDashboardOrigin,
   normalizeThemePreviewDevice,
   normalizeThemePreviewRoutePath,
 } from "@/lib/theme-preview-route";
@@ -68,12 +67,14 @@ function hasBoundedFormBody(request: Request, body: string): boolean {
   return true;
 }
 
+export const GET: APIRoute = async () => browserContinuationRelayResponse([
+  { name: "continuationCode", pattern: CONTINUATION_CODE.source, maxBytes: 52 },
+  { name: "path", pattern: "^/[^\\r\\n]{0,511}$", maxBytes: 512 },
+  { name: "device", pattern: "^(?:full|desktop|mobile)$", maxBytes: 7 },
+]);
+
 export const POST: APIRoute = async ({ request, url }) => {
-  const trustedDashboardOrigin = normalizeThemePreviewDashboardOrigin(cfEnv.DASHBOARD_URL);
-  if (!trustedDashboardOrigin) {
-    return textResponse("Theme preview continuation is not configured.", 503);
-  }
-  if (request.headers.get("Origin") !== trustedDashboardOrigin) {
+  if (request.headers.get("Origin") !== url.origin) {
     return textResponse("Forbidden", 403);
   }
 
@@ -144,5 +145,5 @@ export const POST: APIRoute = async ({ request, url }) => {
 };
 
 export const ALL: APIRoute = async () => textResponse("Method not allowed", 405, {
-  "Allow": "POST",
+  "Allow": "GET, POST",
 });
