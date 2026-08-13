@@ -50,6 +50,18 @@ const productPickerSummarySchema = z.object({
     discountPercentage: z.number().nullable(),
 });
 
+const productAgentSummarySchema = z.object({
+    id: z.string().max(180),
+    name: z.string().max(100),
+    slug: z.string().max(100),
+    price: z.number(),
+    isActive: z.boolean(),
+    aggregateRevision: z.number().int().min(1),
+    category: z.object({ name: z.string().max(100) }),
+    variantCount: z.number().int().nonnegative(),
+    sku: z.string().max(100).optional(),
+});
+
 const semanticPageSchema = {
     total: z.number().int().nonnegative(),
     offset: z.number().int().nonnegative(),
@@ -377,6 +389,49 @@ app.openapi(listRoute, async (c) => {
         showTrashed: query.trashed === "true",
         sort: query.sort as "name" | "price" | "category" | "createdAt" | "updatedAt" | undefined,
         order: query.order as "asc" | "desc" | undefined
+    });
+    return ok(c, result);
+});
+
+// ── Bounded Product Summaries for Agents ──
+
+const listAgentSummariesRoute = createRoute({
+    method: "get",
+    path: "/summaries",
+    operationId: "dashboard.products.list_summaries",
+    tags: ["Admin - Products"],
+    summary: "List bounded product summaries",
+    request: {
+        query: z.object({
+            page: z.coerce.number().int().min(1).default(1),
+            limit: z.coerce.number().int().min(1).max(50).default(20),
+            search: z.string().trim().max(120).optional(),
+            category: z.string().max(180).optional(),
+            trashed: z.enum(["true", "false"]).optional(),
+            sort: z.enum(["name", "price", "category", "createdAt", "updatedAt"]).optional().default("updatedAt"),
+            order: z.enum(["asc", "desc"]).optional().default("desc"),
+        }),
+    },
+    responses: {
+        200: {
+            description: "Bounded product summaries with pagination",
+            content: { "application/json": { schema: paginatedEnvelope("products", productAgentSummarySchema) } },
+        },
+        ...errorResponses,
+    },
+});
+
+app.openapi(listAgentSummariesRoute, async (c) => {
+    const db = c.get("db");
+    const query = c.req.valid("query");
+    const result = await ProductsAdmin.listProductAgentSummaries(db, {
+        page: query.page,
+        limit: query.limit,
+        search: query.search || undefined,
+        categoryId: query.category || undefined,
+        showTrashed: query.trashed === "true",
+        sort: query.sort,
+        order: query.order,
     });
     return ok(c, result);
 });

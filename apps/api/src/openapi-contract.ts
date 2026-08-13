@@ -580,18 +580,20 @@ const REVIEWED_AGENT_OPERATIONS: Readonly<
     operationId: "dashboard.products.list",
     metadata: {
       surface: "dashboard",
-      exposure: "execute",
+      exposure: "excluded",
       principals: ["admin"],
       risk: "read",
       openWorld: false,
       idempotency: "none",
       revision: "none",
-      batch: "parallel",
+      batch: "forbidden",
       transport: "json",
       maximumResponseBytes: 65_536,
       maxRequestBytes: 1024 * 1024,
       sensitiveOutput: false,
       oneTimeSecretOutput: false,
+      exclusionReason:
+        "Legacy dashboard list may include oversized rich text and media projections; use dashboard.products.list_summaries.",
     },
   },
   "POST /admin/products": {
@@ -820,6 +822,7 @@ const CATALOG_READ_OPERATION_IDS = [
   "dashboard.products.stats",
   "dashboard.products.lookup_barcode",
   "dashboard.products.list",
+  "dashboard.products.list_summaries",
   "dashboard.products.get_by_ids",
   "dashboard.products.get_section",
   "dashboard.product_variants.list",
@@ -1933,6 +1936,15 @@ const REVIEWED_AGENT_OPERATIONS_BY_ID: Readonly<
       exposure: "excluded",
       exclusionReason:
         "Legacy oversized aggregate projection; use dashboard.products.get_section.",
+    },
+  ),
+  "dashboard.products.list": dashboardOperationMetadata(
+    "dashboard.products.list",
+    {
+      risk: "read",
+      exposure: "excluded",
+      exclusionReason:
+        "Legacy dashboard list may include oversized rich text and media projections; use dashboard.products.list_summaries.",
     },
   ),
   "dashboard.collections.get": dashboardOperationMetadata(

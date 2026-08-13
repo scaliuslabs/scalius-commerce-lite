@@ -70,14 +70,18 @@ describe("agent operation contract", () => {
   });
 
   it("exposes the representative dashboard read, dashboard mutation, and storefront read", () => {
-    expect(byId(manifest, "dashboard.products.list")).toMatchObject({
+    expect(byId(manifest, "dashboard.products.list_summaries")).toMatchObject({
       method: "GET",
-      pathTemplate: "/api/v1/admin/products",
+      pathTemplate: "/api/v1/admin/products/summaries",
       surface: "dashboard",
       principals: ["admin"],
       risk: "read",
       batch: "parallel",
       rbac: { type: "permission", permission: "products.view" },
+    });
+    expect(byId(manifest, "dashboard.products.list")).toMatchObject({
+      exposure: "excluded",
+      batch: "forbidden",
     });
     expect(byId(manifest, "dashboard.products.create")).toMatchObject({
       method: "POST",
