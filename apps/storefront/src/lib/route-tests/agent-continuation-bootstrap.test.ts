@@ -75,6 +75,7 @@ describe("agent storefront body-only bootstrap", () => {
     expect(html).toContain('const raw = window.name;');
     expect(html).toContain('window.name = "";');
     expect(html).toContain('form.method = "post";');
+    expect(html).toContain('button.textContent = "Continue securely";');
     expect(html).toContain("form.submit();");
     expect(html).not.toContain(CODE);
   });
