@@ -176,14 +176,14 @@ const continuationViewSchema = z.object({
 
 const startedContinuationSchema = continuationViewSchema.extend({
   browser: z.object({
-    url: z.string().url(),
+    url: z.string().url().max(512),
     method: z.literal("POST"),
     fields: z.object({
       continuationCode: z.string().length(68)
         .regex(/^acb_[A-Za-z0-9_-]{20}_[A-Za-z0-9_-]{43}$/),
     }).strict(),
   }).strict(),
-  message: z.string(),
+  message: z.string().max(256),
 });
 
 const checkoutSubmitSchema = z.object({
@@ -194,8 +194,8 @@ const checkoutSubmitSchema = z.object({
   customerEmail: z.email().nullable(),
   shippingAddress: z.string().trim().min(10).max(500),
   notes: z.string().trim().max(500).nullable(),
-  paymentMethod: z.literal("cod").openapi({
-    description: "Agent checkout is currently COD-only. Online payment starts remain excluded until the client can complete the body-only browser handoff without leaking bootstrap authority.",
+  paymentMethod: z.enum(["cod", "stripe", "sslcommerz", "polar"]).openapi({
+    description: "Selected active checkout payment method. Online methods continue through storefront.orders.payment.begin.",
   }),
 }).strict();
 
@@ -602,7 +602,7 @@ const submitCheckoutRoute = createRoute({
   path: "/{contextId}/checkout/submit",
   operationId: "storefront.checkout.submit",
   tags: ["Storefront Agent Contexts"],
-  summary: "Create an idempotent COD storefront order and bind order authority",
+  summary: "Create an idempotent storefront order and bind order authority",
   request: {
     params: contextPathSchema,
     headers: checkoutIdempotencyHeadersSchema,

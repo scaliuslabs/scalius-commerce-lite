@@ -4835,9 +4835,9 @@ export type PostApiV1StorefrontAgentContextsByContextIdCheckoutSubmitData = {
         shippingAddress: string;
         notes: string | null;
         /**
-         * Agent checkout is currently COD-only. Online payment starts remain excluded until the client can complete the body-only browser handoff without leaking bootstrap authority.
+         * Selected active checkout payment method. Online methods continue through storefront.orders.payment.begin.
          */
-        paymentMethod: 'cod';
+        paymentMethod: 'cod' | 'stripe' | 'sslcommerz' | 'polar';
     };
     headers?: {
         /**

@@ -133,7 +133,11 @@ function storefrontContextMetadata(
         AgentOperationMetadata,
         | "exposure"
         | "idempotency"
+        | "transport"
         | "maximumResponseBytes"
+        | "maxRequestBytes"
+        | "sensitiveOutput"
+        | "continuationOutput"
         | "exclusionReason"
       >
     >,
@@ -149,11 +153,14 @@ function storefrontContextMetadata(
       idempotency: options.idempotency ?? "none",
       revision: options.revision,
       batch: options.batch,
-      transport: "json",
+      transport: options.transport ?? "json",
       maximumResponseBytes: options.maximumResponseBytes ?? 65_536,
-      maxRequestBytes: 1024 * 1024,
-      sensitiveOutput: false,
+      maxRequestBytes: options.maxRequestBytes ?? 1024 * 1024,
+      sensitiveOutput: options.sensitiveOutput ?? false,
       oneTimeSecretOutput: false,
+      ...(options.continuationOutput
+        ? { continuationOutput: options.continuationOutput }
+        : {}),
       ...(options.exposure === "excluded"
         ? { exclusionReason: options.exclusionReason }
         : {}),
@@ -689,11 +696,19 @@ const REVIEWED_AGENT_OPERATIONS: Readonly<
     "storefront.customer_auth.begin",
     {
       risk: "security",
-      exposure: "excluded",
+      exposure: "continuation",
       revision: "none",
       batch: "forbidden",
-      exclusionReason:
-        "The hosted bootstrap is body-only, but this operation remains excluded until MCP and CLI clients can perform the fixed-URL POST without placing its one-time code in URLs, logs, or shell history.",
+      transport: "continuation",
+      maximumResponseBytes: 8_192,
+      maxRequestBytes: 16_384,
+      sensitiveOutput: true,
+      continuationOutput: {
+        method: "POST",
+        urlJsonPointer: "/data/browser/url",
+        fieldsJsonPointer: "/data/browser/fields",
+        sensitiveFields: ["continuationCode"],
+      },
     },
   ),
   "GET /storefront/agent-contexts/{contextId}/customer/auth/{continuationId}": storefrontContextMetadata(
@@ -737,11 +752,19 @@ const REVIEWED_AGENT_OPERATIONS: Readonly<
     "storefront.orders.payment.begin",
     {
       risk: "financial",
-      exposure: "excluded",
+      exposure: "continuation",
       revision: "none",
       batch: "forbidden",
-      exclusionReason:
-        "The hosted payment bootstrap is body-only, but this operation remains excluded until MCP and CLI clients can perform the fixed-URL POST without placing its one-time code in URLs, logs, or shell history.",
+      transport: "continuation",
+      maximumResponseBytes: 8_192,
+      maxRequestBytes: 16_384,
+      sensitiveOutput: true,
+      continuationOutput: {
+        method: "POST",
+        urlJsonPointer: "/data/browser/url",
+        fieldsJsonPointer: "/data/browser/fields",
+        sensitiveFields: ["continuationCode"],
+      },
     },
   ),
   "GET /storefront/agent-contexts/{contextId}/payments/{continuationId}": storefrontContextMetadata(
@@ -757,11 +780,19 @@ const REVIEWED_AGENT_OPERATIONS: Readonly<
     "storefront.payment_recovery.begin",
     {
       risk: "security",
-      exposure: "excluded",
+      exposure: "continuation",
       revision: "none",
       batch: "forbidden",
-      exclusionReason:
-        "The hosted recovery bootstrap is body-only, but this operation remains excluded until MCP and CLI clients can perform the fixed-URL POST without placing its one-time code in URLs, logs, or shell history.",
+      transport: "continuation",
+      maximumResponseBytes: 8_192,
+      maxRequestBytes: 16_384,
+      sensitiveOutput: true,
+      continuationOutput: {
+        method: "POST",
+        urlJsonPointer: "/data/browser/url",
+        fieldsJsonPointer: "/data/browser/fields",
+        sensitiveFields: ["continuationCode"],
+      },
     },
   ),
   "GET /storefront/agent-contexts/{contextId}/payment-recoveries/{continuationId}": storefrontContextMetadata(

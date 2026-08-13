@@ -47,7 +47,17 @@ describe("finalized API OpenAPI interop", () => {
     }
     expect(operations.find(({ id }) => id === "dashboard.media.upload_part")?.agent.maxRequestBytes)
       .toBe(5 * 1024 * 1024);
-    expect(operations.filter(({ agent }) => agent.exposure === "continuation")).toHaveLength(5);
+    expect(operations.filter(({ agent }) => agent.exposure === "continuation").map(({ id }) => id))
+      .toEqual([
+        "dashboard.theme.preview_session_create",
+        "storefront.continuations.get",
+        "storefront.customer_auth.begin",
+        "storefront.customer_auth.status",
+        "storefront.orders.payment.begin",
+        "storefront.payment_recovery.begin",
+        "storefront.payment_recovery.status",
+        "storefront.payment.status",
+      ]);
     expect(operations.find(({ id }) => id === "dashboard.theme.preview_session_create")?.agent.continuationOutput)
       .toEqual(expect.objectContaining({ sensitiveFields: ["continuationCode"] }));
   });

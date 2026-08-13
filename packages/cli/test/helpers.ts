@@ -15,6 +15,7 @@ export function createTestRuntime(options: {
   now?: number;
   env?: NodeJS.ProcessEnv;
   signal?: AbortSignal;
+  openUrl?: (url: string) => Promise<unknown>;
 }): TestRuntime {
   const stdinStream = new PassThrough();
   const stdin = stdinStream as Runtime["stdin"];
@@ -35,7 +36,10 @@ export function createTestRuntime(options: {
     fetch: options.fetch ?? (async () => new Response("Not found", { status: 404 })),
     homedir: () => options.directory,
     now: () => clock,
-    openUrl: async (url) => { openedUrls.push(url); },
+    openUrl: async (url) => {
+      openedUrls.push(url);
+      return options.openUrl?.(url);
+    },
     platform: "linux",
     signal: options.signal,
     sleep: async (milliseconds) => { sleeps.push(milliseconds); clock += milliseconds; },

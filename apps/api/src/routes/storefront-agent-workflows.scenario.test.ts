@@ -189,6 +189,36 @@ describe("storefront agent buyer workflow scenarios", () => {
     expect(JSON.stringify([checkout, receipt])).not.toMatch(/chk_|cst_|receiptToken|clientSecret/);
   });
 
+  it.each(["stripe", "sslcommerz", "polar"])(
+    "accepts the reviewed %s order method before the secure payment continuation",
+    async (paymentMethod) => {
+      mocks.submit.mockResolvedValueOnce({
+        response: {
+          status: "complete",
+          contextRevision: 3,
+          orderId,
+          paymentMethod,
+          message: "Order created. Start secure payment with storefront.orders.payment.begin.",
+        },
+        postCommitPayload: null,
+        availabilityVariantIds: [],
+      });
+      const response = await request(`/storefront/agent-contexts/${contextId}/checkout/submit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...checkoutBody(`scenario_${paymentMethod}_0001`), paymentMethod }),
+      });
+      expect(response).toMatchObject({ success: true, data: { orderId, paymentMethod } });
+      expect(mocks.submit).toHaveBeenCalledWith(
+        expect.anything(),
+        "agr_test",
+        contextId,
+        expect.objectContaining({ paymentMethod }),
+        expect.anything(),
+      );
+    },
+  );
+
   it("replays a header-only checkout with one canonical idempotency key", async () => {
     const idempotencyKey = "scenario_header_retry_0001";
     const init: RequestInit = {

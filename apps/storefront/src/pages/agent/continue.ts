@@ -1,5 +1,4 @@
 import type { APIRoute } from "astro";
-import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
 import { createApiUrl, fetchWithRetry } from "@/lib/api/client";
 import { createAgentContinuationCookieHeader } from "@/lib/agent-continuation-cookie";
 
@@ -28,8 +27,22 @@ function asRecord(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
+function isTrustedBootstrapOrigin(request: Request): boolean {
+  const origin = request.headers.get("Origin");
+  if (!origin) return false;
+  try {
+    const submitted = new URL(origin);
+    const target = new URL(request.url);
+    if (submitted.origin === target.origin) return true;
+    return submitted.protocol === "http:" &&
+      ["127.0.0.1", "localhost", "[::1]"].includes(submitted.hostname);
+  } catch {
+    return false;
+  }
+}
+
 export const POST: APIRoute = async ({ request }) => {
-  if (shouldRejectCrossOriginCookieRequest(request)) {
+  if (!isTrustedBootstrapOrigin(request)) {
     return failure("Cross-origin request denied.", 403);
   }
   const contentLength = Number(request.headers.get("content-length") || "0");

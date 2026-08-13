@@ -73,12 +73,6 @@ export interface AgentStorefrontCheckoutSubmitView {
   pricesIncludeTax?: boolean;
   currencyCode?: string;
   decimalPlaces?: number;
-  continuation?: {
-    id: string;
-    kind: "payment";
-    status: "pending";
-    expiresAt: string;
-  };
   message: string;
 }
 
@@ -395,19 +389,6 @@ export async function submitAgentStorefrontCheckout(
     if (issue) throw new ValidationError(issue);
   }
 
-  const continuationId = `acn_${nanoid(20)}`;
-  const continuationBootstrap = input.paymentMethod === PaymentMethod.COD
-    ? null
-    : await createAgentStorefrontBootstrap(continuationId, nanoid(43));
-  const continuation = continuationBootstrap
-    ? {
-        id: continuationId,
-        kind: "payment" as const,
-        status: "pending" as const,
-        expiresAt: paymentContinuationExpiry(now, owned.expiresAt),
-        bootstrapCodeHash: continuationBootstrap.codeHash,
-      }
-    : null;
   const response: AgentStorefrontCheckoutSubmitView = {
     status: "complete",
     contextRevision: owned.revision + 1,
@@ -423,17 +404,9 @@ export async function submitAgentStorefrontCheckout(
     pricesIncludeTax: prepared.taxQuote.pricesIncludeTax,
     currencyCode: prepared.taxQuote.currencyCode,
     decimalPlaces: prepared.taxQuote.decimalPlaces,
-    ...(continuation ? {
-      continuation: {
-        id: continuation.id,
-        kind: continuation.kind,
-        status: continuation.status,
-        expiresAt: continuation.expiresAt.toISOString(),
-      },
-    } : {}),
-    message: continuation
-      ? "Order created. Complete payment in the secure storefront tab."
-      : "Cash-on-delivery order created.",
+    message: input.paymentMethod === PaymentMethod.COD
+      ? "Cash-on-delivery order created."
+      : "Order created. Start secure payment with storefront.orders.payment.begin.",
   };
 
   try {
@@ -445,14 +418,6 @@ export async function submitAgentStorefrontCheckout(
         grantId,
         expectedRevision: owned.revision,
         expiresAt: owned.expiresAt,
-        ...(continuation ? {
-          continuation: {
-            id: continuation.id,
-            kind: continuation.kind,
-            expiresAt: continuation.expiresAt,
-            bootstrapCodeHash: continuation.bootstrapCodeHash,
-          },
-        } : {}),
       },
     });
   } catch (error) {

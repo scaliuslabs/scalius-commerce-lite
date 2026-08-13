@@ -2,6 +2,7 @@ import { basename } from "node:path";
 import { open, readFile } from "node:fs/promises";
 import { Readable } from "node:stream";
 import { writeAtomicOutput } from "./config.js";
+import { openBrowserContinuation } from "./continuation.js";
 import { CliError } from "./errors.js";
 import { bearerHeaders, fetchWithNetworkErrors, responseError } from "./http.js";
 import { findOperation, getIndexedOperations, searchOperations } from "./openapi.js";
@@ -356,13 +357,6 @@ export async function executeOperation(
   options: RunOperationOptions,
 ): Promise<OperationExecutionResult> {
   if (!profile.token) throw new CliError(3, "not_authenticated", "Authentication is required.");
-  if (operation.agent.exposure === "continuation" && operation.agent.sensitiveOutput === true) {
-    throw new CliError(
-      5,
-      "browser_continuation_required",
-      `Operation '${operation.id}' requires a protected browser continuation and cannot be emitted by the CLI.`,
-    );
-  }
   if (requiresConfirmation(operation) && !options.yes) {
     throw new CliError(2, "confirmation_required", `Operation '${operation.id}' has ${operation.agent.risk} risk. Re-run with --yes after reviewing the input.`);
   }
@@ -465,7 +459,10 @@ export async function executeOperation(
     result.bytesWritten = bytesWritten;
   } else {
     const maximumBytes = operation.agent.maximumResponseBytes ?? 10 * 1024 * 1024;
-    result.data = await responseData(response, maximumBytes);
+    const data = await responseData(response, maximumBytes);
+    result.data = operation.agent.exposure === "continuation" && operation.agent.sensitiveOutput === true
+      ? await openBrowserContinuation(runtime, data, operation.agent.continuationOutput!)
+      : data;
   }
   return result;
 }
