@@ -281,7 +281,19 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
                 }
                 throw error;
             }
-            const taxAuthority = taxPlan.resolve(results.slice(8, 11));
+            let taxAuthority: StorefrontTaxAuthoritySnapshot;
+            try {
+                taxAuthority = taxPlan.resolve(results.slice(8, 11));
+            } catch (error) {
+                if (error instanceof Error && !("code" in error)) {
+                    Object.defineProperty(error, "code", {
+                        configurable: true,
+                        enumerable: false,
+                        value: "CHECKOUT_TAX_AUTHORITY",
+                    });
+                }
+                throw error;
+            }
             const authorityRevision = Number(sideEffectSettings?.revision);
             if (!Number.isSafeInteger(authorityRevision) || authorityRevision < 1) {
                 throw new Error("Checkout authority revision is unavailable.");
@@ -352,6 +364,13 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
                         },
                     };
                 } catch (error) {
+                    if (error instanceof Error && !("code" in error)) {
+                        Object.defineProperty(error, "code", {
+                            configurable: true,
+                            enumerable: false,
+                            value: "CHECKOUT_INPUT_RESOLVE",
+                        });
+                    }
                     return { ok: false, error };
                 }
             });
