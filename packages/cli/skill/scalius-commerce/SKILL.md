@@ -12,7 +12,7 @@ This is a portable Agent Skill, not harness-specific prompting. If the two Scali
 ## Operating loop
 
 1. Search with two or three task words. In CLI use `scalius ops search "create product"`; in MCP use `operations.search` with the same phrase.
-2. Describe only the likely operation. Do not load unrelated schemas.
+2. Describe only the likely operation. The default MCP description is compact; request `full=true` only when ready to construct the exact input. Do not load unrelated schemas.
 3. Read its risk, RBAC, revision, idempotency, batch, byte, artifact, upload, and continuation policy.
 4. Resolve human names with the domain's bounded summary/form operation before constructing input.
 5. Execute through MCP for JSON workflows. Use the CLI for local files and direct artifact saves.

@@ -98,4 +98,12 @@ describe("MCP server construction", () => {
     expect(JSON.stringify(formatted.structuredContent).match(new RegExp(code, "g")))
       .toHaveLength(1);
   });
+
+  it("does not duplicate a large structured result into compatibility text", () => {
+    const value = { ok: true, operation: { schema: "x".repeat(5_000) } };
+    const formatted = formatAgentToolResult(value);
+    expect(formatted.content[0]?.text).toMatch(/^Structured result returned \(\d+ UTF-8 bytes\)$/);
+    expect(formatted.content[0]?.text).not.toContain("xxxx");
+    expect(formatted.structuredContent).toEqual(value);
+  });
 });
