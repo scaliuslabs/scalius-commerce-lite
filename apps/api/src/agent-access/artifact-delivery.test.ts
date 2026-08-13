@@ -80,13 +80,14 @@ function artifactOperation(
   };
 }
 
-function artifactEnv(options: { createFails?: boolean } = {}) {
+function artifactEnv(options: { createFails?: boolean; storageFails?: boolean } = {}) {
   const stored: ArrayBuffer[] = [];
   const deleted: string[] = [];
   const env = {
     PUBLIC_API_BASE_URL: "https://api.example.test",
     AGENT_ARTIFACTS: {
       put: vi.fn(async (_key: string, value: ReadableStream) => {
+        if (options.storageFails) throw new Error("R2 unavailable");
         stored.push(await new Response(value).arrayBuffer());
         return {};
       }),
@@ -195,7 +196,7 @@ describe("manifest-driven artifact delivery", () => {
 
   it("deletes the R2 object when relational handle creation fails", async () => {
     const { env, deleted } = artifactEnv({ createFails: true });
-    await expect(stageAgentArtifact(
+    const failure = stageAgentArtifact(
       artifactOperation(),
       new Response("csv", {
         headers: {
@@ -205,9 +206,35 @@ describe("manifest-driven artifact delivery", () => {
       }),
       principal,
       env,
-    )).rejects.toThrow("D1 unavailable");
+    );
+    await expect(failure).rejects.toMatchObject({
+      code: "artifact_handle_failed",
+      status: 502,
+    });
     expect(deleted).toHaveLength(1);
     expect(deleted[0]).toContain(`agent-artifacts/${principal.grantId}/`);
+  });
+
+  it("classifies dedicated R2 failures without exposing provider details", async () => {
+    const { env, deleted } = artifactEnv({ storageFails: true });
+    const failure = stageAgentArtifact(
+      artifactOperation(),
+      new Response("csv", {
+        headers: {
+          "Content-Type": "text/csv",
+          "Content-Disposition": 'attachment; filename="orders.csv"',
+        },
+      }),
+      principal,
+      env,
+    );
+
+    await expect(failure).rejects.toMatchObject({
+      code: "artifact_storage_failed",
+      status: 502,
+    });
+    await expect(failure).rejects.not.toThrow("R2 unavailable");
+    expect(deleted).toHaveLength(1);
   });
 
   it("fails before persistence on wrong media, unsafe filename, or overflow", async () => {

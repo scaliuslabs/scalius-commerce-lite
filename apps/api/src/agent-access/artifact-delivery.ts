@@ -175,7 +175,12 @@ export async function stageAgentArtifact(
     } catch {
       // Best-effort cleanup of a failed or partial write.
     }
-    throw error;
+    if (error instanceof AgentArtifactDeliveryError) throw error;
+    throw new AgentArtifactDeliveryError(
+      "artifact_storage_failed",
+      "Artifact storage is temporarily unavailable",
+      502,
+    );
   }
   if (bytes.byteLength < 1 || bytes.byteLength !== total) {
     try {
@@ -233,7 +238,12 @@ export async function stageAgentArtifact(
       // An unreferenced object contains only generated artifact bytes and is
       // unreachable. Bucket lifecycle cleanup remains a secondary safety net.
     }
-    throw error;
+    if (error instanceof AgentArtifactDeliveryError) throw error;
+    throw new AgentArtifactDeliveryError(
+      "artifact_handle_failed",
+      "Artifact handle creation is temporarily unavailable",
+      502,
+    );
   }
 }
 
