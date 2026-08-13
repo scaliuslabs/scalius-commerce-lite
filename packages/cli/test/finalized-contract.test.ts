@@ -3,7 +3,7 @@ import { indexOperations } from "../src/openapi.js";
 import type { OpenApiDocument } from "../src/types.js";
 
 describe("finalized API OpenAPI interop", () => {
-  it("indexes every executable operation from the in-memory finalized application contract", async () => {
+  it("indexes every executable and continuation operation from the in-memory finalized application contract", async () => {
     const appModulePath = new URL("../../../apps/api/src/app.ts", import.meta.url).href;
     const contractModulePath = new URL("../../../apps/api/src/openapi-contract.ts", import.meta.url).href;
     const [appModule, contractModule] = await Promise.all([
@@ -20,17 +20,17 @@ describe("finalized API OpenAPI interop", () => {
     })) as OpenApiDocument;
 
     const operations = indexOperations(document);
-    const executableCount = Object.values(document.paths ?? {}).reduce((count, pathItem) => {
+    const runnableCount = Object.values(document.paths ?? {}).reduce((count, pathItem) => {
       if (!pathItem || typeof pathItem !== "object") return count;
       return count + Object.values(pathItem).filter((candidate) => {
         if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) return false;
         const metadata = (candidate as Record<string, unknown>)["x-scalius-agent"];
         return Boolean(metadata) && typeof metadata === "object" &&
-          (metadata as Record<string, unknown>).exposure === "execute";
+          ["execute", "continuation"].includes(String((metadata as Record<string, unknown>).exposure));
       }).length;
     }, 0);
 
-    expect(operations).toHaveLength(executableCount);
+    expect(operations).toHaveLength(runnableCount);
     expect(operations.some(({ agent }) => agent.openWorld === true)).toBe(true);
     expect(operations.some(({ agent }) => agent.openWorld === false)).toBe(true);
     expect(operations.every(({ agent }) =>
@@ -47,5 +47,8 @@ describe("finalized API OpenAPI interop", () => {
     }
     expect(operations.find(({ id }) => id === "dashboard.media.upload_part")?.agent.maxRequestBytes)
       .toBe(5 * 1024 * 1024);
+    expect(operations.filter(({ agent }) => agent.exposure === "continuation")).toHaveLength(5);
+    expect(operations.find(({ id }) => id === "dashboard.theme.preview_session_create")?.agent.continuationOutput)
+      .toEqual(expect.objectContaining({ sensitiveFields: ["continuationCode"] }));
   });
 });

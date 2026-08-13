@@ -32,6 +32,84 @@ describe("OpenAPI operation indexing", () => {
     expect(findOperation(operations, "dashboard.products.create").agent.openWorld).toBe(true);
   });
 
+  it("indexes a non-sensitive JSON continuation and a protected browser continuation", () => {
+    const document = executableSpec() as OpenApiDocument;
+    document.paths!["/api/v1/storefront/contexts/{contextId}/continuations/{continuationId}"] = {
+      get: {
+        operationId: "storefront.continuations.get",
+        parameters: [
+          { in: "path", name: "contextId", required: true, schema: { type: "string" } },
+          { in: "path", name: "continuationId", required: true, schema: { type: "string" } },
+        ],
+        "x-scalius-agent": {
+          surface: "storefront",
+          exposure: "continuation",
+          principals: ["visitor", "customer"],
+          risk: "read",
+          openWorld: false,
+          idempotency: "none",
+          revision: "none",
+          batch: "forbidden",
+          transport: "json",
+          maximumResponseBytes: 65_536,
+          maxRequestBytes: 16_384,
+          sensitiveOutput: false,
+          oneTimeSecretOutput: false,
+        },
+      },
+    };
+    document.paths!["/api/v1/admin/theme/preview"] = {
+      post: {
+        operationId: "dashboard.theme.preview_session_create",
+        "x-scalius-agent": {
+          surface: "dashboard",
+          exposure: "continuation",
+          principals: ["admin"],
+          risk: "read",
+          openWorld: false,
+          idempotency: "none",
+          revision: "none",
+          batch: "forbidden",
+          transport: "continuation",
+          maximumResponseBytes: 8_192,
+          maxRequestBytes: 16_384,
+          sensitiveOutput: true,
+          oneTimeSecretOutput: false,
+          continuationOutput: {
+            method: "POST",
+            urlJsonPointer: "/data/continuation/url",
+            fieldsJsonPointer: "/data/continuation/fields",
+            sensitiveFields: ["continuationCode"],
+          },
+        },
+      },
+    };
+
+    const operations = indexOperations(document);
+    expect(findOperation(operations, "storefront.continuations.get").agent.transport).toBe("json");
+    expect(findOperation(operations, "dashboard.theme.preview_session_create").agent.continuationOutput)
+      .toEqual(expect.objectContaining({ sensitiveFields: ["continuationCode"] }));
+  });
+
+  it("rejects unsafe continuation output combinations", () => {
+    const document = executableSpec() as OpenApiDocument;
+    const operation = document.paths!["/api/v1/admin/products/{id}"]!.get as Record<string, unknown>;
+    operation["x-scalius-agent"] = {
+      ...(operation["x-scalius-agent"] as Record<string, unknown>),
+      exposure: "continuation",
+      batch: "forbidden",
+      transport: "continuation",
+      sensitiveOutput: true,
+      continuationOutput: {
+        method: "POST",
+        urlJsonPointer: "/data/url",
+        fieldsJsonPointer: "/data/fields",
+        sensitiveFields: [],
+      },
+    };
+    expect(() => indexOperations(document)).toThrow("invalid continuation output metadata");
+  });
+
   it.each([undefined, "false", 0, null])("rejects non-boolean openWorld metadata value %s", (openWorld) => {
     const document = executableSpec() as OpenApiDocument;
     const operation = document.paths!["/api/v1/admin/products"]!.post as Record<string, unknown>;
