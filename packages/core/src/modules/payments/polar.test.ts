@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   applyInventoryForStatusChange: vi.fn(),
   polarConstructor: vi.fn(),
   polarCheckoutCreate: vi.fn(),
+  polarCheckoutGet: vi.fn(),
   polarCheckoutList: vi.fn(),
   polarRefundCreate: vi.fn(),
 }));
@@ -13,7 +14,7 @@ vi.mock("@polar-sh/sdk", () => ({
   Polar: vi.fn(function PolarMock(options: unknown) {
     mocks.polarConstructor(options);
     return {
-      checkouts: { create: mocks.polarCheckoutCreate, list: mocks.polarCheckoutList },
+      checkouts: { create: mocks.polarCheckoutCreate, get: mocks.polarCheckoutGet, list: mocks.polarCheckoutList },
       refunds: { create: mocks.polarRefundCreate },
     };
   }),
@@ -28,6 +29,7 @@ import {
   createPolarRefund,
   findReusablePolarCheckout,
   processPolarWebhookRefund,
+  retrievePolarCheckout,
 } from "./polar";
 
 function createDbMock({
@@ -774,6 +776,45 @@ describe("Polar client cache", () => {
     mocks.polarCheckoutCreate.mockResolvedValue({ url: "https://polar.example/checkout", id: "co_1" });
     mocks.polarCheckoutList.mockResolvedValue(checkoutPages([]));
     mocks.polarRefundCreate.mockResolvedValue({ id: "refund_1" });
+  });
+
+  it("retrieves only the safe checkout verification projection", async () => {
+    mocks.polarCheckoutGet.mockResolvedValueOnce({
+      id: "co_1",
+      status: "succeeded",
+      totalAmount: 2149,
+      currency: "usd",
+      clientSecret: "provider-secret",
+      customerEmail: "buyer@example.test",
+      metadata: {
+        orderId: "order_1",
+        paymentType: "full",
+        ignoredObject: { nested: true },
+      },
+    });
+
+    const result = await retrievePolarCheckout({
+      enabled: true,
+      accessToken: "polar_token",
+      webhookSecret: "polar_whs_test",
+      productId: "product_1",
+      sandbox: true,
+    }, "co_1", 5_000);
+
+    expect(result).toEqual({
+      success: true,
+      checkout: {
+        id: "co_1",
+        status: "succeeded",
+        totalAmount: 2149,
+        currency: "usd",
+        metadata: { orderId: "order_1", paymentType: "full" },
+      },
+    });
+    expect(mocks.polarCheckoutGet).toHaveBeenCalledWith(
+      { id: "co_1" },
+      { retries: { strategy: "none" }, timeoutMs: 5_000 },
+    );
   });
 
   it("creates a new SDK client when sandbox changes with the same access token", async () => {

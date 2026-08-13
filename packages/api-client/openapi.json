@@ -25086,7 +25086,7 @@
         "tags": [
           "Internal Storefront Continuations"
         ],
-        "summary": "Reconcile a provider-confirmed Stripe payment inside the buyer-only tab",
+        "summary": "Reconcile a provider-confirmed payment inside the buyer-only tab",
         "security": [
           {
             "bearerAuth": []

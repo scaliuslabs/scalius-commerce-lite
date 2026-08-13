@@ -173,6 +173,62 @@ export async function createPolarCheckout(
     }
 }
 
+export type PolarCheckoutVerification = {
+    id: string;
+    status: string;
+    totalAmount: number;
+    currency: string;
+    metadata: Record<string, string>;
+};
+
+/**
+ * Read the authoritative Polar checkout after a buyer returns from the hosted
+ * payment page. The projection deliberately excludes the provider client
+ * secret and customer data.
+ */
+export async function retrievePolarCheckout(
+    settings: PolarSettings,
+    checkoutId: string,
+    requestTimeoutMs?: number,
+): Promise<{ success: true; checkout: PolarCheckoutVerification } | { success: false; error: string; timedOut?: boolean }> {
+    try {
+        const checkout = await getPolarClient(settings).checkouts.get(
+            { id: checkoutId },
+            {
+                retries: { strategy: "none" },
+                ...(requestTimeoutMs ? { timeoutMs: requestTimeoutMs } : {}),
+            },
+        );
+        const metadata = Object.fromEntries(
+            Object.entries(checkout.metadata ?? {})
+                .filter((entry): entry is [string, string] => typeof entry[1] === "string"),
+        );
+        return {
+            success: true,
+            checkout: {
+                id: checkout.id,
+                status: checkout.status,
+                totalAmount: checkout.totalAmount,
+                currency: checkout.currency,
+                metadata,
+            },
+        };
+    } catch (error: unknown) {
+        if (isProviderTimeoutError(error)) {
+            return {
+                success: false,
+                error: "Polar did not respond before the payment timeout. Please try again.",
+                timedOut: true,
+            };
+        }
+        console.error("[Polar] Error retrieving checkout", polarErrorLogMetadata(error));
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : "Unknown Polar API error",
+        };
+    }
+}
+
 export async function findReusablePolarCheckout(
     settings: PolarSettings,
     params: FindReusablePolarCheckoutParams,

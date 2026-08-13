@@ -405,7 +405,16 @@ if (!validContinuationId) Astro.response.status = 404;
   async function bootstrap(): Promise<void> {
     if (!continuationId) return;
     try {
-      const continuation = await call();
+      let continuation = await call();
+      const paymentReturn = new URLSearchParams(window.location.search).get("paymentReturn");
+      if (continuation.kind === "payment" && continuation.status === "pending" && paymentReturn) {
+        setStatus("Confirming the payment result…");
+        await call("/payment/reconcile", {});
+        for (let attempt = 0; attempt < 8 && continuation.status === "pending"; attempt += 1) {
+          await new Promise((resolve) => window.setTimeout(resolve, 1000));
+          continuation = await call();
+        }
+      }
       if (continuation.status === "complete") {
         setStatus("This secure step is complete. You may close this tab and return to the agent.", "success");
         return;

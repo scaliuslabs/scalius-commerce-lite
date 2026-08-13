@@ -10,6 +10,7 @@ import { successEnvelope, errorResponses, serviceUnavailableResponse } from "../
 import { ok } from "../../utils/api-response";
 import { createPolarPaymentSession, isPaymentSessionProcessingResult } from "./payment-session-create";
 import { acceptedPaymentSessionProcessing, paymentSessionProcessingResponse } from "./payment-session-response";
+import { reconcilePolarOrderPayment } from "./polar-reconciliation";
 
 export const polarPaymentRoutes = new OpenAPIHono<{ Bindings: Env }>();
 const RECEIPT_TOKEN_HEADER = "X-Receipt-Token";
@@ -133,7 +134,9 @@ function getAgentContinuationId(c: { req: { query: (key: string) => string | und
 }
 
 function buildStorefrontAgentContinuationUrl(storefront: string, continuationId: string): string {
-    return new URL(`/checkout/continue/${encodeURIComponent(continuationId)}`, storefront).toString();
+    const url = new URL(`/checkout/continue/${encodeURIComponent(continuationId)}`, storefront);
+    url.searchParams.set("paymentReturn", "polar");
+    return url.toString();
 }
 
 function buildStorefrontOrderSuccessUrl(
@@ -190,6 +193,7 @@ polarPaymentRoutes.get("/success", async (c) => {
             const db: Database = c.get("db");
             const invalidRedirect = await validateCallbackOrder(db, orderId, storefrontUrl);
             if (invalidRedirect) return c.redirect(invalidRedirect);
+            await reconcilePolarOrderPayment({ db, env: c.env, orderId }).catch(() => undefined);
         }
         if (shouldReturnToAccount(c) && orderId) {
             return c.redirect(buildStorefrontAccountOrderUrl(storefrontUrl, {

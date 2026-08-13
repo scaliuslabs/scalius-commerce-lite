@@ -75530,7 +75530,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "operationId": "system.storefront_continuations.payment_reconcile",
     "method": "POST",
     "pathTemplate": "/api/v1/storefront/agent-continuations/{continuationId}/payment/reconcile",
-    "summary": "Reconcile a provider-confirmed Stripe payment inside the buyer-only tab",
+    "summary": "Reconcile a provider-confirmed payment inside the buyer-only tab",
     "tags": [
       "Internal Storefront Continuations"
     ],

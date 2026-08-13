@@ -1,4 +1,6 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { eq } from "drizzle-orm";
+import { orders } from "@scalius/database/schema";
 import {
   assertHostedContinuationOrderAccess,
   bindAgentStorefrontCustomerSession,
@@ -53,6 +55,7 @@ import {
 } from "./payment/payment-session-create";
 import { acceptedPaymentSessionProcessing, paymentSessionProcessingResponse } from "./payment/payment-session-response";
 import { reconcileStripeOrderPayment } from "./payment/stripe-reconciliation";
+import { reconcilePolarOrderPayment } from "./payment/polar-reconciliation";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -381,7 +384,7 @@ const reconcilePaymentRoute = createRoute({
   path: "/{continuationId}/payment/reconcile",
   operationId: "system.storefront_continuations.payment_reconcile",
   tags: ["Internal Storefront Continuations"],
-  summary: "Reconcile a provider-confirmed Stripe payment inside the buyer-only tab",
+  summary: "Reconcile a provider-confirmed payment inside the buyer-only tab",
   security: [{ bearerAuth: [] }],
   request: {
     params: continuationPathSchema,
@@ -406,9 +409,12 @@ app.openapi(reconcilePaymentRoute, async (c) => {
     c.get("db"),
     c.req.valid("param").continuationId,
   );
-  const { data, accepted } = await reconcileStripeOrderPayment({
-    db: c.get("db"), env: c.env, orderId: access.orderId,
-  });
+  const order = await c.get("db").select({ paymentMethod: orders.paymentMethod })
+    .from(orders).where(eq(orders.id, access.orderId)).get();
+  const reconciliation = order?.paymentMethod === "polar"
+    ? await reconcilePolarOrderPayment({ db: c.get("db"), env: c.env, orderId: access.orderId })
+    : await reconcileStripeOrderPayment({ db: c.get("db"), env: c.env, orderId: access.orderId });
+  const { data, accepted } = reconciliation;
   return accepted
     ? c.json({ success: true as const, data: {
       status: "scheduled" as const,
