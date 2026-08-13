@@ -71,13 +71,7 @@ function hasBoundedFormBody(request: Request, body: string): boolean {
   return true;
 }
 
-export const GET: APIRoute = async () => browserContinuationRelayResponse([
-  { name: "continuationCode", pattern: CONTINUATION_CODE.source, maxBytes: 52 },
-  { name: "path", pattern: "^/[^\\r\\n]{0,511}$", maxBytes: 512 },
-  { name: "device", pattern: "^(?:full|desktop|mobile)$", maxBytes: 7 },
-]);
-
-export const POST: APIRoute = async ({ request, url }) => {
+export const GET: APIRoute = async () => {
   const dashboardOrigin = (() => {
     try {
       return new URL((cfEnv as Env).DASHBOARD_URL ?? "").origin;
@@ -85,10 +79,15 @@ export const POST: APIRoute = async ({ request, url }) => {
       return "";
     }
   })();
-  if (!isTrustedBrowserContinuationPostOrigin(
-    request,
-    dashboardOrigin ? [dashboardOrigin] : [],
-  )) {
+  return browserContinuationRelayResponse([
+    { name: "continuationCode", pattern: CONTINUATION_CODE.source, maxBytes: 52 },
+    { name: "path", pattern: "^/[^\\r\\n]{0,511}$", maxBytes: 512 },
+    { name: "device", pattern: "^(?:full|desktop|mobile)$", maxBytes: 7 },
+  ], dashboardOrigin ? [dashboardOrigin] : []);
+};
+
+export const POST: APIRoute = async ({ request, url }) => {
+  if (!isTrustedBrowserContinuationPostOrigin(request)) {
     return textResponse("Forbidden", 403);
   }
 

@@ -1,49 +1,22 @@
-const RELAY_PREFIX = "scalius-continuation-v1:";
-const MAX_RELAY_NAME_LENGTH = 16_384;
-const MAX_RELAY_PAYLOAD_BYTES = 8_192;
 const RELAY_PATHS = new Set([
   "/checkout/continue",
   "/agent/continue",
   "/theme-preview/continue",
 ]);
-const FORM_CONTENT_TYPES = [
-  "application/x-www-form-urlencoded",
-  "multipart/form-data",
-  "text/plain",
-] as const;
+const READY_MESSAGE = "scalius-continuation-ready-v1";
+const FIELDS_MESSAGE = "scalius-continuation-fields-v1";
+const ACCEPTED_MESSAGE = "scalius-continuation-accepted-v1";
 
-function isLoopbackHostname(hostname: string): boolean {
-  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
-}
-
-export function isTrustedBrowserContinuationPostOrigin(
-  request: Request,
-  additionalOrigins: readonly string[] = [],
-): boolean {
+export function isTrustedBrowserContinuationPostOrigin(request: Request): boolean {
   const rawOrigin = request.headers.get("Origin");
   if (!rawOrigin) return false;
   try {
     const origin = new URL(rawOrigin);
     const target = new URL(request.url);
-    if (rawOrigin !== origin.origin) return false;
-    if (origin.origin === target.origin) return true;
-    if (origin.protocol === "http:" && isLoopbackHostname(origin.hostname)) return true;
-    return additionalOrigins.includes(origin.origin);
+    return rawOrigin === origin.origin && origin.origin === target.origin;
   } catch {
     return false;
   }
-}
-
-export function isForbiddenStorefrontCrossOriginFormRequest(request: Request): boolean {
-  if (["GET", "HEAD", "OPTIONS"].includes(request.method)) return false;
-  const sameOrigin = request.headers.get("Origin") === new URL(request.url).origin;
-  const contentType = request.headers.get("Content-Type");
-  if (contentType !== null) {
-    return FORM_CONTENT_TYPES.some((candidate) =>
-      contentType.toLowerCase().includes(candidate)
-    ) && !sameOrigin;
-  }
-  return !sameOrigin;
 }
 
 export interface BrowserContinuationRelayField {
@@ -77,48 +50,57 @@ function scriptJson(value: unknown): string {
 
 export function browserContinuationRelayResponse(
   fields: readonly BrowserContinuationRelayField[],
+  additionalParentOrigins: readonly string[] = [],
 ): Response {
   const spec = scriptJson(fields);
+  const allowed = scriptJson(additionalParentOrigins);
   const script = `(() => {
   const fail = () => { document.body.textContent = "This secure continuation is invalid or expired."; };
-  const raw = window.name;
-  window.name = "";
-  try {
-    const prefix = ${scriptJson(RELAY_PREFIX)};
-    if (typeof raw !== "string" || raw.length > ${MAX_RELAY_NAME_LENGTH} || !raw.startsWith(prefix)) return fail();
-    const encoded = raw.slice(prefix.length);
-    if (!/^[A-Za-z0-9_-]+$/.test(encoded)) return fail();
-    const base64 = encoded.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - encoded.length % 4) % 4);
-    const binary = atob(base64);
-    if (binary.length < 1 || binary.length > ${MAX_RELAY_PAYLOAD_BYTES}) return fail();
-    const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
-    const payload = JSON.parse(new TextDecoder().decode(bytes));
-    const fields = ${spec};
-    if (!payload || typeof payload !== "object" || Array.isArray(payload)) return fail();
-    const keys = Object.keys(payload);
-    if (keys.length !== fields.length || !fields.every((field) => keys.includes(field.name))) return fail();
-    const form = document.createElement("form");
-    form.method = "post";
-    form.action = window.location.pathname;
-    form.hidden = true;
-    for (const field of fields) {
-      const value = payload[field.name];
-      if (typeof value !== "string" || new TextEncoder().encode(value).byteLength > field.maxBytes || !(new RegExp(field.pattern)).test(value)) return fail();
-      const input = document.createElement("input");
-      input.type = "hidden";
-      input.name = field.name;
-      input.value = value;
-      form.append(input);
-    }
-    const button = document.createElement("button");
-    button.type = "submit";
-    button.textContent = "Continue securely";
-    form.append(button);
-    document.body.replaceChildren(form);
-    form.submit();
-  } catch {
-    fail();
-  }
+  const trustedParentOrigin = (rawOrigin) => {
+    try {
+      const origin = new URL(rawOrigin);
+      if (rawOrigin !== origin.origin) return false;
+      if (origin.origin === window.location.origin) return true;
+      if (origin.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(origin.hostname)) return true;
+      return ${allowed}.includes(origin.origin);
+    } catch { return false; }
+  };
+  const receive = (event) => {
+    if (event.source !== window.opener || !trustedParentOrigin(event.origin)) return;
+    const message = event.data;
+    if (!message || typeof message !== "object" || message.type !== ${scriptJson(FIELDS_MESSAGE)}) return;
+    try {
+      const payload = message.fields;
+      const fields = ${spec};
+      if (!payload || typeof payload !== "object" || Array.isArray(payload)) return fail();
+      const keys = Object.keys(payload);
+      if (keys.length !== fields.length || !fields.every((field) => keys.includes(field.name))) return fail();
+      const form = document.createElement("form");
+      form.method = "post";
+      form.action = window.location.pathname;
+      form.hidden = true;
+      for (const field of fields) {
+        const value = payload[field.name];
+        if (typeof value !== "string" || new TextEncoder().encode(value).byteLength > field.maxBytes || !(new RegExp(field.pattern)).test(value)) return fail();
+        const input = document.createElement("input");
+        input.type = "hidden";
+        input.name = field.name;
+        input.value = value;
+        form.append(input);
+      }
+      const button = document.createElement("button");
+      button.type = "submit";
+      button.textContent = "Continue securely";
+      form.append(button);
+      document.body.replaceChildren(form);
+      window.opener.postMessage({ type: ${scriptJson(ACCEPTED_MESSAGE)} }, event.origin);
+      window.removeEventListener("message", receive);
+      form.submit();
+    } catch { fail(); }
+  };
+  if (!window.opener) return fail();
+  window.addEventListener("message", receive);
+  window.opener.postMessage({ type: ${scriptJson(READY_MESSAGE)} }, "*");
 })();`;
   const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="referrer" content="no-referrer"><meta name="robots" content="noindex,nofollow,noarchive"><title>Continue securely</title></head><body><noscript>JavaScript is required to continue securely.</noscript><script>${script}</script></body></html>`;
   return new Response(html, {

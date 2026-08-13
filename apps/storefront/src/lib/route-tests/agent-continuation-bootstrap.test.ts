@@ -10,10 +10,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/api/client", () => mocks);
 
 import { GET, POST } from "../../pages/checkout/continue";
-import {
-  isBrowserContinuationRelayPathname,
-  isForbiddenStorefrontCrossOriginFormRequest,
-} from "../browser-continuation-relay";
+import { isBrowserContinuationRelayPathname } from "../browser-continuation-relay";
 
 const CODE = `acb_${"a".repeat(20)}_${"b".repeat(43)}`;
 const ID = `acn_${"a".repeat(20)}`;
@@ -62,20 +59,11 @@ describe("agent storefront body-only bootstrap", () => {
   });
 
   it.each([
+    "https://evil.example.test",
+    "http://evil.example.test:43123",
     "http://127.0.0.1:43123",
     "http://localhost:43124",
     "http://[::1]:43125",
-  ])("accepts a body-only handoff from an ephemeral CLI loopback origin %s", async (origin) => {
-    const response = await POST(request(origin));
-    expect(response.status).toBe(303);
-    expect(response.headers.get("Location")).toBe(`/checkout/continue/${ID}`);
-    expect(response.headers.get("Location")).not.toContain(CODE);
-    expect(mocks.fetchWithRetry).toHaveBeenCalledOnce();
-  });
-
-  it.each([
-    "https://evil.example.test",
-    "http://evil.example.test:43123",
     "http://127.0.0.1:43123/not-an-origin",
     "null",
     "file://",
@@ -88,14 +76,16 @@ describe("agent storefront body-only bootstrap", () => {
     },
   );
 
-  it("serves a private relay that clears window.name before same-origin submission", async () => {
+  it("serves a private opener relay that transfers no continuation through its URL", async () => {
     const response = await GET({} as never);
     const html = await response.text();
     expect(response.status).toBe(200);
     expect(response.headers.get("Cache-Control")).toContain("no-store");
     expect(response.headers.get("Content-Security-Policy")).toContain("form-action 'self'");
-    expect(html).toContain('const raw = window.name;');
-    expect(html).toContain('window.name = "";');
+    expect(html).not.toContain("window.name");
+    expect(html).toContain("window.opener");
+    expect(html).toContain("scalius-continuation-ready-v1");
+    expect(html).toContain("scalius-continuation-fields-v1");
     expect(html).toContain('form.method = "post";');
     expect(html).toContain('button.textContent = "Continue securely";');
     expect(html).toContain("form.submit();");
@@ -111,39 +101,4 @@ describe("agent storefront body-only bootstrap", () => {
     expect(isBrowserContinuationRelayPathname("/")).toBe(false);
   });
 
-  it("preserves Astro's cross-origin form protection for every ordinary route", () => {
-    const ordinaryUrl = "https://storefront.example.test/api/checkout";
-    expect(isForbiddenStorefrontCrossOriginFormRequest(new Request(ordinaryUrl, {
-      method: "POST",
-      headers: {
-        Origin: "https://evil.example.test",
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: "value=1",
-    }))).toBe(true);
-    expect(isForbiddenStorefrontCrossOriginFormRequest(new Request(ordinaryUrl, {
-      method: "POST",
-      headers: {
-        Origin: "https://storefront.example.test",
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: "value=1",
-    }))).toBe(false);
-    expect(isForbiddenStorefrontCrossOriginFormRequest(new Request(ordinaryUrl, {
-      method: "POST",
-      headers: {
-        Origin: "https://evil.example.test",
-        "Content-Type": "application/json",
-      },
-      body: "{}",
-    }))).toBe(false);
-    expect(isForbiddenStorefrontCrossOriginFormRequest(new Request(ordinaryUrl, {
-      method: "POST",
-      headers: { Origin: "https://evil.example.test" },
-    }))).toBe(true);
-    expect(isForbiddenStorefrontCrossOriginFormRequest(new Request(ordinaryUrl, {
-      method: "GET",
-      headers: { Origin: "https://evil.example.test" },
-    }))).toBe(false);
-  });
 });

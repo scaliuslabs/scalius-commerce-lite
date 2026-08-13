@@ -85,26 +85,18 @@ describe("theme preview continuation route", () => {
     expect(response.headers.get("Referrer-Policy")).toBe("no-referrer");
   });
 
-  it.each([
-    "https://dashboard.example.test",
-    "http://127.0.0.1:43123",
-    "http://localhost:43124",
-    "http://[::1]:43125",
-  ])("accepts a body-only form from a reviewed continuation origin %s", async (origin) => {
-    mocks.fetchWithRetry.mockResolvedValue(Response.json({
-      success: true,
-      data: { token: TOKEN, draftRevision: 3, basePublishedRevision: 2 },
-    }));
-    const response = await POST(context(undefined, origin));
-    expect(response.status).toBe(303);
-    expect(response.headers.get("Location")).not.toContain(CONTINUATION_CODE);
-  });
-
   it("requires the exact storefront origin and bounded form shape", async () => {
-    await expect(POST(context(undefined, "https://evil.example.test")))
-      .resolves.toMatchObject({ status: 403 });
-    await expect(POST(context(undefined, "http://127.0.0.1:43123/not-an-origin")))
-      .resolves.toMatchObject({ status: 403 });
+    for (const origin of [
+      "https://evil.example.test",
+      "https://dashboard.example.test",
+      "http://127.0.0.1:43123",
+      "http://localhost:43124",
+      "http://[::1]:43125",
+      "http://127.0.0.1:43123/not-an-origin",
+    ]) {
+      await expect(POST(context(undefined, origin)))
+        .resolves.toMatchObject({ status: 403 });
+    }
     await expect(POST(context({
       continuationCode: CONTINUATION_CODE,
       path: "/",
@@ -138,7 +130,10 @@ describe("theme preview continuation route", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("Cache-Control")).toContain("no-store");
     expect(response.headers.get("Content-Security-Policy")).toContain("form-action 'self'");
-    expect(html).toContain('window.name = "";');
+    expect(html).not.toContain("window.name");
+    expect(html).toContain("window.opener");
+    expect(html).toContain("scalius-continuation-ready-v1");
+    expect(html).toContain("https://dashboard.example.test");
     expect(html).toContain("continuationCode");
     expect(html).not.toContain(CONTINUATION_CODE);
   });

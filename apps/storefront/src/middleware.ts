@@ -25,7 +25,6 @@ import { BUILD_ID } from "@/config/build-id";
 import { deferProductGlobalStylesheet } from "@/lib/product-style-delivery";
 import {
   isBrowserContinuationRelayPathname,
-  isForbiddenStorefrontCrossOriginFormRequest,
 } from "@/lib/browser-continuation-relay";
 
 function getEnv(): Env | null {
@@ -136,11 +135,6 @@ const transportSecurityMiddleware = defineMiddleware(
     if (redirect) return redirect;
 
     const privateRelay = isBrowserContinuationRelayPathname(new URL(request.url).pathname);
-    if (!privateRelay && isForbiddenStorefrontCrossOriginFormRequest(request)) {
-      return new Response(`Cross-site ${request.method} form submissions are forbidden`, {
-        status: 403,
-      });
-    }
     const response = applyBaselineSecurityHeaders(request, await next(), {
       frameProtection: privateRelay ? "deny" : "same-origin",
     });
