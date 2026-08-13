@@ -13,7 +13,7 @@ export function createAgentContinuationCookieHeader(
   const name = getAgentContinuationCookieName(continuationId);
   if (!name || !Number.isFinite(maxAgeSeconds)) return null;
   const maxAge = Math.max(1, Math.min(30 * 60, Math.floor(maxAgeSeconds)));
-  return `${name}=${continuationId}; Max-Age=${maxAge}; Path=/; HttpOnly; SameSite=Strict; Secure`;
+  return `${name}=${continuationId}; Max-Age=${maxAge}; Path=/; HttpOnly; SameSite=Lax; Secure`;
 }
 
 export function readAgentContinuationCookie(
