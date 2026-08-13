@@ -1,0 +1,41 @@
+# Catalog and media
+
+## Product creation
+
+Prefer one atomic `dashboard.products.create` after resolving prerequisites:
+
+1. Find or create the category. A category cannot publish until it has an active product with a buyer-resolvable SKU.
+2. Find or create attributes; product assignments use attribute IDs and merchant-visible string values.
+3. Commit media first. For local files prefer `scalius media upload`; otherwise use initiate → numbered raw parts → complete.
+4. Build product-media associations. A `media_*` identifies the committed asset; a caller-local `pmed_*` identifies its association within the product. Variant `imageId` points to `pmed_*`, not `media_*`.
+5. For an option matrix, define option axes in merchant order, give every value a request-local ID, and give each variant one selected value ID per axis in that same order. Request-local option/value/variant IDs correlate only this atomic request.
+6. Include long description, additional information, attributes, media, variants, SEO, visibility, price, stock, and tracking in the same create call.
+7. Verify `base`, `media`, `attributes`, `additional_info`, `options`, and paged `variants` through bounded product sections. Then publish the category if requested.
+
+Do not call per-variant creation after an atomic matrix create. Do not use product-level inventory for optioned products. SKU and barcode identities are globally normalized and must be unique.
+
+## Media policy
+
+Accepted images are JPEG (`.jpg`/`.jpeg`), PNG, GIF, WebP, and AVIF, at most 20 MiB each. Accepted video is MP4 and WebM, at most 100 MiB. Extension, declared MIME type, and file signature must agree. One raw part is at most 5 MiB; use the session's exact part size/count.
+
+Retain an already-supported image when it is within limits. Do not recompress JPEG merely to say it is “optimized”; a rewrite may grow it or alter pixels. Preserve animation and transparency unless the merchant approves a change.
+
+For unsupported still formats, inspect before conversion. With Pillow available:
+
+```bash
+python3 - <<'PY'
+from PIL import Image
+src, dst = "input.tiff", "output.webp"
+with Image.open(src) as im:
+    im.seek(0)
+    im.load()
+    if im.width * im.height > 100_000_000:
+        raise SystemExit("image pixel count is unsafe")
+    im.thumbnail((4096, 4096))
+    im.save(dst, "WEBP", lossless=True, method=6)
+PY
+```
+
+Use PNG rather than WebP when lossless WebP support is unavailable or the source requires exact wide-gamut/tool compatibility. HEIC/HEIF decoding depends on the local codec; fail with an actionable message rather than uploading mislabeled bytes. Never upload SVG directly.
+
+On interruption, inspect the upload session and resume missing parts. Abort an unwanted session; do not initiate duplicates because output was overlooked.

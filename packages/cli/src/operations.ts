@@ -467,9 +467,14 @@ export async function executeOperation(
   return result;
 }
 
-export async function operationsSearch(runtime: Runtime, profile: ResolvedProfile, query?: string): Promise<Record<string, unknown>> {
+export async function operationsSearch(
+  runtime: Runtime,
+  profile: ResolvedProfile,
+  query?: string,
+  limit = 20,
+): Promise<Record<string, unknown>> {
   const { operations } = await getIndexedOperations(runtime, profile);
-  const matches = searchOperations(operations, query).map(({ id, method, path, operation, agent }) => ({
+  const matches = searchOperations(operations, query).slice(0, limit).map(({ id, method, path, operation, agent }) => ({
     operationId: id,
     summary: operation.summary ?? null,
     tags: operation.tags ?? [],
@@ -484,7 +489,12 @@ export async function operationsSearch(runtime: Runtime, profile: ResolvedProfil
   return { query: query ?? null, count: matches.length, operations: matches };
 }
 
-export async function operationsDescribe(runtime: Runtime, profile: ResolvedProfile, id: string): Promise<Record<string, unknown>> {
+export async function operationsDescribe(
+  runtime: Runtime,
+  profile: ResolvedProfile,
+  id: string,
+  full = false,
+): Promise<Record<string, unknown>> {
   const { document, operations } = await getIndexedOperations(runtime, profile);
   const selected = findOperation(operations, id);
   return {
@@ -498,7 +508,9 @@ export async function operationsDescribe(runtime: Runtime, profile: ResolvedProf
     rbac: selected.operation["x-scalius-rbac"] ?? null,
     parameters: selected.pathParameters,
     requestBody: requestBody(document, selected) ?? null,
-    responses: selected.operation.responses ?? {},
+    ...(full ? { responses: selected.operation.responses ?? {} } : {
+      responseStatuses: Object.keys(selected.operation.responses ?? {}).sort(),
+    }),
   };
 }
 

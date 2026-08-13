@@ -235,8 +235,9 @@ function operationMatchesQuery(operation: AgentOperationManifestEntry, query: st
   const haystack = [
     operation.operationId,
     operation.summary,
+    operation.description,
     ...operation.tags,
-  ].join(" ").toLowerCase();
+  ].filter(Boolean).join(" ").toLowerCase();
   return terms.every((term) => haystack.includes(term));
 }
 

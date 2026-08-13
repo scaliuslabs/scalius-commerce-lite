@@ -3,9 +3,11 @@ import { login, importToken, authStatus, logout, revoke } from "./auth.js";
 import { ConfigStore } from "./config.js";
 import { asCliError, CliError } from "./errors.js";
 import { collectFile, readBatchInput, readInput } from "./input.js";
+import { uploadMediaFiles } from "./media.js";
 import { operationsBatch, operationsDescribe, operationsRun, operationsSearch } from "./operations.js";
 import { writeError, writeResult } from "./output.js";
 import { listProfiles, showProfile, useProfile } from "./profiles.js";
+import { AGENT_HARNESSES, installSkill, setupHarness, type AgentHarness } from "./skill.js";
 import type { OutputMode, Runtime } from "./types.js";
 
 interface GlobalOptions {
@@ -73,6 +75,24 @@ export function createProgram(runtime: Runtime): Command {
     .showHelpAfterError()
     .showSuggestionAfterError()
     .exitOverride();
+
+  program.command("setup")
+    .description("install the portable agent skill and print exact MCP setup")
+    .requiredOption("--harness <name>", `agent harness (${AGENT_HARNESSES.join("|")})`)
+    .option("--server <origin>", "Scalius API origin; otherwise use the selected profile")
+    .option("--force", "replace an existing Scalius skill", false)
+    .action(async (options: { harness: string; server?: string; force: boolean }, command) => {
+      if (!AGENT_HARNESSES.includes(options.harness as AgentHarness)) {
+        throw new CliError(2, "invalid_harness", `Harness must be one of: ${AGENT_HARNESSES.join(", ")}.`);
+      }
+      const profile = options.server ? undefined : await resolve(runtime, command, false).catch(() => undefined);
+      const result = await setupHarness(runtime, {
+        harness: options.harness as AgentHarness,
+        force: options.force,
+        server: options.server ?? profile?.server,
+      });
+      writeResult(runtime, globalOptions(command).output, result, JSON.stringify(result, null, 2));
+    });
 
   const auth = program.command("auth").description("authenticate the CLI");
   auth.command("login")
@@ -144,15 +164,21 @@ export function createProgram(runtime: Runtime): Command {
   operations.command("search")
     .description("search the live operation contract")
     .argument("[query]")
-    .action(async (query: string | undefined, _options, command) => {
-      const result = await operationsSearch(runtime, await resolve(runtime, command), query);
+    .option("--limit <count>", "maximum results (1-100)", "20")
+    .action(async (query: string | undefined, options: { limit: string }, command) => {
+      const limit = Number(options.limit);
+      if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
+        throw new CliError(2, "invalid_limit", "Search limit must be an integer from 1 to 100.");
+      }
+      const result = await operationsSearch(runtime, await resolve(runtime, command), query, limit);
       writeResult(runtime, globalOptions(command).output, result, operationSearchSummary(result));
     });
   operations.command("describe")
     .description("describe one executable or continuation operation")
     .argument("<operationId>")
-    .action(async (id: string, _options, command) => {
-      const result = await operationsDescribe(runtime, await resolve(runtime, command), id);
+    .option("--full", "include every response schema", false)
+    .action(async (id: string, options: { full: boolean }, command) => {
+      const result = await operationsDescribe(runtime, await resolve(runtime, command), id, options.full);
       writeResult(runtime, globalOptions(command).output, result, `${id}\n${JSON.stringify(result, null, 2)}`);
     });
   operations.command("run")
@@ -184,6 +210,31 @@ export function createProgram(runtime: Runtime): Command {
       const input = await readBatchInput(runtime, options.input);
       const result = await operationsBatch(runtime, await resolve(runtime, command), input, options.yes);
       writeResult(runtime, globalOptions(command).output, result, `Completed ${String(result.count)} batch step(s).\n${JSON.stringify(result.results, null, 2)}`);
+    });
+
+  const media = program.command("media").description("run guided media workflows");
+  media.command("upload")
+    .description("validate and upload one or more local media files")
+    .argument("<files...>")
+    .option("--folder-id <id>", "destination media folder")
+    .option("--yes", "confirm the write", false)
+    .action(async (files: string[], options: { folderId?: string; yes: boolean }, command) => {
+      if (!options.yes) throw new CliError(2, "confirmation_required", "Media upload writes to the store. Re-run with --yes after reviewing the files.");
+      const result = await uploadMediaFiles(runtime, await resolve(runtime, command), files, options.folderId);
+      writeResult(runtime, globalOptions(command).output, result);
+    });
+
+  const skill = program.command("skill").description("install the bundled Scalius agent skill");
+  skill.command("install")
+    .description("install or update the portable Agent Skill")
+    .option("--harness <name>", `agent harness (${AGENT_HARNESSES.join("|")})`, "agents")
+    .option("--force", "replace an existing Scalius skill", false)
+    .action(async (options: { harness: string; force: boolean }, command) => {
+      if (!AGENT_HARNESSES.includes(options.harness as AgentHarness)) {
+        throw new CliError(2, "invalid_harness", `Harness must be one of: ${AGENT_HARNESSES.join(", ")}.`);
+      }
+      const result = await installSkill(runtime, options.harness as AgentHarness, options.force);
+      writeResult(runtime, globalOptions(command).output, result, `${String(result.status)}: ${String(result.path)}`);
     });
 
   return program;

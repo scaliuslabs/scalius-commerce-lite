@@ -27,7 +27,8 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "skill"
   ],
   "engines": {
     "node": ">=22.12"

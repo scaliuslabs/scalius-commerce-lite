@@ -18,6 +18,7 @@ import type {
 const METHODS = ["get", "post", "put", "patch", "delete", "head", "options"] as const;
 const OPERATION_ID = /^(?:dashboard|storefront|system)(?:\.[a-z][a-z0-9_]*){2,}$/;
 const CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1_000;
+const CACHE_REVALIDATE_AFTER_MS = 5 * 60 * 1_000;
 const ARTIFACT_MEDIA_TYPE = /^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/;
 const MAX_ARTIFACT_BYTES = 16 * 1024 * 1024;
 const MAX_REQUEST_BYTES = 16 * 1024 * 1024;
@@ -221,6 +222,15 @@ export async function loadOpenApi(runtime: Runtime, profile: ResolvedProfile): P
   const store = new ConfigStore(runtime);
   const path = store.cachePath(profile.name);
   const cached = await readCache(path, profile.server);
+  const cachedAge = cached ? runtime.now() - Date.parse(cached.fetchedAt) : Number.POSITIVE_INFINITY;
+  if (
+    cached &&
+    Number.isFinite(cachedAge) &&
+    cachedAge >= 0 &&
+    cachedAge < CACHE_REVALIDATE_AFTER_MS
+  ) {
+    return cached.document;
+  }
   const headers = bearerHeaders(profile.token);
   if (cached?.etag) headers.set("If-None-Match", cached.etag);
   const url = `${profile.server}/api/v1/openapi.json`;
@@ -268,10 +278,10 @@ export function findOperation(operations: IndexedOperation[], id: string): Index
 }
 
 export function searchOperations(operations: IndexedOperation[], query?: string): IndexedOperation[] {
-  const needle = query?.trim().toLocaleLowerCase();
-  if (!needle) return operations;
+  const terms = query?.trim().toLocaleLowerCase().split(/\s+/u).filter(Boolean) ?? [];
+  if (terms.length === 0) return operations;
   return operations.filter(({ id, operation }) => {
     const text = [id, operation.summary, operation.description, ...(operation.tags ?? [])].filter(Boolean).join("\n").toLocaleLowerCase();
-    return text.includes(needle);
+    return terms.every((term) => text.includes(term));
   });
 }

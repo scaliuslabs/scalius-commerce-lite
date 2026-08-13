@@ -68,6 +68,7 @@ export function summarizeOperation(operation: AgentOperationManifestEntry) {
 export function describeOperation(operation: AgentOperationManifestEntry) {
   return {
     ...summarizeOperation(operation),
+    description: operation.description ?? null,
     method: operation.method,
     pathTemplate: operation.pathTemplate,
     principals: operation.principals,

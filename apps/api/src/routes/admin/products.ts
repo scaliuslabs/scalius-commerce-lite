@@ -481,6 +481,7 @@ const createProductRoute = createRoute({
     operationId: "dashboard.products.create",
     tags: ["Admin - Products"],
     summary: "Create a product",
+    description: "Create the complete product atomically. Discover categoryId with dashboard.categories.form_options and attributeId with dashboard.attributes.list_summaries. Media must first be committed through dashboard.media.upload_initiate, upload_part, and upload_complete. Product-media IDs (pmed_*) are caller-local association IDs; option/value/variant draft IDs only correlate this request. Each variant selectedOptionValueIds must follow option order, and variant imageId references a pmed_* association rather than a media_* asset.",
     request: {
         body: { content: { "application/json": { schema: createProductSchema } } }
     },

@@ -96,6 +96,7 @@ export type AgentOperationManifestEntry = Omit<
   method: AgentOperationHttpMethod;
   pathTemplate: string;
   summary: string;
+  description?: string;
   tags: string[];
   maxResponseBytes: number;
   maxRequestBytes: number;
@@ -110,6 +111,7 @@ export type AgentOperationManifestEntry = Omit<
 type OpenApiOperationLike = {
   operationId?: unknown;
   summary?: unknown;
+  description?: unknown;
   tags?: unknown;
   parameters?: unknown;
   requestBody?: unknown;
@@ -948,6 +950,12 @@ export function buildAgentOperationManifest(
           ? operation.summary
           : `${method} ${pathTemplate}`;
       if (
+        operation.description !== undefined &&
+        (typeof operation.description !== "string" || operation.description.length > 4_096)
+      ) {
+        throw new Error(`${operation.operationId} requires a description of at most 4096 characters.`);
+      }
+      if (
         operation.tags !== undefined &&
         (!Array.isArray(operation.tags) ||
         operation.tags.some((tag) => typeof tag !== "string")
@@ -961,6 +969,9 @@ export function buildAgentOperationManifest(
         method: method as AgentOperationHttpMethod,
         pathTemplate,
         summary,
+        ...(typeof operation.description === "string" && operation.description.length > 0
+          ? { description: operation.description }
+          : {}),
         tags: [...((operation.tags as string[] | undefined) ?? [])].sort(),
         surface: metadata.surface,
         exposure: metadata.exposure,
