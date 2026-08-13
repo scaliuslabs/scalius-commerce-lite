@@ -83,6 +83,17 @@ describe("agent operation contract", () => {
       exposure: "excluded",
       batch: "forbidden",
     });
+    expect(byId(manifest, "dashboard.attributes.list_summaries")).toMatchObject({
+      method: "GET",
+      pathTemplate: "/api/v1/admin/attributes/summaries",
+      exposure: "execute",
+      maxResponseBytes: 65_536,
+      rbac: { type: "permission", permission: "attributes.view" },
+    });
+    expect(byId(manifest, "dashboard.attributes.list")).toMatchObject({
+      exposure: "excluded",
+      batch: "forbidden",
+    });
     expect(byId(manifest, "dashboard.products.create")).toMatchObject({
       method: "POST",
       pathTemplate: "/api/v1/admin/products",

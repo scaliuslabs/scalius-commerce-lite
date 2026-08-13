@@ -175152,14 +175152,11 @@
         "security": [
           {
             "adminSession": []
-          },
-          {
-            "agentBearer": []
           }
         ],
         "x-scalius-agent": {
           "surface": "dashboard",
-          "exposure": "execute",
+          "exposure": "excluded",
           "principals": [
             "admin"
           ],
@@ -175167,12 +175164,13 @@
           "openWorld": false,
           "idempotency": "none",
           "revision": "none",
-          "batch": "parallel",
+          "batch": "forbidden",
           "transport": "json",
           "maximumResponseBytes": 65536,
           "maxRequestBytes": 1048576,
           "sensitiveOutput": false,
-          "oneTimeSecretOutput": false
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "Legacy dashboard list may include up to 500 preset values per attribute; use dashboard.attributes.list_summaries and dashboard.attribute_values.list."
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -175246,65 +175244,26 @@
                           "type": "object",
                           "properties": {
                             "id": {
-                              "type": "string"
+                              "type": "string",
+                              "maxLength": 180
                             },
                             "name": {
-                              "type": "string"
+                              "type": "string",
+                              "maxLength": 100
                             },
                             "slug": {
-                              "type": "string"
+                              "type": "string",
+                              "maxLength": 100
                             },
                             "filterable": {
                               "type": "boolean"
-                            },
-                            "options": {
-                              "type": "array",
-                              "nullable": true,
-                              "items": {
-                                "type": "string"
-                              }
-                            },
-                            "createdAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                }
-                              ]
-                            },
-                            "updatedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                }
-                              ]
-                            },
-                            "deletedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                }
-                              ],
-                              "nullable": true
                             }
                           },
                           "required": [
                             "id",
                             "name",
                             "slug",
-                            "filterable",
-                            "options",
-                            "createdAt",
-                            "updatedAt",
-                            "deletedAt"
+                            "filterable"
                           ]
                         }
                       },
@@ -175633,6 +175592,464 @@
         }
       }
     },
+    "/api/v1/admin/attributes/summaries": {
+      "get": {
+        "operationId": "dashboard.attributes.list_summaries",
+        "tags": [
+          "Admin - Attributes"
+        ],
+        "summary": "List bounded attribute summaries",
+        "parameters": [
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            },
+            "required": false,
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 120,
+              "default": ""
+            },
+            "required": false,
+            "name": "search",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "name",
+                "slug",
+                "filterable",
+                "createdAt",
+                "updatedAt"
+              ],
+              "default": "name"
+            },
+            "required": false,
+            "name": "sort",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "default": "asc"
+            },
+            "required": false,
+            "name": "order",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 9000
+            },
+            "required": false,
+            "name": "ids",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            },
+            "required": false,
+            "name": "trashed",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bounded attribute summaries with pagination",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "attributes": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "maxLength": 180
+                              },
+                              "name": {
+                                "type": "string",
+                                "maxLength": 100
+                              },
+                              "slug": {
+                                "type": "string",
+                                "maxLength": 100
+                              },
+                              "filterable": {
+                                "type": "boolean"
+                              },
+                              "deletedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "slug",
+                              "filterable",
+                              "deletedAt"
+                            ]
+                          }
+                        },
+                        "pagination": {
+                          "type": "object",
+                          "properties": {
+                            "page": {
+                              "type": "number"
+                            },
+                            "limit": {
+                              "type": "number"
+                            },
+                            "total": {
+                              "type": "number"
+                            },
+                            "totalPages": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "page",
+                            "limit",
+                            "total",
+                            "totalPages"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "attributes",
+                        "pagination"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "attributes.view"
+        }
+      }
+    },
     "/api/v1/admin/attributes/{id}": {
       "put": {
         "operationId": "dashboard.attributes.update",
@@ -175707,65 +176124,26 @@
                           "type": "object",
                           "properties": {
                             "id": {
-                              "type": "string"
+                              "type": "string",
+                              "maxLength": 180
                             },
                             "name": {
-                              "type": "string"
+                              "type": "string",
+                              "maxLength": 100
                             },
                             "slug": {
-                              "type": "string"
+                              "type": "string",
+                              "maxLength": 100
                             },
                             "filterable": {
                               "type": "boolean"
-                            },
-                            "options": {
-                              "type": "array",
-                              "nullable": true,
-                              "items": {
-                                "type": "string"
-                              }
-                            },
-                            "createdAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                }
-                              ]
-                            },
-                            "updatedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                }
-                              ]
-                            },
-                            "deletedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                }
-                              ],
-                              "nullable": true
                             }
                           },
                           "required": [
                             "id",
                             "name",
                             "slug",
-                            "filterable",
-                            "options",
-                            "createdAt",
-                            "updatedAt",
-                            "deletedAt"
+                            "filterable"
                           ]
                         }
                       },
@@ -177761,12 +178139,12 @@
             "schema": {
               "type": "integer",
               "minimum": 1,
-              "maximum": 100,
+              "maximum": 50,
               "default": 20,
-              "description": "Items per page"
+              "description": "Items per page (max 50)"
             },
             "required": false,
-            "description": "Items per page",
+            "description": "Items per page (max 50)",
             "name": "limit",
             "in": "query"
           }
@@ -177789,10 +178167,12 @@
                       "type": "object",
                       "properties": {
                         "attributeId": {
-                          "type": "string"
+                          "type": "string",
+                          "maxLength": 180
                         },
                         "attributeName": {
-                          "type": "string"
+                          "type": "string",
+                          "maxLength": 100
                         },
                         "values": {
                           "type": "array",
@@ -177800,7 +178180,8 @@
                             "type": "object",
                             "properties": {
                               "value": {
-                                "type": "string"
+                                "type": "string",
+                                "maxLength": 100
                               },
                               "productCount": {
                                 "type": "number"
@@ -177821,8 +178202,10 @@
                               "sampleProducts": {
                                 "type": "array",
                                 "items": {
-                                  "type": "string"
-                                }
+                                  "type": "string",
+                                  "maxLength": 100
+                                },
+                                "maxItems": 5
                               }
                             },
                             "required": [
@@ -177832,7 +178215,8 @@
                               "isPreset",
                               "sampleProducts"
                             ]
-                          }
+                          },
+                          "maxItems": 50
                         },
                         "totalValues": {
                           "type": "number"

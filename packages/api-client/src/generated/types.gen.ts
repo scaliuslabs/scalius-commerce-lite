@@ -46309,16 +46309,124 @@ export type PostApiV1AdminAttributesResponses = {
                 name: string;
                 slug: string;
                 filterable: boolean;
-                options: Array<string> | null;
-                createdAt: string | number;
-                updatedAt: string | number;
-                deletedAt: string | number | null;
             };
         };
     };
 };
 
 export type PostApiV1AdminAttributesResponse = PostApiV1AdminAttributesResponses[keyof PostApiV1AdminAttributesResponses];
+
+export type GetApiV1AdminAttributesSummariesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        page?: number;
+        limit?: number;
+        search?: string;
+        sort?: 'name' | 'slug' | 'filterable' | 'createdAt' | 'updatedAt';
+        order?: 'asc' | 'desc';
+        ids?: string;
+        trashed?: 'true' | 'false';
+    };
+    url: '/api/v1/admin/attributes/summaries';
+};
+
+export type GetApiV1AdminAttributesSummariesErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminAttributesSummariesError = GetApiV1AdminAttributesSummariesErrors[keyof GetApiV1AdminAttributesSummariesErrors];
+
+export type GetApiV1AdminAttributesSummariesResponses = {
+    /**
+     * Bounded attribute summaries with pagination
+     */
+    200: {
+        success: true;
+        data: {
+            attributes: Array<{
+                id: string;
+                name: string;
+                slug: string;
+                filterable: boolean;
+                deletedAt: string | number | null;
+            }>;
+            pagination: {
+                page: number;
+                limit: number;
+                total: number;
+                totalPages: number;
+            };
+        };
+    };
+};
+
+export type GetApiV1AdminAttributesSummariesResponse = GetApiV1AdminAttributesSummariesResponses[keyof GetApiV1AdminAttributesSummariesResponses];
 
 export type DeleteApiV1AdminAttributesByIdData = {
     body?: never;
@@ -46528,10 +46636,6 @@ export type PutApiV1AdminAttributesByIdResponses = {
                 name: string;
                 slug: string;
                 filterable: boolean;
-                options: Array<string> | null;
-                createdAt: string | number;
-                updatedAt: string | number;
-                deletedAt: string | number | null;
             };
         };
     };
@@ -47028,7 +47132,7 @@ export type GetApiV1AdminAttributesByIdValuesData = {
          */
         page?: number;
         /**
-         * Items per page
+         * Items per page (max 50)
          */
         limit?: number;
     };

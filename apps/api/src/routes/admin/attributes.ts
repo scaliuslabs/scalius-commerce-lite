@@ -13,6 +13,7 @@ import {
 } from "@scalius/core/modules/attributes/attributes.validation";
 import {
     listAttributes,
+    listAttributeAgentSummaries,
     createAttribute,
     updateAttribute,
     deleteAttribute,
@@ -41,6 +42,15 @@ import {
 } from "../../utils/cache-invalidation";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const ATTRIBUTE_CACHE_GROUPS = ["attributes", "products"] as const;
+const attributeMutationResultSchema = z.object({
+    id: z.string().max(180),
+    name: z.string().max(100),
+    slug: z.string().max(100),
+    filterable: z.boolean(),
+});
+const attributeAgentSummarySchema = attributeMutationResultSchema.extend({
+    deletedAt: z.union([z.string(), z.number()]).nullable(),
+});
 
 async function invalidateAttributeCaches(c: {
     env?: Env;
@@ -92,6 +102,45 @@ app.openapi(listRoute, async (c) => {
     return ok(c, result);
 });
 
+const listAgentSummariesRoute = createRoute({
+    method: "get",
+    path: "/summaries",
+    operationId: "dashboard.attributes.list_summaries",
+    tags: ["Admin - Attributes"],
+    summary: "List bounded attribute summaries",
+    request: {
+        query: z.object({
+            page: z.coerce.number().int().min(1).default(1),
+            limit: z.coerce.number().int().min(1).max(50).default(20),
+            search: z.string().trim().max(120).optional().default(""),
+            sort: z.enum(["name", "slug", "filterable", "createdAt", "updatedAt"]).optional().default("name"),
+            order: z.enum(["asc", "desc"]).optional().default("asc"),
+            ids: z.string().max(9000).optional(),
+            trashed: z.enum(["true", "false"]).optional(),
+        }),
+    },
+    responses: {
+        200: {
+            description: "Bounded attribute summaries with pagination",
+            content: { "application/json": { schema: paginatedEnvelope("attributes", attributeAgentSummarySchema) } },
+        },
+        ...errorResponses,
+    },
+});
+
+app.openapi(listAgentSummariesRoute, async (c) => {
+    const query = c.req.valid("query");
+    return ok(c, await listAttributeAgentSummaries(c.get("db"), {
+        page: query.page,
+        limit: query.limit,
+        search: query.search,
+        sort: query.sort,
+        order: query.order,
+        ids: query.ids?.split(","),
+        showTrashed: query.trashed === "true",
+    }));
+});
+
 // ── Create Attribute ──
 
 const createAttributeRoute = createRoute({
@@ -106,7 +155,7 @@ const createAttributeRoute = createRoute({
     responses: {
         201: {
             description: "Attribute created",
-            content: { "application/json": { schema: successEnvelope(z.object({ attribute: attributeSchema }) as z.ZodTypeAny) } },
+            content: { "application/json": { schema: successEnvelope(z.object({ attribute: attributeMutationResultSchema })) } },
         },
         ...errorResponses,
         409: conflictResponse,
@@ -136,7 +185,7 @@ const updateAttributeRoute = createRoute({
     responses: {
         200: {
             description: "Attribute updated",
-            content: { "application/json": { schema: successEnvelope(z.object({ attribute: attributeSchema }) as z.ZodTypeAny) } },
+            content: { "application/json": { schema: successEnvelope(z.object({ attribute: attributeMutationResultSchema })) } },
         },
         ...errorResponses,
         409: conflictResponse,
@@ -296,22 +345,22 @@ const listValuesRoute = createRoute({
             search: z.string().trim().max(120).optional().openapi({ description: "Filter values" }),
             sort: z.enum(["asc", "desc"]).optional().default("desc").openapi({ description: "Sort order" }),
             page: z.coerce.number().int().min(1).default(1).openapi({ description: "Page number" }),
-            limit: z.coerce.number().int().min(1).max(100).default(20).openapi({ description: "Items per page" })
+            limit: z.coerce.number().int().min(1).max(50).default(20).openapi({ description: "Items per page (max 50)" })
         })
     },
     responses: {
         200: {
             description: "Attribute values",
             content: { "application/json": { schema: successEnvelope(z.object({
-                attributeId: z.string(),
-                attributeName: z.string(),
+                attributeId: z.string().max(180),
+                attributeName: z.string().max(100),
                 values: z.array(z.object({
-                    value: z.string(),
+                    value: z.string().max(100),
                     productCount: z.number(),
                     createdAt: z.union([z.string(), z.number()]),
                     isPreset: z.boolean(),
-                    sampleProducts: z.array(z.string()),
-                })),
+                    sampleProducts: z.array(z.string().max(100)).max(5),
+                })).max(50),
                 totalValues: z.number(),
                 totalProducts: z.number(),
                 page: z.number(),
