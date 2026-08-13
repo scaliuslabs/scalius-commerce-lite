@@ -133,10 +133,10 @@ const cartProjectionSchema = z.object({
   }).optional(),
 });
 
-const agentCustomerPhoneSchema = phoneNumberSchema.openapi({
+const agentCustomerPhoneSchema = z.string().min(7).max(16).openapi({
   description: "Customer phone number. Use international E.164 form to avoid country ambiguity (for example, +8801712345678).",
   example: "+8801712345678",
-});
+}).pipe(phoneNumberSchema);
 
 const checkoutInputSchema = z.object({
   customerPhone: agentCustomerPhoneSchema.optional().nullable(),
