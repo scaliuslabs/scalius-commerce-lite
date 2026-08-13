@@ -16,10 +16,10 @@ describe("direct agent operation manifest matching", () => {
 
   it("returns excluded manifest entries so the authority layer can deny them", () => {
     expect(resolveDirectAgentOperation(
-      "POST",
-      "/api/v1/storefront/agent-contexts/asc_12345678901234567890/customer/auth",
+      "GET",
+      "/api/v1/admin/products/prod_12345678901234567890",
     )).toMatchObject({
-      operationId: "storefront.customer_auth.begin",
+      operationId: "dashboard.products.get",
       exposure: "excluded",
     });
   });
