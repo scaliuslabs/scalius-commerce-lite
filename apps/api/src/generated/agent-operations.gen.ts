@@ -246,9 +246,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "createdAt",
                   "updatedAt"
                 ],
-                "additionalProperties": {
-                  "nullable": true
-                }
+                "additionalProperties": {}
               }
             },
             "pagination": {
@@ -1318,7 +1316,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "operationId": "dashboard.agent_access_authorization_requests_approve.approve",
     "method": "POST",
     "pathTemplate": "/api/v1/admin/agent-access/authorization-requests/{requestId}/approve",
-    "summary": "POST /api/v1/admin/agent-access/authorization-requests/{requestId}/approve",
+    "summary": "Approve an OAuth authorization request",
+    "description": "Human-only consent ceremony that creates the selected grant and completes OAuth authorization.",
     "tags": [
       "Admin - Agent Access"
     ],
@@ -1352,7 +1351,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "operationId": "dashboard.agent_access_authorization_requests_deny.deny",
     "method": "POST",
     "pathTemplate": "/api/v1/admin/agent-access/authorization-requests/{requestId}/deny",
-    "summary": "POST /api/v1/admin/agent-access/authorization-requests/{requestId}/deny",
+    "summary": "Deny an OAuth authorization request",
+    "description": "Human-only consent ceremony that denies a pending OAuth authorization request.",
     "tags": [
       "Admin - Agent Access"
     ],
@@ -1386,7 +1386,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "operationId": "dashboard.agent_access_authorization_requests.get",
     "method": "GET",
     "pathTemplate": "/api/v1/admin/agent-access/authorization-requests/{requestId}",
-    "summary": "GET /api/v1/admin/agent-access/authorization-requests/{requestId}",
+    "summary": "Review an OAuth authorization request",
+    "description": "Returns the bounded safe details needed for a human OAuth consent decision.",
     "tags": [
       "Admin - Agent Access"
     ],
@@ -1420,7 +1421,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "operationId": "dashboard.agent_access_device_authorizations_approve.approve",
     "method": "POST",
     "pathTemplate": "/api/v1/admin/agent-access/device-authorizations/{deviceId}/approve",
-    "summary": "POST /api/v1/admin/agent-access/device-authorizations/{deviceId}/approve",
+    "summary": "Approve a CLI device pairing",
+    "description": "Human-only ceremony that approves a scoped CLI grant and prepares one-time credential delivery.",
     "tags": [
       "Admin - Agent Access"
     ],
@@ -1454,7 +1456,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "operationId": "dashboard.agent_access_device_authorizations_deny.deny",
     "method": "POST",
     "pathTemplate": "/api/v1/admin/agent-access/device-authorizations/{deviceId}/deny",
-    "summary": "POST /api/v1/admin/agent-access/device-authorizations/{deviceId}/deny",
+    "summary": "Deny a CLI device pairing",
+    "description": "Human-only ceremony that denies a pending CLI pairing request.",
     "tags": [
       "Admin - Agent Access"
     ],
@@ -1488,7 +1491,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "operationId": "dashboard.agent_access_device_authorizations_lookup.lookup",
     "method": "POST",
     "pathTemplate": "/api/v1/admin/agent-access/device-authorizations/lookup",
-    "summary": "POST /api/v1/admin/agent-access/device-authorizations/lookup",
+    "summary": "Look up a CLI device pairing",
+    "description": "Looks up a short-lived pairing request by the human-entered user code without exposing its device credential.",
     "tags": [
       "Admin - Agent Access"
     ],
@@ -1522,7 +1526,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "operationId": "dashboard.agent_access_revoke_all.revoke_all",
     "method": "POST",
     "pathTemplate": "/api/v1/admin/agent-access/revoke-all",
-    "summary": "POST /api/v1/admin/agent-access/revoke-all",
+    "summary": "Revoke all agent grants",
+    "description": "Emergency browser-only ceremony that revokes all matching agent grants.",
     "tags": [
       "Admin - Agent Access"
     ],
@@ -1556,7 +1561,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "operationId": "dashboard.agent_access.connections.events_list",
     "method": "GET",
     "pathTemplate": "/api/v1/admin/agent-access/connections/{grantId}/events",
-    "summary": "GET /api/v1/admin/agent-access/connections/{grantId}/events",
+    "summary": "List agent connection audit events",
+    "description": "Lists bounded, redacted audit events for one agent grant.",
     "tags": [
       "Admin - Agent Access"
     ],
@@ -1626,9 +1632,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
         },
         "data": {
           "type": "object",
-          "additionalProperties": {
-            "nullable": true
-          }
+          "additionalProperties": {}
         }
       },
       "required": [
@@ -1641,7 +1645,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "operationId": "dashboard.agent_access.connections.get",
     "method": "GET",
     "pathTemplate": "/api/v1/admin/agent-access/connections/{grantId}",
-    "summary": "GET /api/v1/admin/agent-access/connections/{grantId}",
+    "summary": "Get an agent connection",
+    "description": "Returns one safe agent grant projection without exposing bearer credentials.",
     "tags": [
       "Admin - Agent Access"
     ],
@@ -1690,9 +1695,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
         },
         "data": {
           "type": "object",
-          "additionalProperties": {
-            "nullable": true
-          }
+          "additionalProperties": {}
         }
       },
       "required": [
@@ -1705,7 +1708,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "operationId": "dashboard.agent_access.connections.list",
     "method": "GET",
     "pathTemplate": "/api/v1/admin/agent-access/connections",
-    "summary": "GET /api/v1/admin/agent-access/connections",
+    "summary": "List agent connections",
+    "description": "Lists bounded agent grants and credentials visible to the current administrator or agent principal.",
     "tags": [
       "Admin - Agent Access"
     ],
@@ -1806,9 +1810,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
         },
         "data": {
           "type": "object",
-          "additionalProperties": {
-            "nullable": true
-          }
+          "additionalProperties": {}
         }
       },
       "required": [
@@ -1821,7 +1823,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "operationId": "dashboard.agent_access.grants.revoke",
     "method": "DELETE",
     "pathTemplate": "/api/v1/admin/agent-access/grants/{grantId}",
-    "summary": "DELETE /api/v1/admin/agent-access/grants/{grantId}",
+    "summary": "Revoke an agent grant",
+    "description": "Revokes one active agent grant and its effective credentials.",
     "tags": [
       "Admin - Agent Access"
     ],
@@ -1887,9 +1890,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
         },
         "data": {
           "type": "object",
-          "additionalProperties": {
-            "nullable": true
-          }
+          "additionalProperties": {}
         }
       },
       "required": [
@@ -1902,7 +1903,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "operationId": "dashboard.agent_access.grants.update",
     "method": "PATCH",
     "pathTemplate": "/api/v1/admin/agent-access/grants/{grantId}",
-    "summary": "PATCH /api/v1/admin/agent-access/grants/{grantId}",
+    "summary": "Narrow an agent grant",
+    "description": "Narrows a grant's label, permissions, risk ceiling, or expiry; widening requires new approval.",
     "tags": [
       "Admin - Agent Access"
     ],
@@ -1992,9 +1994,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
         },
         "data": {
           "type": "object",
-          "additionalProperties": {
-            "nullable": true
-          }
+          "additionalProperties": {}
         }
       },
       "required": [
@@ -2007,7 +2007,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "operationId": "dashboard.agent_access.tokens.create",
     "method": "POST",
     "pathTemplate": "/api/v1/admin/agent-access/tokens",
-    "summary": "POST /api/v1/admin/agent-access/tokens",
+    "summary": "Create an agent personal access token",
+    "description": "Creates a scoped subordinate grant and returns its bearer token exactly once.",
     "tags": [
       "Admin - Agent Access"
     ],
@@ -2108,9 +2109,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
         },
         "data": {
           "type": "object",
-          "additionalProperties": {
-            "nullable": true
-          }
+          "additionalProperties": {}
         }
       },
       "required": [
@@ -2123,7 +2122,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "operationId": "dashboard.agent_access.tokens.rotate",
     "method": "POST",
     "pathTemplate": "/api/v1/admin/agent-access/tokens/{credentialId}/rotate",
-    "summary": "POST /api/v1/admin/agent-access/tokens/{credentialId}/rotate",
+    "summary": "Rotate an agent credential",
+    "description": "Atomically replaces an active credential and returns the replacement bearer token exactly once.",
     "tags": [
       "Admin - Agent Access"
     ],
@@ -2190,9 +2190,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
         },
         "data": {
           "type": "object",
-          "additionalProperties": {
-            "nullable": true
-          }
+          "additionalProperties": {}
         }
       },
       "required": [
@@ -4588,9 +4586,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   }
                 },
@@ -6956,9 +6952,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 }
               },
@@ -7459,9 +7453,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 }
               },
@@ -7821,9 +7813,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 {
                   "type": "number"
                 },
-                {
-                  "nullable": true
-                }
+                {}
               ]
             }
           },
@@ -8219,9 +8209,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   }
                 },
@@ -8889,9 +8877,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 }
               },
@@ -10136,9 +10122,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         {
                           "type": "number"
                         },
-                        {
-                          "nullable": true
-                        }
+                        {}
                       ]
                     },
                     "updatedAt": {
@@ -10149,9 +10133,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         {
                           "type": "number"
                         },
-                        {
-                          "nullable": true
-                        }
+                        {}
                       ]
                     },
                     "deletedAt": {
@@ -10162,9 +10144,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         {
                           "type": "number"
                         },
-                        {
-                          "nullable": true
-                        }
+                        {}
                       ]
                     },
                     "metaTitle": {
@@ -10445,9 +10425,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   },
                   "updatedAt": {
@@ -10458,9 +10436,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   },
                   "deletedAt": {
@@ -10471,9 +10447,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   }
                 },
@@ -11563,9 +11537,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "filename",
                     "size"
                   ],
-                  "additionalProperties": {
-                    "nullable": true
-                  }
+                  "additionalProperties": {}
                 },
                 "contentType": {
                   "type": "string",
@@ -11584,9 +11556,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "string"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 },
                 "isPublished": {
@@ -11830,9 +11800,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "filename",
                 "size"
               ],
-              "additionalProperties": {
-                "nullable": true
-              }
+              "additionalProperties": {}
             },
             "publishedAt": {
               "anyOf": [
@@ -11842,9 +11810,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 {
                   "type": "number"
                 },
-                {
-                  "nullable": true
-                }
+                {}
               ]
             },
             "sortOrder": {
@@ -11862,9 +11828,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 {
                   "type": "number"
                 },
-                {
-                  "nullable": true
-                }
+                {}
               ]
             },
             "updatedAt": {
@@ -11875,9 +11839,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 {
                   "type": "number"
                 },
-                {
-                  "nullable": true
-                }
+                {}
               ]
             },
             "deletedAt": {
@@ -11888,9 +11850,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 {
                   "type": "number"
                 },
-                {
-                  "nullable": true
-                }
+                {}
               ]
             }
           },
@@ -12209,9 +12169,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "filename",
                       "size"
                     ],
-                    "additionalProperties": {
-                      "nullable": true
-                    }
+                    "additionalProperties": {}
                   },
                   "publishedAt": {
                     "anyOf": [
@@ -12221,9 +12179,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   },
                   "sortOrder": {
@@ -12241,9 +12197,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   },
                   "updatedAt": {
@@ -12254,9 +12208,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   },
                   "deletedAt": {
@@ -12267,9 +12219,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   }
                 },
@@ -12663,9 +12613,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "string"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 },
                 "hideHeader": {
@@ -12751,9 +12699,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "filename",
                     "size"
                   ],
-                  "additionalProperties": {
-                    "nullable": true
-                  }
+                  "additionalProperties": {}
                 }
               },
               "required": [
@@ -13521,9 +13467,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 {
                   "type": "number"
                 },
-                {
-                  "nullable": true
-                }
+                {}
               ]
             },
             "totalOrders": {
@@ -13540,9 +13484,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 {
                   "type": "number"
                 },
-                {
-                  "nullable": true
-                }
+                {}
               ]
             },
             "createdAt": {
@@ -13573,9 +13515,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 {
                   "type": "number"
                 },
-                {
-                  "nullable": true
-                }
+                {}
               ]
             }
           },
@@ -13755,9 +13695,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 },
                 "totalOrders": {
@@ -13774,9 +13712,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 },
                 "createdAt": {
@@ -13807,9 +13743,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 }
               },
@@ -14628,16 +14562,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "externalIds": {
                   "type": "object",
                   "nullable": true,
-                  "additionalProperties": {
-                    "nullable": true
-                  }
+                  "additionalProperties": {}
                 },
                 "metadata": {
                   "type": "object",
                   "nullable": true,
-                  "additionalProperties": {
-                    "nullable": true
-                  }
+                  "additionalProperties": {}
                 },
                 "isActive": {
                   "type": "boolean"
@@ -14659,9 +14589,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "isActive",
                 "sortOrder"
               ],
-              "additionalProperties": {
-                "nullable": true
-              }
+              "additionalProperties": {}
             }
           },
           "required": [
@@ -14830,16 +14758,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "externalIds": {
               "type": "object",
               "nullable": true,
-              "additionalProperties": {
-                "nullable": true
-              }
+              "additionalProperties": {}
             },
             "metadata": {
               "type": "object",
               "nullable": true,
-              "additionalProperties": {
-                "nullable": true
-              }
+              "additionalProperties": {}
             },
             "isActive": {
               "type": "boolean"
@@ -14861,9 +14785,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "isActive",
             "sortOrder"
           ],
-          "additionalProperties": {
-            "nullable": true
-          }
+          "additionalProperties": {}
         }
       },
       "required": [
@@ -15007,16 +14929,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "externalIds": {
                     "type": "object",
                     "nullable": true,
-                    "additionalProperties": {
-                      "nullable": true
-                    }
+                    "additionalProperties": {}
                   },
                   "metadata": {
                     "type": "object",
                     "nullable": true,
-                    "additionalProperties": {
-                      "nullable": true
-                    }
+                    "additionalProperties": {}
                   },
                   "isActive": {
                     "type": "boolean"
@@ -15038,9 +14956,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "isActive",
                   "sortOrder"
                 ],
-                "additionalProperties": {
-                  "nullable": true
-                }
+                "additionalProperties": {}
               }
             },
             "pagination": {
@@ -15596,16 +15512,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "externalIds": {
               "type": "object",
               "nullable": true,
-              "additionalProperties": {
-                "nullable": true
-              }
+              "additionalProperties": {}
             },
             "metadata": {
               "type": "object",
               "nullable": true,
-              "additionalProperties": {
-                "nullable": true
-              }
+              "additionalProperties": {}
             },
             "isActive": {
               "type": "boolean"
@@ -15627,9 +15539,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "isActive",
             "sortOrder"
           ],
-          "additionalProperties": {
-            "nullable": true
-          }
+          "additionalProperties": {}
         }
       },
       "required": [
@@ -15693,9 +15603,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     },
                     {
                       "type": "object",
-                      "additionalProperties": {
-                        "nullable": true
-                      }
+                      "additionalProperties": {}
                     }
                   ]
                 },
@@ -15707,9 +15615,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     },
                     {
                       "type": "object",
-                      "additionalProperties": {
-                        "nullable": true
-                      }
+                      "additionalProperties": {}
                     }
                   ]
                 },
@@ -15842,9 +15748,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 },
                 "lastTestSuccessAt": {
@@ -15855,9 +15759,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 },
                 "lastTestFailureAt": {
@@ -15868,9 +15770,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 }
               },
@@ -16139,9 +16039,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 },
                 "lastTestSuccessAt": {
@@ -16152,9 +16050,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 },
                 "lastTestFailureAt": {
@@ -16165,9 +16061,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 }
               },
@@ -16392,9 +16286,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                           {
                             "type": "number"
                           },
-                          {
-                            "nullable": true
-                          }
+                          {}
                         ]
                       },
                       "lastTestSuccessAt": {
@@ -16405,9 +16297,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                           {
                             "type": "number"
                           },
-                          {
-                            "nullable": true
-                          }
+                          {}
                         ]
                       },
                       "lastTestFailureAt": {
@@ -16418,9 +16308,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                           {
                             "type": "number"
                           },
-                          {
-                            "nullable": true
-                          }
+                          {}
                         ]
                       }
                     },
@@ -16626,9 +16514,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     },
                     {
                       "type": "object",
-                      "additionalProperties": {
-                        "nullable": true
-                      }
+                      "additionalProperties": {}
                     }
                   ]
                 },
@@ -16640,9 +16526,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     },
                     {
                       "type": "object",
-                      "additionalProperties": {
-                        "nullable": true
-                      }
+                      "additionalProperties": {}
                     }
                   ]
                 },
@@ -16753,9 +16637,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     },
                     {
                       "type": "object",
-                      "additionalProperties": {
-                        "nullable": true
-                      }
+                      "additionalProperties": {}
                     }
                   ]
                 },
@@ -16767,9 +16649,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     },
                     {
                       "type": "object",
-                      "additionalProperties": {
-                        "nullable": true
-                      }
+                      "additionalProperties": {}
                     }
                   ]
                 },
@@ -16900,9 +16780,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 },
                 "lastTestSuccessAt": {
@@ -16913,9 +16791,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 },
                 "lastTestFailureAt": {
@@ -16926,9 +16802,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 }
               },
@@ -17232,9 +17106,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 },
                 "isActive": {
@@ -17505,9 +17377,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 {
                   "type": "number"
                 },
-                {
-                  "nullable": true
-                }
+                {}
               ]
             },
             "isActive": {
@@ -17541,9 +17411,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 {
                   "type": "number"
                 },
-                {
-                  "nullable": true
-                }
+                {}
               ]
             }
           },
@@ -17769,9 +17637,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   },
                   "isActive": {
@@ -17805,9 +17671,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   }
                 },
@@ -18180,9 +18044,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 },
                 "isActive": {
@@ -19199,9 +19061,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 {
                   "type": "number"
                 },
-                {
-                  "nullable": true
-                }
+                {}
               ]
             }
           },
@@ -19215,9 +19075,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "updatedAt",
             "deletedAt"
           ],
-          "additionalProperties": {
-            "nullable": true
-          }
+          "additionalProperties": {}
         }
       },
       "required": [
@@ -19378,9 +19236,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 {
                   "type": "number"
                 },
-                {
-                  "nullable": true
-                }
+                {}
               ]
             }
           },
@@ -19394,9 +19250,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "updatedAt",
             "deletedAt"
           ],
-          "additionalProperties": {
-            "nullable": true
-          }
+          "additionalProperties": {}
         }
       },
       "required": [
@@ -19548,9 +19402,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   {
                     "type": "number"
                   },
-                  {
-                    "nullable": true
-                  }
+                  {}
                 ]
               }
             },
@@ -19564,9 +19416,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "updatedAt",
               "deletedAt"
             ],
-            "additionalProperties": {
-              "nullable": true
-            }
+            "additionalProperties": {}
           }
         }
       },
@@ -19747,9 +19597,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 {
                   "type": "number"
                 },
-                {
-                  "nullable": true
-                }
+                {}
               ]
             }
           },
@@ -19763,9 +19611,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "updatedAt",
             "deletedAt"
           ],
-          "additionalProperties": {
-            "nullable": true
-          }
+          "additionalProperties": {}
         }
       },
       "required": [
@@ -20001,9 +19847,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 {
                   "type": "number"
                 },
-                {
-                  "nullable": true
-                }
+                {}
               ]
             }
           },
@@ -20017,9 +19861,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "updatedAt",
             "deletedAt"
           ],
-          "additionalProperties": {
-            "nullable": true
-          }
+          "additionalProperties": {}
         }
       },
       "required": [
@@ -20800,9 +20642,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   },
                   "acknowledgedAt": {
@@ -20813,9 +20653,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   },
                   "resolvedAt": {
@@ -20826,9 +20664,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   },
                   "createdAt": {
@@ -20880,9 +20716,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "variantSku",
                   "variantLabel"
                 ],
-                "additionalProperties": {
-                  "nullable": true
-                }
+                "additionalProperties": {}
               }
             }
           },
@@ -21398,9 +21232,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "newStock",
             "delta"
           ],
-          "additionalProperties": {
-            "nullable": true
-          }
+          "additionalProperties": {}
         }
       },
       "required": [
@@ -21841,9 +21673,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "lowStockThreshold",
                   "version"
                 ],
-                "additionalProperties": {
-                  "nullable": true
-                }
+                "additionalProperties": {}
               }
             },
             "movements": {
@@ -21986,9 +21816,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "actorName",
                   "actorType"
                 ],
-                "additionalProperties": {
-                  "nullable": true
-                }
+                "additionalProperties": {}
               }
             },
             "alerts": {
@@ -22022,9 +21850,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   },
                   "acknowledgedAt": {
@@ -22035,9 +21861,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   },
                   "resolvedAt": {
@@ -22048,9 +21872,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   },
                   "createdAt": {
@@ -22102,9 +21924,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "variantSku",
                   "variantLabel"
                 ],
-                "additionalProperties": {
-                  "nullable": true
-                }
+                "additionalProperties": {}
               }
             },
             "pagination": {
@@ -22211,9 +22031,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               ]
             }
           },
-          "additionalProperties": {
-            "nullable": true
-          }
+          "additionalProperties": {}
         }
       },
       "required": [
@@ -22330,9 +22148,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "barcodeType",
                 "lowStockThreshold"
               ],
-              "additionalProperties": {
-                "nullable": true
-              }
+              "additionalProperties": {}
             },
             "product": {
               "type": "object",
@@ -22370,9 +22186,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "imageUrl",
                 "imageMediaId"
               ],
-              "additionalProperties": {
-                "nullable": true
-              }
+              "additionalProperties": {}
             }
           },
           "required": [
@@ -22705,9 +22519,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 }
               },
@@ -22896,9 +22708,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   }
                 },
@@ -23069,9 +22879,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 }
               },
@@ -23344,9 +23152,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   },
                   "deletedAt": {
@@ -23357,9 +23163,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   }
                 },
@@ -23753,9 +23557,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 },
                 "deletedAt": {
@@ -23766,9 +23568,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 }
               },
@@ -23978,9 +23778,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 },
                 "deletedAt": {
@@ -23991,9 +23789,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 }
               },
@@ -24250,9 +24046,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 },
                 "deletedAt": {
@@ -24263,9 +24057,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 }
               },
@@ -24503,9 +24295,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 },
                 "deletedAt": {
@@ -24516,9 +24306,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 }
               },
@@ -25135,9 +24923,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 },
                 "updatedAt": {
@@ -25148,9 +24934,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 }
               },
@@ -25457,9 +25241,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   }
                 },
@@ -25633,9 +25415,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 {
                   "type": "number"
                 },
-                {
-                  "nullable": true
-                }
+                {}
               ]
             },
             "updatedAt": {
@@ -25646,9 +25426,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 {
                   "type": "number"
                 },
-                {
-                  "nullable": true
-                }
+                {}
               ]
             }
           },
@@ -25923,9 +25701,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
         "data": {
           "type": "object",
           "properties": {
-            "item": {
-              "nullable": true
-            },
+            "item": {},
             "revision": {
               "type": "integer",
               "minimum": 0,
@@ -27110,9 +26886,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
         "data": {
           "type": "object",
           "properties": {
-            "item": {
-              "nullable": true
-            },
+            "item": {},
             "revision": {
               "type": "integer",
               "minimum": 0,
@@ -27234,9 +27008,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           "properties": {
             "menu": {
               "type": "object",
-              "additionalProperties": {
-                "nullable": true
-              }
+              "additionalProperties": {}
             }
           },
           "required": [
@@ -27307,9 +27079,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           "properties": {
             "menu": {
               "type": "object",
-              "additionalProperties": {
-                "nullable": true
-              }
+              "additionalProperties": {}
             }
           },
           "required": [
@@ -28048,9 +27818,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "type": "array",
               "items": {
                 "type": "object",
-                "additionalProperties": {
-                  "nullable": true
-                }
+                "additionalProperties": {}
               }
             }
           },
@@ -28112,9 +27880,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "type": "array",
               "items": {
                 "type": "object",
-                "additionalProperties": {
-                  "nullable": true
-                }
+                "additionalProperties": {}
               }
             }
           },
@@ -28237,9 +28003,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           "properties": {
             "placement": {
               "type": "object",
-              "additionalProperties": {
-                "nullable": true
-              }
+              "additionalProperties": {}
             }
           },
           "required": [
@@ -29307,9 +29071,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             },
             "publicConfig": {
               "type": "object",
-              "additionalProperties": {
-                "nullable": true
-              }
+              "additionalProperties": {}
             }
           },
           "required": [
@@ -29367,9 +29129,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 },
                 "publicConfig": {
                   "type": "object",
-                  "additionalProperties": {
-                    "nullable": true
-                  }
+                  "additionalProperties": {}
                 }
               }
             }
@@ -29611,9 +29371,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "id",
                       "status"
                     ],
-                    "additionalProperties": {
-                      "nullable": true
-                    }
+                    "additionalProperties": {}
                   },
                   "error": {
                     "type": "string"
@@ -29623,9 +29381,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "orderId",
                   "success"
                 ],
-                "additionalProperties": {
-                  "nullable": true
-                }
+                "additionalProperties": {}
               }
             }
           },
@@ -29937,9 +29693,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 },
                 "codStatus": {
@@ -29965,9 +29719,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 },
                 "receiptUrl": {
@@ -30511,9 +30263,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 {
                   "type": "number"
                 },
-                {
-                  "nullable": true
-                }
+                {}
               ]
             },
             "shipmentItems": {
@@ -30574,9 +30324,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "updatedAt",
             "providerName"
           ],
-          "additionalProperties": {
-            "nullable": true
-          }
+          "additionalProperties": {}
         }
       },
       "required": [
@@ -30930,9 +30678,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "createdAt",
                 "updatedAt"
               ],
-              "additionalProperties": {
-                "nullable": true
-              }
+              "additionalProperties": {}
             },
             "fullEditReadiness": {
               "type": "object",
@@ -30975,9 +30721,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   },
                   "discountPercentage": {
@@ -31096,9 +30840,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                             {
                               "type": "number"
                             },
-                            {
-                              "nullable": true
-                            }
+                            {}
                           ]
                         },
                         "preorderMessage": {
@@ -31159,9 +30901,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                             {
                               "type": "number"
                             },
-                            {
-                              "nullable": true
-                            }
+                            {}
                           ]
                         },
                         "stockVersion": {
@@ -31197,9 +30937,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "discountAmount",
                   "variants"
                 ],
-                "additionalProperties": {
-                  "nullable": true
-                }
+                "additionalProperties": {}
               }
             },
             "defaultValues": {
@@ -31315,9 +31053,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "updatedAt",
                 "items"
               ],
-              "additionalProperties": {
-                "nullable": true
-              }
+              "additionalProperties": {}
             }
           },
           "required": [
@@ -31559,9 +31295,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   },
                   "shipmentItems": {
@@ -31873,9 +31607,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 {
                   "type": "number"
                 },
-                {
-                  "nullable": true
-                }
+                {}
               ]
             },
             "itemCount": {
@@ -31997,9 +31729,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 },
                 "updatedAt": {
@@ -32093,9 +31823,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 }
               },
@@ -32161,9 +31889,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 }
               },
@@ -32233,9 +31959,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   },
                   "updatedAt": {
@@ -32246,9 +31970,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   },
                   "nextProbeAt": {
@@ -32259,9 +31981,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   },
                   "lastProbeAt": {
@@ -32272,9 +31992,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   },
                   "refundedAt": {
@@ -32285,9 +32003,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   },
                   "failedAt": {
@@ -32298,9 +32014,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   },
                   "reason": {
@@ -32410,9 +32124,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 },
                 "lastProbeAt": {
@@ -32423,9 +32135,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 },
                 "providerStatus": {
@@ -32551,9 +32261,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   },
                   "resolvedAt": {
@@ -32564,9 +32272,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   },
                   "createdAt": {
@@ -32577,9 +32283,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   },
                   "updatedAt": {
@@ -32590,9 +32294,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   }
                 },
@@ -34131,9 +33833,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                           {
                             "type": "number"
                           },
-                          {
-                            "nullable": true
-                          }
+                          {}
                         ]
                       },
                       "updatedAt": {
@@ -34227,9 +33927,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                           {
                             "type": "number"
                           },
-                          {
-                            "nullable": true
-                          }
+                          {}
                         ]
                       }
                     },
@@ -34295,9 +33993,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                           {
                             "type": "number"
                           },
-                          {
-                            "nullable": true
-                          }
+                          {}
                         ]
                       }
                     },
@@ -34362,9 +34058,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                           {
                             "type": "number"
                           },
-                          {
-                            "nullable": true
-                          }
+                          {}
                         ]
                       },
                       "lastProbeAt": {
@@ -34375,9 +34069,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                           {
                             "type": "number"
                           },
-                          {
-                            "nullable": true
-                          }
+                          {}
                         ]
                       },
                       "providerStatus": {
@@ -34800,9 +34492,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   },
                   "sentAt": {
@@ -34813,9 +34503,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   },
                   "createdAt": {
@@ -34881,9 +34569,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                             {
                               "type": "number"
                             },
-                            {
-                              "nullable": true
-                            }
+                            {}
                           ]
                         },
                         "lastAttemptAt": {
@@ -34894,9 +34580,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                             {
                               "type": "number"
                             },
-                            {
-                              "nullable": true
-                            }
+                            {}
                           ]
                         },
                         "lastError": {
@@ -34911,9 +34595,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                             {
                               "type": "number"
                             },
-                            {
-                              "nullable": true
-                            }
+                            {}
                           ]
                         },
                         "deliveredAt": {
@@ -34924,9 +34606,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                             {
                               "type": "number"
                             },
-                            {
-                              "nullable": true
-                            }
+                            {}
                           ]
                         },
                         "failedAt": {
@@ -34937,9 +34617,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                             {
                               "type": "number"
                             },
-                            {
-                              "nullable": true
-                            }
+                            {}
                           ]
                         },
                         "skippedAt": {
@@ -34950,9 +34628,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                             {
                               "type": "number"
                             },
-                            {
-                              "nullable": true
-                            }
+                            {}
                           ]
                         },
                         "createdAt": {
@@ -35325,9 +35001,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 {
                   "type": "number"
                 },
-                {
-                  "nullable": true
-                }
+                {}
               ]
             },
             "accessMode": {
@@ -35408,9 +35082,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 }
               },
@@ -35758,9 +35430,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                           {
                             "type": "number"
                           },
-                          {
-                            "nullable": true
-                          }
+                          {}
                         ]
                       },
                       "updatedAt": {
@@ -35854,9 +35524,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                           {
                             "type": "number"
                           },
-                          {
-                            "nullable": true
-                          }
+                          {}
                         ]
                       }
                     },
@@ -35922,9 +35590,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                           {
                             "type": "number"
                           },
-                          {
-                            "nullable": true
-                          }
+                          {}
                         ]
                       }
                     },
@@ -35989,9 +35655,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                           {
                             "type": "number"
                           },
-                          {
-                            "nullable": true
-                          }
+                          {}
                         ]
                       },
                       "lastProbeAt": {
@@ -36002,9 +35666,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                           {
                             "type": "number"
                           },
-                          {
-                            "nullable": true
-                          }
+                          {}
                         ]
                       },
                       "providerStatus": {
@@ -36228,9 +35890,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   },
                   "codReceiptUrl": {
@@ -36310,9 +35970,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 },
                 "balancePaidAt": {
@@ -36323,9 +35981,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 },
                 "balanceDueDate": {
@@ -36424,9 +36080,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   },
                   "updatedAt": {
@@ -36437,9 +36091,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   },
                   "nextProbeAt": {
@@ -36450,9 +36102,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   },
                   "lastProbeAt": {
@@ -36463,9 +36113,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   },
                   "refundedAt": {
@@ -36476,9 +36124,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   },
                   "failedAt": {
@@ -36489,9 +36135,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   },
                   "reason": {
@@ -36601,9 +36245,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 },
                 "lastProbeAt": {
@@ -36614,9 +36256,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 },
                 "providerStatus": {
@@ -36772,9 +36412,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   },
                   "createdAt": {
@@ -37170,9 +36808,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "notificationCount",
             "sideEffectErrors"
           ],
-          "additionalProperties": {
-            "nullable": true
-          }
+          "additionalProperties": {}
         }
       },
       "required": [
@@ -38990,9 +38626,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 {
                   "type": "number"
                 },
-                {
-                  "nullable": true
-                }
+                {}
               ]
             },
             "shipmentItems": {
@@ -39349,9 +38983,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "statusChanged",
             "orderStatusUpdate"
           ],
-          "additionalProperties": {
-            "nullable": true
-          }
+          "additionalProperties": {}
         }
       },
       "required": [
@@ -39503,9 +39135,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   {
                     "type": "number"
                   },
-                  {
-                    "nullable": true
-                  }
+                  {}
                 ]
               },
               "shipmentItems": {
@@ -39566,9 +39196,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "updatedAt",
               "providerName"
             ],
-            "additionalProperties": {
-              "nullable": true
-            }
+            "additionalProperties": {}
           }
         }
       },
@@ -39793,9 +39421,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 },
                 "resolvedAt": {
@@ -39806,9 +39432,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 },
                 "createdAt": {
@@ -39819,9 +39443,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 },
                 "updatedAt": {
@@ -39832,9 +39454,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 }
               },
@@ -39920,9 +39540,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   },
                   "resolvedAt": {
@@ -39933,9 +39551,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   },
                   "createdAt": {
@@ -39946,9 +39562,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   },
                   "updatedAt": {
@@ -39959,9 +39573,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   }
                 },
@@ -40564,9 +40176,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "defaultMethod",
             "gatewayStatus"
           ],
-          "additionalProperties": {
-            "nullable": true
-          }
+          "additionalProperties": {}
         }
       },
       "required": [
@@ -41641,9 +41251,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 {
                   "type": "number"
                 },
-                {
-                  "nullable": true
-                }
+                {}
               ]
             },
             "preorderMessage": {
@@ -41704,9 +41312,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 {
                   "type": "number"
                 },
-                {
-                  "nullable": true
-                }
+                {}
               ]
             },
             "stockVersion": {
@@ -41898,9 +41504,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   },
                   "preorderMessage": {
@@ -41961,9 +41565,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   },
                   "stockVersion": {
@@ -42343,9 +41945,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 {
                   "type": "number"
                 },
-                {
-                  "nullable": true
-                }
+                {}
               ]
             },
             "preorderMessage": {
@@ -42406,9 +42006,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 {
                   "type": "number"
                 },
-                {
-                  "nullable": true
-                }
+                {}
               ]
             },
             "stockVersion": {
@@ -43447,9 +43045,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         {
                           "type": "number"
                         },
-                        {
-                          "nullable": true
-                        }
+                        {}
                       ]
                     },
                     "textLengths": {
@@ -44549,9 +44145,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "barcode",
                 "barcodeType"
               ],
-              "additionalProperties": {
-                "nullable": true
-              }
+              "additionalProperties": {}
             },
             "product": {
               "type": "object",
@@ -44579,9 +44173,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "price",
                 "isActive"
               ],
-              "additionalProperties": {
-                "nullable": true
-              }
+              "additionalProperties": {}
             }
           },
           "required": [
@@ -46328,9 +45920,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   },
                   "config": {
                     "type": "object",
-                    "additionalProperties": {
-                      "nullable": true
-                    }
+                    "additionalProperties": {}
                   }
                 },
                 "required": [
@@ -46359,9 +45949,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   },
                   "config": {
                     "type": "object",
-                    "additionalProperties": {
-                      "nullable": true
-                    }
+                    "additionalProperties": {}
                   }
                 },
                 "required": [
@@ -46612,9 +46200,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         },
                         "config": {
                           "type": "object",
-                          "additionalProperties": {
-                            "nullable": true
-                          }
+                          "additionalProperties": {}
                         }
                       },
                       "required": [
@@ -46643,9 +46229,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         },
                         "config": {
                           "type": "object",
-                          "additionalProperties": {
-                            "nullable": true
-                          }
+                          "additionalProperties": {}
                         }
                       },
                       "required": [
@@ -46971,14 +46555,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "minimum": 0,
               "exclusiveMinimum": true
             },
-            "applied": {
-              "nullable": true
-            },
+            "applied": {},
             "rejected": {
               "type": "array",
-              "items": {
-                "nullable": true
-              }
+              "items": {}
             },
             "unmatchedCodes": {
               "type": "array",
@@ -51882,9 +51462,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "updatedAt",
                 "deletedAt"
               ],
-              "additionalProperties": {
-                "nullable": true
-              }
+              "additionalProperties": {}
             }
           },
           "required": [
@@ -52042,9 +51620,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "updatedAt",
                 "deletedAt"
               ],
-              "additionalProperties": {
-                "nullable": true
-              }
+              "additionalProperties": {}
             }
           },
           "required": [
@@ -52220,9 +51796,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "updatedAt",
                   "deletedAt"
                 ],
-                "additionalProperties": {
-                  "nullable": true
-                }
+                "additionalProperties": {}
               }
             },
             "pagination": {
@@ -52506,9 +52080,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "updatedAt",
                 "deletedAt"
               ],
-              "additionalProperties": {
-                "nullable": true
-              }
+              "additionalProperties": {}
             }
           },
           "required": [
@@ -52626,9 +52198,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 },
                 "updatedAt": {
@@ -52639,9 +52209,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 },
                 "deletedAt": {
@@ -52652,9 +52220,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 }
               },
@@ -52776,9 +52342,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 },
                 "updatedAt": {
@@ -52789,9 +52353,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 },
                 "deletedAt": {
@@ -52802,9 +52364,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 }
               },
@@ -52939,9 +52499,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   },
                   "updatedAt": {
@@ -52952,9 +52510,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   },
                   "deletedAt": {
@@ -52965,9 +52521,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   }
                 },
@@ -53133,9 +52687,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 },
                 "updatedAt": {
@@ -53146,9 +52698,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 },
                 "deletedAt": {
@@ -53159,9 +52709,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 }
               },
@@ -53842,9 +53390,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "rateBps",
                   "amountMinor"
                 ],
-                "additionalProperties": {
-                  "nullable": true
-                }
+                "additionalProperties": {}
               }
             }
           },
@@ -54035,9 +53581,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 },
                 "updatedAt": {
@@ -54048,9 +53592,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 },
                 "deletedAt": {
@@ -54061,9 +53603,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 }
               },
@@ -54218,9 +53758,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 },
                 "updatedAt": {
@@ -54231,9 +53769,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 },
                 "deletedAt": {
@@ -54244,9 +53780,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 }
               },
@@ -54424,9 +53958,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   },
                   "updatedAt": {
@@ -54437,9 +53969,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   },
                   "deletedAt": {
@@ -54450,9 +53980,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   }
                 },
@@ -54682,9 +54210,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 },
                 "updatedAt": {
@@ -54695,9 +54221,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 },
                 "deletedAt": {
@@ -54708,9 +54232,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 }
               },
@@ -54827,9 +54349,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 },
                 "updatedAt": {
@@ -54840,9 +54360,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 }
               },
@@ -55006,9 +54524,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 },
                 "updatedAt": {
@@ -55019,9 +54535,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 }
               },
@@ -57106,9 +56620,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "type": "integer",
               "minimum": 0
             },
-            "updatedAt": {
-              "nullable": true
-            }
+            "updatedAt": {}
           },
           "required": [
             "theme",
@@ -57426,9 +56938,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "type": "integer",
               "minimum": 0
             },
-            "updatedAt": {
-              "nullable": true
-            }
+            "updatedAt": {}
           },
           "required": [
             "theme",
@@ -57608,9 +57118,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "theme",
             "revision"
           ],
-          "additionalProperties": {
-            "nullable": true
-          }
+          "additionalProperties": {}
         }
       },
       "required": [
@@ -57763,9 +57271,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "type": "integer",
               "minimum": 0
             },
-            "expiresAt": {
-              "nullable": true
-            }
+            "expiresAt": {}
           },
           "required": [
             "continuation",
@@ -58099,9 +57605,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "type": "integer",
                   "minimum": 0
                 },
-                "updatedAt": {
-                  "nullable": true
-                }
+                "updatedAt": {}
               },
               "required": [
                 "theme",
@@ -58447,9 +57951,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "type": "integer",
                   "minimum": 0
                 },
-                "updatedAt": {
-                  "nullable": true
-                }
+                "updatedAt": {}
               },
               "required": [
                 "theme",
@@ -58705,9 +58207,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "type": "string",
                     "nullable": true
                   },
-                  "createdAt": {
-                    "nullable": true
-                  }
+                  "createdAt": {}
                 },
                 "required": [
                   "id",
@@ -59024,9 +58524,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "type": "integer",
                   "minimum": 0
                 },
-                "updatedAt": {
-                  "nullable": true
-                }
+                "updatedAt": {}
               },
               "required": [
                 "theme",
@@ -59330,9 +58828,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "filename",
                     "size"
                   ],
-                  "additionalProperties": {
-                    "nullable": true
-                  }
+                  "additionalProperties": {}
                 },
                 "publishedAt": {
                   "anyOf": [
@@ -59342,9 +58838,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 },
                 "sortOrder": {
@@ -59362,9 +58856,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 },
                 "updatedAt": {
@@ -59375,9 +58867,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 },
                 "deletedAt": {
@@ -59388,9 +58878,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 }
               },
@@ -59638,9 +59126,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "filename",
                       "size"
                     ],
-                    "additionalProperties": {
-                      "nullable": true
-                    }
+                    "additionalProperties": {}
                   },
                   "publishedAt": {
                     "anyOf": [
@@ -59650,9 +59136,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   },
                   "sortOrder": {
@@ -59670,9 +59154,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   },
                   "updatedAt": {
@@ -59683,9 +59165,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   },
                   "deletedAt": {
@@ -59696,9 +59176,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   }
                 },
@@ -63093,9 +62571,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 }
               },
@@ -65509,9 +64985,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "result": {
               "type": "object",
               "nullable": true,
-              "additionalProperties": {
-                "nullable": true
-              }
+              "additionalProperties": {}
             },
             "message": {
               "type": "string"
@@ -66175,9 +65649,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "result": {
               "type": "object",
               "nullable": true,
-              "additionalProperties": {
-                "nullable": true
-              }
+              "additionalProperties": {}
             },
             "message": {
               "type": "string"
@@ -66254,9 +65726,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
         "data": {
           "type": "object",
           "properties": {},
-          "additionalProperties": {
-            "nullable": true
-          }
+          "additionalProperties": {}
         }
       },
       "required": [
@@ -66354,9 +65824,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
         "data": {
           "type": "object",
           "properties": {},
-          "additionalProperties": {
-            "nullable": true
-          }
+          "additionalProperties": {}
         }
       },
       "required": [
@@ -67951,9 +67419,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "images",
                 "isActive"
               ],
-              "additionalProperties": {
-                "nullable": true
-              }
+              "additionalProperties": {}
             },
             "images": {
               "type": "array",
@@ -68009,9 +67475,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           "required": [
             "images"
           ],
-          "additionalProperties": {
-            "nullable": true
-          }
+          "additionalProperties": {}
         }
       },
       "required": [
@@ -69899,9 +69363,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           "properties": {
             "navigation": {
               "type": "object",
-              "additionalProperties": {
-                "nullable": true
-              }
+              "additionalProperties": {}
             }
           },
           "required": [
@@ -70018,9 +69480,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           "properties": {
             "menu": {
               "type": "object",
-              "additionalProperties": {
-                "nullable": true
-              }
+              "additionalProperties": {}
             },
             "parentId": {
               "type": "string",
@@ -70466,9 +69926,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "type": "array",
               "items": {
                 "type": "object",
-                "additionalProperties": {
-                  "nullable": true
-                }
+                "additionalProperties": {}
               }
             }
           },
@@ -70785,9 +70243,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
         "data": {
           "type": "object",
           "properties": {},
-          "additionalProperties": {
-            "nullable": true
-          }
+          "additionalProperties": {}
         }
       },
       "required": [
@@ -70870,9 +70326,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
         "data": {
           "type": "object",
           "properties": {},
-          "additionalProperties": {
-            "nullable": true
-          }
+          "additionalProperties": {}
         }
       },
       "required": [
@@ -71181,9 +70635,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
         "data": {
           "type": "object",
           "properties": {},
-          "additionalProperties": {
-            "nullable": true
-          }
+          "additionalProperties": {}
         }
       },
       "required": [
@@ -71374,9 +70826,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "filename",
                     "size"
                   ],
-                  "additionalProperties": {
-                    "nullable": true
-                  }
+                  "additionalProperties": {}
                 },
                 "publishedAt": {
                   "anyOf": [
@@ -71386,9 +70836,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 },
                 "sortOrder": {
@@ -71406,9 +70854,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 },
                 "updatedAt": {
@@ -71419,9 +70865,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 },
                 "deletedAt": {
@@ -71432,9 +70876,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 }
               },
@@ -71657,9 +71099,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "filename",
                     "size"
                   ],
-                  "additionalProperties": {
-                    "nullable": true
-                  }
+                  "additionalProperties": {}
                 },
                 "publishedAt": {
                   "anyOf": [
@@ -71669,9 +71109,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 },
                 "sortOrder": {
@@ -71689,9 +71127,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 },
                 "updatedAt": {
@@ -71702,9 +71138,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 },
                 "deletedAt": {
@@ -71715,9 +71149,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     {
                       "type": "number"
                     },
-                    {
-                      "nullable": true
-                    }
+                    {}
                   ]
                 }
               },
@@ -71976,9 +71408,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "filename",
                       "size"
                     ],
-                    "additionalProperties": {
-                      "nullable": true
-                    }
+                    "additionalProperties": {}
                   },
                   "publishedAt": {
                     "anyOf": [
@@ -71988,9 +71418,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   },
                   "sortOrder": {
@@ -72008,9 +71436,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   },
                   "updatedAt": {
@@ -72021,9 +71447,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   },
                   "deletedAt": {
@@ -72034,9 +71458,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       {
                         "type": "number"
                       },
-                      {
-                        "nullable": true
-                      }
+                      {}
                     ]
                   }
                 },
@@ -72400,9 +71822,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
         "data": {
           "type": "object",
           "properties": {},
-          "additionalProperties": {
-            "nullable": true
-          }
+          "additionalProperties": {}
         }
       },
       "required": [
@@ -72577,9 +71997,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
         "data": {
           "type": "object",
           "properties": {},
-          "additionalProperties": {
-            "nullable": true
-          }
+          "additionalProperties": {}
         }
       },
       "required": [
@@ -74042,9 +73460,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "discountedPrice",
                   "priceVaries"
                 ],
-                "additionalProperties": {
-                  "nullable": true
-                }
+                "additionalProperties": {}
               }
             },
             "pagination": {
@@ -74276,9 +73692,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
         "data": {
           "type": "object",
           "properties": {},
-          "additionalProperties": {
-            "nullable": true
-          }
+          "additionalProperties": {}
         }
       },
       "required": [
@@ -75004,7 +74418,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "operationId": "system.agent_auth.device_ack",
     "method": "POST",
     "pathTemplate": "/api/v1/agent-auth/device/ack",
-    "summary": "POST /api/v1/agent-auth/device/ack",
+    "summary": "Acknowledge a paired CLI credential",
+    "description": "Confirms that the CLI stored its one-time credential so the encrypted delivery envelope can be destroyed.",
     "tags": [
       "Agent Authentication"
     ],
@@ -75070,7 +74485,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "operationId": "system.agent_auth.device_start",
     "method": "POST",
     "pathTemplate": "/api/v1/agent-auth/device/start",
-    "summary": "POST /api/v1/agent-auth/device/start",
+    "summary": "Start CLI device pairing",
+    "description": "Starts a short-lived dashboard pairing ceremony and returns one-time device and user codes.",
     "tags": [
       "Agent Authentication"
     ],
@@ -75156,7 +74572,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "operationId": "system.agent_auth.device_token",
     "method": "POST",
     "pathTemplate": "/api/v1/agent-auth/device/token",
-    "summary": "POST /api/v1/agent-auth/device/token",
+    "summary": "Poll CLI device pairing",
+    "description": "Polls a pairing ceremony and returns the credential once after a Super Admin approves it.",
     "tags": [
       "Agent Authentication"
     ],
@@ -75234,7 +74651,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "operationId": "system.agent_auth.revoke",
     "method": "POST",
     "pathTemplate": "/api/v1/agent-auth/revoke",
-    "summary": "POST /api/v1/agent-auth/revoke",
+    "summary": "Revoke the current agent connection",
+    "description": "Revokes the credential and grant represented by the current agent bearer token.",
     "tags": [
       "Agent Authentication"
     ],

@@ -22,6 +22,10 @@ function finalizedDocument(): OpenApiDocument {
         title: "Scalius Commerce API",
         version: "1.0.0",
         description: "E-commerce platform API powering admin dashboard and storefront",
+        license: {
+          name: "GNU Affero General Public License v3.0",
+          url: "https://www.gnu.org/licenses/agpl-3.0.html",
+        },
       },
       servers: [{ url: "/", description: "Default" }],
     }),
@@ -57,6 +61,14 @@ function documentedOperationCount(document: OpenApiDocument): number {
   }, 0);
 }
 
+function containsStandaloneNullableSchema(value: unknown): boolean {
+  if (Array.isArray(value)) return value.some(containsStandaloneNullableSchema);
+  if (!value || typeof value !== "object") return false;
+  const record = value as Record<string, unknown>;
+  if (Object.keys(record).length === 1 && record.nullable === true) return true;
+  return Object.values(record).some(containsStandaloneNullableSchema);
+}
+
 describe("agent operation contract", () => {
   const document = finalizedDocument();
   const manifest = buildAgentOperationManifest(document);
@@ -73,6 +85,25 @@ describe("agent operation contract", () => {
         ),
       ),
     ).toBe(true);
+  });
+
+  it("keeps the human OpenAPI contract valid and navigable", () => {
+    const operations = Object.values(document.paths ?? {}).flatMap((pathItem) => {
+      if (!pathItem || typeof pathItem !== "object") return [];
+      return Object.entries(pathItem)
+        .filter(([method]) => HTTP_METHODS.has(method.toLowerCase()))
+        .map(([, operation]) => operation as Record<string, unknown>);
+    });
+
+    expect(operations).toHaveLength(documentedOperationCount(document));
+    expect(
+      operations.every(
+        (operation) =>
+          typeof operation.summary === "string" && operation.summary.trim().length > 0,
+      ),
+    ).toBe(true);
+    expect(containsStandaloneNullableSchema(document)).toBe(false);
+    expect(operations.every((operation) => Array.isArray(operation.security))).toBe(true);
   });
 
   it("exposes the representative dashboard read, dashboard mutation, and storefront read", () => {

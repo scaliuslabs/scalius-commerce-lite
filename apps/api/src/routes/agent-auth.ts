@@ -70,6 +70,8 @@ async function enforceUnauthenticatedAuthRate(c: { env: Env; req: { header(name:
 const startRoute = createRoute({
   method: "post", path: "/device/start", tags: ["Agent Authentication"],
   operationId: "system.agent_auth.device_start",
+  summary: "Start CLI device pairing",
+  description: "Starts a short-lived dashboard pairing ceremony and returns one-time device and user codes.",
   request: { body: { required: true, content: { "application/json": { schema: z.object({
     clientName: z.string().trim().min(1).max(80),
     profileName: z.string().trim().min(1).max(80).optional(),
@@ -115,6 +117,8 @@ const deviceCodeBody = z.object({ deviceCode: z.string().regex(/^[A-Za-z0-9_-]{4
 const tokenRoute = createRoute({
   method: "post", path: "/device/token", tags: ["Agent Authentication"],
   operationId: "system.agent_auth.device_token",
+  summary: "Poll CLI device pairing",
+  description: "Polls a pairing ceremony and returns the credential once after a Super Admin approves it.",
   request: { body: { required: true, content: { "application/json": { schema: deviceCodeBody } } } },
   responses: {
     200: { description: "Credential delivered", content: { "application/json": { schema: z.object({ status: z.literal("approved"), token: z.string(), credentialId: z.string(), expiresAt: z.string() }) } } },
@@ -189,6 +193,8 @@ app.openapi(tokenRoute, async (c) => {
 const ackRoute = createRoute({
   method: "post", path: "/device/ack", tags: ["Agent Authentication"],
   operationId: "system.agent_auth.device_ack",
+  summary: "Acknowledge a paired CLI credential",
+  description: "Confirms that the CLI stored its one-time credential so the encrypted delivery envelope can be destroyed.",
   request: { body: { required: true, content: { "application/json": { schema: deviceCodeBody } } } },
   responses: { 200: { description: "Credential acknowledged", content: { "application/json": { schema: z.object({ status: z.literal("acknowledged") }) } } } },
 });
@@ -223,6 +229,8 @@ app.openapi(ackRoute, async (c) => {
 const revokeRoute = createRoute({
   method: "post", path: "/revoke", tags: ["Agent Authentication"],
   operationId: "system.agent_auth.revoke",
+  summary: "Revoke the current agent connection",
+  description: "Revokes the credential and grant represented by the current agent bearer token.",
   request: { body: { required: true, content: { "application/json": { schema: z.object({}).strict() } } } },
   responses: { 200: { description: "Current connection revoked", content: { "application/json": { schema: z.object({ status: z.literal("revoked") }) } } } },
 });

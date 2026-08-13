@@ -10,6 +10,8 @@ type OpenApiSecurityRequirement = Record<string, string[]>;
 
 type OpenApiOperation = {
   operationId?: string;
+  summary?: string;
+  description?: string;
   security?: OpenApiSecurityRequirement[];
   responses?: Record<string, unknown>;
   "x-scalius-agent"?: AgentOperationMetadata;
@@ -122,6 +124,11 @@ const CUSTOMER_SECURITY: OpenApiSecurityRequirement[] = [{ customerSession: [] }
 const AGENT_SECURITY: OpenApiSecurityRequirement[] = [{ agentBearer: [] }];
 const ADMIN_OR_AGENT_SECURITY: OpenApiSecurityRequirement[] = [
   { adminSession: [] },
+  { agentBearer: [] },
+];
+const SCANNER_ADMIN_OR_AGENT_SECURITY: OpenApiSecurityRequirement[] = [
+  { adminSession: [] },
+  { scannerSession: [] },
   { agentBearer: [] },
 ];
 
@@ -2613,6 +2620,9 @@ function securityForOperation(path: string, method: string): OpenApiSecurityRequ
     return BEARER_SECURITY;
   }
   if (path === "/agent-auth/revoke") return AGENT_SECURITY;
+  // The private preview token is the request-body proof; it is not an HTTP
+  // authentication scheme and therefore has an explicit empty requirement.
+  if (path === "/storefront/theme-preview/resolve") return [];
   if (
     path === "/storefront/agent-contexts" ||
     path.startsWith("/storefront/agent-contexts/")
@@ -2693,12 +2703,21 @@ function applyOperationContract(spec: OpenApiDocument): void {
           reviewed?.metadata.exposure === "continuation") &&
         reviewed.metadata.surface === "dashboard"
       ) {
-        operation.security = ADMIN_OR_AGENT_SECURITY;
+        operation.security = isScannerEndpoint(path, method)
+          ? SCANNER_ADMIN_OR_AGENT_SECURITY
+          : ADMIN_OR_AGENT_SECURITY;
       }
       operation.operationId ??= reviewed?.operationId ?? derivedOperationId;
       operation["x-scalius-agent"] ??=
         reviewed?.metadata ?? excludedMetadata(path, method);
       operation["x-scalius-rbac"] ??= operationRbac(path, method);
+      // OpenAPI has no root security requirement. Make intentional public
+      // access explicit instead of relying on the implicit empty default.
+      // Proof-bearing receipt/payment endpoints still document their proof
+      // headers and bodies independently; they do not use an auth scheme.
+      if (!hasOwn(operation, "security") && operation["x-scalius-rbac"]?.type === "public") {
+        operation.security = [];
+      }
       if (
         reviewed?.metadata.exposure === "execute" &&
         reviewed.metadata.risk !== "read" &&
@@ -2720,9 +2739,37 @@ function applyOperationContract(spec: OpenApiDocument): void {
   buildAgentOperationManifest(spec);
 }
 
+/**
+ * Hono's OpenAPI 3.0 serializer represents unconstrained Zod values as the
+ * schema fragment `{ nullable: true }`. `nullable` modifies a declared type in
+ * OpenAPI 3.0 and is not a schema by itself, so validators correctly reject
+ * that fragment. An empty schema is the accurate OpenAPI 3.0 representation
+ * of the same unconstrained value (including null).
+ */
+function normalizeUnconstrainedOpenApiSchemas(value: unknown): void {
+  if (Array.isArray(value)) {
+    for (const item of value) normalizeUnconstrainedOpenApiSchemas(item);
+    return;
+  }
+  if (!value || typeof value !== "object") return;
+
+  const record = value as Record<string, unknown>;
+  if (
+    Object.keys(record).length === 1 &&
+    record.nullable === true
+  ) {
+    delete record.nullable;
+    return;
+  }
+  for (const item of Object.values(record)) {
+    normalizeUnconstrainedOpenApiSchemas(item);
+  }
+}
+
 export function finalizeOpenApiContract<T extends { components?: unknown; paths?: unknown }>(spec: T): T {
   const document = spec as OpenApiDocument;
   applySecuritySchemes(document);
   applyOperationContract(document);
+  normalizeUnconstrainedOpenApiSchemas(document);
   return spec;
 }

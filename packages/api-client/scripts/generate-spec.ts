@@ -24,6 +24,10 @@ async function generateSpec() {
         version: "1.0.0",
         description:
           "E-commerce platform API powering admin dashboard and storefront",
+        license: {
+          name: "GNU Affero General Public License v3.0",
+          url: "https://www.gnu.org/licenses/agpl-3.0.html",
+        },
       },
       servers: [{ url: "/", description: "Default" }],
     }));
