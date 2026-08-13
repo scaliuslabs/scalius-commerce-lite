@@ -10,6 +10,7 @@ import {
 } from "./agent-operation-manifest";
 import {
   AGENT_OPERATION_MANIFEST_PATH,
+  assertOpenApiContractModuleFresh,
   generateAgentOperationManifestSource,
 } from "./generate-agent-operation-manifest";
 
@@ -17,7 +18,12 @@ function finalizedDocument(): OpenApiDocument {
   return finalizeOpenApiContract(
     app.getOpenAPIDocument({
       openapi: "3.0.0",
-      info: { title: "Agent operation contract", version: "test" },
+      info: {
+        title: "Scalius Commerce API",
+        version: "1.0.0",
+        description: "E-commerce platform API powering admin dashboard and storefront",
+      },
+      servers: [{ url: "/", description: "Default" }],
     }),
   ) as unknown as OpenApiDocument;
 }
@@ -519,5 +525,9 @@ describe("agent operation contract", () => {
     const checkedIn = readFileSync(AGENT_OPERATION_MANIFEST_PATH, "utf8");
     expect(checkedIn).toBe(expected);
     expect(checkedIn).not.toMatch(/generatedAt|new Date\(|20\d\d-\d\d-\d\dT/);
+  });
+
+  it("keeps the runtime OpenAPI response byte-for-byte deploy generated", () => {
+    expect(() => assertOpenApiContractModuleFresh(document)).not.toThrow();
   });
 });
