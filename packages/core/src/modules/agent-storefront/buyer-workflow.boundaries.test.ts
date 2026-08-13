@@ -15,13 +15,13 @@ describe("agent storefront full buyer workflow boundaries", () => {
     expect(buyerSource).toContain("commitStorefrontOrderPayload");
   });
 
-  it("atomically binds the created order and payment continuation before clearing the cart", () => {
+  it("atomically binds the created order before clearing the cart", () => {
     expect(ingestSource).toContain("prepareAgentStorefrontCheckoutCommit");
     expect(ingestSource).toContain("agentStorefrontOrderGrants");
-    expect(ingestSource).toContain("agentStorefrontContinuations");
     expect(ingestSource).toContain("AGENT_STOREFRONT_CONTEXT_CHECKOUT_CONFLICT");
     expect(ingestSource).toContain("cartJson: \"[]\"");
     expect(ingestSource).toContain("discountCode: null");
+    expect(buyerSource).toContain("Start secure payment with storefront.orders.payment.begin");
   });
 
   it("authorizes account and receipt workflows only through live context authority", () => {

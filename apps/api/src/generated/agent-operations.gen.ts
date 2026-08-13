@@ -63702,7 +63702,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "operationId": "storefront.checkout.submit",
     "method": "POST",
     "pathTemplate": "/api/v1/storefront/agent-contexts/{contextId}/checkout/submit",
-    "summary": "Create an idempotent COD storefront order and bind order authority",
+    "summary": "Create an idempotent storefront order and bind order authority",
     "tags": [
       "Storefront Agent Contexts"
     ],
@@ -63798,9 +63798,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "paymentMethod": {
                   "type": "string",
                   "enum": [
-                    "cod"
+                    "cod",
+                    "stripe",
+                    "sslcommerz",
+                    "polar"
                   ],
-                  "description": "Agent checkout is currently COD-only. Online payment starts remain excluded until the client can complete the body-only browser handoff without leaking bootstrap authority."
+                  "description": "Selected active checkout payment method. Online methods continue through storefront.orders.payment.begin."
                 }
               },
               "required": [
@@ -65830,7 +65833,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
       "Storefront Agent Contexts"
     ],
     "surface": "storefront",
-    "exposure": "excluded",
+    "exposure": "continuation",
     "principals": [
       "customer",
       "visitor"
@@ -65840,20 +65843,142 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "idempotency": "none",
     "revision": "none",
     "batch": "forbidden",
-    "transport": "json",
-    "maxResponseBytes": 65536,
-    "maxRequestBytes": 1048576,
-    "sensitiveOutput": false,
+    "transport": "continuation",
+    "maxResponseBytes": 8192,
+    "maxRequestBytes": 16384,
+    "sensitiveOutput": true,
     "oneTimeSecretOutput": false,
     "requiredClientAction": null,
     "artifactOutput": null,
-    "continuationOutput": null,
-    "exclusionReason": "The hosted bootstrap is body-only, but this operation remains excluded until MCP and CLI clients can perform the fixed-URL POST without placing its one-time code in URLs, logs, or shell history.",
+    "continuationOutput": {
+      "method": "POST",
+      "urlJsonPointer": "/data/browser/url",
+      "fieldsJsonPointer": "/data/browser/fields",
+      "sensitiveFields": [
+        "continuationCode"
+      ]
+    },
     "rbac": {
       "type": "agentGrant"
     },
-    "inputSchema": null,
-    "outputSchema": null
+    "inputSchema": {
+      "parameters": [
+        {
+          "schema": {
+            "type": "string",
+            "pattern": "^asc_[A-Za-z0-9_-]{20}$"
+          },
+          "required": true,
+          "name": "contextId",
+          "in": "path"
+        }
+      ],
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {},
+              "additionalProperties": false
+            }
+          }
+        }
+      }
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^acn_[A-Za-z0-9_-]{20}$"
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "customer_auth",
+                "payment",
+                "payment_recovery"
+              ]
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "complete",
+                "expired",
+                "failed"
+              ]
+            },
+            "expiresAt": {
+              "type": "string"
+            },
+            "browser": {
+              "type": "object",
+              "properties": {
+                "url": {
+                  "type": "string",
+                  "maxLength": 512,
+                  "format": "uri"
+                },
+                "method": {
+                  "type": "string",
+                  "enum": [
+                    "POST"
+                  ]
+                },
+                "fields": {
+                  "type": "object",
+                  "properties": {
+                    "continuationCode": {
+                      "type": "string",
+                      "minLength": 68,
+                      "maxLength": 68,
+                      "pattern": "^acb_[A-Za-z0-9_-]{20}_[A-Za-z0-9_-]{43}$"
+                    }
+                  },
+                  "required": [
+                    "continuationCode"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "url",
+                "method",
+                "fields"
+              ],
+              "additionalProperties": false
+            },
+            "message": {
+              "type": "string",
+              "maxLength": 256
+            }
+          },
+          "required": [
+            "id",
+            "kind",
+            "status",
+            "expiresAt",
+            "browser",
+            "message"
+          ]
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    }
   },
   {
     "operationId": "storefront.customer_auth.logout",
@@ -70791,7 +70916,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
       "Storefront Agent Contexts"
     ],
     "surface": "storefront",
-    "exposure": "excluded",
+    "exposure": "continuation",
     "principals": [
       "customer",
       "visitor"
@@ -70801,20 +70926,152 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "idempotency": "none",
     "revision": "none",
     "batch": "forbidden",
-    "transport": "json",
-    "maxResponseBytes": 65536,
-    "maxRequestBytes": 1048576,
-    "sensitiveOutput": false,
+    "transport": "continuation",
+    "maxResponseBytes": 8192,
+    "maxRequestBytes": 16384,
+    "sensitiveOutput": true,
     "oneTimeSecretOutput": false,
     "requiredClientAction": null,
     "artifactOutput": null,
-    "continuationOutput": null,
-    "exclusionReason": "The hosted payment bootstrap is body-only, but this operation remains excluded until MCP and CLI clients can perform the fixed-URL POST without placing its one-time code in URLs, logs, or shell history.",
+    "continuationOutput": {
+      "method": "POST",
+      "urlJsonPointer": "/data/browser/url",
+      "fieldsJsonPointer": "/data/browser/fields",
+      "sensitiveFields": [
+        "continuationCode"
+      ]
+    },
     "rbac": {
       "type": "agentGrant"
     },
-    "inputSchema": null,
-    "outputSchema": null
+    "inputSchema": {
+      "parameters": [
+        {
+          "schema": {
+            "type": "string",
+            "pattern": "^asc_[A-Za-z0-9_-]{20}$"
+          },
+          "required": true,
+          "name": "contextId",
+          "in": "path"
+        },
+        {
+          "schema": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "required": true,
+          "name": "orderId",
+          "in": "path"
+        }
+      ],
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {},
+              "additionalProperties": false
+            }
+          }
+        }
+      }
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^acn_[A-Za-z0-9_-]{20}$"
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "customer_auth",
+                "payment",
+                "payment_recovery"
+              ]
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "complete",
+                "expired",
+                "failed"
+              ]
+            },
+            "expiresAt": {
+              "type": "string"
+            },
+            "browser": {
+              "type": "object",
+              "properties": {
+                "url": {
+                  "type": "string",
+                  "maxLength": 512,
+                  "format": "uri"
+                },
+                "method": {
+                  "type": "string",
+                  "enum": [
+                    "POST"
+                  ]
+                },
+                "fields": {
+                  "type": "object",
+                  "properties": {
+                    "continuationCode": {
+                      "type": "string",
+                      "minLength": 68,
+                      "maxLength": 68,
+                      "pattern": "^acb_[A-Za-z0-9_-]{20}_[A-Za-z0-9_-]{43}$"
+                    }
+                  },
+                  "required": [
+                    "continuationCode"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "url",
+                "method",
+                "fields"
+              ],
+              "additionalProperties": false
+            },
+            "message": {
+              "type": "string",
+              "maxLength": 256
+            }
+          },
+          "required": [
+            "id",
+            "kind",
+            "status",
+            "expiresAt",
+            "browser",
+            "message"
+          ]
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    }
   },
   {
     "operationId": "storefront.orders.support_request.create",
@@ -71914,7 +72171,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
       "Storefront Agent Contexts"
     ],
     "surface": "storefront",
-    "exposure": "excluded",
+    "exposure": "continuation",
     "principals": [
       "customer",
       "visitor"
@@ -71924,20 +72181,152 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "idempotency": "none",
     "revision": "none",
     "batch": "forbidden",
-    "transport": "json",
-    "maxResponseBytes": 65536,
-    "maxRequestBytes": 1048576,
-    "sensitiveOutput": false,
+    "transport": "continuation",
+    "maxResponseBytes": 8192,
+    "maxRequestBytes": 16384,
+    "sensitiveOutput": true,
     "oneTimeSecretOutput": false,
     "requiredClientAction": null,
     "artifactOutput": null,
-    "continuationOutput": null,
-    "exclusionReason": "The hosted recovery bootstrap is body-only, but this operation remains excluded until MCP and CLI clients can perform the fixed-URL POST without placing its one-time code in URLs, logs, or shell history.",
+    "continuationOutput": {
+      "method": "POST",
+      "urlJsonPointer": "/data/browser/url",
+      "fieldsJsonPointer": "/data/browser/fields",
+      "sensitiveFields": [
+        "continuationCode"
+      ]
+    },
     "rbac": {
       "type": "agentGrant"
     },
-    "inputSchema": null,
-    "outputSchema": null
+    "inputSchema": {
+      "parameters": [
+        {
+          "schema": {
+            "type": "string",
+            "pattern": "^asc_[A-Za-z0-9_-]{20}$"
+          },
+          "required": true,
+          "name": "contextId",
+          "in": "path"
+        },
+        {
+          "schema": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "required": true,
+          "name": "orderId",
+          "in": "path"
+        }
+      ],
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {},
+              "additionalProperties": false
+            }
+          }
+        }
+      }
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^acn_[A-Za-z0-9_-]{20}$"
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "customer_auth",
+                "payment",
+                "payment_recovery"
+              ]
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "complete",
+                "expired",
+                "failed"
+              ]
+            },
+            "expiresAt": {
+              "type": "string"
+            },
+            "browser": {
+              "type": "object",
+              "properties": {
+                "url": {
+                  "type": "string",
+                  "maxLength": 512,
+                  "format": "uri"
+                },
+                "method": {
+                  "type": "string",
+                  "enum": [
+                    "POST"
+                  ]
+                },
+                "fields": {
+                  "type": "object",
+                  "properties": {
+                    "continuationCode": {
+                      "type": "string",
+                      "minLength": 68,
+                      "maxLength": 68,
+                      "pattern": "^acb_[A-Za-z0-9_-]{20}_[A-Za-z0-9_-]{43}$"
+                    }
+                  },
+                  "required": [
+                    "continuationCode"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "url",
+                "method",
+                "fields"
+              ],
+              "additionalProperties": false
+            },
+            "message": {
+              "type": "string",
+              "maxLength": 256
+            }
+          },
+          "required": [
+            "id",
+            "kind",
+            "status",
+            "expiresAt",
+            "browser",
+            "message"
+          ]
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    }
   },
   {
     "operationId": "storefront.payment_recovery.status",

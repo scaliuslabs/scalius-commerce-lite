@@ -324,6 +324,25 @@ describe("agent operation contract", () => {
         sensitiveFields: ["continuationCode"],
       },
     });
+    for (const operationId of [
+      "storefront.customer_auth.begin",
+      "storefront.orders.payment.begin",
+      "storefront.payment_recovery.begin",
+    ]) {
+      expect(byId(manifest, operationId)).toMatchObject({
+        exposure: "continuation",
+        transport: "continuation",
+        batch: "forbidden",
+        sensitiveOutput: true,
+        oneTimeSecretOutput: false,
+        continuationOutput: {
+          method: "POST",
+          urlJsonPointer: "/data/browser/url",
+          fieldsJsonPointer: "/data/browser/fields",
+          sensitiveFields: ["continuationCode"],
+        },
+      });
+    }
     expect(byId(manifest, "system.storefront_continuations.theme_preview_exchange")).toMatchObject({
       pathTemplate: "/api/v1/storefront/agent-continuations/theme-preview",
       surface: "system",

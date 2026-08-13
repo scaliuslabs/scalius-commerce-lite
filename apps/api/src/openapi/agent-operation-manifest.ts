@@ -201,6 +201,24 @@ const REVIEWED_CONTINUATION_OUTPUTS: Readonly<
     fieldsJsonPointer: "/data/continuation/fields",
     sensitiveFields: ["continuationCode"],
   },
+  "storefront.customer_auth.begin": {
+    method: "POST",
+    urlJsonPointer: "/data/browser/url",
+    fieldsJsonPointer: "/data/browser/fields",
+    sensitiveFields: ["continuationCode"],
+  },
+  "storefront.orders.payment.begin": {
+    method: "POST",
+    urlJsonPointer: "/data/browser/url",
+    fieldsJsonPointer: "/data/browser/fields",
+    sensitiveFields: ["continuationCode"],
+  },
+  "storefront.payment_recovery.begin": {
+    method: "POST",
+    urlJsonPointer: "/data/browser/url",
+    fieldsJsonPointer: "/data/browser/fields",
+    sensitiveFields: ["continuationCode"],
+  },
 };
 
 const REVIEWED_DEVICE_OPERATION_IDS = new Set([

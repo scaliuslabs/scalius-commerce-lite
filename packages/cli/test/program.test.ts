@@ -111,23 +111,47 @@ describe("CLI program", () => {
     expect(JSON.parse(runtime.stdoutText()).data).toEqual({ status: "pending" });
   });
 
-  it("blocks a sensitive browser continuation before network access or output", async () => {
+  it("relays a sensitive browser continuation through a body-only loopback form", async () => {
     let operationCalls = 0;
     const secret = "tpc_secret_that_must_never_escape";
     const fetch = vi.fn(async (input: string | URL | Request) => {
       if (String(input).endsWith("/openapi.json")) return Response.json(specWithContinuations());
       operationCalls += 1;
-      return Response.json({ data: { continuation: { fields: { continuationCode: secret } } } });
+      return Response.json({ data: { continuation: {
+        url: "https://storefront.example.test/theme-preview/continue",
+        fields: { continuationCode: secret },
+      } } });
     });
-    const runtime = await authenticatedRuntime(fetch as typeof globalThis.fetch);
+    let relayHtml = "";
+    const directory = await mkdtemp(join(tmpdir(), "scalius-cli-continuation-"));
+    const runtime = createTestRuntime({
+      directory,
+      fetch: fetch as typeof globalThis.fetch,
+      openUrl: async (url) => {
+        expect(url).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/[A-Za-z0-9_-]{43}$/);
+        expect(url).not.toContain(secret);
+        const response = await globalThis.fetch(url);
+        expect(response.headers.get("Content-Security-Policy")).toContain("form-action https://storefront.example.test");
+        relayHtml = await response.text();
+      },
+    });
+    const store = new ConfigStore(runtime);
+    await store.putProfile("default", "https://api.example.com");
+    await store.putCredential("default", { token: validToken(), createdAt: "2026-08-13T00:00:00.000Z" });
     expect(await runProgram(runtime, [
       "--output", "json", "operations", "run", "dashboard.theme.preview_session_create",
       "--input", '{"body":{"expectedDraftRevision":1}}',
-    ])).toBe(5);
-    expect(operationCalls).toBe(0);
+    ])).toBe(0);
+    expect(operationCalls).toBe(1);
+    expect(relayHtml).toContain(`value="${secret}"`);
+    expect(relayHtml).toContain('method="post"');
     expect(runtime.stdoutText()).not.toContain(secret);
     expect(runtime.stderrText()).not.toContain(secret);
-    expect(runtime.stderrText()).toContain("browser_continuation_required");
+    expect(JSON.parse(runtime.stdoutText()).data).toEqual({
+      status: "browser_continuation_opened",
+      method: "POST",
+      origin: "https://storefront.example.test",
+    });
   });
 
   it("requires both confirmation and idempotency for declared writes", async () => {

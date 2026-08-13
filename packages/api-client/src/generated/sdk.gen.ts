@@ -501,7 +501,7 @@ export const postApiV1StorefrontAgentContextsByContextIdCheckoutQuote = <ThrowOn
 });
 
 /**
- * Create an idempotent COD storefront order and bind order authority
+ * Create an idempotent storefront order and bind order authority
  */
 export const postApiV1StorefrontAgentContextsByContextIdCheckoutSubmit = <ThrowOnError extends boolean = false>(options: Options<PostApiV1StorefrontAgentContextsByContextIdCheckoutSubmitData, ThrowOnError>): RequestResult<PostApiV1StorefrontAgentContextsByContextIdCheckoutSubmitResponses, PostApiV1StorefrontAgentContextsByContextIdCheckoutSubmitErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1StorefrontAgentContextsByContextIdCheckoutSubmitResponses, PostApiV1StorefrontAgentContextsByContextIdCheckoutSubmitErrors, ThrowOnError>({
     security: [{
