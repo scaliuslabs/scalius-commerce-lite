@@ -400,6 +400,15 @@ describe("navigation authority D1 commands", () => {
     })).rejects.toBeInstanceOf(NavigationRevisionConflictError);
     expect(sqlite!.prepare("SELECT revision FROM navigation_menus WHERE id = ?").get(menu.id))
       .toEqual({ revision: 8 });
+
+    await expect(updateNavigationMenuItem(db, menu.id, "navitem_missing", {
+      expectedRevision: 8,
+      label: "Missing",
+      labelMode: "custom",
+      target: { type: "internal_path", path: "/missing" },
+    })).rejects.toThrow("Menu item not found");
+    expect(sqlite!.prepare("SELECT revision FROM navigation_menus WHERE id = ?").get(menu.id))
+      .toEqual({ revision: 8 });
   });
 
   it("deletes a bounded menu subtree without recursive SQL", async () => {

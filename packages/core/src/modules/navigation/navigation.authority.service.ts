@@ -114,6 +114,25 @@ function buildMenuRevisionGuard(
         )`, NAVIGATION_REVISION_GUARD);
 }
 
+function buildMenuItemRevisionGuard(
+    db: Database,
+    menuId: string,
+    itemId: string,
+    expectedRevision: number,
+): BatchItem<"sqlite"> {
+    return buildBatchGuard(db, sql`EXISTS (
+            SELECT 1 FROM ${navigationMenus}
+            WHERE ${navigationMenus.id} = ${menuId}
+              AND ${navigationMenus.revision} = ${expectedRevision}
+              AND ${navigationMenus.deletedAt} IS NULL
+              AND EXISTS (
+                  SELECT 1 FROM ${navigationMenuItems}
+                  WHERE ${navigationMenuItems.id} = ${itemId}
+                    AND ${navigationMenuItems.menuId} = ${menuId}
+              )
+        )`, NAVIGATION_REVISION_GUARD);
+}
+
 function buildTrashedMenuRevisionGuard(
     db: Database,
     menuId: string,
@@ -204,6 +223,44 @@ async function executeMenuMutation(
             results: results.slice(1, -1),
         };
     } catch (error) {
+        return rethrowNavigationMutationError(db, menuId, expectedRevision, error);
+    }
+}
+
+async function executeMenuItemMutation(
+    db: Database,
+    menuId: string,
+    itemId: string,
+    expectedRevision: number,
+    statement: BatchItem<"sqlite">,
+): Promise<{ revision: number; result: unknown }> {
+    if (!Number.isInteger(expectedRevision) || expectedRevision < 1) {
+        throw new ValidationError("A current menu revision is required.");
+    }
+    try {
+        const results = await safeBatch(db, [
+            buildMenuItemRevisionGuard(db, menuId, itemId, expectedRevision),
+            statement,
+            buildMenuRevisionBump(db, menuId),
+        ] as never) as unknown[];
+        return {
+            revision: readRevisionResult(results[2]),
+            result: results[1],
+        };
+    } catch (error) {
+        if (isRevisionGuardError(error)) {
+            const current = await db
+                .select({
+                    revision: navigationMenus.revision,
+                    deletedAt: navigationMenus.deletedAt,
+                })
+                .from(navigationMenus)
+                .where(eq(navigationMenus.id, menuId))
+                .get();
+            if (current?.revision === expectedRevision && current.deletedAt == null) {
+                throw new NotFoundError("Menu item not found.");
+            }
+        }
         return rethrowNavigationMutationError(db, menuId, expectedRevision, error);
     }
 }
@@ -785,7 +842,7 @@ export async function updateNavigationMenuItem(
     input: NavigationMenuItemInput & { expectedRevision: number },
 ) {
     const normalized = normalizeNavigationMenuItemInput(input);
-    const mutation = await executeMenuMutation(db, menuId, input.expectedRevision, [
+    const mutation = await executeMenuItemMutation(db, menuId, itemId, input.expectedRevision,
         db.update(navigationMenuItems)
             .set({ ...normalized, updatedAt: sql`unixepoch()` })
             .where(and(
@@ -793,8 +850,8 @@ export async function updateNavigationMenuItem(
                 eq(navigationMenuItems.menuId, menuId),
             ))
             .returning(),
-    ] as never);
-    const item = (mutation.results[0] as unknown[] | undefined)?.[0];
+    );
+    const item = (mutation.result as unknown[] | undefined)?.[0];
     if (!item) throw new NotFoundError("Menu item not found.");
     return { item, revision: mutation.revision };
 }
