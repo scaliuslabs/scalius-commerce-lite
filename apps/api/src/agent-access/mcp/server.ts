@@ -56,6 +56,7 @@ const batchStepSchema = z.object({
   operationId: z.string().min(1).max(240),
   input: operationInputSchema.optional(),
 }).strict();
+const MCP_TEXT_COMPATIBILITY_BYTES = 4 * 1024;
 
 interface McpServerDependencies {
   surface: AgentResource;
@@ -164,7 +165,12 @@ export function formatAgentToolResult(value: Record<string, unknown>) {
     };
   }
   return {
-    content: [{ type: "text" as const, text }],
+    content: [{
+      type: "text" as const,
+      text: utf8ByteLength(text) <= MCP_TEXT_COMPATIBILITY_BYTES
+        ? text
+        : `Structured result returned (${utf8ByteLength(text)} UTF-8 bytes)`,
+    }],
     structuredContent: value,
   };
 }
@@ -300,8 +306,11 @@ export function createAgentMcpServer(deps: McpServerDependencies): McpServer {
     "operations.describe",
     {
       title: "Describe operation",
-      description: "Describe one authorized operation and its structured input contract.",
-      inputSchema: z.object({ operationId: z.string().min(1).max(240) }).strict(),
+      description: "Describe one authorized operation compactly. Set full=true only when constructing its exact input.",
+      inputSchema: z.object({
+        operationId: z.string().min(1).max(240),
+        full: z.boolean().default(false),
+      }).strict(),
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -309,12 +318,15 @@ export function createAgentMcpServer(deps: McpServerDependencies): McpServer {
         openWorldHint: false,
       },
     },
-    async ({ operationId }) => {
+    async ({ operationId, full }) => {
       try {
         const principal = await requireToolPrincipal(deps);
         const operation = await getAuthorizedOperation(operationId, deps.surface, principal);
         if (!operation) return toolError("operation_not_found", "Operation is unavailable or not authorized");
-        return formatAgentToolResult({ ok: true, operation: describeOperation(operation) });
+        return formatAgentToolResult({
+          ok: true,
+          operation: full ? describeOperation(operation, true) : describeOperation(operation),
+        });
       } catch (error) {
         return safeToolError(error);
       }

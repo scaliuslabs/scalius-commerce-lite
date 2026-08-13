@@ -65,8 +65,52 @@ export function summarizeOperation(operation: AgentOperationManifestEntry) {
   };
 }
 
-export function describeOperation(operation: AgentOperationManifestEntry) {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function compactInputContract(inputSchema: unknown) {
+  if (!isRecord(inputSchema)) return null;
+  const parameters = Array.isArray(inputSchema.parameters) ? inputSchema.parameters : [];
+  const parameter = (location: "path" | "query") => parameters.flatMap((candidate) => {
+    if (!isRecord(candidate) || candidate.in !== location || typeof candidate.name !== "string") return [];
+    return [{ name: candidate.name, required: candidate.required === true }];
+  });
+  const requestBody = isRecord(inputSchema.requestBody) ? inputSchema.requestBody : null;
+  const content = requestBody && isRecord(requestBody.content) ? requestBody.content : null;
+  const contentTypes = content ? Object.keys(content) : [];
+  const jsonMedia = content && isRecord(content["application/json"])
+    ? content["application/json"]
+    : null;
+  const bodySchema = jsonMedia && isRecord(jsonMedia.schema) ? jsonMedia.schema : null;
+  const properties = bodySchema && isRecord(bodySchema.properties)
+    ? Object.keys(bodySchema.properties)
+    : [];
+  const required = bodySchema && Array.isArray(bodySchema.required)
+    ? bodySchema.required.filter((value): value is string => typeof value === "string")
+    : [];
   return {
+    path: parameter("path"),
+    query: parameter("query"),
+    body: requestBody
+      ? {
+        required: requestBody.required === true,
+        contentTypes,
+        requiredProperties: required,
+        optionalProperties: properties.filter((name) => !required.includes(name)),
+      }
+      : null,
+  };
+}
+
+export function describeOperation(operation: AgentOperationManifestEntry, full: true): ReturnType<typeof describeOperationFull>;
+export function describeOperation(operation: AgentOperationManifestEntry, full?: false): ReturnType<typeof describeOperationCompact>;
+export function describeOperation(operation: AgentOperationManifestEntry, full = false) {
+  return full ? describeOperationFull(operation) : describeOperationCompact(operation);
+}
+
+function describeOperationCompact(operation: AgentOperationManifestEntry) {
+  const description = {
     ...summarizeOperation(operation),
     description: operation.description ?? null,
     method: operation.method,
@@ -74,16 +118,28 @@ export function describeOperation(operation: AgentOperationManifestEntry) {
     principals: operation.principals,
     openWorld: operation.openWorld,
     maxResponseBytes: operation.maxResponseBytes,
+    maxRequestBytes: operation.maxRequestBytes,
     sensitiveOutput: operation.sensitiveOutput,
     oneTimeSecretOutput: operation.oneTimeSecretOutput,
+    requiredClientAction: operation.requiredClientAction,
+    artifactOutput: operation.artifactOutput,
+    continuationOutput: operation.continuationOutput,
     rbac: operation.rbac,
-    inputSchema: operation.inputSchema,
-    outputSchema: operation.outputSchema,
+    inputContract: compactInputContract(operation.inputSchema),
     input: {
       path: "Object containing only named path-template parameters",
       query: "Object containing query keys and primitive values or arrays",
       body: "JSON body when the operation contract permits it",
       idempotencyKey: "Required or optional only as declared by idempotency",
     },
+  };
+  return description;
+}
+
+function describeOperationFull(operation: AgentOperationManifestEntry) {
+  return {
+    ...describeOperationCompact(operation),
+    inputSchema: operation.inputSchema,
+    outputSchema: operation.outputSchema,
   };
 }
