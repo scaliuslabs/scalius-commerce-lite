@@ -32,6 +32,7 @@ import {
     categoryRevisionClaimsMatchCondition,
     normalizeCategoryRevisionClaims,
     rethrowCategoryRevisionConflict,
+    assertCategoryClaimsCurrent,
 } from "./categories.revision";
 
 type SQLiteBatchItem = BatchItem<"sqlite">;
@@ -505,12 +506,7 @@ export async function updateCategory(
             .returning({ revision: categories.revision })
             .get();
         if (!updated) {
-            await rethrowCategoryRevisionConflict(
-                db,
-                claims,
-                new Error(CATEGORY_REVISION_CONFLICT),
-                "active",
-            );
+            await assertCategoryClaimsCurrent(db, claims, "active");
             if (data.status === "published") {
                 throw new ValidationError(
                     "Add at least one active product with a buyer-resolvable SKU before publishing this category.",
@@ -570,12 +566,7 @@ export async function updateCategoryStatus(
         .returning({ revision: categories.revision })
         .get();
     if (!updated) {
-        await rethrowCategoryRevisionConflict(
-            db,
-            claims,
-            new Error(CATEGORY_REVISION_CONFLICT),
-            "active",
-        );
+        await assertCategoryClaimsCurrent(db, claims, "active");
         if (data.status === "published") {
             throw new ValidationError(
                 "Add at least one active product with a buyer-resolvable SKU before publishing this category.",

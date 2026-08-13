@@ -3,6 +3,7 @@ import { ValidationError } from "@scalius/core/errors";
 import {
   CategoryRevisionConflictError,
   CategoryStateConflictError,
+  assertCategoryClaimsCurrent,
   normalizeCategoryRevisionClaims,
   rethrowCategoryRevisionConflict,
 } from "./categories.revision";
@@ -18,6 +19,25 @@ function revisionReadDb(rows: Array<{ id: string; revision: number; deletedAt: D
 }
 
 describe("category revision authority", () => {
+  it("allows a current conditional-write claim to fall through to domain validation", async () => {
+    const db = revisionReadDb([{ id: "cat_1", revision: 4, deletedAt: null }]);
+
+    await expect(assertCategoryClaimsCurrent(
+      db as never,
+      [{ id: "cat_1", expectedRevision: 4 }],
+      "active",
+    )).resolves.toBeUndefined();
+  });
+
+  it("turns a raced conditional write into a stable revision conflict", async () => {
+    const db = revisionReadDb([{ id: "cat_1", revision: 5, deletedAt: null }]);
+
+    await expect(assertCategoryClaimsCurrent(
+      db as never,
+      [{ id: "cat_1", expectedRevision: 4 }],
+      "active",
+    )).rejects.toBeInstanceOf(CategoryRevisionConflictError);
+  });
   it("rejects duplicate and oversized revision claim sets before D1", () => {
     expect(() => normalizeCategoryRevisionClaims([
       { id: "cat_1", expectedRevision: 1 },
