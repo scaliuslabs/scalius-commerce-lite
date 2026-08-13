@@ -193,12 +193,10 @@ async function stageAgentArtifactInternal(
   }
   const sha256 = await sha256Hex(bytes);
   try {
-    await env.AGENT_ARTIFACTS.put(r2Key, bytes, {
-      httpMetadata: {
-        contentType: mediaType,
-        contentDisposition: `attachment; filename="${filename}"`,
-      },
-    });
+    // The private object is never served directly. The relational handle is
+    // the authority for response type, filename, digest, size, and expiry, so
+    // avoid duplicating untrusted response metadata into R2 object metadata.
+    await env.AGENT_ARTIFACTS.put(r2Key, bytes);
   } catch {
     try {
       await env.AGENT_ARTIFACTS.delete(r2Key);
