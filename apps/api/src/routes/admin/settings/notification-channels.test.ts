@@ -49,6 +49,25 @@ vi.mock("@scalius/core/modules/notifications/notification-provider-health", () =
 
 import { notificationChannelsRoutes } from "./notification-channels";
 
+const completeAdminChannels = (override: Record<string, string[]> = {}) => ({
+    order_created: ["push"],
+    order_confirmed: [],
+    order_processing: [],
+    order_shipped: [],
+    order_delivered: [],
+    order_completed: [],
+    order_cancelled: [],
+    order_returned: [],
+    refund_processing: [],
+    refund_failed: [],
+    order_refunded: [],
+    order_partially_refunded: [],
+    payment_balance_paid: [],
+    support_request_submitted: [],
+    support_request_status_updated: [],
+    ...override,
+});
+
 function createTestApp() {
     const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1/admin/settings");
     const env = {
@@ -363,7 +382,7 @@ describe("notification channel settings routes", () => {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-                channels: { order_created: ["push"] },
+                channels: completeAdminChannels(),
             }),
         }, env);
         const body = await response.json() as { success: boolean; error: { message: string } };
@@ -389,7 +408,7 @@ describe("notification channel settings routes", () => {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-                channels: { order_created: [] },
+                channels: completeAdminChannels({ order_created: [] }),
             }),
         }, env);
         const body = await response.json() as { success: boolean; data: { channels: Record<string, string[]> } };
@@ -404,7 +423,24 @@ describe("notification channel settings routes", () => {
         });
         expect(mocks.updateAdminNotificationChannels).toHaveBeenCalledWith(
             { id: "db" },
-            { order_created: [] },
+            completeAdminChannels({ order_created: [] }),
         );
+    });
+
+    it.each([
+        ["partial event maps", { channels: { order_created: ["push"] } }],
+        ["unsupported admin channels", { channels: completeAdminChannels({ order_created: ["email"] }) }],
+        ["unknown event keys", { channels: { ...completeAdminChannels(), arbitrary_event: [] } }],
+    ])("rejects %s before mutating notification settings", async (_label, payload) => {
+        const { app, env } = createTestApp();
+
+        const response = await app.request("/api/v1/admin/settings/notification-channels/admin-channels", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+        }, env);
+
+        expect(response.status).toBe(400);
+        expect(mocks.updateAdminNotificationChannels).not.toHaveBeenCalled();
     });
 });

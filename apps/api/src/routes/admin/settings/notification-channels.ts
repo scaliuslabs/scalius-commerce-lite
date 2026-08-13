@@ -27,7 +27,26 @@ import { ValidationError } from "../../../utils/api-error";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
+const notificationEventsSchema = <T extends z.ZodTypeAny>(channel: T) => z.object({
+    order_created: z.array(channel),
+    order_confirmed: z.array(channel),
+    order_processing: z.array(channel),
+    order_shipped: z.array(channel),
+    order_delivered: z.array(channel),
+    order_completed: z.array(channel),
+    order_cancelled: z.array(channel),
+    order_returned: z.array(channel),
+    refund_processing: z.array(channel),
+    refund_failed: z.array(channel),
+    order_refunded: z.array(channel),
+    order_partially_refunded: z.array(channel),
+    payment_balance_paid: z.array(channel),
+    support_request_submitted: z.array(channel),
+    support_request_status_updated: z.array(channel),
+}).strict();
+
 const channelsSchema = z.record(z.string(), z.array(z.string()));
+const adminChannelsSchema = notificationEventsSchema(z.literal("push"));
 
 const whatsappTemplateSchema = z.object({
     templateName: z.string().min(1).max(512).regex(/^[a-z0-9_]+$/),
@@ -35,8 +54,8 @@ const whatsappTemplateSchema = z.object({
 });
 
 const wrappedChannelsSchema = z.object({
-    channels: channelsSchema,
-});
+    channels: adminChannelsSchema,
+}).strict();
 
 const adminNotificationSettingsSchema = z.object({
     channels: channelsSchema,

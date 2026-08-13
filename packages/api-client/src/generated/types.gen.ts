@@ -36847,7 +36847,21 @@ export type GetApiV1AdminSettingsNotificationChannelsAdminChannelsResponse = Get
 export type PutApiV1AdminSettingsNotificationChannelsAdminChannelsData = {
     body: {
         channels: {
-            [key: string]: Array<string>;
+            order_created: Array<'push'>;
+            order_confirmed: Array<'push'>;
+            order_processing: Array<'push'>;
+            order_shipped: Array<'push'>;
+            order_delivered: Array<'push'>;
+            order_completed: Array<'push'>;
+            order_cancelled: Array<'push'>;
+            order_returned: Array<'push'>;
+            refund_processing: Array<'push'>;
+            refund_failed: Array<'push'>;
+            order_refunded: Array<'push'>;
+            order_partially_refunded: Array<'push'>;
+            payment_balance_paid: Array<'push'>;
+            support_request_submitted: Array<'push'>;
+            support_request_status_updated: Array<'push'>;
         };
     };
     path?: never;
