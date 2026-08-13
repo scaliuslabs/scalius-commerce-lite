@@ -135,6 +135,21 @@ function uniqueNonEmpty(values: readonly (string | null | undefined)[]): string[
         .filter(Boolean))];
 }
 
+function resolveCheckoutAuthorityStage<T>(code: string, resolve: () => T): T {
+    try {
+        return resolve();
+    } catch (error) {
+        if (error instanceof Error && !("code" in error)) {
+            Object.defineProperty(error, "code", {
+                configurable: true,
+                enumerable: false,
+                value: code,
+            });
+        }
+        throw error;
+    }
+}
+
 /**
  * Builds one shared authority read for a coordinator microbatch. Store-wide
  * settings and tax policy are read once, while catalog, media, delivery, and
@@ -234,7 +249,10 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
             const categoryRows = (category: string) => genericRows.filter(
                 (row) => row.category === category,
             );
-            const currency = resolveCurrencySettingsFromRows(categoryRows("currency"));
+            const currency = resolveCheckoutAuthorityStage(
+                "CHECKOUT_CURRENCY_SETTINGS",
+                () => resolveCurrencySettingsFromRows(categoryRows("currency")),
+            );
             const siteRows = Array.isArray(results[1])
                 ? results[1] as CheckoutSiteSettingsRow[]
                 : [];
@@ -245,8 +263,11 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
             const variantRows = Array.isArray(results[3])
                 ? results[3] as StorefrontCartVariantRow[]
                 : [];
-            const mediaByProduct = resolveProductMediaProjectionRows(
-                Array.isArray(results[4]) ? results[4] as ProductMediaProjectionRow[] : [],
+            const mediaByProduct = resolveCheckoutAuthorityStage(
+                "CHECKOUT_MEDIA_PROJECTION",
+                () => resolveProductMediaProjectionRows(
+                    Array.isArray(results[4]) ? results[4] as ProductMediaProjectionRow[] : [],
+                ),
             );
             const locationRows = Array.isArray(results[5])
                 ? results[5] as ActiveDeliveryLocationRow[]
@@ -258,13 +279,22 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
                 ? results[7] as CheckoutSideEffectSettingsRow[]
                 : [];
             const sideEffectSettings = sideEffectRows[0];
-            const orderCreatedChannels = resolveNotificationChannelsFromStoredValue(
-                sideEffectSettings?.orderChannels,
-            ).order_created ?? [];
-            const adminOrderCreatedChannels = resolveAdminNotificationChannelsFromStoredValue(
-                sideEffectSettings?.adminChannels,
-            ).order_created ?? [];
-            const allowedCountries = resolveAllowedCountriesFromRows(categoryRows("phone"));
+            const orderCreatedChannels = resolveCheckoutAuthorityStage(
+                "CHECKOUT_NOTIFICATION_SETTINGS",
+                () => resolveNotificationChannelsFromStoredValue(
+                    sideEffectSettings?.orderChannels,
+                ).order_created ?? [],
+            );
+            const adminOrderCreatedChannels = resolveCheckoutAuthorityStage(
+                "CHECKOUT_ADMIN_NOTIFICATION_SETTINGS",
+                () => resolveAdminNotificationChannelsFromStoredValue(
+                    sideEffectSettings?.adminChannels,
+                ).order_created ?? [],
+            );
+            const allowedCountries = resolveCheckoutAuthorityStage(
+                "CHECKOUT_PHONE_SETTINGS",
+                () => resolveAllowedCountriesFromRows(categoryRows("phone")),
+            );
             let activePaymentMethods: PaymentMethodsConfig;
             try {
                 activePaymentMethods = await resolveActivePaymentMethodsFromRows(
