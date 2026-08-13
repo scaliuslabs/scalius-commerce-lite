@@ -75527,6 +75527,39 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "outputSchema": null
   },
   {
+    "operationId": "system.storefront_continuations.payment_reconcile",
+    "method": "POST",
+    "pathTemplate": "/api/v1/storefront/agent-continuations/{continuationId}/payment/reconcile",
+    "summary": "Reconcile a provider-confirmed Stripe payment inside the buyer-only tab",
+    "tags": [
+      "Internal Storefront Continuations"
+    ],
+    "surface": "system",
+    "exposure": "excluded",
+    "principals": [
+      "internal"
+    ],
+    "risk": "write",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "forbidden",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "exclusionReason": "Internal service-JWT browser continuation bridge; use the protected context continuation operations.",
+    "rbac": {
+      "type": "unmapped"
+    },
+    "inputSchema": null,
+    "outputSchema": null
+  },
+  {
     "operationId": "system.storefront_continuations.payment_recovery_send_otp",
     "method": "POST",
     "pathTemplate": "/api/v1/storefront/agent-continuations/{continuationId}/recovery/send-otp",

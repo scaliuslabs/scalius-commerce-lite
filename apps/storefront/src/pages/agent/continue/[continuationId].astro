@@ -251,7 +251,14 @@ if (!validContinuationId) Astro.response.status = 404;
       if (result.paymentIntent?.status !== "succeeded" && result.paymentIntent?.status !== "requires_capture") {
         throw new Error("The payment gateway has not confirmed payment.");
       }
-      setStatus("Payment submitted. You may return to the agent while confirmation finishes.", "success");
+      const reconciliation = await call("/payment/reconcile", {});
+      const reconciliationStatus = typeof reconciliation.status === "string" ? reconciliation.status : "scheduled";
+      setStatus(
+        reconciliationStatus === "settled"
+          ? "Payment confirmed. You may return to the agent."
+          : "Payment confirmed and settlement is processing. You may return to the agent.",
+        "success",
+      );
       button.classList.add("hidden");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Payment was not completed.", "error");
