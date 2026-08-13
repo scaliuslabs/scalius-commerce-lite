@@ -480,6 +480,9 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   "/api/v1/admin/media/uploads": {
     POST: { permission: PERMISSIONS.MEDIA_UPLOAD },
   },
+  "/api/v1/admin/media/uploads/import-url": {
+    POST: { permission: PERMISSIONS.MEDIA_UPLOAD },
+  },
   "/api/v1/admin/media/uploads/reconcile": {
     POST: { permission: PERMISSIONS.MEDIA_UPLOAD },
   },

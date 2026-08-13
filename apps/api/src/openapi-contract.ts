@@ -2274,6 +2274,7 @@ const REVIEWED_AGENT_OPERATIONS_BY_ID: Readonly<
   })),
   ...reviewedEntries([
     "dashboard.media.upload_initiate",
+    "dashboard.media.import_url",
     "dashboard.media.upload_complete",
     "dashboard.media.upload_abort",
     "dashboard.media.update",
@@ -2283,6 +2284,8 @@ const REVIEWED_AGENT_OPERATIONS_BY_ID: Readonly<
     "dashboard.media_folders.update",
   ], (operationId) => dashboardOperationMetadata(operationId, {
     risk: "write",
+    openWorld: operationId === "dashboard.media.import_url",
+    batch: operationId === "dashboard.media.import_url" ? "forbidden" : "sequential",
     revision: [
       "dashboard.media.update",
       "dashboard.media.restore",

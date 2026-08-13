@@ -50,6 +50,7 @@ const expectedOperations: Expected[] = [
   ["delete", "/api/v1/admin/pages/{id}/permanent", "dashboard.content.permanently_delete"],
   ["get", "/api/v1/admin/media", "dashboard.media.list"],
   ["post", "/api/v1/admin/media/uploads", "dashboard.media.upload_initiate"],
+  ["post", "/api/v1/admin/media/uploads/import-url", "dashboard.media.import_url"],
   ["get", "/api/v1/admin/media/uploads/{id}", "dashboard.media.upload_get"],
   ["delete", "/api/v1/admin/media/uploads/{id}", "dashboard.media.upload_abort"],
   ["put", "/api/v1/admin/media/uploads/{id}/parts/{partNumber}", "dashboard.media.upload_part"],

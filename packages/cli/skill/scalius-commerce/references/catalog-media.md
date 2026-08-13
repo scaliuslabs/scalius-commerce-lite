@@ -6,7 +6,7 @@ Prefer one atomic `dashboard.products.create` after resolving prerequisites:
 
 1. Find or create the category. A category cannot publish until it has an active product with a buyer-resolvable SKU.
 2. Find or create attributes; product assignments use attribute IDs and merchant-visible string values.
-3. Commit media first. For local files prefer `scalius media upload`; otherwise use initiate → numbered raw parts → complete.
+3. Commit media first. For public web assets use `dashboard.media.import_url` through either MCP or CLI. For local files prefer `scalius media upload`; clients that can stream raw files may also use initiate → numbered raw parts → complete.
 4. Build product-media associations. A `media_*` identifies the committed asset; a caller-local `pmed_*` identifies its association within the product. Variant `imageId` points to `pmed_*`, not `media_*`.
 5. For an option matrix, define option axes in merchant order, give every value a request-local ID, and give each variant one selected value ID per axis in that same order. Request-local option/value/variant IDs correlate only this atomic request.
 6. Include long description, additional information, attributes, media, variants, SEO, visibility, price, stock, and tracking in the same create call.
@@ -15,6 +15,8 @@ Prefer one atomic `dashboard.products.create` after resolving prerequisites:
 Do not call per-variant creation after an atomic matrix create. Do not use product-level inventory for optioned products. SKU and barcode identities are globally normalized and must be unique.
 
 ## Media policy
+
+Remote MCP servers cannot read a client's local filesystem, and MCP tool arguments do not define a portable file-upload primitive. This is a host boundary, not a hidden CLI requirement: shell-less agents can import credential-free public HTTPS assets with `dashboard.media.import_url`; local-only files require a client capable of the reviewed direct-upload action. Never embed multi-megabyte base64 media in model context.
 
 Accepted images are JPEG (`.jpg`/`.jpeg`), PNG, GIF, WebP, and AVIF, at most 20 MiB each. Accepted video is MP4 and WebM, at most 100 MiB. Extension, declared MIME type, and file signature must agree. One raw part is at most 5 MiB; use the session's exact part size/count.
 

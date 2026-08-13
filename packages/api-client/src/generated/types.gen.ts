@@ -19619,6 +19619,146 @@ export type PostApiV1AdminMediaUploadsResponses = {
 
 export type PostApiV1AdminMediaUploadsResponse = PostApiV1AdminMediaUploadsResponses[keyof PostApiV1AdminMediaUploadsResponses];
 
+export type PostApiV1AdminMediaUploadsImportUrlData = {
+    body: {
+        sourceUrl: string;
+        filename?: string;
+        folderId?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/media/uploads/import-url';
+};
+
+export type PostApiV1AdminMediaUploadsImportUrlErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminMediaUploadsImportUrlError = PostApiV1AdminMediaUploadsImportUrlErrors[keyof PostApiV1AdminMediaUploadsImportUrlErrors];
+
+export type PostApiV1AdminMediaUploadsImportUrlResponses = {
+    /**
+     * Remote media committed
+     */
+    201: {
+        success: true;
+        data: {
+            file: {
+                id: string;
+                filename: string;
+                url: string;
+                kind: 'image' | 'video';
+                objectKey: string;
+                size: number;
+                mimeType: string;
+                altText?: string | null;
+                caption?: string | null;
+                width?: number | null;
+                height?: number | null;
+                durationMs?: number | null;
+                posterMediaId?: string | null;
+                posterUrl: string | null;
+                folderId: string | null;
+                status: 'ready' | 'trashed' | 'deleting' | 'deleted';
+                version: number;
+                createdAt: string | number;
+                updatedAt: string | number;
+                trashedAt: string | number | unknown;
+                deletedAt: string | number | unknown;
+            };
+        };
+    };
+};
+
+export type PostApiV1AdminMediaUploadsImportUrlResponse = PostApiV1AdminMediaUploadsImportUrlResponses[keyof PostApiV1AdminMediaUploadsImportUrlResponses];
+
 export type DeleteApiV1AdminMediaUploadsByIdData = {
     body?: never;
     path: {

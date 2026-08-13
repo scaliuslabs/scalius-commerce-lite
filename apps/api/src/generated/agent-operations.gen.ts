@@ -22974,6 +22974,228 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     }
   },
   {
+    "operationId": "dashboard.media.import_url",
+    "method": "POST",
+    "pathTemplate": "/api/v1/admin/media/uploads/import-url",
+    "summary": "Import supported media from a public HTTPS URL",
+    "description": "Fetch one credential-free public HTTPS asset into the same durable, signature-checked media authority used by direct uploads. Redirects are revalidated, Content-Type and Content-Length must be exact, and the source is never persisted as authority.",
+    "tags": [
+      "Admin - Media"
+    ],
+    "surface": "dashboard",
+    "exposure": "execute",
+    "principals": [
+      "admin"
+    ],
+    "risk": "write",
+    "openWorld": true,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "forbidden",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "rbac": {
+      "type": "permission",
+      "permission": "media.upload"
+    },
+    "inputSchema": {
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "sourceUrl": {
+                  "type": "string",
+                  "maxLength": 2048,
+                  "format": "uri"
+                },
+                "filename": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255
+                },
+                "folderId": {
+                  "type": "string",
+                  "nullable": true,
+                  "minLength": 8,
+                  "maxLength": 160
+                }
+              },
+              "required": [
+                "sourceUrl"
+              ]
+            }
+          }
+        },
+        "required": true
+      }
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "file": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "filename": {
+                  "type": "string"
+                },
+                "url": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "image",
+                    "video"
+                  ]
+                },
+                "objectKey": {
+                  "type": "string"
+                },
+                "size": {
+                  "type": "number"
+                },
+                "mimeType": {
+                  "type": "string"
+                },
+                "altText": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "caption": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "width": {
+                  "type": "number",
+                  "nullable": true
+                },
+                "height": {
+                  "type": "number",
+                  "nullable": true
+                },
+                "durationMs": {
+                  "type": "number",
+                  "nullable": true
+                },
+                "posterMediaId": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "posterUrl": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "folderId": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "ready",
+                    "trashed",
+                    "deleting",
+                    "deleted"
+                  ]
+                },
+                "version": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "createdAt": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
+                },
+                "updatedAt": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
+                },
+                "trashedAt": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {}
+                  ]
+                },
+                "deletedAt": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {}
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "filename",
+                "url",
+                "kind",
+                "objectKey",
+                "size",
+                "mimeType",
+                "posterUrl",
+                "folderId",
+                "status",
+                "version",
+                "createdAt",
+                "updatedAt",
+                "trashedAt",
+                "deletedAt"
+              ]
+            }
+          },
+          "required": [
+            "file"
+          ]
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    }
+  },
+  {
     "operationId": "dashboard.media.list",
     "method": "GET",
     "pathTemplate": "/api/v1/admin/media",
