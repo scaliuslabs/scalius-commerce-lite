@@ -38,7 +38,7 @@ function humanSummary(value: unknown): string | undefined {
 
 function operationSearchSummary(value: Record<string, unknown>): string {
   const operations = Array.isArray(value.operations) ? value.operations as Array<Record<string, unknown>> : [];
-  if (operations.length === 0) return "No executable operations matched.";
+  if (operations.length === 0) return "No runnable operations matched.";
   return operations.map((operation) => {
     const summary = typeof operation.summary === "string" ? ` — ${operation.summary}` : "";
     const risk = typeof operation.risk === "string" ? ` [${operation.risk}]` : "";
@@ -149,14 +149,14 @@ export function createProgram(runtime: Runtime): Command {
       writeResult(runtime, globalOptions(command).output, result, operationSearchSummary(result));
     });
   operations.command("describe")
-    .description("describe one executable operation")
+    .description("describe one executable or continuation operation")
     .argument("<operationId>")
     .action(async (id: string, _options, command) => {
       const result = await operationsDescribe(runtime, await resolve(runtime, command), id);
       writeResult(runtime, globalOptions(command).output, result, `${id}\n${JSON.stringify(result, null, 2)}`);
     });
   operations.command("run")
-    .description("execute one operation from the live contract")
+    .description("run one executable or non-sensitive continuation operation")
     .argument("<operationId>")
     .option("--input <json|@file|->", "structured path/query/body input")
     .option("--file <path|field=@path>", "stream a reviewed raw file or attach a multipart field", collectFile, [])

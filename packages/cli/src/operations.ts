@@ -356,6 +356,13 @@ export async function executeOperation(
   options: RunOperationOptions,
 ): Promise<OperationExecutionResult> {
   if (!profile.token) throw new CliError(3, "not_authenticated", "Authentication is required.");
+  if (operation.agent.exposure === "continuation" && operation.agent.sensitiveOutput === true) {
+    throw new CliError(
+      5,
+      "browser_continuation_required",
+      `Operation '${operation.id}' requires a protected browser continuation and cannot be emitted by the CLI.`,
+    );
+  }
   if (requiresConfirmation(operation) && !options.yes) {
     throw new CliError(2, "confirmation_required", `Operation '${operation.id}' has ${operation.agent.risk} risk. Re-run with --yes after reviewing the input.`);
   }
@@ -472,6 +479,7 @@ export async function operationsSearch(runtime: Runtime, profile: ResolvedProfil
     method,
     path,
     surface: agent.surface,
+    exposure: agent.exposure,
     risk: agent.risk,
     openWorld: agent.openWorld,
     transport: agent.transport,

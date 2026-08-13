@@ -5,6 +5,7 @@ import { CliError } from "./errors.js";
 import { bearerHeaders, fetchWithNetworkErrors, responseError } from "./http.js";
 import type {
   AgentArtifactOutput,
+  AgentContinuationOutput,
   AgentMetadata,
   IndexedOperation,
   OpenApiDocument,
@@ -67,16 +68,47 @@ function artifactOutput(id: string, value: unknown): AgentArtifactOutput | undef
   };
 }
 
-function executableMetadata(id: string, value: unknown): AgentMetadata | undefined {
+function continuationOutput(id: string, value: unknown): AgentContinuationOutput | undefined {
+  if (value === undefined) return undefined;
+  if (!isObject(value)) {
+    throw new CliError(8, "invalid_openapi", `Continuation operation '${id}' has invalid continuation output metadata.`);
+  }
+  const fields = value.sensitiveFields;
+  if (
+    value.method !== "POST" ||
+    typeof value.urlJsonPointer !== "string" ||
+    !value.urlJsonPointer.startsWith("/") ||
+    typeof value.fieldsJsonPointer !== "string" ||
+    !value.fieldsJsonPointer.startsWith("/") ||
+    !Array.isArray(fields) ||
+    fields.length === 0 ||
+    fields.some((field) => typeof field !== "string" || !/^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(field)) ||
+    new Set(fields).size !== fields.length
+  ) {
+    throw new CliError(8, "invalid_openapi", `Continuation operation '${id}' has invalid continuation output metadata.`);
+  }
+  return {
+    method: "POST",
+    urlJsonPointer: value.urlJsonPointer,
+    fieldsJsonPointer: value.fieldsJsonPointer,
+    sensitiveFields: [...fields] as string[],
+  };
+}
+
+function runnableMetadata(id: string, value: unknown): AgentMetadata | undefined {
   const metadata = agentMetadata(value);
-  if (metadata?.exposure !== "execute") return undefined;
+  if (metadata?.exposure !== "execute" && metadata?.exposure !== "continuation") return undefined;
+  const continuation = metadata.exposure === "continuation";
   const allowedSurface = ["dashboard", "storefront", "system"].includes(metadata.surface ?? "");
   const allowedRisk = ["read", "write", "destructive", "financial", "security"].includes(metadata.risk ?? "");
   const allowedIdempotency = ["none", "supported", "required"].includes(metadata.idempotency ?? "");
+  const allowedRevision = ["none", "optional", "required"].includes(metadata.revision ?? "none");
   const allowedBatch = ["parallel", "sequential", "forbidden"].includes(metadata.batch ?? "");
-  const allowedTransport = ["json", "multipart", "octet-stream"].includes(metadata.transport ?? "");
-  if (!allowedSurface || !allowedRisk || !allowedIdempotency || !allowedBatch || !allowedTransport || typeof metadata.openWorld !== "boolean") {
-    throw new CliError(8, "invalid_openapi", `Executable operation '${id}' has invalid agent metadata.`);
+  const allowedTransport = continuation
+    ? ["json", "continuation"].includes(metadata.transport ?? "")
+    : ["json", "multipart", "octet-stream"].includes(metadata.transport ?? "");
+  if (!allowedSurface || !allowedRisk || !allowedIdempotency || !allowedRevision || !allowedBatch || !allowedTransport || typeof metadata.openWorld !== "boolean") {
+    throw new CliError(8, "invalid_openapi", `Runnable operation '${id}' has invalid agent metadata.`);
   }
   if (metadata.maximumResponseBytes !== undefined && (!Number.isSafeInteger(metadata.maximumResponseBytes) || metadata.maximumResponseBytes < 1)) {
     throw new CliError(8, "invalid_openapi", `Executable operation '${id}' has an invalid response limit.`);
@@ -92,7 +124,26 @@ function executableMetadata(id: string, value: unknown): AgentMetadata | undefin
   if (artifact && (metadata.batch !== "forbidden" || metadata.sensitiveOutput === true || metadata.transport === "continuation")) {
     throw new CliError(8, "invalid_openapi", `Executable operation '${id}' has an invalid artifact output policy.`);
   }
-  return { ...metadata, ...(artifact ? { artifactOutput: artifact } : {}) };
+  const continuationPolicy = continuationOutput(id, metadata.continuationOutput);
+  if (continuation && (
+    metadata.batch !== "forbidden" ||
+    artifact !== undefined ||
+    metadata.oneTimeSecretOutput === true ||
+    metadata.requiredClientAction !== undefined ||
+    (metadata.sensitiveOutput === true
+      ? metadata.transport !== "continuation" || continuationPolicy === undefined
+      : metadata.transport !== "json" || continuationPolicy !== undefined)
+  )) {
+    throw new CliError(8, "invalid_openapi", `Continuation operation '${id}' has an invalid output policy.`);
+  }
+  if (!continuation && continuationPolicy !== undefined) {
+    throw new CliError(8, "invalid_openapi", `Executable operation '${id}' has an invalid continuation output policy.`);
+  }
+  return {
+    ...metadata,
+    ...(artifact ? { artifactOutput: artifact } : {}),
+    ...(continuationPolicy ? { continuationOutput: continuationPolicy } : {}),
+  };
 }
 
 function parameters(value: unknown): OpenApiParameter[] {
@@ -111,9 +162,10 @@ export function indexOperations(document: OpenApiDocument): IndexedOperation[] {
       const operation = raw as OpenApiOperation;
       const id = operation.operationId;
       const rawMetadata = operation["x-scalius-agent"];
-      const hasExecutableExposure = isObject(rawMetadata) && rawMetadata.exposure === "execute";
-      if (!id || !OPERATION_ID.test(id) || !hasExecutableExposure) continue;
-      const agent = executableMetadata(id, rawMetadata)!;
+      const hasRunnableExposure = isObject(rawMetadata) &&
+        (rawMetadata.exposure === "execute" || rawMetadata.exposure === "continuation");
+      if (!id || !OPERATION_ID.test(id) || !hasRunnableExposure) continue;
+      const agent = runnableMetadata(id, rawMetadata)!;
       const fullPath = path.startsWith("/api/v1/") ? path : `/api/v1${path.startsWith("/") ? path : `/${path}`}`;
       if (!fullPath.startsWith("/api/v1/") || fullPath.includes("\\")) {
         throw new CliError(8, "invalid_openapi", `Operation '${id}' contains an invalid API path.`);

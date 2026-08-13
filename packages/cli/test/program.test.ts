@@ -23,6 +23,43 @@ function specWithCreateRequestLimit(maxRequestBytes: number): Record<string, unk
   return spec;
 }
 
+function specWithContinuations(): Record<string, unknown> {
+  const spec = executableSpec();
+  const paths = spec.paths as Record<string, Record<string, Record<string, unknown>>>;
+  paths["/api/v1/storefront/agent-contexts/{contextId}/continuations/{continuationId}"] = {
+    get: {
+      operationId: "storefront.continuations.get",
+      parameters: [
+        { in: "path", name: "contextId", required: true, schema: { type: "string" } },
+        { in: "path", name: "continuationId", required: true, schema: { type: "string" } },
+      ],
+      "x-scalius-agent": {
+        surface: "storefront", exposure: "continuation", principals: ["visitor", "customer"],
+        risk: "read", openWorld: false, idempotency: "none", revision: "none",
+        batch: "forbidden", transport: "json", maximumResponseBytes: 65_536,
+        maxRequestBytes: 16_384, sensitiveOutput: false, oneTimeSecretOutput: false,
+      },
+    },
+  };
+  paths["/api/v1/admin/settings/theme/preview-session"] = {
+    post: {
+      operationId: "dashboard.theme.preview_session_create",
+      requestBody: { required: true, content: { "application/json": { schema: { type: "object" } } } },
+      "x-scalius-agent": {
+        surface: "dashboard", exposure: "continuation", principals: ["admin"],
+        risk: "read", openWorld: false, idempotency: "none", revision: "none",
+        batch: "forbidden", transport: "continuation", maximumResponseBytes: 8_192,
+        maxRequestBytes: 16_384, sensitiveOutput: true, oneTimeSecretOutput: false,
+        continuationOutput: {
+          method: "POST", urlJsonPointer: "/data/continuation/url",
+          fieldsJsonPointer: "/data/continuation/fields", sensitiveFields: ["continuationCode"],
+        },
+      },
+    },
+  };
+  return spec;
+}
+
 describe("CLI program", () => {
   it("searches the live OpenAPI contract with deterministic JSON stdout", async () => {
     const fetch = vi.fn(async () => Response.json(executableSpec(), { headers: { ETag: '"v1"' } }));
@@ -53,6 +90,44 @@ describe("CLI program", () => {
     expect(calls[1]?.url).toBe("https://api.example.com/api/v1/admin/products/p%2F1?expand=variants&expand=media");
     expect(calls[1]?.init?.method).toBe("GET");
     expect(new Headers(calls[1]?.init?.headers).get("Authorization")).toMatch(/^Bearer sc_cli_/);
+  });
+
+  it("runs a non-sensitive JSON continuation status operation", async () => {
+    const calls: string[] = [];
+    const fetch = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.endsWith("/openapi.json")) return Response.json(specWithContinuations());
+      calls.push(url);
+      return Response.json({ status: "pending" });
+    });
+    const runtime = await authenticatedRuntime(fetch as typeof globalThis.fetch);
+    expect(await runProgram(runtime, [
+      "--output", "json", "operations", "run", "storefront.continuations.get",
+      "--input", JSON.stringify({ path: { contextId: "ctx_1", continuationId: "acn_1" } }),
+    ])).toBe(0);
+    expect(calls).toEqual([
+      "https://api.example.com/api/v1/storefront/agent-contexts/ctx_1/continuations/acn_1",
+    ]);
+    expect(JSON.parse(runtime.stdoutText()).data).toEqual({ status: "pending" });
+  });
+
+  it("blocks a sensitive browser continuation before network access or output", async () => {
+    let operationCalls = 0;
+    const secret = "tpc_secret_that_must_never_escape";
+    const fetch = vi.fn(async (input: string | URL | Request) => {
+      if (String(input).endsWith("/openapi.json")) return Response.json(specWithContinuations());
+      operationCalls += 1;
+      return Response.json({ data: { continuation: { fields: { continuationCode: secret } } } });
+    });
+    const runtime = await authenticatedRuntime(fetch as typeof globalThis.fetch);
+    expect(await runProgram(runtime, [
+      "--output", "json", "operations", "run", "dashboard.theme.preview_session_create",
+      "--input", '{"body":{"expectedDraftRevision":1}}',
+    ])).toBe(5);
+    expect(operationCalls).toBe(0);
+    expect(runtime.stdoutText()).not.toContain(secret);
+    expect(runtime.stderrText()).not.toContain(secret);
+    expect(runtime.stderrText()).toContain("browser_continuation_required");
   });
 
   it("requires both confirmation and idempotency for declared writes", async () => {
