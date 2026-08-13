@@ -10,7 +10,10 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/api/client", () => mocks);
 
 import { GET, POST } from "../../pages/agent/continue";
-import { isBrowserContinuationRelayPathname } from "../browser-continuation-relay";
+import {
+  isBrowserContinuationRelayPathname,
+  isForbiddenStorefrontCrossOriginFormRequest,
+} from "../browser-continuation-relay";
 
 const CODE = `acb_${"a".repeat(20)}_${"b".repeat(43)}`;
 const ID = `acn_${"a".repeat(20)}`;
@@ -104,5 +107,41 @@ describe("agent storefront body-only bootstrap", () => {
     expect(isBrowserContinuationRelayPathname("/theme-preview/continue")).toBe(true);
     expect(isBrowserContinuationRelayPathname("/agent/continue/anything")).toBe(false);
     expect(isBrowserContinuationRelayPathname("/")).toBe(false);
+  });
+
+  it("preserves Astro's cross-origin form protection for every ordinary route", () => {
+    const ordinaryUrl = "https://storefront.example.test/api/checkout";
+    expect(isForbiddenStorefrontCrossOriginFormRequest(new Request(ordinaryUrl, {
+      method: "POST",
+      headers: {
+        Origin: "https://evil.example.test",
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: "value=1",
+    }))).toBe(true);
+    expect(isForbiddenStorefrontCrossOriginFormRequest(new Request(ordinaryUrl, {
+      method: "POST",
+      headers: {
+        Origin: "https://storefront.example.test",
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: "value=1",
+    }))).toBe(false);
+    expect(isForbiddenStorefrontCrossOriginFormRequest(new Request(ordinaryUrl, {
+      method: "POST",
+      headers: {
+        Origin: "https://evil.example.test",
+        "Content-Type": "application/json",
+      },
+      body: "{}",
+    }))).toBe(false);
+    expect(isForbiddenStorefrontCrossOriginFormRequest(new Request(ordinaryUrl, {
+      method: "POST",
+      headers: { Origin: "https://evil.example.test" },
+    }))).toBe(true);
+    expect(isForbiddenStorefrontCrossOriginFormRequest(new Request(ordinaryUrl, {
+      method: "GET",
+      headers: { Origin: "https://evil.example.test" },
+    }))).toBe(false);
   });
 });

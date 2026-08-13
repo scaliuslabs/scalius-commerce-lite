@@ -2,6 +2,11 @@ const RELAY_PREFIX = "scalius-continuation-v1:";
 const MAX_RELAY_NAME_LENGTH = 16_384;
 const MAX_RELAY_PAYLOAD_BYTES = 8_192;
 const RELAY_PATHS = new Set(["/agent/continue", "/theme-preview/continue"]);
+const FORM_CONTENT_TYPES = [
+  "application/x-www-form-urlencoded",
+  "multipart/form-data",
+  "text/plain",
+] as const;
 
 function isLoopbackHostname(hostname: string): boolean {
   return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
@@ -23,6 +28,18 @@ export function isTrustedBrowserContinuationPostOrigin(
   } catch {
     return false;
   }
+}
+
+export function isForbiddenStorefrontCrossOriginFormRequest(request: Request): boolean {
+  if (["GET", "HEAD", "OPTIONS"].includes(request.method)) return false;
+  const sameOrigin = request.headers.get("Origin") === new URL(request.url).origin;
+  const contentType = request.headers.get("Content-Type");
+  if (contentType !== null) {
+    return FORM_CONTENT_TYPES.some((candidate) =>
+      contentType.toLowerCase().includes(candidate)
+    ) && !sameOrigin;
+  }
+  return !sameOrigin;
 }
 
 export interface BrowserContinuationRelayField {
