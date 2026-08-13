@@ -1699,11 +1699,6 @@ async function getOrderDetailsOnce(
             deletedAt: sql<number>`CAST(${orders.deletedAt} AS INTEGER)`,
             shipmentClaimId: orders.shipmentClaimId,
             shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
-            itemCount: sql<number>`(
-        SELECT COUNT(*)
-        FROM ${orderItems}
-        WHERE ${orderItems.orderId} = ${orders.id}
-      )`,
             ...adminOrderFullEditEvidenceSelection(),
         })
         .from(orders)
@@ -1820,6 +1815,7 @@ async function getOrderDetailsOnce(
         deletedAt: order.deletedAt ? new Date(order.deletedAt * 1000) : null,
         promotion: promotionRows[0] ?? null,
         items: formattedItems,
+        itemCount: formattedItems.length,
         latestShipment,
         shipmentRecovery: buildShipmentRecoverySummary(order, latestShipment, nowSeconds),
         refundAttempts: refundAttemptViews,

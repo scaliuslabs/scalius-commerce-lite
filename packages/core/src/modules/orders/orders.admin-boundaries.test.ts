@@ -38,6 +38,16 @@ describe("admin order list boundaries", () => {
     expect(detailSource).toContain("version: orders.version");
   });
 
+  it("derives detail itemCount from the exact loaded item projection", () => {
+    const source = readFileSync(ORDERS_ADMIN_SOURCE, "utf8");
+    const detailStart = source.indexOf("export async function getOrderDetails");
+    const detailEnd = source.indexOf("export async function createOrder", detailStart);
+    const detailSource = source.slice(detailStart, detailEnd);
+
+    expect(detailSource).toContain("itemCount: formattedItems.length");
+    expect(detailSource).not.toContain("SELECT COUNT(*)");
+  });
+
   it("returns immutable promotion attribution for merchant support", () => {
     const source = readFileSync(ORDERS_ADMIN_SOURCE, "utf8");
     const detailStart = source.indexOf("export async function getOrderDetails");
