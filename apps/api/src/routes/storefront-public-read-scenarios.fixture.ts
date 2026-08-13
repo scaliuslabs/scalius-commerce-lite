@@ -24,9 +24,9 @@ export const storefrontPublicReadScenarios = {
   prepareCheckout: [
     "storefront.checkout.get_config",
     "storefront.checkout_language.get_active",
-    "storefront.locations.cities",
-    "storefront.locations.zones",
-    "storefront.locations.areas",
+    "storefront.locations.city_summaries",
+    "storefront.locations.zone_summaries",
+    "storefront.locations.area_summaries",
     "storefront.shipping_methods.list",
   ],
 } as const;
@@ -36,6 +36,9 @@ export const storefrontPublicReadScenarios = {
  * routes stay documented but must not become a second execution authority.
  */
 export const storefrontPublicReadExcludedOperations = {
+  unboundedCitiesAggregate: "storefront.locations.cities",
+  unboundedZonesAggregate: "storefront.locations.zones",
+  unboundedAreasAggregate: "storefront.locations.areas",
   unboundedCategoryListAggregate: "storefront.categories.list",
   unboundedCategoryAggregate: "storefront.categories.get",
   unboundedCategoryProductAggregate: "storefront.categories.list_products",

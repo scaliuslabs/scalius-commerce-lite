@@ -8941,6 +8941,60 @@ export type GetApiV1LocationsCitiesResponses = {
 
 export type GetApiV1LocationsCitiesResponse = GetApiV1LocationsCitiesResponses[keyof GetApiV1LocationsCitiesResponses];
 
+export type GetApiV1LocationsCitiesSummariesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        page?: number;
+        limit?: number;
+        search?: string;
+    };
+    url: '/api/v1/locations/cities/summaries';
+};
+
+export type GetApiV1LocationsCitiesSummariesErrors = {
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1LocationsCitiesSummariesError = GetApiV1LocationsCitiesSummariesErrors[keyof GetApiV1LocationsCitiesSummariesErrors];
+
+export type GetApiV1LocationsCitiesSummariesResponses = {
+    /**
+     * Paginated city summaries
+     */
+    200: {
+        success: true;
+        data: {
+            locations: Array<{
+                id: string;
+                name: string;
+                type: 'city' | 'zone' | 'area';
+                parentId: string | null;
+                isActive: boolean;
+                sortOrder: number;
+            }>;
+            pagination: {
+                page: number;
+                limit: number;
+                total: number;
+                totalPages: number;
+            };
+        };
+    };
+};
+
+export type GetApiV1LocationsCitiesSummariesResponse = GetApiV1LocationsCitiesSummariesResponses[keyof GetApiV1LocationsCitiesSummariesResponses];
+
 export type GetApiV1LocationsZonesData = {
     body?: never;
     path?: never;
@@ -8999,6 +9053,72 @@ export type GetApiV1LocationsZonesResponses = {
 
 export type GetApiV1LocationsZonesResponse = GetApiV1LocationsZonesResponses[keyof GetApiV1LocationsZonesResponses];
 
+export type GetApiV1LocationsZonesSummariesData = {
+    body?: never;
+    path?: never;
+    query: {
+        page?: number;
+        limit?: number;
+        search?: string;
+        cityId: string;
+    };
+    url: '/api/v1/locations/zones/summaries';
+};
+
+export type GetApiV1LocationsZonesSummariesErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1LocationsZonesSummariesError = GetApiV1LocationsZonesSummariesErrors[keyof GetApiV1LocationsZonesSummariesErrors];
+
+export type GetApiV1LocationsZonesSummariesResponses = {
+    /**
+     * Paginated zone summaries
+     */
+    200: {
+        success: true;
+        data: {
+            locations: Array<{
+                id: string;
+                name: string;
+                type: 'city' | 'zone' | 'area';
+                parentId: string | null;
+                isActive: boolean;
+                sortOrder: number;
+            }>;
+            pagination: {
+                page: number;
+                limit: number;
+                total: number;
+                totalPages: number;
+            };
+        };
+    };
+};
+
+export type GetApiV1LocationsZonesSummariesResponse = GetApiV1LocationsZonesSummariesResponses[keyof GetApiV1LocationsZonesSummariesResponses];
+
 export type GetApiV1LocationsAreasData = {
     body?: never;
     path?: never;
@@ -9056,6 +9176,72 @@ export type GetApiV1LocationsAreasResponses = {
 };
 
 export type GetApiV1LocationsAreasResponse = GetApiV1LocationsAreasResponses[keyof GetApiV1LocationsAreasResponses];
+
+export type GetApiV1LocationsAreasSummariesData = {
+    body?: never;
+    path?: never;
+    query: {
+        page?: number;
+        limit?: number;
+        search?: string;
+        zoneId: string;
+    };
+    url: '/api/v1/locations/areas/summaries';
+};
+
+export type GetApiV1LocationsAreasSummariesErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1LocationsAreasSummariesError = GetApiV1LocationsAreasSummariesErrors[keyof GetApiV1LocationsAreasSummariesErrors];
+
+export type GetApiV1LocationsAreasSummariesResponses = {
+    /**
+     * Paginated area summaries
+     */
+    200: {
+        success: true;
+        data: {
+            locations: Array<{
+                id: string;
+                name: string;
+                type: 'city' | 'zone' | 'area';
+                parentId: string | null;
+                isActive: boolean;
+                sortOrder: number;
+            }>;
+            pagination: {
+                page: number;
+                limit: number;
+                total: number;
+                totalPages: number;
+            };
+        };
+    };
+};
+
+export type GetApiV1LocationsAreasSummariesResponse = GetApiV1LocationsAreasSummariesResponses[keyof GetApiV1LocationsAreasSummariesResponses];
 
 export type GetApiV1ShippingMethodsData = {
     body?: never;
