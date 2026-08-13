@@ -9,7 +9,7 @@ export const storefrontPublicReadScenarios = {
     "storefront.search.predict",
     "storefront.categories.list",
     "storefront.categories.get_section",
-    "storefront.categories.list_products",
+    "storefront.categories.list_product_summaries",
     "storefront.collections.list",
     "storefront.collections.get",
   ],
@@ -37,6 +37,7 @@ export const storefrontPublicReadScenarios = {
  */
 export const storefrontPublicReadExcludedOperations = {
   unboundedCategoryAggregate: "storefront.categories.get",
+  unboundedCategoryProductAggregate: "storefront.categories.list_products",
   unboundedProductAggregate: "storefront.products.get",
   legacyVariantSearch: "storefront.products.search_legacy",
   categoryIdAttributeAlias: "storefront.attributes.category_id_alias",

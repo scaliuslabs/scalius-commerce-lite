@@ -10459,6 +10459,144 @@ export type GetApiV1CategoriesBySlugProductsResponses = {
 
 export type GetApiV1CategoriesBySlugProductsResponse = GetApiV1CategoriesBySlugProductsResponses[keyof GetApiV1CategoriesBySlugProductsResponses];
 
+export type GetApiV1CategoriesBySlugProductSummariesData = {
+    body?: never;
+    path: {
+        slug: string;
+    };
+    query?: {
+        page?: number;
+        limit?: number;
+        sort?: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount';
+        search?: string;
+        minPrice?: number | null;
+        maxPrice?: number | null;
+        freeDelivery?: 'true' | 'false';
+        hasDiscount?: 'true' | 'false';
+    };
+    url: '/api/v1/categories/{slug}/product-summaries';
+};
+
+export type GetApiV1CategoriesBySlugProductSummariesErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1CategoriesBySlugProductSummariesError = GetApiV1CategoriesBySlugProductSummariesErrors[keyof GetApiV1CategoriesBySlugProductSummariesErrors];
+
+export type GetApiV1CategoriesBySlugProductSummariesResponses = {
+    /**
+     * Bounded category product summaries
+     */
+    200: {
+        success: true;
+        data: {
+            category: {
+                id: string;
+                name: string;
+                slug: string;
+                imageUrl: string | null;
+                canonicalPath: string | null;
+                noIndex: boolean;
+                excludeFromSitemap: boolean;
+                descriptionCharacters: number;
+                contentCharacters: number;
+            };
+            products: Array<{
+                id: string;
+                name: string;
+                slug: string;
+                price: number;
+                discountType: string | null;
+                discountPercentage: number | null;
+                discountAmount: number | null;
+                discountedPrice: number;
+                priceVaries: boolean;
+                freeDelivery: boolean;
+                categoryId: string | null;
+                hasVariants: boolean;
+                availableForSale: boolean;
+                imageUrl: string | null;
+                imageMediaId: string | null;
+                imageAlt: string | null;
+                category: {
+                    id: string;
+                    name: string;
+                    slug: string;
+                } | null;
+                createdAt: string | null;
+                updatedAt: string | null;
+            }>;
+            pagination: {
+                page: number;
+                limit: number;
+                total: number;
+                totalPages: number;
+            };
+            priceRange: {
+                min: number;
+                max: number;
+            };
+            facets: Array<{
+                id: string;
+                name: string;
+                slug: string;
+                values: Array<{
+                    value: string;
+                    count: number;
+                }>;
+            }>;
+            appliedFilters: {
+                attributes: Array<{
+                    id: string;
+                    name: string;
+                    slug: string;
+                    values: Array<string>;
+                }>;
+                sort: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount';
+                search?: string;
+                minPrice?: number;
+                maxPrice?: number;
+                freeDelivery?: 'true' | 'false';
+                hasDiscount?: 'true' | 'false';
+            };
+        };
+    };
+};
+
+export type GetApiV1CategoriesBySlugProductSummariesResponse = GetApiV1CategoriesBySlugProductSummariesResponses[keyof GetApiV1CategoriesBySlugProductSummariesResponses];
+
 export type GetApiV1CacheGroupsData = {
     body?: never;
     path?: never;

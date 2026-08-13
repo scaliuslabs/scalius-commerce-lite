@@ -62417,10 +62417,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     }
   },
   {
-    "operationId": "storefront.categories.list_products",
+    "operationId": "storefront.categories.list_product_summaries",
     "method": "GET",
-    "pathTemplate": "/api/v1/categories/{slug}/products",
-    "summary": "Get products in a category with filtering",
+    "pathTemplate": "/api/v1/categories/{slug}/product-summaries",
+    "summary": "Get a bounded page of products in a category",
     "tags": [
       "Categories"
     ],
@@ -62464,11 +62464,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "type": "integer",
             "minimum": 1,
             "maximum": 1000,
-            "default": 1,
-            "description": "Page number"
+            "default": 1
           },
           "required": false,
-          "description": "Page number",
           "name": "page",
           "in": "query"
         },
@@ -62476,12 +62474,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           "schema": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 100,
-            "default": 20,
-            "description": "Items per page"
+            "maximum": 20,
+            "default": 20
           },
           "required": false,
-          "description": "Items per page",
           "name": "limit",
           "in": "query"
         },
@@ -62496,22 +62492,18 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "name-desc",
               "discount"
             ],
-            "default": "newest",
-            "description": "Sort order"
+            "default": "newest"
           },
           "required": false,
-          "description": "Sort order",
           "name": "sort",
           "in": "query"
         },
         {
           "schema": {
             "type": "string",
-            "maxLength": 100,
-            "description": "Search within category"
+            "maxLength": 100
           },
           "required": false,
-          "description": "Search within category",
           "name": "search",
           "in": "query"
         },
@@ -62519,11 +62511,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           "schema": {
             "type": "number",
             "nullable": true,
-            "minimum": 0,
-            "description": "Minimum effective buyer-SKU price"
+            "minimum": 0
           },
           "required": false,
-          "description": "Minimum effective buyer-SKU price",
           "name": "minPrice",
           "in": "query"
         },
@@ -62531,11 +62521,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           "schema": {
             "type": "number",
             "nullable": true,
-            "minimum": 0,
-            "description": "Maximum effective buyer-SKU price"
+            "minimum": 0
           },
           "required": false,
-          "description": "Maximum effective buyer-SKU price",
           "name": "maxPrice",
           "in": "query"
         },
@@ -62545,11 +62533,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "enum": [
               "true",
               "false"
-            ],
-            "description": "Free delivery filter"
+            ]
           },
           "required": false,
-          "description": "Free delivery filter",
           "name": "freeDelivery",
           "in": "query"
         },
@@ -62559,11 +62545,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "enum": [
               "true",
               "false"
-            ],
-            "description": "Has discount filter"
+            ]
           },
           "required": false,
-          "description": "Has discount filter",
           "name": "hasDiscount",
           "in": "query"
         }
@@ -62593,27 +62577,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "slug": {
                   "type": "string"
                 },
-                "description": {
-                  "type": "string",
-                  "nullable": true
-                },
                 "imageUrl": {
-                  "type": "string",
-                  "nullable": true
-                },
-                "createdAt": {
-                  "type": "string",
-                  "nullable": true
-                },
-                "updatedAt": {
-                  "type": "string",
-                  "nullable": true
-                },
-                "metaTitle": {
-                  "type": "string",
-                  "nullable": true
-                },
-                "metaDescription": {
                   "type": "string",
                   "nullable": true
                 },
@@ -62627,25 +62591,25 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "excludeFromSitemap": {
                   "type": "boolean"
                 },
-                "content": {
-                  "type": "string",
-                  "nullable": true
+                "descriptionCharacters": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "contentCharacters": {
+                  "type": "integer",
+                  "minimum": 0
                 }
               },
               "required": [
                 "id",
                 "name",
                 "slug",
-                "description",
                 "imageUrl",
-                "createdAt",
-                "updatedAt",
-                "metaTitle",
-                "metaDescription",
                 "canonicalPath",
                 "noIndex",
                 "excludeFromSitemap",
-                "content"
+                "descriptionCharacters",
+                "contentCharacters"
               ]
             },
             "products": {
@@ -62758,7 +62722,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "createdAt",
                   "updatedAt"
                 ]
-              }
+              },
+              "maxItems": 20
             },
             "pagination": {
               "type": "object",
@@ -62932,6 +62897,40 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
         "data"
       ]
     }
+  },
+  {
+    "operationId": "storefront.categories.list_products",
+    "method": "GET",
+    "pathTemplate": "/api/v1/categories/{slug}/products",
+    "summary": "Get products in a category with filtering",
+    "tags": [
+      "Categories"
+    ],
+    "surface": "storefront",
+    "exposure": "excluded",
+    "principals": [
+      "customer",
+      "visitor"
+    ],
+    "risk": "read",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "forbidden",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 16384,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "exclusionReason": "Browser category listing embeds the unbounded category aggregate; use storefront.categories.list_product_summaries plus storefront.categories.get_section.",
+    "rbac": {
+      "type": "public"
+    },
+    "inputSchema": null,
+    "outputSchema": null
   },
   {
     "operationId": "storefront.checkout_language.get_active",

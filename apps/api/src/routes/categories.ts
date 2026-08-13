@@ -116,6 +116,22 @@ const appliedCategoryFiltersSchema = z.object({
   hasDiscount: z.enum(["true", "false"]).optional(),
 });
 
+const agentCategoryProductFilterSchema = z.object({
+  page: z.coerce.number().int().min(1).max(1000).optional().default(1),
+  limit: z.coerce.number().int().min(1).max(20).optional().default(20),
+  sort: z.enum(["newest", "price-asc", "price-desc", "name-asc", "name-desc", "discount"])
+    .optional().default("newest"),
+  search: z.string().trim().max(100).optional(),
+  minPrice: z.coerce.number().min(0).optional(),
+  maxPrice: z.coerce.number().min(0).optional(),
+  freeDelivery: z.enum(["true", "false"]).optional(),
+  hasDiscount: z.enum(["true", "false"]).optional(),
+}).superRefine((value, ctx) => {
+  if (value.minPrice !== undefined && value.maxPrice !== undefined && value.minPrice > value.maxPrice) {
+    ctx.addIssue({ code: "custom", path: ["maxPrice"], message: "Maximum price must be greater than or equal to minimum price" });
+  }
+});
+
 const publicCategorySlugSchema = z
   .string()
   .trim()
@@ -332,6 +348,97 @@ app.openapi(getCategoryProductsRoute, async (c) => {
     pagination: result.pagination,
     priceRange: result.priceRange,
     facets: result.facets,
+    appliedFilters,
+  });
+});
+
+const getCategoryProductSummariesRoute = createRoute({
+  method: "get",
+  path: "/{slug}/product-summaries",
+  operationId: "storefront.categories.list_product_summaries",
+  tags: ["Categories"],
+  summary: "Get a bounded page of products in a category",
+  request: {
+    params: z.object({ slug: publicCategorySlugSchema }),
+    query: agentCategoryProductFilterSchema,
+  },
+  responses: {
+    200: {
+      description: "Bounded category product summaries",
+      content: { "application/json": { schema: successEnvelope(z.object({
+        category: z.object({
+          id: z.string(),
+          name: z.string(),
+          slug: z.string(),
+          imageUrl: z.string().nullable(),
+          canonicalPath: z.string().nullable(),
+          noIndex: z.boolean(),
+          excludeFromSitemap: z.boolean(),
+          descriptionCharacters: z.number().int().min(0),
+          contentCharacters: z.number().int().min(0),
+        }),
+        products: z.array(storefrontCategoryProductSchema).max(20),
+        pagination: paginationSchema,
+        priceRange: z.object({ min: z.number().min(0), max: z.number().min(0) }),
+        facets: z.array(productFacetSchema),
+        appliedFilters: appliedCategoryFiltersSchema,
+      })) } },
+    },
+    400: errorResponses[400],
+    404: errorResponses[404],
+    500: errorResponses[500],
+  },
+});
+
+app.openapi(getCategoryProductSummariesRoute, async (c) => {
+  const { slug } = c.req.valid("param");
+  const params = c.req.valid("query");
+  const summary = await getPublicCategorySection(c.get("db"), slug, "summary");
+  if (!summary || summary.section !== "summary") throw new NotFoundError("Category not found");
+  const category = summary.category;
+  const queryParams = readRepeatedPublicQueryValues(c.req.url);
+  const attributeFilters = await resolvePublicAttributeFilters(c.get("db"), queryParams, Object.keys(params));
+  const result = await getStorefrontCategoryProducts(c.get("db"), {
+    id: category.id,
+    name: category.name,
+    slug: category.slug,
+    description: null,
+    imageUrl: category.imageUrl,
+    metaTitle: category.metaTitle,
+    metaDescription: category.metaDescription,
+    canonicalPath: category.canonicalPath,
+    noIndex: category.noIndex,
+    excludeFromSitemap: category.excludeFromSitemap,
+    createdAt: category.createdAt,
+    updatedAt: category.updatedAt,
+  }, {
+    ...params,
+    search: normalizePublicListingSearchParam(params.search),
+    attributeFilters,
+  });
+  const appliedFilters: z.infer<typeof appliedCategoryFiltersSchema> = {
+    attributes: attributeFilters,
+    sort: params.sort,
+  };
+  const normalizedSearch = normalizePublicFtsSearchQuery(params.search);
+  if (normalizedSearch) appliedFilters.search = normalizedSearch;
+  if (params.minPrice !== undefined) appliedFilters.minPrice = params.minPrice;
+  if (params.maxPrice !== undefined) appliedFilters.maxPrice = params.maxPrice;
+  if (params.freeDelivery !== undefined) appliedFilters.freeDelivery = params.freeDelivery;
+  if (params.hasDiscount !== undefined) appliedFilters.hasDiscount = params.hasDiscount;
+  return ok(c, {
+    category: {
+      id: category.id,
+      name: category.name,
+      slug: category.slug,
+      imageUrl: category.imageUrl,
+      canonicalPath: category.canonicalPath,
+      noIndex: category.noIndex,
+      excludeFromSitemap: category.excludeFromSitemap,
+      descriptionCharacters: category.descriptionCharacters,
+      contentCharacters: category.contentCharacters,
+    },
+    ...result,
     appliedFilters,
   });
 });
