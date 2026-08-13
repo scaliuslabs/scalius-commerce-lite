@@ -89,6 +89,27 @@ describe("runSeoDiscoveryLiveProbe", () => {
     });
   });
 
+  it("rejects an oversized legacy Store URL before producing repeated probe URLs", async () => {
+    mocks.getStorefrontUrl.mockResolvedValue({
+      storefrontUrl: `https://${"a".repeat(2_100)}.example.com`,
+    });
+    const fetchMock = vi.fn();
+
+    const result = await runSeoDiscoveryLiveProbe({
+      fetch: fetchMock as unknown as typeof fetch,
+      getStorefrontUrl: storefrontUrlLookup,
+      getDiscoveryPolicy: discoveryPolicyLookup,
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      baseUrl: null,
+      ok: false,
+      error: "Store URL must be an absolute http(s) URL.",
+      resources: [],
+    });
+  });
+
   it("probes policy-enabled discovery paths without forwarding credentials", async () => {
     mocks.getStorefrontUrl.mockResolvedValue({
       storefrontUrl: "https://shop.example.com/",

@@ -83,4 +83,22 @@ describe("storefront private cache policy", () => {
       "private, no-cache, no-store, must-revalidate",
     );
   });
+
+  it("rejects malformed or extra cookie-bridge authority before resolution", async () => {
+    for (const body of [
+      { token: "tpv_short" },
+      { token: `tpv_${"a".repeat(48)}`, unexpected: true },
+    ]) {
+      const response = await createTestApp().request(
+        "/api/v1/storefront/theme-preview/resolve",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        },
+      );
+      expect(response.status).toBe(400);
+    }
+    expect(mocks.resolveThemePreviewSession).not.toHaveBeenCalled();
+  });
 });

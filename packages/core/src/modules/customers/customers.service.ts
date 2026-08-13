@@ -66,7 +66,7 @@ const customerCityLocation = alias(deliveryLocations, "customer_city_location");
 const customerZoneLocation = alias(deliveryLocations, "customer_zone_location");
 const customerAreaLocation = alias(deliveryLocations, "customer_area_location");
 
-interface CustomerOrderShipmentSummary {
+export interface CustomerOrderShipmentSummary {
     id: string;
     providerType: string;
     providerName: string | null;

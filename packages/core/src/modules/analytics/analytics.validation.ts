@@ -165,7 +165,7 @@ export function getAnalyticsProviderIdentifier(
 const analyticsFields = {
     name: z.string().min(3).max(100),
     type: analyticsScriptTypeSchema,
-    config: z.string().min(1),
+    config: z.string().min(1).max(32_768),
     location: z.enum(["head", "body_start", "body_end"]),
 };
 

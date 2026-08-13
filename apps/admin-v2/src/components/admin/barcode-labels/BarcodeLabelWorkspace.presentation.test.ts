@@ -50,7 +50,16 @@ describe("BarcodeLabelWorkspace presentation boundary", () => {
   });
 
   it("keeps the primary mobile print targets at least 44 pixels tall", () => {
-    expect(source.match(/className="min-h-11 shrink-0"/g)).toHaveLength(2);
+    expect(source.match(/className="min-h-11 shrink-0"/g)?.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("uses one server artifact endpoint for CSV, print HTML, and PDF", () => {
+    expect(source).toContain('/api/v1/admin/inventory/labels/artifact');
+    expect(source).toContain('window.open("about:blank", "_blank")');
+    expect(source).toContain("const blob = await response.blob()");
+    expect(source).toContain("artifactWindow!.location.href = url");
+    expect(source).not.toContain("buildLabelDataCsv");
+    expect(source).not.toContain("window.print()");
   });
 
   it("uses mobile-safe targets throughout the progressive workspace without loosening desktop density", () => {

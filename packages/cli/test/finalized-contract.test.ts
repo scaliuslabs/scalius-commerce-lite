@@ -1,0 +1,51 @@
+import { describe, expect, it } from "vitest";
+import { indexOperations } from "../src/openapi.js";
+import type { OpenApiDocument } from "../src/types.js";
+
+describe("finalized API OpenAPI interop", () => {
+  it("indexes every executable operation from the in-memory finalized application contract", async () => {
+    const appModulePath = new URL("../../../apps/api/src/app.ts", import.meta.url).href;
+    const contractModulePath = new URL("../../../apps/api/src/openapi-contract.ts", import.meta.url).href;
+    const [appModule, contractModule] = await Promise.all([
+      import(/* @vite-ignore */ appModulePath),
+      import(/* @vite-ignore */ contractModulePath),
+    ]);
+    const app = appModule.default as {
+      getOpenAPIDocument: (options: Record<string, unknown>) => unknown;
+    };
+    const finalizeOpenApiContract = contractModule.finalizeOpenApiContract as (document: unknown) => unknown;
+    const document = finalizeOpenApiContract(app.getOpenAPIDocument({
+      openapi: "3.0.0",
+      info: { title: "Scalius CLI finalized-contract proof", version: "test" },
+    })) as OpenApiDocument;
+
+    const operations = indexOperations(document);
+    const executableCount = Object.values(document.paths ?? {}).reduce((count, pathItem) => {
+      if (!pathItem || typeof pathItem !== "object") return count;
+      return count + Object.values(pathItem).filter((candidate) => {
+        if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) return false;
+        const metadata = (candidate as Record<string, unknown>)["x-scalius-agent"];
+        return Boolean(metadata) && typeof metadata === "object" &&
+          (metadata as Record<string, unknown>).exposure === "execute";
+      }).length;
+    }, 0);
+
+    expect(operations).toHaveLength(executableCount);
+    expect(operations.some(({ agent }) => agent.openWorld === true)).toBe(true);
+    expect(operations.some(({ agent }) => agent.openWorld === false)).toBe(true);
+    expect(operations.every(({ agent }) =>
+      Number.isSafeInteger(agent.maxRequestBytes) &&
+      agent.maxRequestBytes! >= 1 &&
+      agent.maxRequestBytes! <= 16 * 1024 * 1024
+    )).toBe(true);
+
+    for (const operation of operations) {
+      const pathItem = document.paths![operation.path]!;
+      const raw = pathItem[operation.method.toLowerCase()] as Record<string, unknown>;
+      const rawMetadata = raw["x-scalius-agent"] as Record<string, unknown>;
+      expect(operation.agent.maxRequestBytes).toBe(rawMetadata.maxRequestBytes);
+    }
+    expect(operations.find(({ id }) => id === "dashboard.media.upload_part")?.agent.maxRequestBytes)
+      .toBe(5 * 1024 * 1024);
+  });
+});

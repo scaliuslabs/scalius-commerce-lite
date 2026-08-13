@@ -5,6 +5,12 @@ import { fileURLToPath, URL } from "node:url";
 const ADMIN_ORDERS_ROUTE_SOURCE = fileURLToPath(
     new URL("./orders.ts", import.meta.url),
 );
+const ORDER_CSV_ARTIFACT_SOURCE = fileURLToPath(
+    new URL("../../../../../packages/core/src/modules/orders/order-csv-export.ts", import.meta.url),
+);
+const ADMIN_ORDERS_INVOICE_ROUTE_SOURCE = fileURLToPath(
+    new URL("./orders-invoice.ts", import.meta.url),
+);
 
 describe("admin orders route boundaries", () => {
     it("keeps relevance as an explicit order-list search sort mode", () => {
@@ -94,7 +100,7 @@ describe("admin orders route boundaries", () => {
         const source = readFileSync(ADMIN_ORDERS_ROUTE_SOURCE, "utf8");
         const recoveryListRoute = source.split("const paymentRecoveryListRoute = createRoute")[1]?.split("const paymentRecoveryExportRoute = createRoute")[0] ?? "";
         const recoveryExportRoute = source.split("const paymentRecoveryExportRoute = createRoute")[1]?.split("// ─── POST / (Create)")[0] ?? "";
-        const csvBuilder = source.split("function buildPaymentRecoveryCsv")[1]?.split("function isSuccessfulOrderResult")[0] ?? "";
+        const csvBuilder = readFileSync(ORDER_CSV_ARTIFACT_SOURCE, "utf8");
 
         expect(source.indexOf("const paymentRecoveryListRoute = createRoute"))
             .toBeLessThan(source.indexOf("const createOrderRoute = createRoute"));
@@ -110,9 +116,18 @@ describe("admin orders route boundaries", () => {
         expect(recoveryExportRoute).toContain('summary: "Export hosted-payment recovery orders as CSV"');
         expect(recoveryExportRoute).toContain("PAYMENT_RECOVERY_EXPORT_MAX_ROWS");
         expect(recoveryExportRoute).toContain('"Content-Disposition"');
+        expect(recoveryExportRoute).toContain('"Content-Length"');
         expect(recoveryExportRoute).toContain('"X-Export-Row-Count"');
         expect(recoveryExportRoute).toContain('"X-Export-Limited"');
+        expect(recoveryExportRoute).toContain('"X-Export-Truncated-By"');
+        expect(recoveryExportRoute).toContain('"X-Export-Artifact-Bytes"');
+        expect(recoveryExportRoute).toContain('"X-Export-Max-Bytes"');
         expect(recoveryExportRoute).toContain("paymentRecovery: query.state as OrderPaymentRecoveryFilter");
+        expect(recoveryExportRoute).toContain("status: query.status || undefined");
+        expect(recoveryExportRoute).toContain("statusGroup: query.statusGroup");
+        expect(recoveryExportRoute).toContain("paymentStatus: query.paymentStatus");
+        expect(recoveryExportRoute).toContain("fulfillmentStatus: query.fulfillmentStatus");
+        expect(recoveryExportRoute).toContain('showArchived: query.archived === "true"');
 
         expect(csvBuilder).toContain('"Recovery State"');
         expect(csvBuilder).toContain('"Recovery Gateway"');
@@ -127,6 +142,43 @@ describe("admin orders route boundaries", () => {
         expect(csvBuilder).not.toContain("providerSessionId");
         expect(csvBuilder).not.toContain("providerCorrelationId");
         expect(csvBuilder).not.toContain("lastError");
+    });
+
+    it("keeps general order CSV export bounded and spreadsheet-safe", () => {
+        const routeSource = readFileSync(ADMIN_ORDERS_ROUTE_SOURCE, "utf8");
+        const csvBuilder = readFileSync(ORDER_CSV_ARTIFACT_SOURCE, "utf8");
+        const exportRoute = routeSource.split("const exportOrdersRoute = createRoute")[1]?.split("const paymentRecoveryListRoute = createRoute")[0] ?? "";
+
+        expect(exportRoute).toContain('path: "/export"');
+        expect(exportRoute).toContain("ORDER_EXPORT_MAX_ROWS");
+        expect(exportRoute).toContain('"Content-Disposition"');
+        expect(exportRoute).toContain('"Content-Length"');
+        expect(exportRoute).toContain('"X-Export-Row-Count"');
+        expect(exportRoute).toContain('"X-Export-Limited"');
+        expect(exportRoute).toContain('"X-Export-Truncated-By"');
+        expect(exportRoute).toContain('"X-Export-Artifact-Bytes"');
+        expect(exportRoute).toContain('"X-Export-Max-Bytes"');
+        expect(exportRoute).toContain("createOrdersCsvArtifactBuilder()");
+        expect(exportRoute).toContain("if (!csvBuilder.append(order)) break exportPages");
+        expect(exportRoute).toContain("csvStream(artifact.chunks)");
+        expect(csvBuilder).toContain("spreadsheetSafeCsvCell");
+        expect(csvBuilder).toContain("/^[\\t\\r\\n ]*[=+\\-@]/");
+        expect(csvBuilder).toContain("ORDER_CSV_ARTIFACT_MAX_BYTES = 16 * 1024 * 1024");
+        expect(csvBuilder).toContain("byteLength + chunkBytes > maxBytes");
+        expect(csvBuilder).not.toContain("attemptKey");
+        expect(csvBuilder).not.toContain("providerSessionId");
+        expect(csvBuilder).not.toContain("providerCorrelationId");
+        expect(csvBuilder).not.toContain("lastError");
+    });
+
+    it("serves the source-bounded printable invoice with attachment disposition", () => {
+        const invoiceRoute = readFileSync(ADMIN_ORDERS_INVOICE_ROUTE_SOURCE, "utf8");
+
+        expect(invoiceRoute).toContain("renderPrintableInvoice(document)");
+        expect(invoiceRoute).toContain('"Content-Disposition": `attachment; filename=');
+        expect(invoiceRoute).toContain('"Content-Length": String(artifactBytes)');
+        expect(invoiceRoute).toContain('"X-Artifact-Bytes": String(artifactBytes)');
+        expect(invoiceRoute).not.toContain('"Content-Disposition": `inline;');
     });
 
     it("declares payment recovery link issuance before the dynamic order route", () => {

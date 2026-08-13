@@ -24,9 +24,29 @@ import {
 } from "../../schemas/responses";
 import { invalidateProductAvailabilityCaches } from "../../utils/cache-invalidation";
 import { enqueueOrderNotificationsForStatus } from "../../utils/order-notification-queue";
+import { resolveCanonicalIdempotencyKey } from "./idempotency-key";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 type AdminRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>;
+
+const returnCommandKeySchema = z.string().trim().min(8).max(200);
+const returnIdempotencyHeadersSchema = z.object({
+    "idempotency-key": returnCommandKeySchema.optional().openapi({
+        description: "Standard retry key. May replace body.commandKey; if both are sent they must match.",
+    }),
+});
+const createOrderReturnRequestSchema = createOrderReturnSchema.extend({
+    commandKey: returnCommandKeySchema.optional(),
+});
+const approveOrderReturnRequestSchema = approveOrderReturnSchema.extend({
+    commandKey: returnCommandKeySchema.optional(),
+});
+const receiveOrderReturnRequestSchema = receiveOrderReturnSchema.extend({
+    commandKey: returnCommandKeySchema.optional(),
+});
+const cancelOrderReturnRequestSchema = cancelOrderReturnSchema.extend({
+    commandKey: returnCommandKeySchema.optional(),
+});
 
 const returnLineSchema = z.object({
     id: z.string(),
@@ -103,6 +123,7 @@ const mutationResponses = {
 } as const;
 
 const listRoute = createRoute({
+    operationId: "dashboard.orders.returns",
     method: "get",
     path: "/{id}/returns",
     tags: ["Admin - Orders"],
@@ -115,6 +136,7 @@ const listRoute = createRoute({
 });
 
 const getRoute = createRoute({
+    operationId: "dashboard.orders.return_get",
     method: "get",
     path: "/{id}/returns/{returnId}",
     tags: ["Admin - Orders"],
@@ -127,13 +149,15 @@ const getRoute = createRoute({
 });
 
 const createRouteDefinition = createRoute({
+    operationId: "dashboard.orders.return_create",
     method: "post",
     path: "/{id}/returns",
     tags: ["Admin - Orders"],
     summary: "Request an item-level return without changing stock",
     request: {
         params: z.object({ id: z.string() }),
-        body: { required: true, content: { "application/json": { schema: createOrderReturnSchema } } },
+        headers: returnIdempotencyHeadersSchema,
+        body: { required: true, content: { "application/json": { schema: createOrderReturnRequestSchema } } },
     },
     responses: {
         201: { description: "Return requested", content: { "application/json": { schema: successEnvelope(commandResultSchema) } } },
@@ -143,15 +167,17 @@ const createRouteDefinition = createRoute({
 
 function mutationRoute(
     action: "approve" | "receive" | "cancel",
-    schema: typeof approveOrderReturnSchema | typeof receiveOrderReturnSchema | typeof cancelOrderReturnSchema,
+    schema: typeof approveOrderReturnRequestSchema | typeof receiveOrderReturnRequestSchema | typeof cancelOrderReturnRequestSchema,
 ) {
     return createRoute({
+        operationId: `dashboard.orders.return_${action}`,
         method: "post",
         path: `/{id}/returns/{returnId}/${action}`,
         tags: ["Admin - Orders"],
         summary: `${action[0]!.toUpperCase()}${action.slice(1)} an item-level return`,
         request: {
             params: z.object({ id: z.string(), returnId: z.string() }),
+            headers: returnIdempotencyHeadersSchema,
             body: { required: true, content: { "application/json": { schema } } },
         },
         responses: {
@@ -161,11 +187,12 @@ function mutationRoute(
     });
 }
 
-const approveRoute = mutationRoute("approve", approveOrderReturnSchema);
-const receiveRoute = mutationRoute("receive", receiveOrderReturnSchema);
-const cancelRoute = mutationRoute("cancel", cancelOrderReturnSchema);
+const approveRoute = mutationRoute("approve", approveOrderReturnRequestSchema);
+const receiveRoute = mutationRoute("receive", receiveOrderReturnRequestSchema);
+const cancelRoute = mutationRoute("cancel", cancelOrderReturnRequestSchema);
 
 const reconcileRoute = createRoute({
+    operationId: "dashboard.orders.return_reconcile",
     method: "post",
     path: "/{id}/returns/{returnId}/reconcile",
     tags: ["Admin - Orders"],
@@ -219,22 +246,42 @@ app.openapi(getRoute, async (c) => {
     const { id, returnId } = c.req.valid("param");
     return ok(c, { return: await getOrderReturn(c.get("db"), id, returnId) });
 });
-app.openapi(createRouteDefinition, async (c) => created(c, await createOrderReturn(
-    c.get("db"),
-    c.req.valid("param").id,
-    c.req.valid("json"),
-    actor(c),
-)));
+app.openapi(createRouteDefinition, async (c) => {
+    const { commandKey: bodyCommandKey, ...payload } = c.req.valid("json");
+    const commandKey = resolveCanonicalIdempotencyKey(
+        c.req.valid("header")["idempotency-key"],
+        bodyCommandKey,
+        "commandKey",
+    );
+    return created(c, await createOrderReturn(
+        c.get("db"),
+        c.req.valid("param").id,
+        { ...payload, commandKey },
+        actor(c),
+    ));
+});
 app.openapi(approveRoute, async (c) => {
     const { id, returnId } = c.req.valid("param");
+    const { commandKey: bodyCommandKey, ...payload } = c.req.valid("json");
+    const commandKey = resolveCanonicalIdempotencyKey(
+        c.req.valid("header")["idempotency-key"],
+        bodyCommandKey,
+        "commandKey",
+    );
     return ok(c, await approveOrderReturn(
-        c.get("db"), id, returnId, c.req.valid("json") as ApproveOrderReturnInput, actor(c),
+        c.get("db"), id, returnId, { ...payload, commandKey } as ApproveOrderReturnInput, actor(c),
     ));
 });
 app.openapi(receiveRoute, async (c) => {
     const { id, returnId } = c.req.valid("param");
+    const { commandKey: bodyCommandKey, ...payload } = c.req.valid("json");
+    const commandKey = resolveCanonicalIdempotencyKey(
+        c.req.valid("header")["idempotency-key"],
+        bodyCommandKey,
+        "commandKey",
+    );
     const result = await receiveOrderReturn(
-        c.get("db"), id, returnId, c.req.valid("json") as ReceiveOrderReturnInput, actor(c),
+        c.get("db"), id, returnId, { ...payload, commandKey } as ReceiveOrderReturnInput, actor(c),
     );
     await postReceiptSideEffects(c, result);
     const { availabilityTransitionVariantIds: _cacheSignal, ...response } = result;
@@ -242,8 +289,14 @@ app.openapi(receiveRoute, async (c) => {
 });
 app.openapi(cancelRoute, async (c) => {
     const { id, returnId } = c.req.valid("param");
+    const { commandKey: bodyCommandKey, ...payload } = c.req.valid("json");
+    const commandKey = resolveCanonicalIdempotencyKey(
+        c.req.valid("header")["idempotency-key"],
+        bodyCommandKey,
+        "commandKey",
+    );
     return ok(c, await cancelOrderReturn(
-        c.get("db"), id, returnId, c.req.valid("json") as CancelOrderReturnInput, actor(c),
+        c.get("db"), id, returnId, { ...payload, commandKey } as CancelOrderReturnInput, actor(c),
     ));
 });
 app.openapi(reconcileRoute, async (c) => {

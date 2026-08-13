@@ -76,6 +76,7 @@ const shippingMethodSchema = z.object({
 const listRoute = createRoute({
     method: "get",
     path: "/",
+    operationId: "dashboard.shipping_methods.list",
     tags: ["Admin - Shipping Methods"],
     summary: "List all shipping methods",
     request: {
@@ -169,10 +170,11 @@ app.openapi(listRoute, async (c) => {
 const createRoute_ = createRoute({
     method: "post",
     path: "/",
+    operationId: "dashboard.shipping_methods.create",
     tags: ["Admin - Shipping Methods"],
     summary: "Create a shipping method",
     request: {
-        body: { content: { "application/json": { schema: createShippingMethodSchema } } }
+        body: { required: true, content: { "application/json": { schema: createShippingMethodSchema } } }
     },
     responses: {
         201: { description: "Shipping method created", content: { "application/json": { schema: successEnvelope(z.object({ shippingMethod: shippingMethodSchema })) } } },
@@ -229,6 +231,7 @@ app.openapi(createRoute_, (async (c: AppRouteContext<typeof createRoute_>) => {
 const getByIdRoute = createRoute({
     method: "get",
     path: "/{id}",
+    operationId: "dashboard.shipping_methods.get",
     tags: ["Admin - Shipping Methods"],
     summary: "Get a shipping method by ID",
     request: {
@@ -264,11 +267,12 @@ app.openapi(getByIdRoute, (async (c: AppRouteContext<typeof getByIdRoute>) => {
 const updateRoute = createRoute({
     method: "put",
     path: "/{id}",
+    operationId: "dashboard.shipping_methods.update",
     tags: ["Admin - Shipping Methods"],
     summary: "Update a shipping method",
     request: {
         params: z.object({ id: z.string() }),
-        body: { content: { "application/json": { schema: updateShippingMethodSchema } } }
+        body: { required: true, content: { "application/json": { schema: updateShippingMethodSchema } } }
     },
     responses: {
         200: { description: "Shipping method updated", content: { "application/json": { schema: successEnvelope(z.object({ shippingMethod: shippingMethodSchema })) } } },
@@ -343,6 +347,7 @@ app.openapi(updateRoute, (async (c: AppRouteContext<typeof updateRoute>) => {
 const deleteRoute = createRoute({
     method: "delete",
     path: "/{id}",
+    operationId: "dashboard.shipping_methods.trash",
     tags: ["Admin - Shipping Methods"],
     summary: "Soft-delete a shipping method",
     request: {
@@ -394,6 +399,7 @@ app.openapi(deleteRoute, async (c) => {
 const restoreRoute = createRoute({
     method: "post",
     path: "/{id}/restore",
+    operationId: "dashboard.shipping_methods.restore",
     tags: ["Admin - Shipping Methods"],
     summary: "Restore a soft-deleted shipping method",
     request: {
@@ -449,6 +455,7 @@ app.openapi(restoreRoute, async (c) => {
 const permanentDeleteRoute = createRoute({
     method: "delete",
     path: "/{id}/permanent-delete",
+    operationId: "dashboard.shipping_methods.delete_permanently",
     tags: ["Admin - Shipping Methods"],
     summary: "Permanently delete a shipping method",
     request: {

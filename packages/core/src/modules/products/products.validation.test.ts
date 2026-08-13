@@ -87,6 +87,20 @@ describe("product validation", () => {
         ).toBe(false);
     });
 
+    it("preserves nullable legacy catalog facts on update but requires them on create", () => {
+        const nullableFacts = {
+            ...productInput,
+            categoryId: null,
+            productCondition: null,
+        };
+        expect(createProductSchema.safeParse(nullableFacts).success).toBe(false);
+        expect(updateProductSchema.safeParse({
+            ...nullableFacts,
+            id: "prod_legacy",
+            expectedAggregateRevision: 4,
+        }).success).toBe(true);
+    });
+
     it("requires an authoritative aggregate revision on every editor mutation", () => {
         expect(updateProductSchema.safeParse({ ...productInput, id: "prod_1" }).success).toBe(false);
         expect(createVariantSchema.safeParse({}).success).toBe(false);

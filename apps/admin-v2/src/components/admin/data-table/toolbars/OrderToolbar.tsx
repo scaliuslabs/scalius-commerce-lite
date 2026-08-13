@@ -366,7 +366,7 @@ export function OrderToolbar({
 
   const showCreateOrderAction = !showTrashed && orderActions.canCreateOrders;
   const mobileExportLabel =
-    exportLabel === "Export current page" ? "Export" : "Recovery CSV";
+    exportLabel === "Export filtered orders" ? "Export" : "Recovery CSV";
   const actions: ReactNode = (
     <div
       className={`grid w-full gap-2 sm:flex sm:w-auto sm:flex-wrap ${

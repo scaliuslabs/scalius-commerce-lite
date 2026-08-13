@@ -280,6 +280,95 @@ export async function getTaxConfiguration(db: Database) {
     };
 }
 
+export async function getTaxSettingsDocument(db: Database) {
+    const row = await db.select().from(taxSettings)
+        .where(eq(taxSettings.id, "default"))
+        .get();
+    return row ?? DEFAULT_SETTINGS;
+}
+
+export async function listTaxClasses(db: Database, input: {
+    page: number;
+    limit: number;
+    search?: string;
+}) {
+    const search = input.search?.trim();
+    const where = and(
+        isNull(taxClasses.deletedAt),
+        search ? or(
+            like(taxClasses.name, `%${search}%`),
+            like(taxClasses.description, `%${search}%`),
+        ) : undefined,
+    );
+    const [items, totalRow] = await Promise.all([
+        db.select().from(taxClasses).where(where)
+            .orderBy(asc(taxClasses.name), asc(taxClasses.id))
+            .limit(input.limit)
+            .offset((input.page - 1) * input.limit),
+        db.select({ count: sql<number>`count(*)` }).from(taxClasses).where(where).get(),
+    ]);
+    return { items, total: totalRow?.count ?? 0 };
+}
+
+export async function listTaxRates(db: Database, input: {
+    page: number;
+    limit: number;
+    search?: string;
+    taxClassId?: string;
+}) {
+    const search = input.search?.trim();
+    const where = and(
+        isNull(taxRates.deletedAt),
+        input.taxClassId ? eq(taxRates.taxClassId, input.taxClassId) : undefined,
+        search ? or(
+            like(taxRates.name, `%${search}%`),
+            like(taxRates.jurisdictionLabel, `%${search}%`),
+        ) : undefined,
+    );
+    const [items, totalRow] = await Promise.all([
+        db.select().from(taxRates).where(where).orderBy(
+            asc(taxRates.taxClassId),
+            asc(taxRates.priority),
+            asc(taxRates.id),
+        ).limit(input.limit).offset((input.page - 1) * input.limit),
+        db.select({ count: sql<number>`count(*)` }).from(taxRates).where(where).get(),
+    ]);
+    return { items, total: totalRow?.count ?? 0 };
+}
+
+export async function listTaxJurisdictions(db: Database, input: {
+    page: number;
+    limit: number;
+    search?: string;
+    type?: "city" | "zone" | "area";
+    parentId?: string;
+}) {
+    const search = input.search?.trim();
+    const where = and(
+        eq(deliveryLocations.isActive, true),
+        isNull(deliveryLocations.deletedAt),
+        input.type ? eq(deliveryLocations.type, input.type) : undefined,
+        input.parentId ? eq(deliveryLocations.parentId, input.parentId) : undefined,
+        search ? like(deliveryLocations.name, `%${search}%`) : undefined,
+    );
+    const projection = {
+        id: deliveryLocations.id,
+        name: deliveryLocations.name,
+        type: deliveryLocations.type,
+        parentId: deliveryLocations.parentId,
+    };
+    const [items, totalRow] = await Promise.all([
+        db.select(projection).from(deliveryLocations).where(where).orderBy(
+            asc(deliveryLocations.type),
+            asc(deliveryLocations.sortOrder),
+            asc(deliveryLocations.name),
+            asc(deliveryLocations.id),
+        ).limit(input.limit).offset((input.page - 1) * input.limit),
+        db.select({ count: sql<number>`count(*)` }).from(deliveryLocations).where(where).get(),
+    ]);
+    return { items, total: totalRow?.count ?? 0 };
+}
+
 export async function updateTaxSettings(db: Database, input: UpdateTaxSettingsInput) {
     const displayLabel = normalizeName(input.displayLabel, "Tax label", 80);
     const [defaultTaxClass, shippingTaxClass] = await Promise.all([

@@ -157,6 +157,7 @@ const listItemsRoute = createRoute({
     path: "/items",
     tags: ["Admin - Navigation"],
     summary: "Get navigation items",
+    operationId: "dashboard.navigation.legacy_items_list",
     responses: {
         200: {
             description: "Navigation items list",
@@ -190,6 +191,7 @@ const listResourcesRoute = createRoute({
     path: "/resources",
     tags: ["Admin - Navigation"],
     summary: "Search resources for navigation menu items",
+    operationId: "dashboard.navigation.resources_search",
     request: {
         query: z.object({
             type: navigationResourceTypeSchema,
@@ -245,6 +247,7 @@ const previewProductsRoute = createRoute({
     path: "/preview-products",
     tags: ["Admin - Navigation"],
     summary: "Preview dynamic navigation product count",
+    operationId: "dashboard.navigation.products_preview_count",
     request: {
         query: previewProductsQuerySchema,
     },
@@ -310,6 +313,7 @@ const listMenusRoute = createRoute({
     path: "/menus",
     tags: ["Admin - Navigation"],
     summary: "List reusable navigation menus",
+    operationId: "dashboard.navigation.menus_list",
     request: {
         query: z.object({
             limit: z.coerce.number().int().min(1).max(100).optional(),
@@ -363,6 +367,7 @@ const createMenuRoute = createRoute({
     path: "/menus",
     tags: ["Admin - Navigation"],
     summary: "Create a reusable navigation menu",
+    operationId: "dashboard.navigation.menus_create",
     request: {
         body: { content: { "application/json": { schema: z.object({
             name: z.string().trim().min(1).max(100),
@@ -391,6 +396,7 @@ const getMenuRoute = createRoute({
     path: "/menus/{menuId}",
     tags: ["Admin - Navigation"],
     summary: "Get one reusable navigation menu",
+    operationId: "dashboard.navigation.menus_get",
     request: { params: z.object({ menuId: z.string().min(1) }) },
     responses: {
         200: {
@@ -413,6 +419,7 @@ const updateMenuRoute = createRoute({
     path: "/menus/{menuId}",
     tags: ["Admin - Navigation"],
     summary: "Update menu identity with revision protection",
+    operationId: "dashboard.navigation.menus_update",
     request: {
         params: z.object({ menuId: z.string().min(1) }),
         body: { content: { "application/json": { schema: z.object({
@@ -445,6 +452,7 @@ const trashMenuRoute = createRoute({
     path: "/menus/{menuId}",
     tags: ["Admin - Navigation"],
     summary: "Move an unplaced menu to Trash",
+    operationId: "dashboard.navigation.menus_trash",
     request: {
         params: z.object({ menuId: z.string().min(1) }),
         body: { content: { "application/json": { schema: z.object({
@@ -475,6 +483,7 @@ const restoreMenuRoute = createRoute({
     path: "/menus/{menuId}/restore",
     tags: ["Admin - Navigation"],
     summary: "Restore a menu from Trash",
+    operationId: "dashboard.navigation.menus_restore",
     request: {
         params: z.object({ menuId: z.string().min(1) }),
         body: { content: { "application/json": { schema: z.object({
@@ -505,6 +514,7 @@ const listMenuItemsRoute = createRoute({
     path: "/menus/{menuId}/items",
     tags: ["Admin - Navigation"],
     summary: "List one parent page of menu items",
+    operationId: "dashboard.navigation.items_list",
     request: {
         params: z.object({ menuId: z.string().min(1) }),
         query: z.object({
@@ -548,6 +558,7 @@ const searchMenuItemsRoute = createRoute({
     path: "/menus/{menuId}/search",
     tags: ["Admin - Navigation"],
     summary: "Search a large menu and include its ancestors",
+    operationId: "dashboard.navigation.items_search",
     request: {
         params: z.object({ menuId: z.string().min(1) }),
         query: z.object({
@@ -584,6 +595,7 @@ const getMenuItemRoute = createRoute({
     path: "/menus/{menuId}/items/{itemId}",
     tags: ["Admin - Navigation"],
     summary: "Get one menu item",
+    operationId: "dashboard.navigation.items_get",
     request: {
         params: z.object({ menuId: z.string().min(1), itemId: z.string().min(1) }),
     },
@@ -609,6 +621,7 @@ const getMenuMoveOptionsRoute = createRoute({
     path: "/menus/{menuId}/items/{itemId}/move-options",
     tags: ["Admin - Navigation"],
     summary: "Get depth-safe exact move choices for one menu item",
+    operationId: "dashboard.navigation.items_move_options",
     request: {
         params: z.object({ menuId: z.string().min(1), itemId: z.string().min(1) }),
         query: z.object({
@@ -661,6 +674,7 @@ const createMenuItemRoute = createRoute({
     path: "/menus/{menuId}/items",
     tags: ["Admin - Navigation"],
     summary: "Add one menu item",
+    operationId: "dashboard.navigation.items_create",
     request: {
         params: z.object({ menuId: z.string().min(1) }),
         body: { content: { "application/json": { schema: menuItemFieldsSchema.extend({
@@ -691,6 +705,7 @@ const updateMenuItemRoute = createRoute({
     path: "/menus/{menuId}/items/{itemId}",
     tags: ["Admin - Navigation"],
     summary: "Update one menu item",
+    operationId: "dashboard.navigation.items_update",
     request: {
         params: z.object({ menuId: z.string().min(1), itemId: z.string().min(1) }),
         body: { content: { "application/json": { schema: menuItemFieldsSchema.extend({
@@ -720,6 +735,7 @@ const moveMenuItemRoute = createRoute({
     path: "/menus/{menuId}/items/{itemId}/move",
     tags: ["Admin - Navigation"],
     summary: "Move one menu item by stable destination identity",
+    operationId: "dashboard.navigation.items_move",
     request: {
         params: z.object({ menuId: z.string().min(1), itemId: z.string().min(1) }),
         body: { content: { "application/json": { schema: z.object({
@@ -752,6 +768,7 @@ const deleteMenuItemRoute = createRoute({
     path: "/menus/{menuId}/items/{itemId}",
     tags: ["Admin - Navigation"],
     summary: "Delete one menu item subtree",
+    operationId: "dashboard.navigation.items_delete",
     request: {
         params: z.object({ menuId: z.string().min(1), itemId: z.string().min(1) }),
         body: { content: { "application/json": { schema: z.object({
@@ -782,6 +799,7 @@ const publishMenuRoute = createRoute({
     path: "/menus/{menuId}/publish",
     tags: ["Admin - Navigation"],
     summary: "Publish an immutable menu revision",
+    operationId: "dashboard.navigation.menus_publish",
     request: {
         params: z.object({ menuId: z.string().min(1) }),
         body: { content: { "application/json": { schema: z.object({
@@ -819,6 +837,7 @@ const listMenuPublicationsRoute = createRoute({
     path: "/menus/{menuId}/publications",
     tags: ["Admin - Navigation"],
     summary: "List immutable menu publications",
+    operationId: "dashboard.navigation.publications_list",
     request: {
         params: z.object({ menuId: z.string().min(1) }),
         query: z.object({
@@ -859,6 +878,7 @@ const rollbackMenuRoute = createRoute({
     path: "/menus/{menuId}/rollback",
     tags: ["Admin - Navigation"],
     summary: "Restore a publication as a new immutable menu revision",
+    operationId: "dashboard.navigation.menus_rollback",
     request: {
         params: z.object({ menuId: z.string().min(1) }),
         body: { content: { "application/json": { schema: z.object({
@@ -898,6 +918,7 @@ const placementManifestRoute = createRoute({
     path: "/placements",
     tags: ["Admin - Navigation"],
     summary: "Get current navigation placement manifest",
+    operationId: "dashboard.navigation.placements_manifest",
     responses: {
         200: {
             description: "Navigation placements",
@@ -918,6 +939,7 @@ const listPlacementSettingsRoute = createRoute({
     path: "/placement-settings",
     tags: ["Admin - Navigation"],
     summary: "List navigation placement settings",
+    operationId: "dashboard.navigation.placements_list",
     responses: {
         200: {
             description: "Navigation placement settings",
@@ -938,6 +960,7 @@ const savePlacementRoute = createRoute({
     path: "/placements/{placementId}",
     tags: ["Admin - Navigation"],
     summary: "Create or update one navigation placement with CAS",
+    operationId: "dashboard.navigation.placements_save",
     request: {
         params: z.object({ placementId: z.string().trim().min(1).max(160) }),
         body: { content: { "application/json": { schema: z.object({
@@ -977,6 +1000,7 @@ const shadowReportRoute = createRoute({
     path: "/authority-shadow",
     tags: ["Admin - Navigation"],
     summary: "Compare the normalized navigation authority with the typed bridge",
+    operationId: "dashboard.navigation.authority_shadow",
     responses: {
         200: {
             description: "Navigation migration parity",

@@ -2,9 +2,9 @@
 // Admin OpenAPI routes for inventory.
 
 import { OpenAPIHono, createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
-import { stream } from "hono/streaming";
-import { getInventoryOverview, getInventoryLabelVariants, listInventoryMovements, adjustInventory, adjustInventorySchema, adjustStock, setStock, lookupByBarcodeOrSku, inventoryOperationKeySchema, INVENTORY_LABEL_VARIANT_LIMIT } from "@scalius/core/modules/inventory";
+import { getInventoryOverview, getInventoryLabelVariants, adjustInventory, adjustInventoryRequestSchema, adjustStock, setStock, lookupByBarcodeOrSku, inventoryOperationKeySchema, INVENTORY_LABEL_VARIANT_LIMIT, INVENTORY_LABEL_ARTIFACT_MAX_COPIES, INVENTORY_LABEL_ARTIFACT_MAX_BYTES, buildInventoryLabelArtifact, buildInventoryMovementCsvArtifact, INVENTORY_MOVEMENT_EXPORT_MAX_BYTES, INVENTORY_MOVEMENT_EXPORT_MAX_ROWS } from "@scalius/core/modules/inventory";
 import { acknowledgeLowStockAlert } from "@scalius/core/modules/inventory/alerts";
+import { getCurrencyConfig } from "@scalius/core/modules/settings/settings.service";
 import { NotFoundError, ValidationError } from "../../utils/api-error";
 
 import { ok } from "../../utils/api-response";
@@ -17,11 +17,29 @@ import { nullableTimestampSchema } from "../../schemas/timestamps";
 import { parseBangladeshDateOnlyBoundary } from "./order-date-filter";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
-const INVENTORY_MOVEMENT_EXPORT_MAX_ROWS = 5_000;
-const INVENTORY_MOVEMENT_EXPORT_PAGE_SIZE = 100;
 
 type AdminRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>;
 type AdminRouteContext<R extends RouteConfig> = Parameters<AdminRouteHandler<R>>[0];
+
+const inventoryIdempotencyHeadersSchema = z.object({
+    "idempotency-key": inventoryOperationKeySchema.optional().openapi({
+        description: "Standard retry key. May replace body.operationKey; if both are sent they must match.",
+    }),
+});
+
+function resolveInventoryOperationKey(
+    headerKey: string | undefined,
+    bodyKey: string | undefined,
+): string {
+    if (headerKey && bodyKey && headerKey !== bodyKey) {
+        throw new ValidationError("Idempotency-Key header must match body.operationKey.");
+    }
+    const operationKey = headerKey ?? bodyKey;
+    if (!operationKey) {
+        throw new ValidationError("Idempotency-Key header or body.operationKey is required.");
+    }
+    return operationKey;
+}
 
 async function invalidateStockMutationIfVisible(
     db: Parameters<typeof findStockMutationAvailabilityTransitions>[0],
@@ -50,7 +68,7 @@ const inventoryVariantSchema = z.object({
     barcodeType: z.string().nullable(),
     optionLabel: z.string().nullable(),
     price: z.number(),
-    effectivePrice: z.number(),
+    effectivePrice: z.number().optional(),
     stock: z.number(),
     reservedStock: z.number(),
     available: z.number(),
@@ -137,44 +155,6 @@ const inventoryOverviewSchema = z.object({
     pageInfo: inventoryMovementPageInfoSchema.optional(),
 }).passthrough();
 
-function movementCsvCell(value: unknown): string {
-    if (value === null || value === undefined) return "";
-    let text = String(value);
-    if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
-    return `"${text.replaceAll('"', '""')}"`;
-}
-
-function movementTimestampIso(value: string | number | Date): string {
-    const date = value instanceof Date
-        ? value
-        : new Date(typeof value === "number" && value < 10_000_000_000 ? value * 1_000 : value);
-    return Number.isFinite(date.getTime()) ? date.toISOString() : "";
-}
-
-function inventoryMovementCsvRow(movement: Awaited<ReturnType<typeof listInventoryMovements>>["movements"][number]): string {
-    return [
-        movementTimestampIso(movement.createdAt),
-        movement.id,
-        movement.type,
-        movement.variantSku,
-        movement.productName,
-        movement.orderId,
-        movement.actorName,
-        movement.pool,
-        movement.reservationGeneration,
-        movement.stockDelta,
-        movement.previousStock,
-        movement.newStock,
-        movement.reservedStockDelta,
-        movement.previousReservedStock,
-        movement.newReservedStock,
-        movement.preorderStockDelta,
-        movement.previousPreorderStock,
-        movement.newPreorderStock,
-        movement.notes,
-    ].map(movementCsvCell).join(",");
-}
-
 const adjustResultSchema = z.object({
     variantId: z.string(),
     previousStock: z.number(),
@@ -234,6 +214,7 @@ const inventoryLabelVariantSchema = z.object({
 const listRoute = createRoute({
     method: "get",
     path: "/",
+    operationId: "dashboard.inventory.list",
     tags: ["Admin - Inventory"],
     summary: "Get inventory overview",
     request: {
@@ -250,8 +231,6 @@ const listRoute = createRoute({
             movementEndDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().openapi({ description: "Movement end date (YYYY-MM-DD, Bangladesh calendar day)" }),
             movementCursor: z.string().max(512).optional().openapi({ description: "Opaque cursor for the next movement page" }),
             movementHealthOnly: z.enum(["true"]).optional().openapi({ description: "Return only ledger health diagnostics" }),
-            format: z.enum(["json", "csv"]).optional().default("json").openapi({ description: "Response format; CSV is supported for movement history" }),
-            maxRows: z.coerce.number().int().min(1).max(INVENTORY_MOVEMENT_EXPORT_MAX_ROWS).optional().default(1_000).openapi({ description: "Maximum CSV rows, hard-capped at 5000" }),
             sort: z.enum(["productName", "sku", "available"]).optional().default("available").openapi({ description: "Sort field" }),
             order: z.enum(["asc", "desc"]).optional().default("asc").openapi({ description: "Sort order" }),
         })
@@ -261,7 +240,6 @@ const listRoute = createRoute({
             description: "Inventory overview",
             content: {
                 "application/json": { schema: successEnvelope(inventoryOverviewSchema) },
-                "text/csv": { schema: z.string() },
             },
         },
     }
@@ -277,45 +255,6 @@ app.openapi(listRoute, async (c) => {
         if (query.movementEndDate && !movementEndDate) throw new ValidationError("Invalid movement end date");
         if (movementStartDate && movementEndDate && movementStartDate > movementEndDate) {
             throw new ValidationError("Movement start date must not be after end date");
-        }
-
-        if (query.format === "csv") {
-            if (query.section !== "movements") {
-                throw new ValidationError("CSV export is available only for inventory movements");
-            }
-            const filename = `inventory-movements-${new Date().toISOString().slice(0, 10)}.csv`;
-            c.header("Content-Disposition", `attachment; filename="${filename}"`);
-            c.header("Content-Type", "text/csv; charset=utf-8");
-            c.header("Cache-Control", "private, no-store");
-            c.header("X-Content-Type-Options", "nosniff");
-            c.header("X-Export-Max-Rows", String(query.maxRows));
-            return stream(c, async (stream) => {
-                await stream.write([
-                    "Timestamp", "Movement ID", "Type", "SKU", "Product", "Order ID", "Actor",
-                    "Pool", "Generation", "Stock delta", "Stock before", "Stock after",
-                    "Reserved delta", "Reserved before", "Reserved after", "Preorder delta",
-                    "Preorder before", "Preorder after", "Notes",
-                ].map(movementCsvCell).join(",") + "\n");
-
-                let cursor: string | undefined;
-                let written = 0;
-                while (!stream.aborted && written < query.maxRows) {
-                    const result = await listInventoryMovements(db, {
-                        search: query.search,
-                        movementType: query.movementType,
-                        orderId: query.movementOrderId,
-                        startDate: movementStartDate,
-                        endDate: movementEndDate,
-                        cursor,
-                        limit: Math.min(INVENTORY_MOVEMENT_EXPORT_PAGE_SIZE, query.maxRows - written),
-                    });
-                    if (result.movements.length === 0) break;
-                    await stream.write(result.movements.map(inventoryMovementCsvRow).join("\n") + "\n");
-                    written += result.movements.length;
-                    if (!result.pageInfo.hasMore || !result.pageInfo.nextCursor) break;
-                    cursor = result.pageInfo.nextCursor;
-                }
-            });
         }
 
         const result = await getInventoryOverview(db, {
@@ -343,11 +282,71 @@ app.openapi(listRoute, async (c) => {
     }
 });
 
+// ── Bounded movement CSV artifact ──
+
+const movementExportBodySchema = z.object({
+    search: z.string().trim().max(120).optional().default(""),
+    movementType: z.enum(["all", "reserved", "deducted", "released", "adjusted", "restored", "preorder_reserved", "preorder_deducted"]).optional().default("all"),
+    movementOrderId: z.string().trim().max(100).optional(),
+    movementStartDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    movementEndDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    maxRows: z.number().int().min(1).max(INVENTORY_MOVEMENT_EXPORT_MAX_ROWS).default(INVENTORY_MOVEMENT_EXPORT_MAX_ROWS),
+});
+
+const movementsExportRoute = createRoute({
+    method: "post",
+    path: "/movements/export",
+    operationId: "dashboard.inventory.movements_export",
+    tags: ["Admin - Inventory"],
+    summary: "Generate a bounded inventory movement CSV artifact",
+    request: {
+        body: { content: { "application/json": { schema: movementExportBodySchema } } },
+    },
+    responses: {
+        200: {
+            description: "Bounded inventory movement CSV attachment",
+            content: { "text/csv": { schema: z.string() } },
+        },
+        ...errorResponses,
+    },
+});
+
+app.openapi(movementsExportRoute, async (c) => {
+    const db = c.get("db");
+    const input = c.req.valid("json");
+    const startDate = parseBangladeshDateOnlyBoundary(input.movementStartDate, "start");
+    const endDate = parseBangladeshDateOnlyBoundary(input.movementEndDate, "end");
+    if (input.movementStartDate && !startDate) throw new ValidationError("Invalid movement start date");
+    if (input.movementEndDate && !endDate) throw new ValidationError("Invalid movement end date");
+    if (startDate && endDate && startDate > endDate) {
+        throw new ValidationError("Movement start date must not be after end date");
+    }
+    const artifact = await buildInventoryMovementCsvArtifact(db, {
+        search: input.search,
+        movementType: input.movementType,
+        orderId: input.movementOrderId,
+        startDate,
+        endDate,
+        maxRows: input.maxRows,
+    });
+    const filename = `inventory-movements-${new Date().toISOString().slice(0, 10)}.csv`;
+    c.header("Content-Type", artifact.contentType);
+    c.header("Content-Disposition", `attachment; filename="${filename}"`);
+    c.header("Content-Length", String(artifact.byteLength));
+    c.header("Cache-Control", "private, no-store");
+    c.header("X-Content-Type-Options", "nosniff");
+    c.header("X-Export-Max-Rows", String(input.maxRows));
+    c.header("X-Export-Row-Count", String(artifact.rowCount));
+    c.header("X-Artifact-Max-Bytes", String(INVENTORY_MOVEMENT_EXPORT_MAX_BYTES));
+    return c.body(artifact.body);
+});
+
 // ── Get Alerts ──
 
 const alertsRoute = createRoute({
     method: "get",
     path: "/alerts",
+    operationId: "dashboard.inventory_alerts.list",
     tags: ["Admin - Inventory"],
     summary: "Get inventory alerts",
     request: {
@@ -382,6 +381,7 @@ app.openapi(alertsRoute, (async (c: AdminRouteContext<typeof alertsRoute>) => {
 const acknowledgeAlertRoute = createRoute({
     method: "patch",
     path: "/alerts",
+    operationId: "dashboard.inventory_alerts.acknowledge",
     tags: ["Admin - Inventory"],
     summary: "Acknowledge a low stock alert",
     request: {
@@ -419,6 +419,7 @@ app.openapi(acknowledgeAlertRoute, async (c) => {
 const labelPreviewRoute = createRoute({
     method: "post",
     path: "/labels/preview",
+    operationId: "dashboard.inventory_labels.preview",
     tags: ["Admin - Inventory"],
     summary: "Get exact SKU facts for a barcode label batch",
     request: {
@@ -455,16 +456,111 @@ app.openapi(labelPreviewRoute, async (c) => {
     return ok(c, await getInventoryLabelVariants(db, variantIds));
 });
 
+const labelArtifactPresetSchema = z.object({
+    pageWidthMm: z.number().min(20).max(320),
+    pageHeightMm: z.number().min(15).max(450),
+    columns: z.number().int().min(1).max(10),
+    rows: z.number().int().min(1).max(20),
+    marginXmm: z.number().min(0).max(50),
+    marginYmm: z.number().min(0).max(50),
+    gapXmm: z.number().min(0).max(30),
+    gapYmm: z.number().min(0).max(30),
+    cropMarks: z.boolean(),
+}).superRefine((preset, context) => {
+    const width = (preset.pageWidthMm - 2 * preset.marginXmm - (preset.columns - 1) * preset.gapXmm) / preset.columns;
+    const height = (preset.pageHeightMm - 2 * preset.marginYmm - (preset.rows - 1) * preset.gapYmm) / preset.rows;
+    if (width < 20) context.addIssue({ code: "custom", message: "Each label must be at least 20 mm wide." });
+    if (height < 15) context.addIssue({ code: "custom", message: "Each label must be at least 15 mm high." });
+});
+
+const labelArtifactBodySchema = z.object({
+    format: z.enum(["csv", "html", "pdf"]),
+    mode: z.enum(["job", "test"]).default("job"),
+    variantIds: z.array(z.string().trim().min(1).max(100)).min(1).max(INVENTORY_LABEL_VARIANT_LIMIT),
+    quantities: z.record(z.string().trim().min(1).max(100), z.number().int().min(0).max(INVENTORY_LABEL_ARTIFACT_MAX_COPIES)),
+    order: z.enum(["selected", "product", "sku"]).default("selected"),
+    preset: labelArtifactPresetSchema,
+    startOffset: z.number().int().min(0).max(199).default(0),
+    alignment: z.object({ xMm: z.number().min(-5).max(5), yMm: z.number().min(-5).max(5) }),
+    content: z.object({
+        showProduct: z.boolean(),
+        showVariant: z.boolean(),
+        showSku: z.boolean(),
+        showPrice: z.boolean(),
+    }),
+}).superRefine((job, context) => {
+    const allowedIds = new Set(job.variantIds);
+    if (Object.keys(job.quantities).some((id) => !allowedIds.has(id))) {
+        context.addIssue({ code: "custom", path: ["quantities"], message: "Quantities may reference only selected SKUs." });
+    }
+    const copies = job.variantIds.reduce((sum, id) => sum + (job.quantities[id] ?? 0), 0);
+    if (copies < 1 || copies > INVENTORY_LABEL_ARTIFACT_MAX_COPIES) {
+        context.addIssue({ code: "custom", path: ["quantities"], message: `Select from 1 through ${INVENTORY_LABEL_ARTIFACT_MAX_COPIES} label copies.` });
+    }
+    if (job.startOffset >= job.preset.columns * job.preset.rows) {
+        context.addIssue({ code: "custom", path: ["startOffset"], message: "Start offset must fit on the first page." });
+    }
+});
+
+const labelArtifactRoute = createRoute({
+    method: "post",
+    path: "/labels/artifact",
+    operationId: "dashboard.inventory_labels.generate_artifact",
+    tags: ["Admin - Inventory"],
+    summary: "Generate a bounded barcode-label CSV, printable HTML, or PDF artifact",
+    request: { body: { content: { "application/json": { schema: labelArtifactBodySchema } } } },
+    responses: {
+        200: {
+            description: "Generated barcode-label artifact",
+            content: {
+                "text/csv": { schema: z.string() },
+                "text/html": { schema: z.string() },
+                "application/pdf": { schema: z.string().openapi({ format: "binary" }) },
+            },
+        },
+        ...errorResponses,
+    },
+});
+
+app.openapi(labelArtifactRoute, async (c) => {
+    const db = c.get("db");
+    const job = c.req.valid("json");
+    const projection = await getInventoryLabelVariants(db, job.variantIds);
+    if (projection.missingVariantIds.length > 0) {
+        throw new ValidationError("One or more selected SKUs are no longer printable. Refresh the label job.");
+    }
+    const currency = await getCurrencyConfig(db);
+    let artifact: ReturnType<typeof buildInventoryLabelArtifact>;
+    try {
+        artifact = buildInventoryLabelArtifact(projection.variants, job, currency.code);
+    } catch (error: unknown) {
+        if (error instanceof Error) throw new ValidationError(error.message);
+        throw error;
+    }
+    const filename = `barcode-labels-${new Date().toISOString().slice(0, 10)}.${artifact.extension}`;
+    c.header("Content-Type", artifact.contentType);
+    c.header("Content-Disposition", `attachment; filename="${filename}"`);
+    c.header("Cache-Control", "private, no-store");
+    c.header("X-Content-Type-Options", "nosniff");
+    c.header("X-Label-Copy-Count", String(artifact.copyCount));
+    c.header("X-Label-Page-Count", String(artifact.pageCount));
+    c.header("X-Artifact-Max-Bytes", String(INVENTORY_LABEL_ARTIFACT_MAX_BYTES));
+    c.header("Content-Length", String(artifact.byteLength));
+    return c.body(artifact.body);
+});
+
 // ── Adjust Inventory ──
 
 const adjustRoute = createRoute({
     method: "post",
     path: "/{variantId}/adjust",
+    operationId: "dashboard.inventory.adjust",
     tags: ["Admin - Inventory"],
     summary: "Adjust inventory for a variant",
     request: {
         params: z.object({ variantId: z.string() }),
-        body: { content: { "application/json": { schema: adjustInventorySchema } } }
+        headers: inventoryIdempotencyHeadersSchema,
+        body: { content: { "application/json": { schema: adjustInventoryRequestSchema } } }
     },
     responses: {
         200: {
@@ -479,10 +575,14 @@ const adjustRoute = createRoute({
 app.openapi(adjustRoute, async (c) => {
     const db = c.get("db");
     const { variantId } = c.req.valid("param");
-    const payload = c.req.valid("json");
+    const { operationKey: bodyOperationKey, ...payload } = c.req.valid("json");
+    const operationKey = resolveInventoryOperationKey(
+        c.req.valid("header")["idempotency-key"],
+        bodyOperationKey,
+    );
     const user = c.get("user");
     try {
-        const result = await adjustInventory(db, variantId, payload, user?.id);
+        const result = await adjustInventory(db, variantId, { ...payload, operationKey }, user?.id);
         await invalidateStockMutationIfVisible(db, { ...result, pool: payload.pool }, c);
         return ok(c, result);
     } catch (error: unknown) {
@@ -496,6 +596,7 @@ app.openapi(adjustRoute, async (c) => {
 const scannerLookupRoute = createRoute({
     method: "get",
     path: "/scanner/lookup",
+    operationId: "dashboard.inventory.lookup_sku",
     tags: ["Admin - Inventory"],
     summary: "Look up a product variant by barcode or SKU (scanner workflow)",
     request: {
@@ -527,14 +628,16 @@ app.openapi(scannerLookupRoute, async (c) => {
 const stockAdjustRoute = createRoute({
     method: "post",
     path: "/stock-adjust",
+    operationId: "dashboard.inventory.adjust_stock",
     tags: ["Admin - Inventory"],
     summary: "Adjust stock by a relative amount (+/-)",
     request: {
+        headers: inventoryIdempotencyHeadersSchema,
         body: {
             content: {
                 "application/json": {
                     schema: z.object({
-                        operationKey: inventoryOperationKeySchema,
+                        operationKey: inventoryOperationKeySchema.optional(),
                         variantId: z.string().openapi({ description: "Variant ID" }),
                         adjustment: z.number().int().min(-Number.MAX_SAFE_INTEGER).max(Number.MAX_SAFE_INTEGER).refine((value) => value !== 0, "Adjustment must not be zero.").openapi({ description: "Whole-number stock adjustment (positive=add, negative=remove)" }),
                         reason: z.string().trim().max(500).optional().openapi({ description: "Reason for adjustment" }),
@@ -555,7 +658,11 @@ const stockAdjustRoute = createRoute({
 
 app.openapi(stockAdjustRoute, async (c) => {
     const db = c.get("db");
-    const { operationKey, variantId, adjustment, reason } = c.req.valid("json");
+    const { operationKey: bodyOperationKey, variantId, adjustment, reason } = c.req.valid("json");
+    const operationKey = resolveInventoryOperationKey(
+        c.req.valid("header")["idempotency-key"],
+        bodyOperationKey,
+    );
     const user = c.get("user");
     try {
         const result = await adjustStock(db, variantId, adjustment, operationKey, reason, user?.id);
@@ -572,14 +679,16 @@ app.openapi(stockAdjustRoute, async (c) => {
 const stockSetRoute = createRoute({
     method: "post",
     path: "/stock-set",
+    operationId: "dashboard.inventory.set_stock",
     tags: ["Admin - Inventory"],
     summary: "Set stock to an absolute value (stocktaking)",
     request: {
+        headers: inventoryIdempotencyHeadersSchema,
         body: {
             content: {
                 "application/json": {
                     schema: z.object({
-                        operationKey: inventoryOperationKeySchema,
+                        operationKey: inventoryOperationKeySchema.optional(),
                         variantId: z.string().openapi({ description: "Variant ID" }),
                         newStock: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).openapi({ description: "New absolute whole-number stock value" }),
                         reason: z.string().trim().max(500).optional().openapi({ description: "Reason for stocktake" }),
@@ -600,7 +709,11 @@ const stockSetRoute = createRoute({
 
 app.openapi(stockSetRoute, async (c) => {
     const db = c.get("db");
-    const { operationKey, variantId, newStock, reason } = c.req.valid("json");
+    const { operationKey: bodyOperationKey, variantId, newStock, reason } = c.req.valid("json");
+    const operationKey = resolveInventoryOperationKey(
+        c.req.valid("header")["idempotency-key"],
+        bodyOperationKey,
+    );
     const user = c.get("user");
     try {
         const result = await setStock(db, variantId, newStock, operationKey, reason, user?.id);

@@ -393,8 +393,6 @@ export default function ThemeSettingsPage({
     }
     const previewWindow = prepareThemePreviewWindow({
       storefrontUrl: configuredStorefrontUrl,
-      path: selectedPath,
-      device: selectedDevice,
     });
     if (!previewWindow) {
       setMessage({ type: "error", text: "Allow pop-ups for this dashboard to open the preview." });
@@ -409,12 +407,16 @@ export default function ThemeSettingsPage({
         return;
       }
       const preview = await createThemePreviewSession({
-        data: { expectedDraftRevision: saved.revision },
+        data: {
+          expectedDraftRevision: saved.revision,
+          path: selectedPath,
+          device: selectedDevice,
+        },
       });
       await submitThemePreview({
         previewWindow,
         storefrontUrl: configuredStorefrontUrl,
-        token: preview.token,
+        continuation: preview.continuation,
       });
       setMessage({ type: "success", text: `Preview opened from draft revision ${saved.revision}.` });
     } catch (error) {

@@ -27,8 +27,6 @@ import {
 } from "@scalius/core/modules/orders/order-archive-policy";
 import type { OrderListItem } from "@scalius/core/modules/orders/orders.types";
 import type { DateRange } from "react-day-picker";
-import { formatDateShort } from "@scalius/shared/timestamps";
-import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
 import { ordersQueryOptions } from "~/lib/api-query-options/orders";
 import { warmRouteQuery } from "~/lib/route-query-warming";
 import { formatDateOnly, parseDateOnly } from "~/lib/date-only";
@@ -50,6 +48,10 @@ import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions"
 import type { BulkShipOrdersPayload } from "~/lib/api-functions/orders";
 import type { BulkShipResultSummary } from "~/components/admin/order-list/BulkShipDialog";
 import { getOrderAutoRefreshPauseReason } from "./-order-auto-refresh";
+import {
+  buildOrderExportSearchParams,
+  buildRecoveryExportSearchParams,
+} from "./-order-export-search-params";
 
 const ArchiveOrderDialog = lazy(() =>
   import("~/components/admin/order-list/ArchiveOrderDialog").then((module) => ({
@@ -212,19 +214,6 @@ function hasActiveRefundOperation(order: OrderListItem) {
 
 function hasActiveShipmentLock(order: OrderListItem) {
   return order.shipmentRecovery?.activeLock === true;
-}
-
-function buildRecoveryExportSearchParams(search: SearchParams) {
-  if (!search.paymentRecovery) return null;
-  const params = new URLSearchParams();
-  params.set("state", search.paymentRecovery);
-  if (search.search.trim()) params.set("search", search.search.trim());
-  if (search.paymentMethod) params.set("paymentMethod", search.paymentMethod);
-  if (search.sort) params.set("sort", search.sort);
-  if (search.order) params.set("order", search.order);
-  if (search.startDate) params.set("startDate", search.startDate);
-  if (search.endDate) params.set("endDate", search.endDate);
-  return params;
 }
 
 function getSafeBulkShipError(error: unknown) {
@@ -842,108 +831,33 @@ function OrdersPage() {
 
   const handleExportCSV = useCallback(async () => {
     const recoveryExportParams = buildRecoveryExportSearchParams(search);
-    if (recoveryExportParams) {
-      try {
-        const response = await fetch(
-          `/api/v1/admin/orders/payment-recovery/export?${recoveryExportParams.toString()}`,
-        );
-        if (!response.ok) {
-          throw new Error(`Export failed with ${response.status}`);
-        }
-        const blob = await response.blob();
-        const link = document.createElement("a");
-        const url = URL.createObjectURL(blob);
-        link.setAttribute("href", url);
-        link.setAttribute(
-          "download",
-          `payment-recovery-${new Date().toISOString().split("T")[0]}.csv`,
-        );
-        link.style.visibility = "hidden";
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-        const rowCount = response.headers.get("X-Export-Row-Count");
-        const limited = response.headers.get("X-Export-Limited") === "true";
-        toast.success(
-          `${rowCount ?? "Recovery"} order${rowCount === "1" ? "" : "s"} exported.`,
-          limited
-            ? { description: "The CSV was capped. Narrow the filter to export fewer rows." }
-            : undefined,
-        );
-      } catch {
-        toast.error("Payment recovery export failed.");
-      }
-      return;
+    const params = recoveryExportParams ?? buildOrderExportSearchParams(search);
+    const endpoint = recoveryExportParams
+      ? "/api/v1/admin/orders/payment-recovery/export"
+      : "/api/v1/admin/orders/export";
+    try {
+      const response = await fetch(`${endpoint}?${params.toString()}`);
+      if (!response.ok) throw new Error(`Export failed with ${response.status}`);
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = recoveryExportParams
+        ? `payment-recovery-${new Date().toISOString().slice(0, 10)}.csv`
+        : `orders-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      const rowCount = response.headers.get("X-Export-Row-Count");
+      const limited = response.headers.get("X-Export-Limited") === "true";
+      toast.success(`${rowCount ?? "Filtered"} order${rowCount === "1" ? "" : "s"} exported.`, limited
+        ? { description: "The CSV was capped. Narrow the filters to export fewer rows." }
+        : undefined);
+    } catch {
+      toast.error("Order export failed.");
     }
-
-    const rows = table.getRowModel().rows.map((r) => r.original);
-    const csvHeaders = [
-      "Order ID",
-      "Customer Name",
-      "Phone",
-      "Email",
-      "City",
-      "Zone",
-      "Area",
-      "Status",
-      "Payment Status",
-      "Payment Method",
-      "Payment Recovery",
-      "Recovery Gateway",
-      "Recovery Status",
-      "Recovery Attempts",
-      "Shipment Recovery",
-      "Shipment Recovery Status",
-      "Fulfillment Status",
-      "Total Amount",
-      "Discount",
-      "Items",
-      "Created At",
-    ];
-    const csvRows = rows.map((order) => [
-      order.id,
-      order.customerName,
-      formatPhoneForDisplay(order.customerPhone),
-      order.customerEmail || "",
-      order.cityName || order.city,
-      order.zoneName || order.zone,
-      order.areaName || order.area || "",
-      order.status,
-      order.paymentStatus,
-      order.paymentMethod,
-      order.paymentRecovery?.state === "none" ? "" : (order.paymentRecovery?.label ?? ""),
-      order.paymentRecovery?.gateway ?? "",
-      order.paymentRecovery?.status ?? "",
-      order.paymentRecovery?.attempts ?? 0,
-      order.shipmentRecovery?.state === "none" ? "" : (order.shipmentRecovery?.label ?? ""),
-      order.shipmentRecovery?.status ?? "",
-      order.fulfillmentStatus,
-      order.totalAmount,
-      order.discountAmount || 0,
-      order.itemCount,
-      formatDateShort(order.createdAt),
-    ]);
-    const csvContent = [
-      csvHeaders.join(","),
-      ...csvRows.map((row) =>
-        row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(","),
-      ),
-    ].join("\n");
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    link.setAttribute(
-      "download",
-      `orders-${new Date().toISOString().split("T")[0]}.csv`,
-    );
-    link.style.visibility = "hidden";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    toast.success(`${rows.length} orders from this page exported.`);
-  }, [search, table]);
+  }, [search]);
 
   // ── Bulk archive handler (after useServerTable for selected revisions) ──
   const handleBulkArchiveConfirm = useCallback(() => {
@@ -1202,7 +1116,7 @@ function OrdersPage() {
       exportLabel={
         buildRecoveryExportSearchParams(search)
           ? "Export recovery CSV"
-          : "Export current page"
+          : "Export filtered orders"
       }
       autoRefreshEnabled={autoRefreshEnabled}
       autoRefreshPauseReason={autoRefreshPauseReason}

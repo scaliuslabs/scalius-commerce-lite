@@ -4,6 +4,56 @@ import { eq, lt } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import { readStoredCredentialStrict } from "../../utils/credential-encryption";
 
+const SAFE_META_LOG_PAYLOAD_UNAVAILABLE = JSON.stringify({ available: false });
+
+function summarizeRequestPayload(payload: string): string {
+    try {
+        const parsed = JSON.parse(payload) as Record<string, unknown>;
+        if (!Array.isArray(parsed.data)) return SAFE_META_LOG_PAYLOAD_UNAVAILABLE;
+        return JSON.stringify({
+            eventCount: parsed.data.length,
+            events: parsed.data.slice(0, 20).map((event) => {
+                if (!event || typeof event !== "object") return { eventName: "unknown" };
+                const row = event as Record<string, unknown>;
+                return {
+                    eventName: typeof row.event_name === "string"
+                        ? row.event_name.slice(0, 100)
+                        : "unknown",
+                    actionSource: typeof row.action_source === "string"
+                        ? row.action_source.slice(0, 50)
+                        : null,
+                };
+            }),
+            truncated: parsed.data.length > 20,
+        });
+    } catch {
+        return SAFE_META_LOG_PAYLOAD_UNAVAILABLE;
+    }
+}
+
+function summarizeResponsePayload(payload: string | undefined): string | undefined {
+    if (!payload) return undefined;
+    try {
+        const parsed = JSON.parse(payload) as Record<string, unknown>;
+        const eventsReceived = Number(parsed.events_received);
+        const error = parsed.error && typeof parsed.error === "object"
+            ? parsed.error as Record<string, unknown>
+            : null;
+        return JSON.stringify({
+            eventsReceived: Number.isFinite(eventsReceived)
+                ? Math.max(0, Math.trunc(eventsReceived))
+                : null,
+            hasError: Boolean(error),
+            errorType: typeof error?.type === "string" ? error.type.slice(0, 100) : null,
+            errorCode: typeof error?.code === "number" && Number.isFinite(error.code)
+                ? Math.trunc(error.code)
+                : null,
+        });
+    } catch {
+        return SAFE_META_LOG_PAYLOAD_UNAVAILABLE;
+    }
+}
+
 /**
  * Fetches the Meta Conversions API settings from the database.
  */
@@ -57,10 +107,20 @@ export async function logCapiEvent(
     retentionHours: number = 12
 ): Promise<void> {
     try {
-        const { eventTime, ...restOfLogData } = logData;
+        const { eventTime } = logData;
+        const safeLogData = {
+            eventId: logData.eventId.slice(0, 200),
+            eventName: logData.eventName.slice(0, 100),
+            status: logData.status,
+            requestPayload: summarizeRequestPayload(logData.requestPayload),
+            responsePayload: summarizeResponsePayload(logData.responsePayload),
+            errorMessage: logData.errorMessage
+                ? "Meta delivery failed. Review provider configuration."
+                : undefined,
+        };
         const values = {
             id: createId(),
-            ...restOfLogData,
+            ...safeLogData,
             eventTime: new Date(eventTime * 1000),
         };
 
@@ -77,11 +137,11 @@ export async function logCapiEvent(
             await db
                 .update(metaConversionsLogs)
                 .set({
-                    eventName: logData.eventName,
-                    status: logData.status,
-                    requestPayload: logData.requestPayload,
-                    responsePayload: logData.responsePayload,
-                    errorMessage: logData.errorMessage,
+                    eventName: safeLogData.eventName,
+                    status: safeLogData.status,
+                    requestPayload: safeLogData.requestPayload,
+                    responsePayload: safeLogData.responsePayload,
+                    errorMessage: safeLogData.errorMessage,
                     eventTime: new Date(eventTime * 1000),
                 })
                 .where(eq(metaConversionsLogs.eventId, logData.eventId));
@@ -91,8 +151,8 @@ export async function logCapiEvent(
         // Not awaited intentionally — the caller should not wait for cleanup
         // to complete before returning. Errors are caught inside performLogCleanup.
         void performLogCleanup(db, retentionHours);
-    } catch (error: unknown) {
-        console.error("Failed to write to Meta CAPI log:", error);
+    } catch {
+        console.error("Failed to write to Meta CAPI log");
     }
 }
 
@@ -119,8 +179,8 @@ export async function performLogCleanup(db: Database, retentionHours: number): P
         await db
             .delete(metaConversionsLogs)
             .where(lt(metaConversionsLogs.createdAt, cutoffTime));
-    } catch (error: unknown) {
-        console.error("Error during Meta CAPI log cleanup:", error);
+    } catch {
+        console.error("Error during Meta CAPI log cleanup");
     }
 }
 
@@ -138,10 +198,10 @@ export async function manualLogCleanup(
             success: true,
             message: `Log cleanup completed. Retention period: ${retentionHours} hours.`,
         };
-    } catch (error: unknown) {
+    } catch {
         return {
             success: false,
-            message: `Log cleanup failed: ${error instanceof Error ? error.message : String(error)}`,
+            message: "Log cleanup failed",
         };
     }
 }

@@ -469,6 +469,147 @@ export type GetApiV1AuthTokenStatsResponses = {
 
 export type GetApiV1AuthTokenStatsResponse = GetApiV1AuthTokenStatsResponses[keyof GetApiV1AuthTokenStatsResponses];
 
+export type PostApiV1AgentAuthDeviceStartData = {
+    body: {
+        clientName: string;
+        profileName?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/agent-auth/device/start';
+};
+
+export type PostApiV1AgentAuthDeviceStartResponses = {
+    /**
+     * Pairing started
+     */
+    200: {
+        deviceCode: string;
+        userCode: string;
+        verificationUri: string;
+        intervalSeconds: number;
+        expiresInSeconds: number;
+    };
+};
+
+export type PostApiV1AgentAuthDeviceStartResponse = PostApiV1AgentAuthDeviceStartResponses[keyof PostApiV1AgentAuthDeviceStartResponses];
+
+export type PostApiV1AgentAuthDeviceTokenData = {
+    body: {
+        deviceCode: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/agent-auth/device/token';
+};
+
+export type PostApiV1AgentAuthDeviceTokenErrors = {
+    /**
+     * Pairing denied
+     */
+    400: unknown;
+    /**
+     * Pairing expired
+     */
+    410: unknown;
+    /**
+     * Polling too quickly
+     */
+    429: unknown;
+};
+
+export type PostApiV1AgentAuthDeviceTokenResponses = {
+    /**
+     * Credential delivered
+     */
+    200: {
+        status: 'approved';
+        token: string;
+        credentialId: string;
+        expiresAt: string;
+    };
+    /**
+     * Approval pending
+     */
+    202: {
+        status: 'pending';
+        intervalSeconds: number;
+    };
+};
+
+export type PostApiV1AgentAuthDeviceTokenResponse = PostApiV1AgentAuthDeviceTokenResponses[keyof PostApiV1AgentAuthDeviceTokenResponses];
+
+export type PostApiV1AgentAuthDeviceAckData = {
+    body: {
+        deviceCode: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/agent-auth/device/ack';
+};
+
+export type PostApiV1AgentAuthDeviceAckResponses = {
+    /**
+     * Credential acknowledged
+     */
+    200: {
+        status: 'acknowledged';
+    };
+};
+
+export type PostApiV1AgentAuthDeviceAckResponse = PostApiV1AgentAuthDeviceAckResponses[keyof PostApiV1AgentAuthDeviceAckResponses];
+
+export type PostApiV1AgentAuthRevokeData = {
+    body: {
+        [key: string]: never;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/agent-auth/revoke';
+};
+
+export type PostApiV1AgentAuthRevokeResponses = {
+    /**
+     * Current connection revoked
+     */
+    200: {
+        status: 'revoked';
+    };
+};
+
+export type PostApiV1AgentAuthRevokeResponse = PostApiV1AgentAuthRevokeResponses[keyof PostApiV1AgentAuthRevokeResponses];
+
+export type GetApiV1AgentArtifactsByArtifactIdData = {
+    body?: never;
+    path: {
+        artifactId: string;
+    };
+    query?: never;
+    url: '/api/v1/agent-artifacts/{artifactId}';
+};
+
+export type GetApiV1AgentArtifactsByArtifactIdErrors = {
+    /**
+     * Agent credential required
+     */
+    401: unknown;
+    /**
+     * Artifact authority denied
+     */
+    403: unknown;
+    /**
+     * Artifact unavailable
+     */
+    404: unknown;
+};
+
+export type GetApiV1AgentArtifactsByArtifactIdResponses = {
+    /**
+     * Authenticated artifact bytes
+     */
+    200: unknown;
+};
+
 export type GetApiV1AttributesFilterableData = {
     body?: never;
     path?: never;
@@ -504,7 +645,6 @@ export type GetApiV1AttributesFilterableResponses = {
                 name: string;
                 slug: string;
                 values: Array<string>;
-                [key: string]: unknown;
             }>;
         };
     };
@@ -549,7 +689,6 @@ export type GetApiV1AttributesCategoryByCategoryIdResponses = {
                 name: string;
                 slug: string;
                 values: Array<string>;
-                [key: string]: unknown;
             }>;
         };
     };
@@ -605,7 +744,6 @@ export type GetApiV1AttributesCategorySlugByCategorySlugResponses = {
                 name: string;
                 slug: string;
                 values: Array<string>;
-                [key: string]: unknown;
             }>;
         };
     };
@@ -657,7 +795,6 @@ export type GetApiV1AttributesSearchFiltersResponses = {
                 name: string;
                 slug: string;
                 values: Array<string>;
-                [key: string]: unknown;
             }>;
         };
     };
@@ -711,7 +848,6 @@ export type GetApiV1CollectionsResponses = {
                 excludeFromSitemap: boolean;
                 createdAt: string | null;
                 updatedAt: string | null;
-                [key: string]: unknown;
             }>;
         };
     };
@@ -791,33 +927,47 @@ export type GetApiV1CollectionsByIdResponses = {
                 content: string | null;
                 metaTitle: string | null;
                 metaDescription: string | null;
-                [key: string]: unknown;
             };
             categories: Array<{
                 id: string;
                 name: string;
                 slug: string;
-                [key: string]: unknown;
             }>;
             products: Array<{
                 id: string;
                 name: string;
                 price: number;
                 slug: string;
+                discountType: string | null;
                 discountPercentage: number | null;
+                discountAmount: number | null;
                 imageUrl: string | null;
+                imageMediaId: string | null;
+                imageAlt: string | null;
                 discountedPrice: number;
-                [key: string]: unknown;
+                priceVaries: boolean;
+                availableForSale: boolean;
+                freeDelivery: boolean;
+                categoryId: string | null;
+                hasVariants: boolean;
             }>;
             featuredProduct?: {
                 id: string;
                 name: string;
                 price: number;
                 slug: string;
+                discountType: string | null;
                 discountPercentage: number | null;
+                discountAmount: number | null;
                 imageUrl: string | null;
+                imageMediaId: string | null;
+                imageAlt: string | null;
                 discountedPrice: number;
-                [key: string]: unknown;
+                priceVaries: boolean;
+                availableForSale: boolean;
+                freeDelivery: boolean;
+                categoryId: string | null;
+                hasVariants: boolean;
             };
             pagination: {
                 page: number;
@@ -1108,19 +1258,16 @@ export type GetApiV1SearchResponses = {
                 imageAlt: string | null;
                 categoryId: string | null;
                 categoryName: string | null;
-                [key: string]: unknown;
             }>;
             pages: Array<{
                 id: string;
                 title: string;
                 slug: string;
-                [key: string]: unknown;
             }>;
             categories: Array<{
                 id: string;
                 name: string;
                 slug: string;
-                [key: string]: unknown;
             }>;
             query: string;
             timestamp?: string;
@@ -1172,7 +1319,48 @@ export type GetApiV1HeaderResponses = {
         success: true;
         data: {
             header: {
-                [key: string]: unknown;
+                topBar: {
+                    text: string;
+                    isEnabled: boolean;
+                };
+                logo: {
+                    src: string;
+                    alt: string;
+                    width: number;
+                };
+                favicon: {
+                    src: string;
+                    alt: string;
+                };
+                contact: {
+                    phone: string;
+                    text: string;
+                    isEnabled: boolean;
+                };
+                social: Array<{
+                    id: string;
+                    label: string;
+                    url: string;
+                    iconUrl?: string;
+                }>;
+                navigation: Array<{
+                    id?: string;
+                    title: string;
+                    href?: string;
+                    openInNewTab?: boolean;
+                    subMenu?: Array<{
+                        id?: string;
+                        title: string;
+                        href?: string;
+                        openInNewTab?: boolean;
+                        subMenu?: Array<{
+                            id?: string;
+                            title: string;
+                            href?: string;
+                            openInNewTab?: boolean;
+                        }>;
+                    }>;
+                }>;
             };
         };
     };
@@ -1541,7 +1729,45 @@ export type GetApiV1FooterResponses = {
     200: {
         success: true;
         data: {
-            [key: string]: unknown;
+            logo: {
+                src: string;
+                alt: string;
+            };
+            favicon: {
+                src: string;
+                alt: string;
+            };
+            tagline: string;
+            description: string;
+            copyrightText: string;
+            menus: Array<{
+                id: string;
+                title: string;
+                links: Array<{
+                    id?: string;
+                    title: string;
+                    href?: string;
+                    openInNewTab?: boolean;
+                    subMenu?: Array<{
+                        id?: string;
+                        title: string;
+                        href?: string;
+                        openInNewTab?: boolean;
+                        subMenu?: Array<{
+                            id?: string;
+                            title: string;
+                            href?: string;
+                            openInNewTab?: boolean;
+                        }>;
+                    }>;
+                }>;
+            }>;
+            social: Array<{
+                id: string;
+                label: string;
+                url: string;
+                iconUrl?: string;
+            }>;
         };
     };
 };
@@ -2272,18 +2498,116 @@ export type GetApiV1StorefrontHomepageResponses = {
         success: true;
         data: {
             seo: {
-                [key: string]: unknown;
+                siteTitle: string | null;
+                homepageTitle: string | null;
+                homepageMetaDescription: string | null;
             };
             hero: {
-                [key: string]: unknown;
+                desktop: {
+                    id: string;
+                    type: string;
+                    images: Array<{
+                        id: string;
+                        url: string;
+                        title: string;
+                        link: string;
+                        focalPoint: {
+                            x: number;
+                            y: number;
+                        };
+                    }>;
+                } | null;
+                mobile: {
+                    id: string;
+                    type: string;
+                    images: Array<{
+                        id: string;
+                        url: string;
+                        title: string;
+                        link: string;
+                        focalPoint: {
+                            x: number;
+                            y: number;
+                        };
+                    }>;
+                } | null;
             };
             collections: Array<{
-                [key: string]: unknown;
-            } | null>;
+                id: string;
+                name: string;
+                presentation: string;
+                config: {
+                    maxProducts: number;
+                    title: string;
+                    subtitle: string;
+                };
+                sortOrder: number;
+                isActive: boolean;
+                categories: Array<{
+                    id: string;
+                    name: string;
+                    slug: string;
+                }>;
+                products: Array<{
+                    id: string;
+                    name: string;
+                    slug: string;
+                    price: number;
+                    discountType: string | null;
+                    discountPercentage: number | null;
+                    discountAmount: number | null;
+                    discountedPrice: number;
+                    priceVaries: boolean;
+                    availableForSale: boolean;
+                    freeDelivery: boolean;
+                    categoryId: string | null;
+                    hasVariants: boolean;
+                    imageUrl: string | null;
+                    imageMediaId: string | null;
+                    imageAlt: string | null;
+                }>;
+                featuredProduct: {
+                    id: string;
+                    name: string;
+                    slug: string;
+                    price: number;
+                    discountType: string | null;
+                    discountPercentage: number | null;
+                    discountAmount: number | null;
+                    discountedPrice: number;
+                    priceVaries: boolean;
+                    availableForSale: boolean;
+                    freeDelivery: boolean;
+                    categoryId: string | null;
+                    hasVariants: boolean;
+                    imageUrl: string | null;
+                    imageMediaId: string | null;
+                    imageAlt: string | null;
+                } | null;
+            }>;
             presentation: {
-                [key: string]: unknown;
+                categoryRail: {
+                    enabled: boolean;
+                    title: string;
+                    categories: Array<{
+                        id: string;
+                        name: string;
+                        slug: string;
+                        description: string | null;
+                        imageUrl: string | null;
+                        canonicalPath: string | null;
+                    }>;
+                };
+                trustStrip: {
+                    enabled: boolean;
+                    items: Array<{
+                        kind: 'delivery' | 'returns';
+                        title: string;
+                        detail: string;
+                        href?: string;
+                    }>;
+                };
             };
-            [key: string]: unknown;
         };
     };
 };
@@ -2408,34 +2732,185 @@ export type GetApiV1StorefrontLayoutResponses = {
     200: {
         success: true;
         data: {
-            analytics?: unknown;
+            analytics: Array<{
+                id: string;
+                type: string;
+                usePartytown: boolean;
+                config: string;
+                location: string;
+            }>;
             header: {
-                [key: string]: unknown;
+                topBar: {
+                    text: string;
+                    isEnabled: boolean;
+                };
+                logo: {
+                    src: string;
+                    alt: string;
+                    width: number;
+                };
+                favicon: {
+                    src: string;
+                    alt: string;
+                };
+                contact: {
+                    phone: string;
+                    text: string;
+                    isEnabled: boolean;
+                };
+                social: Array<{
+                    id: string;
+                    label: string;
+                    url: string;
+                    iconUrl?: string;
+                }>;
             };
             navigation: Array<{
                 id?: string;
                 title: string;
                 href?: string;
                 openInNewTab?: boolean;
-                subMenu?: Array<unknown>;
-                [key: string]: unknown;
+                subMenu?: Array<{
+                    id?: string;
+                    title: string;
+                    href?: string;
+                    openInNewTab?: boolean;
+                    subMenu?: Array<{
+                        id?: string;
+                        title: string;
+                        href?: string;
+                        openInNewTab?: boolean;
+                    }>;
+                }>;
             }>;
             footer: {
-                [key: string]: unknown;
+                logo: {
+                    src: string;
+                    alt: string;
+                };
+                favicon: {
+                    src: string;
+                    alt: string;
+                };
+                tagline: string;
+                description: string;
+                copyrightText: string;
+                menus: Array<{
+                    id: string;
+                    title: string;
+                    links: Array<{
+                        id?: string;
+                        title: string;
+                        href?: string;
+                        openInNewTab?: boolean;
+                        subMenu?: Array<{
+                            id?: string;
+                            title: string;
+                            href?: string;
+                            openInNewTab?: boolean;
+                            subMenu?: Array<{
+                                id?: string;
+                                title: string;
+                                href?: string;
+                                openInNewTab?: boolean;
+                            }>;
+                        }>;
+                    }>;
+                }>;
+                social: Array<{
+                    id: string;
+                    label: string;
+                    url: string;
+                    iconUrl?: string;
+                }>;
             };
             currency: {
-                [key: string]: unknown;
+                code: string;
+                symbol: string;
+                usdExchangeRate: number;
             };
             theme: {
-                [key: string]: unknown;
+                colors: {
+                    [key: string]: string;
+                };
+                typography: {
+                    heading: 'system' | 'modern' | 'editorial';
+                    body: 'system' | 'modern' | 'humanist';
+                    scale: 'compact' | 'standard' | 'generous';
+                };
+                cornerStyle: 'square' | 'subtle' | 'rounded';
+                density: 'compact' | 'comfortable' | 'airy';
+                containerWidth: 'focused' | 'standard' | 'wide';
+                components: {
+                    buttons: 'solid' | 'soft' | 'outline';
+                    inputs: 'outlined' | 'filled';
+                    cards: 'bordered' | 'elevated' | 'flat';
+                };
             };
-            business?: {
-                [key: string]: unknown;
+            media: {
+                enabled: boolean;
+                canonicalCdnUrl: string;
+                allowedImageHosts: Array<string>;
+                canonicalHostAliases: Array<string>;
             };
-            seo?: {
-                [key: string]: unknown;
+            metaCapi: {
+                browserEventsEnabled: boolean;
             };
-            [key: string]: unknown;
+            business: {
+                companyName: string;
+                legalName: string;
+                addressLine1: string;
+                addressLine2: string;
+                city: string;
+                stateRegion: string;
+                postalCode: string;
+                country: string;
+                phone: string;
+                email: string;
+                taxId: string;
+            };
+            seo: {
+                discovery: {
+                    sitemap: {
+                        enabled: boolean;
+                        staticPages: boolean;
+                        products: boolean;
+                        categories: boolean;
+                        collections: boolean;
+                        pages: boolean;
+                        articles: boolean;
+                    };
+                    feeds: {
+                        productCatalogEnabled: boolean;
+                        includeUnavailableProducts: boolean;
+                        variantStrategy: 'products' | 'variants';
+                        title: string;
+                        description: string;
+                    };
+                    robots: {
+                        advertiseSitemap: boolean;
+                    };
+                    structuredData: {
+                        organization: boolean;
+                        websiteSearch: boolean;
+                        products: boolean;
+                        productGroups: boolean;
+                        offerShippingDetails: boolean;
+                        breadcrumbs: boolean;
+                        collections: boolean;
+                        articles: boolean;
+                    };
+                };
+                returnPolicy: {
+                    enabled: boolean;
+                    country: string;
+                    category: 'finite' | 'unlimited' | 'no_returns';
+                    returnWindowDays: number | null;
+                    returnFees: 'free' | 'customer_responsibility';
+                    returnMethod: 'mail' | 'in_store' | 'both';
+                    policyUrl: string;
+                };
+            };
         };
     };
 };
@@ -2534,6 +3009,4127 @@ export type GetApiV1StorefrontCspResponses = {
 
 export type GetApiV1StorefrontCspResponse = GetApiV1StorefrontCspResponses[keyof GetApiV1StorefrontCspResponses];
 
+export type PostApiV1StorefrontAgentContextsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/storefront/agent-contexts';
+};
+
+export type PostApiV1StorefrontAgentContextsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1StorefrontAgentContextsError = PostApiV1StorefrontAgentContextsErrors[keyof PostApiV1StorefrontAgentContextsErrors];
+
+export type PostApiV1StorefrontAgentContextsResponses = {
+    /**
+     * Context created
+     */
+    201: {
+        success: true;
+        data: {
+            id: string;
+            status: 'active' | 'closed' | 'expired' | 'revoked';
+            revision: number;
+            cart: Array<{
+                variantId: string;
+                quantity: number;
+            }>;
+            discountCode: string | null;
+            delivery: {
+                cityId: string | null;
+                zoneId: string | null;
+                areaId: string | null;
+                shippingMethodId: string | null;
+            };
+            customerAuthorized: boolean;
+            expiresAt: string;
+            lastUsedAt: string;
+            createdAt: string;
+            updatedAt: string;
+        };
+    };
+};
+
+export type PostApiV1StorefrontAgentContextsResponse = PostApiV1StorefrontAgentContextsResponses[keyof PostApiV1StorefrontAgentContextsResponses];
+
+export type GetApiV1StorefrontAgentContextsByContextIdData = {
+    body?: never;
+    path: {
+        contextId: string;
+    };
+    query?: never;
+    url: '/api/v1/storefront/agent-contexts/{contextId}';
+};
+
+export type GetApiV1StorefrontAgentContextsByContextIdErrors = {
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1StorefrontAgentContextsByContextIdError = GetApiV1StorefrontAgentContextsByContextIdErrors[keyof GetApiV1StorefrontAgentContextsByContextIdErrors];
+
+export type GetApiV1StorefrontAgentContextsByContextIdResponses = {
+    /**
+     * Context state
+     */
+    200: {
+        success: true;
+        data: {
+            id: string;
+            status: 'active' | 'closed' | 'expired' | 'revoked';
+            revision: number;
+            cart: Array<{
+                variantId: string;
+                quantity: number;
+            }>;
+            discountCode: string | null;
+            delivery: {
+                cityId: string | null;
+                zoneId: string | null;
+                areaId: string | null;
+                shippingMethodId: string | null;
+            };
+            customerAuthorized: boolean;
+            expiresAt: string;
+            lastUsedAt: string;
+            createdAt: string;
+            updatedAt: string;
+        };
+    };
+};
+
+export type GetApiV1StorefrontAgentContextsByContextIdResponse = GetApiV1StorefrontAgentContextsByContextIdResponses[keyof GetApiV1StorefrontAgentContextsByContextIdResponses];
+
+export type PostApiV1StorefrontAgentContextsByContextIdCloseData = {
+    body: {
+        revision: number;
+    };
+    path: {
+        contextId: string;
+    };
+    query?: never;
+    url: '/api/v1/storefront/agent-contexts/{contextId}/close';
+};
+
+export type PostApiV1StorefrontAgentContextsByContextIdCloseErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1StorefrontAgentContextsByContextIdCloseError = PostApiV1StorefrontAgentContextsByContextIdCloseErrors[keyof PostApiV1StorefrontAgentContextsByContextIdCloseErrors];
+
+export type PostApiV1StorefrontAgentContextsByContextIdCloseResponses = {
+    /**
+     * Closed context
+     */
+    200: {
+        success: true;
+        data: {
+            id: string;
+            status: 'active' | 'closed' | 'expired' | 'revoked';
+            revision: number;
+            cart: Array<{
+                variantId: string;
+                quantity: number;
+            }>;
+            discountCode: string | null;
+            delivery: {
+                cityId: string | null;
+                zoneId: string | null;
+                areaId: string | null;
+                shippingMethodId: string | null;
+            };
+            customerAuthorized: boolean;
+            expiresAt: string;
+            lastUsedAt: string;
+            createdAt: string;
+            updatedAt: string;
+        };
+    };
+};
+
+export type PostApiV1StorefrontAgentContextsByContextIdCloseResponse = PostApiV1StorefrontAgentContextsByContextIdCloseResponses[keyof PostApiV1StorefrontAgentContextsByContextIdCloseResponses];
+
+export type DeleteApiV1StorefrontAgentContextsByContextIdCartData = {
+    body: {
+        revision: number;
+    };
+    path: {
+        contextId: string;
+    };
+    query?: never;
+    url: '/api/v1/storefront/agent-contexts/{contextId}/cart';
+};
+
+export type DeleteApiV1StorefrontAgentContextsByContextIdCartErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type DeleteApiV1StorefrontAgentContextsByContextIdCartError = DeleteApiV1StorefrontAgentContextsByContextIdCartErrors[keyof DeleteApiV1StorefrontAgentContextsByContextIdCartErrors];
+
+export type DeleteApiV1StorefrontAgentContextsByContextIdCartResponses = {
+    /**
+     * Updated authoritative cart
+     */
+    200: {
+        success: true;
+        data: {
+            context: {
+                id: string;
+                status: 'active' | 'closed' | 'expired' | 'revoked';
+                revision: number;
+                cart: Array<{
+                    variantId: string;
+                    quantity: number;
+                }>;
+                discountCode: string | null;
+                delivery: {
+                    cityId: string | null;
+                    zoneId: string | null;
+                    areaId: string | null;
+                    shippingMethodId: string | null;
+                };
+                customerAuthorized: boolean;
+                expiresAt: string;
+                lastUsedAt: string;
+                createdAt: string;
+                updatedAt: string;
+            };
+            valid: boolean;
+            issues: Array<{
+                index: number;
+                cartKey?: string | null;
+                productId: string;
+                variantId: string | null;
+                code: string;
+                action: string;
+                message: string;
+                productName: string | null;
+                variantLabel: string | null;
+                requestedQuantity: number;
+                availableQuantity?: number;
+                submittedPrice?: number;
+                currentPrice?: number;
+            }>;
+            items: Array<{
+                index: number;
+                cartKey?: string | null;
+                productId: string;
+                variantId: string;
+                quantity: number;
+                unitPrice: number;
+                productName: string;
+                variantLabel: string | null;
+                freeDelivery: boolean;
+                inventoryTracked: boolean;
+                availableQuantity: number | null;
+                taxClassId: string | null;
+                productImageMediaId: string | null;
+                productImage: string | null;
+            }>;
+            subtotal: number;
+            hasFreeDeliveryProduct: boolean;
+            delivery?: {
+                shippingCharge: number;
+                cityName: string;
+                zoneName: string;
+                areaName: string | null;
+            };
+        };
+    };
+};
+
+export type DeleteApiV1StorefrontAgentContextsByContextIdCartResponse = DeleteApiV1StorefrontAgentContextsByContextIdCartResponses[keyof DeleteApiV1StorefrontAgentContextsByContextIdCartResponses];
+
+export type GetApiV1StorefrontAgentContextsByContextIdCartData = {
+    body?: never;
+    path: {
+        contextId: string;
+    };
+    query?: never;
+    url: '/api/v1/storefront/agent-contexts/{contextId}/cart';
+};
+
+export type GetApiV1StorefrontAgentContextsByContextIdCartErrors = {
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1StorefrontAgentContextsByContextIdCartError = GetApiV1StorefrontAgentContextsByContextIdCartErrors[keyof GetApiV1StorefrontAgentContextsByContextIdCartErrors];
+
+export type GetApiV1StorefrontAgentContextsByContextIdCartResponses = {
+    /**
+     * Authoritative cart
+     */
+    200: {
+        success: true;
+        data: {
+            context: {
+                id: string;
+                status: 'active' | 'closed' | 'expired' | 'revoked';
+                revision: number;
+                cart: Array<{
+                    variantId: string;
+                    quantity: number;
+                }>;
+                discountCode: string | null;
+                delivery: {
+                    cityId: string | null;
+                    zoneId: string | null;
+                    areaId: string | null;
+                    shippingMethodId: string | null;
+                };
+                customerAuthorized: boolean;
+                expiresAt: string;
+                lastUsedAt: string;
+                createdAt: string;
+                updatedAt: string;
+            };
+            valid: boolean;
+            issues: Array<{
+                index: number;
+                cartKey?: string | null;
+                productId: string;
+                variantId: string | null;
+                code: string;
+                action: string;
+                message: string;
+                productName: string | null;
+                variantLabel: string | null;
+                requestedQuantity: number;
+                availableQuantity?: number;
+                submittedPrice?: number;
+                currentPrice?: number;
+            }>;
+            items: Array<{
+                index: number;
+                cartKey?: string | null;
+                productId: string;
+                variantId: string;
+                quantity: number;
+                unitPrice: number;
+                productName: string;
+                variantLabel: string | null;
+                freeDelivery: boolean;
+                inventoryTracked: boolean;
+                availableQuantity: number | null;
+                taxClassId: string | null;
+                productImageMediaId: string | null;
+                productImage: string | null;
+            }>;
+            subtotal: number;
+            hasFreeDeliveryProduct: boolean;
+            delivery?: {
+                shippingCharge: number;
+                cityName: string;
+                zoneName: string;
+                areaName: string | null;
+            };
+        };
+    };
+};
+
+export type GetApiV1StorefrontAgentContextsByContextIdCartResponse = GetApiV1StorefrontAgentContextsByContextIdCartResponses[keyof GetApiV1StorefrontAgentContextsByContextIdCartResponses];
+
+export type DeleteApiV1StorefrontAgentContextsByContextIdCartItemsData = {
+    body: {
+        revision: number;
+        variantId: string;
+    };
+    path: {
+        contextId: string;
+    };
+    query?: never;
+    url: '/api/v1/storefront/agent-contexts/{contextId}/cart/items';
+};
+
+export type DeleteApiV1StorefrontAgentContextsByContextIdCartItemsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type DeleteApiV1StorefrontAgentContextsByContextIdCartItemsError = DeleteApiV1StorefrontAgentContextsByContextIdCartItemsErrors[keyof DeleteApiV1StorefrontAgentContextsByContextIdCartItemsErrors];
+
+export type DeleteApiV1StorefrontAgentContextsByContextIdCartItemsResponses = {
+    /**
+     * Updated authoritative cart
+     */
+    200: {
+        success: true;
+        data: {
+            context: {
+                id: string;
+                status: 'active' | 'closed' | 'expired' | 'revoked';
+                revision: number;
+                cart: Array<{
+                    variantId: string;
+                    quantity: number;
+                }>;
+                discountCode: string | null;
+                delivery: {
+                    cityId: string | null;
+                    zoneId: string | null;
+                    areaId: string | null;
+                    shippingMethodId: string | null;
+                };
+                customerAuthorized: boolean;
+                expiresAt: string;
+                lastUsedAt: string;
+                createdAt: string;
+                updatedAt: string;
+            };
+            valid: boolean;
+            issues: Array<{
+                index: number;
+                cartKey?: string | null;
+                productId: string;
+                variantId: string | null;
+                code: string;
+                action: string;
+                message: string;
+                productName: string | null;
+                variantLabel: string | null;
+                requestedQuantity: number;
+                availableQuantity?: number;
+                submittedPrice?: number;
+                currentPrice?: number;
+            }>;
+            items: Array<{
+                index: number;
+                cartKey?: string | null;
+                productId: string;
+                variantId: string;
+                quantity: number;
+                unitPrice: number;
+                productName: string;
+                variantLabel: string | null;
+                freeDelivery: boolean;
+                inventoryTracked: boolean;
+                availableQuantity: number | null;
+                taxClassId: string | null;
+                productImageMediaId: string | null;
+                productImage: string | null;
+            }>;
+            subtotal: number;
+            hasFreeDeliveryProduct: boolean;
+            delivery?: {
+                shippingCharge: number;
+                cityName: string;
+                zoneName: string;
+                areaName: string | null;
+            };
+        };
+    };
+};
+
+export type DeleteApiV1StorefrontAgentContextsByContextIdCartItemsResponse = DeleteApiV1StorefrontAgentContextsByContextIdCartItemsResponses[keyof DeleteApiV1StorefrontAgentContextsByContextIdCartItemsResponses];
+
+export type PatchApiV1StorefrontAgentContextsByContextIdCartItemsData = {
+    body: {
+        revision: number;
+        variantId: string;
+        quantity: number;
+    };
+    path: {
+        contextId: string;
+    };
+    query?: never;
+    url: '/api/v1/storefront/agent-contexts/{contextId}/cart/items';
+};
+
+export type PatchApiV1StorefrontAgentContextsByContextIdCartItemsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PatchApiV1StorefrontAgentContextsByContextIdCartItemsError = PatchApiV1StorefrontAgentContextsByContextIdCartItemsErrors[keyof PatchApiV1StorefrontAgentContextsByContextIdCartItemsErrors];
+
+export type PatchApiV1StorefrontAgentContextsByContextIdCartItemsResponses = {
+    /**
+     * Updated authoritative cart
+     */
+    200: {
+        success: true;
+        data: {
+            context: {
+                id: string;
+                status: 'active' | 'closed' | 'expired' | 'revoked';
+                revision: number;
+                cart: Array<{
+                    variantId: string;
+                    quantity: number;
+                }>;
+                discountCode: string | null;
+                delivery: {
+                    cityId: string | null;
+                    zoneId: string | null;
+                    areaId: string | null;
+                    shippingMethodId: string | null;
+                };
+                customerAuthorized: boolean;
+                expiresAt: string;
+                lastUsedAt: string;
+                createdAt: string;
+                updatedAt: string;
+            };
+            valid: boolean;
+            issues: Array<{
+                index: number;
+                cartKey?: string | null;
+                productId: string;
+                variantId: string | null;
+                code: string;
+                action: string;
+                message: string;
+                productName: string | null;
+                variantLabel: string | null;
+                requestedQuantity: number;
+                availableQuantity?: number;
+                submittedPrice?: number;
+                currentPrice?: number;
+            }>;
+            items: Array<{
+                index: number;
+                cartKey?: string | null;
+                productId: string;
+                variantId: string;
+                quantity: number;
+                unitPrice: number;
+                productName: string;
+                variantLabel: string | null;
+                freeDelivery: boolean;
+                inventoryTracked: boolean;
+                availableQuantity: number | null;
+                taxClassId: string | null;
+                productImageMediaId: string | null;
+                productImage: string | null;
+            }>;
+            subtotal: number;
+            hasFreeDeliveryProduct: boolean;
+            delivery?: {
+                shippingCharge: number;
+                cityName: string;
+                zoneName: string;
+                areaName: string | null;
+            };
+        };
+    };
+};
+
+export type PatchApiV1StorefrontAgentContextsByContextIdCartItemsResponse = PatchApiV1StorefrontAgentContextsByContextIdCartItemsResponses[keyof PatchApiV1StorefrontAgentContextsByContextIdCartItemsResponses];
+
+export type PostApiV1StorefrontAgentContextsByContextIdCartItemsData = {
+    body: {
+        revision: number;
+        variantId: string;
+        quantity: number;
+    };
+    path: {
+        contextId: string;
+    };
+    query?: never;
+    url: '/api/v1/storefront/agent-contexts/{contextId}/cart/items';
+};
+
+export type PostApiV1StorefrontAgentContextsByContextIdCartItemsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1StorefrontAgentContextsByContextIdCartItemsError = PostApiV1StorefrontAgentContextsByContextIdCartItemsErrors[keyof PostApiV1StorefrontAgentContextsByContextIdCartItemsErrors];
+
+export type PostApiV1StorefrontAgentContextsByContextIdCartItemsResponses = {
+    /**
+     * Updated authoritative cart
+     */
+    200: {
+        success: true;
+        data: {
+            context: {
+                id: string;
+                status: 'active' | 'closed' | 'expired' | 'revoked';
+                revision: number;
+                cart: Array<{
+                    variantId: string;
+                    quantity: number;
+                }>;
+                discountCode: string | null;
+                delivery: {
+                    cityId: string | null;
+                    zoneId: string | null;
+                    areaId: string | null;
+                    shippingMethodId: string | null;
+                };
+                customerAuthorized: boolean;
+                expiresAt: string;
+                lastUsedAt: string;
+                createdAt: string;
+                updatedAt: string;
+            };
+            valid: boolean;
+            issues: Array<{
+                index: number;
+                cartKey?: string | null;
+                productId: string;
+                variantId: string | null;
+                code: string;
+                action: string;
+                message: string;
+                productName: string | null;
+                variantLabel: string | null;
+                requestedQuantity: number;
+                availableQuantity?: number;
+                submittedPrice?: number;
+                currentPrice?: number;
+            }>;
+            items: Array<{
+                index: number;
+                cartKey?: string | null;
+                productId: string;
+                variantId: string;
+                quantity: number;
+                unitPrice: number;
+                productName: string;
+                variantLabel: string | null;
+                freeDelivery: boolean;
+                inventoryTracked: boolean;
+                availableQuantity: number | null;
+                taxClassId: string | null;
+                productImageMediaId: string | null;
+                productImage: string | null;
+            }>;
+            subtotal: number;
+            hasFreeDeliveryProduct: boolean;
+            delivery?: {
+                shippingCharge: number;
+                cityName: string;
+                zoneName: string;
+                areaName: string | null;
+            };
+        };
+    };
+};
+
+export type PostApiV1StorefrontAgentContextsByContextIdCartItemsResponse = PostApiV1StorefrontAgentContextsByContextIdCartItemsResponses[keyof PostApiV1StorefrontAgentContextsByContextIdCartItemsResponses];
+
+export type DeleteApiV1StorefrontAgentContextsByContextIdDiscountData = {
+    body: {
+        revision: number;
+    };
+    path: {
+        contextId: string;
+    };
+    query?: never;
+    url: '/api/v1/storefront/agent-contexts/{contextId}/discount';
+};
+
+export type DeleteApiV1StorefrontAgentContextsByContextIdDiscountErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type DeleteApiV1StorefrontAgentContextsByContextIdDiscountError = DeleteApiV1StorefrontAgentContextsByContextIdDiscountErrors[keyof DeleteApiV1StorefrontAgentContextsByContextIdDiscountErrors];
+
+export type DeleteApiV1StorefrontAgentContextsByContextIdDiscountResponses = {
+    /**
+     * Updated authoritative cart
+     */
+    200: {
+        success: true;
+        data: {
+            context: {
+                id: string;
+                status: 'active' | 'closed' | 'expired' | 'revoked';
+                revision: number;
+                cart: Array<{
+                    variantId: string;
+                    quantity: number;
+                }>;
+                discountCode: string | null;
+                delivery: {
+                    cityId: string | null;
+                    zoneId: string | null;
+                    areaId: string | null;
+                    shippingMethodId: string | null;
+                };
+                customerAuthorized: boolean;
+                expiresAt: string;
+                lastUsedAt: string;
+                createdAt: string;
+                updatedAt: string;
+            };
+            valid: boolean;
+            issues: Array<{
+                index: number;
+                cartKey?: string | null;
+                productId: string;
+                variantId: string | null;
+                code: string;
+                action: string;
+                message: string;
+                productName: string | null;
+                variantLabel: string | null;
+                requestedQuantity: number;
+                availableQuantity?: number;
+                submittedPrice?: number;
+                currentPrice?: number;
+            }>;
+            items: Array<{
+                index: number;
+                cartKey?: string | null;
+                productId: string;
+                variantId: string;
+                quantity: number;
+                unitPrice: number;
+                productName: string;
+                variantLabel: string | null;
+                freeDelivery: boolean;
+                inventoryTracked: boolean;
+                availableQuantity: number | null;
+                taxClassId: string | null;
+                productImageMediaId: string | null;
+                productImage: string | null;
+            }>;
+            subtotal: number;
+            hasFreeDeliveryProduct: boolean;
+            delivery?: {
+                shippingCharge: number;
+                cityName: string;
+                zoneName: string;
+                areaName: string | null;
+            };
+        };
+    };
+};
+
+export type DeleteApiV1StorefrontAgentContextsByContextIdDiscountResponse = DeleteApiV1StorefrontAgentContextsByContextIdDiscountResponses[keyof DeleteApiV1StorefrontAgentContextsByContextIdDiscountResponses];
+
+export type PutApiV1StorefrontAgentContextsByContextIdDiscountData = {
+    body: {
+        revision: number;
+        code: string;
+        customerPhone?: string | null;
+    };
+    path: {
+        contextId: string;
+    };
+    query?: never;
+    url: '/api/v1/storefront/agent-contexts/{contextId}/discount';
+};
+
+export type PutApiV1StorefrontAgentContextsByContextIdDiscountErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PutApiV1StorefrontAgentContextsByContextIdDiscountError = PutApiV1StorefrontAgentContextsByContextIdDiscountErrors[keyof PutApiV1StorefrontAgentContextsByContextIdDiscountErrors];
+
+export type PutApiV1StorefrontAgentContextsByContextIdDiscountResponses = {
+    /**
+     * Updated authoritative cart
+     */
+    200: {
+        success: true;
+        data: {
+            context: {
+                id: string;
+                status: 'active' | 'closed' | 'expired' | 'revoked';
+                revision: number;
+                cart: Array<{
+                    variantId: string;
+                    quantity: number;
+                }>;
+                discountCode: string | null;
+                delivery: {
+                    cityId: string | null;
+                    zoneId: string | null;
+                    areaId: string | null;
+                    shippingMethodId: string | null;
+                };
+                customerAuthorized: boolean;
+                expiresAt: string;
+                lastUsedAt: string;
+                createdAt: string;
+                updatedAt: string;
+            };
+            valid: boolean;
+            issues: Array<{
+                index: number;
+                cartKey?: string | null;
+                productId: string;
+                variantId: string | null;
+                code: string;
+                action: string;
+                message: string;
+                productName: string | null;
+                variantLabel: string | null;
+                requestedQuantity: number;
+                availableQuantity?: number;
+                submittedPrice?: number;
+                currentPrice?: number;
+            }>;
+            items: Array<{
+                index: number;
+                cartKey?: string | null;
+                productId: string;
+                variantId: string;
+                quantity: number;
+                unitPrice: number;
+                productName: string;
+                variantLabel: string | null;
+                freeDelivery: boolean;
+                inventoryTracked: boolean;
+                availableQuantity: number | null;
+                taxClassId: string | null;
+                productImageMediaId: string | null;
+                productImage: string | null;
+            }>;
+            subtotal: number;
+            hasFreeDeliveryProduct: boolean;
+            delivery?: {
+                shippingCharge: number;
+                cityName: string;
+                zoneName: string;
+                areaName: string | null;
+            };
+        };
+    };
+};
+
+export type PutApiV1StorefrontAgentContextsByContextIdDiscountResponse = PutApiV1StorefrontAgentContextsByContextIdDiscountResponses[keyof PutApiV1StorefrontAgentContextsByContextIdDiscountResponses];
+
+export type PutApiV1StorefrontAgentContextsByContextIdDeliveryData = {
+    body: {
+        revision: number;
+        cityId: string | null;
+        zoneId: string | null;
+        areaId: string | null;
+        shippingMethodId: string | null;
+    };
+    path: {
+        contextId: string;
+    };
+    query?: never;
+    url: '/api/v1/storefront/agent-contexts/{contextId}/delivery';
+};
+
+export type PutApiV1StorefrontAgentContextsByContextIdDeliveryErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PutApiV1StorefrontAgentContextsByContextIdDeliveryError = PutApiV1StorefrontAgentContextsByContextIdDeliveryErrors[keyof PutApiV1StorefrontAgentContextsByContextIdDeliveryErrors];
+
+export type PutApiV1StorefrontAgentContextsByContextIdDeliveryResponses = {
+    /**
+     * Updated authoritative cart
+     */
+    200: {
+        success: true;
+        data: {
+            context: {
+                id: string;
+                status: 'active' | 'closed' | 'expired' | 'revoked';
+                revision: number;
+                cart: Array<{
+                    variantId: string;
+                    quantity: number;
+                }>;
+                discountCode: string | null;
+                delivery: {
+                    cityId: string | null;
+                    zoneId: string | null;
+                    areaId: string | null;
+                    shippingMethodId: string | null;
+                };
+                customerAuthorized: boolean;
+                expiresAt: string;
+                lastUsedAt: string;
+                createdAt: string;
+                updatedAt: string;
+            };
+            valid: boolean;
+            issues: Array<{
+                index: number;
+                cartKey?: string | null;
+                productId: string;
+                variantId: string | null;
+                code: string;
+                action: string;
+                message: string;
+                productName: string | null;
+                variantLabel: string | null;
+                requestedQuantity: number;
+                availableQuantity?: number;
+                submittedPrice?: number;
+                currentPrice?: number;
+            }>;
+            items: Array<{
+                index: number;
+                cartKey?: string | null;
+                productId: string;
+                variantId: string;
+                quantity: number;
+                unitPrice: number;
+                productName: string;
+                variantLabel: string | null;
+                freeDelivery: boolean;
+                inventoryTracked: boolean;
+                availableQuantity: number | null;
+                taxClassId: string | null;
+                productImageMediaId: string | null;
+                productImage: string | null;
+            }>;
+            subtotal: number;
+            hasFreeDeliveryProduct: boolean;
+            delivery?: {
+                shippingCharge: number;
+                cityName: string;
+                zoneName: string;
+                areaName: string | null;
+            };
+        };
+    };
+};
+
+export type PutApiV1StorefrontAgentContextsByContextIdDeliveryResponse = PutApiV1StorefrontAgentContextsByContextIdDeliveryResponses[keyof PutApiV1StorefrontAgentContextsByContextIdDeliveryResponses];
+
+export type PostApiV1StorefrontAgentContextsByContextIdCheckoutValidateData = {
+    body: {
+        customerPhone?: string | null;
+    };
+    path: {
+        contextId: string;
+    };
+    query?: never;
+    url: '/api/v1/storefront/agent-contexts/{contextId}/checkout/validate';
+};
+
+export type PostApiV1StorefrontAgentContextsByContextIdCheckoutValidateErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1StorefrontAgentContextsByContextIdCheckoutValidateError = PostApiV1StorefrontAgentContextsByContextIdCheckoutValidateErrors[keyof PostApiV1StorefrontAgentContextsByContextIdCheckoutValidateErrors];
+
+export type PostApiV1StorefrontAgentContextsByContextIdCheckoutValidateResponses = {
+    /**
+     * Validated checkout state
+     */
+    200: {
+        success: true;
+        data: {
+            context: {
+                id: string;
+                status: 'active' | 'closed' | 'expired' | 'revoked';
+                revision: number;
+                cart: Array<{
+                    variantId: string;
+                    quantity: number;
+                }>;
+                discountCode: string | null;
+                delivery: {
+                    cityId: string | null;
+                    zoneId: string | null;
+                    areaId: string | null;
+                    shippingMethodId: string | null;
+                };
+                customerAuthorized: boolean;
+                expiresAt: string;
+                lastUsedAt: string;
+                createdAt: string;
+                updatedAt: string;
+            };
+            valid: boolean;
+            issues: Array<{
+                index: number;
+                cartKey?: string | null;
+                productId: string;
+                variantId: string | null;
+                code: string;
+                action: string;
+                message: string;
+                productName: string | null;
+                variantLabel: string | null;
+                requestedQuantity: number;
+                availableQuantity?: number;
+                submittedPrice?: number;
+                currentPrice?: number;
+            }>;
+            items: Array<{
+                index: number;
+                cartKey?: string | null;
+                productId: string;
+                variantId: string;
+                quantity: number;
+                unitPrice: number;
+                productName: string;
+                variantLabel: string | null;
+                freeDelivery: boolean;
+                inventoryTracked: boolean;
+                availableQuantity: number | null;
+                taxClassId: string | null;
+                productImageMediaId: string | null;
+                productImage: string | null;
+            }>;
+            subtotal: number;
+            hasFreeDeliveryProduct: boolean;
+            delivery?: {
+                shippingCharge: number;
+                cityName: string;
+                zoneName: string;
+                areaName: string | null;
+            };
+        };
+    };
+};
+
+export type PostApiV1StorefrontAgentContextsByContextIdCheckoutValidateResponse = PostApiV1StorefrontAgentContextsByContextIdCheckoutValidateResponses[keyof PostApiV1StorefrontAgentContextsByContextIdCheckoutValidateResponses];
+
+export type PostApiV1StorefrontAgentContextsByContextIdCheckoutQuoteData = {
+    body: {
+        customerPhone?: string | null;
+    };
+    path: {
+        contextId: string;
+    };
+    query?: never;
+    url: '/api/v1/storefront/agent-contexts/{contextId}/checkout/quote';
+};
+
+export type PostApiV1StorefrontAgentContextsByContextIdCheckoutQuoteErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1StorefrontAgentContextsByContextIdCheckoutQuoteError = PostApiV1StorefrontAgentContextsByContextIdCheckoutQuoteErrors[keyof PostApiV1StorefrontAgentContextsByContextIdCheckoutQuoteErrors];
+
+export type PostApiV1StorefrontAgentContextsByContextIdCheckoutQuoteResponses = {
+    /**
+     * Authoritative checkout quote
+     */
+    200: {
+        success: true;
+        data: {
+            valid: true;
+            contextRevision: number;
+            quoteFingerprint: string;
+            displayLabel: string;
+            pricesIncludeTax: boolean;
+            shippingTaxed: boolean;
+            currencyCode: string;
+            decimalPlaces: number;
+            settingsVersion: number;
+            subtotalMinor: number;
+            subtotalAmount: number;
+            shippingMinor: number;
+            shippingAmount: number;
+            discountMinor: number;
+            discountAmount: number;
+            taxMinor: number;
+            taxAmount: number;
+            totalMinor: number;
+            totalAmount: number;
+            items: Array<{
+                productId: string;
+                variantId: string;
+                quantity: number;
+                unitPrice: number;
+                productName: string;
+                variantLabel: string | null;
+            }>;
+        };
+    };
+};
+
+export type PostApiV1StorefrontAgentContextsByContextIdCheckoutQuoteResponse = PostApiV1StorefrontAgentContextsByContextIdCheckoutQuoteResponses[keyof PostApiV1StorefrontAgentContextsByContextIdCheckoutQuoteResponses];
+
+export type PostApiV1StorefrontAgentContextsByContextIdCheckoutSubmitData = {
+    body: {
+        expectedRevision: number;
+        idempotencyKey?: string;
+        customerName: string;
+        customerPhone: string;
+        customerEmail: string | null;
+        shippingAddress: string;
+        notes: string | null;
+        /**
+         * Agent checkout is currently COD-only. Online payment starts remain excluded until the client can complete the body-only browser handoff without leaking bootstrap authority.
+         */
+        paymentMethod: 'cod';
+    };
+    headers?: {
+        /**
+         * Standard retry key. May replace body.idempotencyKey; if both are sent they must match.
+         */
+        'idempotency-key'?: string;
+    };
+    path: {
+        contextId: string;
+    };
+    query?: never;
+    url: '/api/v1/storefront/agent-contexts/{contextId}/checkout/submit';
+};
+
+export type PostApiV1StorefrontAgentContextsByContextIdCheckoutSubmitErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1StorefrontAgentContextsByContextIdCheckoutSubmitError = PostApiV1StorefrontAgentContextsByContextIdCheckoutSubmitErrors[keyof PostApiV1StorefrontAgentContextsByContextIdCheckoutSubmitErrors];
+
+export type PostApiV1StorefrontAgentContextsByContextIdCheckoutSubmitResponses = {
+    /**
+     * Order submit result
+     */
+    200: {
+        success: true;
+        data: {
+            status: 'complete' | 'processing';
+            contextRevision: number;
+            orderId: string;
+            orderStatus?: string;
+            paymentMethod?: string;
+            paymentStatus?: string;
+            totalAmount?: number;
+            totalAmountMinor?: number;
+            taxAmount?: number;
+            taxAmountMinor?: number;
+            taxLabel?: string;
+            pricesIncludeTax?: boolean;
+            currencyCode?: string;
+            decimalPlaces?: number;
+            message: string;
+        };
+    };
+    /**
+     * Order created
+     */
+    201: {
+        success: true;
+        data: {
+            status: 'complete' | 'processing';
+            contextRevision: number;
+            orderId: string;
+            orderStatus?: string;
+            paymentMethod?: string;
+            paymentStatus?: string;
+            totalAmount?: number;
+            totalAmountMinor?: number;
+            taxAmount?: number;
+            taxAmountMinor?: number;
+            taxLabel?: string;
+            pricesIncludeTax?: boolean;
+            currencyCode?: string;
+            decimalPlaces?: number;
+            message: string;
+        };
+    };
+};
+
+export type PostApiV1StorefrontAgentContextsByContextIdCheckoutSubmitResponse = PostApiV1StorefrontAgentContextsByContextIdCheckoutSubmitResponses[keyof PostApiV1StorefrontAgentContextsByContextIdCheckoutSubmitResponses];
+
+export type PostApiV1StorefrontAgentContextsByContextIdCustomerAuthData = {
+    body: {
+        [key: string]: never;
+    };
+    path: {
+        contextId: string;
+    };
+    query?: never;
+    url: '/api/v1/storefront/agent-contexts/{contextId}/customer/auth';
+};
+
+export type PostApiV1StorefrontAgentContextsByContextIdCustomerAuthErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1StorefrontAgentContextsByContextIdCustomerAuthError = PostApiV1StorefrontAgentContextsByContextIdCustomerAuthErrors[keyof PostApiV1StorefrontAgentContextsByContextIdCustomerAuthErrors];
+
+export type PostApiV1StorefrontAgentContextsByContextIdCustomerAuthResponses = {
+    /**
+     * Secure storefront step started
+     */
+    201: {
+        success: true;
+        data: {
+            id: string;
+            kind: 'customer_auth' | 'payment' | 'payment_recovery';
+            status: 'pending' | 'complete' | 'expired' | 'failed';
+            expiresAt: string;
+            browser: {
+                url: string;
+                method: 'POST';
+                fields: {
+                    continuationCode: string;
+                };
+            };
+            message: string;
+        };
+    };
+};
+
+export type PostApiV1StorefrontAgentContextsByContextIdCustomerAuthResponse = PostApiV1StorefrontAgentContextsByContextIdCustomerAuthResponses[keyof PostApiV1StorefrontAgentContextsByContextIdCustomerAuthResponses];
+
+export type GetApiV1StorefrontAgentContextsByContextIdCustomerAuthByContinuationIdData = {
+    body?: never;
+    path: {
+        contextId: string;
+        continuationId: string;
+    };
+    query?: never;
+    url: '/api/v1/storefront/agent-contexts/{contextId}/customer/auth/{continuationId}';
+};
+
+export type GetApiV1StorefrontAgentContextsByContextIdCustomerAuthByContinuationIdErrors = {
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1StorefrontAgentContextsByContextIdCustomerAuthByContinuationIdError = GetApiV1StorefrontAgentContextsByContextIdCustomerAuthByContinuationIdErrors[keyof GetApiV1StorefrontAgentContextsByContextIdCustomerAuthByContinuationIdErrors];
+
+export type GetApiV1StorefrontAgentContextsByContextIdCustomerAuthByContinuationIdResponses = {
+    /**
+     * Customer authorization status
+     */
+    200: {
+        success: true;
+        data: {
+            id: string;
+            kind: 'customer_auth';
+            status: 'pending' | 'complete' | 'expired' | 'failed';
+            expiresAt: string;
+            result: {
+                [key: string]: unknown;
+            } | null;
+            message: string;
+        };
+    };
+};
+
+export type GetApiV1StorefrontAgentContextsByContextIdCustomerAuthByContinuationIdResponse = GetApiV1StorefrontAgentContextsByContextIdCustomerAuthByContinuationIdResponses[keyof GetApiV1StorefrontAgentContextsByContextIdCustomerAuthByContinuationIdResponses];
+
+export type PostApiV1StorefrontAgentContextsByContextIdCustomerLogoutData = {
+    body: {
+        revision: number;
+    };
+    path: {
+        contextId: string;
+    };
+    query?: never;
+    url: '/api/v1/storefront/agent-contexts/{contextId}/customer/logout';
+};
+
+export type PostApiV1StorefrontAgentContextsByContextIdCustomerLogoutErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1StorefrontAgentContextsByContextIdCustomerLogoutError = PostApiV1StorefrontAgentContextsByContextIdCustomerLogoutErrors[keyof PostApiV1StorefrontAgentContextsByContextIdCustomerLogoutErrors];
+
+export type PostApiV1StorefrontAgentContextsByContextIdCustomerLogoutResponses = {
+    /**
+     * Customer logged out
+     */
+    200: {
+        success: true;
+        data: {
+            revision: number;
+            authenticated: false;
+        };
+    };
+};
+
+export type PostApiV1StorefrontAgentContextsByContextIdCustomerLogoutResponse = PostApiV1StorefrontAgentContextsByContextIdCustomerLogoutResponses[keyof PostApiV1StorefrontAgentContextsByContextIdCustomerLogoutResponses];
+
+export type GetApiV1StorefrontAgentContextsByContextIdCustomerProfileData = {
+    body?: never;
+    path: {
+        contextId: string;
+    };
+    query?: never;
+    url: '/api/v1/storefront/agent-contexts/{contextId}/customer/profile';
+};
+
+export type GetApiV1StorefrontAgentContextsByContextIdCustomerProfileErrors = {
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1StorefrontAgentContextsByContextIdCustomerProfileError = GetApiV1StorefrontAgentContextsByContextIdCustomerProfileErrors[keyof GetApiV1StorefrontAgentContextsByContextIdCustomerProfileErrors];
+
+export type GetApiV1StorefrontAgentContextsByContextIdCustomerProfileResponses = {
+    /**
+     * Customer profile
+     */
+    200: {
+        success: true;
+        data: {
+            [key: string]: unknown;
+        };
+    };
+};
+
+export type GetApiV1StorefrontAgentContextsByContextIdCustomerProfileResponse = GetApiV1StorefrontAgentContextsByContextIdCustomerProfileResponses[keyof GetApiV1StorefrontAgentContextsByContextIdCustomerProfileResponses];
+
+export type PutApiV1StorefrontAgentContextsByContextIdCustomerProfileData = {
+    body: {
+        name?: string;
+        address?: string;
+        city?: string;
+        zone?: string;
+        area?: string;
+    };
+    path: {
+        contextId: string;
+    };
+    query?: never;
+    url: '/api/v1/storefront/agent-contexts/{contextId}/customer/profile';
+};
+
+export type PutApiV1StorefrontAgentContextsByContextIdCustomerProfileErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PutApiV1StorefrontAgentContextsByContextIdCustomerProfileError = PutApiV1StorefrontAgentContextsByContextIdCustomerProfileErrors[keyof PutApiV1StorefrontAgentContextsByContextIdCustomerProfileErrors];
+
+export type PutApiV1StorefrontAgentContextsByContextIdCustomerProfileResponses = {
+    /**
+     * Updated customer profile
+     */
+    200: {
+        success: true;
+        data: {
+            [key: string]: unknown;
+        };
+    };
+};
+
+export type PutApiV1StorefrontAgentContextsByContextIdCustomerProfileResponse = PutApiV1StorefrontAgentContextsByContextIdCustomerProfileResponses[keyof PutApiV1StorefrontAgentContextsByContextIdCustomerProfileResponses];
+
+export type GetApiV1StorefrontAgentContextsByContextIdCustomerOrdersData = {
+    body?: never;
+    path: {
+        contextId: string;
+    };
+    query?: {
+        cursor?: string;
+        limit?: number;
+    };
+    url: '/api/v1/storefront/agent-contexts/{contextId}/customer/orders';
+};
+
+export type GetApiV1StorefrontAgentContextsByContextIdCustomerOrdersErrors = {
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1StorefrontAgentContextsByContextIdCustomerOrdersError = GetApiV1StorefrontAgentContextsByContextIdCustomerOrdersErrors[keyof GetApiV1StorefrontAgentContextsByContextIdCustomerOrdersErrors];
+
+export type GetApiV1StorefrontAgentContextsByContextIdCustomerOrdersResponses = {
+    /**
+     * Customer orders
+     */
+    200: {
+        success: true;
+        data: {
+            [key: string]: unknown;
+        };
+    };
+};
+
+export type GetApiV1StorefrontAgentContextsByContextIdCustomerOrdersResponse = GetApiV1StorefrontAgentContextsByContextIdCustomerOrdersResponses[keyof GetApiV1StorefrontAgentContextsByContextIdCustomerOrdersResponses];
+
+export type GetApiV1StorefrontAgentContextsByContextIdCustomerOrdersByOrderIdData = {
+    body?: never;
+    path: {
+        contextId: string;
+        orderId: string;
+    };
+    query?: never;
+    url: '/api/v1/storefront/agent-contexts/{contextId}/customer/orders/{orderId}';
+};
+
+export type GetApiV1StorefrontAgentContextsByContextIdCustomerOrdersByOrderIdErrors = {
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1StorefrontAgentContextsByContextIdCustomerOrdersByOrderIdError = GetApiV1StorefrontAgentContextsByContextIdCustomerOrdersByOrderIdErrors[keyof GetApiV1StorefrontAgentContextsByContextIdCustomerOrdersByOrderIdErrors];
+
+export type GetApiV1StorefrontAgentContextsByContextIdCustomerOrdersByOrderIdResponses = {
+    /**
+     * Customer order
+     */
+    200: {
+        success: true;
+        data: {
+            [key: string]: unknown;
+        };
+    };
+};
+
+export type GetApiV1StorefrontAgentContextsByContextIdCustomerOrdersByOrderIdResponse = GetApiV1StorefrontAgentContextsByContextIdCustomerOrdersByOrderIdResponses[keyof GetApiV1StorefrontAgentContextsByContextIdCustomerOrdersByOrderIdResponses];
+
+export type GetApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdReceiptData = {
+    body?: never;
+    path: {
+        contextId: string;
+        orderId: string;
+    };
+    query?: never;
+    url: '/api/v1/storefront/agent-contexts/{contextId}/orders/{orderId}/receipt';
+};
+
+export type GetApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdReceiptErrors = {
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdReceiptError = GetApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdReceiptErrors[keyof GetApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdReceiptErrors];
+
+export type GetApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdReceiptResponses = {
+    /**
+     * Order receipt
+     */
+    200: {
+        success: true;
+        data: {
+            [key: string]: unknown;
+        };
+    };
+};
+
+export type GetApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdReceiptResponse = GetApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdReceiptResponses[keyof GetApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdReceiptResponses];
+
+export type PostApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdSupportRequestsData = {
+    body: {
+        type: 'cancel_pre_shipment' | 'return' | 'refund';
+        reason: string;
+        message?: string | null;
+    };
+    path: {
+        contextId: string;
+        orderId: string;
+    };
+    query?: never;
+    url: '/api/v1/storefront/agent-contexts/{contextId}/orders/{orderId}/support-requests';
+};
+
+export type PostApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdSupportRequestsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdSupportRequestsError = PostApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdSupportRequestsErrors[keyof PostApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdSupportRequestsErrors];
+
+export type PostApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdSupportRequestsResponses = {
+    /**
+     * Support request submitted
+     */
+    201: {
+        success: true;
+        data: {
+            [key: string]: unknown;
+        };
+    };
+};
+
+export type PostApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdSupportRequestsResponse = PostApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdSupportRequestsResponses[keyof PostApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdSupportRequestsResponses];
+
+export type PostApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdPaymentData = {
+    body: {
+        [key: string]: never;
+    };
+    path: {
+        contextId: string;
+        orderId: string;
+    };
+    query?: never;
+    url: '/api/v1/storefront/agent-contexts/{contextId}/orders/{orderId}/payment';
+};
+
+export type PostApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdPaymentErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdPaymentError = PostApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdPaymentErrors[keyof PostApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdPaymentErrors];
+
+export type PostApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdPaymentResponses = {
+    /**
+     * Secure storefront step started
+     */
+    201: {
+        success: true;
+        data: {
+            id: string;
+            kind: 'customer_auth' | 'payment' | 'payment_recovery';
+            status: 'pending' | 'complete' | 'expired' | 'failed';
+            expiresAt: string;
+            browser: {
+                url: string;
+                method: 'POST';
+                fields: {
+                    continuationCode: string;
+                };
+            };
+            message: string;
+        };
+    };
+};
+
+export type PostApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdPaymentResponse = PostApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdPaymentResponses[keyof PostApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdPaymentResponses];
+
+export type GetApiV1StorefrontAgentContextsByContextIdPaymentsByContinuationIdData = {
+    body?: never;
+    path: {
+        contextId: string;
+        continuationId: string;
+    };
+    query?: never;
+    url: '/api/v1/storefront/agent-contexts/{contextId}/payments/{continuationId}';
+};
+
+export type GetApiV1StorefrontAgentContextsByContextIdPaymentsByContinuationIdErrors = {
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1StorefrontAgentContextsByContextIdPaymentsByContinuationIdError = GetApiV1StorefrontAgentContextsByContextIdPaymentsByContinuationIdErrors[keyof GetApiV1StorefrontAgentContextsByContextIdPaymentsByContinuationIdErrors];
+
+export type GetApiV1StorefrontAgentContextsByContextIdPaymentsByContinuationIdResponses = {
+    /**
+     * Payment status
+     */
+    200: {
+        success: true;
+        data: {
+            [key: string]: unknown;
+        };
+    };
+};
+
+export type GetApiV1StorefrontAgentContextsByContextIdPaymentsByContinuationIdResponse = GetApiV1StorefrontAgentContextsByContextIdPaymentsByContinuationIdResponses[keyof GetApiV1StorefrontAgentContextsByContextIdPaymentsByContinuationIdResponses];
+
+export type PostApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdPaymentRecoveryData = {
+    body: {
+        [key: string]: never;
+    };
+    path: {
+        contextId: string;
+        orderId: string;
+    };
+    query?: never;
+    url: '/api/v1/storefront/agent-contexts/{contextId}/orders/{orderId}/payment-recovery';
+};
+
+export type PostApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdPaymentRecoveryErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdPaymentRecoveryError = PostApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdPaymentRecoveryErrors[keyof PostApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdPaymentRecoveryErrors];
+
+export type PostApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdPaymentRecoveryResponses = {
+    /**
+     * Secure storefront step started
+     */
+    201: {
+        success: true;
+        data: {
+            id: string;
+            kind: 'customer_auth' | 'payment' | 'payment_recovery';
+            status: 'pending' | 'complete' | 'expired' | 'failed';
+            expiresAt: string;
+            browser: {
+                url: string;
+                method: 'POST';
+                fields: {
+                    continuationCode: string;
+                };
+            };
+            message: string;
+        };
+    };
+};
+
+export type PostApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdPaymentRecoveryResponse = PostApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdPaymentRecoveryResponses[keyof PostApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdPaymentRecoveryResponses];
+
+export type GetApiV1StorefrontAgentContextsByContextIdPaymentRecoveriesByContinuationIdData = {
+    body?: never;
+    path: {
+        contextId: string;
+        continuationId: string;
+    };
+    query?: never;
+    url: '/api/v1/storefront/agent-contexts/{contextId}/payment-recoveries/{continuationId}';
+};
+
+export type GetApiV1StorefrontAgentContextsByContextIdPaymentRecoveriesByContinuationIdErrors = {
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1StorefrontAgentContextsByContextIdPaymentRecoveriesByContinuationIdError = GetApiV1StorefrontAgentContextsByContextIdPaymentRecoveriesByContinuationIdErrors[keyof GetApiV1StorefrontAgentContextsByContextIdPaymentRecoveriesByContinuationIdErrors];
+
+export type GetApiV1StorefrontAgentContextsByContextIdPaymentRecoveriesByContinuationIdResponses = {
+    /**
+     * Payment recovery status
+     */
+    200: {
+        success: true;
+        data: {
+            [key: string]: unknown;
+        };
+    };
+};
+
+export type GetApiV1StorefrontAgentContextsByContextIdPaymentRecoveriesByContinuationIdResponse = GetApiV1StorefrontAgentContextsByContextIdPaymentRecoveriesByContinuationIdResponses[keyof GetApiV1StorefrontAgentContextsByContextIdPaymentRecoveriesByContinuationIdResponses];
+
+export type GetApiV1StorefrontAgentContextsByContextIdContinuationsByContinuationIdData = {
+    body?: never;
+    path: {
+        contextId: string;
+        continuationId: string;
+    };
+    query?: never;
+    url: '/api/v1/storefront/agent-contexts/{contextId}/continuations/{continuationId}';
+};
+
+export type GetApiV1StorefrontAgentContextsByContextIdContinuationsByContinuationIdErrors = {
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1StorefrontAgentContextsByContextIdContinuationsByContinuationIdError = GetApiV1StorefrontAgentContextsByContextIdContinuationsByContinuationIdErrors[keyof GetApiV1StorefrontAgentContextsByContextIdContinuationsByContinuationIdErrors];
+
+export type GetApiV1StorefrontAgentContextsByContextIdContinuationsByContinuationIdResponses = {
+    /**
+     * Safe continuation state
+     */
+    200: {
+        success: true;
+        data: {
+            id: string;
+            kind: 'customer_auth' | 'payment' | 'payment_recovery';
+            status: 'pending' | 'complete' | 'expired' | 'failed';
+            expiresAt: string;
+            result: {
+                [key: string]: unknown;
+            } | null;
+            message: string;
+        };
+    };
+};
+
+export type GetApiV1StorefrontAgentContextsByContextIdContinuationsByContinuationIdResponse = GetApiV1StorefrontAgentContextsByContextIdContinuationsByContinuationIdResponses[keyof GetApiV1StorefrontAgentContextsByContextIdContinuationsByContinuationIdResponses];
+
+export type PostApiV1StorefrontAgentContinuationsThemePreviewData = {
+    body: {
+        continuationCode: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/storefront/agent-continuations/theme-preview';
+};
+
+export type PostApiV1StorefrontAgentContinuationsThemePreviewErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1StorefrontAgentContinuationsThemePreviewError = PostApiV1StorefrontAgentContinuationsThemePreviewErrors[keyof PostApiV1StorefrontAgentContinuationsThemePreviewErrors];
+
+export type PostApiV1StorefrontAgentContinuationsThemePreviewResponses = {
+    /**
+     * Cookie-only preview bearer for the trusted storefront bridge
+     */
+    200: {
+        success: true;
+        data: {
+            token: string;
+            draftRevision: number;
+            basePublishedRevision: number;
+            expiresAt?: unknown;
+        };
+    };
+};
+
+export type PostApiV1StorefrontAgentContinuationsThemePreviewResponse = PostApiV1StorefrontAgentContinuationsThemePreviewResponses[keyof PostApiV1StorefrontAgentContinuationsThemePreviewResponses];
+
+export type PostApiV1StorefrontAgentContinuationsBootstrapData = {
+    body: {
+        continuationCode: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/storefront/agent-continuations/bootstrap';
+};
+
+export type PostApiV1StorefrontAgentContinuationsBootstrapErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1StorefrontAgentContinuationsBootstrapError = PostApiV1StorefrontAgentContinuationsBootstrapErrors[keyof PostApiV1StorefrontAgentContinuationsBootstrapErrors];
+
+export type PostApiV1StorefrontAgentContinuationsBootstrapResponses = {
+    /**
+     * Claimed browser-only continuation identity
+     */
+    200: {
+        success: true;
+        data: {
+            id: string;
+            kind: 'customer_auth' | 'payment' | 'payment_recovery';
+            expiresAt: string;
+        };
+    };
+};
+
+export type PostApiV1StorefrontAgentContinuationsBootstrapResponse = PostApiV1StorefrontAgentContinuationsBootstrapResponses[keyof PostApiV1StorefrontAgentContinuationsBootstrapResponses];
+
+export type GetApiV1StorefrontAgentContinuationsByContinuationIdData = {
+    body?: never;
+    path: {
+        continuationId: string;
+    };
+    query?: never;
+    url: '/api/v1/storefront/agent-continuations/{continuationId}';
+};
+
+export type GetApiV1StorefrontAgentContinuationsByContinuationIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1StorefrontAgentContinuationsByContinuationIdError = GetApiV1StorefrontAgentContinuationsByContinuationIdErrors[keyof GetApiV1StorefrontAgentContinuationsByContinuationIdErrors];
+
+export type GetApiV1StorefrontAgentContinuationsByContinuationIdResponses = {
+    /**
+     * Secure workflow bootstrap
+     */
+    200: {
+        success: true;
+        data: {
+            id: string;
+            kind: 'customer_auth' | 'payment' | 'payment_recovery';
+            status: 'pending' | 'complete' | 'expired' | 'failed';
+            expiresAt: string;
+        };
+    };
+};
+
+export type GetApiV1StorefrontAgentContinuationsByContinuationIdResponse = GetApiV1StorefrontAgentContinuationsByContinuationIdResponses[keyof GetApiV1StorefrontAgentContinuationsByContinuationIdResponses];
+
+export type PostApiV1StorefrontAgentContinuationsByContinuationIdCustomerSendOtpData = {
+    body: {
+        method: 'email' | 'phone';
+        channel?: 'email' | 'sms' | 'whatsapp';
+        intent?: 'sign_in' | 'sign_up';
+        identifier: string;
+        name?: string;
+        phone?: string;
+        email?: string;
+    };
+    path: {
+        continuationId: string;
+    };
+    query?: never;
+    url: '/api/v1/storefront/agent-continuations/{continuationId}/customer/send-otp';
+};
+
+export type PostApiV1StorefrontAgentContinuationsByContinuationIdCustomerSendOtpErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1StorefrontAgentContinuationsByContinuationIdCustomerSendOtpError = PostApiV1StorefrontAgentContinuationsByContinuationIdCustomerSendOtpErrors[keyof PostApiV1StorefrontAgentContinuationsByContinuationIdCustomerSendOtpErrors];
+
+export type PostApiV1StorefrontAgentContinuationsByContinuationIdCustomerSendOtpResponses = {
+    /**
+     * OTP delivery accepted
+     */
+    200: {
+        success: true;
+        data: {
+            message: string;
+        };
+    };
+};
+
+export type PostApiV1StorefrontAgentContinuationsByContinuationIdCustomerSendOtpResponse = PostApiV1StorefrontAgentContinuationsByContinuationIdCustomerSendOtpResponses[keyof PostApiV1StorefrontAgentContinuationsByContinuationIdCustomerSendOtpResponses];
+
+export type PostApiV1StorefrontAgentContinuationsByContinuationIdCustomerVerifyOtpData = {
+    body: {
+        method: 'email' | 'phone';
+        channel?: 'email' | 'sms' | 'whatsapp';
+        intent?: 'sign_in' | 'sign_up';
+        identifier: string;
+        name?: string;
+        phone?: string;
+        email?: string;
+        code: string;
+    };
+    path: {
+        continuationId: string;
+    };
+    query?: never;
+    url: '/api/v1/storefront/agent-continuations/{continuationId}/customer/verify-otp';
+};
+
+export type PostApiV1StorefrontAgentContinuationsByContinuationIdCustomerVerifyOtpErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1StorefrontAgentContinuationsByContinuationIdCustomerVerifyOtpError = PostApiV1StorefrontAgentContinuationsByContinuationIdCustomerVerifyOtpErrors[keyof PostApiV1StorefrontAgentContinuationsByContinuationIdCustomerVerifyOtpErrors];
+
+export type PostApiV1StorefrontAgentContinuationsByContinuationIdCustomerVerifyOtpResponses = {
+    /**
+     * Customer authorized
+     */
+    200: {
+        success: true;
+        data: {
+            authenticated: true;
+            customer?: {
+                [key: string]: unknown;
+            };
+            isNewUser: boolean;
+        };
+    };
+};
+
+export type PostApiV1StorefrontAgentContinuationsByContinuationIdCustomerVerifyOtpResponse = PostApiV1StorefrontAgentContinuationsByContinuationIdCustomerVerifyOtpResponses[keyof PostApiV1StorefrontAgentContinuationsByContinuationIdCustomerVerifyOtpResponses];
+
+export type PostApiV1StorefrontAgentContinuationsByContinuationIdPaymentStartData = {
+    body: {
+        [key: string]: never;
+    };
+    path: {
+        continuationId: string;
+    };
+    query?: never;
+    url: '/api/v1/storefront/agent-continuations/{continuationId}/payment/start';
+};
+
+export type PostApiV1StorefrontAgentContinuationsByContinuationIdPaymentStartErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1StorefrontAgentContinuationsByContinuationIdPaymentStartError = PostApiV1StorefrontAgentContinuationsByContinuationIdPaymentStartErrors[keyof PostApiV1StorefrontAgentContinuationsByContinuationIdPaymentStartErrors];
+
+export type PostApiV1StorefrontAgentContinuationsByContinuationIdPaymentStartResponses = {
+    /**
+     * Buyer-only payment session
+     */
+    200: {
+        success: true;
+        data: {
+            [key: string]: unknown;
+        };
+    };
+    /**
+     * Payment session creation is already processing
+     */
+    202: {
+        success: true;
+        data: {
+            status: 'processing';
+            retryable: true;
+            retryAfterSeconds: number;
+            orderId: string;
+            gateway: 'stripe' | 'sslcommerz' | 'polar';
+            paymentType: 'full' | 'deposit' | 'balance';
+            message: string;
+        };
+    };
+};
+
+export type PostApiV1StorefrontAgentContinuationsByContinuationIdPaymentStartResponse = PostApiV1StorefrontAgentContinuationsByContinuationIdPaymentStartResponses[keyof PostApiV1StorefrontAgentContinuationsByContinuationIdPaymentStartResponses];
+
+export type PostApiV1StorefrontAgentContinuationsByContinuationIdRecoverySendOtpData = {
+    body: {
+        channel?: 'email' | 'sms' | 'whatsapp';
+    };
+    path: {
+        continuationId: string;
+    };
+    query?: never;
+    url: '/api/v1/storefront/agent-continuations/{continuationId}/recovery/send-otp';
+};
+
+export type PostApiV1StorefrontAgentContinuationsByContinuationIdRecoverySendOtpErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1StorefrontAgentContinuationsByContinuationIdRecoverySendOtpError = PostApiV1StorefrontAgentContinuationsByContinuationIdRecoverySendOtpErrors[keyof PostApiV1StorefrontAgentContinuationsByContinuationIdRecoverySendOtpErrors];
+
+export type PostApiV1StorefrontAgentContinuationsByContinuationIdRecoverySendOtpResponses = {
+    /**
+     * Recovery verification accepted
+     */
+    200: {
+        success: true;
+        data: {
+            message: string;
+            channel?: 'email' | 'sms' | 'whatsapp';
+        };
+    };
+};
+
+export type PostApiV1StorefrontAgentContinuationsByContinuationIdRecoverySendOtpResponse = PostApiV1StorefrontAgentContinuationsByContinuationIdRecoverySendOtpResponses[keyof PostApiV1StorefrontAgentContinuationsByContinuationIdRecoverySendOtpResponses];
+
+export type PostApiV1StorefrontAgentContinuationsByContinuationIdRecoveryVerifyOtpData = {
+    body: {
+        channel: 'email' | 'sms' | 'whatsapp';
+        code: string;
+    };
+    path: {
+        continuationId: string;
+    };
+    query?: never;
+    url: '/api/v1/storefront/agent-continuations/{continuationId}/recovery/verify-otp';
+};
+
+export type PostApiV1StorefrontAgentContinuationsByContinuationIdRecoveryVerifyOtpErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1StorefrontAgentContinuationsByContinuationIdRecoveryVerifyOtpError = PostApiV1StorefrontAgentContinuationsByContinuationIdRecoveryVerifyOtpErrors[keyof PostApiV1StorefrontAgentContinuationsByContinuationIdRecoveryVerifyOtpErrors];
+
+export type PostApiV1StorefrontAgentContinuationsByContinuationIdRecoveryVerifyOtpResponses = {
+    /**
+     * Recovery verified for trusted storefront proxy
+     */
+    200: {
+        success: true;
+        data: {
+            recovered: true;
+            orderId: string;
+            receiptProof: string;
+        };
+    };
+};
+
+export type PostApiV1StorefrontAgentContinuationsByContinuationIdRecoveryVerifyOtpResponse = PostApiV1StorefrontAgentContinuationsByContinuationIdRecoveryVerifyOtpResponses[keyof PostApiV1StorefrontAgentContinuationsByContinuationIdRecoveryVerifyOtpResponses];
+
 export type GetApiV1CheckoutConfigData = {
     body?: never;
     path?: never;
@@ -2575,7 +7171,58 @@ export type GetApiV1CheckoutConfigResponses = {
     200: {
         success: true;
         data: {
-            [key: string]: unknown;
+            gateways: Array<{
+                id: 'stripe';
+                name: string;
+                currencies: Array<string>;
+                publishableKey: string;
+                testMode: boolean;
+            } | {
+                id: 'sslcommerz';
+                name: string;
+                currencies: Array<string>;
+                sandbox: boolean;
+                testMode: boolean;
+            } | {
+                id: 'polar';
+                name: string;
+                currencies: Array<string>;
+                sandbox: boolean;
+                testMode: boolean;
+            } | {
+                id: 'cod';
+                name: string;
+                currencies: Array<string>;
+            }>;
+            activeDefaultMethod?: 'stripe' | 'sslcommerz' | 'polar' | 'cod';
+            guestCheckoutEnabled: boolean;
+            authVerificationMethod: 'email' | 'sms_otp' | 'whatsapp_otp' | 'both';
+            customerAuthPolicy: {
+                otpChannels: Array<'email' | 'sms' | 'whatsapp'>;
+                requiredContactFields: Array<'email' | 'phone'>;
+                optionalContactFields: Array<'email' | 'phone'>;
+                defaultOtpChannel: 'email' | 'sms' | 'whatsapp';
+            };
+            checkoutMode: 'guest_cod_only' | 'gateways_only' | 'all';
+            partialPaymentEnabled: boolean;
+            partialPaymentAmount: number;
+            allowedCountries: Array<string>;
+            allowedCountriesMode: 'include' | 'exclude';
+            currency: {
+                code: string;
+                symbol: string;
+                decimalPlaces: number;
+            };
+            checkoutReadiness: {
+                ready: boolean;
+                hasActiveShippingMethod: boolean;
+                hasActiveDeliveryHierarchy: boolean;
+                customerSignInRequired: boolean;
+                hasUsableCustomerSignIn: boolean;
+                issues: Array<string>;
+            };
+            unavailable: boolean;
+            unavailableMessage?: string;
         };
     };
 };
@@ -4002,18 +8649,51 @@ export type GetApiV1CheckoutLanguagesActiveResponses = {
                 id: string;
                 name: string;
                 code: string;
-                languageData: string | {
-                    [key: string]: unknown;
+                languageData: {
+                    pageTitle: string;
+                    checkoutSectionTitle: string;
+                    cartSectionTitle: string;
+                    customerNameLabel: string;
+                    customerNamePlaceholder: string;
+                    customerPhoneLabel: string;
+                    customerPhonePlaceholder: string;
+                    customerPhoneHelp: string;
+                    customerEmailLabel: string;
+                    customerEmailPlaceholder: string;
+                    shippingAddressLabel: string;
+                    shippingAddressPlaceholder: string;
+                    cityLabel: string;
+                    zoneLabel: string;
+                    areaLabel: string;
+                    shippingMethodLabel: string;
+                    orderNotesLabel: string;
+                    orderNotesPlaceholder: string;
+                    continueShoppingText: string;
+                    subtotalText: string;
+                    shippingText: string;
+                    discountText: string;
+                    totalText: string;
+                    discountCodePlaceholder: string;
+                    applyDiscountText: string;
+                    removeDiscountText: string;
+                    placeOrderText: string;
+                    processingText: string;
+                    emptyCartText: string;
+                    termsText: string;
+                    processingOrderTitle: string;
+                    processingOrderMessage: string;
+                    requiredFieldIndicator: string;
                 };
-                fieldVisibility: string | {
-                    [key: string]: unknown;
+                fieldVisibility: {
+                    showEmailField: boolean;
+                    showOrderNotesField: boolean;
+                    showAreaField: boolean;
                 };
                 isActive: boolean;
                 isDefault: boolean;
                 createdAt?: string | number;
                 updatedAt?: string | number;
                 deletedAt?: string | number | null;
-                [key: string]: unknown;
             };
         };
     };
@@ -4248,9 +8928,10 @@ export type GetApiV1LocationsCitiesResponses = {
         data: Array<{
             id: string;
             name: string;
-            type: string;
+            type: 'city' | 'zone' | 'area';
             parentId: string | null;
             isActive: boolean;
+            sortOrder: number;
         }>;
     };
 };
@@ -4305,9 +8986,10 @@ export type GetApiV1LocationsZonesResponses = {
         data: Array<{
             id: string;
             name: string;
-            type: string;
+            type: 'city' | 'zone' | 'area';
             parentId: string | null;
             isActive: boolean;
+            sortOrder: number;
         }>;
     };
 };
@@ -4362,9 +9044,10 @@ export type GetApiV1LocationsAreasResponses = {
         data: Array<{
             id: string;
             name: string;
-            type: string;
+            type: 'city' | 'zone' | 'area';
             parentId: string | null;
             isActive: boolean;
+            sortOrder: number;
         }>;
     };
 };
@@ -4410,7 +9093,6 @@ export type GetApiV1ShippingMethodsResponses = {
                 sortOrder: number;
                 createdAt: string | null;
                 updatedAt: string | null;
-                [key: string]: unknown;
             }>;
         };
     };
@@ -4739,10 +9421,37 @@ export type GetApiV1ProductsSearchResponses = {
                 imageUrl: string | null;
                 imageMediaId: string | null;
                 imageAlt: string | null;
+                discountType: string | null;
+                discountPercentage: number | null;
+                discountAmount: number | null;
+                freeDelivery: boolean;
                 variants: Array<{
-                    [key: string]: unknown;
+                    id: string;
+                    productId: string;
+                    optionCombinationKey: string | null;
+                    imageId: string | null;
+                    selectedOptions: Array<{
+                        optionDefinitionId: string;
+                        optionValueId: string;
+                        name: string;
+                        value: string;
+                        position: number;
+                        valuePosition: number;
+                        standardMapping: 'size' | 'color' | 'material' | 'pattern' | 'none';
+                    }>;
+                    weight: number | null;
+                    sku: string;
+                    price: number;
+                    stock: number;
+                    reservedStock: number;
+                    lowStockThreshold: number | null;
+                    availabilityBand: 'untracked' | 'out_of_stock' | 'low_stock' | 'in_stock';
+                    isDefault: boolean;
+                    trackInventory: boolean;
+                    discountType: string | null;
+                    discountPercentage: number | null;
+                    discountAmount: number | null;
                 }>;
-                [key: string]: unknown;
             }>;
             pagination: {
                 page: number;
@@ -4975,6 +9684,248 @@ export type GetApiV1ProductsSitemapResponses = {
 
 export type GetApiV1ProductsSitemapResponse = GetApiV1ProductsSitemapResponses[keyof GetApiV1ProductsSitemapResponses];
 
+export type GetApiV1ProductsBySlugSectionsBySectionData = {
+    body?: never;
+    path: {
+        slug: string;
+        section: 'summary' | 'text' | 'media' | 'attributes' | 'additional_info' | 'additional_info_text' | 'options' | 'option_values' | 'variants' | 'related_products';
+    };
+    query?: {
+        offset?: number | null;
+        limit?: number;
+        field?: 'description' | 'metaTitle' | 'metaDescription' | 'title' | 'content';
+        itemId?: string;
+    };
+    url: '/api/v1/products/{slug}/sections/{section}';
+};
+
+export type GetApiV1ProductsBySlugSectionsBySectionErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1ProductsBySlugSectionsBySectionError = GetApiV1ProductsBySlugSectionsBySectionErrors[keyof GetApiV1ProductsBySlugSectionsBySectionErrors];
+
+export type GetApiV1ProductsBySlugSectionsBySectionResponses = {
+    /**
+     * Bounded public product section
+     */
+    200: {
+        success: true;
+        data: {
+            section: 'summary';
+            product: {
+                id: string;
+                name: string;
+                price: number;
+                categoryId: string | null;
+                slug: string;
+                canonicalPath: string | null;
+                productCondition: 'new' | 'refurbished' | 'used' | null;
+                noIndex: boolean;
+                discountType: string;
+                discountPercentage: number;
+                discountAmount: number;
+                discountedPrice: number;
+                freeDelivery: boolean;
+                hasVariants: boolean;
+                imageUrl: string | null;
+                imageMediaId: string | null;
+                imageAlt: string | null;
+                createdAt: string | null;
+                updatedAt: string | null;
+                category: {
+                    id: string;
+                    name: string;
+                    slug: string;
+                } | null;
+                textLengths: {
+                    description: number;
+                    metaTitle: number;
+                    metaDescription: number;
+                };
+                counts: {
+                    media: number;
+                    attributes: number;
+                    additionalInfo: number;
+                    options: number;
+                    variants: number;
+                    relatedProducts: number;
+                };
+            };
+        } | {
+            section: 'text' | 'additional_info_text';
+            itemId?: string;
+            field: 'description' | 'metaTitle' | 'metaDescription' | 'title' | 'content';
+            value: string;
+            totalCharacters: number;
+            offset: number;
+            nextOffset: number | null;
+            isNull: boolean;
+        } | {
+            section: 'media';
+            items: Array<{
+                id: string;
+                mediaId: string;
+                kind: 'image' | 'video';
+                url: string;
+                posterMediaId: string | null;
+                posterUrl: string | null;
+                altText: string;
+                caption: string | null;
+                width: number | null;
+                height: number | null;
+                durationMs: number | null;
+                isPrimary: boolean;
+                sortOrder: number;
+                status: 'ready' | 'trashed';
+            }>;
+            total: number;
+            offset: number;
+            limit: number;
+            nextOffset: number | null;
+        } | {
+            section: 'attributes';
+            items: Array<{
+                name: string;
+                slug: string;
+                value: string;
+            }>;
+            total: number;
+            offset: number;
+            limit: number;
+            nextOffset: number | null;
+        } | {
+            section: 'additional_info';
+            items: Array<{
+                id: string;
+                titleCharacters: number;
+                contentCharacters: number;
+            }>;
+            total: number;
+            offset: number;
+            limit: number;
+            nextOffset: number | null;
+        } | {
+            section: 'options';
+            items: Array<{
+                id: string;
+                name: string;
+                position: number;
+                standardMapping: 'size' | 'color' | 'material' | 'pattern' | 'none';
+                valueCount: number;
+            }>;
+            total: number;
+            offset: number;
+            limit: number;
+            nextOffset: number | null;
+        } | {
+            section: 'option_values';
+            itemId: string;
+            items: Array<{
+                id: string;
+                value: string;
+                position: number;
+            }>;
+            total: number;
+            offset: number;
+            limit: number;
+            nextOffset: number | null;
+        } | {
+            section: 'variants';
+            items: Array<{
+                id: string;
+                productId: string;
+                optionCombinationKey: string | null;
+                imageId: string | null;
+                imageMediaId: string | null;
+                imageUrl: string | null;
+                selectedOptions: Array<{
+                    optionDefinitionId: string;
+                    optionValueId: string;
+                    name: string;
+                    value: string;
+                    position: number;
+                    valuePosition: number;
+                    standardMapping: 'size' | 'color' | 'material' | 'pattern' | 'none';
+                }>;
+                weight: number | null;
+                sku: string;
+                price: number;
+                availabilityBand: 'untracked' | 'out_of_stock' | 'low_stock' | 'in_stock';
+                isDefault: boolean;
+                barcode: string | null;
+                barcodeType: string | null;
+                discountType: string | null;
+                discountPercentage: number | null;
+                discountAmount: number | null;
+                createdAt: string | null;
+                updatedAt: string | null;
+            }>;
+            total: number;
+            offset: number;
+            limit: number;
+            nextOffset: number | null;
+        } | {
+            section: 'related_products';
+            items: Array<{
+                id: string;
+                name: string;
+                price: number;
+                slug: string;
+                discountType: string | null;
+                discountPercentage: number | null;
+                discountAmount: number | null;
+                discountedPrice: number;
+                hasVariants: boolean;
+                availableForSale: boolean;
+                priceVaries: boolean;
+                freeDelivery: boolean;
+                imageUrl: string | null;
+                imageMediaId: string | null;
+                imageAlt: string | null;
+            }>;
+            total: number;
+            offset: number;
+            limit: number;
+            nextOffset: number | null;
+        };
+    };
+};
+
+export type GetApiV1ProductsBySlugSectionsBySectionResponse = GetApiV1ProductsBySlugSectionsBySectionResponses[keyof GetApiV1ProductsBySlugSectionsBySectionResponses];
+
 export type GetApiV1ProductsBySlugData = {
     body?: never;
     path: {
@@ -5019,10 +9970,64 @@ export type GetApiV1ProductsBySlugResponses = {
         success: true;
         data: {
             product: {
-                [key: string]: unknown;
+                id: string;
+                name: string;
+                description: string | null;
+                price: number;
+                categoryId: string | null;
+                slug: string;
+                metaTitle: string | null;
+                metaDescription: string | null;
+                canonicalPath: string | null;
+                productCondition: 'new' | 'refurbished' | 'used' | null;
+                noIndex: boolean;
+                discountType: string;
+                discountPercentage: number;
+                discountAmount: number;
+                discountedPrice: number;
+                freeDelivery: boolean;
+                isActive: boolean;
+                deletedAt: string | null;
+                createdAt: string | null;
+                updatedAt: string | null;
+                hasVariants: boolean;
+                imageUrl: string | null;
+                imageMediaId: string | null;
+                imageAlt: string | null;
+                options: Array<{
+                    id: string;
+                    name: string;
+                    position: number;
+                    standardMapping: 'size' | 'color' | 'material' | 'pattern' | 'none';
+                    values: Array<{
+                        id: string;
+                        value: string;
+                        position: number;
+                    }>;
+                }>;
+                features: Array<string>;
+                attributes: Array<{
+                    name: string;
+                    slug: string;
+                    value: string;
+                }>;
+                additionalInfo: Array<{
+                    id: string;
+                    title: string;
+                    content: string;
+                }>;
             };
             category: {
-                [key: string]: unknown;
+                id: string;
+                name: string;
+                slug: string;
+                description: string | null;
+                imageUrl: string | null;
+                metaTitle: string | null;
+                metaDescription: string | null;
+                canonicalPath: string | null;
+                noIndex: boolean;
+                excludeFromSitemap: boolean;
             } | null;
             media: Array<{
                 id: string;
@@ -5041,10 +10046,55 @@ export type GetApiV1ProductsBySlugResponses = {
                 status: 'ready' | 'trashed';
             }>;
             variants: Array<{
-                [key: string]: unknown;
+                id: string;
+                productId: string;
+                optionCombinationKey: string | null;
+                imageId: string | null;
+                imageMediaId: string | null;
+                imageUrl: string | null;
+                selectedOptions: Array<{
+                    optionDefinitionId: string;
+                    optionValueId: string;
+                    name: string;
+                    value: string;
+                    position: number;
+                    valuePosition: number;
+                    standardMapping: 'size' | 'color' | 'material' | 'pattern' | 'none';
+                }>;
+                weight: number | null;
+                sku: string;
+                price: number;
+                stock: number;
+                reservedStock: number;
+                lowStockThreshold: number | null;
+                availabilityBand: 'untracked' | 'out_of_stock' | 'low_stock' | 'in_stock';
+                isDefault: boolean;
+                trackInventory: boolean;
+                barcode: string | null;
+                barcodeType: string | null;
+                discountType: string | null;
+                discountPercentage: number | null;
+                discountAmount: number | null;
+                createdAt: string | null;
+                updatedAt: string | null;
+                deletedAt: string | null;
             }>;
             relatedProducts: Array<{
-                [key: string]: unknown;
+                id: string;
+                name: string;
+                price: number;
+                slug: string;
+                discountType: string | null;
+                discountPercentage: number | null;
+                discountAmount: number | null;
+                discountedPrice: number;
+                hasVariants: boolean;
+                availableForSale: boolean;
+                priceVaries: boolean;
+                freeDelivery: boolean;
+                imageUrl: string | null;
+                imageMediaId: string | null;
+                imageAlt: string | null;
             }>;
         };
     };
@@ -5095,7 +10145,6 @@ export type GetApiV1CategoriesResponses = {
                 canonicalPath: string | null;
                 noIndex: boolean;
                 excludeFromSitemap: boolean;
-                [key: string]: unknown;
             }>;
         };
     };
@@ -5160,7 +10209,6 @@ export type GetApiV1CategoriesBySlugResponses = {
                 noIndex: boolean;
                 excludeFromSitemap: boolean;
                 content: string | null;
-                [key: string]: unknown;
             };
         };
     };
@@ -5269,7 +10317,6 @@ export type GetApiV1CategoriesBySlugProductsResponses = {
                 noIndex: boolean;
                 excludeFromSitemap: boolean;
                 content: string | null;
-                [key: string]: unknown;
             };
             products: Array<{
                 id: string;
@@ -5281,7 +10328,20 @@ export type GetApiV1CategoriesBySlugProductsResponses = {
                 discountAmount: number | null;
                 discountedPrice: number;
                 priceVaries: boolean;
-                [key: string]: unknown;
+                freeDelivery: boolean;
+                categoryId: string | null;
+                hasVariants: boolean;
+                availableForSale: boolean;
+                imageUrl: string | null;
+                imageMediaId: string | null;
+                imageAlt: string | null;
+                category: {
+                    id: string;
+                    name: string;
+                    slug: string;
+                } | null;
+                createdAt: string | null;
+                updatedAt: string | null;
             }>;
             pagination: {
                 page: number;
@@ -5303,7 +10363,18 @@ export type GetApiV1CategoriesBySlugProductsResponses = {
                 }>;
             }>;
             appliedFilters: {
-                [key: string]: unknown;
+                attributes: Array<{
+                    id: string;
+                    name: string;
+                    slug: string;
+                    values: Array<string>;
+                }>;
+                sort: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount';
+                search?: string;
+                minPrice?: number;
+                maxPrice?: number;
+                freeDelivery?: 'true' | 'false';
+                hasDiscount?: 'true' | 'false';
             };
         };
     };
@@ -5504,7 +10575,7 @@ export type PostApiV1CacheClearResponses = {
 export type PostApiV1CacheClearResponse = PostApiV1CacheClearResponses[keyof PostApiV1CacheClearResponses];
 
 export type PostApiV1CacheClearGroupData = {
-    body?: {
+    body: {
         groups: Array<string>;
     };
     path?: never;
@@ -6714,7 +11785,7 @@ export type GetApiV1AdminCategoriesResponses = {
 export type GetApiV1AdminCategoriesResponse = GetApiV1AdminCategoriesResponses[keyof GetApiV1AdminCategoriesResponses];
 
 export type PostApiV1AdminCategoriesData = {
-    body?: {
+    body: {
         name: string;
         description: string | null;
         content?: string | null;
@@ -6939,7 +12010,7 @@ export type GetApiV1AdminCategoriesByIdPublishReadinessResponses = {
 export type GetApiV1AdminCategoriesByIdPublishReadinessResponse = GetApiV1AdminCategoriesByIdPublishReadinessResponses[keyof GetApiV1AdminCategoriesByIdPublishReadinessResponses];
 
 export type DeleteApiV1AdminCategoriesByIdData = {
-    body?: {
+    body: {
         expectedRevision: number;
     };
     path: {
@@ -7162,7 +12233,7 @@ export type GetApiV1AdminCategoriesByIdResponses = {
 export type GetApiV1AdminCategoriesByIdResponse = GetApiV1AdminCategoriesByIdResponses[keyof GetApiV1AdminCategoriesByIdResponses];
 
 export type PutApiV1AdminCategoriesByIdData = {
-    body?: {
+    body: {
         name: string;
         description: string | null;
         content?: string | null;
@@ -7287,7 +12358,7 @@ export type PutApiV1AdminCategoriesByIdResponses = {
 export type PutApiV1AdminCategoriesByIdResponse = PutApiV1AdminCategoriesByIdResponses[keyof PutApiV1AdminCategoriesByIdResponses];
 
 export type PostApiV1AdminCategoriesBulkDeleteData = {
-    body?: {
+    body: {
         categories: Array<{
             id: string;
             expectedRevision: number;
@@ -7391,7 +12462,7 @@ export type PostApiV1AdminCategoriesBulkDeleteResponses = {
 export type PostApiV1AdminCategoriesBulkDeleteResponse = PostApiV1AdminCategoriesBulkDeleteResponses[keyof PostApiV1AdminCategoriesBulkDeleteResponses];
 
 export type PostApiV1AdminCategoriesBulkRestoreData = {
-    body?: {
+    body: {
         categories: Array<{
             id: string;
             expectedRevision: number;
@@ -7494,7 +12565,7 @@ export type PostApiV1AdminCategoriesBulkRestoreResponses = {
 export type PostApiV1AdminCategoriesBulkRestoreResponse = PostApiV1AdminCategoriesBulkRestoreResponses[keyof PostApiV1AdminCategoriesBulkRestoreResponses];
 
 export type PatchApiV1AdminCategoriesByIdStatusData = {
-    body?: {
+    body: {
         expectedRevision: number;
         status: 'draft' | 'published' | 'internal';
     };
@@ -7603,7 +12674,7 @@ export type PatchApiV1AdminCategoriesByIdStatusResponses = {
 export type PatchApiV1AdminCategoriesByIdStatusResponse = PatchApiV1AdminCategoriesByIdStatusResponses[keyof PatchApiV1AdminCategoriesByIdStatusResponses];
 
 export type DeleteApiV1AdminCategoriesByIdPermanentData = {
-    body?: {
+    body: {
         expectedRevision: number;
     };
     path: {
@@ -7705,7 +12776,7 @@ export type DeleteApiV1AdminCategoriesByIdPermanentResponses = {
 export type DeleteApiV1AdminCategoriesByIdPermanentResponse = DeleteApiV1AdminCategoriesByIdPermanentResponses[keyof DeleteApiV1AdminCategoriesByIdPermanentResponses];
 
 export type PostApiV1AdminCategoriesByIdRestoreData = {
-    body?: {
+    body: {
         expectedRevision: number;
     };
     path: {
@@ -8146,7 +13217,7 @@ export type GetApiV1AdminCollectionsData = {
         /**
          * Show trashed items
          */
-        trashed?: string;
+        trashed?: 'true' | 'false';
         /**
          * Sort field
          */
@@ -8265,7 +13336,7 @@ export type GetApiV1AdminCollectionsResponses = {
 export type GetApiV1AdminCollectionsResponse = GetApiV1AdminCollectionsResponses[keyof GetApiV1AdminCollectionsResponses];
 
 export type PostApiV1AdminCollectionsData = {
-    body?: {
+    body: {
         name: string;
         description?: string | null;
         content?: string | null;
@@ -8495,7 +13566,7 @@ export type GetApiV1AdminCollectionsByIdsResponses = {
 export type GetApiV1AdminCollectionsByIdsResponse = GetApiV1AdminCollectionsByIdsResponses[keyof GetApiV1AdminCollectionsByIdsResponses];
 
 export type PostApiV1AdminCollectionsBulkDeleteData = {
-    body?: {
+    body: {
         collectionIds: Array<string>;
         permanent?: boolean;
     };
@@ -8585,7 +13656,7 @@ export type PostApiV1AdminCollectionsBulkDeleteResponses = {
 export type PostApiV1AdminCollectionsBulkDeleteResponse = PostApiV1AdminCollectionsBulkDeleteResponses[keyof PostApiV1AdminCollectionsBulkDeleteResponses];
 
 export type PostApiV1AdminCollectionsBulkActivateData = {
-    body?: {
+    body: {
         ids: Array<string>;
     };
     path?: never;
@@ -8685,7 +13756,7 @@ export type PostApiV1AdminCollectionsBulkActivateResponses = {
 export type PostApiV1AdminCollectionsBulkActivateResponse = PostApiV1AdminCollectionsBulkActivateResponses[keyof PostApiV1AdminCollectionsBulkActivateResponses];
 
 export type PostApiV1AdminCollectionsBulkDeactivateData = {
-    body?: {
+    body: {
         ids: Array<string>;
     };
     path?: never;
@@ -8774,7 +13845,7 @@ export type PostApiV1AdminCollectionsBulkDeactivateResponses = {
 export type PostApiV1AdminCollectionsBulkDeactivateResponse = PostApiV1AdminCollectionsBulkDeactivateResponses[keyof PostApiV1AdminCollectionsBulkDeactivateResponses];
 
 export type PostApiV1AdminCollectionsBulkRestoreData = {
-    body?: {
+    body: {
         ids: Array<string>;
     };
     path?: never;
@@ -8979,7 +14050,7 @@ export type PostApiV1AdminCollectionsByIdRestoreResponses = {
 export type PostApiV1AdminCollectionsByIdRestoreResponse = PostApiV1AdminCollectionsByIdRestoreResponses[keyof PostApiV1AdminCollectionsByIdRestoreResponses];
 
 export type PostApiV1AdminCollectionsReorderData = {
-    body?: {
+    body: {
         items: Array<{
             id: string;
             sortOrder: number;
@@ -9232,7 +14303,7 @@ export type GetApiV1AdminCollectionsByIdResponses = {
 export type GetApiV1AdminCollectionsByIdResponse = GetApiV1AdminCollectionsByIdResponses[keyof GetApiV1AdminCollectionsByIdResponses];
 
 export type PutApiV1AdminCollectionsByIdData = {
-    body?: {
+    body: {
         expectedVersion: number;
         name?: string;
         description?: string | null;
@@ -9605,7 +14676,7 @@ export type GetApiV1AdminCustomersResponses = {
 export type GetApiV1AdminCustomersResponse = GetApiV1AdminCustomersResponses[keyof GetApiV1AdminCustomersResponses];
 
 export type PostApiV1AdminCustomersData = {
-    body?: {
+    body: {
         name: string;
         email: string | null;
         phone: string;
@@ -9705,7 +14776,7 @@ export type PostApiV1AdminCustomersResponses = {
 export type PostApiV1AdminCustomersResponse = PostApiV1AdminCustomersResponses[keyof PostApiV1AdminCustomersResponses];
 
 export type PostApiV1AdminCustomersBulkDeleteData = {
-    body?: {
+    body: {
         customerIds: Array<string>;
         permanent?: boolean;
     };
@@ -9869,7 +14940,7 @@ export type GetApiV1AdminCustomersByIdResponses = {
 export type GetApiV1AdminCustomersByIdResponse = GetApiV1AdminCustomersByIdResponses[keyof GetApiV1AdminCustomersByIdResponses];
 
 export type PutApiV1AdminCustomersByIdData = {
-    body?: {
+    body: {
         name?: string;
         email?: string | null;
         phone?: string;
@@ -10331,7 +15402,7 @@ export type GetApiV1AdminPagesResponses = {
 export type GetApiV1AdminPagesResponse = GetApiV1AdminPagesResponses[keyof GetApiV1AdminPagesResponses];
 
 export type PostApiV1AdminPagesData = {
-    body?: {
+    body: {
         title: string;
         slug: string;
         content: string;
@@ -10467,7 +15538,7 @@ export type PostApiV1AdminPagesResponses = {
 export type PostApiV1AdminPagesResponse = PostApiV1AdminPagesResponses[keyof PostApiV1AdminPagesResponses];
 
 export type PostApiV1AdminPagesBulkDeleteData = {
-    body?: {
+    body: {
         pages: Array<{
             id: string;
             expectedRevision: number;
@@ -10571,7 +15642,7 @@ export type PostApiV1AdminPagesBulkDeleteResponses = {
 export type PostApiV1AdminPagesBulkDeleteResponse = PostApiV1AdminPagesBulkDeleteResponses[keyof PostApiV1AdminPagesBulkDeleteResponses];
 
 export type PostApiV1AdminPagesBulkPublishData = {
-    body?: {
+    body: {
         pages: Array<{
             id: string;
             expectedRevision: number;
@@ -10674,7 +15745,7 @@ export type PostApiV1AdminPagesBulkPublishResponses = {
 export type PostApiV1AdminPagesBulkPublishResponse = PostApiV1AdminPagesBulkPublishResponses[keyof PostApiV1AdminPagesBulkPublishResponses];
 
 export type PostApiV1AdminPagesBulkUnpublishData = {
-    body?: {
+    body: {
         pages: Array<{
             id: string;
             expectedRevision: number;
@@ -10777,7 +15848,7 @@ export type PostApiV1AdminPagesBulkUnpublishResponses = {
 export type PostApiV1AdminPagesBulkUnpublishResponse = PostApiV1AdminPagesBulkUnpublishResponses[keyof PostApiV1AdminPagesBulkUnpublishResponses];
 
 export type PostApiV1AdminPagesBulkRestoreData = {
-    body?: {
+    body: {
         pages: Array<{
             id: string;
             expectedRevision: number;
@@ -10880,7 +15951,7 @@ export type PostApiV1AdminPagesBulkRestoreResponses = {
 export type PostApiV1AdminPagesBulkRestoreResponse = PostApiV1AdminPagesBulkRestoreResponses[keyof PostApiV1AdminPagesBulkRestoreResponses];
 
 export type PostApiV1AdminPagesByIdRestoreData = {
-    body?: {
+    body: {
         expectedRevision: number;
     };
     path: {
@@ -10987,7 +16058,7 @@ export type PostApiV1AdminPagesByIdRestoreResponses = {
 export type PostApiV1AdminPagesByIdRestoreResponse = PostApiV1AdminPagesByIdRestoreResponses[keyof PostApiV1AdminPagesByIdRestoreResponses];
 
 export type DeleteApiV1AdminPagesByIdData = {
-    body?: {
+    body: {
         expectedRevision: number;
     };
     path: {
@@ -11219,7 +16290,7 @@ export type GetApiV1AdminPagesByIdResponses = {
 export type GetApiV1AdminPagesByIdResponse = GetApiV1AdminPagesByIdResponses[keyof GetApiV1AdminPagesByIdResponses];
 
 export type PutApiV1AdminPagesByIdData = {
-    body?: {
+    body: {
         expectedRevision: number;
         title?: string;
         slug?: string;
@@ -11356,7 +16427,7 @@ export type PutApiV1AdminPagesByIdResponses = {
 export type PutApiV1AdminPagesByIdResponse = PutApiV1AdminPagesByIdResponses[keyof PutApiV1AdminPagesByIdResponses];
 
 export type DeleteApiV1AdminPagesByIdPermanentData = {
-    body?: {
+    body: {
         expectedRevision: number;
     };
     path: {
@@ -11604,7 +16675,7 @@ export type GetApiV1AdminDiscountsResponses = {
 export type GetApiV1AdminDiscountsResponse = GetApiV1AdminDiscountsResponses[keyof GetApiV1AdminDiscountsResponses];
 
 export type PostApiV1AdminDiscountsData = {
-    body?: {
+    body: {
         code: string;
         type: 'amount_off_products' | 'amount_off_order' | 'free_shipping';
         valueType: 'percentage' | 'fixed_amount' | 'free';
@@ -11727,7 +16798,7 @@ export type PostApiV1AdminDiscountsResponses = {
 export type PostApiV1AdminDiscountsResponse = PostApiV1AdminDiscountsResponses[keyof PostApiV1AdminDiscountsResponses];
 
 export type PostApiV1AdminDiscountsBulkDeleteData = {
-    body?: {
+    body: {
         discountIds: Array<string>;
         permanent?: boolean;
     };
@@ -11784,7 +16855,7 @@ export type PostApiV1AdminDiscountsBulkDeleteResponses = {
 export type PostApiV1AdminDiscountsBulkDeleteResponse = PostApiV1AdminDiscountsBulkDeleteResponses[keyof PostApiV1AdminDiscountsBulkDeleteResponses];
 
 export type PostApiV1AdminDiscountsBulkRestoreData = {
-    body?: {
+    body: {
         discountIds: Array<string>;
     };
     path?: never;
@@ -13554,7 +18625,7 @@ export type GetApiV1AdminMediaResponses = {
 export type GetApiV1AdminMediaResponse = GetApiV1AdminMediaResponses[keyof GetApiV1AdminMediaResponses];
 
 export type PostApiV1AdminMediaUploadsData = {
-    body?: {
+    body: {
         filename: string;
         mimeType: string;
         size: number;
@@ -13921,7 +18992,7 @@ export type GetApiV1AdminMediaUploadsByIdResponses = {
 export type GetApiV1AdminMediaUploadsByIdResponse = GetApiV1AdminMediaUploadsByIdResponses[keyof GetApiV1AdminMediaUploadsByIdResponses];
 
 export type PutApiV1AdminMediaUploadsByIdPartsByPartNumberData = {
-    body?: never;
+    body: Blob | File;
     path: {
         id: string;
         partNumber: number;
@@ -14285,7 +19356,7 @@ export type PostApiV1AdminMediaUploadsReconcileResponses = {
 export type PostApiV1AdminMediaUploadsReconcileResponse = PostApiV1AdminMediaUploadsReconcileResponses[keyof PostApiV1AdminMediaUploadsReconcileResponses];
 
 export type PatchApiV1AdminMediaByIdData = {
-    body?: {
+    body: {
         expectedVersion: number;
         filename?: string;
         altText?: string | null;
@@ -14422,7 +19493,7 @@ export type PatchApiV1AdminMediaByIdResponses = {
 export type PatchApiV1AdminMediaByIdResponse = PatchApiV1AdminMediaByIdResponses[keyof PatchApiV1AdminMediaByIdResponses];
 
 export type PostApiV1AdminMediaByIdTrashData = {
-    body?: {
+    body: {
         expectedVersion: number;
     };
     path: {
@@ -14551,7 +19622,7 @@ export type PostApiV1AdminMediaByIdTrashResponses = {
 export type PostApiV1AdminMediaByIdTrashResponse = PostApiV1AdminMediaByIdTrashResponses[keyof PostApiV1AdminMediaByIdTrashResponses];
 
 export type PostApiV1AdminMediaByIdRestoreData = {
-    body?: {
+    body: {
         expectedVersion: number;
     };
     path: {
@@ -14793,7 +19864,7 @@ export type DeleteApiV1AdminMediaByIdPermanentResponses = {
 export type DeleteApiV1AdminMediaByIdPermanentResponse = DeleteApiV1AdminMediaByIdPermanentResponses[keyof DeleteApiV1AdminMediaByIdPermanentResponses];
 
 export type PostApiV1AdminMediaMoveData = {
-    body?: {
+    body: {
         items: Array<{
             id: string;
             expectedVersion: number;
@@ -15020,7 +20091,7 @@ export type GetApiV1AdminMediaFoldersResponses = {
 export type GetApiV1AdminMediaFoldersResponse = GetApiV1AdminMediaFoldersResponses[keyof GetApiV1AdminMediaFoldersResponses];
 
 export type PostApiV1AdminMediaFoldersData = {
-    body?: {
+    body: {
         name: string;
     };
     path?: never;
@@ -15234,7 +20305,7 @@ export type DeleteApiV1AdminMediaFoldersByIdResponses = {
 export type DeleteApiV1AdminMediaFoldersByIdResponse = DeleteApiV1AdminMediaFoldersByIdResponses[keyof DeleteApiV1AdminMediaFoldersByIdResponses];
 
 export type PutApiV1AdminMediaFoldersByIdData = {
-    body?: {
+    body: {
         name: string;
         expectedVersion: number;
     };
@@ -15401,14 +20472,6 @@ export type GetApiV1AdminInventoryData = {
          */
         movementHealthOnly?: 'true';
         /**
-         * Response format; CSV is supported for movement history
-         */
-        format?: 'json' | 'csv';
-        /**
-         * Maximum CSV rows, hard-capped at 5000
-         */
-        maxRows?: number;
-        /**
          * Sort field
          */
         sort?: 'productName' | 'sku' | 'available';
@@ -15436,7 +20499,7 @@ export type GetApiV1AdminInventoryResponses = {
                 barcodeType: string | null;
                 optionLabel: string | null;
                 price: number;
-                effectivePrice: number;
+                effectivePrice?: number;
                 stock: number;
                 reservedStock: number;
                 available: number;
@@ -15522,6 +20585,100 @@ export type GetApiV1AdminInventoryResponses = {
 
 export type GetApiV1AdminInventoryResponse = GetApiV1AdminInventoryResponses[keyof GetApiV1AdminInventoryResponses];
 
+export type PostApiV1AdminInventoryMovementsExportData = {
+    body?: {
+        search?: string;
+        movementType?: 'all' | 'reserved' | 'deducted' | 'released' | 'adjusted' | 'restored' | 'preorder_reserved' | 'preorder_deducted';
+        movementOrderId?: string;
+        movementStartDate?: string;
+        movementEndDate?: string;
+        maxRows?: number;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/inventory/movements/export';
+};
+
+export type PostApiV1AdminInventoryMovementsExportErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminInventoryMovementsExportError = PostApiV1AdminInventoryMovementsExportErrors[keyof PostApiV1AdminInventoryMovementsExportErrors];
+
+export type PostApiV1AdminInventoryMovementsExportResponses = {
+    /**
+     * Bounded inventory movement CSV attachment
+     */
+    200: string;
+};
+
+export type PostApiV1AdminInventoryMovementsExportResponse = PostApiV1AdminInventoryMovementsExportResponses[keyof PostApiV1AdminInventoryMovementsExportResponses];
+
 export type GetApiV1AdminInventoryAlertsData = {
     body?: never;
     path?: never;
@@ -15565,7 +20722,7 @@ export type GetApiV1AdminInventoryAlertsResponses = {
 export type GetApiV1AdminInventoryAlertsResponse = GetApiV1AdminInventoryAlertsResponses[keyof GetApiV1AdminInventoryAlertsResponses];
 
 export type PatchApiV1AdminInventoryAlertsData = {
-    body?: {
+    body: {
         /**
          * Variant ID
          */
@@ -15644,13 +20801,136 @@ export type PostApiV1AdminInventoryLabelsPreviewResponses = {
 
 export type PostApiV1AdminInventoryLabelsPreviewResponse = PostApiV1AdminInventoryLabelsPreviewResponses[keyof PostApiV1AdminInventoryLabelsPreviewResponses];
 
-export type PostApiV1AdminInventoryByVariantIdAdjustData = {
+export type PostApiV1AdminInventoryLabelsArtifactData = {
     body?: {
-        operationKey: string;
+        format: 'csv' | 'html' | 'pdf';
+        mode?: 'job' | 'test';
+        variantIds: Array<string>;
+        quantities: {
+            [key: string]: number;
+        };
+        order?: 'selected' | 'product' | 'sku';
+        preset: {
+            pageWidthMm: number;
+            pageHeightMm: number;
+            columns: number;
+            rows: number;
+            marginXmm: number;
+            marginYmm: number;
+            gapXmm: number;
+            gapYmm: number;
+            cropMarks: boolean;
+        };
+        startOffset?: number;
+        alignment: {
+            xMm: number;
+            yMm: number;
+        };
+        content: {
+            showProduct: boolean;
+            showVariant: boolean;
+            showSku: boolean;
+            showPrice: boolean;
+        };
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/inventory/labels/artifact';
+};
+
+export type PostApiV1AdminInventoryLabelsArtifactErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminInventoryLabelsArtifactError = PostApiV1AdminInventoryLabelsArtifactErrors[keyof PostApiV1AdminInventoryLabelsArtifactErrors];
+
+export type PostApiV1AdminInventoryLabelsArtifactResponses = {
+    /**
+     * Generated barcode-label artifact
+     */
+    200: string;
+};
+
+export type PostApiV1AdminInventoryLabelsArtifactResponse = PostApiV1AdminInventoryLabelsArtifactResponses[keyof PostApiV1AdminInventoryLabelsArtifactResponses];
+
+export type PostApiV1AdminInventoryByVariantIdAdjustData = {
+    body: {
+        operationKey?: string;
         delta: number;
         reason: 'received' | 'correction' | 'damage' | 'theft' | 'return' | 'other';
         notes?: string;
         pool?: 'stock' | 'preorderStock';
+    };
+    headers?: {
+        /**
+         * Standard retry key. May replace body.operationKey; if both are sent they must match.
+         */
+        'idempotency-key'?: string;
     };
     path: {
         variantId: string;
@@ -15769,8 +21049,8 @@ export type GetApiV1AdminInventoryScannerLookupResponses = {
 export type GetApiV1AdminInventoryScannerLookupResponse = GetApiV1AdminInventoryScannerLookupResponses[keyof GetApiV1AdminInventoryScannerLookupResponses];
 
 export type PostApiV1AdminInventoryStockAdjustData = {
-    body?: {
-        operationKey: string;
+    body: {
+        operationKey?: string;
         /**
          * Variant ID
          */
@@ -15783,6 +21063,12 @@ export type PostApiV1AdminInventoryStockAdjustData = {
          * Reason for adjustment
          */
         reason?: string;
+    };
+    headers?: {
+        /**
+         * Standard retry key. May replace body.operationKey; if both are sent they must match.
+         */
+        'idempotency-key'?: string;
     };
     path?: never;
     query?: never;
@@ -15834,8 +21120,8 @@ export type PostApiV1AdminInventoryStockAdjustResponses = {
 export type PostApiV1AdminInventoryStockAdjustResponse = PostApiV1AdminInventoryStockAdjustResponses[keyof PostApiV1AdminInventoryStockAdjustResponses];
 
 export type PostApiV1AdminInventoryStockSetData = {
-    body?: {
-        operationKey: string;
+    body: {
+        operationKey?: string;
         /**
          * Variant ID
          */
@@ -15848,6 +21134,12 @@ export type PostApiV1AdminInventoryStockSetData = {
          * Reason for stocktake
          */
         reason?: string;
+    };
+    headers?: {
+        /**
+         * Standard retry key. May replace body.operationKey; if both are sent they must match.
+         */
+        'idempotency-key'?: string;
     };
     path?: never;
     query?: never;
@@ -16339,7 +21631,7 @@ export type GetApiV1AdminNavigationMenusResponses = {
 export type GetApiV1AdminNavigationMenusResponse = GetApiV1AdminNavigationMenusResponses[keyof GetApiV1AdminNavigationMenusResponses];
 
 export type PostApiV1AdminNavigationMenusData = {
-    body?: {
+    body: {
         name: string;
         handle?: string;
     };
@@ -16447,7 +21739,7 @@ export type PostApiV1AdminNavigationMenusResponses = {
 export type PostApiV1AdminNavigationMenusResponse = PostApiV1AdminNavigationMenusResponses[keyof PostApiV1AdminNavigationMenusResponses];
 
 export type DeleteApiV1AdminNavigationMenusByMenuIdData = {
-    body?: {
+    body: {
         expectedRevision: number;
     };
     path: {
@@ -16650,7 +21942,7 @@ export type GetApiV1AdminNavigationMenusByMenuIdResponses = {
 export type GetApiV1AdminNavigationMenusByMenuIdResponse = GetApiV1AdminNavigationMenusByMenuIdResponses[keyof GetApiV1AdminNavigationMenusByMenuIdResponses];
 
 export type PatchApiV1AdminNavigationMenusByMenuIdData = {
-    body?: {
+    body: {
         expectedRevision: number;
         name: string;
         handle: string;
@@ -16761,7 +22053,7 @@ export type PatchApiV1AdminNavigationMenusByMenuIdResponses = {
 export type PatchApiV1AdminNavigationMenusByMenuIdResponse = PatchApiV1AdminNavigationMenusByMenuIdResponses[keyof PatchApiV1AdminNavigationMenusByMenuIdResponses];
 
 export type PostApiV1AdminNavigationMenusByMenuIdRestoreData = {
-    body?: {
+    body: {
         expectedRevision: number;
     };
     path: {
@@ -16985,7 +22277,7 @@ export type GetApiV1AdminNavigationMenusByMenuIdItemsResponses = {
 export type GetApiV1AdminNavigationMenusByMenuIdItemsResponse = GetApiV1AdminNavigationMenusByMenuIdItemsResponses[keyof GetApiV1AdminNavigationMenusByMenuIdItemsResponses];
 
 export type PostApiV1AdminNavigationMenusByMenuIdItemsData = {
-    body?: {
+    body: {
         label: string;
         labelMode: 'custom' | 'resource';
         target: {
@@ -17231,7 +22523,7 @@ export type GetApiV1AdminNavigationMenusByMenuIdSearchResponses = {
 export type GetApiV1AdminNavigationMenusByMenuIdSearchResponse = GetApiV1AdminNavigationMenusByMenuIdSearchResponses[keyof GetApiV1AdminNavigationMenusByMenuIdSearchResponses];
 
 export type DeleteApiV1AdminNavigationMenusByMenuIdItemsByItemIdData = {
-    body?: {
+    body: {
         expectedRevision: number;
     };
     path: {
@@ -17451,7 +22743,7 @@ export type GetApiV1AdminNavigationMenusByMenuIdItemsByItemIdResponses = {
 export type GetApiV1AdminNavigationMenusByMenuIdItemsByItemIdResponse = GetApiV1AdminNavigationMenusByMenuIdItemsByItemIdResponses[keyof GetApiV1AdminNavigationMenusByMenuIdItemsByItemIdResponses];
 
 export type PatchApiV1AdminNavigationMenusByMenuIdItemsByItemIdData = {
-    body?: {
+    body: {
         label: string;
         labelMode: 'custom' | 'resource';
         target: {
@@ -17696,7 +22988,7 @@ export type GetApiV1AdminNavigationMenusByMenuIdItemsByItemIdMoveOptionsResponse
 export type GetApiV1AdminNavigationMenusByMenuIdItemsByItemIdMoveOptionsResponse = GetApiV1AdminNavigationMenusByMenuIdItemsByItemIdMoveOptionsResponses[keyof GetApiV1AdminNavigationMenusByMenuIdItemsByItemIdMoveOptionsResponses];
 
 export type PostApiV1AdminNavigationMenusByMenuIdItemsByItemIdMoveData = {
-    body?: {
+    body: {
         expectedRevision: number;
         parentId?: string | null;
         beforeId?: string;
@@ -17808,7 +23100,7 @@ export type PostApiV1AdminNavigationMenusByMenuIdItemsByItemIdMoveResponses = {
 export type PostApiV1AdminNavigationMenusByMenuIdItemsByItemIdMoveResponse = PostApiV1AdminNavigationMenusByMenuIdItemsByItemIdMoveResponses[keyof PostApiV1AdminNavigationMenusByMenuIdItemsByItemIdMoveResponses];
 
 export type PostApiV1AdminNavigationMenusByMenuIdPublishData = {
-    body?: {
+    body: {
         expectedRevision: number;
     };
     path: {
@@ -18023,7 +23315,7 @@ export type GetApiV1AdminNavigationMenusByMenuIdPublicationsResponses = {
 export type GetApiV1AdminNavigationMenusByMenuIdPublicationsResponse = GetApiV1AdminNavigationMenusByMenuIdPublicationsResponses[keyof GetApiV1AdminNavigationMenusByMenuIdPublicationsResponses];
 
 export type PostApiV1AdminNavigationMenusByMenuIdRollbackData = {
-    body?: {
+    body: {
         expectedRevision: number;
         sourceRevision: number;
     };
@@ -18323,7 +23615,7 @@ export type GetApiV1AdminNavigationPlacementSettingsResponses = {
 export type GetApiV1AdminNavigationPlacementSettingsResponse = GetApiV1AdminNavigationPlacementSettingsResponses[keyof GetApiV1AdminNavigationPlacementSettingsResponses];
 
 export type PutApiV1AdminNavigationPlacementsByPlacementIdData = {
-    body?: {
+    body: {
         expectedRevision: number;
         surface: string;
         slot: string;
@@ -19020,7 +24312,7 @@ export type GetApiV1AdminAnalyticsResponses = {
 export type GetApiV1AdminAnalyticsResponse = GetApiV1AdminAnalyticsResponses[keyof GetApiV1AdminAnalyticsResponses];
 
 export type PostApiV1AdminAnalyticsData = {
-    body?: {
+    body: {
         name: string;
         type: 'google_analytics' | 'google_tag_manager' | 'facebook_pixel' | 'tiktok_pixel' | 'cloudflare_web_analytics' | 'custom';
         config: string;
@@ -19368,7 +24660,7 @@ export type GetApiV1AdminAnalyticsByIdSourceResponses = {
 export type GetApiV1AdminAnalyticsByIdSourceResponse = GetApiV1AdminAnalyticsByIdSourceResponses[keyof GetApiV1AdminAnalyticsByIdSourceResponses];
 
 export type DeleteApiV1AdminAnalyticsByIdData = {
-    body?: {
+    body: {
         expectedRevision: number;
     };
     path: {
@@ -19487,7 +24779,7 @@ export type DeleteApiV1AdminAnalyticsByIdResponses = {
 export type DeleteApiV1AdminAnalyticsByIdResponse = DeleteApiV1AdminAnalyticsByIdResponses[keyof DeleteApiV1AdminAnalyticsByIdResponses];
 
 export type PutApiV1AdminAnalyticsByIdData = {
-    body?: {
+    body: {
         id: string;
         expectedRevision: number;
         name: string;
@@ -19614,7 +24906,7 @@ export type PutApiV1AdminAnalyticsByIdResponses = {
 export type PutApiV1AdminAnalyticsByIdResponse = PutApiV1AdminAnalyticsByIdResponses[keyof PutApiV1AdminAnalyticsByIdResponses];
 
 export type PostApiV1AdminAnalyticsByIdToggleData = {
-    body?: {
+    body: {
         isActive: boolean;
         expectedRevision: number;
         allowDuplicateProvider?: boolean;
@@ -19736,7 +25028,7 @@ export type PostApiV1AdminAnalyticsByIdToggleResponses = {
 export type PostApiV1AdminAnalyticsByIdToggleResponse = PostApiV1AdminAnalyticsByIdToggleResponses[keyof PostApiV1AdminAnalyticsByIdToggleResponses];
 
 export type PostApiV1AdminAnalyticsByIdRestoreData = {
-    body?: {
+    body: {
         expectedRevision: number;
     };
     path: {
@@ -19855,7 +25147,7 @@ export type PostApiV1AdminAnalyticsByIdRestoreResponses = {
 export type PostApiV1AdminAnalyticsByIdRestoreResponse = PostApiV1AdminAnalyticsByIdRestoreResponses[keyof PostApiV1AdminAnalyticsByIdRestoreResponses];
 
 export type DeleteApiV1AdminAnalyticsByIdPermanentData = {
-    body?: {
+    body: {
         expectedRevision: number;
     };
     path: {
@@ -20001,7 +25293,6 @@ export type GetApiV1AdminDashboardHomeSummaryResponses = {
                 totalAmount: number;
                 status: string;
                 createdAt: string | number;
-                [key: string]: unknown;
             }>;
         };
     };
@@ -20090,7 +25381,6 @@ export type GetApiV1AdminDashboardSummaryResponses = {
                 totalAmount: number;
                 status: string;
                 createdAt: string | number;
-                [key: string]: unknown;
             }>;
         };
     };
@@ -20165,7 +25455,6 @@ export type GetApiV1AdminDashboardResponses = {
                 totalAmount: number;
                 status: string;
                 createdAt: string | number;
-                [key: string]: unknown;
             }>;
             dailyActivityData: Array<{
                 date: string;
@@ -20182,7 +25471,10 @@ export type GetApiV1AdminDashboardResponse = GetApiV1AdminDashboardResponses[key
 export type GetApiV1AdminFraudCheckerData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        page?: number;
+        limit?: number;
+    };
     url: '/api/v1/admin/fraud-checker';
 };
 
@@ -20263,24 +25555,30 @@ export type GetApiV1AdminFraudCheckerResponses = {
      */
     200: {
         success: true;
-        data: Array<{
-            id: string;
-            name: string;
-            apiUrl: string;
-            apiKey: string;
-            apiSecret?: string;
-            userId?: string;
-            isActive: boolean;
-            providerType?: 'default' | 'fraudbd' | 'fraudguard' | 'ecourier';
-            [key: string]: unknown;
-        }>;
+        data: {
+            providers: Array<{
+                id: string;
+                name: string;
+                apiUrl: string;
+                apiKey: string;
+                apiSecret?: string;
+                userId?: string;
+                isActive: boolean;
+                providerType?: 'default' | 'fraudbd' | 'fraudguard' | 'ecourier';
+            }>;
+            pagination: {
+                page: number;
+                limit: number;
+                hasMore: boolean;
+            };
+        };
     };
 };
 
 export type GetApiV1AdminFraudCheckerResponse = GetApiV1AdminFraudCheckerResponses[keyof GetApiV1AdminFraudCheckerResponses];
 
 export type PostApiV1AdminFraudCheckerData = {
-    body?: {
+    body: {
         name: string;
         apiUrl: string;
         apiKey: string;
@@ -20391,7 +25689,6 @@ export type PostApiV1AdminFraudCheckerResponses = {
             userId?: string;
             isActive: boolean;
             providerType?: 'default' | 'fraudbd' | 'fraudguard' | 'ecourier';
-            [key: string]: unknown;
         };
     };
 };
@@ -20399,7 +25696,7 @@ export type PostApiV1AdminFraudCheckerResponses = {
 export type PostApiV1AdminFraudCheckerResponse = PostApiV1AdminFraudCheckerResponses[keyof PostApiV1AdminFraudCheckerResponses];
 
 export type PutApiV1AdminFraudCheckerData = {
-    body?: {
+    body: {
         id: string;
         name: string;
         apiUrl: string;
@@ -20511,7 +25808,6 @@ export type PutApiV1AdminFraudCheckerResponses = {
             userId?: string;
             isActive: boolean;
             providerType?: 'default' | 'fraudbd' | 'fraudguard' | 'ecourier';
-            [key: string]: unknown;
         };
     };
 };
@@ -20700,8 +25996,7 @@ export type PostApiV1AdminFraudCheckerByIdTestResponses = {
         success: true;
         data: {
             success: boolean;
-            message?: string;
-            [key: string]: unknown;
+            message: string;
         };
     };
 };
@@ -20806,12 +26101,10 @@ export type PostApiV1AdminFraudCheckerLookupResponses = {
     200: {
         success: true;
         data: {
-            mobile_number?: string;
             total_parcels?: number;
             total_delivered?: number;
             total_cancel?: number;
             provider_status?: string;
-            message?: string;
             customer_tag?: string;
             success_rate?: number;
             cancel_rate?: number;
@@ -20823,7 +26116,6 @@ export type PostApiV1AdminFraudCheckerLookupResponses = {
                     total_cancelled_parcels: number;
                 };
             };
-            [key: string]: unknown;
         };
     };
 };
@@ -20833,7 +26125,10 @@ export type PostApiV1AdminFraudCheckerLookupResponse = PostApiV1AdminFraudChecke
 export type GetApiV1AdminRbacRolesData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        page?: number;
+        limit?: number;
+    };
     url: '/api/v1/admin/rbac/roles';
 };
 
@@ -20922,10 +26217,15 @@ export type GetApiV1AdminRbacRolesResponses = {
                 description: string | null;
                 isSystem: boolean;
                 permissions: Array<string>;
+                permissionsTruncated?: boolean;
                 createdAt: string | number;
                 updatedAt: string | number;
-                [key: string]: unknown;
             }>;
+            pagination: {
+                page: number;
+                limit: number;
+                hasMore: boolean;
+            };
         };
     };
 };
@@ -20933,7 +26233,7 @@ export type GetApiV1AdminRbacRolesResponses = {
 export type GetApiV1AdminRbacRolesResponse = GetApiV1AdminRbacRolesResponses[keyof GetApiV1AdminRbacRolesResponses];
 
 export type PostApiV1AdminRbacRolesData = {
-    body?: {
+    body: {
         name: string;
         displayName: string;
         description?: string;
@@ -21040,9 +26340,9 @@ export type PostApiV1AdminRbacRolesResponses = {
                 description: string | null;
                 isSystem: boolean;
                 permissions: Array<string>;
+                permissionsTruncated?: boolean;
                 createdAt: string | number;
                 updatedAt: string | number;
-                [key: string]: unknown;
             };
         };
     };
@@ -21249,9 +26549,9 @@ export type GetApiV1AdminRbacRolesByIdResponses = {
                 description: string | null;
                 isSystem: boolean;
                 permissions: Array<string>;
+                permissionsTruncated?: boolean;
                 createdAt: string | number;
                 updatedAt: string | number;
-                [key: string]: unknown;
             };
         };
     };
@@ -21260,7 +26560,7 @@ export type GetApiV1AdminRbacRolesByIdResponses = {
 export type GetApiV1AdminRbacRolesByIdResponse = GetApiV1AdminRbacRolesByIdResponses[keyof GetApiV1AdminRbacRolesByIdResponses];
 
 export type PutApiV1AdminRbacRolesByIdData = {
-    body?: {
+    body: {
         displayName?: string;
         description?: string;
         permissions?: Array<string>;
@@ -21357,9 +26657,9 @@ export type PutApiV1AdminRbacRolesByIdResponses = {
                 description: string | null;
                 isSystem: boolean;
                 permissions: Array<string>;
+                permissionsTruncated?: boolean;
                 createdAt: string | number;
                 updatedAt: string | number;
-                [key: string]: unknown;
             };
         };
     };
@@ -21368,7 +26668,7 @@ export type PutApiV1AdminRbacRolesByIdResponses = {
 export type PutApiV1AdminRbacRolesByIdResponse = PutApiV1AdminRbacRolesByIdResponses[keyof PutApiV1AdminRbacRolesByIdResponses];
 
 export type DeleteApiV1AdminRbacUserRolesData = {
-    body?: {
+    body: {
         userId: string;
         roleId: string;
     };
@@ -21463,7 +26763,7 @@ export type DeleteApiV1AdminRbacUserRolesResponses = {
 export type DeleteApiV1AdminRbacUserRolesResponse = DeleteApiV1AdminRbacUserRolesResponses[keyof DeleteApiV1AdminRbacUserRolesResponses];
 
 export type PostApiV1AdminRbacUserRolesData = {
-    body?: {
+    body: {
         userId: string;
         roleId: string;
     };
@@ -21569,7 +26869,7 @@ export type PostApiV1AdminRbacUserRolesResponses = {
 export type PostApiV1AdminRbacUserRolesResponse = PostApiV1AdminRbacUserRolesResponses[keyof PostApiV1AdminRbacUserRolesResponses];
 
 export type DeleteApiV1AdminRbacUserPermissionsData = {
-    body?: {
+    body: {
         userId: string;
         permission: string;
     };
@@ -21664,7 +26964,7 @@ export type DeleteApiV1AdminRbacUserPermissionsResponses = {
 export type DeleteApiV1AdminRbacUserPermissionsResponse = DeleteApiV1AdminRbacUserPermissionsResponses[keyof DeleteApiV1AdminRbacUserPermissionsResponses];
 
 export type PostApiV1AdminRbacUserPermissionsData = {
-    body?: {
+    body: {
         userId: string;
         permission: string;
         granted: boolean;
@@ -21849,12 +27149,16 @@ export type GetApiV1AdminRbacPermissionsResponses = {
                 name: string;
                 description: string | null;
                 category: string;
-                [key: string]: unknown;
             }>;
             grouped: {
                 [key: string]: Array<{
                     name: string;
+                    displayName: string;
                     description: string;
+                    resource?: string;
+                    action?: string;
+                    category: string;
+                    isSensitive: boolean;
                 }>;
             };
         };
@@ -21953,12 +27257,15 @@ export type GetApiV1AdminRbacMyPermissionsResponses = {
             roles: Array<{
                 id: string;
                 name: string;
-                [key: string]: unknown;
+                displayName: string;
             }>;
+            rolesTruncated: boolean;
             permissions: Array<string>;
+            permissionsTruncated: boolean;
             overrides: {
                 grants: Array<string>;
                 denials: Array<string>;
+                truncated: boolean;
             };
         };
     };
@@ -22062,7 +27369,7 @@ export type GetApiV1AdminSettingsCurrencyResponses = {
 export type GetApiV1AdminSettingsCurrencyResponse = GetApiV1AdminSettingsCurrencyResponses[keyof GetApiV1AdminSettingsCurrencyResponses];
 
 export type PostApiV1AdminSettingsCurrencyData = {
-    body?: {
+    body: {
         currencyCode?: 'USD' | 'EUR' | 'GBP' | 'JPY' | 'CHF' | 'CAD' | 'AUD' | 'NZD' | 'CNY' | 'HKD' | 'SGD' | 'SEK' | 'NOK' | 'DKK' | 'MXN' | 'BRL' | 'BDT' | 'INR' | 'PKR' | 'LKR' | 'NPR' | 'AFN' | 'BTN' | 'MVR' | 'MYR' | 'PHP' | 'THB' | 'IDR' | 'VND' | 'MMK' | 'KHR' | 'LAK' | 'BND' | 'KRW' | 'TWD' | 'MNT' | 'KPW' | 'MOP' | 'AED' | 'SAR' | 'QAR' | 'KWD' | 'BHD' | 'OMR' | 'JOD' | 'IQD' | 'IRR' | 'YER' | 'LBP' | 'SYP' | 'ILS' | 'KZT' | 'UZS' | 'KGS' | 'TJS' | 'TMT' | 'GEL' | 'AMD' | 'AZN' | 'TRY' | 'RUB' | 'UAH' | 'PLN' | 'CZK' | 'HUF' | 'RON' | 'BGN' | 'HRK' | 'RSD' | 'BAM' | 'MKD' | 'ALL' | 'MDL' | 'BYN' | 'ISK' | 'ARS' | 'CLP' | 'COP' | 'PEN' | 'UYU' | 'PYG' | 'BOB' | 'VES' | 'GYD' | 'SRD' | 'TTD' | 'JMD' | 'BBD' | 'BSD' | 'BZD' | 'CRC' | 'CUP' | 'DOP' | 'GTQ' | 'HNL' | 'HTG' | 'NIO' | 'PAB' | 'AWG' | 'ANG' | 'KYD' | 'BMD' | 'XCD' | 'FKP' | 'NGN' | 'GHS' | 'XOF' | 'GMD' | 'GNF' | 'SLL' | 'LRD' | 'CVE' | 'MRU' | 'KES' | 'TZS' | 'UGX' | 'RWF' | 'BIF' | 'ETB' | 'SOS' | 'ERN' | 'DJF' | 'SDG' | 'SSP' | 'SCR' | 'KMF' | 'MGA' | 'MUR' | 'XAF' | 'CDF' | 'ZAR' | 'BWP' | 'LSL' | 'SZL' | 'NAD' | 'MWK' | 'ZMW' | 'MZN' | 'AOA' | 'ZWL' | 'EGP' | 'DZD' | 'MAD' | 'TND' | 'LYD' | 'STN' | 'FJD' | 'PGK' | 'WST' | 'TOP' | 'VUV' | 'SBD' | 'XPF' | 'XDR' | 'XAG' | 'XAU';
         currencySymbol?: string;
         usdExchangeRate?: string;
@@ -22279,8 +27586,126 @@ export type GetApiV1AdminSettingsGeneralResponses = {
 
 export type GetApiV1AdminSettingsGeneralResponse = GetApiV1AdminSettingsGeneralResponses[keyof GetApiV1AdminSettingsGeneralResponses];
 
+export type GetApiV1AdminSettingsHeaderData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/header';
+};
+
+export type GetApiV1AdminSettingsHeaderErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsHeaderError = GetApiV1AdminSettingsHeaderErrors[keyof GetApiV1AdminSettingsHeaderErrors];
+
+export type GetApiV1AdminSettingsHeaderResponses = {
+    /**
+     * Header configuration
+     */
+    200: {
+        success: true;
+        data: {
+            config: {
+                topBar: {
+                    text: string;
+                    isEnabled?: boolean;
+                };
+                logo: {
+                    src: string;
+                    alt: string;
+                    width?: number;
+                };
+                favicon: {
+                    src: string;
+                    alt: string;
+                };
+                contact: {
+                    phone: string;
+                    text: string;
+                    isEnabled?: boolean;
+                };
+                social: Array<{
+                    id: string;
+                    label: string;
+                    url: string;
+                    iconUrl?: string;
+                }>;
+            };
+            revision: number;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsHeaderResponse = GetApiV1AdminSettingsHeaderResponses[keyof GetApiV1AdminSettingsHeaderResponses];
+
 export type PostApiV1AdminSettingsHeaderData = {
-    body?: {
+    body: {
         topBar: {
             text: string;
             isEnabled?: boolean;
@@ -22408,8 +27833,115 @@ export type PostApiV1AdminSettingsHeaderResponses = {
 
 export type PostApiV1AdminSettingsHeaderResponse = PostApiV1AdminSettingsHeaderResponses[keyof PostApiV1AdminSettingsHeaderResponses];
 
+export type GetApiV1AdminSettingsFooterData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/footer';
+};
+
+export type GetApiV1AdminSettingsFooterErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsFooterError = GetApiV1AdminSettingsFooterErrors[keyof GetApiV1AdminSettingsFooterErrors];
+
+export type GetApiV1AdminSettingsFooterResponses = {
+    /**
+     * Footer configuration
+     */
+    200: {
+        success: true;
+        data: {
+            config: {
+                logo: {
+                    src: string;
+                    alt: string;
+                };
+                tagline?: string;
+                description?: string;
+                copyrightText?: string;
+                social: Array<{
+                    id: string;
+                    label: string;
+                    url: string;
+                    iconUrl?: string;
+                }>;
+            };
+            revision: number;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsFooterResponse = GetApiV1AdminSettingsFooterResponses[keyof GetApiV1AdminSettingsFooterResponses];
+
 export type PostApiV1AdminSettingsFooterData = {
-    body?: {
+    body: {
         logo: {
             src: string;
             alt: string;
@@ -22904,7 +28436,7 @@ export type GetApiV1AdminSettingsThemeWorkspaceResponses = {
 export type GetApiV1AdminSettingsThemeWorkspaceResponse = GetApiV1AdminSettingsThemeWorkspaceResponses[keyof GetApiV1AdminSettingsThemeWorkspaceResponses];
 
 export type PostApiV1AdminSettingsThemeDraftData = {
-    body?: {
+    body: {
         theme: {
             colors: {
                 [key: string]: string;
@@ -23037,7 +28569,7 @@ export type PostApiV1AdminSettingsThemeDraftResponses = {
 export type PostApiV1AdminSettingsThemeDraftResponse = PostApiV1AdminSettingsThemeDraftResponses[keyof PostApiV1AdminSettingsThemeDraftResponses];
 
 export type PostApiV1AdminSettingsThemeDraftRebaseData = {
-    body?: {
+    body: {
         theme: {
             colors: {
                 [key: string]: string;
@@ -23170,7 +28702,7 @@ export type PostApiV1AdminSettingsThemeDraftRebaseResponses = {
 export type PostApiV1AdminSettingsThemeDraftRebaseResponse = PostApiV1AdminSettingsThemeDraftRebaseResponses[keyof PostApiV1AdminSettingsThemeDraftRebaseResponses];
 
 export type PostApiV1AdminSettingsThemePublishData = {
-    body?: {
+    body: {
         expectedPublishedRevision: number;
         expectedDraftRevision: number;
     };
@@ -23427,7 +28959,7 @@ export type GetApiV1AdminSettingsThemeVersionsResponses = {
 export type GetApiV1AdminSettingsThemeVersionsResponse = GetApiV1AdminSettingsThemeVersionsResponses[keyof GetApiV1AdminSettingsThemeVersionsResponses];
 
 export type PostApiV1AdminSettingsThemeRollbackData = {
-    body?: {
+    body: {
         sourceRevision: number;
         expectedPublishedRevision: number;
         expectedDraftRevision: number;
@@ -23568,6 +29100,8 @@ export type PostApiV1AdminSettingsThemeRollbackResponse = PostApiV1AdminSettings
 export type PostApiV1AdminSettingsThemePreviewSessionData = {
     body?: {
         expectedDraftRevision: number;
+        path?: string;
+        device?: 'full' | 'desktop' | 'mobile';
     };
     path?: never;
     query?: never;
@@ -23641,6 +29175,17 @@ export type PostApiV1AdminSettingsThemePreviewSessionErrors = {
             details?: unknown;
         };
     };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PostApiV1AdminSettingsThemePreviewSessionError = PostApiV1AdminSettingsThemePreviewSessionErrors[keyof PostApiV1AdminSettingsThemePreviewSessionErrors];
@@ -23652,7 +29197,15 @@ export type PostApiV1AdminSettingsThemePreviewSessionResponses = {
     200: {
         success: true;
         data: {
-            token: string;
+            continuation: {
+                url: string;
+                method: 'POST';
+                fields: {
+                    continuationCode: string;
+                    path: string;
+                    device: 'full' | 'desktop' | 'mobile';
+                };
+            };
             draftRevision: number;
             basePublishedRevision: number;
             expiresAt?: unknown;
@@ -23758,7 +29311,7 @@ export type GetApiV1AdminSettingsMediaResponses = {
 export type GetApiV1AdminSettingsMediaResponse = GetApiV1AdminSettingsMediaResponses[keyof GetApiV1AdminSettingsMediaResponses];
 
 export type PostApiV1AdminSettingsMediaData = {
-    body?: {
+    body: {
         enabled?: boolean;
         canonicalCdnUrl?: string;
         allowedImageHosts?: Array<string>;
@@ -23994,7 +29547,7 @@ export type GetApiV1AdminSettingsSeoResponses = {
 export type GetApiV1AdminSettingsSeoResponse = GetApiV1AdminSettingsSeoResponses[keyof GetApiV1AdminSettingsSeoResponses];
 
 export type PostApiV1AdminSettingsSeoData = {
-    body?: {
+    body: {
         siteTitle?: string;
         homepageTitle?: string;
         homepageMetaDescription?: string;
@@ -24253,6 +29806,133 @@ export type GetApiV1AdminSettingsSeoFeedDiagnosticsResponses = {
 
 export type GetApiV1AdminSettingsSeoFeedDiagnosticsResponse = GetApiV1AdminSettingsSeoFeedDiagnosticsResponses[keyof GetApiV1AdminSettingsSeoFeedDiagnosticsResponses];
 
+export type GetApiV1AdminSettingsSeoLiveProbeData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/seo/live-probe';
+};
+
+export type GetApiV1AdminSettingsSeoLiveProbeErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsSeoLiveProbeError = GetApiV1AdminSettingsSeoLiveProbeErrors[keyof GetApiV1AdminSettingsSeoLiveProbeErrors];
+
+export type GetApiV1AdminSettingsSeoLiveProbeResponses = {
+    /**
+     * Bounded live discovery probe
+     */
+    200: {
+        success: true;
+        data: {
+            baseUrl: string | null;
+            checkedAt: string;
+            ok: boolean;
+            error?: string;
+            resources: Array<{
+                key: 'robots' | 'sitemap' | 'productFeed' | 'facebookFeed' | 'ucpProfile' | 'staticPagesSitemap' | 'productsSitemap' | 'categoriesSitemap' | 'collectionsSitemap' | 'pagesSitemap' | 'articlesSitemap';
+                kind: 'robots' | 'sitemap' | 'feed' | 'ucpProfile' | 'sitemapChild';
+                label: string;
+                path: string;
+                href: string | null;
+                ok: boolean;
+                status: number | null;
+                contentType: string | null;
+                cacheControl: string | null;
+                counts: {
+                    robotsSitemapLines?: number;
+                    sitemapLocs?: number;
+                    feedItems?: number;
+                    feedLinks?: number;
+                    absoluteFeedLinks?: number;
+                    imageLinks?: number;
+                    absoluteImageLinks?: number;
+                    availabilityValues?: number;
+                    ucpValidJson?: number;
+                    ucpVersion?: string;
+                    ucpShoppingRestServices?: number;
+                    ucpCatalogCapabilities?: number;
+                    ucpForbiddenCapabilities?: number;
+                    ucpPaymentHandlers?: number;
+                };
+                bodyTruncated?: boolean;
+                disabledReason?: string;
+                error?: string;
+                expectedRobotsSitemapLines?: number;
+                minimumSitemapLocs?: number;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsSeoLiveProbeResponse = GetApiV1AdminSettingsSeoLiveProbeResponses[keyof GetApiV1AdminSettingsSeoLiveProbeResponses];
+
 export type GetApiV1AdminSettingsStorefrontUrlData = {
     body?: never;
     path?: never;
@@ -24346,7 +30026,7 @@ export type GetApiV1AdminSettingsStorefrontUrlResponses = {
 export type GetApiV1AdminSettingsStorefrontUrlResponse = GetApiV1AdminSettingsStorefrontUrlResponses[keyof GetApiV1AdminSettingsStorefrontUrlResponses];
 
 export type PostApiV1AdminSettingsStorefrontUrlData = {
-    body?: {
+    body: {
         storefrontUrl: string;
     };
     path?: never;
@@ -24542,7 +30222,7 @@ export type GetApiV1AdminSettingsHomepagePresentationResponses = {
 export type GetApiV1AdminSettingsHomepagePresentationResponse = GetApiV1AdminSettingsHomepagePresentationResponses[keyof GetApiV1AdminSettingsHomepagePresentationResponses];
 
 export type PostApiV1AdminSettingsHomepagePresentationData = {
-    body?: {
+    body: {
         categoryRail: {
             enabled: boolean;
             title: string;
@@ -24750,8 +30430,7 @@ export type GetApiV1AdminSettingsAllowedCountriesResponses = {
         success: true;
         data: {
             allowedCountries: Array<string>;
-            allowedCountriesMode: string;
-            [key: string]: unknown;
+            allowedCountriesMode: 'include' | 'exclude';
         };
     };
 };
@@ -24759,7 +30438,7 @@ export type GetApiV1AdminSettingsAllowedCountriesResponses = {
 export type GetApiV1AdminSettingsAllowedCountriesResponse = GetApiV1AdminSettingsAllowedCountriesResponses[keyof GetApiV1AdminSettingsAllowedCountriesResponses];
 
 export type PutApiV1AdminSettingsAllowedCountriesData = {
-    body?: {
+    body: {
         allowedCountries: Array<string>;
         mode?: 'include' | 'exclude';
     };
@@ -24959,7 +30638,7 @@ export type GetApiV1AdminSettingsBusinessResponses = {
 export type GetApiV1AdminSettingsBusinessResponse = GetApiV1AdminSettingsBusinessResponses[keyof GetApiV1AdminSettingsBusinessResponses];
 
 export type PostApiV1AdminSettingsBusinessData = {
-    body?: {
+    body: {
         companyName?: string;
         legalName?: string;
         addressLine1?: string;
@@ -25212,7 +30891,7 @@ export type GetApiV1AdminSettingsPaymentMethodsResponses = {
 export type GetApiV1AdminSettingsPaymentMethodsResponse = GetApiV1AdminSettingsPaymentMethodsResponses[keyof GetApiV1AdminSettingsPaymentMethodsResponses];
 
 export type PostApiV1AdminSettingsPaymentMethodsData = {
-    body?: {
+    body: {
         enabledMethods: Array<'stripe' | 'sslcommerz' | 'polar' | 'cod'>;
         defaultMethod: 'stripe' | 'sslcommerz' | 'polar' | 'cod';
     };
@@ -25402,7 +31081,7 @@ export type GetApiV1AdminSettingsStripeResponses = {
 export type GetApiV1AdminSettingsStripeResponse = GetApiV1AdminSettingsStripeResponses[keyof GetApiV1AdminSettingsStripeResponses];
 
 export type PostApiV1AdminSettingsStripeData = {
-    body?: {
+    body: {
         secretKey?: string;
         publishableKey?: string;
         webhookSecret?: string;
@@ -25605,7 +31284,7 @@ export type GetApiV1AdminSettingsSslcommerzResponses = {
 export type GetApiV1AdminSettingsSslcommerzResponse = GetApiV1AdminSettingsSslcommerzResponses[keyof GetApiV1AdminSettingsSslcommerzResponses];
 
 export type PostApiV1AdminSettingsSslcommerzData = {
-    body?: {
+    body: {
         storeId?: string;
         storePassword?: string;
         sandbox?: boolean;
@@ -25809,7 +31488,7 @@ export type GetApiV1AdminSettingsPolarResponses = {
 export type GetApiV1AdminSettingsPolarResponse = GetApiV1AdminSettingsPolarResponses[keyof GetApiV1AdminSettingsPolarResponses];
 
 export type PostApiV1AdminSettingsPolarData = {
-    body?: {
+    body: {
         accessToken?: string;
         webhookSecret?: string;
         productId?: string;
@@ -26111,7 +31790,7 @@ export type GetApiV1AdminSettingsCheckoutFlowResponses = {
 export type GetApiV1AdminSettingsCheckoutFlowResponse = GetApiV1AdminSettingsCheckoutFlowResponses[keyof GetApiV1AdminSettingsCheckoutFlowResponses];
 
 export type PutApiV1AdminSettingsCheckoutFlowData = {
-    body?: {
+    body: {
         guestCheckoutEnabled: boolean;
         checkoutMode: 'guest_cod_only' | 'gateways_only' | 'all';
         partialPaymentEnabled: boolean;
@@ -26325,7 +32004,7 @@ export type GetApiV1AdminSettingsAuthResponses = {
 export type GetApiV1AdminSettingsAuthResponse = GetApiV1AdminSettingsAuthResponses[keyof GetApiV1AdminSettingsAuthResponses];
 
 export type PostApiV1AdminSettingsAuthData = {
-    body?: {
+    body: {
         authVerificationMethod?: 'email' | 'sms_otp' | 'whatsapp_otp' | 'both';
         customerAuthPolicy?: {
             otpChannels: Array<'email' | 'sms' | 'whatsapp'>;
@@ -26531,7 +32210,7 @@ export type GetApiV1AdminSettingsSecurityResponses = {
 export type GetApiV1AdminSettingsSecurityResponse = GetApiV1AdminSettingsSecurityResponses[keyof GetApiV1AdminSettingsSecurityResponses];
 
 export type PostApiV1AdminSettingsSecurityData = {
-    body?: {
+    body: {
         cspAllowedDomains?: string;
     };
     path?: never;
@@ -26623,6 +32302,102 @@ export type PostApiV1AdminSettingsSecurityResponses = {
 };
 
 export type PostApiV1AdminSettingsSecurityResponse = PostApiV1AdminSettingsSecurityResponses[keyof PostApiV1AdminSettingsSecurityResponses];
+
+export type GetApiV1AdminSettingsSecurityRuntimeSourcesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/security/runtime-sources';
+};
+
+export type GetApiV1AdminSettingsSecurityRuntimeSourcesErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsSecurityRuntimeSourcesError = GetApiV1AdminSettingsSecurityRuntimeSourcesErrors[keyof GetApiV1AdminSettingsSecurityRuntimeSourcesErrors];
+
+export type GetApiV1AdminSettingsSecurityRuntimeSourcesResponses = {
+    /**
+     * Inherited storefront security origins
+     */
+    200: {
+        success: true;
+        data: Array<{
+            key: string;
+            label: string;
+            kind: 'storefront' | 'api' | 'dashboard' | 'media';
+            source: string | null;
+            consequence: string;
+        }>;
+    };
+};
+
+export type GetApiV1AdminSettingsSecurityRuntimeSourcesResponse = GetApiV1AdminSettingsSecurityRuntimeSourcesResponses[keyof GetApiV1AdminSettingsSecurityRuntimeSourcesResponses];
 
 export type GetApiV1AdminSettingsEmailData = {
     body?: never;
@@ -26724,7 +32499,7 @@ export type GetApiV1AdminSettingsEmailResponses = {
 export type GetApiV1AdminSettingsEmailResponse = GetApiV1AdminSettingsEmailResponses[keyof GetApiV1AdminSettingsEmailResponses];
 
 export type PostApiV1AdminSettingsEmailData = {
-    body?: {
+    body: {
         provider?: 'cloudflare' | 'resend';
         apiKey?: string;
         sender?: string;
@@ -26926,7 +32701,7 @@ export type GetApiV1AdminSettingsFirebaseResponses = {
 export type GetApiV1AdminSettingsFirebaseResponse = GetApiV1AdminSettingsFirebaseResponses[keyof GetApiV1AdminSettingsFirebaseResponses];
 
 export type PostApiV1AdminSettingsFirebaseData = {
-    body?: {
+    body: {
         serviceAccount?: string;
         publicConfig?: {
             [key: string]: unknown;
@@ -27168,7 +32943,7 @@ export type GetApiV1AdminSettingsShippingMethodsResponses = {
 export type GetApiV1AdminSettingsShippingMethodsResponse = GetApiV1AdminSettingsShippingMethodsResponses[keyof GetApiV1AdminSettingsShippingMethodsResponses];
 
 export type PostApiV1AdminSettingsShippingMethodsData = {
-    body?: {
+    body: {
         name: string;
         fee: number;
         description?: string | null;
@@ -27460,7 +33235,7 @@ export type GetApiV1AdminSettingsShippingMethodsByIdResponses = {
 export type GetApiV1AdminSettingsShippingMethodsByIdResponse = GetApiV1AdminSettingsShippingMethodsByIdResponses[keyof GetApiV1AdminSettingsShippingMethodsByIdResponses];
 
 export type PutApiV1AdminSettingsShippingMethodsByIdData = {
-    body?: {
+    body: {
         name?: string;
         fee?: number;
         description?: string | null;
@@ -27745,7 +33520,10 @@ export type DeleteApiV1AdminSettingsShippingMethodsByIdPermanentDeleteResponse =
 export type GetApiV1AdminSettingsDeliveryProvidersData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        page?: number;
+        limit?: number;
+    };
     url: '/api/v1/admin/settings/delivery-providers';
 };
 
@@ -27826,44 +33604,50 @@ export type GetApiV1AdminSettingsDeliveryProvidersResponses = {
      */
     200: {
         success: true;
-        data: Array<{
-            id: string;
-            name: string;
-            type: string;
-            credentials: string;
-            config: string;
-            isActive: boolean;
-            readiness?: {
-                status: 'draft' | 'configured' | 'tested' | 'active' | 'blocked';
-                configured: boolean;
-                tested: boolean;
-                active: boolean;
-                canCreateShipment: boolean;
-                blockers: Array<{
-                    code: string;
-                    message: string;
-                    [key: string]: unknown;
-                }>;
-                activationBlockers: Array<{
-                    source: string;
-                    key: string;
-                    label: string;
-                    message: string;
-                    [key: string]: unknown;
-                }>;
-                [key: string]: unknown;
+        data: {
+            providers: Array<{
+                id: string;
+                name: string;
+                type: string;
+                credentials: string;
+                config: string;
+                isActive: boolean;
+                readiness?: {
+                    status: 'draft' | 'configured' | 'tested' | 'active' | 'blocked';
+                    configured: boolean;
+                    tested: boolean;
+                    active: boolean;
+                    canCreateShipment: boolean;
+                    blockers: Array<{
+                        code: string;
+                        message: string;
+                    }>;
+                    activationBlockers: Array<{
+                        source: string;
+                        key: string;
+                        label: string;
+                        message: string;
+                    }>;
+                    lastTestAttemptAt?: string | number | null;
+                    lastTestSuccessAt?: string | number | null;
+                    lastTestFailureAt?: string | number | null;
+                };
+                createdAt: string | number;
+                updatedAt: string | number;
+            }>;
+            pagination: {
+                page: number;
+                limit: number;
+                hasMore: boolean;
             };
-            createdAt: string | number;
-            updatedAt: string | number;
-            [key: string]: unknown;
-        }>;
+        };
     };
 };
 
 export type GetApiV1AdminSettingsDeliveryProvidersResponse = GetApiV1AdminSettingsDeliveryProvidersResponses[keyof GetApiV1AdminSettingsDeliveryProvidersResponses];
 
 export type PostApiV1AdminSettingsDeliveryProvidersData = {
-    body?: {
+    body: {
         name: string;
         type: string;
         credentials: string | {
@@ -27983,20 +33767,19 @@ export type PostApiV1AdminSettingsDeliveryProvidersResponses = {
                 blockers: Array<{
                     code: string;
                     message: string;
-                    [key: string]: unknown;
                 }>;
                 activationBlockers: Array<{
                     source: string;
                     key: string;
                     label: string;
                     message: string;
-                    [key: string]: unknown;
                 }>;
-                [key: string]: unknown;
+                lastTestAttemptAt?: string | number | null;
+                lastTestSuccessAt?: string | number | null;
+                lastTestFailureAt?: string | number | null;
             };
             createdAt: string | number;
             updatedAt: string | number;
-            [key: string]: unknown;
         };
     };
 };
@@ -28004,7 +33787,7 @@ export type PostApiV1AdminSettingsDeliveryProvidersResponses = {
 export type PostApiV1AdminSettingsDeliveryProvidersResponse = PostApiV1AdminSettingsDeliveryProvidersResponses[keyof PostApiV1AdminSettingsDeliveryProvidersResponses];
 
 export type PutApiV1AdminSettingsDeliveryProvidersData = {
-    body?: {
+    body: {
         id: string;
         name: string;
         type: string;
@@ -28125,20 +33908,19 @@ export type PutApiV1AdminSettingsDeliveryProvidersResponses = {
                 blockers: Array<{
                     code: string;
                     message: string;
-                    [key: string]: unknown;
                 }>;
                 activationBlockers: Array<{
                     source: string;
                     key: string;
                     label: string;
                     message: string;
-                    [key: string]: unknown;
                 }>;
-                [key: string]: unknown;
+                lastTestAttemptAt?: string | number | null;
+                lastTestSuccessAt?: string | number | null;
+                lastTestFailureAt?: string | number | null;
             };
             createdAt: string | number;
             updatedAt: string | number;
-            [key: string]: unknown;
         };
     };
     /**
@@ -28162,20 +33944,19 @@ export type PutApiV1AdminSettingsDeliveryProvidersResponses = {
                 blockers: Array<{
                     code: string;
                     message: string;
-                    [key: string]: unknown;
                 }>;
                 activationBlockers: Array<{
                     source: string;
                     key: string;
                     label: string;
                     message: string;
-                    [key: string]: unknown;
                 }>;
-                [key: string]: unknown;
+                lastTestAttemptAt?: string | number | null;
+                lastTestSuccessAt?: string | number | null;
+                lastTestFailureAt?: string | number | null;
             };
             createdAt: string | number;
             updatedAt: string | number;
-            [key: string]: unknown;
         };
     };
 };
@@ -28183,7 +33964,7 @@ export type PutApiV1AdminSettingsDeliveryProvidersResponses = {
 export type PutApiV1AdminSettingsDeliveryProvidersResponse = PutApiV1AdminSettingsDeliveryProvidersResponses[keyof PutApiV1AdminSettingsDeliveryProvidersResponses];
 
 export type PostApiV1AdminSettingsDeliveryProvidersCreateTestData = {
-    body?: {
+    body: {
         type: string;
         credentials: string | {
             [key: string]: unknown;
@@ -28277,8 +34058,7 @@ export type PostApiV1AdminSettingsDeliveryProvidersCreateTestResponses = {
         success: true;
         data: {
             success: boolean;
-            message?: string;
-            [key: string]: unknown;
+            message: string;
         };
     };
 };
@@ -28481,20 +34261,19 @@ export type GetApiV1AdminSettingsDeliveryProvidersByIdResponses = {
                 blockers: Array<{
                     code: string;
                     message: string;
-                    [key: string]: unknown;
                 }>;
                 activationBlockers: Array<{
                     source: string;
                     key: string;
                     label: string;
                     message: string;
-                    [key: string]: unknown;
                 }>;
-                [key: string]: unknown;
+                lastTestAttemptAt?: string | number | null;
+                lastTestSuccessAt?: string | number | null;
+                lastTestFailureAt?: string | number | null;
             };
             createdAt: string | number;
             updatedAt: string | number;
-            [key: string]: unknown;
         };
     };
 };
@@ -28589,8 +34368,7 @@ export type PostApiV1AdminSettingsDeliveryProvidersByIdResponses = {
         success: true;
         data: {
             success: boolean;
-            message?: string;
-            [key: string]: unknown;
+            message: string;
         };
     };
 };
@@ -28707,7 +34485,7 @@ export type GetApiV1AdminSettingsHeroSlidersResponses = {
 export type GetApiV1AdminSettingsHeroSlidersResponse = GetApiV1AdminSettingsHeroSlidersResponses[keyof GetApiV1AdminSettingsHeroSlidersResponses];
 
 export type PostApiV1AdminSettingsHeroSlidersData = {
-    body?: {
+    body: {
         type: 'desktop' | 'mobile';
         images: Array<{
             id: string;
@@ -28840,7 +34618,7 @@ export type PostApiV1AdminSettingsHeroSlidersResponses = {
 export type PostApiV1AdminSettingsHeroSlidersResponse = PostApiV1AdminSettingsHeroSlidersResponses[keyof PostApiV1AdminSettingsHeroSlidersResponses];
 
 export type DeleteApiV1AdminSettingsHeroSlidersByIdData = {
-    body?: {
+    body: {
         expectedRevision: number;
     };
     path: {
@@ -29075,7 +34853,7 @@ export type GetApiV1AdminSettingsHeroSlidersByIdResponses = {
 export type GetApiV1AdminSettingsHeroSlidersByIdResponse = GetApiV1AdminSettingsHeroSlidersByIdResponses[keyof GetApiV1AdminSettingsHeroSlidersByIdResponses];
 
 export type PutApiV1AdminSettingsHeroSlidersByIdData = {
-    body?: {
+    body: {
         expectedRevision: number;
         images?: Array<{
             id: string;
@@ -29301,9 +35079,8 @@ export type GetApiV1AdminSettingsMetaConversionsResponses = {
                 testEventCode: string | null;
                 isEnabled: boolean;
                 logRetentionDays: number;
-                createdAt: number | null;
-                updatedAt: number | null;
-                [key: string]: unknown;
+                createdAt: string | number | null;
+                updatedAt: string | number | null;
             } | null;
             pixelParity: {
                 status: 'not_configured' | 'invalid_capi_pixel_id' | 'no_browser_pixel' | 'unreadable_browser_pixel' | 'ok' | 'mismatch' | 'multiple_browser_pixels' | 'unavailable';
@@ -29321,7 +35098,7 @@ export type GetApiV1AdminSettingsMetaConversionsResponses = {
 export type GetApiV1AdminSettingsMetaConversionsResponse = GetApiV1AdminSettingsMetaConversionsResponses[keyof GetApiV1AdminSettingsMetaConversionsResponses];
 
 export type PostApiV1AdminSettingsMetaConversionsData = {
-    body?: {
+    body: {
         pixelId?: string;
         accessToken?: string;
         testEventCode?: string;
@@ -29428,9 +35205,8 @@ export type PostApiV1AdminSettingsMetaConversionsResponses = {
             testEventCode: string | null;
             isEnabled: boolean;
             logRetentionDays: number;
-            createdAt: number | null;
-            updatedAt: number | null;
-            [key: string]: unknown;
+            createdAt: string | number | null;
+            updatedAt: string | number | null;
         };
     };
     /**
@@ -29445,9 +35221,8 @@ export type PostApiV1AdminSettingsMetaConversionsResponses = {
             testEventCode: string | null;
             isEnabled: boolean;
             logRetentionDays: number;
-            createdAt: number | null;
-            updatedAt: number | null;
-            [key: string]: unknown;
+            createdAt: string | number | null;
+            updatedAt: string | number | null;
         };
     };
 };
@@ -29553,11 +35328,11 @@ export type GetApiV1AdminSettingsMetaConversionsLogsData = {
         /**
          * Page number
          */
-        page?: number | null;
+        page?: number;
         /**
          * Items per page
          */
-        limit?: number | null;
+        limit?: number;
     };
     url: '/api/v1/admin/settings/meta-conversions/logs';
 };
@@ -29647,8 +35422,7 @@ export type GetApiV1AdminSettingsMetaConversionsLogsResponses = {
                 requestPayload: string | null;
                 responsePayload: string | null;
                 errorMessage: string | null;
-                createdAt: number | null;
-                [key: string]: unknown;
+                createdAt: string | number | null;
             }>;
             pagination: {
                 page: number;
@@ -29863,7 +35637,7 @@ export type GetApiV1AdminSettingsNotificationChannelsResponses = {
 export type GetApiV1AdminSettingsNotificationChannelsResponse = GetApiV1AdminSettingsNotificationChannelsResponses[keyof GetApiV1AdminSettingsNotificationChannelsResponses];
 
 export type PutApiV1AdminSettingsNotificationChannelsData = {
-    body?: {
+    body: {
         channels: {
             [key: string]: Array<string>;
         };
@@ -30071,7 +35845,7 @@ export type GetApiV1AdminSettingsNotificationChannelsAdminChannelsResponses = {
 export type GetApiV1AdminSettingsNotificationChannelsAdminChannelsResponse = GetApiV1AdminSettingsNotificationChannelsAdminChannelsResponses[keyof GetApiV1AdminSettingsNotificationChannelsAdminChannelsResponses];
 
 export type PutApiV1AdminSettingsNotificationChannelsAdminChannelsData = {
-    body?: {
+    body: {
         channels: {
             [key: string]: Array<string>;
         };
@@ -30255,7 +36029,7 @@ export type GetApiV1AdminSettingsSmsResponses = {
     200: {
         success: true;
         data: {
-            activeProvider: string | null;
+            activeProvider: 'smsnetbd' | 'bdbulksms' | 'mimsms' | 'gennet' | null;
             activeProviderConfigured: boolean;
             activeProviderError: string | null;
             bdbulksmsToken: string;
@@ -30274,7 +36048,7 @@ export type GetApiV1AdminSettingsSmsResponses = {
 export type GetApiV1AdminSettingsSmsResponse = GetApiV1AdminSettingsSmsResponses[keyof GetApiV1AdminSettingsSmsResponses];
 
 export type PostApiV1AdminSettingsSmsData = {
-    body?: {
+    body: {
         activeProvider?: 'smsnetbd' | 'bdbulksms' | 'mimsms' | 'gennet';
         bdbulksmsToken?: string;
         mimsmsUsername?: string;
@@ -30618,7 +36392,7 @@ export type PutApiV1AdminSettingsCustomerRequestsResponses = {
 export type PutApiV1AdminSettingsCustomerRequestsResponse = PutApiV1AdminSettingsCustomerRequestsResponses[keyof PutApiV1AdminSettingsCustomerRequestsResponses];
 
 export type PutApiV1AdminOrdersByIdStatusData = {
-    body?: {
+    body: {
         status: string;
     };
     path: {
@@ -30739,7 +36513,7 @@ export type GetApiV1AdminOrdersByIdCodResponses = {
 export type GetApiV1AdminOrdersByIdCodResponse = GetApiV1AdminOrdersByIdCodResponses[keyof GetApiV1AdminOrdersByIdCodResponses];
 
 export type PostApiV1AdminOrdersByIdCodData = {
-    body?: {
+    body: {
         action: 'collected';
         collectedBy: string;
         collectedAmount: number;
@@ -30875,7 +36649,7 @@ export type GetApiV1AdminOrdersByIdFulfillResponses = {
 export type GetApiV1AdminOrdersByIdFulfillResponse = GetApiV1AdminOrdersByIdFulfillResponses[keyof GetApiV1AdminOrdersByIdFulfillResponses];
 
 export type PostApiV1AdminOrdersByIdFulfillData = {
-    body?: {
+    body: {
         itemIds?: Array<string>;
         trackingId?: string;
         trackingUrl?: string;
@@ -31010,7 +36784,7 @@ export type GetApiV1AdminOrdersByIdShipmentsResponses = {
 export type GetApiV1AdminOrdersByIdShipmentsResponse = GetApiV1AdminOrdersByIdShipmentsResponses[keyof GetApiV1AdminOrdersByIdShipmentsResponses];
 
 export type PostApiV1AdminOrdersByIdShipmentsData = {
-    body?: {
+    body: {
         providerId: string;
         options?: {
             deliveryType?: number;
@@ -31586,7 +37360,7 @@ export type PostApiV1AdminOrdersByIdShipmentsByShipmentIdReconcileResponses = {
 export type PostApiV1AdminOrdersByIdShipmentsByShipmentIdReconcileResponse = PostApiV1AdminOrdersByIdShipmentsByShipmentIdReconcileResponses[keyof PostApiV1AdminOrdersByIdShipmentsByShipmentIdReconcileResponses];
 
 export type PostApiV1AdminOrdersByIdRefundData = {
-    body?: {
+    body: {
         amount?: number;
         reason?: string;
         gateway?: 'stripe' | 'sslcommerz' | 'polar' | 'cod';
@@ -31951,8 +37725,14 @@ export type GetApiV1AdminOrdersByIdInvoiceResponse = GetApiV1AdminOrdersByIdInvo
 
 export type PostApiV1AdminOrdersByIdInvoiceData = {
     body: {
-        operationKey: string;
+        operationKey?: string;
         expectedOrderVersion: number;
+    };
+    headers?: {
+        /**
+         * Standard retry key. May replace body.operationKey; if both are sent they must match.
+         */
+        'idempotency-key'?: string;
     };
     path: {
         /**
@@ -32142,6 +37922,120 @@ export type PostApiV1AdminOrdersByIdInvoiceResponses = {
 };
 
 export type PostApiV1AdminOrdersByIdInvoiceResponse = PostApiV1AdminOrdersByIdInvoiceResponses[keyof PostApiV1AdminOrdersByIdInvoiceResponses];
+
+export type GetApiV1AdminOrdersByIdInvoicePrintData = {
+    body?: never;
+    path: {
+        /**
+         * Order ID
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/orders/{id}/invoice/print';
+};
+
+export type GetApiV1AdminOrdersByIdInvoicePrintErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminOrdersByIdInvoicePrintError = GetApiV1AdminOrdersByIdInvoicePrintErrors[keyof GetApiV1AdminOrdersByIdInvoicePrintErrors];
+
+export type GetApiV1AdminOrdersByIdInvoicePrintResponses = {
+    /**
+     * Private printable HTML invoice
+     */
+    200: string;
+};
+
+export type GetApiV1AdminOrdersByIdInvoicePrintResponse = GetApiV1AdminOrdersByIdInvoicePrintResponses[keyof GetApiV1AdminOrdersByIdInvoicePrintResponses];
 
 export type PutApiV1AdminOrdersByIdSupportRequestsByRequestIdStatusData = {
     body: {
@@ -32445,7 +38339,7 @@ export type GetApiV1AdminOrdersByIdReturnsResponse = GetApiV1AdminOrdersByIdRetu
 
 export type PostApiV1AdminOrdersByIdReturnsData = {
     body: {
-        commandKey: string;
+        commandKey?: string;
         expectedOrderVersion: number;
         reason: string;
         notes?: string | null;
@@ -32455,6 +38349,12 @@ export type PostApiV1AdminOrdersByIdReturnsData = {
             reason?: string | null;
             notes?: string | null;
         }>;
+    };
+    headers?: {
+        /**
+         * Standard retry key. May replace body.commandKey; if both are sent they must match.
+         */
+        'idempotency-key'?: string;
     };
     path: {
         id: string;
@@ -32700,7 +38600,7 @@ export type GetApiV1AdminOrdersByIdReturnsByReturnIdResponse = GetApiV1AdminOrde
 
 export type PostApiV1AdminOrdersByIdReturnsByReturnIdApproveData = {
     body: {
-        commandKey: string;
+        commandKey?: string;
         expectedVersion: number;
         notes?: string | null;
         lines: Array<{
@@ -32709,6 +38609,12 @@ export type PostApiV1AdminOrdersByIdReturnsByReturnIdApproveData = {
             rejectedQuantity: number;
             notes?: string | null;
         }>;
+    };
+    headers?: {
+        /**
+         * Standard retry key. May replace body.commandKey; if both are sent they must match.
+         */
+        'idempotency-key'?: string;
     };
     path: {
         id: string;
@@ -32810,7 +38716,7 @@ export type PostApiV1AdminOrdersByIdReturnsByReturnIdApproveResponse = PostApiV1
 
 export type PostApiV1AdminOrdersByIdReturnsByReturnIdReceiveData = {
     body: {
-        commandKey: string;
+        commandKey?: string;
         expectedVersion: number;
         notes?: string | null;
         lines: Array<{
@@ -32820,6 +38726,12 @@ export type PostApiV1AdminOrdersByIdReturnsByReturnIdReceiveData = {
             damagedQuantity: number;
             notes?: string | null;
         }>;
+    };
+    headers?: {
+        /**
+         * Standard retry key. May replace body.commandKey; if both are sent they must match.
+         */
+        'idempotency-key'?: string;
     };
     path: {
         id: string;
@@ -32921,9 +38833,15 @@ export type PostApiV1AdminOrdersByIdReturnsByReturnIdReceiveResponse = PostApiV1
 
 export type PostApiV1AdminOrdersByIdReturnsByReturnIdCancelData = {
     body: {
-        commandKey: string;
+        commandKey?: string;
         expectedVersion: number;
         notes?: string | null;
+    };
+    headers?: {
+        /**
+         * Standard retry key. May replace body.commandKey; if both are sent they must match.
+         */
+        'idempotency-key'?: string;
     };
     path: {
         id: string;
@@ -33411,7 +39329,7 @@ export type GetApiV1AdminOrdersResponses = {
 export type GetApiV1AdminOrdersResponse = GetApiV1AdminOrdersResponses[keyof GetApiV1AdminOrdersResponses];
 
 export type PostApiV1AdminOrdersData = {
-    body?: {
+    body: {
         customerName: string;
         customerPhone: string;
         customerEmail: string | null;
@@ -33430,7 +39348,13 @@ export type PostApiV1AdminOrdersData = {
             variantId: string | null;
             quantity: number;
         }>;
-        requestKey: string;
+        requestKey?: string;
+    };
+    headers?: {
+        /**
+         * Standard retry key. May replace body.requestKey; if both are sent they must match.
+         */
+        'idempotency-key'?: string;
     };
     path?: never;
     query?: never;
@@ -33499,6 +39423,116 @@ export type PostApiV1AdminOrdersResponses = {
 };
 
 export type PostApiV1AdminOrdersResponse = PostApiV1AdminOrdersResponses[keyof PostApiV1AdminOrdersResponses];
+
+export type GetApiV1AdminOrdersExportData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Search query
+         */
+        search?: string;
+        /**
+         * Filter by status
+         */
+        status?: string;
+        statusGroup?: 'open' | 'in_transit' | 'delivered' | 'closed';
+        paymentStatus?: 'unpaid' | 'partial' | 'paid' | 'refunded' | 'failed';
+        paymentMethod?: 'cod' | 'stripe' | 'sslcommerz' | 'polar';
+        fulfillmentStatus?: 'pending' | 'partial' | 'complete';
+        paymentRecovery?: 'recoverable' | 'awaiting_payment' | 'processing' | 'needs_attention';
+        archived?: 'true' | 'false';
+        sort?: 'relevance' | 'customerName' | 'totalAmount' | 'status' | 'createdAt' | 'updatedAt';
+        order?: 'asc' | 'desc';
+        startDate?: string;
+        endDate?: string;
+        /**
+         * Maximum rows to export. Hard-capped at 5000.
+         */
+        maxRows?: number;
+    };
+    url: '/api/v1/admin/orders/export';
+};
+
+export type GetApiV1AdminOrdersExportErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminOrdersExportError = GetApiV1AdminOrdersExportErrors[keyof GetApiV1AdminOrdersExportErrors];
+
+export type GetApiV1AdminOrdersExportResponses = {
+    /**
+     * Private spreadsheet-safe order CSV
+     */
+    200: string;
+};
+
+export type GetApiV1AdminOrdersExportResponse = GetApiV1AdminOrdersExportResponses[keyof GetApiV1AdminOrdersExportResponses];
 
 export type GetApiV1AdminOrdersPaymentRecoveryData = {
     body?: never;
@@ -33728,9 +39762,29 @@ export type GetApiV1AdminOrdersPaymentRecoveryExportData = {
          */
         state?: 'recoverable' | 'awaiting_payment' | 'processing' | 'needs_attention';
         /**
+         * Filter by exact order status
+         */
+        status?: string;
+        /**
+         * Filter by order lifecycle view
+         */
+        statusGroup?: 'open' | 'in_transit' | 'delivered' | 'closed';
+        /**
+         * Filter by payment status
+         */
+        paymentStatus?: 'unpaid' | 'partial' | 'paid' | 'refunded' | 'failed';
+        /**
          * Filter by payment gateway
          */
         paymentMethod?: 'cod' | 'stripe' | 'sslcommerz' | 'polar';
+        /**
+         * Filter by fulfillment status
+         */
+        fulfillmentStatus?: 'pending' | 'partial' | 'complete';
+        /**
+         * Show archived orders
+         */
+        archived?: 'true' | 'false';
         /**
          * Sort field
          */
@@ -33968,7 +40022,7 @@ export type PostApiV1AdminOrdersQuoteResponses = {
 export type PostApiV1AdminOrdersQuoteResponse = PostApiV1AdminOrdersQuoteResponses[keyof PostApiV1AdminOrdersQuoteResponses];
 
 export type PostApiV1AdminOrdersArchiveData = {
-    body?: {
+    body: {
         orders: Array<{
             id: string;
             expectedVersion: number;
@@ -34038,7 +40092,7 @@ export type PostApiV1AdminOrdersArchiveResponses = {
 export type PostApiV1AdminOrdersArchiveResponse = PostApiV1AdminOrdersArchiveResponses[keyof PostApiV1AdminOrdersArchiveResponses];
 
 export type PostApiV1AdminOrdersBulkShipData = {
-    body?: {
+    body: {
         orderIds: Array<string>;
         providerId: string;
         options?: {
@@ -34440,7 +40494,7 @@ export type GetApiV1AdminOrdersByIdResponses = {
 export type GetApiV1AdminOrdersByIdResponse = GetApiV1AdminOrdersByIdResponses[keyof GetApiV1AdminOrdersByIdResponses];
 
 export type PutApiV1AdminOrdersByIdData = {
-    body?: {
+    body: {
         customerName: string;
         customerPhone: string;
         customerEmail: string | null;
@@ -34545,7 +40599,7 @@ export type PutApiV1AdminOrdersByIdResponses = {
 export type PutApiV1AdminOrdersByIdResponse = PutApiV1AdminOrdersByIdResponses[keyof PutApiV1AdminOrdersByIdResponses];
 
 export type PostApiV1AdminOrdersByIdRestoreData = {
-    body?: {
+    body: {
         expectedVersion: number;
     };
     path: {
@@ -34881,8 +40935,14 @@ export type PostApiV1AdminOrdersByIdNotificationsByOutboxIdRetryResponses = {
 export type PostApiV1AdminOrdersByIdNotificationsByOutboxIdRetryResponse = PostApiV1AdminOrdersByIdNotificationsByOutboxIdRetryResponses[keyof PostApiV1AdminOrdersByIdNotificationsByOutboxIdRetryResponses];
 
 export type PostApiV1AdminOrdersByIdNotificationsByOutboxIdResendData = {
-    body?: {
-        resendRequestId: string;
+    body: {
+        resendRequestId?: string;
+    };
+    headers?: {
+        /**
+         * Standard retry key. May replace body.resendRequestId; if both are sent they must match.
+         */
+        'idempotency-key'?: string;
     };
     path: {
         id: string;
@@ -35252,11 +41312,11 @@ export type GetApiV1AdminProductsData = {
         /**
          * Page number
          */
-        page?: number | null;
+        page?: number;
         /**
          * Items per page
          */
-        limit?: number | null;
+        limit?: number;
         /**
          * Search term
          */
@@ -35268,15 +41328,15 @@ export type GetApiV1AdminProductsData = {
         /**
          * Show trashed items
          */
-        trashed?: string;
+        trashed?: 'true' | 'false';
         /**
          * Sort field
          */
-        sort?: string;
+        sort?: 'name' | 'price' | 'category' | 'createdAt' | 'updatedAt';
         /**
          * Sort order
          */
-        order?: string;
+        order?: 'asc' | 'desc';
     };
     url: '/api/v1/admin/products';
 };
@@ -35394,7 +41454,7 @@ export type GetApiV1AdminProductsResponses = {
 export type GetApiV1AdminProductsResponse = GetApiV1AdminProductsResponses[keyof GetApiV1AdminProductsResponses];
 
 export type PostApiV1AdminProductsData = {
-    body?: {
+    body: {
         name: string;
         description: string | null;
         price: number;
@@ -35651,7 +41711,7 @@ export type GetApiV1AdminProductsByIdsResponses = {
 export type GetApiV1AdminProductsByIdsResponse = GetApiV1AdminProductsByIdsResponses[keyof GetApiV1AdminProductsByIdsResponses];
 
 export type PostApiV1AdminProductsBulkDeleteData = {
-    body?: {
+    body: {
         products: Array<{
             id: string;
             expectedAggregateRevision: number;
@@ -35793,6 +41853,437 @@ export type PostApiV1AdminProductsBulkDeleteResponses = {
 };
 
 export type PostApiV1AdminProductsBulkDeleteResponse = PostApiV1AdminProductsBulkDeleteResponses[keyof PostApiV1AdminProductsBulkDeleteResponses];
+
+export type GetApiV1AdminProductsByIdSectionsBySectionData = {
+    body?: never;
+    path: {
+        id: string;
+        section: 'base' | 'text' | 'media' | 'attributes' | 'additional_info' | 'additional_info_text' | 'options' | 'variants';
+    };
+    query?: {
+        offset?: number | null;
+        limit?: number;
+        field?: 'description' | 'metaTitle' | 'metaDescription' | 'title' | 'content';
+        itemId?: string;
+    };
+    url: '/api/v1/admin/products/{id}/sections/{section}';
+};
+
+export type GetApiV1AdminProductsByIdSectionsBySectionErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminProductsByIdSectionsBySectionError = GetApiV1AdminProductsByIdSectionsBySectionErrors[keyof GetApiV1AdminProductsByIdSectionsBySectionErrors];
+
+export type GetApiV1AdminProductsByIdSectionsBySectionResponses = {
+    /**
+     * Bounded product section
+     */
+    200: {
+        success: true;
+        data: {
+            section: 'base';
+            aggregateRevision: number;
+            product: {
+                id: string;
+                name: string;
+                price: number;
+                categoryId: string | null;
+                categoryName: string | null;
+                slug: string;
+                canonicalPath: string | null;
+                noIndex: boolean;
+                excludeFromSitemap: boolean;
+                excludeFromProductFeed: boolean;
+                productCondition: 'new' | 'refurbished' | 'used' | null;
+                isActive: boolean;
+                discountType: 'percentage' | 'flat' | null;
+                discountPercentage: number | null;
+                discountAmount: number | null;
+                freeDelivery: boolean;
+                createdAt: string | number;
+                updatedAt: string | number;
+                deletedAt: string | number | null;
+                textLengths: {
+                    description: number;
+                    metaTitle: number;
+                    metaDescription: number;
+                };
+                counts: {
+                    media: number;
+                    attributes: number;
+                    additionalInfo: number;
+                    options: number;
+                    variants: number;
+                };
+            };
+        } | {
+            section: 'text';
+            field: 'description' | 'metaTitle' | 'metaDescription';
+            aggregateRevision: number;
+            value: string;
+            totalCharacters: number;
+            offset: number;
+            nextOffset: number | null;
+            isNull: boolean;
+        } | {
+            section: 'media';
+            aggregateRevision: number;
+            items: Array<{
+                id: string;
+                mediaId: string;
+                altText: string | null;
+                isPrimary: boolean;
+                sortOrder: number;
+            }>;
+            total: number;
+            offset: number;
+            limit: number;
+            nextOffset: number | null;
+        } | {
+            section: 'attributes';
+            aggregateRevision: number;
+            items: Array<{
+                attributeId: string;
+                value: string;
+            }>;
+            total: number;
+            offset: number;
+            limit: number;
+            nextOffset: number | null;
+        } | {
+            section: 'additional_info';
+            aggregateRevision: number;
+            items: Array<{
+                id: string;
+                sortOrder: number;
+                titleCharacters: number;
+                contentCharacters: number;
+            }>;
+            total: number;
+            offset: number;
+            limit: number;
+            nextOffset: number | null;
+        } | {
+            section: 'additional_info_text';
+            itemId: string;
+            field: 'title' | 'content';
+            sortOrder: number;
+            aggregateRevision: number;
+            value: string;
+            totalCharacters: number;
+            offset: number;
+            nextOffset: number | null;
+            isNull: boolean;
+        } | {
+            section: 'options';
+            aggregateRevision: number;
+            items: Array<{
+                id: string;
+                name: string;
+                position: number;
+                standardMapping: 'size' | 'color' | 'material' | 'pattern' | 'none';
+                values: Array<{
+                    id: string;
+                    value: string;
+                    position: number;
+                }>;
+            }>;
+            total: number;
+            offset: number;
+            limit: number;
+            nextOffset: number | null;
+        } | {
+            section: 'variants';
+            aggregateRevision: number;
+            items: Array<{
+                id: string;
+                selectedOptionValueIds: Array<string>;
+                selectedOptions: Array<{
+                    optionDefinitionId: string;
+                    optionValueId: string;
+                    name: string;
+                    value: string;
+                    position: number;
+                    valuePosition: number;
+                    standardMapping: 'size' | 'color' | 'material' | 'pattern' | 'none';
+                }>;
+                imageId: string | null;
+                weight: number | null;
+                sku: string;
+                price: number;
+                stock: number;
+                trackInventory: boolean;
+                barcode: string | null;
+                barcodeType: 'ean13' | 'upc' | 'isbn' | 'gtin' | 'code128' | 'custom' | null;
+                discountType: 'percentage' | 'flat' | null;
+                discountPercentage: number | null;
+                discountAmount: number | null;
+            }>;
+            total: number;
+            offset: number;
+            limit: number;
+            nextOffset: number | null;
+        };
+    };
+};
+
+export type GetApiV1AdminProductsByIdSectionsBySectionResponse = GetApiV1AdminProductsByIdSectionsBySectionResponses[keyof GetApiV1AdminProductsByIdSectionsBySectionResponses];
+
+export type PatchApiV1AdminProductsByIdSectionsBySectionData = {
+    body: {
+        section: 'base';
+        expectedAggregateRevision: number;
+        patch: {
+            name?: string;
+            price?: number;
+            categoryId?: string | null;
+            isActive?: boolean;
+            discountType?: 'percentage' | 'flat';
+            discountPercentage?: number | null;
+            discountAmount?: number | null;
+            freeDelivery?: boolean;
+            canonicalPath?: string | null;
+            noIndex?: boolean;
+            excludeFromSitemap?: boolean;
+            excludeFromProductFeed?: boolean;
+            productCondition?: 'new' | 'refurbished' | 'used' | null;
+            slug?: string;
+        };
+    } | {
+        section: 'text';
+        expectedAggregateRevision: number;
+        field: 'description' | 'metaTitle' | 'metaDescription';
+        offset: number;
+        deleteCount: number;
+        value: string | null;
+    } | {
+        section: 'media';
+        expectedAggregateRevision: number;
+        media: Array<{
+            id: string;
+            mediaId: string;
+            altText: string | null;
+            isPrimary: boolean;
+        }>;
+        acknowledgedSkuImageRemovalIds?: Array<string>;
+    } | {
+        section: 'attributes';
+        expectedAggregateRevision: number;
+        attributes: Array<{
+            attributeId: string;
+            value: string;
+        }>;
+    } | {
+        section: 'additional_info';
+        expectedAggregateRevision: number;
+        action: 'create' | 'delete' | 'set_sort_order';
+        itemId: string;
+        title?: string;
+        content?: string;
+        sortOrder?: number;
+    } | {
+        section: 'additional_info_text';
+        expectedAggregateRevision: number;
+        itemId: string;
+        field: 'title' | 'content';
+        offset: number;
+        deleteCount: number;
+        value: string;
+    };
+    path: {
+        id: string;
+        section: 'base' | 'text' | 'media' | 'attributes' | 'additional_info' | 'additional_info_text';
+    };
+    query?: never;
+    url: '/api/v1/admin/products/{id}/sections/{section}';
+};
+
+export type PatchApiV1AdminProductsByIdSectionsBySectionErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Product revision or domain conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: 'PRODUCT_REVISION_CONFLICT';
+            message: string;
+            details: {
+                expectedRevision: number;
+                currentRevision: number | null;
+            };
+        };
+    } | {
+        success: false;
+        error: {
+            code: 'PRODUCT_MEDIA_SKU_REFERENCE_CONFLICT';
+            message: string;
+            details: {
+                affectedCount: number;
+                affectedAssociationIds: Array<string>;
+                affectedSkus: Array<{
+                    id: string;
+                    sku: string;
+                    imageId: string;
+                }>;
+            };
+        };
+    } | {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PatchApiV1AdminProductsByIdSectionsBySectionError = PatchApiV1AdminProductsByIdSectionsBySectionErrors[keyof PatchApiV1AdminProductsByIdSectionsBySectionErrors];
+
+export type PatchApiV1AdminProductsByIdSectionsBySectionResponses = {
+    /**
+     * Product section updated
+     */
+    200: {
+        success: true;
+        data: {
+            aggregateRevision: number;
+        };
+    };
+};
+
+export type PatchApiV1AdminProductsByIdSectionsBySectionResponse = PatchApiV1AdminProductsByIdSectionsBySectionResponses[keyof PatchApiV1AdminProductsByIdSectionsBySectionResponses];
 
 export type DeleteApiV1AdminProductsByIdData = {
     body?: never;
@@ -36067,11 +42558,11 @@ export type GetApiV1AdminProductsByIdResponses = {
 export type GetApiV1AdminProductsByIdResponse = GetApiV1AdminProductsByIdResponses[keyof GetApiV1AdminProductsByIdResponses];
 
 export type PutApiV1AdminProductsByIdData = {
-    body?: {
+    body: {
         name: string;
         description: string | null;
         price: number;
-        categoryId: string;
+        categoryId: string | null;
         isActive: boolean;
         discountType?: 'percentage' | 'flat';
         discountPercentage?: number | null;
@@ -36083,7 +42574,7 @@ export type PutApiV1AdminProductsByIdData = {
         noIndex?: boolean;
         excludeFromSitemap?: boolean;
         excludeFromProductFeed?: boolean;
-        productCondition: 'new' | 'refurbished' | 'used';
+        productCondition: 'new' | 'refurbished' | 'used' | null;
         slug: string;
         media: Array<{
             id: string;
@@ -36661,7 +43152,7 @@ export type GetApiV1AdminProductsByIdVariantsResponses = {
 export type GetApiV1AdminProductsByIdVariantsResponse = GetApiV1AdminProductsByIdVariantsResponses[keyof GetApiV1AdminProductsByIdVariantsResponses];
 
 export type PostApiV1AdminProductsByIdVariantsData = {
-    body?: {
+    body: {
         selectedOptionValueIds: Array<string>;
         imageId: string | null;
         weight: number | null;
@@ -36975,7 +43466,7 @@ export type DeleteApiV1AdminProductsByIdVariantsByVariantIdResponses = {
 export type DeleteApiV1AdminProductsByIdVariantsByVariantIdResponse = DeleteApiV1AdminProductsByIdVariantsByVariantIdResponses[keyof DeleteApiV1AdminProductsByIdVariantsByVariantIdResponses];
 
 export type PutApiV1AdminProductsByIdVariantsByVariantIdData = {
-    body?: {
+    body: {
         selectedOptionValueIds: Array<string>;
         imageId: string | null;
         weight: number | null;
@@ -37157,7 +43648,7 @@ export type PutApiV1AdminProductsByIdVariantsByVariantIdResponses = {
 export type PutApiV1AdminProductsByIdVariantsByVariantIdResponse = PutApiV1AdminProductsByIdVariantsByVariantIdResponses[keyof PutApiV1AdminProductsByIdVariantsByVariantIdResponses];
 
 export type PutApiV1AdminProductsByIdOptionsMatrixData = {
-    body?: {
+    body: {
         options: Array<{
             id: string;
             name: string;
@@ -37315,7 +43806,10 @@ export type PutApiV1AdminProductsByIdOptionsMatrixResponse = PutApiV1AdminProduc
 export type GetApiV1AdminAuthUsersData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        page?: number;
+        limit?: number;
+    };
     url: '/api/v1/admin/auth/users';
 };
 
@@ -37419,12 +43913,18 @@ export type GetApiV1AdminAuthUsersResponses = {
                     name: string;
                     displayName: string;
                 }>;
+                rolesTruncated: boolean;
                 overrides: {
                     grants: Array<string>;
                     denials: Array<string>;
                 };
-                [key: string]: unknown;
+                overridesTruncated: boolean;
             }>;
+            pagination: {
+                page: number;
+                limit: number;
+                hasMore: boolean;
+            };
         };
     };
 };
@@ -37432,7 +43932,7 @@ export type GetApiV1AdminAuthUsersResponses = {
 export type GetApiV1AdminAuthUsersResponse = GetApiV1AdminAuthUsersResponses[keyof GetApiV1AdminAuthUsersResponses];
 
 export type PostApiV1AdminAuthUsersData = {
-    body?: {
+    body: {
         name: string;
         email: string;
         roleId?: string;
@@ -37756,7 +44256,7 @@ export type DeleteApiV1AdminAuthUsersByIdResponses = {
 export type DeleteApiV1AdminAuthUsersByIdResponse = DeleteApiV1AdminAuthUsersByIdResponses[keyof DeleteApiV1AdminAuthUsersByIdResponses];
 
 export type PostApiV1AdminAuthUsersByIdSuspensionData = {
-    body?: {
+    body: {
         suspended: boolean;
     };
     path: {
@@ -37959,7 +44459,7 @@ export type PostApiV1AdminAuthChangePasswordResponses = {
 export type PostApiV1AdminAuthChangePasswordResponse = PostApiV1AdminAuthChangePasswordResponses[keyof PostApiV1AdminAuthChangePasswordResponses];
 
 export type PostApiV1AdminAuthUpdateProfileData = {
-    body?: {
+    body: {
         name?: string;
         image?: string | null;
     };
@@ -38051,13 +44551,105 @@ export type PostApiV1AdminAuthUpdateProfileResponses = {
                 name: string;
                 email: string;
                 image: string | null;
-                [key: string]: unknown;
             } | null;
         };
     };
 };
 
 export type PostApiV1AdminAuthUpdateProfileResponse = PostApiV1AdminAuthUpdateProfileResponses[keyof PostApiV1AdminAuthUpdateProfileResponses];
+
+export type PostApiV1AdminAuthScannerLinkData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/auth/scanner-link';
+};
+
+export type PostApiV1AdminAuthScannerLinkErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminAuthScannerLinkError = PostApiV1AdminAuthScannerLinkErrors[keyof PostApiV1AdminAuthScannerLinkErrors];
+
+export type PostApiV1AdminAuthScannerLinkResponses = {
+    /**
+     * One-time scanner pairing token created
+     */
+    201: {
+        success: true;
+        data: {
+            token: string;
+            expiresAt: string;
+        };
+    };
+};
+
+export type PostApiV1AdminAuthScannerLinkResponse = PostApiV1AdminAuthScannerLinkResponses[keyof PostApiV1AdminAuthScannerLinkResponses];
 
 export type GetApiV1AdminAuth2FaInfoData = {
     body?: never;
@@ -38897,7 +45489,7 @@ export type GetApiV1AdminAttributesData = {
         /**
          * Show trashed items
          */
-        trashed?: string;
+        trashed?: 'true' | 'false';
     };
     url: '/api/v1/admin/attributes';
 };
@@ -39004,7 +45596,7 @@ export type GetApiV1AdminAttributesResponses = {
 export type GetApiV1AdminAttributesResponse = GetApiV1AdminAttributesResponses[keyof GetApiV1AdminAttributesResponses];
 
 export type PostApiV1AdminAttributesData = {
-    body?: {
+    body: {
         name: string;
         slug: string;
         filterable?: boolean;
@@ -39221,7 +45813,7 @@ export type DeleteApiV1AdminAttributesByIdResponses = {
 export type DeleteApiV1AdminAttributesByIdResponse = DeleteApiV1AdminAttributesByIdResponses[keyof DeleteApiV1AdminAttributesByIdResponses];
 
 export type PutApiV1AdminAttributesByIdData = {
-    body?: {
+    body: {
         name?: string;
         slug?: string;
         filterable?: boolean;
@@ -39429,7 +46021,7 @@ export type DeleteApiV1AdminAttributesByIdPermanentResponses = {
 export type DeleteApiV1AdminAttributesByIdPermanentResponse = DeleteApiV1AdminAttributesByIdPermanentResponses[keyof DeleteApiV1AdminAttributesByIdPermanentResponses];
 
 export type PostApiV1AdminAttributesBulkDeleteData = {
-    body?: {
+    body: {
         ids: Array<string>;
         permanent?: boolean;
     };
@@ -39519,7 +46111,7 @@ export type PostApiV1AdminAttributesBulkDeleteResponses = {
 export type PostApiV1AdminAttributesBulkDeleteResponse = PostApiV1AdminAttributesBulkDeleteResponses[keyof PostApiV1AdminAttributesBulkDeleteResponses];
 
 export type PostApiV1AdminAttributesBulkRestoreData = {
-    body?: {
+    body: {
         ids: Array<string>;
         permanent?: boolean;
     };
@@ -39714,7 +46306,7 @@ export type PostApiV1AdminAttributesByIdRestoreResponses = {
 export type PostApiV1AdminAttributesByIdRestoreResponse = PostApiV1AdminAttributesByIdRestoreResponses[keyof PostApiV1AdminAttributesByIdRestoreResponses];
 
 export type DeleteApiV1AdminAttributesByIdValuesData = {
-    body?: {
+    body: {
         value: string;
     };
     path: {
@@ -39934,7 +46526,7 @@ export type GetApiV1AdminAttributesByIdValuesResponses = {
 export type GetApiV1AdminAttributesByIdValuesResponse = GetApiV1AdminAttributesByIdValuesResponses[keyof GetApiV1AdminAttributesByIdValuesResponses];
 
 export type PostApiV1AdminAttributesByIdValuesData = {
-    body?: {
+    body: {
         value: string;
     };
     path: {
@@ -40041,7 +46633,7 @@ export type PostApiV1AdminAttributesByIdValuesResponses = {
 export type PostApiV1AdminAttributesByIdValuesResponse = PostApiV1AdminAttributesByIdValuesResponses[keyof PostApiV1AdminAttributesByIdValuesResponses];
 
 export type PutApiV1AdminAttributesByIdValuesData = {
-    body?: {
+    body: {
         oldValue: string;
         newValue: string;
     };
@@ -40283,6 +46875,109 @@ export type GetApiV1AdminTaxesResponses = {
 
 export type GetApiV1AdminTaxesResponse = GetApiV1AdminTaxesResponses[keyof GetApiV1AdminTaxesResponses];
 
+export type GetApiV1AdminTaxesSettingsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/taxes/settings';
+};
+
+export type GetApiV1AdminTaxesSettingsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminTaxesSettingsError = GetApiV1AdminTaxesSettingsErrors[keyof GetApiV1AdminTaxesSettingsErrors];
+
+export type GetApiV1AdminTaxesSettingsResponses = {
+    /**
+     * Tax settings
+     */
+    200: {
+        success: true;
+        data: {
+            settings: {
+                id: 'default';
+                enabled: boolean;
+                pricesIncludeTax: boolean;
+                taxShipping: boolean;
+                defaultTaxClassId: string | null;
+                shippingTaxClassId: string | null;
+                displayLabel: string;
+                version: number;
+                createdAt: string | number | null;
+                updatedAt: string | number | null;
+            };
+        };
+    };
+};
+
+export type GetApiV1AdminTaxesSettingsResponse = GetApiV1AdminTaxesSettingsResponses[keyof GetApiV1AdminTaxesSettingsResponses];
+
 export type PutApiV1AdminTaxesSettingsData = {
     body: {
         expectedVersion: number;
@@ -40371,6 +47066,114 @@ export type PutApiV1AdminTaxesSettingsResponses = {
 };
 
 export type PutApiV1AdminTaxesSettingsResponse = PutApiV1AdminTaxesSettingsResponses[keyof PutApiV1AdminTaxesSettingsResponses];
+
+export type GetApiV1AdminTaxesClassesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        page?: number;
+        limit?: number;
+        search?: string;
+    };
+    url: '/api/v1/admin/taxes/classes';
+};
+
+export type GetApiV1AdminTaxesClassesErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminTaxesClassesError = GetApiV1AdminTaxesClassesErrors[keyof GetApiV1AdminTaxesClassesErrors];
+
+export type GetApiV1AdminTaxesClassesResponses = {
+    /**
+     * Tax classes
+     */
+    200: {
+        success: true;
+        data: {
+            items: Array<{
+                id: string;
+                name: string;
+                description: string | null;
+                isExempt: boolean;
+                version: number;
+                createdAt: string | number | null;
+                updatedAt: string | number | null;
+                deletedAt: string | number | null;
+            }>;
+            total: number;
+            page: number;
+            limit: number;
+        };
+    };
+};
+
+export type GetApiV1AdminTaxesClassesResponse = GetApiV1AdminTaxesClassesResponses[keyof GetApiV1AdminTaxesClassesResponses];
 
 export type PostApiV1AdminTaxesClassesData = {
     body: {
@@ -40634,6 +47437,121 @@ export type PutApiV1AdminTaxesClassesByIdResponses = {
 };
 
 export type PutApiV1AdminTaxesClassesByIdResponse = PutApiV1AdminTaxesClassesByIdResponses[keyof PutApiV1AdminTaxesClassesByIdResponses];
+
+export type GetApiV1AdminTaxesRatesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        page?: number;
+        limit?: number;
+        search?: string;
+        taxClassId?: string;
+    };
+    url: '/api/v1/admin/taxes/rates';
+};
+
+export type GetApiV1AdminTaxesRatesErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminTaxesRatesError = GetApiV1AdminTaxesRatesErrors[keyof GetApiV1AdminTaxesRatesErrors];
+
+export type GetApiV1AdminTaxesRatesResponses = {
+    /**
+     * Tax rates
+     */
+    200: {
+        success: true;
+        data: {
+            items: Array<{
+                id: string;
+                taxClassId: string;
+                name: string;
+                rateBps: number;
+                jurisdictionType: 'all' | 'city' | 'zone' | 'area';
+                jurisdictionId: string | null;
+                jurisdictionLabel: string | null;
+                priority: number;
+                isCompound: boolean;
+                isActive: boolean;
+                version: number;
+                createdAt: string | number | null;
+                updatedAt: string | number | null;
+                deletedAt: string | number | null;
+            }>;
+            total: number;
+            page: number;
+            limit: number;
+        };
+    };
+};
+
+export type GetApiV1AdminTaxesRatesResponse = GetApiV1AdminTaxesRatesResponses[keyof GetApiV1AdminTaxesRatesResponses];
 
 export type PostApiV1AdminTaxesRatesData = {
     body: {
@@ -40928,6 +47846,112 @@ export type PutApiV1AdminTaxesRatesByIdResponses = {
 
 export type PutApiV1AdminTaxesRatesByIdResponse = PutApiV1AdminTaxesRatesByIdResponses[keyof PutApiV1AdminTaxesRatesByIdResponses];
 
+export type GetApiV1AdminTaxesJurisdictionsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        page?: number;
+        limit?: number;
+        search?: string;
+        type?: 'city' | 'zone' | 'area';
+        parentId?: string;
+    };
+    url: '/api/v1/admin/taxes/jurisdictions';
+};
+
+export type GetApiV1AdminTaxesJurisdictionsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminTaxesJurisdictionsError = GetApiV1AdminTaxesJurisdictionsErrors[keyof GetApiV1AdminTaxesJurisdictionsErrors];
+
+export type GetApiV1AdminTaxesJurisdictionsResponses = {
+    /**
+     * Tax jurisdictions
+     */
+    200: {
+        success: true;
+        data: {
+            items: Array<{
+                id: string;
+                name: string;
+                type: 'city' | 'zone' | 'area';
+                parentId: string | null;
+            }>;
+            total: number;
+            page: number;
+            limit: number;
+        };
+    };
+};
+
+export type GetApiV1AdminTaxesJurisdictionsResponse = GetApiV1AdminTaxesJurisdictionsResponses[keyof GetApiV1AdminTaxesJurisdictionsResponses];
+
 export type GetApiV1AdminTaxesClassificationsData = {
     body?: never;
     path?: never;
@@ -41201,8 +48225,1366 @@ export type PostApiV1AdminTaxesPreviewResponses = {
 
 export type PostApiV1AdminTaxesPreviewResponse = PostApiV1AdminTaxesPreviewResponses[keyof PostApiV1AdminTaxesPreviewResponses];
 
+export type GetApiV1AdminAgentAccessConnectionsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        page?: number;
+        limit?: number;
+        status?: 'pending' | 'active' | 'revoked' | 'expired';
+        resource?: 'dashboard' | 'storefront';
+        kind?: 'oauth' | 'pat' | 'cli';
+    };
+    url: '/api/v1/admin/agent-access/connections';
+};
+
+export type GetApiV1AdminAgentAccessConnectionsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminAgentAccessConnectionsError = GetApiV1AdminAgentAccessConnectionsErrors[keyof GetApiV1AdminAgentAccessConnectionsErrors];
+
+export type GetApiV1AdminAgentAccessConnectionsResponses = {
+    /**
+     * Agent connections
+     */
+    200: {
+        success: true;
+        data: {
+            [key: string]: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminAgentAccessConnectionsResponse = GetApiV1AdminAgentAccessConnectionsResponses[keyof GetApiV1AdminAgentAccessConnectionsResponses];
+
+export type GetApiV1AdminAgentAccessConnectionsByGrantIdData = {
+    body?: never;
+    path: {
+        grantId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/agent-access/connections/{grantId}';
+};
+
+export type GetApiV1AdminAgentAccessConnectionsByGrantIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminAgentAccessConnectionsByGrantIdError = GetApiV1AdminAgentAccessConnectionsByGrantIdErrors[keyof GetApiV1AdminAgentAccessConnectionsByGrantIdErrors];
+
+export type GetApiV1AdminAgentAccessConnectionsByGrantIdResponses = {
+    /**
+     * Agent connection
+     */
+    200: {
+        success: true;
+        data: {
+            [key: string]: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminAgentAccessConnectionsByGrantIdResponse = GetApiV1AdminAgentAccessConnectionsByGrantIdResponses[keyof GetApiV1AdminAgentAccessConnectionsByGrantIdResponses];
+
+export type GetApiV1AdminAgentAccessConnectionsByGrantIdEventsData = {
+    body?: never;
+    path: {
+        grantId: string;
+    };
+    query?: {
+        page?: number;
+        limit?: number;
+    };
+    url: '/api/v1/admin/agent-access/connections/{grantId}/events';
+};
+
+export type GetApiV1AdminAgentAccessConnectionsByGrantIdEventsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminAgentAccessConnectionsByGrantIdEventsError = GetApiV1AdminAgentAccessConnectionsByGrantIdEventsErrors[keyof GetApiV1AdminAgentAccessConnectionsByGrantIdEventsErrors];
+
+export type GetApiV1AdminAgentAccessConnectionsByGrantIdEventsResponses = {
+    /**
+     * Safe agent audit events
+     */
+    200: {
+        success: true;
+        data: {
+            [key: string]: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminAgentAccessConnectionsByGrantIdEventsResponse = GetApiV1AdminAgentAccessConnectionsByGrantIdEventsResponses[keyof GetApiV1AdminAgentAccessConnectionsByGrantIdEventsResponses];
+
+export type PostApiV1AdminAgentAccessTokensData = {
+    body: {
+        label?: string;
+        preset: 'read' | 'operator' | 'full' | 'custom';
+        permissions?: Array<string>;
+        riskCeiling?: 'read' | 'write' | 'destructive' | 'financial' | 'security';
+        expiresInDays?: number;
+        resource: 'dashboard' | 'storefront';
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/agent-access/tokens';
+};
+
+export type PostApiV1AdminAgentAccessTokensErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminAgentAccessTokensError = PostApiV1AdminAgentAccessTokensErrors[keyof PostApiV1AdminAgentAccessTokensErrors];
+
+export type PostApiV1AdminAgentAccessTokensResponses = {
+    /**
+     * PAT created; token is shown once
+     */
+    201: {
+        success: true;
+        data: {
+            [key: string]: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminAgentAccessTokensResponse = PostApiV1AdminAgentAccessTokensResponses[keyof PostApiV1AdminAgentAccessTokensResponses];
+
+export type PostApiV1AdminAgentAccessTokensByCredentialIdRotateData = {
+    body: {
+        expiresInDays?: number;
+    };
+    path: {
+        credentialId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/agent-access/tokens/{credentialId}/rotate';
+};
+
+export type PostApiV1AdminAgentAccessTokensByCredentialIdRotateErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminAgentAccessTokensByCredentialIdRotateError = PostApiV1AdminAgentAccessTokensByCredentialIdRotateErrors[keyof PostApiV1AdminAgentAccessTokensByCredentialIdRotateErrors];
+
+export type PostApiV1AdminAgentAccessTokensByCredentialIdRotateResponses = {
+    /**
+     * Credential rotated; token is shown once
+     */
+    200: {
+        success: true;
+        data: {
+            [key: string]: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminAgentAccessTokensByCredentialIdRotateResponse = PostApiV1AdminAgentAccessTokensByCredentialIdRotateResponses[keyof PostApiV1AdminAgentAccessTokensByCredentialIdRotateResponses];
+
+export type DeleteApiV1AdminAgentAccessGrantsByGrantIdData = {
+    body: {
+        reason?: string;
+    };
+    path: {
+        grantId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/agent-access/grants/{grantId}';
+};
+
+export type DeleteApiV1AdminAgentAccessGrantsByGrantIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type DeleteApiV1AdminAgentAccessGrantsByGrantIdError = DeleteApiV1AdminAgentAccessGrantsByGrantIdErrors[keyof DeleteApiV1AdminAgentAccessGrantsByGrantIdErrors];
+
+export type DeleteApiV1AdminAgentAccessGrantsByGrantIdResponses = {
+    /**
+     * Connection revoked
+     */
+    200: {
+        success: true;
+        data: {
+            [key: string]: unknown;
+        };
+    };
+};
+
+export type DeleteApiV1AdminAgentAccessGrantsByGrantIdResponse = DeleteApiV1AdminAgentAccessGrantsByGrantIdResponses[keyof DeleteApiV1AdminAgentAccessGrantsByGrantIdResponses];
+
+export type PatchApiV1AdminAgentAccessGrantsByGrantIdData = {
+    body: {
+        label?: string;
+        permissions?: Array<string>;
+        riskCeiling?: 'read' | 'write' | 'destructive' | 'financial' | 'security';
+        expiresAt?: string;
+    };
+    path: {
+        grantId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/agent-access/grants/{grantId}';
+};
+
+export type PatchApiV1AdminAgentAccessGrantsByGrantIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Widening requires new approval
+     */
+    409: unknown;
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PatchApiV1AdminAgentAccessGrantsByGrantIdError = PatchApiV1AdminAgentAccessGrantsByGrantIdErrors[keyof PatchApiV1AdminAgentAccessGrantsByGrantIdErrors];
+
+export type PatchApiV1AdminAgentAccessGrantsByGrantIdResponses = {
+    /**
+     * Connection narrowed
+     */
+    200: {
+        success: true;
+        data: {
+            [key: string]: unknown;
+        };
+    };
+};
+
+export type PatchApiV1AdminAgentAccessGrantsByGrantIdResponse = PatchApiV1AdminAgentAccessGrantsByGrantIdResponses[keyof PatchApiV1AdminAgentAccessGrantsByGrantIdResponses];
+
+export type PostApiV1AdminAgentAccessRevokeAllData = {
+    body: {
+        resource?: 'dashboard' | 'storefront';
+        reason?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/agent-access/revoke-all';
+};
+
+export type PostApiV1AdminAgentAccessRevokeAllErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminAgentAccessRevokeAllError = PostApiV1AdminAgentAccessRevokeAllErrors[keyof PostApiV1AdminAgentAccessRevokeAllErrors];
+
+export type PostApiV1AdminAgentAccessRevokeAllResponses = {
+    /**
+     * Connections revoked
+     */
+    200: {
+        success: true;
+        data: {
+            [key: string]: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminAgentAccessRevokeAllResponse = PostApiV1AdminAgentAccessRevokeAllResponses[keyof PostApiV1AdminAgentAccessRevokeAllResponses];
+
+export type GetApiV1AdminAgentAccessAuthorizationRequestsByRequestIdData = {
+    body?: never;
+    path: {
+        requestId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/agent-access/authorization-requests/{requestId}';
+};
+
+export type GetApiV1AdminAgentAccessAuthorizationRequestsByRequestIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminAgentAccessAuthorizationRequestsByRequestIdError = GetApiV1AdminAgentAccessAuthorizationRequestsByRequestIdErrors[keyof GetApiV1AdminAgentAccessAuthorizationRequestsByRequestIdErrors];
+
+export type GetApiV1AdminAgentAccessAuthorizationRequestsByRequestIdResponses = {
+    /**
+     * Safe OAuth request
+     */
+    200: {
+        success: true;
+        data: {
+            [key: string]: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminAgentAccessAuthorizationRequestsByRequestIdResponse = GetApiV1AdminAgentAccessAuthorizationRequestsByRequestIdResponses[keyof GetApiV1AdminAgentAccessAuthorizationRequestsByRequestIdResponses];
+
+export type PostApiV1AdminAgentAccessAuthorizationRequestsByRequestIdApproveData = {
+    body: {
+        label?: string;
+        preset: 'read' | 'operator' | 'full' | 'custom';
+        permissions?: Array<string>;
+        riskCeiling?: 'read' | 'write' | 'destructive' | 'financial' | 'security';
+        expiresInDays?: number;
+    };
+    path: {
+        requestId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/agent-access/authorization-requests/{requestId}/approve';
+};
+
+export type PostApiV1AdminAgentAccessAuthorizationRequestsByRequestIdApproveErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminAgentAccessAuthorizationRequestsByRequestIdApproveError = PostApiV1AdminAgentAccessAuthorizationRequestsByRequestIdApproveErrors[keyof PostApiV1AdminAgentAccessAuthorizationRequestsByRequestIdApproveErrors];
+
+export type PostApiV1AdminAgentAccessAuthorizationRequestsByRequestIdApproveResponses = {
+    /**
+     * OAuth request approved
+     */
+    200: {
+        success: true;
+        data: {
+            [key: string]: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminAgentAccessAuthorizationRequestsByRequestIdApproveResponse = PostApiV1AdminAgentAccessAuthorizationRequestsByRequestIdApproveResponses[keyof PostApiV1AdminAgentAccessAuthorizationRequestsByRequestIdApproveResponses];
+
+export type PostApiV1AdminAgentAccessAuthorizationRequestsByRequestIdDenyData = {
+    body: {
+        reason?: string;
+    };
+    path: {
+        requestId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/agent-access/authorization-requests/{requestId}/deny';
+};
+
+export type PostApiV1AdminAgentAccessAuthorizationRequestsByRequestIdDenyErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminAgentAccessAuthorizationRequestsByRequestIdDenyError = PostApiV1AdminAgentAccessAuthorizationRequestsByRequestIdDenyErrors[keyof PostApiV1AdminAgentAccessAuthorizationRequestsByRequestIdDenyErrors];
+
+export type PostApiV1AdminAgentAccessAuthorizationRequestsByRequestIdDenyResponses = {
+    /**
+     * OAuth request denied
+     */
+    200: {
+        success: true;
+        data: {
+            [key: string]: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminAgentAccessAuthorizationRequestsByRequestIdDenyResponse = PostApiV1AdminAgentAccessAuthorizationRequestsByRequestIdDenyResponses[keyof PostApiV1AdminAgentAccessAuthorizationRequestsByRequestIdDenyResponses];
+
+export type PostApiV1AdminAgentAccessDeviceAuthorizationsLookupData = {
+    body: {
+        userCode: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/agent-access/device-authorizations/lookup';
+};
+
+export type PostApiV1AdminAgentAccessDeviceAuthorizationsLookupErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminAgentAccessDeviceAuthorizationsLookupError = PostApiV1AdminAgentAccessDeviceAuthorizationsLookupErrors[keyof PostApiV1AdminAgentAccessDeviceAuthorizationsLookupErrors];
+
+export type PostApiV1AdminAgentAccessDeviceAuthorizationsLookupResponses = {
+    /**
+     * Safe device authorization
+     */
+    200: {
+        success: true;
+        data: {
+            [key: string]: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminAgentAccessDeviceAuthorizationsLookupResponse = PostApiV1AdminAgentAccessDeviceAuthorizationsLookupResponses[keyof PostApiV1AdminAgentAccessDeviceAuthorizationsLookupResponses];
+
+export type PostApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdApproveData = {
+    body: {
+        label?: string;
+        preset: 'read' | 'operator' | 'full' | 'custom';
+        permissions?: Array<string>;
+        riskCeiling?: 'read' | 'write' | 'destructive' | 'financial' | 'security';
+        expiresInDays?: number;
+    };
+    path: {
+        deviceId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/agent-access/device-authorizations/{deviceId}/approve';
+};
+
+export type PostApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdApproveErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdApproveError = PostApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdApproveErrors[keyof PostApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdApproveErrors];
+
+export type PostApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdApproveResponses = {
+    /**
+     * Device approved
+     */
+    200: {
+        success: true;
+        data: {
+            [key: string]: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdApproveResponse = PostApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdApproveResponses[keyof PostApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdApproveResponses];
+
+export type PostApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdDenyData = {
+    body: {
+        reason?: string;
+    };
+    path: {
+        deviceId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/agent-access/device-authorizations/{deviceId}/deny';
+};
+
+export type PostApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdDenyErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdDenyError = PostApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdDenyErrors[keyof PostApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdDenyErrors];
+
+export type PostApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdDenyResponses = {
+    /**
+     * Device denied
+     */
+    200: {
+        success: true;
+        data: {
+            [key: string]: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdDenyResponse = PostApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdDenyResponses[keyof PostApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdDenyResponses];
+
 export type DeleteApiV1AdminAbandonedCheckoutsData = {
-    body?: {
+    body: {
         ids: Array<string>;
     };
     path?: never;
@@ -41365,7 +49747,7 @@ export type PostApiV1AdminAbandonedCheckoutsBulkDeleteResponses = {
 export type PostApiV1AdminAbandonedCheckoutsBulkDeleteResponse = PostApiV1AdminAbandonedCheckoutsBulkDeleteResponses[keyof PostApiV1AdminAbandonedCheckoutsBulkDeleteResponses];
 
 export type PostApiV1AdminFcmTokenData = {
-    body?: {
+    body: {
         token: string;
         userId: string;
         deviceInfo?: string;
@@ -41461,7 +49843,7 @@ export type PostApiV1AdminFcmTokenResponses = {
 export type PostApiV1AdminFcmTokenResponse = PostApiV1AdminFcmTokenResponses[keyof PostApiV1AdminFcmTokenResponses];
 
 export type PostApiV1AdminFcmTokenCleanupData = {
-    body?: {
+    body: {
         invalidTokens: Array<string>;
     };
     path?: never;
@@ -41556,7 +49938,7 @@ export type PostApiV1AdminFcmTokenCleanupResponses = {
 export type PostApiV1AdminFcmTokenCleanupResponse = PostApiV1AdminFcmTokenCleanupResponses[keyof PostApiV1AdminFcmTokenCleanupResponses];
 
 export type DeleteApiV1AdminSettingsDeliveryLocationsData = {
-    body?: {
+    body: {
         ids: Array<string>;
     };
     path?: never;
@@ -41784,7 +50166,7 @@ export type GetApiV1AdminSettingsDeliveryLocationsResponses = {
 export type GetApiV1AdminSettingsDeliveryLocationsResponse = GetApiV1AdminSettingsDeliveryLocationsResponses[keyof GetApiV1AdminSettingsDeliveryLocationsResponses];
 
 export type PostApiV1AdminSettingsDeliveryLocationsData = {
-    body?: {
+    body: {
         name: string;
         type: 'city' | 'zone' | 'area';
         parentId?: string | null;
@@ -41903,7 +50285,7 @@ export type PostApiV1AdminSettingsDeliveryLocationsResponses = {
 export type PostApiV1AdminSettingsDeliveryLocationsResponse = PostApiV1AdminSettingsDeliveryLocationsResponses[keyof PostApiV1AdminSettingsDeliveryLocationsResponses];
 
 export type DeleteApiV1AdminSettingsDeliveryLocationsAllData = {
-    body?: {
+    body: {
         confirmDeleteAll: true;
     };
     path?: never;
@@ -42198,7 +50580,7 @@ export type GetApiV1AdminSettingsDeliveryLocationsByIdResponses = {
 export type GetApiV1AdminSettingsDeliveryLocationsByIdResponse = GetApiV1AdminSettingsDeliveryLocationsByIdResponses[keyof GetApiV1AdminSettingsDeliveryLocationsByIdResponses];
 
 export type PutApiV1AdminSettingsDeliveryLocationsByIdData = {
-    body?: {
+    body: {
         name?: string;
         parentId?: string | null;
         externalIds?: {
@@ -42315,6 +50697,312 @@ export type PutApiV1AdminSettingsDeliveryLocationsByIdResponses = {
 
 export type PutApiV1AdminSettingsDeliveryLocationsByIdResponse = PutApiV1AdminSettingsDeliveryLocationsByIdResponses[keyof PutApiV1AdminSettingsDeliveryLocationsByIdResponses];
 
+export type DeleteApiV1AdminSettingsDeliveryLocationsImportPathaoData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/delivery-locations/import-pathao';
+};
+
+export type DeleteApiV1AdminSettingsDeliveryLocationsImportPathaoErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type DeleteApiV1AdminSettingsDeliveryLocationsImportPathaoError = DeleteApiV1AdminSettingsDeliveryLocationsImportPathaoErrors[keyof DeleteApiV1AdminSettingsDeliveryLocationsImportPathaoErrors];
+
+export type DeleteApiV1AdminSettingsDeliveryLocationsImportPathaoResponses = {
+    /**
+     * Pathao import progress reset
+     */
+    200: {
+        success: true;
+        data: {
+            message: string;
+        };
+    };
+};
+
+export type DeleteApiV1AdminSettingsDeliveryLocationsImportPathaoResponse = DeleteApiV1AdminSettingsDeliveryLocationsImportPathaoResponses[keyof DeleteApiV1AdminSettingsDeliveryLocationsImportPathaoResponses];
+
+export type PostApiV1AdminSettingsDeliveryLocationsImportPathaoData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/delivery-locations/import-pathao';
+};
+
+export type PostApiV1AdminSettingsDeliveryLocationsImportPathaoErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsDeliveryLocationsImportPathaoError = PostApiV1AdminSettingsDeliveryLocationsImportPathaoErrors[keyof PostApiV1AdminSettingsDeliveryLocationsImportPathaoErrors];
+
+export type PostApiV1AdminSettingsDeliveryLocationsImportPathaoResponses = {
+    /**
+     * Current Pathao import progress
+     */
+    200: {
+        success: true;
+        data: {
+            status: 'importing' | 'complete' | 'error';
+            phase: 'cities' | 'zones' | 'areas' | 'done';
+            progress: {
+                current: number;
+                total: number;
+                label: string;
+            };
+            stats: {
+                citiesCreated: number;
+                citiesUpdated: number;
+                zonesCreated: number;
+                zonesUpdated: number;
+                areasCreated: number;
+                areasUpdated: number;
+            };
+            error?: string;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsDeliveryLocationsImportPathaoResponse = PostApiV1AdminSettingsDeliveryLocationsImportPathaoResponses[keyof PostApiV1AdminSettingsDeliveryLocationsImportPathaoResponses];
+
+export type GetApiV1AdminSettingsDeliveryLocationsImportPathaoStatusData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/delivery-locations/import-pathao/status';
+};
+
+export type GetApiV1AdminSettingsDeliveryLocationsImportPathaoStatusErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsDeliveryLocationsImportPathaoStatusError = GetApiV1AdminSettingsDeliveryLocationsImportPathaoStatusErrors[keyof GetApiV1AdminSettingsDeliveryLocationsImportPathaoStatusErrors];
+
+export type GetApiV1AdminSettingsDeliveryLocationsImportPathaoStatusResponses = {
+    /**
+     * Current Pathao import progress
+     */
+    200: {
+        success: true;
+        data: {
+            status: 'importing' | 'complete' | 'error';
+            phase: 'cities' | 'zones' | 'areas' | 'done';
+            progress: {
+                current: number;
+                total: number;
+                label: string;
+            };
+            stats: {
+                citiesCreated: number;
+                citiesUpdated: number;
+                zonesCreated: number;
+                zonesUpdated: number;
+                areasCreated: number;
+                areasUpdated: number;
+            };
+            error?: string;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsDeliveryLocationsImportPathaoStatusResponse = GetApiV1AdminSettingsDeliveryLocationsImportPathaoStatusResponses[keyof GetApiV1AdminSettingsDeliveryLocationsImportPathaoStatusResponses];
+
 export type GetApiV1AdminSettingsCheckoutLanguagesActiveData = {
     body?: never;
     path?: never;
@@ -42404,18 +51092,51 @@ export type GetApiV1AdminSettingsCheckoutLanguagesActiveResponses = {
                 id: string;
                 name: string;
                 code: string;
-                languageData: string | {
-                    [key: string]: unknown;
+                languageData: {
+                    pageTitle: string;
+                    checkoutSectionTitle: string;
+                    cartSectionTitle: string;
+                    customerNameLabel: string;
+                    customerNamePlaceholder: string;
+                    customerPhoneLabel: string;
+                    customerPhonePlaceholder: string;
+                    customerPhoneHelp: string;
+                    customerEmailLabel: string;
+                    customerEmailPlaceholder: string;
+                    shippingAddressLabel: string;
+                    shippingAddressPlaceholder: string;
+                    cityLabel: string;
+                    zoneLabel: string;
+                    areaLabel: string;
+                    shippingMethodLabel: string;
+                    orderNotesLabel: string;
+                    orderNotesPlaceholder: string;
+                    continueShoppingText: string;
+                    subtotalText: string;
+                    shippingText: string;
+                    discountText: string;
+                    totalText: string;
+                    discountCodePlaceholder: string;
+                    applyDiscountText: string;
+                    removeDiscountText: string;
+                    placeOrderText: string;
+                    processingText: string;
+                    emptyCartText: string;
+                    termsText: string;
+                    processingOrderTitle: string;
+                    processingOrderMessage: string;
+                    requiredFieldIndicator: string;
                 };
-                fieldVisibility: string | {
-                    [key: string]: unknown;
+                fieldVisibility: {
+                    showEmailField: boolean;
+                    showOrderNotesField: boolean;
+                    showAreaField: boolean;
                 };
                 isActive: boolean;
                 isDefault: boolean;
                 createdAt?: string | number;
                 updatedAt?: string | number;
                 deletedAt?: string | number | null;
-                [key: string]: unknown;
             };
         };
     };
@@ -42430,11 +51151,11 @@ export type GetApiV1AdminSettingsCheckoutLanguagesData = {
         /**
          * Page number
          */
-        page?: number | null;
+        page?: number;
         /**
          * Items per page
          */
-        limit?: number | null;
+        limit?: number;
         /**
          * Search query
          */
@@ -42442,7 +51163,7 @@ export type GetApiV1AdminSettingsCheckoutLanguagesData = {
         /**
          * Sort field
          */
-        sort?: string;
+        sort?: 'name' | 'code' | 'isActive' | 'isDefault' | 'createdAt' | 'updatedAt';
         /**
          * Sort order
          */
@@ -42537,18 +51258,51 @@ export type GetApiV1AdminSettingsCheckoutLanguagesResponses = {
                 id: string;
                 name: string;
                 code: string;
-                languageData: string | {
-                    [key: string]: unknown;
+                languageData: {
+                    pageTitle: string;
+                    checkoutSectionTitle: string;
+                    cartSectionTitle: string;
+                    customerNameLabel: string;
+                    customerNamePlaceholder: string;
+                    customerPhoneLabel: string;
+                    customerPhonePlaceholder: string;
+                    customerPhoneHelp: string;
+                    customerEmailLabel: string;
+                    customerEmailPlaceholder: string;
+                    shippingAddressLabel: string;
+                    shippingAddressPlaceholder: string;
+                    cityLabel: string;
+                    zoneLabel: string;
+                    areaLabel: string;
+                    shippingMethodLabel: string;
+                    orderNotesLabel: string;
+                    orderNotesPlaceholder: string;
+                    continueShoppingText: string;
+                    subtotalText: string;
+                    shippingText: string;
+                    discountText: string;
+                    totalText: string;
+                    discountCodePlaceholder: string;
+                    applyDiscountText: string;
+                    removeDiscountText: string;
+                    placeOrderText: string;
+                    processingText: string;
+                    emptyCartText: string;
+                    termsText: string;
+                    processingOrderTitle: string;
+                    processingOrderMessage: string;
+                    requiredFieldIndicator: string;
                 };
-                fieldVisibility: string | {
-                    [key: string]: unknown;
+                fieldVisibility: {
+                    showEmailField: boolean;
+                    showOrderNotesField: boolean;
+                    showAreaField: boolean;
                 };
                 isActive: boolean;
                 isDefault: boolean;
                 createdAt?: string | number;
                 updatedAt?: string | number;
                 deletedAt?: string | number | null;
-                [key: string]: unknown;
             }>;
             pagination: {
                 page: number;
@@ -42565,7 +51319,7 @@ export type GetApiV1AdminSettingsCheckoutLanguagesResponses = {
 export type GetApiV1AdminSettingsCheckoutLanguagesResponse = GetApiV1AdminSettingsCheckoutLanguagesResponses[keyof GetApiV1AdminSettingsCheckoutLanguagesResponses];
 
 export type PostApiV1AdminSettingsCheckoutLanguagesData = {
-    body?: {
+    body: {
         /**
          * Language name
          */
@@ -42578,13 +51332,47 @@ export type PostApiV1AdminSettingsCheckoutLanguagesData = {
          * Language strings
          */
         languageData?: {
-            [key: string]: unknown;
+            pageTitle?: string;
+            checkoutSectionTitle?: string;
+            cartSectionTitle?: string;
+            customerNameLabel?: string;
+            customerNamePlaceholder?: string;
+            customerPhoneLabel?: string;
+            customerPhonePlaceholder?: string;
+            customerPhoneHelp?: string;
+            customerEmailLabel?: string;
+            customerEmailPlaceholder?: string;
+            shippingAddressLabel?: string;
+            shippingAddressPlaceholder?: string;
+            cityLabel?: string;
+            zoneLabel?: string;
+            areaLabel?: string;
+            shippingMethodLabel?: string;
+            orderNotesLabel?: string;
+            orderNotesPlaceholder?: string;
+            continueShoppingText?: string;
+            subtotalText?: string;
+            shippingText?: string;
+            discountText?: string;
+            totalText?: string;
+            discountCodePlaceholder?: string;
+            applyDiscountText?: string;
+            removeDiscountText?: string;
+            placeOrderText?: string;
+            processingText?: string;
+            emptyCartText?: string;
+            termsText?: string;
+            processingOrderTitle?: string;
+            processingOrderMessage?: string;
+            requiredFieldIndicator?: string;
         };
         /**
          * Field visibility settings
          */
         fieldVisibility?: {
-            [key: string]: unknown;
+            showEmailField?: boolean;
+            showOrderNotesField?: boolean;
+            showAreaField?: boolean;
         };
         /**
          * Whether this language is active
@@ -42671,18 +51459,51 @@ export type PostApiV1AdminSettingsCheckoutLanguagesResponses = {
                 id: string;
                 name: string;
                 code: string;
-                languageData: string | {
-                    [key: string]: unknown;
+                languageData: {
+                    pageTitle: string;
+                    checkoutSectionTitle: string;
+                    cartSectionTitle: string;
+                    customerNameLabel: string;
+                    customerNamePlaceholder: string;
+                    customerPhoneLabel: string;
+                    customerPhonePlaceholder: string;
+                    customerPhoneHelp: string;
+                    customerEmailLabel: string;
+                    customerEmailPlaceholder: string;
+                    shippingAddressLabel: string;
+                    shippingAddressPlaceholder: string;
+                    cityLabel: string;
+                    zoneLabel: string;
+                    areaLabel: string;
+                    shippingMethodLabel: string;
+                    orderNotesLabel: string;
+                    orderNotesPlaceholder: string;
+                    continueShoppingText: string;
+                    subtotalText: string;
+                    shippingText: string;
+                    discountText: string;
+                    totalText: string;
+                    discountCodePlaceholder: string;
+                    applyDiscountText: string;
+                    removeDiscountText: string;
+                    placeOrderText: string;
+                    processingText: string;
+                    emptyCartText: string;
+                    termsText: string;
+                    processingOrderTitle: string;
+                    processingOrderMessage: string;
+                    requiredFieldIndicator: string;
                 };
-                fieldVisibility: string | {
-                    [key: string]: unknown;
+                fieldVisibility: {
+                    showEmailField: boolean;
+                    showOrderNotesField: boolean;
+                    showAreaField: boolean;
                 };
                 isActive: boolean;
                 isDefault: boolean;
                 createdAt?: string | number;
                 updatedAt?: string | number;
                 deletedAt?: string | number | null;
-                [key: string]: unknown;
             };
         };
     };
@@ -42836,18 +51657,51 @@ export type GetApiV1AdminSettingsCheckoutLanguagesByIdResponses = {
             id: string;
             name: string;
             code: string;
-            languageData: string | {
-                [key: string]: unknown;
+            languageData: {
+                pageTitle: string;
+                checkoutSectionTitle: string;
+                cartSectionTitle: string;
+                customerNameLabel: string;
+                customerNamePlaceholder: string;
+                customerPhoneLabel: string;
+                customerPhonePlaceholder: string;
+                customerPhoneHelp: string;
+                customerEmailLabel: string;
+                customerEmailPlaceholder: string;
+                shippingAddressLabel: string;
+                shippingAddressPlaceholder: string;
+                cityLabel: string;
+                zoneLabel: string;
+                areaLabel: string;
+                shippingMethodLabel: string;
+                orderNotesLabel: string;
+                orderNotesPlaceholder: string;
+                continueShoppingText: string;
+                subtotalText: string;
+                shippingText: string;
+                discountText: string;
+                totalText: string;
+                discountCodePlaceholder: string;
+                applyDiscountText: string;
+                removeDiscountText: string;
+                placeOrderText: string;
+                processingText: string;
+                emptyCartText: string;
+                termsText: string;
+                processingOrderTitle: string;
+                processingOrderMessage: string;
+                requiredFieldIndicator: string;
             };
-            fieldVisibility: string | {
-                [key: string]: unknown;
+            fieldVisibility: {
+                showEmailField: boolean;
+                showOrderNotesField: boolean;
+                showAreaField: boolean;
             };
             isActive: boolean;
             isDefault: boolean;
             createdAt?: string | number;
             updatedAt?: string | number;
             deletedAt?: string | number | null;
-            [key: string]: unknown;
         };
     };
 };
@@ -42916,7 +51770,7 @@ export type PatchApiV1AdminSettingsCheckoutLanguagesByIdResponses = {
 export type PatchApiV1AdminSettingsCheckoutLanguagesByIdResponse = PatchApiV1AdminSettingsCheckoutLanguagesByIdResponses[keyof PatchApiV1AdminSettingsCheckoutLanguagesByIdResponses];
 
 export type PutApiV1AdminSettingsCheckoutLanguagesByIdData = {
-    body?: {
+    body: {
         /**
          * Language name
          */
@@ -42929,13 +51783,47 @@ export type PutApiV1AdminSettingsCheckoutLanguagesByIdData = {
          * Language strings
          */
         languageData?: {
-            [key: string]: unknown;
+            pageTitle?: string;
+            checkoutSectionTitle?: string;
+            cartSectionTitle?: string;
+            customerNameLabel?: string;
+            customerNamePlaceholder?: string;
+            customerPhoneLabel?: string;
+            customerPhonePlaceholder?: string;
+            customerPhoneHelp?: string;
+            customerEmailLabel?: string;
+            customerEmailPlaceholder?: string;
+            shippingAddressLabel?: string;
+            shippingAddressPlaceholder?: string;
+            cityLabel?: string;
+            zoneLabel?: string;
+            areaLabel?: string;
+            shippingMethodLabel?: string;
+            orderNotesLabel?: string;
+            orderNotesPlaceholder?: string;
+            continueShoppingText?: string;
+            subtotalText?: string;
+            shippingText?: string;
+            discountText?: string;
+            totalText?: string;
+            discountCodePlaceholder?: string;
+            applyDiscountText?: string;
+            removeDiscountText?: string;
+            placeOrderText?: string;
+            processingText?: string;
+            emptyCartText?: string;
+            termsText?: string;
+            processingOrderTitle?: string;
+            processingOrderMessage?: string;
+            requiredFieldIndicator?: string;
         };
         /**
          * Field visibility settings
          */
         fieldVisibility?: {
-            [key: string]: unknown;
+            showEmailField?: boolean;
+            showOrderNotesField?: boolean;
+            showAreaField?: boolean;
         };
         /**
          * Whether this language is active
@@ -43035,18 +51923,51 @@ export type PutApiV1AdminSettingsCheckoutLanguagesByIdResponses = {
                 id: string;
                 name: string;
                 code: string;
-                languageData: string | {
-                    [key: string]: unknown;
+                languageData: {
+                    pageTitle: string;
+                    checkoutSectionTitle: string;
+                    cartSectionTitle: string;
+                    customerNameLabel: string;
+                    customerNamePlaceholder: string;
+                    customerPhoneLabel: string;
+                    customerPhonePlaceholder: string;
+                    customerPhoneHelp: string;
+                    customerEmailLabel: string;
+                    customerEmailPlaceholder: string;
+                    shippingAddressLabel: string;
+                    shippingAddressPlaceholder: string;
+                    cityLabel: string;
+                    zoneLabel: string;
+                    areaLabel: string;
+                    shippingMethodLabel: string;
+                    orderNotesLabel: string;
+                    orderNotesPlaceholder: string;
+                    continueShoppingText: string;
+                    subtotalText: string;
+                    shippingText: string;
+                    discountText: string;
+                    totalText: string;
+                    discountCodePlaceholder: string;
+                    applyDiscountText: string;
+                    removeDiscountText: string;
+                    placeOrderText: string;
+                    processingText: string;
+                    emptyCartText: string;
+                    termsText: string;
+                    processingOrderTitle: string;
+                    processingOrderMessage: string;
+                    requiredFieldIndicator: string;
                 };
-                fieldVisibility: string | {
-                    [key: string]: unknown;
+                fieldVisibility: {
+                    showEmailField: boolean;
+                    showOrderNotesField: boolean;
+                    showAreaField: boolean;
                 };
                 isActive: boolean;
                 isDefault: boolean;
                 createdAt?: string | number;
                 updatedAt?: string | number;
                 deletedAt?: string | number | null;
-                [key: string]: unknown;
             };
         };
     };

@@ -111,6 +111,7 @@ const adminShipmentCreateErrorResponses = {
 // ─── PUT /:id/status ─────────────────────────────────────────────────────────
 
 const updateStatusRoute = createRoute({
+    operationId: "dashboard.orders.update_status",
     method: "put",
     path: "/{id}/status",
     tags: ["Admin - Orders"],
@@ -164,6 +165,7 @@ app.openapi(updateStatusRoute, async (c) => {
 // ─── GET /:id/cod ────────────────────────────────────────────────────────────
 
 const getCodRoute = createRoute({
+    operationId: "dashboard.orders.cod_get",
     method: "get",
     path: "/{id}/cod",
     tags: ["Admin - Orders"],
@@ -205,6 +207,7 @@ const codActionSchema = z.discriminatedUnion("action", [
 ]);
 
 const postCodRoute = createRoute({
+    operationId: "dashboard.orders.cod_update",
     method: "post",
     path: "/{id}/cod",
     tags: ["Admin - Orders"],
@@ -267,6 +270,7 @@ app.openapi(postCodRoute, async (c) => {
 // ─── GET /:id/fulfill ────────────────────────────────────────────────────────
 
 const getFulfillRoute = createRoute({
+    operationId: "dashboard.orders.fulfillment_get",
     method: "get",
     path: "/{id}/fulfill",
     tags: ["Admin - Orders"],
@@ -302,6 +306,7 @@ const fulfillSchema = z.object({
 });
 
 const postFulfillRoute = createRoute({
+    operationId: "dashboard.orders.fulfill",
     method: "post",
     path: "/{id}/fulfill",
     tags: ["Admin - Orders"],
@@ -343,6 +348,7 @@ app.openapi(postFulfillRoute, async (c) => {
 // ─── GET /:id/shipments ──────────────────────────────────────────────────────
 
 const getShipmentsRoute = createRoute({
+    operationId: "dashboard.orders.shipments",
     method: "get",
     path: "/{id}/shipments",
     tags: ["Admin - Orders"],
@@ -380,6 +386,7 @@ const createShipmentBodySchema = z.object({
 }).strict();
 
 const createShipmentRoute = createRoute({
+    operationId: "dashboard.orders.create_shipment",
     method: "post",
     path: "/{id}/shipments",
     tags: ["Admin - Orders"],
@@ -462,6 +469,7 @@ app.openapi(createShipmentRoute, async (c) => {
 // ─── GET /:id/shipments/:shipmentId ──────────────────────────────────────────
 
 const getShipmentRoute = createRoute({
+    operationId: "dashboard.orders.shipment_get",
     method: "get",
     path: "/{id}/shipments/{shipmentId}",
     tags: ["Admin - Orders"],
@@ -492,6 +500,7 @@ app.openapi(getShipmentRoute, async (c) => {
 // ─── DELETE /:id/shipments/:shipmentId ───────────────────────────────────────
 
 const deleteShipmentRoute = createRoute({
+    operationId: "dashboard.orders.shipment_delete",
     method: "delete",
     path: "/{id}/shipments/{shipmentId}",
     tags: ["Admin - Orders"],
@@ -523,6 +532,7 @@ app.openapi(deleteShipmentRoute, async (c) => {
 // ─── POST /:id/shipments/{shipmentId}/status ──────────────────────────────────
 
 const checkShipmentStatusRoute = createRoute({
+    operationId: "dashboard.orders.shipment_status_sync",
     method: "post",
     path: "/{id}/shipments/{shipmentId}/status",
     tags: ["Admin - Orders"],
@@ -561,6 +571,7 @@ app.openapi(checkShipmentStatusRoute, (async (c: AdminRouteContext<typeof checkS
 // ─── POST /:id/shipments/{shipmentId}/refresh ─────────────────────────────────
 
 const refreshShipmentRoute = createRoute({
+    operationId: "dashboard.orders.shipment_refresh",
     method: "post",
     path: "/{id}/shipments/{shipmentId}/refresh",
     tags: ["Admin - Orders"],
@@ -600,6 +611,7 @@ app.openapi(refreshShipmentRoute, async (c) => {
 // ─── POST /:id/shipments/{shipmentId}/reconcile ─────────────────────────────
 
 const reconcileShipmentRoute = createRoute({
+    operationId: "dashboard.orders.shipment_reconcile",
     method: "post",
     path: "/{id}/shipments/{shipmentId}/reconcile",
     tags: ["Admin - Orders"],

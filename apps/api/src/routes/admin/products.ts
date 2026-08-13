@@ -10,6 +10,14 @@ import {
     createVariantSchema,
     updateVariantSchema
 } from "@scalius/core/modules/products/products.types";
+import { PRODUCT_CONDITION_VALUES } from "@scalius/shared/product-condition";
+import {
+    getProductSemanticSection,
+    productSemanticSectionPatchSchema,
+    productSemanticSectionQuerySchema,
+    productSemanticSectionSchema,
+    updateProductSemanticSection,
+} from "@scalius/core/modules/products/products.semantic-sections";
 import { NotFoundError, ValidationError } from "../../utils/api-error";
 import { ok, created, noContent } from "../../utils/api-response";
 import {
@@ -42,6 +50,136 @@ const productPickerSummarySchema = z.object({
     discountPercentage: z.number().nullable(),
 });
 
+const semanticPageSchema = {
+    total: z.number().int().nonnegative(),
+    offset: z.number().int().nonnegative(),
+    limit: z.number().int().positive(),
+    nextOffset: z.number().int().nonnegative().nullable(),
+} as const;
+const semanticTextChunkSchema = {
+    value: z.string().max(12_000),
+    totalCharacters: z.number().int().nonnegative(),
+    offset: z.number().int().nonnegative(),
+    nextOffset: z.number().int().nonnegative().nullable(),
+    isNull: z.boolean(),
+} as const;
+const semanticOptionSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    position: z.number().int(),
+    standardMapping: z.enum(["size", "color", "material", "pattern", "none"]),
+    values: z.array(z.object({ id: z.string(), value: z.string(), position: z.number().int() })).max(150),
+});
+const productSemanticSectionResponseSchema = z.discriminatedUnion("section", [
+    z.object({
+        section: z.literal("base"),
+        aggregateRevision: z.number().int().min(1),
+        product: z.object({
+            id: z.string(),
+            name: z.string(),
+            price: z.number(),
+            categoryId: z.string().nullable(),
+            categoryName: z.string().nullable(),
+            slug: z.string(),
+            canonicalPath: z.string().nullable(),
+            noIndex: z.boolean(),
+            excludeFromSitemap: z.boolean(),
+            excludeFromProductFeed: z.boolean(),
+            productCondition: z.enum(PRODUCT_CONDITION_VALUES).nullable(),
+            isActive: z.boolean(),
+            discountType: z.enum(["percentage", "flat"]).nullable(),
+            discountPercentage: z.number().nullable(),
+            discountAmount: z.number().nullable(),
+            freeDelivery: z.boolean(),
+            createdAt: z.union([z.string(), z.number()]),
+            updatedAt: z.union([z.string(), z.number()]),
+            deletedAt: z.union([z.string(), z.number()]).nullable(),
+            textLengths: z.object({
+                description: z.number().int().nonnegative(),
+                metaTitle: z.number().int().nonnegative(),
+                metaDescription: z.number().int().nonnegative(),
+            }),
+            counts: z.object({
+                media: z.number().int().nonnegative(),
+                attributes: z.number().int().nonnegative(),
+                additionalInfo: z.number().int().nonnegative(),
+                options: z.number().int().nonnegative(),
+                variants: z.number().int().nonnegative(),
+            }),
+        }),
+    }),
+    z.object({
+        section: z.literal("text"),
+        field: z.enum(["description", "metaTitle", "metaDescription"]),
+        aggregateRevision: z.number().int().min(1),
+        ...semanticTextChunkSchema,
+    }),
+    z.object({
+        section: z.literal("media"),
+        aggregateRevision: z.number().int().min(1),
+        items: z.array(z.object({
+            id: z.string(),
+            mediaId: z.string(),
+            altText: z.string().nullable(),
+            isPrimary: z.boolean(),
+            sortOrder: z.number().int(),
+        })).max(20),
+        ...semanticPageSchema,
+    }),
+    z.object({
+        section: z.literal("attributes"),
+        aggregateRevision: z.number().int().min(1),
+        items: z.array(z.object({ attributeId: z.string(), value: z.string() })).max(50),
+        ...semanticPageSchema,
+    }),
+    z.object({
+        section: z.literal("additional_info"),
+        aggregateRevision: z.number().int().min(1),
+        items: z.array(z.object({
+            id: z.string(),
+            sortOrder: z.number().int(),
+            titleCharacters: z.number().int().nonnegative(),
+            contentCharacters: z.number().int().nonnegative(),
+        })).max(50),
+        ...semanticPageSchema,
+    }),
+    z.object({
+        section: z.literal("additional_info_text"),
+        itemId: z.string(),
+        field: z.enum(["title", "content"]),
+        sortOrder: z.number().int(),
+        aggregateRevision: z.number().int().min(1),
+        ...semanticTextChunkSchema,
+    }),
+    z.object({
+        section: z.literal("options"),
+        aggregateRevision: z.number().int().min(1),
+        items: z.array(semanticOptionSchema).max(1),
+        ...semanticPageSchema,
+    }),
+    z.object({
+        section: z.literal("variants"),
+        aggregateRevision: z.number().int().min(1),
+        items: z.array(z.object({
+            id: z.string(),
+            selectedOptionValueIds: z.array(z.string()).max(5),
+            selectedOptions: z.array(selectedProductOptionSchema).max(5),
+            imageId: z.string().nullable(),
+            weight: z.number().nullable(),
+            sku: z.string(),
+            price: z.number(),
+            stock: z.number().int(),
+            trackInventory: z.boolean(),
+            barcode: z.string().nullable(),
+            barcodeType: z.enum(["ean13", "upc", "isbn", "gtin", "code128", "custom"]).nullable(),
+            discountType: z.enum(["percentage", "flat"]).nullable(),
+            discountPercentage: z.number().nullable(),
+            discountAmount: z.number().nullable(),
+        })).max(10),
+        ...semanticPageSchema,
+    }),
+]);
+
 function parseLookupIds(ids: string | undefined): string[] {
     return Array.from(new Set((ids ?? "").split(",").map((id) => id.trim()).filter(Boolean))).slice(0, 100);
 }
@@ -57,6 +195,7 @@ async function invalidateProductCatalogCaches(
 const statsRoute = createRoute({
     method: "get",
     path: "/stats",
+    operationId: "dashboard.products.stats",
     tags: ["Admin - Products"],
     summary: "Get product and category dashboard statistics",
     responses: {
@@ -151,11 +290,12 @@ const conflictMutationErrorResponses = {
 const barcodeLookupRoute = createRoute({
     method: "get",
     path: "/lookup-barcode",
+    operationId: "dashboard.products.lookup_barcode",
     tags: ["Admin - Products"],
     summary: "Look up a product variant by barcode",
     request: {
         query: z.object({
-            barcode: z.string().trim().min(1).openapi({ description: "Barcode value to search for" }),
+            barcode: z.string().trim().min(1).max(50).openapi({ description: "Barcode value to search for" }),
         }),
     },
     responses: {
@@ -203,17 +343,18 @@ app.openapi(barcodeLookupRoute, async (c) => {
 const listRoute = createRoute({
     method: "get",
     path: "/",
+    operationId: "dashboard.products.list",
     tags: ["Admin - Products"],
     summary: "List all products",
     request: {
         query: z.object({
-            page: z.coerce.number().default(1).openapi({ description: "Page number" }),
-            limit: z.coerce.number().max(100).default(10).openapi({ description: "Items per page" }),
-            search: z.string().optional().openapi({ description: "Search term" }),
+            page: z.coerce.number().int().min(1).default(1).openapi({ description: "Page number" }),
+            limit: z.coerce.number().int().min(1).max(100).default(10).openapi({ description: "Items per page" }),
+            search: z.string().trim().max(120).optional().openapi({ description: "Search term" }),
             category: z.string().optional().openapi({ description: "Category ID filter" }),
-            trashed: z.string().optional().openapi({ description: "Show trashed items" }),
-            sort: z.string().optional().default("updatedAt").openapi({ description: "Sort field" }),
-            order: z.string().optional().default("desc").openapi({ description: "Sort order" })
+            trashed: z.enum(["true", "false"]).optional().openapi({ description: "Show trashed items" }),
+            sort: z.enum(["name", "price", "category", "createdAt", "updatedAt"]).optional().default("updatedAt").openapi({ description: "Sort field" }),
+            order: z.enum(["asc", "desc"]).optional().default("desc").openapi({ description: "Sort order" })
         })
     },
     responses: {
@@ -245,6 +386,7 @@ app.openapi(listRoute, async (c) => {
 const getByIdsRoute = createRoute({
     method: "get",
     path: "/by-ids",
+    operationId: "dashboard.products.get_by_ids",
     tags: ["Admin - Products"],
     summary: "Get lightweight product summaries for known IDs",
     request: {
@@ -281,6 +423,7 @@ app.openapi(getByIdsRoute, async (c) => {
 const createProductRoute = createRoute({
     method: "post",
     path: "/",
+    operationId: "dashboard.products.create",
     tags: ["Admin - Products"],
     summary: "Create a product",
     request: {
@@ -318,6 +461,7 @@ app.openapi(createProductRoute, async (c) => {
 const bulkDeleteRoute = createRoute({
     method: "post",
     path: "/bulk-delete",
+    operationId: "dashboard.products.bulk_delete",
     tags: ["Admin - Products"],
     summary: "Bulk delete products",
     request: {
@@ -359,11 +503,113 @@ app.openapi(bulkDeleteRoute, async (c) => {
     });
 });
 
+// ── Bounded Product Sections ──
+
+const getProductSectionRoute = createRoute({
+    method: "get",
+    path: "/{id}/sections/{section}",
+    operationId: "dashboard.products.get_section",
+    tags: ["Admin - Products"],
+    summary: "Read one bounded semantic section of a product",
+    request: {
+        params: z.object({
+            id: z.string(),
+            section: productSemanticSectionSchema,
+        }),
+        query: productSemanticSectionQuerySchema,
+    },
+    responses: {
+        200: {
+            description: "Bounded product section",
+            content: {
+                "application/json": {
+                    schema: successEnvelope(productSemanticSectionResponseSchema),
+                },
+            },
+        },
+        ...errorResponses,
+    },
+});
+
+app.openapi(getProductSectionRoute, async (c) => {
+    const db = c.get("db");
+    const { id, section } = c.req.valid("param");
+    const result = await getProductSemanticSection(
+        db,
+        id,
+        section,
+        c.req.valid("query"),
+    );
+    if (!result) throw new NotFoundError("Product not found");
+    return ok(c, result);
+});
+
+const writableProductSectionSchema = z.enum([
+    "base",
+    "text",
+    "media",
+    "attributes",
+    "additional_info",
+    "additional_info_text",
+]);
+
+const updateProductSectionRoute = createRoute({
+    method: "patch",
+    path: "/{id}/sections/{section}",
+    operationId: "dashboard.products.update_section",
+    tags: ["Admin - Products"],
+    summary: "Update one semantic section with product revision control",
+    request: {
+        params: z.object({
+            id: z.string(),
+            section: writableProductSectionSchema,
+        }),
+        body: {
+            content: {
+                "application/json": { schema: productSemanticSectionPatchSchema },
+            },
+        },
+    },
+    responses: {
+        200: {
+            description: "Product section updated",
+            content: {
+                "application/json": {
+                    schema: successEnvelope(aggregateRevisionResponseSchema),
+                },
+            },
+        },
+        ...conflictMutationErrorResponses,
+    },
+});
+
+app.openapi(updateProductSectionRoute, async (c) => {
+    const db = c.get("db");
+    const { id, section } = c.req.valid("param");
+    const patch = c.req.valid("json");
+    if (patch.section !== section) {
+        throw new ValidationError("Body section must match the section path parameter.");
+    }
+    try {
+        const result = await updateProductSemanticSection(db, id, patch);
+        if (!result) throw new NotFoundError("Product not found");
+        await invalidateCatalogCaches("products", c);
+        return ok(c, result);
+    } catch (error: unknown) {
+        if (error instanceof Error) {
+            if (error.message === "Product not found") throw new NotFoundError(error.message);
+            if (error.message.includes("slug")) throw new ValidationError(error.message);
+        }
+        throw error;
+    }
+});
+
 // ── Get Product By ID ──
 
 const getByIdRoute = createRoute({
     method: "get",
     path: "/{id}",
+    operationId: "dashboard.products.get",
     tags: ["Admin - Products"],
     summary: "Get a product by ID with all details",
     request: {
@@ -391,6 +637,7 @@ app.openapi(getByIdRoute, async (c) => {
 const updateProductRoute = createRoute({
     method: "put",
     path: "/{id}",
+    operationId: "dashboard.products.update",
     tags: ["Admin - Products"],
     summary: "Update a product",
     request: {
@@ -428,6 +675,7 @@ app.openapi(updateProductRoute, async (c) => {
 const deleteProductRoute = createRoute({
     method: "delete",
     path: "/{id}",
+    operationId: "dashboard.products.trash",
     tags: ["Admin - Products"],
     summary: "Soft-delete a product",
     request: {
@@ -457,6 +705,7 @@ app.openapi(deleteProductRoute, async (c) => {
 const restoreProductRoute = createRoute({
     method: "post",
     path: "/{id}/restore",
+    operationId: "dashboard.products.restore",
     tags: ["Admin - Products"],
     summary: "Restore a soft-deleted product",
     request: {
@@ -486,6 +735,7 @@ app.openapi(restoreProductRoute, async (c) => {
 const permanentDeleteRoute = createRoute({
     method: "delete",
     path: "/{id}/permanent",
+    operationId: "dashboard.products.delete_permanently",
     tags: ["Admin - Products"],
     summary: "Permanently delete a product",
     request: {
@@ -512,6 +762,7 @@ app.openapi(permanentDeleteRoute, async (c) => {
 const createVariantRoute = createRoute({
     method: "post",
     path: "/{id}/variants",
+    operationId: "dashboard.product_variants.create",
     tags: ["Admin - Products"],
     summary: "Create a product variant",
     request: {
@@ -547,6 +798,7 @@ app.openapi(createVariantRoute, async (c) => {
 const listVariantsRoute = createRoute({
     method: "get",
     path: "/{id}/variants",
+    operationId: "dashboard.product_variants.list",
     tags: ["Admin - Products"],
     summary: "List variants for a product",
     request: {
@@ -575,6 +827,7 @@ app.openapi(listVariantsRoute, async (c) => {
 const updateVariantRoute = createRoute({
     method: "put",
     path: "/{id}/variants/{variantId}",
+    operationId: "dashboard.product_variants.update",
     tags: ["Admin - Products"],
     summary: "Update a product variant",
     request: {
@@ -614,6 +867,7 @@ app.openapi(updateVariantRoute, async (c) => {
 const deleteVariantRoute = createRoute({
     method: "delete",
     path: "/{id}/variants/{variantId}",
+    operationId: "dashboard.product_variants.retire",
     tags: ["Admin - Products"],
     summary: "Delete a product variant",
     request: {
@@ -651,6 +905,7 @@ app.openapi(deleteVariantRoute, async (c) => {
 const saveOptionMatrixRoute = createRoute({
     method: "put",
     path: "/{id}/options/matrix",
+    operationId: "dashboard.product_options.save_matrix",
     tags: ["Admin - Products"],
     summary: "Save the complete normalized product option matrix",
     request: {

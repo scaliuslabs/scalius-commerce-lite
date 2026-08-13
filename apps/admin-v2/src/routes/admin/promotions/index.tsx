@@ -75,7 +75,9 @@ function PromotionsPage() {
         </div>
         {canCreate ? (
           <Button asChild size="sm" className="h-11 w-full sm:h-9 sm:w-auto">
-            <Link to="/admin/promotions/new"><Plus className="mr-2 size-4" />Create promotion</Link>
+            <Link
+              to="/admin/promotions/new"
+            ><Plus className="mr-2 size-4" />Create promotion</Link>
           </Button>
         ) : null}
       </header>

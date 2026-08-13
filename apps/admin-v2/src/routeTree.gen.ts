@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as ConnectRouteImport } from './routes/connect'
 import { Route as FirebaseMessagingSwDotjsRouteImport } from './routes/firebase-messaging-sw[.]js'
 import { Route as HealthRouteImport } from './routes/health'
 import { Route as ScannerRouteImport } from './routes/scanner'
@@ -55,6 +56,7 @@ import { Route as AdminPromotionsIndexRouteImport } from './routes/admin/promoti
 import { Route as AdminPromotionsNewRouteImport } from './routes/admin/promotions/new'
 import { Route as AdminSettingsIndexRouteImport } from './routes/admin/settings/index'
 import { Route as AdminSettingsAccountRouteImport } from './routes/admin/settings/account'
+import { Route as AdminSettingsAgentAccessRouteImport } from './routes/admin/settings/agent-access'
 import { Route as AdminSettingsCacheRouteImport } from './routes/admin/settings/cache'
 import { Route as AdminSettingsCheckoutRouteImport } from './routes/admin/settings/checkout'
 import { Route as AdminSettingsDeliveryProvidersRouteImport } from './routes/admin/settings/delivery-providers'
@@ -79,6 +81,7 @@ import { Route as AdminProductsProductIdIndexRouteImport } from './routes/admin/
 import { Route as AdminProductsProductIdEditRouteImport } from './routes/admin/products/$productId/edit'
 import { Route as AdminPromotionsPromotionIdEditRouteImport } from './routes/admin/promotions/$promotionId/edit'
 import { Route as ApiV1AdminSplatRouteImport } from './routes/api/v1/admin/$'
+import { Route as AdminSettingsAgentAccessAuthorizeRequestIdRouteImport } from './routes/admin/settings/agent-access.authorize.$requestId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -93,6 +96,11 @@ const AdminRoute = AdminRouteImport.update({
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConnectRoute = ConnectRouteImport.update({
+  id: '/connect',
+  path: '/connect',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FirebaseMessagingSwDotjsRoute =
@@ -311,6 +319,12 @@ const AdminSettingsAccountRoute = AdminSettingsAccountRouteImport.update({
   path: '/settings/account',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminSettingsAgentAccessRoute =
+  AdminSettingsAgentAccessRouteImport.update({
+    id: '/settings/agent-access',
+    path: '/settings/agent-access',
+    getParentRoute: () => AdminRoute,
+  } as any)
 const AdminSettingsCacheRoute = AdminSettingsCacheRouteImport.update({
   id: '/settings/cache',
   path: '/settings/cache',
@@ -446,11 +460,18 @@ const ApiV1AdminSplatRoute = ApiV1AdminSplatRouteImport.update({
   path: '/api/v1/admin/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminSettingsAgentAccessAuthorizeRequestIdRoute =
+  AdminSettingsAgentAccessAuthorizeRequestIdRouteImport.update({
+    id: '/authorize/$requestId',
+    path: '/authorize/$requestId',
+    getParentRoute: () => AdminSettingsAgentAccessRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteWithChildren
   '/auth': typeof AuthRouteWithChildren
+  '/connect': typeof ConnectRoute
   '/firebase-messaging-sw.js': typeof FirebaseMessagingSwDotjsRoute
   '/health': typeof HealthRoute
   '/scanner': typeof ScannerRoute
@@ -481,6 +502,7 @@ export interface FileRoutesByFullPath {
   '/admin/products/new': typeof AdminProductsNewRoute
   '/admin/promotions/new': typeof AdminPromotionsNewRoute
   '/admin/settings/account': typeof AdminSettingsAccountRoute
+  '/admin/settings/agent-access': typeof AdminSettingsAgentAccessRouteWithChildren
   '/admin/settings/cache': typeof AdminSettingsCacheRoute
   '/admin/settings/checkout': typeof AdminSettingsCheckoutRoute
   '/admin/settings/delivery-providers': typeof AdminSettingsDeliveryProvidersRoute
@@ -518,10 +540,12 @@ export interface FileRoutesByFullPath {
   '/api/v1/admin/$': typeof ApiV1AdminSplatRoute
   '/admin/orders/$orderId/': typeof AdminOrdersOrderIdIndexRoute
   '/admin/products/$productId/': typeof AdminProductsProductIdIndexRoute
+  '/admin/settings/agent-access/authorize/$requestId': typeof AdminSettingsAgentAccessAuthorizeRequestIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRouteWithChildren
+  '/connect': typeof ConnectRoute
   '/firebase-messaging-sw.js': typeof FirebaseMessagingSwDotjsRoute
   '/health': typeof HealthRoute
   '/scanner': typeof ScannerRoute
@@ -552,6 +576,7 @@ export interface FileRoutesByTo {
   '/admin/products/new': typeof AdminProductsNewRoute
   '/admin/promotions/new': typeof AdminPromotionsNewRoute
   '/admin/settings/account': typeof AdminSettingsAccountRoute
+  '/admin/settings/agent-access': typeof AdminSettingsAgentAccessRouteWithChildren
   '/admin/settings/cache': typeof AdminSettingsCacheRoute
   '/admin/settings/checkout': typeof AdminSettingsCheckoutRoute
   '/admin/settings/delivery-providers': typeof AdminSettingsDeliveryProvidersRoute
@@ -589,12 +614,14 @@ export interface FileRoutesByTo {
   '/api/v1/admin/$': typeof ApiV1AdminSplatRoute
   '/admin/orders/$orderId': typeof AdminOrdersOrderIdIndexRoute
   '/admin/products/$productId': typeof AdminProductsProductIdIndexRoute
+  '/admin/settings/agent-access/authorize/$requestId': typeof AdminSettingsAgentAccessAuthorizeRequestIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteWithChildren
   '/auth': typeof AuthRouteWithChildren
+  '/connect': typeof ConnectRoute
   '/firebase-messaging-sw.js': typeof FirebaseMessagingSwDotjsRoute
   '/health': typeof HealthRoute
   '/scanner': typeof ScannerRoute
@@ -625,6 +652,7 @@ export interface FileRoutesById {
   '/admin/products/new': typeof AdminProductsNewRoute
   '/admin/promotions/new': typeof AdminPromotionsNewRoute
   '/admin/settings/account': typeof AdminSettingsAccountRoute
+  '/admin/settings/agent-access': typeof AdminSettingsAgentAccessRouteWithChildren
   '/admin/settings/cache': typeof AdminSettingsCacheRoute
   '/admin/settings/checkout': typeof AdminSettingsCheckoutRoute
   '/admin/settings/delivery-providers': typeof AdminSettingsDeliveryProvidersRoute
@@ -662,6 +690,7 @@ export interface FileRoutesById {
   '/api/v1/admin/$': typeof ApiV1AdminSplatRoute
   '/admin/orders/$orderId/': typeof AdminOrdersOrderIdIndexRoute
   '/admin/products/$productId/': typeof AdminProductsProductIdIndexRoute
+  '/admin/settings/agent-access/authorize/$requestId': typeof AdminSettingsAgentAccessAuthorizeRequestIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -669,6 +698,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/auth'
+    | '/connect'
     | '/firebase-messaging-sw.js'
     | '/health'
     | '/scanner'
@@ -699,6 +729,7 @@ export interface FileRouteTypes {
     | '/admin/products/new'
     | '/admin/promotions/new'
     | '/admin/settings/account'
+    | '/admin/settings/agent-access'
     | '/admin/settings/cache'
     | '/admin/settings/checkout'
     | '/admin/settings/delivery-providers'
@@ -736,10 +767,12 @@ export interface FileRouteTypes {
     | '/api/v1/admin/$'
     | '/admin/orders/$orderId/'
     | '/admin/products/$productId/'
+    | '/admin/settings/agent-access/authorize/$requestId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/auth'
+    | '/connect'
     | '/firebase-messaging-sw.js'
     | '/health'
     | '/scanner'
@@ -770,6 +803,7 @@ export interface FileRouteTypes {
     | '/admin/products/new'
     | '/admin/promotions/new'
     | '/admin/settings/account'
+    | '/admin/settings/agent-access'
     | '/admin/settings/cache'
     | '/admin/settings/checkout'
     | '/admin/settings/delivery-providers'
@@ -807,11 +841,13 @@ export interface FileRouteTypes {
     | '/api/v1/admin/$'
     | '/admin/orders/$orderId'
     | '/admin/products/$productId'
+    | '/admin/settings/agent-access/authorize/$requestId'
   id:
     | '__root__'
     | '/'
     | '/admin'
     | '/auth'
+    | '/connect'
     | '/firebase-messaging-sw.js'
     | '/health'
     | '/scanner'
@@ -842,6 +878,7 @@ export interface FileRouteTypes {
     | '/admin/products/new'
     | '/admin/promotions/new'
     | '/admin/settings/account'
+    | '/admin/settings/agent-access'
     | '/admin/settings/cache'
     | '/admin/settings/checkout'
     | '/admin/settings/delivery-providers'
@@ -879,12 +916,14 @@ export interface FileRouteTypes {
     | '/api/v1/admin/$'
     | '/admin/orders/$orderId/'
     | '/admin/products/$productId/'
+    | '/admin/settings/agent-access/authorize/$requestId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRouteWithChildren
   AuthRoute: typeof AuthRouteWithChildren
+  ConnectRoute: typeof ConnectRoute
   FirebaseMessagingSwDotjsRoute: typeof FirebaseMessagingSwDotjsRoute
   HealthRoute: typeof HealthRoute
   ScannerRoute: typeof ScannerRoute
@@ -915,6 +954,13 @@ declare module '@tanstack/react-router' {
       path: '/auth'
       fullPath: '/auth'
       preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/connect': {
+      id: '/connect'
+      path: '/connect'
+      fullPath: '/connect'
+      preLoaderRoute: typeof ConnectRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/firebase-messaging-sw.js': {
@@ -1218,6 +1264,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminSettingsAccountRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/settings/agent-access': {
+      id: '/admin/settings/agent-access'
+      path: '/settings/agent-access'
+      fullPath: '/admin/settings/agent-access'
+      preLoaderRoute: typeof AdminSettingsAgentAccessRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/settings/cache': {
       id: '/admin/settings/cache'
       path: '/settings/cache'
@@ -1386,8 +1439,30 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiV1AdminSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/settings/agent-access/authorize/$requestId': {
+      id: '/admin/settings/agent-access/authorize/$requestId'
+      path: '/authorize/$requestId'
+      fullPath: '/admin/settings/agent-access/authorize/$requestId'
+      preLoaderRoute: typeof AdminSettingsAgentAccessAuthorizeRequestIdRouteImport
+      parentRoute: typeof AdminSettingsAgentAccessRoute
+    }
   }
 }
+
+interface AdminSettingsAgentAccessRouteChildren {
+  AdminSettingsAgentAccessAuthorizeRequestIdRoute: typeof AdminSettingsAgentAccessAuthorizeRequestIdRoute
+}
+
+const AdminSettingsAgentAccessRouteChildren: AdminSettingsAgentAccessRouteChildren =
+  {
+    AdminSettingsAgentAccessAuthorizeRequestIdRoute:
+      AdminSettingsAgentAccessAuthorizeRequestIdRoute,
+  }
+
+const AdminSettingsAgentAccessRouteWithChildren =
+  AdminSettingsAgentAccessRoute._addFileChildren(
+    AdminSettingsAgentAccessRouteChildren,
+  )
 
 interface AdminRouteChildren {
   AdminAbandonedCheckoutsRoute: typeof AdminAbandonedCheckoutsRoute
@@ -1409,6 +1484,7 @@ interface AdminRouteChildren {
   AdminProductsNewRoute: typeof AdminProductsNewRoute
   AdminPromotionsNewRoute: typeof AdminPromotionsNewRoute
   AdminSettingsAccountRoute: typeof AdminSettingsAccountRoute
+  AdminSettingsAgentAccessRoute: typeof AdminSettingsAgentAccessRouteWithChildren
   AdminSettingsCacheRoute: typeof AdminSettingsCacheRoute
   AdminSettingsCheckoutRoute: typeof AdminSettingsCheckoutRoute
   AdminSettingsDeliveryProvidersRoute: typeof AdminSettingsDeliveryProvidersRoute
@@ -1466,6 +1542,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminProductsNewRoute: AdminProductsNewRoute,
   AdminPromotionsNewRoute: AdminPromotionsNewRoute,
   AdminSettingsAccountRoute: AdminSettingsAccountRoute,
+  AdminSettingsAgentAccessRoute: AdminSettingsAgentAccessRouteWithChildren,
   AdminSettingsCacheRoute: AdminSettingsCacheRoute,
   AdminSettingsCheckoutRoute: AdminSettingsCheckoutRoute,
   AdminSettingsDeliveryProvidersRoute: AdminSettingsDeliveryProvidersRoute,
@@ -1529,6 +1606,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRouteWithChildren,
   AuthRoute: AuthRouteWithChildren,
+  ConnectRoute: ConnectRoute,
   FirebaseMessagingSwDotjsRoute: FirebaseMessagingSwDotjsRoute,
   HealthRoute: HealthRoute,
   ScannerRoute: ScannerRoute,

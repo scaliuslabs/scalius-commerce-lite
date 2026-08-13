@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Printer, Download, Loader2 } from "lucide-react";
 
 interface InvoiceActionsProps {
+  orderId: string;
   invoiceNumber: string;
 }
 
@@ -41,11 +42,15 @@ body { font-family: system-ui, -apple-system, sans-serif; color: #374151; backgr
 .invoice-footer p { margin: 0; }
 `;
 
-export function InvoiceActions({ invoiceNumber }: InvoiceActionsProps) {
+export function InvoiceActions({ orderId, invoiceNumber }: InvoiceActionsProps) {
   const [downloading, setDownloading] = useState(false);
 
-  const handlePrint = () => {
-    window.print();
+  const handleDownloadPrintableHtml = () => {
+    window.open(
+      `/api/v1/admin/orders/${encodeURIComponent(orderId)}/invoice/print`,
+      "_blank",
+      "noopener,noreferrer",
+    );
   };
 
   const handleDownloadPdf = async () => {
@@ -106,7 +111,7 @@ export function InvoiceActions({ invoiceNumber }: InvoiceActionsProps) {
         </span>
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
           <button
-            onClick={handlePrint}
+            onClick={handleDownloadPrintableHtml}
             type="button"
             style={{
               display: "inline-flex",
@@ -123,7 +128,7 @@ export function InvoiceActions({ invoiceNumber }: InvoiceActionsProps) {
             }}
           >
             <Printer style={{ width: 16, height: 16 }} />
-            Print
+            Printable HTML
           </button>
           <button
             onClick={handleDownloadPdf}

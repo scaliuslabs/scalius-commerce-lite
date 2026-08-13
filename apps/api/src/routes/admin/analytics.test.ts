@@ -167,7 +167,10 @@ describe("admin analytics routes", () => {
         )?.get;
 
         expect(operation).toBeDefined();
-        expect(operation?.security).toEqual([{ adminSession: [] }]);
+        expect(operation?.security).toEqual([
+            { adminSession: [] },
+            { agentBearer: [] },
+        ]);
     });
 
     it("passes lifecycle authority separately from ordinary script creation", async () => {

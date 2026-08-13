@@ -47,4 +47,6 @@ export const ADMIN_PERMISSIONS = {
   SETTINGS_CACHE_MANAGE: "settings.cache.manage",
   TAXES_VIEW: "taxes.view",
   TAXES_MANAGE: "taxes.manage",
+  AGENT_ACCESS_VIEW: "agent_access.view",
+  AGENT_ACCESS_MANAGE: "agent_access.manage",
 } as const;

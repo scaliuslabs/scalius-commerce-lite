@@ -96,6 +96,13 @@ export interface ThemePreviewSessionDocument {
   expiresAt: Date;
 }
 
+export interface ThemePreviewContinuationDocument {
+  continuationId: string;
+  draftRevision: number;
+  basePublishedRevision: number;
+  expiresAt: Date;
+}
+
 export const SITE_PRESENTATION_REVISION_CONFLICT =
   "SITE_PRESENTATION_REVISION_CONFLICT";
 export const HOMEPAGE_PRESENTATION_REVISION_CONFLICT =
@@ -1118,11 +1125,16 @@ export async function rollbackThemeSettings(
   });
 }
 
+const THEME_PREVIEW_CONTINUATION_TTL_MS = 5 * 60 * 1000;
+const THEME_PREVIEW_SESSION_TTL_MS = 30 * 60 * 1000;
+const THEME_PREVIEW_CONTINUATION_CONSUME_SENTINEL =
+  "THEME_PREVIEW_CONTINUATION_CONSUME_CONFLICT";
+
 export async function createThemePreviewSession(
   db: Database,
   expectedDraftRevision: number,
   actorId: string | null = null,
-): Promise<ThemePreviewSessionDocument & { token: string }> {
+): Promise<ThemePreviewContinuationDocument> {
   if (!Number.isInteger(expectedDraftRevision) || expectedDraftRevision < 1) {
     throw new ValidationError("Save the storefront style draft before previewing it.");
   }
@@ -1144,9 +1156,12 @@ export async function createThemePreviewSession(
     );
   }
 
-  const token = `tpv_${nanoid(48)}`;
-  const tokenHash = await hashThemePreviewToken(token);
-  const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+  // This is a one-time browser continuation bearer, carried only in a bounded
+  // same-origin POST body. Only the service-authenticated exchange accepts it,
+  // and the raw value is never persisted or placed in a URL.
+  const continuationId = `tpc_${nanoid(48)}`;
+  const tokenHash = await hashThemePreviewToken(continuationId);
+  const expiresAt = new Date(Date.now() + THEME_PREVIEW_CONTINUATION_TTL_MS);
   await db
     .delete(themePreviewSessions)
     .where(lte(themePreviewSessions.expiresAt, sql`unixepoch()`));
@@ -1160,10 +1175,81 @@ export async function createThemePreviewSession(
     createdAt: sql`unixepoch()`,
   });
   return {
-    token,
-    theme: parseAuthoritativeThemeSettings(draft.theme),
+    continuationId,
     draftRevision: draft.revision,
     basePublishedRevision: draft.basePublishedRevision,
+    expiresAt,
+  };
+}
+
+/**
+ * Atomically consume a browser continuation and mint the cookie-only preview
+ * bearer. The caller must be the service-authenticated storefront bridge; the
+ * raw bearer must never be returned to a dashboard or agent operation.
+ */
+export async function exchangeThemePreviewContinuation(
+  db: Database,
+  continuationId: string,
+): Promise<ThemePreviewSessionDocument & { token: string }> {
+  const normalizedId = continuationId.trim();
+  if (!/^tpc_[A-Za-z0-9_-]{48}$/.test(normalizedId)) {
+    throw new ConflictError("Theme preview continuation is unavailable or expired.");
+  }
+  const continuationHash = await hashThemePreviewToken(normalizedId);
+  const continuation = await db
+    .select({
+      theme: themePreviewSessions.theme,
+      draftRevision: themePreviewSessions.draftRevision,
+      basePublishedRevision: themePreviewSessions.basePublishedRevision,
+      expiresAt: themePreviewSessions.expiresAt,
+      createdBy: themePreviewSessions.createdBy,
+    })
+    .from(themePreviewSessions)
+    .where(and(
+      eq(themePreviewSessions.tokenHash, continuationHash),
+      gt(themePreviewSessions.expiresAt, sql`unixepoch()`),
+    ))
+    .get();
+  if (!continuation) {
+    throw new ConflictError("Theme preview continuation is unavailable or expired.");
+  }
+
+  const token = `tpv_${nanoid(48)}`;
+  const tokenHash = await hashThemePreviewToken(token);
+  const expiresAt = new Date(Date.now() + THEME_PREVIEW_SESSION_TTL_MS);
+  const consumeGuard = buildBatchGuard(db, sql`EXISTS (
+    SELECT 1 FROM ${themePreviewSessions}
+    WHERE ${themePreviewSessions.tokenHash} = ${continuationHash}
+      AND ${themePreviewSessions.expiresAt} > unixepoch()
+  )`, THEME_PREVIEW_CONTINUATION_CONSUME_SENTINEL);
+  try {
+    await safeBatch(db, [
+      consumeGuard,
+      db.delete(themePreviewSessions).where(and(
+        eq(themePreviewSessions.tokenHash, continuationHash),
+        gt(themePreviewSessions.expiresAt, sql`unixepoch()`),
+      )),
+      db.insert(themePreviewSessions).values({
+        tokenHash,
+        theme: continuation.theme,
+        draftRevision: continuation.draftRevision,
+        basePublishedRevision: continuation.basePublishedRevision,
+        expiresAt,
+        createdBy: continuation.createdBy,
+        createdAt: sql`unixepoch()`,
+      }),
+    ]);
+  } catch (error) {
+    if (isBatchGuardError(error, THEME_PREVIEW_CONTINUATION_CONSUME_SENTINEL)) {
+      throw new ConflictError("Theme preview continuation is unavailable or expired.");
+    }
+    throw error;
+  }
+  return {
+    token,
+    theme: parseAuthoritativeThemeSettings(continuation.theme),
+    draftRevision: continuation.draftRevision,
+    basePublishedRevision: continuation.basePublishedRevision,
     expiresAt,
   };
 }
@@ -1173,7 +1259,7 @@ export async function resolveThemePreviewSession(
   token: string,
 ): Promise<ThemePreviewSessionDocument | null> {
   const normalizedToken = token.trim();
-  if (!/^tpv_[A-Za-z0-9_-]{40,80}$/.test(normalizedToken)) return null;
+  if (!/^tpv_[A-Za-z0-9_-]{48}$/.test(normalizedToken)) return null;
   const tokenHash = await hashThemePreviewToken(normalizedToken);
   const row = await db
     .select({

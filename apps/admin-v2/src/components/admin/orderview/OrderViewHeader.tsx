@@ -95,7 +95,11 @@ export function OrderViewHeader({ order }: OrderViewHeaderProps) {
             asChild
             className="h-11 gap-1.5 rounded-lg border-primary/20 px-3 text-sm font-medium hover:bg-primary/5 sm:h-9"
           >
-            <Link to={`/invoice/${order.id}` as string} target="_blank" rel="noopener noreferrer">
+            <Link
+              to={`/invoice/${order.id}` as string}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
               <Receipt className="h-4 w-4" />
               View invoice
             </Link>
@@ -143,7 +147,9 @@ export function OrderViewHeader({ order }: OrderViewHeaderProps) {
             </div>
             {order.customerId ? (
               <Button asChild variant="ghost" size="sm" className="h-9 shrink-0 gap-1.5 px-2 text-xs">
-                <Link to={`/admin/customers/${order.customerId}/history` as string}>
+                <Link
+                  to={`/admin/customers/${order.customerId}/history` as string}
+                >
                   <History className="h-3.5 w-3.5" />
                   View
                 </Link>

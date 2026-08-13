@@ -21,11 +21,18 @@ export interface AdminUser {
   isSuperAdmin: boolean;
   createdAt: string | number;
   roles: { id: string; name: string; displayName: string }[];
+  rolesTruncated: boolean;
   overrides: { grants: string[]; denials: string[] };
+  overridesTruncated: boolean;
 }
 
 export interface AdminUsersResponse {
   users: AdminUser[];
+  pagination: {
+    page: number;
+    limit: number;
+    hasMore: boolean;
+  };
 }
 
 export interface CreateAdminUserInput {
@@ -116,6 +123,11 @@ export interface RevokeOtherAccountSessionsResponse extends MessageResponse {
   revokedCount: number;
 }
 
+export interface ScannerLinkResponse {
+  token: string;
+  expiresAt: string;
+}
+
 export type SetTwoFactorMethodInput =
   | { method: "totp"; challengeId: string; code: string; sessionToken?: never }
   | { method: "email"; challengeId: string; code: string; sessionToken?: never }
@@ -165,7 +177,18 @@ export interface RunSetupResponse {
 
 export const getAdminUsers = createServerFn({ method: "GET" }).handler(
   async () => {
-    return apiGet<AdminUsersResponse>("/auth/users");
+    const users: AdminUser[] = [];
+    const limit = 2;
+    for (let page = 1; page <= 1_000; page += 1) {
+      const result = await apiGet<AdminUsersResponse>(
+        `/auth/users?page=${page}&limit=${limit}`,
+      );
+      users.push(...result.users);
+      if (!result.pagination.hasMore) {
+        return { users, pagination: result.pagination };
+      }
+    }
+    throw new Error("Administrator list exceeded the supported page limit");
   },
 );
 
@@ -234,6 +257,12 @@ export const revokeAccountSession = createServerFn({ method: "POST" })
 export const revokeOtherAccountSessions = createServerFn({ method: "POST" }).handler(
   async () => {
     return apiDelete<RevokeOtherAccountSessionsResponse>("/auth/sessions");
+  },
+);
+
+export const createScannerLink = createServerFn({ method: "POST" }).handler(
+  async () => {
+    return apiPost<ScannerLinkResponse>("/auth/scanner-link", {});
   },
 );
 

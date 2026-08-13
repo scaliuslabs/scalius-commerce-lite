@@ -36,6 +36,7 @@ const mocks = vi.hoisted(() => ({
   saveHomepagePresentationSettings: vi.fn(),
   getAllowedCountries: vi.fn(),
   saveAllowedCountries: vi.fn(),
+  runSeoDiscoveryLiveProbe: vi.fn(),
 }));
 
 vi.mock("@scalius/core/modules/settings", () => ({
@@ -92,6 +93,10 @@ vi.mock("@scalius/core/modules/products", () => ({
     "unavailable_excluded",
   ],
   getProductFeedDiagnostics: mocks.getProductFeedDiagnostics,
+}));
+
+vi.mock("@scalius/shared/seo-discovery-live-probe", () => ({
+  runSeoDiscoveryLiveProbe: mocks.runSeoDiscoveryLiveProbe,
 }));
 
 import { siteSettingsRoutes } from "./site";
@@ -199,8 +204,7 @@ function createTestApp() {
     },
   });
   mocks.createThemePreviewSession.mockResolvedValue({
-    token: `tpv_${"a".repeat(48)}`,
-    theme: DEFAULT_STOREFRONT_THEME_SETTINGS,
+    continuationId: `tpc_${"a".repeat(48)}`,
     draftRevision: 2,
     basePublishedRevision: 1,
     expiresAt: new Date(Date.now() + 60_000),
@@ -298,6 +302,18 @@ function createTestApp() {
     allowedCountries: ["BD"],
     allowedCountriesMode: "include",
   });
+  mocks.runSeoDiscoveryLiveProbe.mockImplementation(async (deps) => {
+    const [policy, storefront] = await Promise.all([
+      deps.getDiscoveryPolicy(),
+      deps.getStorefrontUrl(),
+    ]);
+    return {
+      baseUrl: storefront.storefrontUrl,
+      checkedAt: "2026-08-13T00:00:00.000Z",
+      ok: Boolean(policy.discovery),
+      resources: [],
+    };
+  });
 
   app.onError((error, c) => {
     const { body, status } = errorResponseFromError(error);
@@ -350,6 +366,134 @@ describe("site settings cache invalidation", () => {
     expect(mocks.saveSeoSettings).not.toHaveBeenCalled();
   });
 
+  it("returns a bounded SEO policy projection below the agent response ceiling", async () => {
+    const { app, env } = createTestApp();
+    const baseline = await mocks.getSeoSettings();
+    mocks.getSeoSettings.mockClear();
+    mocks.getSeoSettings.mockResolvedValueOnce({
+      ...baseline,
+      siteTitle: "t".repeat(2_000),
+      homepageTitle: "h".repeat(2_000),
+      homepageMetaDescription: "m".repeat(20_000),
+      robotsTxt: "r".repeat(100_000),
+      discovery: {
+        ...baseline.discovery,
+        feeds: {
+          ...baseline.discovery.feeds,
+          title: "f".repeat(2_000),
+          description: "d".repeat(20_000),
+        },
+      },
+      returnPolicy: {
+        ...baseline.returnPolicy,
+        policyUrl: `https://storefront.example.com/${"p".repeat(10_000)}`,
+      },
+    });
+
+    const response = await app.request(
+      "/api/v1/admin/settings/seo",
+      { method: "GET" },
+      env,
+    );
+    const responseText = await response.text();
+    const body = JSON.parse(responseText);
+
+    expect(response.status).toBe(200);
+    expect(new TextEncoder().encode(responseText).byteLength).toBeLessThan(65_536);
+    expect(body.data.siteTitle).toHaveLength(200);
+    expect(body.data.homepageTitle).toHaveLength(200);
+    expect(body.data.homepageMetaDescription).toHaveLength(1_000);
+    expect(body.data.robotsTxt).toHaveLength(32_768);
+    expect(body.data.discovery.feeds.title).toHaveLength(200);
+    expect(body.data.discovery.feeds.description).toHaveLength(2_000);
+    expect(body.data.returnPolicy.policyUrl).toHaveLength(2_048);
+    expect(mocks.getSeoSettings).toHaveBeenCalledTimes(1);
+  });
+
+  it("bounds every retained general-settings read below its declared ceiling", async () => {
+    const { app, env } = createTestApp();
+    mocks.getCurrencySettings.mockResolvedValueOnce({
+      currencyCode: "BDT",
+      currencySymbol: "T".repeat(10_000),
+      usdExchangeRate: "1".repeat(10_000),
+    });
+    mocks.getMediaOptimizationSettings.mockResolvedValueOnce({
+      enabled: true,
+      canonicalCdnUrl: "c".repeat(10_000),
+      allowedImageHosts: Array.from(
+        { length: 100 },
+        (_, index) => `asset-${index}.${"a".repeat(1_000)}`,
+      ),
+      canonicalHostAliases: Array.from(
+        { length: 100 },
+        (_, index) => `alias-${index}.${"b".repeat(1_000)}`,
+      ),
+    });
+    mocks.getStorefrontUrlSetting.mockResolvedValueOnce({
+      storefrontUrl: `https://${"a".repeat(3_000)}.example.com`,
+    });
+    const countryCodes = Array.from({ length: 26 * 26 }, (_, index) =>
+      `${String.fromCharCode(65 + Math.floor(index / 26))}${String.fromCharCode(65 + (index % 26))}`,
+    );
+    mocks.getAllowedCountries.mockResolvedValueOnce({
+      allowedCountries: [...countryCodes, "invalid", "BD"],
+      allowedCountriesMode: "exclude",
+    });
+
+    for (const path of [
+      "/currency",
+      "/media",
+      "/storefront-url",
+      "/allowed-countries",
+    ]) {
+      const response = await app.request(
+        `/api/v1/admin/settings${path}`,
+        { method: "GET" },
+        env,
+      );
+      const responseText = await response.text();
+      expect(response.status, path).toBe(200);
+      expect(
+        new TextEncoder().encode(responseText).byteLength,
+        path,
+      ).toBeLessThan(65_536);
+    }
+
+    mocks.getMediaOptimizationSettings.mockResolvedValueOnce({
+      enabled: true,
+      canonicalCdnUrl: "cdn.example.com",
+      allowedImageHosts: Array.from(
+        { length: 100 },
+        (_, index) => `asset-${index}.example.com`,
+      ),
+      canonicalHostAliases: Array.from(
+        { length: 100 },
+        (_, index) => `alias-${index}.example.com`,
+      ),
+    });
+    const projectedMediaResponse = await app.request(
+      "/api/v1/admin/settings/media",
+      { method: "GET" },
+      env,
+    );
+    const projectedMediaBody = (await projectedMediaResponse.json()) as {
+      data: { allowedImageHosts: string[]; canonicalHostAliases: string[] };
+    };
+    expect(projectedMediaBody.data.allowedImageHosts).toHaveLength(24);
+    expect(projectedMediaBody.data.canonicalHostAliases).toHaveLength(24);
+  });
+
+  it("rejects SEO writes that exceed the bounded policy contract", async () => {
+    const { app, env } = createTestApp();
+
+    const response = await requestJson(app, env, "POST", "/seo", {
+      robotsTxt: "r".repeat(32_769),
+    });
+
+    expect(response.status).toBe(400);
+    expect(mocks.saveSeoSettings).not.toHaveBeenCalled();
+  });
+
   it("fails general settings reads visibly instead of returning empty success", async () => {
     const { app, env } = createTestApp();
     mocks.getGeneralSettings.mockRejectedValueOnce(new Error("D1 unavailable"));
@@ -363,6 +507,106 @@ describe("site settings cache invalidation", () => {
 
     expect(response.status).toBe(500);
     expect(body).toMatchObject({ success: false });
+  });
+
+  it("exposes bounded header and footer documents with their exact CAS revisions", async () => {
+    const { app, env } = createTestApp();
+    mocks.getGeneralSettings.mockResolvedValue({
+      headerConfig: {
+        topBar: { text: "Welcome", isEnabled: true },
+        logo: { src: "/logo.png", alt: "Logo", width: 160 },
+        favicon: { src: "/favicon.png", alt: "Icon" },
+        contact: { phone: "+8801700000000", text: "Call", isEnabled: true },
+        social: [],
+        navigation: [{ id: "must-not-project" }],
+      },
+      footerConfig: {
+        logo: { src: "/logo.png", alt: "Logo" },
+        tagline: "Carefully made",
+        description: "Commerce",
+        copyrightText: "Scalius",
+        social: [],
+        menus: [{ id: "must-not-project" }],
+      },
+      revisions: { header: 7, footer: 9 },
+      navigationReadiness: {
+        header: { state: "ready" },
+        footer: { state: "ready" },
+      },
+    });
+
+    const headerResponse = await app.request(
+      "/api/v1/admin/settings/header",
+      { method: "GET" },
+      env,
+    );
+    const footerResponse = await app.request(
+      "/api/v1/admin/settings/footer",
+      { method: "GET" },
+      env,
+    );
+    const headerText = await headerResponse.text();
+    const footerText = await footerResponse.text();
+
+    expect(headerResponse.status).toBe(200);
+    expect(footerResponse.status).toBe(200);
+    expect(JSON.parse(headerText)).toMatchObject({ data: { revision: 7 } });
+    expect(JSON.parse(footerText)).toMatchObject({ data: { revision: 9 } });
+    expect(headerText).not.toContain("navigation");
+    expect(footerText).not.toContain("menus");
+    expect(new TextEncoder().encode(headerText).byteLength).toBeLessThan(65_536);
+    expect(new TextEncoder().encode(footerText).byteLength).toBeLessThan(65_536);
+  });
+
+  it("normalizes empty first-run header and footer documents into writable defaults", async () => {
+    const { app, env } = createTestApp();
+    mocks.getGeneralSettings.mockResolvedValue({
+      headerConfig: {},
+      footerConfig: {},
+      revisions: { header: 0, footer: 0 },
+      navigationReadiness: {
+        header: { state: "ready" },
+        footer: { state: "ready" },
+      },
+    });
+
+    const headerResponse = await app.request(
+      "/api/v1/admin/settings/header",
+      { method: "GET" },
+      env,
+    );
+    const footerResponse = await app.request(
+      "/api/v1/admin/settings/footer",
+      { method: "GET" },
+      env,
+    );
+
+    expect(headerResponse.status).toBe(200);
+    await expect(headerResponse.json()).resolves.toMatchObject({
+      data: {
+        revision: 0,
+        config: {
+          topBar: { text: "", isEnabled: false },
+          logo: { src: "", alt: "" },
+          favicon: { src: "", alt: "" },
+          contact: { phone: "", text: "", isEnabled: false },
+          social: [],
+        },
+      },
+    });
+    expect(footerResponse.status).toBe(200);
+    await expect(footerResponse.json()).resolves.toMatchObject({
+      data: {
+        revision: 0,
+        config: {
+          logo: { src: "", alt: "" },
+          tagline: "",
+          description: "",
+          copyrightText: "Your store",
+          social: [],
+        },
+      },
+    });
   });
 
   it("fails Store URL reads visibly instead of returning a relative fallback", async () => {
@@ -629,6 +873,93 @@ describe("site settings cache invalidation", () => {
         currencyCode: "BDT",
       },
     );
+  });
+
+  it("caps legacy feed diagnostic samples and sample text below 64 KiB", async () => {
+    const { app, env } = createTestApp();
+    const reasons = [
+      "feed_disabled",
+      "storefront_url_unavailable",
+      "product_feed_excluded",
+      "inactive_deleted_unpublished",
+      "inconsistent_option_axes",
+      "no_buyer_sku",
+      "non_positive_price",
+      "missing_image",
+      "unavailable_excluded",
+    ] as const;
+    mocks.getProductFeedDiagnostics.mockResolvedValueOnce({
+      policy: {
+        productCatalogEnabled: true,
+        includeUnavailableProducts: false,
+        variantStrategy: "variants",
+      },
+      scan: {
+        limit: 500,
+        scannedProducts: 500,
+        truncated: true,
+        sampleLimitPerReason: 10,
+      },
+      totals: {
+        emittedRows: 0,
+        emittedProductRows: 0,
+        emittedVariantRows: 0,
+        productsWithIssues: 500,
+        skippedRows: 500,
+      },
+      reasons: reasons.map((reason) => ({
+        reason,
+        products: 500,
+        rows: 500,
+        samples: Array.from({ length: 20 }, (_, index) => ({
+          id: `prod_${index}_${"i".repeat(1_000)}`,
+          name: `Product ${index} ${"n".repeat(10_000)}`,
+          slug: `product-${index}-${"s".repeat(10_000)}`,
+          reason,
+        })),
+      })),
+    });
+
+    const response = await app.request(
+      "/api/v1/admin/settings/seo/feed-diagnostics?sampleLimit=10",
+      { method: "GET" },
+      env,
+    );
+    const responseText = await response.text();
+    const body = JSON.parse(responseText);
+
+    expect(response.status).toBe(200);
+    expect(new TextEncoder().encode(responseText).byteLength).toBeLessThan(65_536);
+    expect(body.data.reasons).toHaveLength(9);
+    expect(body.data.reasons[0].samples).toHaveLength(10);
+    expect(body.data.reasons[0].samples[0].id).toHaveLength(128);
+    expect(body.data.reasons[0].samples[0].name).toHaveLength(200);
+    expect(body.data.reasons[0].samples[0].slug).toHaveLength(200);
+  });
+
+  it("runs live discovery proof from the saved policy and Store URL authority", async () => {
+    const { app, env } = createTestApp();
+
+    const response = await app.request(
+      "/api/v1/admin/settings/seo/live-probe",
+      { method: "GET" },
+      env,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    await expect(response.json()).resolves.toMatchObject({
+      success: true,
+      data: {
+        baseUrl: "https://storefront.example.com",
+        checkedAt: "2026-08-13T00:00:00.000Z",
+        ok: true,
+        resources: [],
+      },
+    });
+    expect(mocks.runSeoDiscoveryLiveProbe).toHaveBeenCalledTimes(1);
+    expect(mocks.getSeoSettings).toHaveBeenCalledTimes(1);
+    expect(mocks.getStorefrontUrlSetting).toHaveBeenCalledTimes(1);
   });
 
   it.each([
@@ -969,15 +1300,81 @@ describe("site settings cache invalidation", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("Cache-Control")).toContain("no-store");
+    expect(response.headers.get("Referrer-Policy")).toBe("no-referrer");
     expect(body.data).toMatchObject({
-      token: `tpv_${"a".repeat(48)}`,
+      continuation: {
+        url: "https://storefront.example.com/theme-preview/continue",
+        method: "POST",
+        fields: {
+          continuationCode: `tpc_${"a".repeat(48)}`,
+          path: "/",
+          device: "full",
+        },
+      },
       draftRevision: 2,
       basePublishedRevision: 1,
     });
+    expect(body.data).not.toHaveProperty("token");
+    expect(JSON.stringify(body.data)).not.toContain("/tpc_");
     expect(body.data).not.toHaveProperty("theme");
     expect(
       mocks.invalidateApiAndScheduleStorefrontGroups,
     ).not.toHaveBeenCalled();
+  });
+
+  it("publishes bounded body-only preview continuation response fields", () => {
+    const { app } = createTestApp();
+    const document = app.getOpenAPIDocument({
+      openapi: "3.0.0",
+      info: { title: "Theme preview", version: "test" },
+    }) as unknown as {
+      paths: Record<string, Record<string, {
+        responses?: Record<string, {
+          content?: Record<string, { schema?: {
+            properties?: Record<string, {
+              properties?: Record<string, unknown>;
+            }>;
+          } }>;
+        }>;
+      }>>;
+    };
+    const responseSchema = document.paths[
+      "/api/v1/admin/settings/theme/preview-session"
+    ]?.post?.responses?.["200"]?.content?.["application/json"]?.schema;
+    const data = responseSchema?.properties?.data as {
+      properties?: Record<string, unknown>;
+    } | undefined;
+    const continuation = data?.properties?.continuation as {
+      properties?: Record<string, unknown>;
+    } | undefined;
+    const fields = continuation?.properties?.fields as {
+      properties?: Record<string, unknown>;
+    } | undefined;
+
+    expect(continuation?.properties?.url).toMatchObject({
+      type: "string",
+      format: "uri",
+      maxLength: 512,
+    });
+    expect(continuation?.properties?.method).toMatchObject({
+      type: "string",
+      enum: ["POST"],
+    });
+    expect(fields?.properties?.continuationCode).toMatchObject({
+      type: "string",
+      minLength: 52,
+      maxLength: 52,
+      pattern: "^tpc_[A-Za-z0-9_-]{48}$",
+    });
+    expect(fields?.properties?.path).toMatchObject({
+      type: "string",
+      minLength: 1,
+      maxLength: 512,
+    });
+    expect(fields?.properties?.device).toMatchObject({
+      type: "string",
+      enum: ["full", "desktop", "mobile"],
+    });
   });
 
   it("invalidates layout only after publishing or restoring a theme revision", async () => {

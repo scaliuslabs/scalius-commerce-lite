@@ -45,6 +45,8 @@ import {
     verifyPendingTotpCode,
     type ClaimedAdminSetup,
 } from "@scalius/core/auth";
+import { createScannerTokenClaim } from "@scalius/core/auth/scanner-token-claims";
+import { SCANNER_TOKEN_TTL_SECONDS } from "@scalius/shared/scanner-auth";
 
 import { ok, created } from "../../utils/api-response";
 import { UnauthorizedError, ForbiddenError, NotFoundError, ValidationError, ConflictError, ServiceUnavailableError } from "../../utils/api-error";
@@ -61,6 +63,9 @@ import {
 } from "./account-session-presentation";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const ADMIN_USER_ENRICHMENT_CHUNK_SIZE = 90;
+const ADMIN_USER_PAGE_LIMIT = 2;
+const ADMIN_USER_ROLE_LIMIT = 20;
+const ADMIN_USER_OVERRIDE_LIMIT = 100;
 
 type BetterAuthHeaders = Headers & { getSetCookie?: () => string[] };
 type BetterAuthHeadersResult<T> = { response: T; headers?: Headers };
@@ -124,16 +129,22 @@ function adminPrincipalPredicate() {
     );
 }
 
+function createOpaqueScannerToken(): string {
+    const bytes = new Uint8Array(32);
+    crypto.getRandomValues(bytes);
+    return `sct_${Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+}
+
 // ─────────────────────────────────────────
 // Admin Users Management
 // ─────────────────────────────────────────
 
 const adminUserSchema = z.object({
-    id: z.string(),
-    name: z.string(),
-    email: z.string(),
+    id: z.string().max(100),
+    name: z.string().max(100),
+    email: z.string().max(320),
     emailVerified: z.boolean(),
-    image: z.string().nullable(),
+    image: z.string().max(2048).nullable(),
     twoFactorEnabled: z.boolean(),
     mustChangePassword: z.boolean(),
     mustEnrollTwoFactor: z.boolean(),
@@ -145,17 +156,40 @@ const adminUserSchema = z.object({
     }).nullable(),
     isSuperAdmin: z.boolean(),
     createdAt: z.union([z.string(), z.number()]),
-    roles: z.array(z.object({ id: z.string(), name: z.string(), displayName: z.string() })),
-    overrides: z.object({ grants: z.array(z.string()), denials: z.array(z.string()) }),
-}).passthrough();
+    roles: z.array(z.object({
+        id: z.string().max(100),
+        name: z.string().max(50),
+        displayName: z.string().max(100),
+    })).max(ADMIN_USER_ROLE_LIMIT),
+    rolesTruncated: z.boolean(),
+    overrides: z.object({
+        grants: z.array(z.string().max(150)).max(ADMIN_USER_OVERRIDE_LIMIT),
+        denials: z.array(z.string().max(150)).max(ADMIN_USER_OVERRIDE_LIMIT),
+    }),
+    overridesTruncated: z.boolean(),
+});
 
 const listUsersRoute = createRoute({
     method: "get",
     path: "/users",
+    operationId: "dashboard.team.users.list",
     tags: ["Admin - Auth Management"],
     summary: "List all admin users",
+    request: {
+        query: z.object({
+            page: z.coerce.number().int().min(1).default(1),
+            limit: z.coerce.number().int().min(1).max(ADMIN_USER_PAGE_LIMIT).default(ADMIN_USER_PAGE_LIMIT),
+        }),
+    },
     responses: {
-        200: { description: "Admin user list", content: { "application/json": { schema: successEnvelope(z.object({ users: z.array(adminUserSchema) })) } } },
+        200: { description: "Admin user list", content: { "application/json": { schema: successEnvelope(z.object({
+            users: z.array(adminUserSchema),
+            pagination: z.object({
+                page: z.number().int().min(1),
+                limit: z.number().int().min(1).max(ADMIN_USER_PAGE_LIMIT),
+                hasMore: z.boolean(),
+            }),
+        })) } } },
         ...errorResponses,
     }
 });
@@ -163,8 +197,9 @@ const listUsersRoute = createRoute({
 app.openapi(listUsersRoute, async (c) => {
     try {
         const db = c.get("db");
+        const { page, limit } = c.req.valid("query");
 
-        const adminUsers = await db
+        const adminUserRows = await db
             .selectDistinct({
                 id: user.id,
                 name: user.name,
@@ -191,7 +226,12 @@ app.openapi(listUsersRoute, async (c) => {
                 eq(userPermissions.granted, true),
             ))
             .leftJoin(adminInvitations, eq(adminInvitations.userId, user.id))
-            .where(adminPrincipalPredicate());
+            .where(adminPrincipalPredicate())
+            .orderBy(desc(user.createdAt), desc(user.id))
+            .limit(limit + 1)
+            .offset((page - 1) * limit);
+        const hasMore = adminUserRows.length > limit;
+        const adminUsers = adminUserRows.slice(0, limit);
 
         const rolesByUserId = new Map<string, Array<{
             id: string;
@@ -255,8 +295,14 @@ app.openapi(listUsersRoute, async (c) => {
 
         const nowMs = Date.now();
         const usersWithRoles = adminUsers.map((adminUser) => {
-            const userRoleData = rolesByUserId.get(adminUser.id) ?? [];
-            const overrides = overridesByUserId.get(adminUser.id) ?? [];
+            const allUserRoles = rolesByUserId.get(adminUser.id) ?? [];
+            const userRoleData = allUserRoles.slice(0, ADMIN_USER_ROLE_LIMIT).map((role) => ({
+                id: role.id.slice(0, 100),
+                name: role.name.slice(0, 50),
+                displayName: role.displayName.slice(0, 100),
+            }));
+            const allOverrides = overridesByUserId.get(adminUser.id) ?? [];
+            const overrides = allOverrides.slice(0, ADMIN_USER_OVERRIDE_LIMIT);
 
             const grants = overrides.filter((o) => o.granted).map((o) => o.permissionName);
             const denials = overrides.filter((o) => !o.granted).map((o) => o.permissionName);
@@ -302,14 +348,26 @@ app.openapi(listUsersRoute, async (c) => {
 
             return {
                 ...publicAdminUser,
+                id: publicAdminUser.id.slice(0, 100),
+                name: publicAdminUser.name.slice(0, 100),
+                email: publicAdminUser.email.slice(0, 320),
+                image: publicAdminUser.image?.slice(0, 2048) ?? null,
                 suspended: Boolean(banned && (!banExpires || banExpiresAt > nowMs)),
                 invitation,
                 roles: userRoleData,
-                overrides: { grants, denials }
+                rolesTruncated: allUserRoles.length > userRoleData.length,
+                overrides: {
+                    grants: grants.map((name) => name.slice(0, 150)),
+                    denials: denials.map((name) => name.slice(0, 150)),
+                },
+                overridesTruncated: allOverrides.length > overrides.length,
             };
         });
 
-        return ok(c, { users: usersWithRoles });
+        return ok(c, {
+            users: usersWithRoles,
+            pagination: { page, limit, hasMore },
+        });
     } catch (error: unknown) {
         console.error("Get admin users error:", error);
         throw error;
@@ -317,14 +375,15 @@ app.openapi(listUsersRoute, async (c) => {
 });
 
 const createAdminSchema = z.object({
-    name: z.string().min(1),
-    email: z.string().email(),
-    roleId: z.string().optional()
+    name: z.string().min(1).max(100),
+    email: z.string().email().max(320),
+    roleId: z.string().max(100).optional()
 });
 
 const createUserRoute = createRoute({
     method: "post",
     path: "/users",
+    operationId: "dashboard.team.users.invite",
     tags: ["Admin - Auth Management"],
     summary: "Create a new admin user",
     request: {
@@ -464,6 +523,7 @@ app.openapi(createUserRoute, async (c) => {
 const resendAdminSetupRoute = createRoute({
     method: "post",
     path: "/users/{id}/resend-setup",
+    operationId: "dashboard.team.users.resend_invitation",
     tags: ["Admin - Auth Management"],
     summary: "Resend an invited administrator's password setup link",
     request: {
@@ -547,6 +607,7 @@ app.openapi(resendAdminSetupRoute, async (c) => {
 const deleteUserRoute = createRoute({
     method: "delete",
     path: "/users/{id}",
+    operationId: "dashboard.team.users.revoke_invitation",
     tags: ["Admin - Auth Management"],
     summary: "Revoke an unfinished administrator invitation",
     request: {
@@ -635,6 +696,7 @@ app.openapi(deleteUserRoute, async (c) => {
 const setAdminSuspensionRoute = createRoute({
     method: "post",
     path: "/users/{id}/suspension",
+    operationId: "dashboard.team.users.set_suspension",
     tags: ["Admin - Auth Management"],
     summary: "Suspend or reactivate an administrator",
     request: {
@@ -806,7 +868,7 @@ app.openapi(setAdminSuspensionRoute, async (c) => {
 // ─────────────────────────────────────────
 
 const changePasswordSchema = z.object({
-    currentPassword: z.string().min(1),
+    currentPassword: z.string().min(1).max(AUTH_PASSWORD_MAX_LENGTH),
     newPassword: z.string()
         .min(AUTH_PASSWORD_MIN_LENGTH, `New password must be at least ${AUTH_PASSWORD_MIN_LENGTH} characters`)
         .max(AUTH_PASSWORD_MAX_LENGTH, `New password must be at most ${AUTH_PASSWORD_MAX_LENGTH} characters`)
@@ -815,6 +877,7 @@ const changePasswordSchema = z.object({
 const changePasswordRoute = createRoute({
     method: "post",
     path: "/change-password",
+    operationId: "dashboard.account.password_change",
     tags: ["Admin - Auth Management"],
     summary: "Change current user password",
     request: {
@@ -865,20 +928,29 @@ app.openapi(changePasswordRoute, async (c) => {
 });
 
 const updateProfileSchema = z.object({
-    name: z.string().min(2, "Name must be at least 2 characters").optional(),
-    image: z.string().url().optional().nullable()
+    name: z.string().min(2, "Name must be at least 2 characters").max(100).optional(),
+    image: z.string().url().max(2048).refine((value) => {
+        const protocol = new URL(value).protocol;
+        return protocol === "https:" || protocol === "http:";
+    }, "Profile image must use HTTP or HTTPS").optional().nullable()
 });
 
 const updateProfileRoute = createRoute({
     method: "post",
     path: "/update-profile",
+    operationId: "dashboard.account.profile_update",
     tags: ["Admin - Auth Management"],
     summary: "Update current user profile",
     request: {
         body: { content: { "application/json": { schema: updateProfileSchema } } }
     },
     responses: {
-        200: { description: "Profile updated", content: { "application/json": { schema: successEnvelope(z.object({ user: z.object({ id: z.string(), name: z.string(), email: z.string(), image: z.string().nullable() }).passthrough().nullable().optional() })) } } },
+        200: { description: "Profile updated", content: { "application/json": { schema: successEnvelope(z.object({ user: z.object({
+            id: z.string().max(100),
+            name: z.string().max(100),
+            email: z.string().max(320),
+            image: z.string().max(2048).nullable(),
+        }).nullable().optional() })) } } },
         ...errorResponses,
     }
 });
@@ -901,11 +973,68 @@ app.openapi(updateProfileRoute, async (c) => {
             .where(eq(user.id, sessionUser.id))
             .get();
 
-        return ok(c, { user: updatedUser });
+        return ok(c, {
+            user: updatedUser
+                ? {
+                    id: updatedUser.id.slice(0, 100),
+                    name: updatedUser.name.slice(0, 100),
+                    email: updatedUser.email.slice(0, 320),
+                    image: updatedUser.image?.slice(0, 2048) ?? null,
+                }
+                : null,
+        });
     } catch (error: unknown) {
         console.error("Error updating profile:", error);
         throw error;
     }
+});
+
+const createScannerLinkRoute = createRoute({
+    method: "post",
+    path: "/scanner-link",
+    operationId: "dashboard.scanner_device.create_link",
+    tags: ["Admin - Auth Management"],
+    summary: "Create a one-time scanner device pairing token",
+    responses: {
+        201: {
+            description: "One-time scanner pairing token created",
+            content: {
+                "application/json": {
+                    schema: successEnvelope(z.object({
+                        token: z.string().regex(/^sct_[a-f0-9]{64}$/),
+                        expiresAt: z.string().datetime(),
+                    })),
+                },
+            },
+        },
+        ...errorResponses,
+    },
+});
+
+app.openapi(createScannerLinkRoute, async (c) => {
+    const db = c.get("db");
+    const principal = c.get("user");
+    const owner = await db
+        .select({ name: user.name, email: user.email })
+        .from(user)
+        .where(eq(user.id, principal.id))
+        .get();
+    if (!owner) throw new NotFoundError("Administrator not found");
+
+    const token = createOpaqueScannerToken();
+    const nowMs = Date.now();
+    await createScannerTokenClaim(db, {
+        token,
+        adminId: principal.id,
+        adminName: owner.name || owner.email,
+        nowMs,
+    });
+
+    c.header("Cache-Control", "private, no-store, max-age=0");
+    return created(c, {
+        token,
+        expiresAt: new Date(nowMs + SCANNER_TOKEN_TTL_SECONDS * 1_000).toISOString(),
+    });
 });
 
 // ─────────────────────────────────────────
@@ -915,10 +1044,11 @@ app.openapi(updateProfileRoute, async (c) => {
 const get2faInfoRoute = createRoute({
     method: "get",
     path: "/2fa/info",
+    operationId: "dashboard.account.two_factor.get",
     tags: ["Admin - Auth Management"],
     summary: "Get 2FA info for current user",
     responses: {
-        200: { description: "2FA info", content: { "application/json": { schema: successEnvelope(z.object({ method: z.string(), twoFactorEnabled: z.boolean(), email: z.string() })) } } },
+        200: { description: "2FA info", content: { "application/json": { schema: successEnvelope(z.object({ method: z.string().max(20), twoFactorEnabled: z.boolean(), email: z.string().max(320) })) } } },
         ...errorResponses,
     }
 });
@@ -936,15 +1066,16 @@ app.openapi(get2faInfoRoute, async (c) => {
     if (!userData) throw new NotFoundError("User not found");
 
     return ok(c, {
-        method: userData.twoFactorMethod || "email",
+        method: (userData.twoFactorMethod || "email").slice(0, 20),
         twoFactorEnabled: userData.twoFactorEnabled,
-        email: userData.email
+        email: userData.email.slice(0, 320)
     });
 });
 
 const start2faMethodChallengeRoute = createRoute({
     method: "post",
     path: "/2fa/method-challenge",
+    operationId: "dashboard.account.two_factor.method_challenge",
     tags: ["Admin - Auth Management"],
     summary: "Start a staged two-factor method change",
     request: {
@@ -953,7 +1084,7 @@ const start2faMethodChallengeRoute = createRoute({
                 "application/json": {
                     schema: z.object({
                         method: z.enum(["totp", "email"]),
-                        password: z.string().min(1),
+                        password: z.string().min(1).max(AUTH_PASSWORD_MAX_LENGTH),
                     }),
                 },
             },
@@ -965,9 +1096,9 @@ const start2faMethodChallengeRoute = createRoute({
             content: {
                 "application/json": {
                     schema: successEnvelope(z.object({
-                        challengeId: z.string(),
-                        totpUri: z.string().nullable(),
-                        expiresAt: z.string(),
+                        challengeId: z.string().max(100),
+                        totpUri: z.string().max(4096).nullable(),
+                        expiresAt: z.string().datetime(),
                     })),
                 },
             },
@@ -1066,6 +1197,7 @@ const update2faMethodSchema = z.union([
 const update2faMethodRoute = createRoute({
     method: "post",
     path: "/2fa/method",
+    operationId: "dashboard.account.two_factor.method_update",
     tags: ["Admin - Auth Management"],
     summary: "Update 2FA method",
     request: {
@@ -1083,7 +1215,7 @@ const update2faMethodRoute = createRoute({
             content: {
                 "application/json": {
                     schema: successEnvelope(z.object({
-                        backupCodes: z.array(z.string()).optional(),
+                        backupCodes: z.array(z.string().max(100)).max(20).optional(),
                     })),
                 },
             },
@@ -1415,6 +1547,7 @@ app.openapi(update2faMethodRoute, async (c) => {
 const verify2faRoute = createRoute({
     method: "post",
     path: "/2fa/verify",
+    operationId: "dashboard.account.two_factor.verify",
     tags: ["Admin - Auth Management"],
     summary: "Verify 2FA code",
     request: {
@@ -1494,9 +1627,9 @@ app.openapi(verify2faRoute, async (c) => {
 const accountSessionSchema = z.object({
     commandId: z.string().regex(/^acs_[A-Za-z0-9_-]{43}$/),
     current: z.boolean(),
-    deviceLabel: z.string(),
+    deviceLabel: z.string().max(100),
     deviceType: z.enum(["desktop", "mobile", "tablet", "unknown"]),
-    networkHint: z.string().nullable(),
+    networkHint: z.string().max(100).nullable(),
     twoFactorVerified: z.boolean(),
     impersonated: z.boolean(),
     createdAt: z.string().datetime(),
@@ -1560,6 +1693,22 @@ async function loadVisibleOtherAccountSessions(
         .limit(MAX_VISIBLE_ACCOUNT_SESSIONS);
 }
 
+async function loadVisibleAgentOwnedAccountSessions(
+    db: Database,
+    userId: string,
+    now: Date,
+) {
+    return db
+        .select(accountSessionProjection)
+        .from(sessionTable)
+        .where(and(
+            eq(sessionTable.userId, userId),
+            gt(sessionTable.expiresAt, now),
+        ))
+        .orderBy(desc(sessionTable.updatedAt))
+        .limit(MAX_VISIBLE_ACCOUNT_SESSIONS + 1);
+}
+
 function activeCurrentAccountSessionGuard(
     userId: string,
     currentSessionId: string,
@@ -1576,6 +1725,7 @@ function activeCurrentAccountSessionGuard(
 const listAccountSessionsRoute = createRoute({
     method: "get",
     path: "/sessions",
+    operationId: "dashboard.account.sessions.list",
     tags: ["Admin - Auth Management"],
     summary: "List active sessions for the current user",
     responses: {
@@ -1584,7 +1734,7 @@ const listAccountSessionsRoute = createRoute({
             content: {
                 "application/json": {
                     schema: successEnvelope(z.object({
-                        sessions: z.array(accountSessionSchema),
+                        sessions: z.array(accountSessionSchema).max(MAX_VISIBLE_ACCOUNT_SESSIONS),
                         hasMore: z.boolean(),
                     })),
                 },
@@ -1599,9 +1749,29 @@ app.openapi(listAccountSessionsRoute, async (c) => {
     const db = c.get("db");
     const sessionUser = c.get("user");
     const currentSession = c.get("session");
+    const isAgentPrincipal = Boolean(c.get("agentPrincipal"));
+
+    if (!currentSession && !isAgentPrincipal) {
+        throw new UnauthorizedError("No active session found");
+    }
+
+    const createCommandId = await createAccountSessionCommandIdFactory(
+        getAccountSessionCommandSecret(c.env),
+    );
 
     if (!currentSession) {
-        throw new UnauthorizedError("No active session found");
+        const rows = await loadVisibleAgentOwnedAccountSessions(
+            db,
+            sessionUser.id,
+            new Date(),
+        );
+        const visibleRows = rows.slice(0, MAX_VISIBLE_ACCOUNT_SESSIONS);
+        return ok(c, {
+            sessions: await Promise.all(visibleRows.map(async (row) =>
+                presentAccountSession(row, "", await createCommandId(row.id))
+            )),
+            hasMore: rows.length > visibleRows.length,
+        });
     }
 
     const now = new Date();
@@ -1626,9 +1796,6 @@ app.openapi(listAccountSessionsRoute, async (c) => {
         0,
         MAX_VISIBLE_ACCOUNT_SESSIONS - 1,
     );
-    const createCommandId = await createAccountSessionCommandIdFactory(
-        getAccountSessionCommandSecret(c.env),
-    );
     const visibleSessions = [current, ...visibleOtherSessions];
     const presentedSessions = await Promise.all(
         visibleSessions.map(async (row) =>
@@ -1649,6 +1816,7 @@ app.openapi(listAccountSessionsRoute, async (c) => {
 const revokeAccountSessionRoute = createRoute({
     method: "delete",
     path: "/sessions/{commandId}",
+    operationId: "dashboard.account.sessions.revoke",
     tags: ["Admin - Auth Management"],
     summary: "Revoke another session for the current user",
     request: {
@@ -1671,37 +1839,45 @@ app.openapi(revokeAccountSessionRoute, async (c) => {
     const sessionUser = c.get("user");
     const currentSession = c.get("session");
     const { commandId } = c.req.valid("param");
+    const isAgentPrincipal = Boolean(c.get("agentPrincipal"));
 
-    if (!currentSession) {
+    if (!currentSession && !isAgentPrincipal) {
         throw new UnauthorizedError("No active session found");
-    }
-    const now = new Date();
-    const current = await loadActiveCurrentAccountSession(
-        db,
-        sessionUser.id,
-        currentSession.id,
-        now,
-    );
-    if (!current) {
-        throw new UnauthorizedError("The current session is no longer active");
     }
 
     const createCommandId = await createAccountSessionCommandIdFactory(
         getAccountSessionCommandSecret(c.env),
     );
-    if (commandId === await createCommandId(current.id)) {
-        throw new ValidationError(
-            "The current session cannot be revoked here. Use Sign out instead.",
-        );
-    }
-
-    const otherSessions = await loadVisibleOtherAccountSessions(
-        db,
-        sessionUser.id,
-        currentSession.id,
-        now,
-    );
-    const candidates = otherSessions.slice(0, MAX_VISIBLE_ACCOUNT_SESSIONS - 1);
+    const now = new Date();
+    const candidates = currentSession
+        ? await (async () => {
+            const current = await loadActiveCurrentAccountSession(
+                db,
+                sessionUser.id,
+                currentSession.id,
+                now,
+            );
+            if (!current) {
+                throw new UnauthorizedError("The current session is no longer active");
+            }
+            if (commandId === await createCommandId(current.id)) {
+                throw new ValidationError(
+                    "The current session cannot be revoked here. Use Sign out instead.",
+                );
+            }
+            const rows = await loadVisibleOtherAccountSessions(
+                db,
+                sessionUser.id,
+                currentSession.id,
+                now,
+            );
+            return rows.slice(0, MAX_VISIBLE_ACCOUNT_SESSIONS - 1);
+        })()
+        : (await loadVisibleAgentOwnedAccountSessions(
+            db,
+            sessionUser.id,
+            now,
+        )).slice(0, MAX_VISIBLE_ACCOUNT_SESSIONS);
     const candidateCommandIds = await Promise.all(
         candidates.map((candidate) => createCommandId(candidate.id)),
     );
@@ -1711,14 +1887,20 @@ app.openapi(revokeAccountSessionRoute, async (c) => {
         throw new NotFoundError("Session not found");
     }
 
-    const revoked = await db
-        .delete(sessionTable)
-        .where(and(
+    const revokeWhere = currentSession
+        ? and(
             eq(sessionTable.id, targetSessionId),
             eq(sessionTable.userId, sessionUser.id),
             ne(sessionTable.id, currentSession.id),
             activeCurrentAccountSessionGuard(sessionUser.id, currentSession.id),
-        ))
+        )
+        : and(
+            eq(sessionTable.id, targetSessionId),
+            eq(sessionTable.userId, sessionUser.id),
+        );
+    const revoked = await db
+        .delete(sessionTable)
+        .where(revokeWhere)
         .returning({ id: sessionTable.id });
 
     if (revoked.length === 0) {
@@ -1731,6 +1913,7 @@ app.openapi(revokeAccountSessionRoute, async (c) => {
 const revokeOtherAccountSessionsRoute = createRoute({
     method: "delete",
     path: "/sessions",
+    operationId: "dashboard.account.sessions.revoke_others",
     tags: ["Admin - Auth Management"],
     summary: "Revoke all other sessions for the current user",
     responses: {
@@ -1754,9 +1937,22 @@ app.openapi(revokeOtherAccountSessionsRoute, async (c) => {
     const db = c.get("db");
     const sessionUser = c.get("user");
     const currentSession = c.get("session");
+    const isAgentPrincipal = Boolean(c.get("agentPrincipal"));
 
-    if (!currentSession) {
+    if (!currentSession && !isAgentPrincipal) {
         throw new UnauthorizedError("No active session found");
+    }
+    if (!currentSession) {
+        const revoked = await db
+            .delete(sessionTable)
+            .where(eq(sessionTable.userId, sessionUser.id))
+            .returning({ id: sessionTable.id });
+        return ok(c, {
+            message: revoked.length === 0
+                ? "No active browser sessions were found"
+                : "Browser sessions signed out successfully",
+            revokedCount: revoked.length,
+        });
     }
     const current = await loadActiveCurrentAccountSession(
         db,
@@ -1788,6 +1984,7 @@ app.openapi(revokeOtherAccountSessionsRoute, async (c) => {
 const getAccountSecurityRoute = createRoute({
     method: "get",
     path: "/account-security",
+    operationId: "dashboard.account.security_get",
     tags: ["Admin - Auth Management"],
     summary: "Get current user account security data",
     responses: {

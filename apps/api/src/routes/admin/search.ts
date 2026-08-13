@@ -14,6 +14,7 @@ const app = new OpenAPIHono<{ Bindings: Env }>();
 const searchRoute = createRoute({
     method: "get",
     path: "/",
+    operationId: "dashboard.search.get_search",
     tags: ["Admin - Search"],
     summary: "Search across products, pages, and categories",
     request: {
@@ -87,6 +88,7 @@ app.openapi(searchRoute, async (c) => {
 const reindexRoute = createRoute({
     method: "post",
     path: "/reindex",
+    operationId: "dashboard.search_reindex.reindex",
     tags: ["Admin - Search"],
     summary: "Trigger search reindex",
     responses: {

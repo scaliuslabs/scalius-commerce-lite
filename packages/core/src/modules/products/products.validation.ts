@@ -110,7 +110,7 @@ const productBaseSchema = z.object({
     name: z.string().min(3).max(100),
     description: z.string().min(10).nullable(),
     price: z.number().min(0).max(MAX_PRODUCT_PRICE),
-    categoryId: z.string().min(1),
+    categoryId: z.string().min(1).nullable(),
     isActive: z.boolean(),
     discountType: z.enum(["percentage", "flat"]).optional(),
     discountPercentage: z.number().min(0).max(100).nullish(),
@@ -125,7 +125,7 @@ const productBaseSchema = z.object({
     noIndex: z.boolean().optional().default(false),
     excludeFromSitemap: z.boolean().optional().default(false),
     excludeFromProductFeed: z.boolean().optional().default(false),
-    productCondition: productConditionSchema,
+    productCondition: productConditionSchema.nullable(),
     slug: z
         .string()
         .min(3)
@@ -152,6 +152,8 @@ function requireCanonicalProductHandle(
 /** Schema for creating a new product (POST /api/products) */
 export const createProductSchema = productBaseSchema
     .extend({
+        categoryId: z.string().min(1),
+        productCondition: productConditionSchema,
         optionMatrix: createProductOptionMatrixSchema.optional(),
     })
     .superRefine(requireCanonicalProductHandle);

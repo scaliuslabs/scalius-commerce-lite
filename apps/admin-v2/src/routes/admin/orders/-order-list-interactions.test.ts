@@ -47,6 +47,9 @@ const DATA_TABLE_TOOLBAR_SOURCE = fileURLToPath(
     import.meta.url,
   ),
 );
+const ORDER_EXPORT_PARAMS_SOURCE = fileURLToPath(
+  new URL("./-order-export-search-params.ts", import.meta.url),
+);
 
 describe("order list interactions", () => {
   it("guards bulk shipping against re-entry and partial-success reselection", () => {
@@ -181,7 +184,7 @@ describe("order list interactions", () => {
     expect(mutationsSource).toContain("queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() })");
   });
 
-  it("labels the bounded page export separately from the server recovery export", () => {
+  it("labels the bounded server order export separately from the recovery export", () => {
     const routeSource = readFileSync(ORDERS_ROUTE_SOURCE, "utf8");
     const toolbarSource = readFileSync(ORDER_TOOLBAR_SOURCE, "utf8");
 
@@ -189,8 +192,11 @@ describe("order list interactions", () => {
     expect(toolbarSource).toContain("{exportLabel}");
     expect(toolbarSource).not.toContain("Export CSV");
     expect(routeSource).toContain('"Export recovery CSV"');
-    expect(routeSource).toContain('"Export current page"');
-    expect(routeSource).toContain("orders from this page exported");
+    expect(routeSource).toContain('"Export filtered orders"');
+    expect(routeSource).toContain('"/api/v1/admin/orders/export"');
+    expect(readFileSync(ORDER_EXPORT_PARAMS_SOURCE, "utf8")).toContain(
+      'params.set("maxRows", "1000")',
+    );
   });
 
   it("serializes order date filters as date-only values", () => {
@@ -286,18 +292,17 @@ describe("order list interactions", () => {
 
   it("uses a server-backed export for hosted-payment recovery filters", () => {
     const routeSource = readFileSync(ORDERS_ROUTE_SOURCE, "utf8");
+    const paramsSource = readFileSync(ORDER_EXPORT_PARAMS_SOURCE, "utf8");
 
-    expect(routeSource).toContain("function buildRecoveryExportSearchParams");
-    expect(routeSource).toContain("if (!search.paymentRecovery) return null");
-    expect(routeSource).toContain('params.set("state", search.paymentRecovery)');
-    expect(routeSource).toContain("/api/v1/admin/orders/payment-recovery/export?");
-    expect(routeSource).toContain('`payment-recovery-${new Date().toISOString().split("T")[0]}.csv`');
+    expect(routeSource).toContain('from "./-order-export-search-params"');
+    expect(paramsSource).toContain("export function buildRecoveryExportSearchParams");
+    expect(paramsSource).toContain("if (!search.paymentRecovery) return null");
+    expect(paramsSource).toContain('params.set("state", search.paymentRecovery)');
+    expect(routeSource).toContain('"/api/v1/admin/orders/payment-recovery/export"');
+    expect(routeSource).toContain('`payment-recovery-${new Date().toISOString().slice(0, 10)}.csv`');
     expect(routeSource).toContain('response.headers.get("X-Export-Row-Count")');
     expect(routeSource).toContain('response.headers.get("X-Export-Limited") === "true"');
-    expect(routeSource).toContain('"Payment Recovery"');
-    expect(routeSource).toContain('"Recovery Gateway"');
-    expect(routeSource).toContain('"Recovery Status"');
-    expect(routeSource).toContain("order.paymentRecovery?.attempts ?? 0");
+    expect(routeSource).toContain("buildRecoveryExportSearchParams(search)");
   });
 
   it("shows fulfillment state in desktop and mobile order rows", () => {

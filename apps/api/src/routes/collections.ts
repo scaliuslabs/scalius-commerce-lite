@@ -48,7 +48,7 @@ const storefrontCollectionSchema = z.object({
   excludeFromSitemap: z.boolean(),
   createdAt: z.string().nullable(),
   updatedAt: z.string().nullable(),
-}).passthrough();
+});
 
 const storefrontCollectionDetailSchema = storefrontCollectionSchema.extend({
   description: z.string().nullable(),
@@ -62,10 +62,19 @@ const collectionProductSchema = z.object({
   name: z.string(),
   price: z.number(),
   slug: z.string(),
+  discountType: z.string().nullable(),
   discountPercentage: z.number().nullable(),
+  discountAmount: z.number().nullable(),
   imageUrl: z.string().nullable(),
+  imageMediaId: z.string().nullable(),
+  imageAlt: z.string().nullable(),
   discountedPrice: z.number(),
-}).passthrough();
+  priceVaries: z.boolean(),
+  availableForSale: z.boolean(),
+  freeDelivery: z.boolean(),
+  categoryId: z.string().nullable(),
+  hasVariants: z.boolean(),
+});
 
 const collectionFacetSchema = z.object({
   id: z.string(),
@@ -108,6 +117,7 @@ const collectionCatalogQuerySchema = z.object({
 const listCollectionsRoute = createRoute({
   method: "get",
   path: "/",
+  operationId: "storefront.collections.list",
   tags: ["Collections"],
   summary: "List all active collections",
   responses: {
@@ -163,6 +173,7 @@ app.openapi(listCollectionsRoute, async (c) => {
 const getCollectionByIdRoute = createRoute({
   method: "get",
   path: "/{id}",
+  operationId: "storefront.collections.get",
   tags: ["Collections"],
   summary: "Get collection by ID with resolved products",
   request: {
@@ -176,7 +187,7 @@ const getCollectionByIdRoute = createRoute({
       description: "Collection details with resolved products",
       content: { "application/json": { schema: successEnvelope(z.object({
         collection: storefrontCollectionDetailSchema,
-        categories: z.array(z.object({ id: z.string(), name: z.string(), slug: z.string() }).passthrough()),
+        categories: z.array(z.object({ id: z.string(), name: z.string(), slug: z.string() })),
         products: z.array(collectionProductSchema),
         featuredProduct: collectionProductSchema.optional(),
         pagination: paginationSchema,

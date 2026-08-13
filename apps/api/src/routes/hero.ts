@@ -56,6 +56,7 @@ const listSlidersRoute = createRoute({
   path: "/sliders",
   tags: ["Hero"],
   summary: "Get all active hero sliders",
+  operationId: "storefront.hero_sliders.list",
   request: {
     query: z.object({
       type: z.enum(["desktop", "mobile"]).optional().openapi({ description: "Slider type filter" })
@@ -181,6 +182,7 @@ const getSliderByIdRoute = createRoute({
   path: "/sliders/{id}",
   tags: ["Hero"],
   summary: "Get hero slider by ID",
+  operationId: "storefront.hero_sliders.get",
   request: {
     params: z.object({
       id: z.string(),

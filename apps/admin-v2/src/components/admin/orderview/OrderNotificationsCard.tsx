@@ -335,7 +335,12 @@ export function OrderNotificationsCard({ order }: { order: Order }) {
               <AlertTriangle className="h-4 w-4" />
               Notification history unavailable
             </div>
-            <Button className="min-h-11 sm:min-h-9" variant="outline" size="sm" onClick={() => void refetch()}>
+            <Button
+              className="min-h-11 sm:min-h-9"
+              variant="outline"
+              size="sm"
+              onClick={() => void refetch()}
+            >
               Retry
             </Button>
           </div>

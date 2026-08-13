@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { encryptCredentials } from "../../utils/credential-encryption";
-import { getCapiSettings } from "./meta.service";
+import { getCapiSettings, logCapiEvent } from "./meta.service";
 
 const baseSettings = {
   id: "singleton",
@@ -53,5 +53,58 @@ describe("getCapiSettings", () => {
     } finally {
       warnSpy.mockRestore();
     }
+  });
+});
+
+describe("logCapiEvent", () => {
+  it("stores bounded summaries instead of raw provider payloads or errors", async () => {
+    const values = vi.fn(async () => undefined);
+    const db = {
+      insert: vi.fn(() => ({ values })),
+      delete: vi.fn(() => ({ where: vi.fn(async () => undefined) })),
+    };
+
+    await logCapiEvent(db as never, {
+      eventId: "Purchase:event_1",
+      eventName: "Purchase",
+      status: "failed",
+      requestPayload: JSON.stringify({
+        data: [{
+          event_name: "Purchase",
+          action_source: "website",
+          user_data: { em: ["hashed-email"], ph: ["hashed-phone"] },
+          custom_data: { order_id: "order-secret" },
+        }],
+        test_event_code: "TEST-secret",
+      }),
+      responsePayload: JSON.stringify({
+        error: {
+          type: "OAuthException",
+          code: 190,
+          message: "Invalid token secret-provider-token",
+        },
+      }),
+      errorMessage: "owner@example.com token secret-provider-token",
+      eventTime: 1_800_000_000,
+    });
+
+    expect(values).toHaveBeenCalledWith(expect.objectContaining({
+      requestPayload: JSON.stringify({
+        eventCount: 1,
+        events: [{ eventName: "Purchase", actionSource: "website" }],
+        truncated: false,
+      }),
+      responsePayload: JSON.stringify({
+        eventsReceived: null,
+        hasError: true,
+        errorType: "OAuthException",
+        errorCode: 190,
+      }),
+      errorMessage: "Meta delivery failed. Review provider configuration.",
+    }));
+    expect(JSON.stringify(values.mock.calls)).not.toContain("hashed-email");
+    expect(JSON.stringify(values.mock.calls)).not.toContain("order-secret");
+    expect(JSON.stringify(values.mock.calls)).not.toContain("secret-provider-token");
+    expect(JSON.stringify(values.mock.calls)).not.toContain("owner@example.com");
   });
 });

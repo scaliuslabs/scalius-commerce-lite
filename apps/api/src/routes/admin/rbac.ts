@@ -21,6 +21,10 @@ import { ok, created } from "../../utils/api-response";
 import { UnauthorizedError, ForbiddenError, NotFoundError, ValidationError, ConflictError } from "../../utils/api-error";
 import { successEnvelope, errorResponses, conflictResponse } from "../../schemas/responses";
 const app = new OpenAPIHono<{ Bindings: Env }>();
+const ROLE_LIST_PAGE_LIMIT = 1;
+const ROLE_PERMISSION_LIMIT = 200;
+const ACCOUNT_ROLE_LIMIT = 10;
+const ACCOUNT_OVERRIDE_LIMIT = 100;
 
 type AdminRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>;
 type AdminRouteContext<R extends RouteConfig> = Parameters<AdminRouteHandler<R>>[0];
@@ -50,51 +54,66 @@ const createRoleSchema = z.object({
     name: z.string().min(1).max(50).regex(/^[a-z0-9_]+$/, "Name must be lowercase alphanumeric with underscores"),
     displayName: z.string().min(1).max(100),
     description: z.string().max(500).optional(),
-    permissions: z.array(z.string()).default([])
+    permissions: z.array(z.string().max(150)).max(200).default([])
 });
 
 const updateRoleSchema = z.object({
     displayName: z.string().min(1).max(100).optional(),
     description: z.string().max(500).optional(),
-    permissions: z.array(z.string()).optional()
+    permissions: z.array(z.string().max(150)).max(200).optional()
 });
 
 const userRoleSchema = z.object({
-    userId: z.string().min(1),
-    roleId: z.string().min(1)
+    userId: z.string().min(1).max(100),
+    roleId: z.string().min(1).max(100)
 });
 
 const setOverrideSchema = z.object({
-    userId: z.string().min(1),
-    permission: z.string().min(1),
+    userId: z.string().min(1).max(100),
+    permission: z.string().min(1).max(150),
     granted: z.boolean()
 });
 
 const removeOverrideSchema = z.object({
-    userId: z.string().min(1),
-    permission: z.string().min(1)
+    userId: z.string().min(1).max(100),
+    permission: z.string().min(1).max(150)
 });
 
 // ── List Roles ──
 
 const roleSchema = z.object({
-    id: z.string(),
-    name: z.string(),
-    displayName: z.string(),
-    description: z.string().nullable(),
+    id: z.string().max(100),
+    name: z.string().max(50),
+    displayName: z.string().max(100),
+    description: z.string().max(500).nullable(),
     isSystem: z.boolean(),
-    permissions: z.array(z.string()),
+    permissions: z.array(z.string().max(150)).max(ROLE_PERMISSION_LIMIT),
+    permissionsTruncated: z.boolean().optional(),
     createdAt: z.union([z.string(), z.number()]),
     updatedAt: z.union([z.string(), z.number()]),
-}).passthrough();
+});
 
 const listRolesRoute = createRoute({
     method: "get",
     path: "/roles",
+    operationId: "dashboard.team.roles.list",
     tags: ["Admin - RBAC"],
     summary: "List all roles with permissions",
+    request: {
+        query: z.object({
+            page: z.coerce.number().int().min(1).default(1),
+            limit: z.coerce.number().int().min(1).max(ROLE_LIST_PAGE_LIMIT).default(ROLE_LIST_PAGE_LIMIT),
+        }),
+    },
     responses: {
-        200: { description: "Role list", content: { "application/json": { schema: successEnvelope(z.object({ roles: z.array(roleSchema) })) } } },
+        200: { description: "Role list", content: { "application/json": { schema: successEnvelope(z.object({
+            roles: z.array(roleSchema),
+            pagination: z.object({
+                page: z.number().int().min(1),
+                limit: z.number().int().min(1).max(ROLE_LIST_PAGE_LIMIT),
+                hasMore: z.boolean(),
+            }),
+        })) } } },
         ...errorResponses,
     }
 });
@@ -114,8 +133,15 @@ app.openapi(listRolesRoute, async (c) => {
             throw new ForbiddenError("Permission denied");
         }
 
-        const rolesWithPermissions = await getAllRolesWithPermissions(db);
-        return ok(c, { roles: rolesWithPermissions });
+        const { page, limit } = c.req.valid("query");
+        const roleRows = await getAllRolesWithPermissions(db, {
+            limit: limit + 1,
+            offset: (page - 1) * limit,
+        });
+        return ok(c, {
+            roles: roleRows.slice(0, limit),
+            pagination: { page, limit, hasMore: roleRows.length > limit },
+        });
     } catch (error: unknown) {
         console.error("Error fetching roles:", error);
         throw error;
@@ -127,6 +153,7 @@ app.openapi(listRolesRoute, async (c) => {
 const createRoleRoute = createRoute({
     method: "post",
     path: "/roles",
+    operationId: "dashboard.team.roles.create",
     tags: ["Admin - RBAC"],
     summary: "Create a new role",
     request: {
@@ -215,6 +242,7 @@ app.openapi(createRoleRoute, (async (c: AdminRouteContext<typeof createRoleRoute
 const getRoleRoute = createRoute({
     method: "get",
     path: "/roles/{id}",
+    operationId: "dashboard.team.roles.get",
     tags: ["Admin - RBAC"],
     summary: "Get a single role with permissions",
     request: {
@@ -248,12 +276,20 @@ app.openapi(getRoleRoute, (async (c: AdminRouteContext<typeof getRoleRoute>) => 
             throw new NotFoundError("Role not found");
         }
 
-        const perms = await getRolePermissions(db, roleId);
+        const allPerms = await getRolePermissions(db, roleId);
+        const perms = allPerms.slice(0, ROLE_PERMISSION_LIMIT).map((name) => name.slice(0, 150));
 
         return ok(c, {
             role: {
-                ...role[0],
-                permissions: perms
+                id: role[0]!.id.slice(0, 100),
+                name: role[0]!.name.slice(0, 50),
+                displayName: role[0]!.displayName.slice(0, 100),
+                description: role[0]!.description?.slice(0, 500) ?? null,
+                isSystem: role[0]!.isSystem,
+                createdAt: role[0]!.createdAt,
+                updatedAt: role[0]!.updatedAt,
+                permissions: perms,
+                permissionsTruncated: allPerms.length > perms.length,
             }
         });
     } catch (error: unknown) {
@@ -267,6 +303,7 @@ app.openapi(getRoleRoute, (async (c: AdminRouteContext<typeof getRoleRoute>) => 
 const updateRoleRoute = createRoute({
     method: "put",
     path: "/roles/{id}",
+    operationId: "dashboard.team.roles.update",
     tags: ["Admin - RBAC"],
     summary: "Update a role",
     request: {
@@ -371,6 +408,7 @@ app.openapi(updateRoleRoute, async (c) => {
 const deleteRoleRoute = createRoute({
     method: "delete",
     path: "/roles/{id}",
+    operationId: "dashboard.team.roles.delete",
     tags: ["Admin - RBAC"],
     summary: "Delete a role",
     request: {
@@ -435,6 +473,7 @@ app.openapi(deleteRoleRoute, async (c) => {
 const assignRoleRoute = createRoute({
     method: "post",
     path: "/user-roles",
+    operationId: "dashboard.team.user_roles.assign",
     tags: ["Admin - RBAC"],
     summary: "Assign a role to a user",
     request: {
@@ -512,6 +551,7 @@ app.openapi(assignRoleRoute, async (c) => {
 const removeRoleRoute = createRoute({
     method: "delete",
     path: "/user-roles",
+    operationId: "dashboard.team.user_roles.remove",
     tags: ["Admin - RBAC"],
     summary: "Remove a role from a user",
     request: {
@@ -565,6 +605,7 @@ app.openapi(removeRoleRoute, async (c) => {
 const setOverrideRoute = createRoute({
     method: "post",
     path: "/user-permissions",
+    operationId: "dashboard.team.permission_overrides.set",
     tags: ["Admin - RBAC"],
     summary: "Set a permission override for a user",
     request: {
@@ -631,6 +672,7 @@ app.openapi(setOverrideRoute, async (c) => {
 const removeOverrideRoute = createRoute({
     method: "delete",
     path: "/user-permissions",
+    operationId: "dashboard.team.permission_overrides.remove",
     tags: ["Admin - RBAC"],
     summary: "Remove a permission override",
     request: {
@@ -690,10 +732,27 @@ app.openapi(removeOverrideRoute, async (c) => {
 const listPermissionsRoute = createRoute({
     method: "get",
     path: "/permissions",
+    operationId: "dashboard.team.permissions.list",
     tags: ["Admin - RBAC"],
     summary: "List all available permissions",
     responses: {
-        200: { description: "Permissions list", content: { "application/json": { schema: successEnvelope(z.object({ permissions: z.array(z.object({ id: z.string(), name: z.string(), description: z.string().nullable(), category: z.string() }).passthrough()), grouped: z.record(z.string(), z.array(z.object({ name: z.string(), description: z.string() }))) })) } } },
+        200: { description: "Permissions list", content: { "application/json": { schema: successEnvelope(z.object({
+            permissions: z.array(z.object({
+                id: z.string().max(100),
+                name: z.string().max(150),
+                description: z.string().max(500).nullable(),
+                category: z.string().max(100),
+            })).max(100),
+            grouped: z.record(z.string().max(100), z.array(z.object({
+                name: z.string().max(150),
+                displayName: z.string().max(100),
+                description: z.string().max(500),
+                resource: z.string().max(100).optional(),
+                action: z.string().max(100).optional(),
+                category: z.string().max(100),
+                isSensitive: z.boolean(),
+            })).max(100)),
+        })) } } },
         ...errorResponses,
     }
 });
@@ -713,8 +772,26 @@ app.openapi(listPermissionsRoute, async (c) => {
             throw new ForbiddenError("Permission denied");
         }
 
-        const allPermissions = await db.select().from(permissions);
-        const groupedPermissions = getPermissionsByCategory();
+        const allPermissions = (await db.select().from(permissions).limit(100)).map((permission) => ({
+            id: permission.id.slice(0, 100),
+            name: permission.name.slice(0, 150),
+            description: null,
+            category: permission.category.slice(0, 100),
+        }));
+        const groupedPermissions = Object.fromEntries(
+            Object.entries(getPermissionsByCategory()).slice(0, 100).map(([category, entries]) => [
+                category.slice(0, 100),
+                entries.slice(0, 100).map((entry) => ({
+                    name: entry.name.slice(0, 150),
+                    displayName: entry.displayName.slice(0, 100),
+                    description: entry.description.slice(0, 500),
+                    ...(entry.resource ? { resource: entry.resource.slice(0, 100) } : {}),
+                    ...(entry.action ? { action: entry.action.slice(0, 100) } : {}),
+                    category: entry.category.slice(0, 100),
+                    isSensitive: entry.isSensitive,
+                })),
+            ]),
+        );
 
         return ok(c, {
             permissions: allPermissions,
@@ -731,10 +808,23 @@ app.openapi(listPermissionsRoute, async (c) => {
 const myPermissionsRoute = createRoute({
     method: "get",
     path: "/my-permissions",
+    operationId: "dashboard.account.permissions.get",
     tags: ["Admin - RBAC"],
     summary: "Get current user's permission context",
     responses: {
-        200: { description: "User permission context", content: { "application/json": { schema: successEnvelope(z.object({ userId: z.string(), isSuperAdmin: z.boolean(), roles: z.array(z.object({ id: z.string(), name: z.string() }).passthrough()), permissions: z.array(z.string()), overrides: z.object({ grants: z.array(z.string()), denials: z.array(z.string()) }) })) } } },
+        200: { description: "User permission context", content: { "application/json": { schema: successEnvelope(z.object({
+            userId: z.string().max(100),
+            isSuperAdmin: z.boolean(),
+            roles: z.array(z.object({ id: z.string().max(100), name: z.string().max(50), displayName: z.string().max(100) })).max(ACCOUNT_ROLE_LIMIT),
+            rolesTruncated: z.boolean(),
+            permissions: z.array(z.string().max(150)).max(ROLE_PERMISSION_LIMIT),
+            permissionsTruncated: z.boolean(),
+            overrides: z.object({
+                grants: z.array(z.string().max(150)).max(ACCOUNT_OVERRIDE_LIMIT),
+                denials: z.array(z.string().max(150)).max(ACCOUNT_OVERRIDE_LIMIT),
+                truncated: z.boolean(),
+            }),
+        })) } } },
         ...errorResponses,
     }
 });
@@ -753,12 +843,27 @@ app.openapi(myPermissionsRoute, async (c) => {
             throw new NotFoundError("User not found");
         }
 
+        const accountRoles = context.roles.slice(0, ACCOUNT_ROLE_LIMIT).map((role) => ({
+            id: role.id.slice(0, 100),
+            name: role.name.slice(0, 50),
+            displayName: role.displayName.slice(0, 100),
+        }));
+        const accountPermissions = Array.from(context.effectivePermissions);
+        const grants = context.overrides.grants.slice(0, ACCOUNT_OVERRIDE_LIMIT);
+        const denials = context.overrides.denials.slice(0, ACCOUNT_OVERRIDE_LIMIT);
         return ok(c, {
-            userId: context.userId,
+            userId: context.userId.slice(0, 100),
             isSuperAdmin: context.isSuperAdmin,
-            roles: context.roles,
-            permissions: Array.from(context.effectivePermissions),
-            overrides: context.overrides
+            roles: accountRoles,
+            rolesTruncated: context.roles.length > accountRoles.length,
+            permissions: accountPermissions.slice(0, ROLE_PERMISSION_LIMIT).map((name) => name.slice(0, 150)),
+            permissionsTruncated: accountPermissions.length > ROLE_PERMISSION_LIMIT,
+            overrides: {
+                grants: grants.map((name) => name.slice(0, 150)),
+                denials: denials.map((name) => name.slice(0, 150)),
+                truncated: context.overrides.grants.length > grants.length
+                    || context.overrides.denials.length > denials.length,
+            },
         });
     } catch (error: unknown) {
         console.error("Error fetching user permissions:", error);

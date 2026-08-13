@@ -8,6 +8,19 @@ import { retryTransientD1 } from "@scalius/core/utils/transient-d1";
 import { session as sessionTable, user as userTable } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import { UnauthorizedError, ForbiddenError } from "../utils/api-error";
+import { getBearerToken, parseAgentCredential } from "../agent-access/pat";
+import { resolveAgentPrincipalFromBearer, resolveAgentPrincipalFromGrant } from "../agent-access/principal";
+import type { AgentPrincipal } from "../agent-access/types";
+import { getAgentDispatchPrincipal } from "../agent-access/dispatch-context";
+import { isAgentRiskAllowed } from "../agent-access/types";
+import { resolveDirectAgentOperation } from "../agent-access/direct-operation";
+import {
+    enforceAgentRateLimit,
+    enforceAgentRequestBoundary,
+    writeDeniedAgentRequestAudit,
+} from "./agent-request-boundary";
+import type { AgentOperationManifestEntry } from "../openapi/agent-operation-manifest";
+import { enforceDirectAgentRequestBodyLimit } from "./direct-agent-request-body";
 import {
     SCANNER_COOKIE_NAME,
     getScannerSessionKey,
@@ -246,9 +259,130 @@ function isTwoFactorOnboardingRequest(
 export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
     let user: User | null = null;
     let session: Session | null = null;
+    let agentPrincipal: AgentPrincipal | null = c.get("agentPrincipal") ?? null;
+    const dispatchPrincipal = getAgentDispatchPrincipal(c.env);
     const cookieHeader = c.req.header("Cookie");
     const hasBetterAuthCookie = hasBetterAuthSessionCookie(cookieHeader);
     const hasScannerCookie = hasNamedCookie(cookieHeader, SCANNER_COOKIE_NAME);
+    const agentBearerToken = getBearerToken(c.req.header("Authorization"));
+    const hasAgentCredential = Boolean(
+        agentBearerToken && parseAgentCredential(agentBearerToken),
+    );
+
+    if (dispatchPrincipal && (cookieHeader?.trim() || c.req.header("Authorization")?.trim())) {
+        throw new ForbiddenError(
+            "Internal agent dispatch cannot be combined with request credentials",
+        );
+    }
+
+    // Agent and browser/scanner credentials are different principal classes.
+    // Reject ambiguity before any session lookup or route authorization.
+    if (hasAgentCredential && (hasBetterAuthCookie || hasScannerCookie)) {
+        throw new ForbiddenError(
+            "Cookie and agent credentials cannot be combined",
+        );
+    }
+
+    // Direct CLI/PAT calls do not pass through the storefront-specific agent
+    // middleware. Resolve them here, then keep the normal route mapping below.
+    // Infrastructure JWTs and arbitrary Bearer tokens never enter this branch.
+    if (hasAgentCredential && !agentPrincipal && agentBearerToken) {
+        agentPrincipal = await resolveAgentPrincipalFromBearer(
+            c.get("db"),
+            agentBearerToken,
+            c.env.AGENT_TOKEN_PEPPER,
+        );
+    }
+
+    if (dispatchPrincipal && !agentPrincipal) {
+        const freshPrincipal = await resolveAgentPrincipalFromGrant(c.get("db"), {
+            grantId: dispatchPrincipal.grantId,
+            credentialId: dispatchPrincipal.credentialId,
+            resource: dispatchPrincipal.resource,
+        });
+        if (
+            !freshPrincipal ||
+            freshPrincipal.ownerUserId !== dispatchPrincipal.ownerUserId ||
+            freshPrincipal.grantKind !== dispatchPrincipal.grantKind
+        ) {
+            throw new UnauthorizedError("Agent dispatch authority is no longer active");
+        }
+        agentPrincipal = freshPrincipal;
+    }
+
+    if (agentPrincipal) {
+        const startedAt = Date.now();
+        let operation: AgentOperationManifestEntry | null = null;
+        if (!dispatchPrincipal) await enforceAgentRateLimit(c, agentPrincipal);
+        try {
+            if (agentPrincipal.resource !== "dashboard") {
+                throw new ForbiddenError(
+                    "Storefront credentials cannot access dashboard operations",
+                );
+            }
+            c.set("agentPrincipal", agentPrincipal);
+            c.set("user", {
+                id: agentPrincipal.ownerUserId,
+                email: "",
+                name: "Agent connection owner",
+                role: "agent",
+                isSuperAdmin: agentPrincipal.isSuperAdmin,
+            });
+            c.set("adminPermissions", agentPrincipal.permissions);
+            c.header("Cache-Control", "private, no-store");
+
+            const pathname = normalizeAdminPath(c.req.url);
+            const method = c.req.method as "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+            operation = resolveDirectAgentOperation(method, pathname);
+            if (
+                !operation ||
+                (operation.exposure !== "execute" && operation.exposure !== "continuation") ||
+                operation.surface !== "dashboard" ||
+                !operation.principals.includes("admin") ||
+                !isAgentRiskAllowed(agentPrincipal.riskCeiling, operation.risk)
+            ) {
+                throw new ForbiddenError(
+                    "This dashboard operation is not available to direct agent credentials",
+                );
+            }
+            const routePermission = getRoutePermission(pathname, method);
+            if (!routePermission) {
+                throw new ForbiddenError("This admin endpoint is not configured for RBAC");
+            }
+            const allowed = routePermission.allowAnyAdmin
+                ? agentPrincipal.isSuperAdmin
+                : routePermission.permission
+                  ? agentPrincipal.permissions.has(routePermission.permission)
+                  : routePermission.anyOf
+                    ? routePermission.anyOf.some((permission) =>
+                        agentPrincipal!.permissions.has(permission))
+                    : routePermission.allOf
+                      ? routePermission.allOf.every((permission) =>
+                          agentPrincipal!.permissions.has(permission))
+                      : false;
+            if (!allowed) {
+                throw new ForbiddenError(
+                    "You do not have permission to perform this action",
+                );
+            }
+            if (!dispatchPrincipal) {
+                await enforceDirectAgentRequestBodyLimit(c, operation);
+            }
+        } catch (error) {
+            if (!dispatchPrincipal) {
+                await writeDeniedAgentRequestAudit(c, agentPrincipal, operation, startedAt, error);
+            }
+            throw error;
+        }
+        if (dispatchPrincipal) {
+            // MCP dispatch already applies the per-step rate/audit boundary. The
+            // Hono boundary still fresh-resolves and authorizes the operation.
+            await next();
+        } else {
+            await enforceAgentRequestBoundary(c, agentPrincipal, operation, next, true);
+        }
+        return;
+    }
 
     // 1. Try Better Auth Session Cookie. Verify the signed cookie locally before
     // touching D1 so raw/tampered cookies fail fast and cannot stall admin reads.

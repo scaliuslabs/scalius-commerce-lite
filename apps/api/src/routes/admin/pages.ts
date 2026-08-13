@@ -54,6 +54,7 @@ const listRoute = createRoute({
   path: "/",
   tags: ["Admin - Pages"],
   summary: "List all pages",
+  operationId: "dashboard.content.list",
   request: {
     query: z.object({
       page: z.coerce
@@ -129,6 +130,7 @@ const createPageRoute = createRoute({
   path: "/",
   tags: ["Admin - Pages"],
   summary: "Create a page",
+  operationId: "dashboard.content.create",
   request: {
     body: { content: { "application/json": { schema: createPageSchema } } },
   },
@@ -160,6 +162,7 @@ const bulkDeleteRoute = createRoute({
   path: "/bulk-delete",
   tags: ["Admin - Pages"],
   summary: "Bulk delete pages",
+  operationId: "dashboard.content.bulk_delete",
   request: {
     body: {
       content: {
@@ -193,6 +196,7 @@ const bulkPublishRoute = createRoute({
   path: "/bulk-publish",
   tags: ["Admin - Pages"],
   summary: "Bulk publish pages",
+  operationId: "dashboard.content.bulk_publish",
   request: {
     body: {
       content: { "application/json": { schema: pageRevisionClaimsSchema } },
@@ -220,6 +224,7 @@ const bulkUnpublishRoute = createRoute({
   path: "/bulk-unpublish",
   tags: ["Admin - Pages"],
   summary: "Bulk unpublish pages",
+  operationId: "dashboard.content.bulk_unpublish",
   request: {
     body: {
       content: { "application/json": { schema: pageRevisionClaimsSchema } },
@@ -247,6 +252,7 @@ const bulkRestoreRoute = createRoute({
   path: "/bulk-restore",
   tags: ["Admin - Pages"],
   summary: "Bulk restore pages",
+  operationId: "dashboard.content.bulk_restore",
   request: {
     body: {
       content: { "application/json": { schema: pageRevisionClaimsSchema } },
@@ -274,6 +280,7 @@ const restoreRoute = createRoute({
   path: "/{id}/restore",
   tags: ["Admin - Pages"],
   summary: "Restore a soft-deleted page",
+  operationId: "dashboard.content.restore",
   request: {
     params: z.object({ id: z.string() }),
     body: {
@@ -313,6 +320,7 @@ const getByIdRoute = createRoute({
   path: "/{id}",
   tags: ["Admin - Pages"],
   summary: "Get a page by ID",
+  operationId: "dashboard.content.get",
   request: {
     params: z.object({ id: z.string() }),
   },
@@ -340,6 +348,7 @@ const updatePageRoute = createRoute({
   path: "/{id}",
   tags: ["Admin - Pages"],
   summary: "Update a page",
+  operationId: "dashboard.content.update",
   request: {
     params: z.object({ id: z.string() }),
     body: { content: { "application/json": { schema: updatePageSchema } } },
@@ -373,6 +382,7 @@ const deletePageRoute = createRoute({
   path: "/{id}",
   tags: ["Admin - Pages"],
   summary: "Soft-delete a page",
+  operationId: "dashboard.content.trash",
   request: {
     params: z.object({ id: z.string() }),
     body: {
@@ -405,6 +415,7 @@ const permanentDeleteRoute = createRoute({
   path: "/{id}/permanent",
   tags: ["Admin - Pages"],
   summary: "Permanently delete a page",
+  operationId: "dashboard.content.permanently_delete",
   request: {
     params: z.object({ id: z.string() }),
     body: {

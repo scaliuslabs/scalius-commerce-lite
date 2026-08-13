@@ -107,13 +107,17 @@ describe("admin order list boundaries", () => {
     expect(source).not.toContain("if (rankExpression) return rankExpression");
   });
 
-  it("keeps admin payment and fulfillment filters as SQL predicates", () => {
+  it("combines exact status, lifecycle, payment, fulfillment, recovery, and archive filters in one list authority", () => {
     const source = readFileSync(ORDERS_ADMIN_SOURCE, "utf8");
 
+    expect(source).toContain("statusGroup?: OrderStatusGroup");
     expect(source).toContain("paymentStatus?: string");
     expect(source).toContain("paymentMethod?: string");
     expect(source).toContain("fulfillmentStatus?: string");
     expect(source).toContain("paymentRecovery?: OrderPaymentRecoveryFilter");
+    expect(source).toContain("if (status) {");
+    expect(source).toContain("} else if (statusGroup) {");
+    expect(source).toContain("getOrderStatusGroupStatuses(statusGroup)");
     expect(source).toContain(
       "whereConditions.push(sql`${orders.paymentStatus} = ${paymentStatus}`)",
     );
@@ -124,6 +128,9 @@ describe("admin order list boundaries", () => {
       "whereConditions.push(sql`${orders.fulfillmentStatus} = ${fulfillmentStatus}`)",
     );
     expect(source).toContain("whereConditions.push(paymentRecoveryFilterCondition(paymentRecovery))");
+    expect(source).toContain("if (showArchived) {");
+    expect(source).toContain("whereConditions.push(sql`${orders.archivedAt} IS NOT NULL`)");
+    expect(source).toContain("whereConditions.push(sql`${orders.archivedAt} IS NULL`)");
   });
 
   it("summarizes hosted payment recovery without exposing private attempt identity", () => {

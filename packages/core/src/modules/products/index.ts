@@ -8,3 +8,5 @@ export * from "./products.option-model";
 export * from "./products.option-matrix";
 export * from "./products.validation";
 export * from "./products.media";
+export * from "./products.semantic-sections";
+export * from "./products.storefront-sections";

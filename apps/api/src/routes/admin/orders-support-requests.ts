@@ -38,6 +38,7 @@ const updateSupportRequestStatusBodySchema = z.object({
 });
 
 const updateSupportRequestStatusRoute = createRoute({
+    operationId: "dashboard.orders.support_request_update",
     method: "put",
     path: "/{id}/support-requests/{requestId}/status",
     tags: ["Admin - Orders"],

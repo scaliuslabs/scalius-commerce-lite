@@ -87,6 +87,7 @@ const searchQuerySchema = z.object({
 const searchRoute = createRoute({
   method: "get",
   path: "/",
+  operationId: "storefront.search.predict",
   tags: ["Search"],
   summary: "Search across products, categories, and pages",
   request: {
@@ -110,9 +111,9 @@ const searchRoute = createRoute({
           imageAlt: z.string().nullable(),
           categoryId: z.string().nullable(),
           categoryName: z.string().nullable(),
-        }).passthrough()),
-        pages: z.array(z.object({ id: z.string(), title: z.string(), slug: z.string() }).passthrough()),
-        categories: z.array(z.object({ id: z.string(), name: z.string(), slug: z.string() }).passthrough()),
+        })),
+        pages: z.array(z.object({ id: z.string(), title: z.string(), slug: z.string() })),
+        categories: z.array(z.object({ id: z.string(), name: z.string(), slug: z.string() })),
         query: z.string(),
         timestamp: z.string().optional(),
       })) } },

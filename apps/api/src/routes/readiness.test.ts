@@ -120,10 +120,13 @@ function createEnv(overrides: Partial<Env> = {}): Env {
     DB: createDb(),
     CACHE: createKv(),
     SHARED_AUTH_CACHE: createKv(),
+    OAUTH_KV: createKv(),
     BUCKET: createBucket(),
+    AGENT_ARTIFACTS: createBucket(),
     PAYMENT_EVENTS_QUEUE: createQueue(),
     ORDER_NOTIFICATIONS_QUEUE: createQueue(),
     AUTH_OTP_QUEUE: createQueue(),
+    AGENT_RATE_LIMITER: createRateLimiter(),
     SEARCH_RATE_LIMITER: createRateLimiter(),
     ORDER_IP_RATE_LIMITER: createRateLimiter(),
     ORDER_PHONE_RATE_LIMITER: createRateLimiter(),
@@ -132,6 +135,7 @@ function createEnv(overrides: Partial<Env> = {}): Env {
     API_TOKEN: "test-api-token",
     JWT_SECRET: "test-jwt-secret",
     CREDENTIAL_ENCRYPTION_KEY: "test-credential-key",
+    AGENT_TOKEN_PEPPER: "test-agent-token-pepper",
     PUBLIC_API_BASE_URL: "https://api.example.test",
     STOREFRONT_URL: "https://storefront.example.test",
     BETTER_AUTH_URL: "https://dashboard.example.test",
@@ -166,15 +170,62 @@ describe("API readiness route", () => {
       d1: { status: "ok" },
       api_cache_kv: { status: "ok" },
       shared_auth_kv: { status: "ok" },
+      oauth_kv: { status: "ok" },
       r2: { status: "ok" },
+      agent_artifacts_r2: { status: "ok" },
       payment_events_queue: { status: "ok" },
       order_notifications_queue: { status: "ok" },
       auth_otp_queue: { status: "ok" },
       checkout_coordinator: { status: "ok" },
+      agent_rate_limiter: { status: "ok" },
       search_rate_limiter: { status: "ok" },
       order_ip_rate_limiter: { status: "ok" },
       order_phone_rate_limiter: { status: "ok" },
       runtime_config: { status: "ok" },
+    });
+    expect(env.OAUTH_KV.get).toHaveBeenCalledWith(
+      "__scalius:readyz:probe",
+      { cacheTtl: 60 },
+    );
+    expect(env.AGENT_ARTIFACTS.list).toHaveBeenCalledWith({ limit: 1 });
+    expect(env.AGENT_RATE_LIMITER.limit).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when agent access bindings or token pepper are missing", async () => {
+    const app = createApp();
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const env = createEnv({
+      OAUTH_KV: undefined as unknown as KVNamespace,
+      AGENT_ARTIFACTS: undefined as unknown as R2Bucket,
+      AGENT_RATE_LIMITER: undefined as unknown as RateLimit,
+      AGENT_TOKEN_PEPPER: "",
+    });
+
+    const response = await app.request("/api/v1/readyz", {}, env);
+    const json = await response.json() as {
+      success?: boolean;
+      status?: string;
+      checks?: Record<string, { status?: string; detail?: string }>;
+    };
+
+    expect(response.status).toBe(503);
+    expect(json.success).toBe(false);
+    expect(json.status).toBe("degraded");
+    expect(json.checks?.oauth_kv).toMatchObject({
+      status: "missing",
+      detail: "binding is not configured",
+    });
+    expect(json.checks?.agent_artifacts_r2).toMatchObject({
+      status: "missing",
+      detail: "binding is not configured",
+    });
+    expect(json.checks?.agent_rate_limiter).toMatchObject({
+      status: "missing",
+      detail: "rate limit binding is not configured",
+    });
+    expect(json.checks?.runtime_config).toMatchObject({
+      status: "missing",
+      detail: "missing AGENT_TOKEN_PEPPER",
     });
   });
 

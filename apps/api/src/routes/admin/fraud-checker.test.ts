@@ -85,16 +85,23 @@ describe("admin fraud checker credential handling", () => {
     const response = await app.request("/api/v1/admin/fraud-checker", { method: "GET" }, env);
 
     expect(response.status, await response.clone().text()).toBe(200);
-    expect(mocks.getFraudProviders).toHaveBeenCalledWith({ id: "db" }, "credential-key");
+    expect(mocks.getFraudProviders).toHaveBeenCalledWith(
+      { id: "db" },
+      "credential-key",
+      { limit: 21, offset: 0 },
+    );
     await expect(response.json()).resolves.toMatchObject({
       success: true,
-      data: [
-        {
-          apiKey: "••••••••••••",
-          apiSecret: "••••••••••••",
-          userId: "merchant-user",
-        },
-      ],
+      data: {
+        providers: [
+          {
+            apiKey: "••••••••••••",
+            apiSecret: "••••••••••••",
+            userId: "••••••••••••",
+          },
+        ],
+        pagination: { page: 1, limit: 20, hasMore: false },
+      },
     });
   });
 
@@ -167,7 +174,7 @@ describe("admin fraud checker credential handling", () => {
         apiUrl: "https://fraudbd.example/api",
         apiKey: "••••••••••••",
         apiSecret: "••••••••••••",
-        userId: "merchant-user",
+        userId: "••••••••••••",
         isActive: true,
         providerType: "fraudbd",
       }),
@@ -177,7 +184,11 @@ describe("admin fraud checker credential handling", () => {
     expect(mocks.getFraudProvider).toHaveBeenCalledWith({ id: "db" }, "provider_fraudbd", "credential-key");
     expect(mocks.saveFraudProvider).toHaveBeenCalledWith(
       { id: "db" },
-      expect.objectContaining({ apiKey: "fraudbd-key", apiSecret: "fraudbd-password" }),
+      expect.objectContaining({
+        apiKey: "fraudbd-key",
+        apiSecret: "fraudbd-password",
+        userId: "merchant-user",
+      }),
       "credential-key",
     );
   });
@@ -224,6 +235,80 @@ describe("admin fraud checker credential handling", () => {
 
     expect(mocks.testFraudProvider).toHaveBeenCalledWith({ id: "db" }, "provider_fraudbd", "credential-key");
     expect(mocks.fraudLookupWithActiveProvider).toHaveBeenCalledWith({ id: "db" }, "+8801700000000", "credential-key");
+  });
+
+  it("projects lookup facts without echoing phone or arbitrary provider fields", async () => {
+    const { app, env } = createTestApp();
+    mocks.fraudLookupWithActiveProvider.mockResolvedValueOnce({
+      success: true,
+      riskLevel: "medium",
+      data: {
+        mobile_number: "+8801700000000",
+        total_parcels: 12,
+        total_delivered: 9,
+        total_cancel: 3,
+        message: "owner@example.com token=secret",
+        provider_status: "verified",
+        arbitrarySecret: "must-not-leave",
+      },
+    });
+
+    const response = await app.request("/api/v1/admin/fraud-checker/lookup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phone: "+8801700000000" }),
+    }, env);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      data: {
+        total_parcels: 12,
+        provider_status: "verified",
+        riskLevel: "medium",
+      },
+    });
+    expect(JSON.stringify(body)).not.toContain("+8801700000000");
+    expect(JSON.stringify(body)).not.toContain("owner@example.com");
+    expect(JSON.stringify(body)).not.toContain("must-not-leave");
+  });
+
+  it("returns generic connection status instead of upstream provider messages", async () => {
+    const { app, env } = createTestApp();
+    mocks.testFraudProvider.mockResolvedValueOnce({
+      success: false,
+      message: "Authorization failed for secret-token",
+    });
+
+    const response = await app.request(
+      "/api/v1/admin/fraud-checker/provider_fraudbd/test",
+      { method: "POST" },
+      env,
+    );
+    const body = await response.json();
+
+    expect(body).toMatchObject({
+      data: { success: false, message: "Connection failed" },
+    });
+    expect(JSON.stringify(body)).not.toContain("secret-token");
+  });
+
+  it("rejects provider URLs that can carry credentials or query secrets", async () => {
+    const { app, env } = createTestApp();
+
+    const response = await app.request("/api/v1/admin/fraud-checker", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Unsafe",
+        apiUrl: "https://user:password@example.com/check?token=secret",
+        apiKey: "new-key",
+        isActive: false,
+      }),
+    }, env);
+
+    expect(response.status).toBe(400);
+    expect(mocks.saveFraudProvider).not.toHaveBeenCalled();
   });
 
   it("does not use JWT_SECRET as the provider read key", async () => {

@@ -57,6 +57,7 @@ const categoryPublishReadinessSchema = z.object({
 const formOptionsRoute = createRoute({
     method: "get",
     path: "/form-options",
+    operationId: "dashboard.categories.form_options",
     tags: ["Admin - Categories"],
     summary: "Get active categories for form dropdowns",
     responses: {
@@ -89,6 +90,7 @@ app.openapi(formOptionsRoute, async (c) => {
 const listRoute = createRoute({
     method: "get",
     path: "/",
+    operationId: "dashboard.categories.list",
     tags: ["Admin - Categories"],
     summary: "List all categories",
     request: {
@@ -129,6 +131,7 @@ app.openapi(listRoute, async (c) => {
 const publishReadinessRoute = createRoute({
     method: "get",
     path: "/{id}/publish-readiness",
+    operationId: "dashboard.categories.publish_readiness",
     tags: ["Admin - Categories"],
     summary: "Get category publication readiness",
     request: { params: z.object({ id: categoryIdSchema }) },
@@ -152,6 +155,7 @@ app.openapi(publishReadinessRoute, async (c) => {
 const getByIdRoute = createRoute({
     method: "get",
     path: "/{id}",
+    operationId: "dashboard.categories.get",
     tags: ["Admin - Categories"],
     summary: "Get a single category by ID",
     request: {
@@ -179,6 +183,7 @@ app.openapi(getByIdRoute, async (c) => {
 const createCategoryRoute = createRoute({
     method: "post",
     path: "/",
+    operationId: "dashboard.categories.create",
     tags: ["Admin - Categories"],
     summary: "Create a category",
     request: {
@@ -211,6 +216,7 @@ app.openapi(createCategoryRoute, async (c) => {
 const bulkDeleteRoute = createRoute({
     method: "post",
     path: "/bulk-delete",
+    operationId: "dashboard.categories.bulk_delete",
     tags: ["Admin - Categories"],
     summary: "Bulk delete categories",
     request: {
@@ -245,6 +251,7 @@ app.openapi(bulkDeleteRoute, async (c) => {
 const bulkRestoreRoute = createRoute({
     method: "post",
     path: "/bulk-restore",
+    operationId: "dashboard.categories.bulk_restore",
     tags: ["Admin - Categories"],
     summary: "Bulk restore categories",
     request: {
@@ -276,6 +283,7 @@ app.openapi(bulkRestoreRoute, async (c) => {
 const updateCategoryRoute = createRoute({
     method: "put",
     path: "/{id}",
+    operationId: "dashboard.categories.update",
     tags: ["Admin - Categories"],
     summary: "Update a category",
     request: {
@@ -304,6 +312,7 @@ app.openapi(updateCategoryRoute, async (c) => {
 const updateStatusRoute = createRoute({
     method: "patch",
     path: "/{id}/status",
+    operationId: "dashboard.categories.set_status",
     tags: ["Admin - Categories"],
     summary: "Change category publication status",
     request: {
@@ -334,6 +343,7 @@ app.openapi(updateStatusRoute, async (c) => {
 const deleteCategoryRoute = createRoute({
     method: "delete",
     path: "/{id}",
+    operationId: "dashboard.categories.trash",
     tags: ["Admin - Categories"],
     summary: "Soft-delete a category",
     request: {
@@ -363,6 +373,7 @@ app.openapi(deleteCategoryRoute, async (c) => {
 const permanentDeleteRoute = createRoute({
     method: "delete",
     path: "/{id}/permanent",
+    operationId: "dashboard.categories.delete_permanently",
     tags: ["Admin - Categories"],
     summary: "Permanently delete a category",
     request: {
@@ -392,6 +403,7 @@ app.openapi(permanentDeleteRoute, async (c) => {
 const restoreCategoryRoute = createRoute({
     method: "post",
     path: "/{id}/restore",
+    operationId: "dashboard.categories.restore",
     tags: ["Admin - Categories"],
     summary: "Restore a soft-deleted category",
     request: {

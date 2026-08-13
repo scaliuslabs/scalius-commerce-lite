@@ -13,6 +13,11 @@ export interface FraudCheckerProviderPayload {
   isActive: boolean;
 }
 
+interface FraudCheckerProvidersResponse {
+  providers: FraudCheckerProviderPayload[];
+  pagination: { page: number; limit: number; hasMore: boolean };
+}
+
 export interface SaveFraudCheckerProviderInput {
   name: string;
   apiUrl: string;
@@ -65,7 +70,16 @@ export interface FraudLookupInput {
 export const getFraudCheckerProviders = createServerFn({
   method: "GET",
 }).handler(async () => {
-  return apiGet<FraudCheckerProviderPayload[]>("/fraud-checker");
+  const providers: FraudCheckerProviderPayload[] = [];
+  const limit = 20;
+  for (let page = 1; page <= 100; page += 1) {
+    const result = await apiGet<FraudCheckerProvidersResponse>(
+      `/fraud-checker?page=${page}&limit=${limit}`,
+    );
+    providers.push(...result.providers);
+    if (!result.pagination.hasMore) return providers;
+  }
+  throw new Error("Fraud provider list exceeded the supported page limit");
 });
 
 export const createFraudCheckerProvider = createServerFn({ method: "POST" })

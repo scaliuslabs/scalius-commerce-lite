@@ -135,7 +135,11 @@ export function CreateReturnDialog({
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={mutation.isPending}>Cancel</Button>
-          <Button type="button" onClick={submit} disabled={!canSubmit}>
+          <Button
+            type="button"
+            onClick={submit}
+            disabled={!canSubmit}
+          >
             {mutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
             Request return
           </Button>

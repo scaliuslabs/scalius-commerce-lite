@@ -1,5 +1,6 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { errorResponseFromError } from "../../utils/api-response";
 
 const mocks = vi.hoisted(() => ({
     listOrderNotificationOutboxForOrder: vi.fn(),
@@ -27,6 +28,11 @@ function createTestApp() {
     const env = {
         ORDER_NOTIFICATIONS_QUEUE: queue,
     } as unknown as Env;
+
+    app.onError((error, c) => {
+        const { body, status } = errorResponseFromError(error);
+        return c.json(body, status);
+    });
 
     app.use("*", async (c, next) => {
         c.set("db", db as never);
@@ -176,6 +182,48 @@ describe("admin order notification routes", () => {
                 method: "POST",
                 headers: { "content-type": "application/json" },
                 body: JSON.stringify({ resendRequestId: " " }),
+            },
+            env,
+        );
+
+        expect(response.status).toBe(400);
+        expect(mocks.resendTerminalOrderNotificationOutboxById).not.toHaveBeenCalled();
+    });
+
+    it("passes one canonical header key through exact resend replay", async () => {
+        const { app, env } = createTestApp();
+        const request = () => app.request(
+            "/api/v1/admin/orders/order_1/notifications/outbox_1/resend",
+            {
+                method: "POST",
+                headers: {
+                    "content-type": "application/json",
+                    "Idempotency-Key": "resend_req_header_1",
+                },
+                body: JSON.stringify({}),
+            },
+            env,
+        );
+
+        expect((await request()).status).toBe(200);
+        expect((await request()).status).toBe(200);
+        expect(mocks.resendTerminalOrderNotificationOutboxById).toHaveBeenCalledTimes(2);
+        for (const call of mocks.resendTerminalOrderNotificationOutboxById.mock.calls) {
+            expect(call[0]).toMatchObject({ resendRequestId: "resend_req_header_1" });
+        }
+    });
+
+    it("rejects an exact resend header/body mismatch", async () => {
+        const { app, env } = createTestApp();
+        const response = await app.request(
+            "/api/v1/admin/orders/order_1/notifications/outbox_1/resend",
+            {
+                method: "POST",
+                headers: {
+                    "content-type": "application/json",
+                    "Idempotency-Key": "resend_req_header_1",
+                },
+                body: JSON.stringify({ resendRequestId: "resend_req_body_1" }),
             },
             env,
         );

@@ -54,17 +54,18 @@ async function invalidateAttributeCaches(c: {
 const listRoute = createRoute({
     method: "get",
     path: "/",
+    operationId: "dashboard.attributes.list",
     tags: ["Admin - Attributes"],
     summary: "List all product attributes",
     request: {
         query: z.object({
             page: z.coerce.number().int().min(1).default(1).openapi({ description: "Page number" }),
             limit: z.coerce.number().int().min(1).max(500).default(10).openapi({ description: "Items per page (max 500)" }),
-            search: z.string().optional().default("").openapi({ description: "Search term" }),
+            search: z.string().trim().max(120).optional().default("").openapi({ description: "Search term" }),
             sort: z.enum(["name", "slug", "filterable", "createdAt", "updatedAt"]).optional().default("name").openapi({ description: "Sort field" }),
             order: z.enum(["asc", "desc"]).optional().default("asc").openapi({ description: "Sort order" }),
             ids: z.string().max(9000).optional().openapi({ description: "Comma-separated attribute IDs (max 90)" }),
-            trashed: z.string().optional().openapi({ description: "Show trashed items" })
+            trashed: z.enum(["true", "false"]).optional().openapi({ description: "Show trashed items" })
         })
     },
     responses: {
@@ -96,6 +97,7 @@ app.openapi(listRoute, async (c) => {
 const createAttributeRoute = createRoute({
     method: "post",
     path: "/",
+    operationId: "dashboard.attributes.create",
     tags: ["Admin - Attributes"],
     summary: "Create a product attribute",
     request: {
@@ -124,6 +126,7 @@ app.openapi(createAttributeRoute, async (c) => {
 const updateAttributeRoute = createRoute({
     method: "put",
     path: "/{id}",
+    operationId: "dashboard.attributes.update",
     tags: ["Admin - Attributes"],
     summary: "Update a product attribute",
     request: {
@@ -154,6 +157,7 @@ app.openapi(updateAttributeRoute, async (c) => {
 const deleteAttributeRoute = createRoute({
     method: "delete",
     path: "/{id}",
+    operationId: "dashboard.attributes.trash",
     tags: ["Admin - Attributes"],
     summary: "Soft-delete a product attribute",
     request: {
@@ -179,6 +183,7 @@ app.openapi(deleteAttributeRoute, async (c) => {
 const permanentDeleteRoute = createRoute({
     method: "delete",
     path: "/{id}/permanent",
+    operationId: "dashboard.attributes.delete_permanently",
     tags: ["Admin - Attributes"],
     summary: "Permanently delete a product attribute",
     request: {
@@ -203,6 +208,7 @@ app.openapi(permanentDeleteRoute, async (c) => {
 const bulkDeleteRoute = createRoute({
     method: "post",
     path: "/bulk-delete",
+    operationId: "dashboard.attributes.bulk_delete",
     tags: ["Admin - Attributes"],
     summary: "Bulk delete attributes",
     request: {
@@ -227,6 +233,7 @@ app.openapi(bulkDeleteRoute, async (c) => {
 const bulkRestoreRoute = createRoute({
     method: "post",
     path: "/bulk-restore",
+    operationId: "dashboard.attributes.bulk_restore",
     tags: ["Admin - Attributes"],
     summary: "Bulk restore attributes",
     request: {
@@ -251,6 +258,7 @@ app.openapi(bulkRestoreRoute, async (c) => {
 const restoreRoute = createRoute({
     method: "post",
     path: "/{id}/restore",
+    operationId: "dashboard.attributes.restore",
     tags: ["Admin - Attributes"],
     summary: "Restore a soft-deleted product attribute",
     request: {
@@ -279,12 +287,13 @@ app.openapi(restoreRoute, async (c) => {
 const listValuesRoute = createRoute({
     method: "get",
     path: "/{id}/values",
+    operationId: "dashboard.attribute_values.list",
     tags: ["Admin - Attributes"],
     summary: "List all unique values for an attribute",
     request: {
         params: z.object({ id: z.string() }),
         query: z.object({
-            search: z.string().optional().openapi({ description: "Filter values" }),
+            search: z.string().trim().max(120).optional().openapi({ description: "Filter values" }),
             sort: z.enum(["asc", "desc"]).optional().default("desc").openapi({ description: "Sort order" }),
             page: z.coerce.number().int().min(1).default(1).openapi({ description: "Page number" }),
             limit: z.coerce.number().int().min(1).max(100).default(20).openapi({ description: "Items per page" })
@@ -332,6 +341,7 @@ app.openapi(listValuesRoute, async (c) => {
 const addValueRoute = createRoute({
     method: "post",
     path: "/{id}/values",
+    operationId: "dashboard.attribute_values.create",
     tags: ["Admin - Attributes"],
     summary: "Add a preset value to an attribute",
     request: {
@@ -362,6 +372,7 @@ app.openapi(addValueRoute, async (c) => {
 const updateValueRoute = createRoute({
     method: "put",
     path: "/{id}/values",
+    operationId: "dashboard.attribute_values.rename",
     tags: ["Admin - Attributes"],
     summary: "Rename an attribute value across all products",
     request: {
@@ -394,6 +405,7 @@ app.openapi(updateValueRoute, async (c) => {
 const deleteValueRoute = createRoute({
     method: "delete",
     path: "/{id}/values",
+    operationId: "dashboard.attribute_values.delete",
     tags: ["Admin - Attributes"],
     summary: "Delete an attribute value from all products",
     request: {

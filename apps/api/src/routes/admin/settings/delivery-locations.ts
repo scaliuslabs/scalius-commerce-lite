@@ -170,6 +170,7 @@ const deliveryLocationSchema = z.object({
 const listRoute = createRoute({
     method: "get",
     path: "/",
+    operationId: "dashboard.delivery_locations.list",
     tags: ["Admin - Delivery Locations"],
     summary: "List delivery locations",
     request: {
@@ -252,9 +253,10 @@ app.openapi(listRoute, async (c) => {
 const createLocationRoute = createRoute({
     method: "post",
     path: "/",
+    operationId: "dashboard.delivery_locations.create",
     tags: ["Admin - Delivery Locations"],
     summary: "Create a delivery location",
-    request: { body: { content: { "application/json": { schema: locationSchema } } } },
+    request: { body: { required: true, content: { "application/json": { schema: locationSchema } } } },
     responses: {
         201: { description: "Location created", content: { "application/json": { schema: successEnvelope(z.object({ location: deliveryLocationSchema })) } } },
         ...errorResponses,
@@ -287,10 +289,11 @@ app.openapi(createLocationRoute, (async (c) => {
 const deleteAllRoute = createRoute({
     method: "delete",
     path: "/all",
+    operationId: "dashboard.delivery_locations.delete_all",
     tags: ["Admin - Delivery Locations"],
     summary: "Delete all delivery locations permanently",
     request: {
-        body: { content: { "application/json": { schema: z.object({ confirmDeleteAll: z.literal(true) }) } } }
+        body: { required: true, content: { "application/json": { schema: z.object({ confirmDeleteAll: z.literal(true) }) } } }
     },
     responses: {
         200: { description: "All locations deleted", content: { "application/json": { schema: messageResponse } } },
@@ -315,10 +318,11 @@ app.openapi(deleteAllRoute, async (c) => {
 const bulkDeleteRoute = createRoute({
     method: "delete",
     path: "/",
+    operationId: "dashboard.delivery_locations.bulk_delete",
     tags: ["Admin - Delivery Locations"],
     summary: "Bulk soft-delete delivery locations",
     request: {
-        body: { content: { "application/json": { schema: z.object({
+        body: { required: true, content: { "application/json": { schema: z.object({
             ids: z.array(z.string().trim().min(1).max(128)).min(1).max(90),
         }) } } }
     },
@@ -352,6 +356,7 @@ app.openapi(bulkDeleteRoute, async (c) => {
 const getByIdRoute = createRoute({
     method: "get",
     path: "/{id}",
+    operationId: "dashboard.delivery_locations.get",
     tags: ["Admin - Delivery Locations"],
     summary: "Get a delivery location by ID",
     request: {
@@ -382,11 +387,12 @@ app.openapi(getByIdRoute, async (c) => {
 const updateLocationRoute = createRoute({
     method: "put",
     path: "/{id}",
+    operationId: "dashboard.delivery_locations.update",
     tags: ["Admin - Delivery Locations"],
     summary: "Update a delivery location",
     request: {
         params: z.object({ id: z.string() }),
-        body: { content: { "application/json": { schema: updateLocationSchema } } }
+        body: { required: true, content: { "application/json": { schema: updateLocationSchema } } }
     },
     responses: {
         200: { description: "Location updated", content: { "application/json": { schema: successEnvelope(deliveryLocationSchema) } } },
@@ -453,6 +459,7 @@ app.openapi(updateLocationRoute, async (c) => {
 const deleteLocationRoute = createRoute({
     method: "delete",
     path: "/{id}",
+    operationId: "dashboard.delivery_locations.trash",
     tags: ["Admin - Delivery Locations"],
     summary: "Soft-delete a delivery location",
     request: {
@@ -504,12 +511,48 @@ import {
 } from "@scalius/core/modules/delivery/pathao-location-import";
 import { deliveryProviders } from "@scalius/database/schema";
 
+const pathaoImportStatsSchema = z.object({
+    citiesCreated: z.number().int().nonnegative(),
+    citiesUpdated: z.number().int().nonnegative(),
+    zonesCreated: z.number().int().nonnegative(),
+    zonesUpdated: z.number().int().nonnegative(),
+    areasCreated: z.number().int().nonnegative(),
+    areasUpdated: z.number().int().nonnegative(),
+});
+
+const pathaoImportResultSchema = z.object({
+    status: z.enum(["importing", "complete", "error"]),
+    phase: z.enum(["cities", "zones", "areas", "done"]),
+    progress: z.object({
+        current: z.number().int().nonnegative(),
+        total: z.number().int().nonnegative(),
+        label: z.string(),
+    }),
+    stats: pathaoImportStatsSchema,
+    error: z.string().optional(),
+});
+
 /**
  * POST /import-pathao — Process one chunk of Pathao location import.
  * Call repeatedly until status === "complete".
  * Admin UI drives the loop with a progress bar.
  */
-app.post("/import-pathao", async (c) => {
+const processPathaoImportRoute = createRoute({
+    method: "post",
+    path: "/import-pathao",
+    operationId: "dashboard.delivery_locations.pathao_import_chunk",
+    tags: ["Admin - Delivery Locations"],
+    summary: "Process one bounded Pathao location import chunk",
+    responses: {
+        200: {
+            description: "Current Pathao import progress",
+            content: { "application/json": { schema: successEnvelope(pathaoImportResultSchema) } },
+        },
+        ...errorResponses,
+    },
+});
+
+app.openapi(processPathaoImportRoute, async (c) => {
     const db = c.get("db");
     const kv = (c.env as Record<string, unknown>).CACHE as KVNamespace | undefined;
 
@@ -556,7 +599,22 @@ app.post("/import-pathao", async (c) => {
 /**
  * GET /import-pathao/status — Check current import progress without processing.
  */
-app.get("/import-pathao/status", async (c) => {
+const getPathaoImportStatusRoute = createRoute({
+    method: "get",
+    path: "/import-pathao/status",
+    operationId: "dashboard.delivery_locations.pathao_import_status",
+    tags: ["Admin - Delivery Locations"],
+    summary: "Get Pathao location import progress",
+    responses: {
+        200: {
+            description: "Current Pathao import progress",
+            content: { "application/json": { schema: successEnvelope(pathaoImportResultSchema) } },
+        },
+        ...errorResponses,
+    },
+});
+
+app.openapi(getPathaoImportStatusRoute, async (c) => {
     const kv = (c.env as Record<string, unknown>).CACHE as KVNamespace | undefined;
     if (!kv) throw new ValidationError("KV not available");
 
@@ -567,7 +625,22 @@ app.get("/import-pathao/status", async (c) => {
 /**
  * DELETE /import-pathao — Reset import progress (for retrying or re-importing).
  */
-app.delete("/import-pathao", async (c) => {
+const resetPathaoImportRoute = createRoute({
+    method: "delete",
+    path: "/import-pathao",
+    operationId: "dashboard.delivery_locations.pathao_import_reset",
+    tags: ["Admin - Delivery Locations"],
+    summary: "Reset Pathao location import progress",
+    responses: {
+        200: {
+            description: "Pathao import progress reset",
+            content: { "application/json": { schema: messageResponse } },
+        },
+        ...errorResponses,
+    },
+});
+
+app.openapi(resetPathaoImportRoute, async (c) => {
     const kv = (c.env as Record<string, unknown>).CACHE as KVNamespace | undefined;
     if (!kv) throw new ValidationError("KV not available");
 

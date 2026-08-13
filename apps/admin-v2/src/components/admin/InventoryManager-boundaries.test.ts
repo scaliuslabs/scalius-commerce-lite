@@ -56,6 +56,17 @@ describe("InventoryManager boundaries", () => {
     expect(source).toContain("`/admin/orders/${m.orderId}`");
   });
 
+  it("exports the active movement filters through the dedicated bounded artifact route", () => {
+    expect(source).toContain('fetch("/api/v1/admin/inventory/movements/export"');
+    expect(source).toContain('method: "POST"');
+    expect(source).toContain("movementOrderId: debouncedMovementOrderId.trim()");
+    expect(source).toContain("movementStartDate: movementStartDate");
+    expect(source).toContain("movementEndDate: movementEndDate");
+    expect(source).toContain("maxRows: 5_000");
+    expect(source).toContain("const blob = await response.blob()");
+    expect(source).not.toContain("movementExportHref");
+  });
+
   it("provides a compact searchable alert inbox with status history and acknowledgement", () => {
     expect(source).toContain('section: "alerts"');
     expect(source).toContain("alertStatus");

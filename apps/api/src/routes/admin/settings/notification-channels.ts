@@ -64,6 +64,7 @@ const updateCustomerNotificationSettingsSchema = z.object({
 const getChannelsRoute = createRoute({
     method: "get",
     path: "/",
+    operationId: "dashboard.notifications.customer_rules_get",
     tags: ["Admin - Settings"],
     summary: "Get notification channel settings per order status",
     responses: {
@@ -101,10 +102,11 @@ app.openapi(getChannelsRoute, async (c) => {
 const updateChannelsRoute = createRoute({
     method: "put",
     path: "/",
+    operationId: "dashboard.notifications.customer_rules_update",
     tags: ["Admin - Settings"],
     summary: "Update notification channel settings per order status",
     request: {
-        body: { content: { "application/json": { schema: updateCustomerNotificationSettingsSchema } } },
+        body: { required: true, content: { "application/json": { schema: updateCustomerNotificationSettingsSchema } } },
     },
     responses: {
         200: {
@@ -147,6 +149,7 @@ app.openapi(updateChannelsRoute, async (c) => {
 const getAdminChannelsRoute = createRoute({
     method: "get",
     path: "/admin-channels",
+    operationId: "dashboard.notifications.admin_rules_get",
     tags: ["Admin - Settings"],
     summary: "Get admin notification channel settings per order status",
     responses: {
@@ -179,10 +182,11 @@ app.openapi(getAdminChannelsRoute, async (c) => {
 const updateAdminChannelsRoute = createRoute({
     method: "put",
     path: "/admin-channels",
+    operationId: "dashboard.notifications.admin_rules_update",
     tags: ["Admin - Settings"],
     summary: "Update admin notification channel settings per order status",
     request: {
-        body: { content: { "application/json": { schema: wrappedChannelsSchema } } },
+        body: { required: true, content: { "application/json": { schema: wrappedChannelsSchema } } },
     },
     responses: {
         200: {

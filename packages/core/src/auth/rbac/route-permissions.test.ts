@@ -69,6 +69,18 @@ describe("route permissions", () => {
     )).toEqual({ permission: PERMISSIONS.PRODUCTS_EDIT });
   });
 
+  it("maps bounded product section reads and edits without opening other methods", () => {
+    const path = "/api/v1/admin/products/prod_1/sections/media";
+    expect(getRoutePermission(path, "GET")).toEqual({
+      permission: PERMISSIONS.PRODUCTS_VIEW,
+    });
+    expect(getRoutePermission(path, "PATCH")).toEqual({
+      permission: PERMISSIONS.PRODUCTS_EDIT,
+    });
+    expect(getRoutePermission(path, "POST")).toBeNull();
+    expect(getRoutePermission(path, "DELETE")).toBeNull();
+  });
+
   it("authorizes every normalized navigation command depth", () => {
     const permission = { permission: PERMISSIONS.SETTINGS_HEADER_EDIT };
     expect(getRoutePermission(
@@ -105,6 +117,15 @@ describe("route permissions", () => {
       "/api/v1/admin/auth/users/admin_2/resend-setup",
       "POST",
     )).toEqual({ permission: PERMISSIONS.TEAM_MANAGE });
+  });
+
+  it("requires read and edit inventory authority to pair a scanner device", () => {
+    expect(getRoutePermission(
+      "/api/v1/admin/auth/scanner-link",
+      "POST",
+    )).toEqual({
+      allOf: [PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.PRODUCTS_EDIT],
+    });
   });
 
   it("keeps hosted-payment recovery queue and export read-only", () => {

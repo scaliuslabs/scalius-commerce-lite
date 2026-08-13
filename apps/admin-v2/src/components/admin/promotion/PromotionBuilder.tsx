@@ -301,7 +301,10 @@ export function PromotionBuilder({
       <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 items-start gap-3">
           <Button asChild variant="ghost" size="icon" className="mt-0.5 size-8 shrink-0">
-            <Link to="/admin/promotions" aria-label="Back to promotions"><ArrowLeft className="size-4" /></Link>
+            <Link
+              to="/admin/promotions"
+              aria-label="Back to promotions"
+            ><ArrowLeft className="size-4" /></Link>
           </Button>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
@@ -335,7 +338,13 @@ export function PromotionBuilder({
           <AlertTitle>Another version was saved</AlertTitle>
           <AlertDescription className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
             <span>Your changes are still here. Reload the latest version only when you are ready to replace this draft.</span>
-            <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => void reloadLatest()}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="shrink-0"
+              onClick={() => void reloadLatest()}
+            >
               <RotateCcw className="mr-2 size-3.5" />Reload latest
             </Button>
           </AlertDescription>

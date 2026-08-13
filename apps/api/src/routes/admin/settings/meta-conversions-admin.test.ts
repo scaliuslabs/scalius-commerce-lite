@@ -29,7 +29,7 @@ const settingsRow = {
     singletonKey: "default",
     pixelId: "1234567890",
     accessToken: "encrypted-token",
-    testEventCode: null,
+    testEventCode: "stored-test-code",
     isEnabled: true,
     logRetentionDays: 30,
     createdAt: 1,
@@ -198,6 +198,7 @@ describe("Meta Conversions admin settings", () => {
 
         expect(response.status).toBe(200);
         expect(body.data.settings?.accessToken).toBe("••••••••••••");
+        expect(body.data.settings?.testEventCode).toBe("••••••••••••");
         expect(body.data.pixelParity).toMatchObject({
             status: "ok",
             severity: "success",
@@ -268,7 +269,7 @@ describe("Meta Conversions admin settings", () => {
         expect(response.status).toBe(201);
         expect(body.data?.pixelId).toBe("1234567890");
         expect(body.data?.accessToken).toBe("••••••••••••");
-        expect(body.data?.testEventCode).toBe("TEST12345");
+        expect(body.data?.testEventCode).toBe("••••••••••••");
         expect(db.settings?.accessToken).toBe("encrypted:live-access-token");
         expect(mocks.cacheDelete).toHaveBeenCalledWith("meta-capi:browser-events:circuit");
         expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalled();
@@ -289,6 +290,21 @@ describe("Meta Conversions admin settings", () => {
         expect(db.settings?.accessToken).toBe("encrypted-token");
         expect(db.settings?.testEventCode).toBeNull();
         expect(mocks.encryptCredentials).not.toHaveBeenCalled();
+    });
+
+    it("preserves the stored test event code when saving its masked marker", async () => {
+        const db = createDb();
+        const { response, body } = await saveSettings(db, {
+            pixelId: "1234567890",
+            accessToken: "••••••••••••",
+            testEventCode: "••••••••••••",
+            isEnabled: true,
+            logRetentionDays: 30,
+        });
+
+        expect(response.status).toBe(200);
+        expect(db.settings?.testEventCode).toBe("stored-test-code");
+        expect(body.data?.testEventCode).toBe("••••••••••••");
     });
 
     it("rejects enabling with a masked token when no stored token exists", async () => {
@@ -345,13 +361,13 @@ describe("Meta Conversions admin settings", () => {
         expect(realLookingDb.settings?.accessToken).toBe("encrypted:EAABtestLiveToken123");
     });
 
-    it("redacts token-like fields from stored response payloads", async () => {
+    it("returns bounded provider summaries instead of stored raw payloads or errors", async () => {
         const db = createDb({
             logs: [{
                 id: "log_1",
                 eventName: "Purchase",
                 status: "failed",
-                requestPayload: null,
+                requestPayload: "raw-secret-that-is-not-json",
                 responsePayload: JSON.stringify({
                     error: {
                         message: "Bad token",
@@ -359,7 +375,7 @@ describe("Meta Conversions admin settings", () => {
                         nested: { authToken: "another-secret" },
                     },
                 }),
-                errorMessage: null,
+                errorMessage: "Upstream rejected owner@example.com with token secret-token",
                 createdAt: 1,
             }],
         });
@@ -370,13 +386,21 @@ describe("Meta Conversions admin settings", () => {
         }, env);
         const body = await response.json() as {
             data: {
-                logs: Array<{ responsePayload: string }>;
+                logs: Array<{
+                    requestPayload: string;
+                    responsePayload: string;
+                    errorMessage: string;
+                }>;
             };
         };
 
         expect(response.status).toBe(200);
-        expect(body.data.logs[0]?.responsePayload).toContain('"access_token": "[redacted]"');
-        expect(body.data.logs[0]?.responsePayload).toContain('"authToken": "[redacted]"');
-        expect(body.data.logs[0]?.responsePayload).not.toContain("secret-token");
+        expect(body.data.logs[0]?.requestPayload).toBe('{"available":false}');
+        expect(body.data.logs[0]?.responsePayload).toBe(
+            '{"eventsReceived":null,"hasError":true,"errorType":null,"errorCode":null}',
+        );
+        expect(body.data.logs[0]?.errorMessage).toContain("Meta delivery failed");
+        expect(JSON.stringify(body)).not.toContain("secret-token");
+        expect(JSON.stringify(body)).not.toContain("owner@example.com");
     });
 });

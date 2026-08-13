@@ -15,6 +15,40 @@ import { successEnvelope } from "../../schemas/responses";
 import { timestampSchema } from "../../schemas/timestamps";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
+const DASHBOARD_RECENT_ORDER_LIMIT = 11;
+const DASHBOARD_ORDER_ID_MAX_LENGTH = 128;
+const DASHBOARD_CUSTOMER_NAME_MAX_LENGTH = 256;
+const DASHBOARD_ORDER_STATUS_MAX_LENGTH = 64;
+
+function boundedText(value: unknown, maximumLength: number): string {
+    return typeof value === "string" ? value.slice(0, maximumLength) : "";
+}
+
+function projectRecentOrders(
+    recentOrders: Awaited<ReturnType<typeof getRecentOrders>>,
+) {
+    return recentOrders.slice(0, DASHBOARD_RECENT_ORDER_LIMIT).map((order) => ({
+        id: boundedText(order.id, DASHBOARD_ORDER_ID_MAX_LENGTH),
+        customerName: boundedText(
+            order.customerName,
+            DASHBOARD_CUSTOMER_NAME_MAX_LENGTH,
+        ),
+        totalAmount: order.totalAmount,
+        status: boundedText(order.status, DASHBOARD_ORDER_STATUS_MAX_LENGTH),
+        createdAt: order.createdAt,
+    }));
+}
+
+function projectDailyActivity(
+    activity: Awaited<ReturnType<typeof getDailyActivityData>>,
+) {
+    return activity.slice(0, 90).map((entry) => ({
+        date: boundedText(entry.date, 10),
+        orders: entry.orders,
+        revenue: entry.revenue,
+        newCustomers: entry.newCustomers,
+    }));
+}
 
 // ─── Inline response schemas ──
 
@@ -41,15 +75,15 @@ const dashboardStatsSchema = z.object({
 });
 
 const recentOrderSchema = z.object({
-    id: z.string(),
-    customerName: z.string(),
+    id: z.string().max(DASHBOARD_ORDER_ID_MAX_LENGTH),
+    customerName: z.string().max(DASHBOARD_CUSTOMER_NAME_MAX_LENGTH),
     totalAmount: z.number(),
-    status: z.string(),
+    status: z.string().max(DASHBOARD_ORDER_STATUS_MAX_LENGTH),
     createdAt: timestampSchema,
-}).passthrough();
+});
 
 const dailyActivitySchema = z.object({
-    date: z.string(),
+    date: z.string().max(10),
     orders: z.number(),
     revenue: z.number(),
     newCustomers: z.number(),
@@ -57,18 +91,18 @@ const dailyActivitySchema = z.object({
 
 const dashboardResponseSchema = successEnvelope(z.object({
     stats: dashboardStatsSchema,
-    recentOrders: z.array(recentOrderSchema),
-    dailyActivityData: z.array(dailyActivitySchema),
+    recentOrders: z.array(recentOrderSchema).max(DASHBOARD_RECENT_ORDER_LIMIT),
+    dailyActivityData: z.array(dailyActivitySchema).max(90),
 }));
 
 const dashboardSummaryResponseSchema = successEnvelope(z.object({
     stats: dashboardStatsSchema,
-    recentOrders: z.array(recentOrderSchema),
+    recentOrders: z.array(recentOrderSchema).max(DASHBOARD_RECENT_ORDER_LIMIT),
 }));
 
 const dashboardHomeSummaryResponseSchema = successEnvelope(z.object({
     stats: dashboardStatsSchema.omit({ totalRevenue: true }),
-    recentOrders: z.array(recentOrderSchema),
+    recentOrders: z.array(recentOrderSchema).max(DASHBOARD_RECENT_ORDER_LIMIT),
 }));
 
 const dashboardMetricsSummaryResponseSchema = successEnvelope(z.object({
@@ -76,7 +110,7 @@ const dashboardMetricsSummaryResponseSchema = successEnvelope(z.object({
 }));
 
 const dashboardActivityResponseSchema = successEnvelope(z.object({
-    dailyActivityData: z.array(dailyActivitySchema),
+    dailyActivityData: z.array(dailyActivitySchema).max(90),
 }));
 
 // ── Dashboard Summary ──
@@ -86,6 +120,7 @@ const dashboardHomeSummaryRoute = createRoute({
     path: "/home-summary",
     tags: ["Admin - Dashboard"],
     summary: "Get lightweight dashboard home metrics and recent orders",
+    operationId: "dashboard.home.summary",
     responses: {
         200: {
             description: "Dashboard home summary data",
@@ -96,8 +131,14 @@ const dashboardHomeSummaryRoute = createRoute({
 
 app.openapi(dashboardHomeSummaryRoute, async (c) => {
     const db = c.get("db");
-    const summary = await getDashboardHomeSummary(db, 11);
-    return ok(c, summary);
+    const summary = await getDashboardHomeSummary(
+        db,
+        DASHBOARD_RECENT_ORDER_LIMIT,
+    );
+    return ok(c, {
+        stats: summary.stats,
+        recentOrders: projectRecentOrders(summary.recentOrders),
+    });
 });
 
 const dashboardMetricsSummaryRoute = createRoute({
@@ -105,6 +146,7 @@ const dashboardMetricsSummaryRoute = createRoute({
     path: "/metrics-summary",
     tags: ["Admin - Dashboard"],
     summary: "Get lightweight dashboard metrics summary",
+    operationId: "dashboard.home.metrics",
     responses: {
         200: {
             description: "Dashboard metrics summary data",
@@ -126,6 +168,7 @@ const dashboardSummaryRoute = createRoute({
     path: "/summary",
     tags: ["Admin - Dashboard"],
     summary: "Get dashboard summary metrics and recent orders",
+    operationId: "dashboard.home.full_summary",
     responses: {
         200: {
             description: "Dashboard summary data",
@@ -139,10 +182,10 @@ app.openapi(dashboardSummaryRoute, async (c) => {
 
     const [stats, recentOrders] = await Promise.all([
         getDashboardStats(db),
-        getRecentOrders(db, 11),
+        getRecentOrders(db, DASHBOARD_RECENT_ORDER_LIMIT),
     ]);
 
-    return ok(c, { stats, recentOrders });
+    return ok(c, { stats, recentOrders: projectRecentOrders(recentOrders) });
 });
 
 // ── Dashboard Activity ──
@@ -152,6 +195,7 @@ const dashboardActivityRoute = createRoute({
     path: "/activity",
     tags: ["Admin - Dashboard"],
     summary: "Get dashboard daily activity chart data",
+    operationId: "dashboard.home.activity",
     responses: {
         200: {
             description: "Dashboard daily activity data",
@@ -165,7 +209,7 @@ app.openapi(dashboardActivityRoute, async (c) => {
 
     const dailyActivityData = await getDailyActivityData(db, 90);
 
-    return ok(c, { dailyActivityData });
+    return ok(c, { dailyActivityData: projectDailyActivity(dailyActivityData) });
 });
 
 // ── Legacy Combined Dashboard ──
@@ -175,6 +219,7 @@ const dashboardRoute = createRoute({
     path: "/",
     tags: ["Admin - Dashboard"],
     summary: "Get dashboard summary, recent orders, and daily activity",
+    operationId: "dashboard.home.legacy_combined",
     responses: {
         200: {
             description: "Dashboard data",
@@ -188,11 +233,15 @@ app.openapi(dashboardRoute, async (c) => {
 
     const [stats, recentOrders, dailyActivityData] = await Promise.all([
         getDashboardStats(db),
-        getRecentOrders(db, 11),
+        getRecentOrders(db, DASHBOARD_RECENT_ORDER_LIMIT),
         getDailyActivityData(db, 90),
     ]);
 
-    return ok(c, { stats, recentOrders, dailyActivityData });
+    return ok(c, {
+        stats,
+        recentOrders: projectRecentOrders(recentOrders),
+        dailyActivityData: projectDailyActivity(dailyActivityData),
+    });
 });
 
 export { app as adminDashboardRoutes };

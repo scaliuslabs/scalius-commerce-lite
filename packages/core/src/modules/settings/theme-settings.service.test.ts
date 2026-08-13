@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
   createThemePreviewSession,
+  exchangeThemePreviewContinuation,
   getThemeSettings,
   getThemeWorkspace,
   listThemeVersions,
@@ -357,7 +358,7 @@ describe("versioned storefront theme settings", () => {
     });
   });
 
-  it("stores only a preview-token hash and resolves an immutable draft snapshot", async () => {
+  it("stores only a continuation hash, exchanges it once, and resolves the immutable preview", async () => {
     seedPublishedWorkspace();
     const firstDraft = {
       ...DEFAULT_STOREFRONT_THEME_SETTINGS,
@@ -375,17 +376,25 @@ describe("versioned storefront theme settings", () => {
       SELECT token_hash AS tokenHash, theme FROM theme_preview_sessions
     `).get() as { tokenHash: string; theme: string };
     expect(stored.tokenHash).toMatch(/^[a-f0-9]{64}$/);
-    expect(stored.tokenHash).not.toContain(preview.token);
+    expect(stored.tokenHash).not.toContain(preview.continuationId);
     expect(stored.theme).toBe(JSON.stringify(firstDraft));
 
     await saveThemeDraft(db, secondDraft, 2, 1, "admin_1");
-    await expect(resolveThemePreviewSession(db, preview.token)).resolves.toMatchObject({
+    const exchanged = await exchangeThemePreviewContinuation(
+      db,
+      preview.continuationId,
+    );
+    expect(exchanged.token).toMatch(/^tpv_[A-Za-z0-9_-]{48}$/);
+    await expect(resolveThemePreviewSession(db, exchanged.token)).resolves.toMatchObject({
       theme: firstDraft,
       draftRevision: 2,
       basePublishedRevision: 1,
     });
+    await expect(
+      exchangeThemePreviewContinuation(db, preview.continuationId),
+    ).rejects.toThrow("unavailable or expired");
 
     sqlite.exec("UPDATE theme_preview_sessions SET expires_at = 0");
-    await expect(resolveThemePreviewSession(db, preview.token)).resolves.toBeNull();
+    await expect(resolveThemePreviewSession(db, exchanged.token)).resolves.toBeNull();
   });
 });

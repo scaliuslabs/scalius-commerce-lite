@@ -76,6 +76,7 @@ function parseProductOptionCategoryIds(ids: string | undefined): string[] {
 const formOptionsRoute = createRoute({
     method: "get",
     path: "/form-options",
+    operationId: "dashboard.collections.form_options",
     tags: ["Admin - Collections"],
     summary: "Get categories and products for collection form",
     responses: {
@@ -120,6 +121,7 @@ app.openapi(formOptionsRoute, async (c) => {
 const categoryOptionsRoute = createRoute({
     method: "get",
     path: "/category-options",
+    operationId: "dashboard.collections.category_options",
     tags: ["Admin - Collections"],
     summary: "Get categories for collection forms",
     responses: {
@@ -148,6 +150,7 @@ app.openapi(categoryOptionsRoute, async (c) => {
 const productOptionsRoute = createRoute({
     method: "get",
     path: "/product-options",
+    operationId: "dashboard.collections.product_options",
     tags: ["Admin - Collections"],
     summary: "Search products for collection forms",
     request: {
@@ -194,14 +197,15 @@ app.openapi(productOptionsRoute, async (c) => {
 const listRoute = createRoute({
     method: "get",
     path: "/",
+    operationId: "dashboard.collections.list",
     tags: ["Admin - Collections"],
     summary: "List all collections",
     request: {
         query: z.object({
             page: z.coerce.number().int().min(1).default(1).openapi({ description: "Page number" }),
             limit: z.coerce.number().int().min(1).max(100).default(20).openapi({ description: "Items per page" }),
-            search: z.string().optional().default("").openapi({ description: "Search term" }),
-            trashed: z.string().optional().openapi({ description: "Show trashed items" }),
+            search: z.string().trim().max(120).optional().default("").openapi({ description: "Search term" }),
+            trashed: z.enum(["true", "false"]).optional().openapi({ description: "Show trashed items" }),
             sort: z.enum(["name", "presentation", "isActive", "updatedAt", "sortOrder"]).optional().default("sortOrder").openapi({ description: "Sort field" }),
             order: z.enum(["asc", "desc"]).optional().default("asc").openapi({ description: "Sort order" })
         })
@@ -234,6 +238,7 @@ app.openapi(listRoute, async (c) => {
 const getByIdsRoute = createRoute({
     method: "get",
     path: "/by-ids",
+    operationId: "dashboard.collections.get_by_ids",
     tags: ["Admin - Collections"],
     summary: "Get lightweight collection summaries for known IDs",
     request: {
@@ -270,6 +275,7 @@ app.openapi(getByIdsRoute, async (c) => {
 const createCollectionRoute = createRoute({
     method: "post",
     path: "/",
+    operationId: "dashboard.collections.create",
     tags: ["Admin - Collections"],
     summary: "Create a collection",
     request: {
@@ -297,6 +303,7 @@ app.openapi(createCollectionRoute, async (c) => {
 const bulkDeleteRoute = createRoute({
     method: "post",
     path: "/bulk-delete",
+    operationId: "dashboard.collections.bulk_delete",
     tags: ["Admin - Collections"],
     summary: "Bulk delete collections",
     request: {
@@ -330,6 +337,7 @@ app.openapi(bulkDeleteRoute, async (c) => {
 const bulkActivateRoute = createRoute({
     method: "post",
     path: "/bulk-activate",
+    operationId: "dashboard.collections.bulk_activate",
     tags: ["Admin - Collections"],
     summary: "Bulk activate collections",
     request: {
@@ -355,6 +363,7 @@ app.openapi(bulkActivateRoute, async (c) => {
 const bulkDeactivateRoute = createRoute({
     method: "post",
     path: "/bulk-deactivate",
+    operationId: "dashboard.collections.bulk_deactivate",
     tags: ["Admin - Collections"],
     summary: "Bulk deactivate collections",
     request: {
@@ -379,6 +388,7 @@ app.openapi(bulkDeactivateRoute, async (c) => {
 const bulkRestoreRoute = createRoute({
     method: "post",
     path: "/bulk-restore",
+    operationId: "dashboard.collections.bulk_restore",
     tags: ["Admin - Collections"],
     summary: "Bulk restore collections",
     request: {
@@ -404,6 +414,7 @@ app.openapi(bulkRestoreRoute, async (c) => {
 const restoreRoute = createRoute({
     method: "post",
     path: "/{id}/restore",
+    operationId: "dashboard.collections.restore",
     tags: ["Admin - Collections"],
     summary: "Restore a soft-deleted collection",
     request: {
@@ -434,6 +445,7 @@ app.openapi(restoreRoute, async (c) => {
 const reorderRoute = createRoute({
     method: "post",
     path: "/reorder",
+    operationId: "dashboard.collections.reorder",
     tags: ["Admin - Collections"],
     summary: "Reorder collections",
     request: {
@@ -474,6 +486,7 @@ app.openapi(reorderRoute, async (c) => {
 const getByIdRoute = createRoute({
     method: "get",
     path: "/{id}",
+    operationId: "dashboard.collections.get",
     tags: ["Admin - Collections"],
     summary: "Get a collection by ID",
     request: {
@@ -501,6 +514,7 @@ app.openapi(getByIdRoute, async (c) => {
 const updateCollectionRoute = createRoute({
     method: "put",
     path: "/{id}",
+    operationId: "dashboard.collections.update",
     tags: ["Admin - Collections"],
     summary: "Update a collection",
     request: {
@@ -530,6 +544,7 @@ app.openapi(updateCollectionRoute, async (c) => {
 const deleteCollectionRoute = createRoute({
     method: "delete",
     path: "/{id}",
+    operationId: "dashboard.collections.trash",
     tags: ["Admin - Collections"],
     summary: "Soft-delete a collection",
     request: {
@@ -554,6 +569,7 @@ app.openapi(deleteCollectionRoute, async (c) => {
 const permanentDeleteRoute = createRoute({
     method: "delete",
     path: "/{id}/permanent",
+    operationId: "dashboard.collections.delete_permanently",
     tags: ["Admin - Collections"],
     summary: "Permanently delete a collection",
     request: {

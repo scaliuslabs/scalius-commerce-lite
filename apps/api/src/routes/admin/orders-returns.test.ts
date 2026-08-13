@@ -1,5 +1,6 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { errorResponseFromError } from "../../utils/api-response";
 
 const mocks = vi.hoisted(() => ({
     createOrderReturn: vi.fn(),
@@ -47,6 +48,10 @@ const baseResult = {
 
 function createApp() {
     const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1/admin");
+    app.onError((error, c) => {
+        const { body, status } = errorResponseFromError(error);
+        return c.json(body, status);
+    });
     app.use("*", async (c, next) => {
         c.set("db", db as never);
         c.set("user", { id: "admin_1" } as never);
@@ -62,6 +67,7 @@ describe("admin item return routes", () => {
         mocks.createOrderReturn.mockResolvedValue(baseResult);
         mocks.approveOrderReturn.mockResolvedValue({ ...baseResult, status: "approved", version: 2 });
         mocks.receiveOrderReturn.mockResolvedValue({ ...baseResult, status: "receiving", version: 3 });
+        mocks.cancelOrderReturn.mockResolvedValue({ ...baseResult, status: "cancelled", version: 2 });
         mocks.reconcileOrderReturnReceipt.mockResolvedValue({ ...baseResult, status: "receiving", version: 3 });
     });
 
@@ -151,5 +157,66 @@ describe("admin item return routes", () => {
             orderIds: ["order_1"],
             newStatus: "returned",
         }));
+    });
+
+    it.each([
+        ["create", "/api/v1/admin/orders/order_1/returns", 201, () => mocks.createOrderReturn, 2, {
+            expectedOrderVersion: 4,
+            reason: "wrong size",
+            lines: [{ orderItemId: "item_1", quantity: 1 }],
+        }],
+        ["approve", "/api/v1/admin/orders/order_1/returns/ret_1/approve", 200, () => mocks.approveOrderReturn, 3, {
+            expectedVersion: 1,
+            lines: [{ lineId: "line_1", approvedQuantity: 1, rejectedQuantity: 0 }],
+        }],
+        ["receive", "/api/v1/admin/orders/order_1/returns/ret_1/receive", 200, () => mocks.receiveOrderReturn, 3, {
+            expectedVersion: 2,
+            lines: [{ lineId: "line_1", receivedQuantity: 1, restockQuantity: 0, damagedQuantity: 1 }],
+        }],
+        ["cancel", "/api/v1/admin/orders/order_1/returns/ret_1/cancel", 200, () => mocks.cancelOrderReturn, 3, {
+            expectedVersion: 1,
+        }],
+    ] as const)("passes one canonical header key through exact %s replay", async (_, path, status, getMock, inputIndex, body) => {
+        const app = createApp();
+        const request = () => app.request(path, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Idempotency-Key": "return-header-key-1" },
+            body: JSON.stringify(body),
+        }, env);
+
+        expect((await request()).status).toBe(status);
+        expect((await request()).status).toBe(status);
+        expect(getMock()).toHaveBeenCalledTimes(2);
+        for (const call of getMock().mock.calls) {
+            expect(call[inputIndex]).toMatchObject({ commandKey: "return-header-key-1" });
+        }
+    });
+
+    it.each([
+        ["create", "/api/v1/admin/orders/order_1/returns", () => mocks.createOrderReturn, {
+            expectedOrderVersion: 4,
+            reason: "wrong size",
+            lines: [{ orderItemId: "item_1", quantity: 1 }],
+        }],
+        ["approve", "/api/v1/admin/orders/order_1/returns/ret_1/approve", () => mocks.approveOrderReturn, {
+            expectedVersion: 1,
+            lines: [{ lineId: "line_1", approvedQuantity: 1, rejectedQuantity: 0 }],
+        }],
+        ["receive", "/api/v1/admin/orders/order_1/returns/ret_1/receive", () => mocks.receiveOrderReturn, {
+            expectedVersion: 2,
+            lines: [{ lineId: "line_1", receivedQuantity: 1, restockQuantity: 0, damagedQuantity: 1 }],
+        }],
+        ["cancel", "/api/v1/admin/orders/order_1/returns/ret_1/cancel", () => mocks.cancelOrderReturn, {
+            expectedVersion: 1,
+        }],
+    ] as const)("rejects exact %s header/body mismatch", async (_, path, getMock, body) => {
+        const response = await createApp().request(path, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Idempotency-Key": "return-header-key-1" },
+            body: JSON.stringify({ ...body, commandKey: "return-body-key-2" }),
+        }, env);
+
+        expect(response.status).toBe(400);
+        expect(getMock()).not.toHaveBeenCalled();
     });
 });

@@ -379,6 +379,50 @@ describe("payment settings cache invalidation", () => {
         vi.clearAllMocks();
     });
 
+    it("never returns stored gateway secrets from configuration reads", async () => {
+        const { app, env } = createTestApp({}, [
+            { key: "secret_key", value: "sk_live_private_credential" },
+            { key: "publishable_key", value: "pk_live_public_identifier" },
+            { key: "store_id", value: "ssl_store_identifier" },
+            { key: "store_password", value: "ssl_private_credential" },
+            { key: "access_token", value: "polar_private_credential" },
+            { key: "product_id", value: "polar_product_identifier" },
+            { key: "webhook_secret", value: "provider_private_webhook" },
+            { key: "sandbox", value: "false" },
+            { key: "enabled", value: "true" },
+        ]);
+
+        const [stripeResponse, sslResponse, polarResponse] = await Promise.all([
+            getJson(app, env, "/stripe"),
+            getJson(app, env, "/sslcommerz"),
+            getJson(app, env, "/polar"),
+        ]);
+
+        expect(stripeResponse.status).toBe(200);
+        expect(sslResponse.status).toBe(200);
+        expect(polarResponse.status).toBe(200);
+        await expect(stripeResponse.json()).resolves.toMatchObject({
+            data: {
+                secretKey: "••••••••••••",
+                publishableKey: "pk_live_public_identifier",
+                webhookSecret: "••••••••••••",
+            },
+        });
+        await expect(sslResponse.json()).resolves.toMatchObject({
+            data: {
+                storeId: "ssl_store_identifier",
+                storePassword: "••••••••••••",
+            },
+        });
+        await expect(polarResponse.json()).resolves.toMatchObject({
+            data: {
+                accessToken: "••••••••••••",
+                productId: "polar_product_identifier",
+                webhookSecret: "••••••••••••",
+            },
+        });
+    });
+
     it("invalidates API and storefront checkout caches after payment method saves", async () => {
         const { app, env } = createTestApp();
         mocks.getStripeSettings.mockResolvedValueOnce({

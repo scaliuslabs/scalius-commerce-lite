@@ -71,13 +71,18 @@ import {
     retryFailedOrderNotificationOutboxById,
 } from "@scalius/core/modules/notifications";
 import type { OrderPaymentRecoveryFilter } from "@scalius/core/modules/orders";
+import {
+    createOrdersCsvArtifactBuilder,
+    createPaymentRecoveryCsvArtifactBuilder,
+    ORDER_CSV_ARTIFACT_MAX_BYTES,
+} from "@scalius/core/modules/orders/order-csv-export";
+import { resolveCanonicalIdempotencyKey } from "./idempotency-key";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 type AdminRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>;
 type AdminRouteContext<R extends RouteConfig> = Parameters<AdminRouteHandler<R>>[0];
 type OrderListSort = "relevance" | "customerName" | "totalAmount" | "status" | "createdAt" | "updatedAt";
-type PaymentRecoveryExportOrder = Awaited<ReturnType<typeof OrdersService.listOrders>>["orders"][number];
 
 const paymentStatusQuerySchema = z.enum([
     PaymentStatus.UNPAID,
@@ -107,71 +112,37 @@ const paymentRecoveryQuerySchema = z.enum([
     "needs_attention",
 ]);
 
+const manualOrderRequestKeySchema = z.uuid("A valid manual-order request key is required");
+const manualOrderIdempotencyHeadersSchema = z.object({
+    "idempotency-key": manualOrderRequestKeySchema.optional().openapi({
+        description: "Standard retry key. May replace body.requestKey; if both are sent they must match.",
+    }),
+});
+const createOrderRequestSchema = createOrderSchema.extend({
+    requestKey: manualOrderRequestKeySchema.optional(),
+});
+
 const recoveryLinkPaymentTypeSchema = z.enum(["full", "deposit", "balance"]);
 
+const ORDER_EXPORT_MAX_ROWS = 5_000;
+const ORDER_EXPORT_PAGE_SIZE = 100;
 const PAYMENT_RECOVERY_EXPORT_MAX_ROWS = 5_000;
 const PAYMENT_RECOVERY_EXPORT_PAGE_SIZE = 100;
 
-function toCsvCell(value: unknown): string {
-    const normalized = value == null
-        ? ""
-        : value instanceof Date
-            ? value.toISOString()
-            : String(value);
-    return `"${normalized.replaceAll('"', '""')}"`;
-}
-
-function toCsvRow(values: unknown[]): string {
-    return values.map(toCsvCell).join(",");
-}
-
-function buildPaymentRecoveryCsv(ordersList: PaymentRecoveryExportOrder[]): string {
-    const headers = [
-        "Order ID",
-        "Customer Name",
-        "Phone",
-        "Email",
-        "Order Status",
-        "Payment Status",
-        "Payment Method",
-        "Recovery State",
-        "Recovery Label",
-        "Recovery Gateway",
-        "Recovery Payment Type",
-        "Recovery Attempt Status",
-        "Recovery Attempts",
-        "Active Processing",
-        "Stale Processing",
-        "Recovery Updated At",
-        "Total Amount",
-        "Created At",
-    ];
-
-    const rows = ordersList.map((order) => [
-        order.id,
-        order.customerName,
-        order.customerPhone,
-        order.customerEmail ?? "",
-        order.status,
-        order.paymentStatus,
-        order.paymentMethod,
-        order.paymentRecovery.state,
-        order.paymentRecovery.label,
-        order.paymentRecovery.gateway ?? "",
-        order.paymentRecovery.paymentType ?? "",
-        order.paymentRecovery.status ?? "",
-        order.paymentRecovery.attempts,
-        order.paymentRecovery.activeProcessing ? "yes" : "no",
-        order.paymentRecovery.staleProcessing ? "yes" : "no",
-        order.paymentRecovery.updatedAt,
-        order.totalAmount,
-        order.createdAt,
-    ]);
-
-    return [
-        toCsvRow(headers),
-        ...rows.map(toCsvRow),
-    ].join("\n");
+function csvStream(chunks: readonly string[]): ReadableStream<Uint8Array> {
+    const encoder = new TextEncoder();
+    let index = 0;
+    return new ReadableStream({
+        pull(controller) {
+            const chunk = chunks[index];
+            if (chunk === undefined) {
+                controller.close();
+                return;
+            }
+            index += 1;
+            controller.enqueue(encoder.encode(chunk));
+        },
+    });
 }
 
 function resolveStorefrontUrl(env: Env): URL {
@@ -384,6 +355,7 @@ const formDataProductSchema = z.object({
 // ─── GET /catalog-products ──────────────────────────────────────────────────
 
 const catalogProductsRoute = createRoute({
+    operationId: "dashboard.orders.catalog_products",
     method: "get",
     path: "/catalog-products",
     tags: ["Admin - Orders"],
@@ -424,6 +396,7 @@ app.openapi(catalogProductsRoute, async (c) => {
 // ─── GET / (List) ────────────────────────────────────────────────────────────
 
 const listOrdersRoute = createRoute({
+    operationId: "dashboard.orders.list",
     method: "get",
     path: "/",
     tags: ["Admin - Orders"],
@@ -495,9 +468,111 @@ app.openapi(listOrdersRoute, async (c) => {
     return ok(c, result);
 });
 
+// ─── GET /export (bounded CSV artifact) ────────────────────────────────────
+
+const exportOrdersRoute = createRoute({
+    operationId: "dashboard.orders.export",
+    method: "get",
+    path: "/export",
+    tags: ["Admin - Orders"],
+    summary: "Export filtered orders as a bounded CSV artifact",
+    request: {
+        query: z.object({
+            search: z.string().optional().openapi({ description: "Search query" }),
+            status: z.string().optional().openapi({ description: "Filter by status" }),
+            statusGroup: z.enum(["open", "in_transit", "delivered", "closed"]).optional(),
+            paymentStatus: paymentStatusQuerySchema.optional(),
+            paymentMethod: paymentMethodQuerySchema.optional(),
+            fulfillmentStatus: fulfillmentStatusQuerySchema.optional(),
+            paymentRecovery: paymentRecoveryQuerySchema.optional(),
+            archived: z.enum(["true", "false"]).optional(),
+            sort: z.enum([
+                "relevance", "customerName", "totalAmount", "status", "createdAt", "updatedAt",
+            ]).optional(),
+            order: z.enum(["asc", "desc"]).optional().default("desc"),
+            startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+            endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+            maxRows: z.coerce.number()
+                .int()
+                .min(1)
+                .max(ORDER_EXPORT_MAX_ROWS)
+                .optional()
+                .default(1_000)
+                .openapi({ description: "Maximum rows to export. Hard-capped at 5000." }),
+        }),
+    },
+    responses: {
+        200: {
+            description: "Private spreadsheet-safe order CSV",
+            content: { "text/csv": { schema: z.string() } },
+        },
+        ...errorResponses,
+    },
+});
+
+app.openapi(exportOrdersRoute, async (c) => {
+    const query = c.req.valid("query");
+    const maxRows = Math.min(query.maxRows, ORDER_EXPORT_MAX_ROWS);
+    const effectiveSort: OrderListSort = query.sort
+        ?? (query.search?.trim() ? "relevance" : "updatedAt");
+    const csvBuilder = createOrdersCsvArtifactBuilder();
+    let exportedRows = 0;
+    let page = 1;
+    let total = 0;
+
+    exportPages: while (exportedRows < maxRows) {
+        const result = await OrdersService.listOrders(c.get("db"), {
+            page,
+            limit: Math.min(ORDER_EXPORT_PAGE_SIZE, maxRows - exportedRows),
+            search: query.search || "",
+            status: query.status || undefined,
+            statusGroup: query.statusGroup,
+            paymentStatus: query.paymentStatus,
+            paymentMethod: query.paymentMethod,
+            fulfillmentStatus: query.fulfillmentStatus,
+            paymentRecovery: query.paymentRecovery,
+            showArchived: query.archived === "true",
+            sort: effectiveSort,
+            order: query.order,
+            startDate: parseBangladeshDateOnlyBoundary(query.startDate, "start"),
+            endDate: parseBangladeshDateOnlyBoundary(query.endDate, "end"),
+        });
+        total = result.pagination.total;
+        for (const order of result.orders) {
+            if (!csvBuilder.append(order)) break exportPages;
+            exportedRows += 1;
+        }
+        if (result.orders.length === 0 || page >= result.pagination.totalPages) break;
+        page += 1;
+    }
+
+    const artifact = csvBuilder.finish();
+    const limited = artifact.truncatedByBytes || total > artifact.rowCount;
+    const truncatedBy = artifact.truncatedByBytes
+        ? "bytes"
+        : total > artifact.rowCount
+            ? "rows"
+            : "none";
+    const filename = `orders-${new Date().toISOString().slice(0, 10)}.csv`;
+    return c.body(csvStream(artifact.chunks), 200, {
+        "Content-Type": "text/csv; charset=utf-8",
+        "Content-Disposition": `attachment; filename="${filename}"`,
+        "Content-Length": String(artifact.byteLength),
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
+        "X-Export-Limited": limited ? "true" : "false",
+        "X-Export-Truncated-By": truncatedBy,
+        "X-Export-Artifact-Bytes": String(artifact.byteLength),
+        "X-Export-Max-Bytes": String(ORDER_CSV_ARTIFACT_MAX_BYTES),
+        "X-Export-Row-Count": String(artifact.rowCount),
+        "X-Export-Total-Count": String(total),
+    });
+});
+
 // ─── GET /payment-recovery (Dedicated queue view) ───────────────────────────
 
 const paymentRecoveryListRoute = createRoute({
+    operationId: "dashboard.orders.payment_recovery_list",
     method: "get",
     path: "/payment-recovery",
     tags: ["Admin - Orders"],
@@ -557,6 +632,7 @@ app.openapi(paymentRecoveryListRoute, async (c) => {
 });
 
 const paymentRecoveryExportRoute = createRoute({
+    operationId: "dashboard.orders.payment_recovery_export",
     method: "get",
     path: "/payment-recovery/export",
     tags: ["Admin - Orders"],
@@ -565,7 +641,14 @@ const paymentRecoveryExportRoute = createRoute({
         query: z.object({
             search: z.string().optional().openapi({ description: "Search query" }),
             state: paymentRecoveryQuerySchema.optional().default("recoverable").openapi({ description: "Hosted-payment recovery state" }),
+            status: z.string().optional().openapi({ description: "Filter by exact order status" }),
+            statusGroup: z.enum(["open", "in_transit", "delivered", "closed"])
+                .optional()
+                .openapi({ description: "Filter by order lifecycle view" }),
+            paymentStatus: paymentStatusQuerySchema.optional().openapi({ description: "Filter by payment status" }),
             paymentMethod: paymentMethodQuerySchema.optional().openapi({ description: "Filter by payment gateway" }),
+            fulfillmentStatus: fulfillmentStatusQuerySchema.optional().openapi({ description: "Filter by fulfillment status" }),
+            archived: z.enum(["true", "false"]).optional().openapi({ description: "Show archived orders" }),
             sort: z.enum([
                 "relevance",
                 "customerName",
@@ -607,36 +690,56 @@ app.openapi(paymentRecoveryExportRoute, async (c) => {
     const maxRows = Math.min(query.maxRows, PAYMENT_RECOVERY_EXPORT_MAX_ROWS);
     const effectiveSort: OrderListSort = query.sort
         ?? (query.search?.trim() ? "relevance" : "updatedAt");
-    const rows: PaymentRecoveryExportOrder[] = [];
+    const csvBuilder = createPaymentRecoveryCsvArtifactBuilder();
+    let exportedRows = 0;
     let page = 1;
     let total = 0;
 
-    while (rows.length < maxRows) {
+    exportPages: while (exportedRows < maxRows) {
         const result = await OrdersService.listOrders(db, {
             page,
-            limit: Math.min(PAYMENT_RECOVERY_EXPORT_PAGE_SIZE, maxRows - rows.length),
+            limit: Math.min(PAYMENT_RECOVERY_EXPORT_PAGE_SIZE, maxRows - exportedRows),
             search: query.search || "",
+            status: query.status || undefined,
+            statusGroup: query.statusGroup,
+            paymentStatus: query.paymentStatus,
             paymentMethod: query.paymentMethod,
+            fulfillmentStatus: query.fulfillmentStatus,
             paymentRecovery: query.state as OrderPaymentRecoveryFilter,
+            showArchived: query.archived === "true",
             sort: effectiveSort,
             order: query.order as "asc" | "desc",
             startDate: parseBangladeshDateOnlyBoundary(query.startDate, "start"),
             endDate: parseBangladeshDateOnlyBoundary(query.endDate, "end"),
         });
         total = result.pagination.total;
-        rows.push(...result.orders);
+        for (const order of result.orders) {
+            if (!csvBuilder.append(order)) break exportPages;
+            exportedRows += 1;
+        }
         if (result.orders.length === 0 || page >= result.pagination.totalPages) break;
         page += 1;
     }
 
-    const csv = buildPaymentRecoveryCsv(rows);
+    const artifact = csvBuilder.finish();
+    const limited = artifact.truncatedByBytes || total > artifact.rowCount;
+    const truncatedBy = artifact.truncatedByBytes
+        ? "bytes"
+        : total > artifact.rowCount
+            ? "rows"
+            : "none";
     const filename = `payment-recovery-${new Date().toISOString().slice(0, 10)}.csv`;
-    return c.text(csv, 200, {
+    return c.body(csvStream(artifact.chunks), 200, {
         "Content-Type": "text/csv; charset=utf-8",
         "Content-Disposition": `attachment; filename="${filename}"`,
+        "Content-Length": String(artifact.byteLength),
         "Cache-Control": "private, no-store",
-        "X-Export-Limited": total > rows.length ? "true" : "false",
-        "X-Export-Row-Count": String(rows.length),
+        "X-Content-Type-Options": "nosniff",
+        "X-Export-Limited": limited ? "true" : "false",
+        "X-Export-Truncated-By": truncatedBy,
+        "X-Export-Artifact-Bytes": String(artifact.byteLength),
+        "X-Export-Max-Bytes": String(ORDER_CSV_ARTIFACT_MAX_BYTES),
+        "X-Export-Row-Count": String(artifact.rowCount),
         "X-Export-Total-Count": String(total),
     });
 });
@@ -666,6 +769,7 @@ const manualOrderQuoteSchema = z.object({
 });
 
 const quoteManualOrderRoute = createRoute({
+    operationId: "dashboard.orders.quote",
     method: "post",
     path: "/quote",
     tags: ["Admin - Orders"],
@@ -689,12 +793,14 @@ app.openapi(quoteManualOrderRoute, async (c) => {
 });
 
 const createOrderRoute = createRoute({
+    operationId: "dashboard.orders.create",
     method: "post",
     path: "/",
     tags: ["Admin - Orders"],
     summary: "Create a new order (admin)",
     request: {
-        body: { content: { "application/json": { schema: createOrderSchema } } }
+        headers: manualOrderIdempotencyHeadersSchema,
+        body: { required: true, content: { "application/json": { schema: createOrderRequestSchema } } }
     },
     responses: {
         201: {
@@ -708,7 +814,13 @@ const createOrderRoute = createRoute({
 
 app.openapi(createOrderRoute, async (c) => {
     const db = c.get("db");
-    const data = c.req.valid("json");
+    const { requestKey: bodyRequestKey, ...payload } = c.req.valid("json");
+    const requestKey = resolveCanonicalIdempotencyKey(
+        c.req.valid("header")["idempotency-key"],
+        bodyRequestKey,
+        "requestKey",
+    );
+    const data = { ...payload, requestKey };
     const user = c.get("user") as { id?: string } | undefined;
     const result = await OrdersService.createOrder(db, data, user?.id ?? null);
     const availabilityTransitionVariantIds =
@@ -733,6 +845,7 @@ app.openapi(createOrderRoute, async (c) => {
 // ─── POST /archive ───────────────────────────────────────────────────────────
 
 const archiveOrdersRoute = createRoute({
+    operationId: "dashboard.orders.archive",
     method: "post",
     path: "/archive",
     tags: ["Admin - Orders"],
@@ -757,6 +870,7 @@ app.openapi(archiveOrdersRoute, async (c) => {
 // ─── POST /bulk-ship ─────────────────────────────────────────────────────────
 
 const bulkShipRoute = createRoute({
+    operationId: "dashboard.orders.bulk_ship",
     method: "post",
     path: "/bulk-ship",
     tags: ["Admin - Orders"],
@@ -833,6 +947,7 @@ app.openapi(bulkShipRoute, (async (c: AdminRouteContext<typeof bulkShipRoute>) =
 // ─── POST /:id/payment-recovery-link ─────────────────────────────────────────
 
 const createPaymentRecoveryLinkRoute = createRoute({
+    operationId: "dashboard.orders.payment_recovery_link",
     method: "post",
     path: "/{id}/payment-recovery-link",
     tags: ["Admin - Orders"],
@@ -873,6 +988,7 @@ app.openapi(createPaymentRecoveryLinkRoute, async (c) => {
 // ─── GET /:id ────────────────────────────────────────────────────────────────
 
 const getOrderRoute = createRoute({
+    operationId: "dashboard.orders.get",
     method: "get",
     path: "/{id}",
     tags: ["Admin - Orders"],
@@ -900,6 +1016,7 @@ app.openapi(getOrderRoute, (async (c: AdminRouteContext<typeof getOrderRoute>) =
 // ─── PUT /:id ────────────────────────────────────────────────────────────────
 
 const updateOrderRoute = createRoute({
+    operationId: "dashboard.orders.update",
     method: "put",
     path: "/{id}",
     tags: ["Admin - Orders"],
@@ -942,6 +1059,7 @@ app.openapi(updateOrderRoute, async (c) => {
 // ─── POST /:id/restore ──────────────────────────────────────────────────────
 
 const restoreOrderRoute = createRoute({
+    operationId: "dashboard.orders.restore",
     method: "post",
     path: "/{id}/restore",
     tags: ["Admin - Orders"],
@@ -967,6 +1085,7 @@ app.openapi(restoreOrderRoute, async (c) => {
 // ─── GET /:id/items ──────────────────────────────────────────────────────────
 
 const getItemsRoute = createRoute({
+    operationId: "dashboard.orders.items",
     method: "get",
     path: "/{id}/items",
     tags: ["Admin - Orders"],
@@ -1021,6 +1140,7 @@ app.openapi(getItemsRoute, async (c) => {
 // ─── GET /:id/payments ───────────────────────────────────────────────────────
 
 const getPaymentsRoute = createRoute({
+    operationId: "dashboard.orders.payments",
     method: "get",
     path: "/{id}/payments",
     tags: ["Admin - Orders"],
@@ -1129,6 +1249,7 @@ const orderNotificationOutboxSchema = z.object({
 });
 
 const getNotificationsRoute = createRoute({
+    operationId: "dashboard.orders.notifications",
     method: "get",
     path: "/{id}/notifications",
     tags: ["Admin - Orders"],
@@ -1160,6 +1281,7 @@ app.openapi(getNotificationsRoute, (async (c: AdminRouteContext<typeof getNotifi
 // ─── POST /:id/notifications/:outboxId/retry ───────────────────────────────
 
 const retryNotificationRoute = createRoute({
+    operationId: "dashboard.orders.notification_retry",
     method: "post",
     path: "/{id}/notifications/{outboxId}/retry",
     tags: ["Admin - Orders"],
@@ -1200,17 +1322,25 @@ app.openapi(retryNotificationRoute, (async (c: AdminRouteContext<typeof retryNot
 // ─── POST /:id/notifications/:outboxId/resend ──────────────────────────────
 
 const resendNotificationBodySchema = z.object({
-    resendRequestId: z.string().trim().min(1).max(128),
+    resendRequestId: z.string().trim().min(1).max(128).optional(),
+});
+const resendNotificationRequestIdSchema = z.string().trim().min(1).max(128);
+const resendNotificationIdempotencyHeadersSchema = z.object({
+    "idempotency-key": resendNotificationRequestIdSchema.optional().openapi({
+        description: "Standard retry key. May replace body.resendRequestId; if both are sent they must match.",
+    }),
 });
 
 const resendNotificationRoute = createRoute({
+    operationId: "dashboard.orders.notification_resend",
     method: "post",
     path: "/{id}/notifications/{outboxId}/resend",
     tags: ["Admin - Orders"],
     summary: "Manually resend an already-sent order notification",
     request: {
         params: z.object({ id: z.string(), outboxId: z.string() }),
-        body: { content: { "application/json": { schema: resendNotificationBodySchema } } },
+        headers: resendNotificationIdempotencyHeadersSchema,
+        body: { required: true, content: { "application/json": { schema: resendNotificationBodySchema } } },
     },
     responses: {
         200: {
@@ -1232,7 +1362,12 @@ const resendNotificationRoute = createRoute({
 
 app.openapi(resendNotificationRoute, (async (c: AdminRouteContext<typeof resendNotificationRoute>) => {
     const { id: orderId, outboxId } = c.req.valid("param");
-    const { resendRequestId } = c.req.valid("json");
+    const { resendRequestId: bodyResendRequestId } = c.req.valid("json");
+    const resendRequestId = resolveCanonicalIdempotencyKey(
+        c.req.valid("header")["idempotency-key"],
+        bodyResendRequestId,
+        "resendRequestId",
+    );
     const db = c.get("db");
     const result = await resendTerminalOrderNotificationOutboxById({
         db,
@@ -1247,6 +1382,7 @@ app.openapi(resendNotificationRoute, (async (c: AdminRouteContext<typeof resendN
 // ─── GET /:id/form-data ──────────────────────────────────────────────────────
 
 const getFormDataRoute = createRoute({
+    operationId: "dashboard.orders.form_data",
     method: "get",
     path: "/{id}/form-data",
     tags: ["Admin - Orders"],

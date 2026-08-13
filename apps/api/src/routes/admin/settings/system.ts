@@ -67,6 +67,19 @@ const app = new OpenAPIHono<{ Bindings: Env }>();
 const MASKED = "••••••••••••";
 const CHECKOUT_CACHE_GROUPS = ["checkout"] as const;
 const LAYOUT_CACHE_GROUPS = ["layout"] as const;
+const MERCHANT_CSP_INPUT_MAX_LENGTH = 65_536;
+const MERCHANT_CSP_ORIGIN_MAX_LENGTH = 512;
+const MERCHANT_CSP_SOURCE_MAX_COUNT = 100;
+const MERCHANT_CSP_OUTPUT_MAX_LENGTH =
+    MERCHANT_CSP_SOURCE_MAX_COUNT * MERCHANT_CSP_ORIGIN_MAX_LENGTH +
+    (MERCHANT_CSP_SOURCE_MAX_COUNT - 1);
+const INHERITED_SECURITY_ORIGIN_MAX_LENGTH = 2_048;
+const PROVIDER_STATUS_ERROR_MAX_LENGTH = 1_000;
+const WHATSAPP_ACCESS_TOKEN_MAX_LENGTH = 2_048;
+const WHATSAPP_PHONE_NUMBER_ID_MAX_LENGTH = 128;
+const WHATSAPP_TEMPLATE_NAME_MAX_LENGTH = 128;
+const EMAIL_API_KEY_MAX_LENGTH = 512;
+const EMAIL_SENDER_MAX_LENGTH = 320;
 
 function normalizeStoredMerchantCspSources(
     value: string,
@@ -82,8 +95,92 @@ function normalizeStoredMerchantCspSources(
         (source): source is string => Boolean(source),
     ));
     return serializeMerchantCspSources(
-        parseMerchantCspSources(value).filter((source) => !inherited.has(source)),
+        parseMerchantCspSources(value)
+            .filter(
+                (source) =>
+                    !inherited.has(source) &&
+                    source.length <= MERCHANT_CSP_ORIGIN_MAX_LENGTH,
+            )
+            .slice(0, MERCHANT_CSP_SOURCE_MAX_COUNT),
     );
+}
+
+const inheritedSecuritySourceKindSchema = z.enum([
+    "storefront",
+    "api",
+    "dashboard",
+    "media",
+]);
+
+const inheritedSecuritySourceSchema = z.object({
+    key: z.string(),
+    label: z.string(),
+    kind: inheritedSecuritySourceKindSchema,
+    source: z.string().max(INHERITED_SECURITY_ORIGIN_MAX_LENGTH).nullable(),
+    consequence: z.string(),
+});
+
+function inheritedSecuritySource(
+    key: string,
+    label: string,
+    kind: z.infer<typeof inheritedSecuritySourceKindSchema>,
+    raw: unknown,
+    consequence: string,
+) {
+    const normalizedSource = normalizePlatformOrigin(raw);
+    return {
+        key,
+        label,
+        kind,
+        source:
+            normalizedSource &&
+            normalizedSource.length <= INHERITED_SECURITY_ORIGIN_MAX_LENGTH
+                ? normalizedSource
+                : null,
+        consequence,
+    };
+}
+
+export function getInheritedSecuritySources(
+    env: Record<string, unknown>,
+): Array<z.infer<typeof inheritedSecuritySourceSchema>> {
+    return [
+        inheritedSecuritySource(
+            "storefront",
+            "Storefront",
+            "storefront",
+            env.STOREFRONT_URL,
+            "The storefront trusts its own origin by default.",
+        ),
+        inheritedSecuritySource(
+            "api",
+            "Commerce API",
+            "api",
+            env.PUBLIC_API_BASE_URL,
+            "Buyer requests can connect to this exact API origin.",
+        ),
+        inheritedSecuritySource(
+            "dashboard",
+            "Admin dashboard",
+            "dashboard",
+            env.BETTER_AUTH_URL,
+            "Admin sessions and credentialed API requests recognize this exact origin.",
+        ),
+        inheritedSecuritySource(
+            "cdn",
+            "Canonical media CDN",
+            "media",
+            env.CDN_DOMAIN_URL,
+            "Storefront images can load from this exact media origin.",
+        ),
+        inheritedSecuritySource(
+            "r2",
+            "Public media storage",
+            "media",
+            env.R2_PUBLIC_URL,
+            "Existing public media can load from this exact storage origin.",
+        ),
+    ];
 }
 
 const customerAuthPolicySchema = z.object({
@@ -118,6 +215,7 @@ function parseCustomerAuthPolicy(value: string | null | undefined): unknown {
 const getCheckoutReadinessRoute = createRoute({
     method: "get",
     path: "/checkout-readiness",
+    operationId: "dashboard.checkout.readiness_get",
     tags: ["Admin - Settings"],
     summary: "Get checkout readiness",
     responses: {
@@ -149,6 +247,7 @@ const checkoutFlowSettingsSchema = z.object({
 const getCheckoutFlowRoute = createRoute({
     method: "get",
     path: "/checkout-flow",
+    operationId: "dashboard.checkout.flow_get",
     tags: ["Admin - Settings"],
     summary: "Get versioned checkout flow settings",
     responses: {
@@ -176,10 +275,12 @@ const saveCheckoutFlowSchema = checkoutFlowSettingsSchema
 const saveCheckoutFlowRoute = createRoute({
     method: "put",
     path: "/checkout-flow",
+    operationId: "dashboard.checkout.flow_update",
     tags: ["Admin - Settings"],
     summary: "Save versioned checkout flow settings",
     request: {
         body: {
+            required: true,
             content: { "application/json": { schema: saveCheckoutFlowSchema } },
         },
     },
@@ -232,14 +333,15 @@ app.openapi(saveCheckoutFlowRoute, async (c) => {
 const authSettingsResponseSchema = z.object({
     authVerificationMethod: z.enum(CUSTOMER_AUTH_METHODS),
     customerAuthPolicy: customerAuthPolicySchema,
-    whatsappAccessToken: z.string(),
-    whatsappPhoneNumberId: z.string(),
-    whatsappTemplateName: z.string(),
+    whatsappAccessToken: z.string().max(MASKED.length),
+    whatsappPhoneNumberId: z.string().max(WHATSAPP_PHONE_NUMBER_ID_MAX_LENGTH),
+    whatsappTemplateName: z.string().max(WHATSAPP_TEMPLATE_NAME_MAX_LENGTH),
 });
 
 const getAuthRoute = createRoute({
     method: "get",
     path: "/auth",
+    operationId: "dashboard.settings.customer_auth_get",
     tags: ["Admin - Settings"],
     summary: "Get customer authentication settings",
     responses: {
@@ -277,25 +379,40 @@ app.openapi(getAuthRoute, async (c) => {
                     : normalizeCustomerAuthMethod(row.authVerificationMethod),
                 customerAuthPolicy,
             whatsappAccessToken: whatsapp.accessTokenConfigured ? MASKED : "",
-            whatsappPhoneNumberId: whatsapp.phoneNumberId || "",
-            whatsappTemplateName: whatsapp.authTemplateName || "",
+            whatsappPhoneNumberId: (whatsapp.phoneNumberId || "").slice(
+                0,
+                WHATSAPP_PHONE_NUMBER_ID_MAX_LENGTH,
+            ),
+            whatsappTemplateName: (whatsapp.authTemplateName || "").slice(
+                0,
+                WHATSAPP_TEMPLATE_NAME_MAX_LENGTH,
+            ),
         });
 });
 
 const saveAuthSchema = z.object({
     authVerificationMethod: z.enum(CUSTOMER_AUTH_METHODS).optional(),
     customerAuthPolicy: customerAuthPolicySchema.optional(),
-    whatsappAccessToken: z.string().optional(),
-    whatsappPhoneNumberId: z.string().nullable().optional(),
-    whatsappTemplateName: z.string().nullable().optional(),
+    whatsappAccessToken: z.string().max(WHATSAPP_ACCESS_TOKEN_MAX_LENGTH).optional(),
+    whatsappPhoneNumberId: z
+        .string()
+        .max(WHATSAPP_PHONE_NUMBER_ID_MAX_LENGTH)
+        .nullable()
+        .optional(),
+    whatsappTemplateName: z
+        .string()
+        .max(WHATSAPP_TEMPLATE_NAME_MAX_LENGTH)
+        .nullable()
+        .optional(),
 }).strict();
 
 const saveAuthRoute = createRoute({
     method: "post",
     path: "/auth",
+    operationId: "dashboard.settings.customer_auth_update",
     tags: ["Admin - Settings"],
     summary: "Save customer authentication settings",
-    request: { body: { content: { "application/json": { schema: saveAuthSchema } } } },
+    request: { body: { required: true, content: { "application/json": { schema: saveAuthSchema } } } },
     responses: {
         200: { description: "Auth settings saved", content: { "application/json": { schema: messageResponse } } },
         ...errorResponses,
@@ -445,8 +562,9 @@ const getSecurityRoute = createRoute({
     path: "/security",
     tags: ["Admin - Settings"],
     summary: "Get security settings",
+    operationId: "dashboard.security.policy_get",
     responses: {
-        200: { description: "Security settings", content: { "application/json": { schema: successEnvelope(z.object({ cspAllowedDomains: z.string() })) } } },
+        200: { description: "Security settings", content: { "application/json": { schema: successEnvelope(z.object({ cspAllowedDomains: z.string().max(MERCHANT_CSP_OUTPUT_MAX_LENGTH) })) } } },
         ...errorResponses,
     }
 });
@@ -467,8 +585,35 @@ app.openapi(getSecurityRoute, async (c) => {
         });
 });
 
+const getSecurityRuntimeSourcesRoute = createRoute({
+    method: "get",
+    path: "/security/runtime-sources",
+    tags: ["Admin - Settings"],
+    summary: "Get inherited storefront security origins",
+    operationId: "dashboard.security.runtime_sources",
+    responses: {
+        200: {
+            description: "Inherited storefront security origins",
+            content: {
+                "application/json": {
+                    schema: successEnvelope(z.array(inheritedSecuritySourceSchema)),
+                },
+            },
+        },
+        ...errorResponses,
+    },
+});
+
+app.openapi(getSecurityRuntimeSourcesRoute, async (c) => {
+    c.header("Cache-Control", "private, no-store");
+    return ok(
+        c,
+        getInheritedSecuritySources(c.env as unknown as Record<string, unknown>),
+    );
+});
+
 const saveSecuritySchema = z.object({
-    cspAllowedDomains: z.string().optional(),
+    cspAllowedDomains: z.string().max(MERCHANT_CSP_INPUT_MAX_LENGTH).optional(),
 });
 
 const saveSecurityRoute = createRoute({
@@ -476,7 +621,13 @@ const saveSecurityRoute = createRoute({
     path: "/security",
     tags: ["Admin - Settings"],
     summary: "Save security settings",
-    request: { body: { content: { "application/json": { schema: saveSecuritySchema } } } },
+    operationId: "dashboard.security.policy_update",
+    request: {
+        body: {
+            required: true,
+            content: { "application/json": { schema: saveSecuritySchema } },
+        },
+    },
     responses: {
         200: { description: "Security settings saved", content: { "application/json": { schema: messageResponse } } },
         ...errorResponses,
@@ -534,18 +685,19 @@ app.openapi(saveSecurityRoute, async (c) => {
 const getEmailRoute = createRoute({
     method: "get",
     path: "/email",
+    operationId: "dashboard.settings.email_get",
     tags: ["Admin - Settings"],
     summary: "Get email settings (system)",
     responses: {
         200: { description: "Email settings", content: { "application/json": { schema: successEnvelope(z.object({
             provider: z.enum(["cloudflare", "resend"]),
-            apiKey: z.string(),
-            sender: z.string(),
+            apiKey: z.string().max(MASKED.length),
+            sender: z.string().max(EMAIL_SENDER_MAX_LENGTH),
             senderConfigured: z.boolean(),
             cloudflareBindingConfigured: z.boolean(),
             resendConfigured: z.boolean(),
             ready: z.boolean(),
-            readinessError: z.string().nullable(),
+            readinessError: z.string().max(PROVIDER_STATUS_ERROR_MAX_LENGTH).nullable(),
         })) } } },
         ...errorResponses,
     }
@@ -569,19 +721,22 @@ app.openapi(getEmailRoute, async (c) => {
         return ok(c, {
             provider: emailSettings.provider,
             apiKey: emailSettings.hasResendApiKey ? MASKED : "",
-            sender: sender || "",
+            sender: (sender || "").slice(0, EMAIL_SENDER_MAX_LENGTH),
             senderConfigured: emailReadiness.senderConfigured,
             cloudflareBindingConfigured: emailSettings.cloudflareBindingConfigured,
             resendConfigured: emailSettings.hasResendApiKey,
             ready: emailReadiness.configured,
-            readinessError: emailReadiness.error,
+            readinessError:
+                typeof emailReadiness.error === "string"
+                    ? emailReadiness.error.slice(0, PROVIDER_STATUS_ERROR_MAX_LENGTH)
+                    : null,
         });
 });
 
 const saveEmailSchema = z.object({
     provider: z.enum(["cloudflare", "resend"]).optional(),
-    apiKey: z.string().max(512).optional(),
-    sender: z.string().max(320).refine(
+    apiKey: z.string().max(EMAIL_API_KEY_MAX_LENGTH).optional(),
+    sender: z.string().max(EMAIL_SENDER_MAX_LENGTH).refine(
         (value) => value.trim() === "" || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value),
         "Sender must be a valid email address",
     ).optional(),
@@ -590,9 +745,10 @@ const saveEmailSchema = z.object({
 const saveEmailRoute = createRoute({
     method: "post",
     path: "/email",
+    operationId: "dashboard.settings.email_update",
     tags: ["Admin - Settings"],
     summary: "Save email settings (system)",
-    request: { body: { content: { "application/json": { schema: saveEmailSchema } } } },
+    request: { body: { required: true, content: { "application/json": { schema: saveEmailSchema } } } },
     responses: {
         200: { description: "Email settings saved", content: { "application/json": { schema: messageResponse } } },
         ...errorResponses,
@@ -640,6 +796,7 @@ app.openapi(saveEmailRoute, async (c) => {
 const getFirebaseRoute = createRoute({
     method: "get",
     path: "/firebase",
+    operationId: "dashboard.notifications.firebase_get",
     tags: ["Admin - Settings"],
     summary: "Get Firebase settings (system)",
     responses: {
@@ -672,9 +829,10 @@ const saveFirebaseSchema = z.object({
 const saveFirebaseRoute = createRoute({
     method: "post",
     path: "/firebase",
+    operationId: "dashboard.notifications.firebase_update",
     tags: ["Admin - Settings"],
     summary: "Save Firebase settings (system)",
-    request: { body: { content: { "application/json": { schema: saveFirebaseSchema } } } },
+    request: { body: { required: true, content: { "application/json": { schema: saveFirebaseSchema } } } },
     responses: {
         200: { description: "Firebase settings saved", content: { "application/json": { schema: messageResponse } } },
         ...errorResponses,

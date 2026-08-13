@@ -263,6 +263,7 @@ function publicRefundResult<T extends {
 // ─── POST /:id/refund ────────────────────────────────────────────────────────
 
 const refundOrderRoute = createRoute({
+    operationId: "dashboard.orders.refund",
     method: "post",
     path: "/{id}/refund",
     tags: ["Admin - Orders"],
@@ -334,6 +335,7 @@ app.openapi(refundOrderRoute, async (c) => {
 // ─── POST /:id/refund-attempts/:attemptId/reconcile ─────────────────────────
 
 const reconcileRefundAttemptRoute = createRoute({
+    operationId: "dashboard.orders.refund_reconcile",
     method: "post",
     path: "/{id}/refund-attempts/{attemptId}/reconcile",
     tags: ["Admin - Orders"],

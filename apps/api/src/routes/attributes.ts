@@ -21,13 +21,25 @@ const app = new OpenAPIHono<{ Bindings: Env }>();
 // Cache this endpoint as it changes infrequently
 // Cache category-specific attributes
 // Cache category-specific attributes by slug
-const attributeFilterSchema = z.object({ id: z.string(), name: z.string(), slug: z.string(), values: z.array(z.string()) }).passthrough();
+const attributeFilterSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  slug: z.string(),
+  values: z.array(z.string()).max(100),
+});
 const filterResponseSchema = successEnvelope(z.object({ filters: z.array(attributeFilterSchema) }));
+const publicAttributeCategorySlugSchema = z
+  .string()
+  .trim()
+  .min(3)
+  .max(100)
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
 
 // GET /attributes/filterable
 const filterableRoute = createRoute({
   method: "get",
   path: "/filterable",
+  operationId: "storefront.attributes.list_filterable",
   tags: ["Attributes"],
   summary: "Get all filterable product attributes with values",
   responses: {
@@ -49,11 +61,12 @@ app.openapi(filterableRoute, async (c) => {
 const categoryAttributesRoute = createRoute({
   method: "get",
   path: "/category/{categoryId}",
+  operationId: "storefront.attributes.category_id_alias",
   tags: ["Attributes"],
   summary: "Get filterable attributes for a category by ID",
   request: {
     params: z.object({
-      categoryId: z.string(),
+      categoryId: z.string().trim().min(1).max(180),
     }),
   },
   responses: {
@@ -79,11 +92,12 @@ app.openapi(categoryAttributesRoute, async (c) => {
 const categorySlugAttributesRoute = createRoute({
   method: "get",
   path: "/category-slug/{categorySlug}",
+  operationId: "storefront.attributes.list_for_category",
   tags: ["Attributes"],
   summary: "Get filterable attributes for a category by slug",
   request: {
     params: z.object({
-      categorySlug: z.string(),
+      categorySlug: publicAttributeCategorySlugSchema,
     }),
   },
   responses: {
@@ -121,12 +135,13 @@ app.openapi(categorySlugAttributesRoute, async (c) => {
 const searchFiltersRoute = createRoute({
   method: "get",
   path: "/search-filters",
+  operationId: "storefront.attributes.list_for_search",
   tags: ["Attributes"],
   summary: "Get filterable attributes for search results",
   request: {
     query: z.object({
-      q: z.string().optional().openapi({ description: "Search query" }),
-      categoryId: z.string().optional().openapi({ description: "Optional category filter" })
+      q: z.string().trim().max(120).optional().openapi({ description: "Search query" }),
+      categoryId: z.string().trim().min(1).max(180).optional().openapi({ description: "Optional category filter" })
     })
   },
   responses: {

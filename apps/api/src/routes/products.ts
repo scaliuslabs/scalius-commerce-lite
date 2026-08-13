@@ -10,6 +10,12 @@ import {
   getStorefrontProductBySlug,
   searchStorefrontProducts,
 } from "@scalius/core/modules/products/products.storefront";
+import {
+  STOREFRONT_PRODUCT_TEXT_CHUNK_MAX,
+  getStorefrontProductSection,
+  storefrontProductSectionQuerySchema,
+  storefrontProductSectionSchema,
+} from "@scalius/core/modules/products/products.storefront-sections";
 import { resolvePublicAttributeFilters } from "@scalius/core/modules/attributes/attributes.public";
 import { NotFoundError } from "../utils/api-error";
 import { successEnvelope, paginationSchema, errorResponses } from "../schemas/responses";
@@ -209,20 +215,259 @@ const productMediaSchema = z.object({
   sortOrder: z.number().int().nonnegative(),
   status: z.enum(["ready", "trashed"]),
 });
-const productDetailRecordSchema = z.record(z.string(), z.any());
+
+const selectedProductOptionSchema = z.object({
+  optionDefinitionId: z.string(),
+  optionValueId: z.string(),
+  name: z.string(),
+  value: z.string(),
+  position: z.number().int(),
+  valuePosition: z.number().int(),
+  standardMapping: z.enum(["size", "color", "material", "pattern", "none"]),
+});
+
+const productSearchVariantSchema = z.object({
+  id: z.string(),
+  productId: z.string(),
+  optionCombinationKey: z.string().nullable(),
+  imageId: z.string().nullable(),
+  selectedOptions: z.array(selectedProductOptionSchema),
+  weight: z.number().nullable(),
+  sku: z.string(),
+  price: z.number(),
+  stock: z.number(),
+  reservedStock: z.number(),
+  lowStockThreshold: z.number().int().nonnegative().nullable(),
+  availabilityBand: z.enum(BUYER_AVAILABILITY_BANDS),
+  isDefault: z.boolean(),
+  trackInventory: z.boolean(),
+  discountType: z.string().nullable(),
+  discountPercentage: z.number().nullable(),
+  discountAmount: z.number().nullable(),
+});
+
+const productOptionSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  position: z.number().int(),
+  standardMapping: z.enum(["size", "color", "material", "pattern", "none"]),
+  values: z.array(z.object({
+    id: z.string(),
+    value: z.string(),
+    position: z.number().int(),
+  })),
+});
+const productOptionSummarySchema = productOptionSchema.omit({ values: true }).extend({
+  valueCount: z.number().int().nonnegative(),
+});
+const productOptionValueSchema = z.object({
+  id: z.string(),
+  value: z.string(),
+  position: z.number().int(),
+});
+
+const productAttributeSchema = z.object({
+  name: z.string(),
+  slug: z.string(),
+  value: z.string(),
+});
+
+const productAdditionalInfoSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  content: z.string(),
+});
+
+const productCategoryDetailSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  slug: z.string(),
+  description: z.string().nullable(),
+  imageUrl: z.string().nullable(),
+  metaTitle: z.string().nullable(),
+  metaDescription: z.string().nullable(),
+  canonicalPath: z.string().nullable(),
+  noIndex: z.boolean(),
+  excludeFromSitemap: z.boolean(),
+});
+
+const productDetailVariantSchema = z.object({
+  id: z.string(),
+  productId: z.string(),
+  optionCombinationKey: z.string().nullable(),
+  imageId: z.string().nullable(),
+  imageMediaId: z.string().nullable(),
+  imageUrl: z.string().nullable(),
+  selectedOptions: z.array(selectedProductOptionSchema),
+  weight: z.number().nullable(),
+  sku: z.string(),
+  price: z.number(),
+  stock: z.number(),
+  reservedStock: z.number(),
+  lowStockThreshold: z.number().int().nonnegative().nullable(),
+  availabilityBand: z.enum(BUYER_AVAILABILITY_BANDS),
+  isDefault: z.boolean(),
+  trackInventory: z.boolean(),
+  barcode: z.string().nullable(),
+  barcodeType: z.string().nullable(),
+  discountType: z.string().nullable(),
+  discountPercentage: z.number().nullable(),
+  discountAmount: z.number().nullable(),
+  createdAt: z.string().nullable(),
+  updatedAt: z.string().nullable(),
+  deletedAt: z.string().nullable(),
+});
+
+const relatedProductSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  price: z.number(),
+  slug: z.string(),
+  discountType: z.string().nullable(),
+  discountPercentage: z.number().nullable(),
+  discountAmount: z.number().nullable(),
+  discountedPrice: z.number(),
+  hasVariants: z.boolean(),
+  availableForSale: z.boolean(),
+  priceVaries: z.boolean(),
+  freeDelivery: z.boolean(),
+  imageUrl: z.string().nullable(),
+  imageMediaId: z.string().nullable(),
+  imageAlt: z.string().nullable(),
+});
+
 const productDetailDataSchema = z.object({
-  product: productDetailRecordSchema,
-  category: productDetailRecordSchema.nullable(),
+  product: z.object({
+    id: z.string(),
+    name: z.string(),
+    description: z.string().nullable(),
+    price: z.number(),
+    categoryId: z.string().nullable(),
+    slug: z.string(),
+    metaTitle: z.string().nullable(),
+    metaDescription: z.string().nullable(),
+    canonicalPath: z.string().nullable(),
+    productCondition: z.enum(PRODUCT_CONDITION_VALUES).nullable(),
+    noIndex: z.boolean(),
+    discountType: z.string(),
+    discountPercentage: z.number(),
+    discountAmount: z.number(),
+    discountedPrice: z.number(),
+    freeDelivery: z.boolean(),
+    isActive: z.boolean(),
+    deletedAt: z.string().nullable(),
+    createdAt: z.string().nullable(),
+    updatedAt: z.string().nullable(),
+    hasVariants: z.boolean(),
+    imageUrl: z.string().nullable(),
+    imageMediaId: z.string().nullable(),
+    imageAlt: z.string().nullable(),
+    options: z.array(productOptionSchema),
+    features: z.array(z.string()),
+    attributes: z.array(productAttributeSchema),
+    additionalInfo: z.array(productAdditionalInfoSchema),
+  }),
+  category: productCategoryDetailSchema.nullable(),
   media: z.array(productMediaSchema),
-  variants: z.array(productDetailRecordSchema),
-  relatedProducts: z.array(productDetailRecordSchema),
+  variants: z.array(productDetailVariantSchema),
+  relatedProducts: z.array(relatedProductSchema),
 });
 type ProductDetailData = z.infer<typeof productDetailDataSchema>;
+
+const storefrontProductSectionPageFields = <T extends z.ZodTypeAny>(item: T, maxItems: number) => ({
+  items: z.array(item).max(maxItems),
+  total: z.number().int().nonnegative(),
+  offset: z.number().int().nonnegative(),
+  limit: z.number().int().positive().max(maxItems),
+  nextOffset: z.number().int().nonnegative().nullable(),
+});
+
+const productSectionSummarySchema = z.object({
+  section: z.literal("summary"),
+  product: z.object({
+    id: z.string(),
+    name: z.string(),
+    price: z.number(),
+    categoryId: z.string().nullable(),
+    slug: z.string(),
+    canonicalPath: z.string().nullable(),
+    productCondition: z.enum(PRODUCT_CONDITION_VALUES).nullable(),
+    noIndex: z.boolean(),
+    discountType: z.string(),
+    discountPercentage: z.number(),
+    discountAmount: z.number(),
+    discountedPrice: z.number(),
+    freeDelivery: z.boolean(),
+    hasVariants: z.boolean(),
+    imageUrl: z.string().nullable(),
+    imageMediaId: z.string().nullable(),
+    imageAlt: z.string().nullable(),
+    createdAt: z.string().nullable(),
+    updatedAt: z.string().nullable(),
+    category: z.object({ id: z.string(), name: z.string(), slug: z.string() }).nullable(),
+    textLengths: z.object({
+      description: z.number().int().nonnegative(),
+      metaTitle: z.number().int().nonnegative(),
+      metaDescription: z.number().int().nonnegative(),
+    }),
+    counts: z.object({
+      media: z.number().int().nonnegative(),
+      attributes: z.number().int().nonnegative(),
+      additionalInfo: z.number().int().nonnegative(),
+      options: z.number().int().nonnegative(),
+      variants: z.number().int().nonnegative(),
+      relatedProducts: z.number().int().nonnegative(),
+    }),
+  }),
+});
+
+const productSectionTextSchema = z.object({
+  section: z.enum(["text", "additional_info_text"]),
+  itemId: z.string().optional(),
+  field: z.enum(["description", "metaTitle", "metaDescription", "title", "content"]),
+  value: z.string().max(STOREFRONT_PRODUCT_TEXT_CHUNK_MAX),
+  totalCharacters: z.number().int().nonnegative(),
+  offset: z.number().int().nonnegative(),
+  nextOffset: z.number().int().nonnegative().nullable(),
+  isNull: z.boolean(),
+});
+
+const productSectionVariantSchema = productDetailVariantSchema.omit({
+  stock: true,
+  reservedStock: true,
+  lowStockThreshold: true,
+  trackInventory: true,
+  deletedAt: true,
+});
+
+const storefrontProductSectionResponseSchema = z.union([
+  productSectionSummarySchema,
+  productSectionTextSchema,
+  z.object({ section: z.literal("media"), ...storefrontProductSectionPageFields(productMediaSchema, 20) }),
+  z.object({ section: z.literal("attributes"), ...storefrontProductSectionPageFields(productAttributeSchema, 50) }),
+  z.object({
+    section: z.literal("additional_info"),
+    ...storefrontProductSectionPageFields(z.object({
+      id: z.string(),
+      titleCharacters: z.number().int().nonnegative(),
+      contentCharacters: z.number().int().nonnegative(),
+    }), 50),
+  }),
+  z.object({ section: z.literal("options"), ...storefrontProductSectionPageFields(productOptionSummarySchema, 5) }),
+  z.object({
+    section: z.literal("option_values"),
+    itemId: z.string(),
+    ...storefrontProductSectionPageFields(productOptionValueSchema, 50),
+  }),
+  z.object({ section: z.literal("variants"), ...storefrontProductSectionPageFields(productSectionVariantSchema, 10) }),
+  z.object({ section: z.literal("related_products"), ...storefrontProductSectionPageFields(relatedProductSchema, 10) }),
+]);
 
 // GET /api/storefront/products
 const listProductsRoute = createRoute({
   method: "get",
   path: "/",
+  operationId: "storefront.products.list",
   tags: ["Products"],
   summary: "List storefront products",
   request: {
@@ -263,6 +508,7 @@ app.openapi(listProductsRoute, async (c) => {
 const searchProductsRoute = createRoute({
   method: "get",
   path: "/search",
+  operationId: "storefront.products.search_legacy",
   tags: ["Products"],
   summary: "Search storefront products with variant data",
   request: {
@@ -280,8 +526,12 @@ const searchProductsRoute = createRoute({
           imageUrl: z.string().nullable(),
           imageMediaId: z.string().nullable(),
           imageAlt: z.string().nullable(),
-          variants: z.array(z.record(z.string(), z.unknown())),
-        }).passthrough()),
+          discountType: z.string().nullable(),
+          discountPercentage: z.number().nullable(),
+          discountAmount: z.number().nullable(),
+          freeDelivery: z.boolean(),
+          variants: z.array(productSearchVariantSchema),
+        })),
         pagination: paginationSchema.extend({ hasNextPage: z.boolean(), hasPrevPage: z.boolean() }),
       })) } },
     },
@@ -361,10 +611,44 @@ app.openapi(sitemapProductsRoute, async (c) => {
   return ok(c, result);
 });
 
+// GET /api/storefront/products/:slug/sections/:section
+const getProductSectionRoute = createRoute({
+  method: "get",
+  path: "/{slug}/sections/{section}",
+  operationId: "storefront.products.get_section",
+  tags: ["Products"],
+  summary: "Get one bounded, reconstructable storefront product section",
+  request: {
+    params: z.object({
+      slug: z.string().trim().min(1).max(100),
+      section: storefrontProductSectionSchema,
+    }),
+    query: storefrontProductSectionQuerySchema,
+  },
+  responses: {
+    200: {
+      description: "Bounded public product section",
+      content: { "application/json": { schema: successEnvelope(storefrontProductSectionResponseSchema) } },
+    },
+    400: errorResponses[400],
+    404: errorResponses[404],
+    500: errorResponses[500],
+  },
+});
+
+app.openapi(getProductSectionRoute, async (c) => {
+  const db = c.get("db");
+  const { slug, section } = c.req.valid("param");
+  const result = await getStorefrontProductSection(db, slug, section, c.req.valid("query"));
+  if (!result) throw new NotFoundError("Product not found");
+  return ok(c, result as z.infer<typeof storefrontProductSectionResponseSchema>);
+});
+
 // GET /api/storefront/products/:slug
 const getProductBySlugRoute = createRoute({
   method: "get",
   path: "/{slug}",
+  operationId: "storefront.products.get",
   tags: ["Products"],
   summary: "Get product by slug",
   request: {

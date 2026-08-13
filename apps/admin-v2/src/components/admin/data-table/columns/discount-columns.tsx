@@ -319,7 +319,11 @@ export function getDiscountColumns(
         !opts.showTrashed
           ? [
               ...(opts.canCreate
-                ? [{ label: "Duplicate", icon: Copy, onClick: () => opts.onDuplicate(d.id) }]
+                ? [{
+                    label: "Duplicate",
+                    icon: Copy,
+                    onClick: () => opts.onDuplicate(d.id),
+                  }]
                 : []),
               ...(opts.canToggleStatus ? [{
                 label: d.isActive ? "Deactivate" : "Activate",

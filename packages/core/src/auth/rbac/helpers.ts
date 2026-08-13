@@ -1,5 +1,5 @@
 // src/lib/rbac/helpers.ts
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc, inArray } from "drizzle-orm";
 import { safeBatch, type Database } from "@scalius/database/client";
 import { NotFoundError } from "@scalius/core/errors";
 import { getRbacSeedCacheKey } from "./auto-seed";
@@ -371,18 +371,27 @@ export async function isSuperAdmin(
  * Get all roles with their permissions
  */
 export async function getAllRolesWithPermissions(
-  db: Database
+  db: Database,
+  options: { limit?: number; offset?: number } = {},
 ) {
-  const [allRoles = [], permissionRows = []] = await safeBatch(db, [
-    db.select().from(roles),
-    db
+  const limit = Math.max(1, Math.min(options.limit ?? 50, 51));
+  const offset = Math.max(0, options.offset ?? 0);
+  const allRoles = await db
+    .select()
+    .from(roles)
+    .orderBy(desc(roles.createdAt), desc(roles.id))
+    .limit(limit)
+    .offset(offset);
+  const permissionRows = allRoles.length === 0
+    ? []
+    : await db
       .select({
         roleId: rolePermissions.roleId,
         name: permissions.name,
       })
       .from(rolePermissions)
-      .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id)),
-  ] as const);
+      .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id))
+      .where(inArray(rolePermissions.roleId, allRoles.map(({ id }) => id)));
   const permissionNamesByRoleId = new Map<string, string[]>();
   for (const row of permissionRows) {
     const names = permissionNamesByRoleId.get(row.roleId) ?? [];
@@ -391,8 +400,17 @@ export async function getAllRolesWithPermissions(
   }
 
   return allRoles.map((role) => ({
-    ...role,
-    permissions: permissionNamesByRoleId.get(role.id) ?? [],
+    id: role.id.slice(0, 100),
+    name: role.name.slice(0, 50),
+    displayName: role.displayName.slice(0, 100),
+    description: role.description?.slice(0, 500) ?? null,
+    isSystem: role.isSystem,
+    createdAt: role.createdAt,
+    updatedAt: role.updatedAt,
+    permissions: (permissionNamesByRoleId.get(role.id) ?? [])
+      .slice(0, 200)
+      .map((name) => name.slice(0, 150)),
+    permissionsTruncated: (permissionNamesByRoleId.get(role.id)?.length ?? 0) > 200,
   }));
 }
 

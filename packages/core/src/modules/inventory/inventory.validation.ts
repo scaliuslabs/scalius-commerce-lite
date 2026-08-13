@@ -17,13 +17,17 @@ export const inventoryOperationKeySchema = z
         "operationKey contains unsupported characters",
     );
 
-export const adjustInventorySchema = z.object({
-    operationKey: inventoryOperationKeySchema,
+const adjustInventoryFields = {
     delta: signedStockAdjustmentSchema,
     reason: z.enum(["received", "correction", "damage", "theft", "return", "other"]),
     notes: z.string().trim().max(500).optional(),
     pool: z.enum(["stock", "preorderStock"]).optional().default("stock"),
-}).superRefine((value, context) => {
+} as const;
+
+function validateAdjustmentReason(
+    value: { delta: number; reason: "received" | "correction" | "damage" | "theft" | "return" | "other" },
+    context: z.RefinementCtx,
+) {
     if ((value.reason === "received" || value.reason === "return") && value.delta < 0) {
         context.addIssue({
             code: "custom",
@@ -38,4 +42,14 @@ export const adjustInventorySchema = z.object({
             message: "Damage and theft require a negative adjustment.",
         });
     }
-});
+}
+
+export const adjustInventorySchema = z.object({
+    operationKey: inventoryOperationKeySchema,
+    ...adjustInventoryFields,
+}).superRefine(validateAdjustmentReason);
+
+export const adjustInventoryRequestSchema = z.object({
+    operationKey: inventoryOperationKeySchema.optional(),
+    ...adjustInventoryFields,
+}).superRefine(validateAdjustmentReason);

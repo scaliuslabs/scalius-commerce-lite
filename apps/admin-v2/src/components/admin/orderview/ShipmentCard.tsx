@@ -474,7 +474,14 @@ export function ShipmentCard({ order }: ShipmentCardProps) {
                 <p className="text-sm font-medium text-destructive">Shipment history unavailable</p>
                 <p className="mt-1 text-xs text-muted-foreground">Existing shipments were not assumed empty.</p>
               </div>
-              <Button type="button" size="sm" variant="outline" className="min-h-11 sm:min-h-9" onClick={retryShipments} disabled={shipmentsRead.refreshing}>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="min-h-11 sm:min-h-9"
+                onClick={retryShipments}
+                disabled={shipmentsRead.refreshing}
+              >
                 {shipmentsRead.refreshing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
                 Retry
               </Button>
@@ -485,7 +492,14 @@ export function ShipmentCard({ order }: ShipmentCardProps) {
                 <div className="flex items-start gap-2 border-b border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
                   <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                   <span className="min-w-0 flex-1">Showing the last loaded shipment data. Refresh failed.</span>
-                  <Button type="button" size="sm" variant="outline" className="h-11 shrink-0 px-2 text-xs sm:h-7" onClick={retryShipments} disabled={shipmentsRead.refreshing}>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-11 shrink-0 px-2 text-xs sm:h-7"
+                    onClick={retryShipments}
+                    disabled={shipmentsRead.refreshing}
+                  >
                     {shipmentsRead.refreshing && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
                     Retry
                   </Button>

@@ -216,11 +216,18 @@ export async function markShipmentReconciliationRequired(
 /**
  * Get all providers from the database
  */
-export async function getDeliveryProviders(db: Database) {
-  return db
+export async function getDeliveryProviders(
+  db: Database,
+  options?: { limit: number; offset: number },
+) {
+  const query = db
     .select()
     .from(deliveryProviders)
     .orderBy(desc(deliveryProviders.updatedAt));
+  if (!options) return query;
+  return query
+    .limit(Math.max(1, Math.min(options.limit, 11)))
+    .offset(Math.max(0, options.offset));
 }
 
 /**

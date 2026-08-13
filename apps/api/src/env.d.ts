@@ -182,11 +182,15 @@ interface Env {
   // Service / resource bindings
   DB?: D1Database;
   CACHE: KVNamespace;
+  OAUTH_KV: KVNamespace;
   BUCKET: R2Bucket;
+  AGENT_ARTIFACTS: R2Bucket;
   SHARED_AUTH_CACHE: KVNamespace;
   SEARCH_RATE_LIMITER: RateLimit;
   ORDER_IP_RATE_LIMITER: RateLimit;
   ORDER_PHONE_RATE_LIMITER: RateLimit;
+  AGENT_RATE_LIMITER: RateLimit;
+  OAUTH_PROVIDER?: import("@cloudflare/workers-oauth-provider").OAuthHelpers;
   CHECKOUT_COORDINATOR: DurableObjectNamespace;
   EMAIL?: CloudflareSendEmailBinding;
 
@@ -201,6 +205,7 @@ interface Env {
   JWT_SECRET?: string;
   FIREBASE_SERVICE_ACCOUNT_CRED_JSON?: string;
   CREDENTIAL_ENCRYPTION_KEY?: string;
+  AGENT_TOKEN_PEPPER?: string;
   DATABASE_PROVIDER?: "d1" | "turso" | "postgres";
   TURSO_DATABASE_URL?: string;
   TURSO_AUTH_TOKEN?: string;

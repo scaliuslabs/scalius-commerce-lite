@@ -80,7 +80,14 @@ export function OrderReturnsCard({ order }: { order: Order }) {
         ) : query.isError ? (
           <div className="flex min-h-28 flex-col items-center justify-center gap-3 p-4 text-center">
             <p className="text-sm font-medium text-destructive">Returns could not be loaded.</p>
-            <Button type="button" size="sm" variant="outline" className="min-h-11 sm:min-h-9" onClick={() => query.refetch()} disabled={query.isFetching}>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="min-h-11 sm:min-h-9"
+              onClick={() => query.refetch()}
+              disabled={query.isFetching}
+            >
               {query.isFetching ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
               Try again
             </Button>
