@@ -58,7 +58,25 @@ describe("agent storefront body-only bootstrap", () => {
     );
   });
 
-  it.each(["https://evil.example.test", "http://127.0.0.1:43123", "null", "file://"])(
+  it.each([
+    "http://127.0.0.1:43123",
+    "http://localhost:43124",
+    "http://[::1]:43125",
+  ])("accepts a body-only handoff from an ephemeral CLI loopback origin %s", async (origin) => {
+    const response = await POST(request(origin));
+    expect(response.status).toBe(303);
+    expect(response.headers.get("Location")).toBe(`/agent/continue/${ID}`);
+    expect(response.headers.get("Location")).not.toContain(CODE);
+    expect(mocks.fetchWithRetry).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    "https://evil.example.test",
+    "http://evil.example.test:43123",
+    "http://127.0.0.1:43123/not-an-origin",
+    "null",
+    "file://",
+  ])(
     "rejects an untrusted browser origin %s before exchange",
     async (origin) => {
       const response = await POST(request(origin));

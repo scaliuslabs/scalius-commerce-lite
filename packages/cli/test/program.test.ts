@@ -131,7 +131,9 @@ describe("CLI program", () => {
         expect(url).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/[A-Za-z0-9_-]{43}$/);
         expect(url).not.toContain(secret);
         const response = await globalThis.fetch(url);
-        expect(response.headers.get("Content-Security-Policy")).toContain("form-action 'none'");
+        expect(response.headers.get("Content-Security-Policy")).toContain(
+          "form-action https://storefront.example.test",
+        );
         relayHtml = await response.text();
       },
     });
@@ -144,8 +146,9 @@ describe("CLI program", () => {
     ])).toBe(0);
     expect(operationCalls).toBe(1);
     expect(relayHtml).not.toContain(secret);
-    expect(relayHtml).toContain("scalius-continuation-v1:");
-    expect(relayHtml).toContain("window.location.replace");
+    expect(relayHtml).not.toContain("window.name");
+    expect(relayHtml).toContain('form.method="POST"');
+    expect(relayHtml).toContain("form.submit()");
     expect(relayHtml).toContain("https://storefront.example.test/theme-preview/continue");
     expect(runtime.stdoutText()).not.toContain(secret);
     expect(runtime.stderrText()).not.toContain(secret);

@@ -1,7 +1,10 @@
 import type { APIRoute } from "astro";
 import { createApiUrl, fetchWithRetry } from "@/lib/api/client";
 import { createAgentContinuationCookieHeader } from "@/lib/agent-continuation-cookie";
-import { browserContinuationRelayResponse } from "@/lib/browser-continuation-relay";
+import {
+  browserContinuationRelayResponse,
+  isTrustedBrowserContinuationPostOrigin,
+} from "@/lib/browser-continuation-relay";
 
 export const prerender = false;
 
@@ -28,18 +31,6 @@ function asRecord(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
-function isTrustedBootstrapOrigin(request: Request): boolean {
-  const origin = request.headers.get("Origin");
-  if (!origin) return false;
-  try {
-    const submitted = new URL(origin);
-    const target = new URL(request.url);
-    return submitted.origin === target.origin;
-  } catch {
-    return false;
-  }
-}
-
 export const GET: APIRoute = async () => browserContinuationRelayResponse([{
   name: "continuationCode",
   pattern: BOOTSTRAP_CODE.source,
@@ -47,7 +38,7 @@ export const GET: APIRoute = async () => browserContinuationRelayResponse([{
 }]);
 
 export const POST: APIRoute = async ({ request }) => {
-  if (!isTrustedBootstrapOrigin(request)) {
+  if (!isTrustedBrowserContinuationPostOrigin(request)) {
     return failure("Cross-origin request denied.", 403);
   }
   const contentLength = Number(request.headers.get("content-length") || "0");

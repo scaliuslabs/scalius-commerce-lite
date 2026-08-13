@@ -3,6 +3,28 @@ const MAX_RELAY_NAME_LENGTH = 16_384;
 const MAX_RELAY_PAYLOAD_BYTES = 8_192;
 const RELAY_PATHS = new Set(["/agent/continue", "/theme-preview/continue"]);
 
+function isLoopbackHostname(hostname: string): boolean {
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
+}
+
+export function isTrustedBrowserContinuationPostOrigin(
+  request: Request,
+  additionalOrigins: readonly string[] = [],
+): boolean {
+  const rawOrigin = request.headers.get("Origin");
+  if (!rawOrigin) return false;
+  try {
+    const origin = new URL(rawOrigin);
+    const target = new URL(request.url);
+    if (rawOrigin !== origin.origin) return false;
+    if (origin.origin === target.origin) return true;
+    if (origin.protocol === "http:" && isLoopbackHostname(origin.hostname)) return true;
+    return additionalOrigins.includes(origin.origin);
+  } catch {
+    return false;
+  }
+}
+
 export interface BrowserContinuationRelayField {
   name: string;
   pattern: string;

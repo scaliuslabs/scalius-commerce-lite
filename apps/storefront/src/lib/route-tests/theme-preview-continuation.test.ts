@@ -10,6 +10,9 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/api/client", () => mocks);
+vi.mock("cloudflare:workers", () => ({
+  env: { DASHBOARD_URL: "https://dashboard.example.test" },
+}));
 
 import { ALL, GET, POST } from "../../pages/theme-preview/continue";
 
@@ -82,8 +85,25 @@ describe("theme preview continuation route", () => {
     expect(response.headers.get("Referrer-Policy")).toBe("no-referrer");
   });
 
+  it.each([
+    "https://dashboard.example.test",
+    "http://127.0.0.1:43123",
+    "http://localhost:43124",
+    "http://[::1]:43125",
+  ])("accepts a body-only form from a reviewed continuation origin %s", async (origin) => {
+    mocks.fetchWithRetry.mockResolvedValue(Response.json({
+      success: true,
+      data: { token: TOKEN, draftRevision: 3, basePublishedRevision: 2 },
+    }));
+    const response = await POST(context(undefined, origin));
+    expect(response.status).toBe(303);
+    expect(response.headers.get("Location")).not.toContain(CONTINUATION_CODE);
+  });
+
   it("requires the exact storefront origin and bounded form shape", async () => {
     await expect(POST(context(undefined, "https://evil.example.test")))
+      .resolves.toMatchObject({ status: 403 });
+    await expect(POST(context(undefined, "http://127.0.0.1:43123/not-an-origin")))
       .resolves.toMatchObject({ status: 403 });
     await expect(POST(context({
       continuationCode: CONTINUATION_CODE,
