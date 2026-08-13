@@ -285,7 +285,7 @@ describe("storefront agent buyer workflow scenarios", () => {
       success: true,
       data: {
         browser: {
-          url: "https://shop.example.test/agent/continue",
+          url: "https://shop.example.test/checkout/continue",
           method: "POST",
           fields: { continuationCode },
         },
@@ -315,12 +315,12 @@ describe("storefront agent buyer workflow scenarios", () => {
     const recoveryStatus = await request(`/storefront/agent-contexts/${contextId}/payment-recoveries/${continuationId}`);
     expect(payment).toMatchObject({
       success: true,
-      data: { kind: "payment", browser: { url: "https://shop.example.test/agent/continue", method: "POST" } },
+      data: { kind: "payment", browser: { url: "https://shop.example.test/checkout/continue", method: "POST" } },
     });
     expect(paymentStatus).toMatchObject({ success: true, data: { kind: "payment", status: "pending" } });
     expect(recovery).toMatchObject({
       success: true,
-      data: { kind: "payment_recovery", browser: { url: "https://shop.example.test/agent/continue", method: "POST" } },
+      data: { kind: "payment_recovery", browser: { url: "https://shop.example.test/checkout/continue", method: "POST" } },
     });
     expect(recoveryStatus).toMatchObject({ success: true, data: { kind: "payment_recovery", result: { recovered: true } } });
     expect(JSON.stringify([payment, paymentStatus, recovery, recoveryStatus])).not.toMatch(/otp|chk_|cst_|receiptProof|clientSecret|sessionKey/i);

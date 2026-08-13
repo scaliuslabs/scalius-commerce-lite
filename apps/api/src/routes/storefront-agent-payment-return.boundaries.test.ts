@@ -21,7 +21,7 @@ describe("agent hosted payment return boundary", () => {
     for (const callbackSource of [sslcommerz, polar]) {
       expect(callbackSource).toContain('/^acn_[A-Za-z0-9_-]{20}$/');
       expect(callbackSource).toContain("buildStorefrontAgentContinuationUrl");
-      expect(callbackSource).toContain("/agent/continue/${encodeURIComponent(continuationId)}");
+      expect(callbackSource).toContain("/checkout/continue/${encodeURIComponent(continuationId)}");
     }
   });
 });

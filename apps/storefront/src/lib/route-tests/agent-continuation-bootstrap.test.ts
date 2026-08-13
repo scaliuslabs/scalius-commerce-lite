@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/api/client", () => mocks);
 
-import { GET, POST } from "../../pages/agent/continue";
+import { GET, POST } from "../../pages/checkout/continue";
 import {
   isBrowserContinuationRelayPathname,
   isForbiddenStorefrontCrossOriginFormRequest,
@@ -17,7 +17,7 @@ import {
 
 const CODE = `acb_${"a".repeat(20)}_${"b".repeat(43)}`;
 const ID = `acn_${"a".repeat(20)}`;
-const URL = "https://storefront.example.test/agent/continue";
+const URL = "https://storefront.example.test/checkout/continue";
 
 function request(origin: string, cookie?: string) {
   const headers: Record<string, string> = {
@@ -47,7 +47,7 @@ describe("agent storefront body-only bootstrap", () => {
     const origin = "https://storefront.example.test";
     const response = await POST(request(origin, "existing_storefront_cookie=value"));
     expect(response.status).toBe(303);
-    expect(response.headers.get("Location")).toBe(`/agent/continue/${ID}`);
+    expect(response.headers.get("Location")).toBe(`/checkout/continue/${ID}`);
     expect(response.headers.get("Location")).not.toContain(CODE);
     expect(response.headers.get("Set-Cookie")).toContain("HttpOnly");
     expect(response.headers.get("Cache-Control")).toContain("no-store");
@@ -68,7 +68,7 @@ describe("agent storefront body-only bootstrap", () => {
   ])("accepts a body-only handoff from an ephemeral CLI loopback origin %s", async (origin) => {
     const response = await POST(request(origin));
     expect(response.status).toBe(303);
-    expect(response.headers.get("Location")).toBe(`/agent/continue/${ID}`);
+    expect(response.headers.get("Location")).toBe(`/checkout/continue/${ID}`);
     expect(response.headers.get("Location")).not.toContain(CODE);
     expect(mocks.fetchWithRetry).toHaveBeenCalledOnce();
   });
@@ -102,9 +102,11 @@ describe("agent storefront body-only bootstrap", () => {
     expect(html).not.toContain(CODE);
   });
 
-  it("identifies only the two exact private relay paths", () => {
+  it("identifies only the exact private relay paths", () => {
+    expect(isBrowserContinuationRelayPathname("/checkout/continue")).toBe(true);
     expect(isBrowserContinuationRelayPathname("/agent/continue")).toBe(true);
     expect(isBrowserContinuationRelayPathname("/theme-preview/continue")).toBe(true);
+    expect(isBrowserContinuationRelayPathname("/checkout/continue/anything")).toBe(false);
     expect(isBrowserContinuationRelayPathname("/agent/continue/anything")).toBe(false);
     expect(isBrowserContinuationRelayPathname("/")).toBe(false);
   });

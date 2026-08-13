@@ -133,7 +133,7 @@ function getAgentContinuationId(c: { req: { query: (key: string) => string | und
 }
 
 function buildStorefrontAgentContinuationUrl(storefront: string, continuationId: string): string {
-    return new URL(`/agent/continue/${encodeURIComponent(continuationId)}`, storefront).toString();
+    return new URL(`/checkout/continue/${encodeURIComponent(continuationId)}`, storefront).toString();
 }
 
 function buildStorefrontOrderSuccessUrl(
