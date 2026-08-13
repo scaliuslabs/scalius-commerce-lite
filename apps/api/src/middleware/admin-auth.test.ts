@@ -754,7 +754,7 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  it("enforces manifest exposure and risk before direct PAT route RBAC", async () => {
+  it("enforces manifest risk and allows reviewed direct PAT reads", async () => {
     const agentToken = `sc_pat_agc_0123456789abcdefghij_${"a".repeat(43)}`;
     const rateLimiter = { limit: vi.fn().mockResolvedValue({ success: true }) };
     const base = {
@@ -788,18 +788,17 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
       message: "This dashboard operation is not available to direct agent credentials",
     });
 
-    await expect(adminAuthMiddleware(
+    const allowedNext = vi.fn().mockResolvedValue(undefined);
+    await adminAuthMiddleware(
       createContext("/api/v1/admin/analytics/health", "GET", {
         headers: { Authorization: `Bearer ${agentToken}` },
         env: { AGENT_RATE_LIMITER: rateLimiter },
       }) as never,
-      vi.fn(),
-    )).rejects.toMatchObject({
-      status: 403,
-      message: "This dashboard operation is not available to direct agent credentials",
-    });
+      allowedNext,
+    );
 
     expect(rateLimiter.limit).toHaveBeenCalledTimes(2);
+    expect(allowedNext).toHaveBeenCalledTimes(1);
   });
 
   it("allows own-account endpoints for any verified admin with admin access", async () => {
