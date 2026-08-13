@@ -165,18 +165,24 @@ export function selectProductMediaProjectionRows(
             kind: media.kind,
             objectKey: media.objectKey,
             mediaAltText: media.altText,
-            contextualAltText: productMedia.altText,
+            contextualAltText: sql<string | null>`${productMedia.altText}`
+                .as("product_media_contextual_alt_text"),
             caption: media.caption,
             width: media.width,
             height: media.height,
             durationMs: media.durationMs,
-            posterMediaId: poster.id,
-            posterObjectKey: poster.objectKey,
-            posterKind: poster.kind,
-            posterStatus: poster.status,
+            posterMediaId: sql<string | null>`${poster.id}`
+                .as("product_media_poster_id"),
+            posterObjectKey: sql<string | null>`${poster.objectKey}`
+                .as("product_media_poster_object_key"),
+            posterKind: sql<"image" | "video" | null>`${poster.kind}`
+                .as("product_media_poster_kind"),
+            posterStatus: sql<ProductMediaProjectionRow["posterStatus"]>`${poster.status}`
+                .as("product_media_poster_status"),
             isPrimary: productMedia.isPrimary,
             sortOrder: productMedia.sortOrder,
-            status: media.status,
+            status: sql<ProductMediaProjectionRow["status"]>`${media.status}`
+                .as("product_media_status"),
         })
         .from(productMedia)
         .innerJoin(products, eq(products.id, productMedia.productId))
@@ -216,18 +222,24 @@ export function selectCheckoutProductMediaProjectionRows(
             kind: media.kind,
             objectKey: media.objectKey,
             mediaAltText: media.altText,
-            contextualAltText: productMedia.altText,
+            contextualAltText: sql<string | null>`${productMedia.altText}`
+                .as("product_media_contextual_alt_text"),
             caption: media.caption,
             width: media.width,
             height: media.height,
             durationMs: media.durationMs,
-            posterMediaId: poster.id,
-            posterObjectKey: poster.objectKey,
-            posterKind: poster.kind,
-            posterStatus: poster.status,
+            posterMediaId: sql<string | null>`${poster.id}`
+                .as("product_media_poster_id"),
+            posterObjectKey: sql<string | null>`${poster.objectKey}`
+                .as("product_media_poster_object_key"),
+            posterKind: sql<"image" | "video" | null>`${poster.kind}`
+                .as("product_media_poster_kind"),
+            posterStatus: sql<ProductMediaProjectionRow["posterStatus"]>`${poster.status}`
+                .as("product_media_poster_status"),
             isPrimary: productMedia.isPrimary,
             sortOrder: productMedia.sortOrder,
-            status: media.status,
+            status: sql<ProductMediaProjectionRow["status"]>`${media.status}`
+                .as("product_media_status"),
         })
         .from(productMedia)
         .innerJoin(products, eq(products.id, productMedia.productId))
