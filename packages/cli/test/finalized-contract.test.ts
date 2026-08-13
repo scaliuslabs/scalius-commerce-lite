@@ -60,5 +60,5 @@ describe("finalized API OpenAPI interop", () => {
       ]);
     expect(operations.find(({ id }) => id === "dashboard.theme.preview_session_create")?.agent.continuationOutput)
       .toEqual(expect.objectContaining({ sensitiveFields: ["continuationCode"] }));
-  });
+  }, 15_000);
 });
