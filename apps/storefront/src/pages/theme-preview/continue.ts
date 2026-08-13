@@ -1,8 +1,12 @@
 import type { APIRoute } from "astro";
+import { env as cfEnv } from "cloudflare:workers";
 
 import { createApiUrl, fetchWithRetry } from "@/lib/api/client";
 import { createThemePreviewCookieHeader } from "@/lib/theme-preview-cookie";
-import { browserContinuationRelayResponse } from "@/lib/browser-continuation-relay";
+import {
+  browserContinuationRelayResponse,
+  isTrustedBrowserContinuationPostOrigin,
+} from "@/lib/browser-continuation-relay";
 import {
   normalizeThemePreviewDevice,
   normalizeThemePreviewRoutePath,
@@ -74,7 +78,17 @@ export const GET: APIRoute = async () => browserContinuationRelayResponse([
 ]);
 
 export const POST: APIRoute = async ({ request, url }) => {
-  if (request.headers.get("Origin") !== url.origin) {
+  const dashboardOrigin = (() => {
+    try {
+      return new URL((cfEnv as Env).DASHBOARD_URL ?? "").origin;
+    } catch {
+      return "";
+    }
+  })();
+  if (!isTrustedBrowserContinuationPostOrigin(
+    request,
+    dashboardOrigin ? [dashboardOrigin] : [],
+  )) {
     return textResponse("Forbidden", 403);
   }
 

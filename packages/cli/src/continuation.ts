@@ -8,7 +8,6 @@ const FORBIDDEN_POINTER_SEGMENTS = new Set(["__proto__", "prototype", "construct
 const MAX_FIELDS = 16;
 const MAX_FIELD_BYTES = 4_096;
 const RELAY_TIMEOUT_MS = 30_000;
-const RELAY_PREFIX = "scalius-continuation-v1:";
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -74,8 +73,8 @@ function scriptJson(value: string): string {
 }
 
 function relayHtml(target: URL, fields: Record<string, string>): string {
-  const payload = `${RELAY_PREFIX}${Buffer.from(JSON.stringify(fields), "utf8").toString("base64url")}`;
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="referrer" content="no-referrer"><title>Continue securely</title></head><body><noscript>JavaScript is required to continue securely.</noscript><script>window.name=${scriptJson(payload)};window.location.replace(${scriptJson(target.toString())});</script></body></html>`;
+  const payload = Buffer.from(JSON.stringify(fields), "utf8").toString("base64url");
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="referrer" content="no-referrer"><title>Continue securely</title></head><body><noscript>JavaScript is required to continue securely.</noscript><script>(()=>{const encoded=${scriptJson(payload)};const base64=encoded.replace(/-/g,"+").replace(/_/g,"/")+"=".repeat((4-encoded.length%4)%4);const bytes=Uint8Array.from(atob(base64),c=>c.charCodeAt(0));const fields=JSON.parse(new TextDecoder().decode(bytes));const form=document.createElement("form");form.method="POST";form.action=${scriptJson(target.toString())};form.hidden=true;for(const [name,value] of Object.entries(fields)){const input=document.createElement("input");input.type="hidden";input.name=name;input.value=value;form.append(input)}document.body.replaceChildren(form);form.submit()})()</script></body></html>`;
 }
 
 async function openRelay(runtime: Runtime, target: URL, fields: Record<string, string>): Promise<void> {
@@ -104,7 +103,7 @@ async function openRelay(runtime: Runtime, target: URL, fields: Record<string, s
         "Content-Type": "text/html; charset=utf-8",
         "Content-Length": String(body.byteLength),
         "Cache-Control": "private, no-store",
-        "Content-Security-Policy": "default-src 'none'; script-src 'unsafe-inline'; form-action 'none'; base-uri 'none'; frame-ancestors 'none'",
+        "Content-Security-Policy": `default-src 'none'; script-src 'unsafe-inline'; form-action ${target.origin}; base-uri 'none'; frame-ancestors 'none'`,
         "Referrer-Policy": "no-referrer",
         "X-Content-Type-Options": "nosniff",
         "X-Frame-Options": "DENY",
