@@ -6,9 +6,11 @@ describe("finalized API OpenAPI interop", () => {
   it("indexes every executable and continuation operation from the in-memory finalized application contract", async () => {
     const appModulePath = new URL("../../../apps/api/src/app.ts", import.meta.url).href;
     const contractModulePath = new URL("../../../apps/api/src/openapi-contract.ts", import.meta.url).href;
-    const [appModule, contractModule] = await Promise.all([
+    const manifestModulePath = new URL("../../../apps/api/src/generated/agent-operations.gen.ts", import.meta.url).href;
+    const [appModule, contractModule, manifestModule] = await Promise.all([
       import(/* @vite-ignore */ appModulePath),
       import(/* @vite-ignore */ contractModulePath),
+      import(/* @vite-ignore */ manifestModulePath),
     ]);
     const app = appModule.default as {
       getOpenAPIDocument: (options: Record<string, unknown>) => unknown;
@@ -31,6 +33,15 @@ describe("finalized API OpenAPI interop", () => {
     }, 0);
 
     expect(operations).toHaveLength(runnableCount);
+    const cliOperationIds = operations.map(({ id }) => id).sort();
+    const mcpOperationIds = (manifestModule.AGENT_OPERATIONS as Array<{
+      operationId: string;
+      exposure: string;
+    }>)
+      .filter(({ exposure }) => exposure === "execute" || exposure === "continuation")
+      .map(({ operationId }) => operationId)
+      .sort();
+    expect(cliOperationIds).toEqual(mcpOperationIds);
     expect(operations.some(({ agent }) => agent.openWorld === true)).toBe(true);
     expect(operations.some(({ agent }) => agent.openWorld === false)).toBe(true);
     expect(operations.every(({ agent }) =>
