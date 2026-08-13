@@ -69,7 +69,7 @@ export function createProgram(runtime: Runtime): Command {
   program
     .name("scalius")
     .description("Discover and execute Scalius Commerce operations")
-    .version("0.1.0")
+    .version("0.2.0")
     .option("--profile <name>", "configuration profile")
     .addOption(new Option("--output <format>", "output format").choices(["human", "json"]).default("human"))
     .showHelpAfterError()
