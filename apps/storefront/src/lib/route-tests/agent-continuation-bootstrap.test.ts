@@ -81,14 +81,16 @@ describe("agent storefront body-only bootstrap", () => {
     const html = await response.text();
     expect(response.status).toBe(200);
     expect(response.headers.get("Cache-Control")).toContain("no-store");
-    expect(response.headers.get("Content-Security-Policy")).toContain("form-action 'self'");
+    expect(response.headers.get("Content-Security-Policy")).toContain("connect-src 'self'");
+    expect(response.headers.get("Content-Security-Policy")).toContain("form-action 'none'");
     expect(html).not.toContain("window.name");
     expect(html).toContain("window.opener");
     expect(html).toContain("scalius-continuation-ready-v1");
     expect(html).toContain("scalius-continuation-fields-v1");
-    expect(html).toContain('form.method = "post";');
-    expect(html).toContain('button.textContent = "Continue securely";');
-    expect(html).toContain("form.submit();");
+    expect(html).toContain("new URLSearchParams()");
+    expect(html).toContain('credentials: "same-origin"');
+    expect(html).toContain('redirect: "follow"');
+    expect(html).toContain("window.location.replace");
     expect(html).not.toContain(CODE);
   });
 
