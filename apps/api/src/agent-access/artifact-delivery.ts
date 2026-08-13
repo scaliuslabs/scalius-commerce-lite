@@ -89,7 +89,7 @@ export function parseArtifactFilename(
   return filename;
 }
 
-export async function stageAgentArtifact(
+async function stageAgentArtifactInternal(
   operation: AgentOperationManifestEntry,
   response: Response,
   principal: AgentPrincipal,
@@ -242,6 +242,24 @@ export async function stageAgentArtifact(
     throw new AgentArtifactDeliveryError(
       "artifact_handle_failed",
       "Artifact handle creation is temporarily unavailable",
+      502,
+    );
+  }
+}
+
+export async function stageAgentArtifact(
+  operation: AgentOperationManifestEntry,
+  response: Response,
+  principal: AgentPrincipal,
+  env: Env,
+): Promise<AgentArtifactResult> {
+  try {
+    return await stageAgentArtifactInternal(operation, response, principal, env);
+  } catch (error) {
+    if (error instanceof AgentArtifactDeliveryError) throw error;
+    throw new AgentArtifactDeliveryError(
+      "artifact_staging_failed",
+      "Artifact staging is temporarily unavailable",
       502,
     );
   }

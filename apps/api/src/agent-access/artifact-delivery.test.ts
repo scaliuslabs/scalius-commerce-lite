@@ -237,6 +237,27 @@ describe("manifest-driven artifact delivery", () => {
     expect(deleted).toHaveLength(1);
   });
 
+  it("classifies synchronous stream failures without exposing runtime details", async () => {
+    const { env } = artifactEnv();
+    const response = new Response("csv", {
+      headers: {
+        "Content-Type": "text/csv",
+        "Content-Disposition": 'attachment; filename="orders.csv"',
+      },
+    });
+    await response.text();
+
+    await expect(stageAgentArtifact(
+      artifactOperation(),
+      response,
+      principal,
+      env,
+    )).rejects.toMatchObject({
+      code: "artifact_staging_failed",
+      status: 502,
+    });
+  });
+
   it("fails before persistence on wrong media, unsafe filename, or overflow", async () => {
     const { env } = artifactEnv();
     await expect(stageAgentArtifact(
