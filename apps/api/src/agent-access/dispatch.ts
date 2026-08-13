@@ -554,11 +554,20 @@ export async function dispatchAgentOperation(
     // No bearer/cookie is forwarded. The Worker-created ExecutionContext is
     // the non-spoofable bridge; Hono auth resolves its verified OAuth props
     // to a fresh principal instead of accepting a synthetic HTTP header.
-    const response = await app.fetch(
-      internalRequest,
-      withAgentDispatchPrincipal(env, principal),
-      ctx,
-    );
+    let response: Response;
+    try {
+      response = await app.fetch(
+        internalRequest,
+        withAgentDispatchPrincipal(env, principal),
+        ctx,
+      );
+    } catch {
+      throw new AgentDispatchError(
+        "operation_dispatch_failed",
+        "Operation dispatch is temporarily unavailable",
+        502,
+      );
+    }
     auditStatus = response.status;
     auditOutcome = response.ok ? "success" : response.status === 401 || response.status === 403
       ? "denied"
