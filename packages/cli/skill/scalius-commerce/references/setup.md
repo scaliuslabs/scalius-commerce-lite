@@ -16,5 +16,8 @@ The operating model is identical in every harness: search, compactly describe
 one operation, request the full schema only while constructing its input,
 execute, then verify through a bounded read. Do not look for harness-specific
 commerce tools or load the complete OpenAPI document into model context. MCP
-and CLI both consume the same live finalized contract; use CLI when local files
-or saved artifacts are involved.
+and CLI both consume the same live finalized contract and must provide the same
+merchant outcomes. MCP uses public-URL media import and one-use authenticated
+artifact links when its host has no local filesystem. A capable local host may
+additionally stream private files or save an artifact directly; that host
+capability must never turn the CLI into a prerequisite for commerce.
