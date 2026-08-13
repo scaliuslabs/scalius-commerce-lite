@@ -600,6 +600,7 @@ export async function operationsRun(runtime: Runtime, profile: ResolvedProfile, 
 }
 
 interface BatchStep {
+  id?: string;
   operationId: string;
   input?: StructuredInput;
   idempotencyKey?: string;
@@ -690,8 +691,13 @@ function parseBatch(value: StructuredInput): BatchInput {
     if (!isObject(candidate) || typeof candidate.operationId !== "string") {
       throw new CliError(5, "invalid_batch", `Batch step ${index + 1} requires operationId.`);
     }
+    if (candidate.id !== undefined && (typeof candidate.id !== "string" || !/^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/.test(candidate.id))) {
+      throw new CliError(5, "invalid_batch", `Batch step ${index + 1} has an invalid id.`);
+    }
     return candidate as unknown as BatchStep;
   });
+  const ids = steps.flatMap((step) => step.id ? [step.id] : []);
+  if (new Set(ids).size !== ids.length) throw new CliError(5, "invalid_batch", "Batch step ids must be unique.");
   return { steps, stopOnError: raw.stopOnError !== false };
 }
 
@@ -720,11 +726,11 @@ export async function operationsBatch(runtime: Runtime, profile: ResolvedProfile
         yes,
         overwrite: false,
       });
-      results.push({ index, ok: true, ...result });
+      results.push({ index, ...(step.id ? { id: step.id } : {}), ok: true, ...result });
     } catch (error) {
       const cliError = error instanceof CliError ? error : new CliError(8, "unexpected_error", error instanceof Error ? error.message : "Unexpected error.");
       firstError ??= cliError;
-      results.push({ index, ok: false, operationId: step.operationId, error: { code: cliError.errorCode, message: cliError.message } });
+      results.push({ index, ...(step.id ? { id: step.id } : {}), ok: false, operationId: step.operationId, error: { code: cliError.errorCode, message: cliError.message } });
       if (batch.stopOnError) throw new CliError(cliError.exitCode, "batch_step_failed", `Batch stopped at step ${index + 1}: ${cliError.message}`, { results });
     }
   }
