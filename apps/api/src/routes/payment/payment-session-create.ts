@@ -56,11 +56,13 @@ type WaitUntilExecutionContext = {
 
 type PaymentSessionProof =
   | { kind: "receipt"; receiptToken: string }
-  | { kind: "customer_account"; customerId: string };
+  | { kind: "customer_account"; customerId: string }
+  | { kind: "agent_context"; contextId: string };
 
 type PaymentReturnTarget =
   | { kind: "receipt" }
-  | { kind: "customer_account" };
+  | { kind: "customer_account" }
+  | { kind: "agent_continuation"; continuationId: string };
 
 type PaymentGateway = "stripe" | "sslcommerz" | "polar";
 
@@ -76,6 +78,13 @@ export interface CreatePaymentSessionInput {
 export interface CreateCustomerAccountPaymentSessionInput {
   orderId: string;
   customerId: string;
+}
+
+export interface CreateAgentContextPaymentSessionInput {
+  orderId: string;
+  contextId: string;
+  continuationId: string;
+  customerId?: string | null;
 }
 
 export interface CustomerPaymentSessionRecovery {
@@ -418,6 +427,31 @@ export async function createCustomerAccountPaymentSession(
     expectedCustomerId: input.customerId,
   };
 
+  if (gateway === "stripe") return createStripePaymentSessionForOrder(c, sessionInput, order);
+  if (gateway === "sslcommerz") return createSSLCommerzPaymentSessionForOrder(c, sessionInput, order);
+  return createPolarPaymentSessionForOrder(c, sessionInput, order);
+}
+
+export async function createAgentContextPaymentSession(
+  c: PaymentRouteContext,
+  input: CreateAgentContextPaymentSessionInput,
+): Promise<CreatedCustomerPaymentSession | PaymentSessionProcessingResponse> {
+  const db = c.get("db");
+  const order = await loadPaymentSessionOrder(db, input.orderId, input.customerId ?? undefined);
+  const gateway = getOrderPaymentGateway(order);
+  if (!gateway) {
+    throw new ValidationError("This order does not use an online payment gateway.");
+  }
+  const sessionInput: CreatePaymentSessionInput = {
+    orderId: input.orderId,
+    paymentType: shouldRequestBalancePayment(order) ? "balance" : undefined,
+    proof: { kind: "agent_context", contextId: input.contextId },
+    returnTarget: {
+      kind: "agent_continuation",
+      continuationId: input.continuationId,
+    },
+    expectedCustomerId: input.customerId ?? undefined,
+  };
   if (gateway === "stripe") return createStripePaymentSessionForOrder(c, sessionInput, order);
   if (gateway === "sslcommerz") return createSSLCommerzPaymentSessionForOrder(c, sessionInput, order);
   return createPolarPaymentSessionForOrder(c, sessionInput, order);
@@ -1104,10 +1138,16 @@ function identityProof(proof: PaymentSessionProof): Pick<Parameters<typeof build
   if (proof.kind === "receipt") {
     return { receiptToken: proof.receiptToken };
   }
-  return {
+  if (proof.kind === "customer_account") return {
     proof: {
       kind: "customer_account",
       value: proof.customerId,
+    },
+  };
+  return {
+    proof: {
+      kind: "agent_context",
+      value: proof.contextId,
     },
   };
 }
@@ -1118,7 +1158,11 @@ function buildCallbackParams(
   depositAmount?: number,
 ): Record<string, string | undefined> {
   return {
-    ...(target.kind === "customer_account" ? { return_to: "account" } : {}),
+    ...(target.kind === "customer_account"
+      ? { return_to: "account" }
+      : target.kind === "agent_continuation"
+        ? { return_to: "agent", continuation_id: target.continuationId }
+        : {}),
     payment_type: paymentType,
     deposit_amount: depositAmount ? String(depositAmount) : undefined,
   };

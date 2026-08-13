@@ -14,6 +14,7 @@ import {
   getPublicApiCachePolicy,
   normalizePublicApiCacheTags,
 } from "./public-cache-policy";
+import { isAgentAccessPath } from "./agent-access/paths";
 
 export type { AppType } from "./app";
 export { CheckoutCoordinator } from "./checkout-coordinator";
@@ -73,6 +74,14 @@ export default class ApiWorker extends WorkerEntrypoint<Env> {
       });
     }
 
+    if (isAgentAccessPath(new URL(request.url).pathname)) {
+      const { handleAgentAccessRequest } = await import("./agent-access/runtime");
+      const response = await handleAgentAccessRequest(request, this.env, this.ctx);
+      return applyBaselineSecurityHeaders(request, response, {
+        frameProtection: "deny",
+      });
+    }
+
     const cachePolicy = getPublicApiCachePolicy(request);
     if (cachePolicy) {
       const cacheRequest = cachePolicy.canonicalUrl === request.url
@@ -106,5 +115,19 @@ export default class ApiWorker extends WorkerEntrypoint<Env> {
       cron: controller.cron,
       scheduledTime: controller.scheduledTime,
     });
+    try {
+      const { purgeExpiredOAuthData } = await import("./agent-access/oauth");
+      await purgeExpiredOAuthData(this.env);
+    } catch {
+      // OAuth protocol storage cleanup is retryable maintenance. It must not
+      // hide successful commerce recovery work from this scheduled run.
+    }
+    try {
+      const { purgeExpiredAgentArtifacts } = await import("./agent-access/artifact-delivery");
+      await purgeExpiredAgentArtifacts(this.env);
+    } catch {
+      // Artifact expiry and object cleanup retry on the next scheduled run and
+      // never hide successful commerce maintenance.
+    }
   }
 }

@@ -30,6 +30,9 @@ describe("API Worker startup boundaries", () => {
     vi.doUnmock("./app");
     vi.doUnmock("./queue-consumer");
     vi.doUnmock("./scheduled-maintenance");
+    vi.doUnmock("./agent-access/oauth");
+    vi.doUnmock("./agent-access/artifact-delivery");
+    vi.doUnmock("./agent-access/runtime");
     vi.resetModules();
   });
 
@@ -106,6 +109,35 @@ describe("API Worker startup boundaries", () => {
       queue: false,
       scheduled: false,
     });
+  });
+
+  it("loads only the agent runtime graph for exact agent paths", async () => {
+    const appFetch = vi.fn(() => new Response("app"));
+    const agentFetch = vi.fn(() => new Response("agent"));
+    let agentLoaded = false;
+    vi.doMock("./app", () => ({ default: { fetch: appFetch } }));
+    vi.doMock("./agent-access/runtime", () => {
+      agentLoaded = true;
+      return {
+        shouldHandleAgentAccessRequest: (request: Request) =>
+          new URL(request.url).pathname === "/api/v1/mcp/dashboard",
+        handleAgentAccessRequest: agentFetch,
+      };
+    });
+
+    const { default: ApiWorker } = await import("./worker");
+    expect(agentLoaded).toBe(false);
+    const worker = new ApiWorker(
+      undefined as never,
+      undefined as never,
+    ) as unknown as TestApiWorker;
+    const response = await worker.fetch(
+      new Request("https://api.example.test/api/v1/mcp/dashboard"),
+    );
+
+    expect(await response.text()).toBe("agent");
+    expect(agentFetch).toHaveBeenCalledTimes(1);
+    expect(appFetch).not.toHaveBeenCalled();
   });
 
   it("serves only health probes while the database migration freeze is active", async () => {
@@ -188,6 +220,8 @@ describe("API Worker startup boundaries", () => {
       scheduled: false,
     };
     const runScheduledMaintenance = vi.fn();
+    const purgeExpiredOAuthData = vi.fn();
+    const purgeExpiredAgentArtifacts = vi.fn();
 
     vi.doMock("./app", () => {
       loaded.app = true;
@@ -201,6 +235,8 @@ describe("API Worker startup boundaries", () => {
       loaded.scheduled = true;
       return { runScheduledMaintenance };
     });
+    vi.doMock("./agent-access/oauth", () => ({ purgeExpiredOAuthData }));
+    vi.doMock("./agent-access/artifact-delivery", () => ({ purgeExpiredAgentArtifacts }));
 
     const { default: ApiWorker } = await import("./worker");
     const worker = new ApiWorker(
@@ -223,6 +259,8 @@ describe("API Worker startup boundaries", () => {
         scheduledTime: 1783166400000,
       },
     );
+    expect(purgeExpiredOAuthData).toHaveBeenCalledWith(worker.env);
+    expect(purgeExpiredAgentArtifacts).toHaveBeenCalledWith(worker.env);
     expect(loaded).toEqual({
       app: false,
       queue: false,
@@ -236,6 +274,10 @@ describe("API Worker startup boundaries", () => {
     vi.doMock("./app", () => ({ default: { fetch: vi.fn() } }));
     vi.doMock("./queue-consumer", () => ({ handleQueueBatch }));
     vi.doMock("./scheduled-maintenance", () => ({ runScheduledMaintenance }));
+    vi.doMock("./agent-access/oauth", () => ({ purgeExpiredOAuthData: vi.fn() }));
+    vi.doMock("./agent-access/artifact-delivery", () => ({
+      purgeExpiredAgentArtifacts: vi.fn(),
+    }));
 
     const { default: ApiWorker } = await import("./worker");
     const worker = new ApiWorker(

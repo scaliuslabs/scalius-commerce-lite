@@ -4,6 +4,7 @@ import { adminOrdersRoutes } from "./orders";
 
 type OperationDoc = {
     responses?: Record<string, unknown>;
+    parameters?: Array<{ name?: string; in?: string }>;
 };
 
 type OpenApiSchema = {
@@ -40,7 +41,44 @@ function expectResponses(
     }
 }
 
+function expectQueryParameters(
+    spec: TestOpenApiDocument,
+    path: string,
+    method: string,
+    expectedNames: string[],
+): void {
+    const operation = spec.paths?.[path]?.[method];
+    if (!operation) throw new Error(`Missing OpenAPI operation ${method.toUpperCase()} ${path}`);
+    const actualNames = operation.parameters
+        ?.filter((parameter) => parameter.in === "query")
+        .map((parameter) => parameter.name)
+        .filter((name): name is string => name !== undefined) ?? [];
+    expect(actualNames.sort()).toEqual([...expectedNames].sort());
+}
+
 describe("admin order mutation OpenAPI responses", () => {
+    it("documents bounded server-side CSV and printable invoice artifacts", () => {
+        const spec = buildAdminOrdersSpec();
+        expectResponses(spec, "/api/v1/admin/orders/export", "get", ["200", "400", "401", "403"]);
+        expectResponses(spec, "/api/v1/admin/orders/{id}/invoice/print", "get", [
+            "200", "400", "401", "403", "404", "409", "503",
+        ]);
+    });
+
+    it("accepts every concurrently active order-list filter on recovery export", () => {
+        const spec = buildAdminOrdersSpec();
+        expectQueryParameters(
+            spec,
+            "/api/v1/admin/orders/payment-recovery/export",
+            "get",
+            [
+                "search", "state", "status", "statusGroup", "paymentStatus",
+                "paymentMethod", "fulfillmentStatus", "archived", "sort", "order",
+                "startDate", "endDate", "maxRows",
+            ],
+        );
+    });
+
     it("documents the bounded manual-order catalog search", () => {
         const spec = buildAdminOrdersSpec();
         expectResponses(spec, "/api/v1/admin/orders/catalog-products", "get", [

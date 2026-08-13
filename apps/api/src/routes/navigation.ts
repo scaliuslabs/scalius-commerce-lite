@@ -31,6 +31,7 @@ const getNavigationRoute = createRoute({
   path: "/",
   tags: ["Navigation"],
   summary: "Get navigation menu items",
+  operationId: "storefront.navigation.get",
   request: {
     query: z.object({
       type: z.enum(["header", "footer", "all"]).optional().default("all").openapi({ description: "Navigation type" })
@@ -75,6 +76,7 @@ const getPlacementManifestRoute = createRoute({
   path: "/placements",
   tags: ["Navigation"],
   summary: "Get the current published navigation placement manifest",
+  operationId: "storefront.navigation.placements_list",
   responses: {
     200: {
       description: "Published navigation placements",
@@ -101,6 +103,7 @@ const getPublishedMenuRoute = createRoute({
   path: "/menus/{menuId}",
   tags: ["Navigation"],
   summary: "Get one bounded published menu tree",
+  operationId: "storefront.navigation.menu_get",
   request: {
     params: z.object({ menuId: z.string().min(1) }),
     query: publishedMenuQuerySchema,
@@ -142,6 +145,7 @@ const getPublishedMenuItemsRoute = createRoute({
   path: "/menus/{menuId}/items",
   tags: ["Navigation"],
   summary: "Get one parent-paged published menu projection",
+  operationId: "storefront.navigation.items_list",
   request: {
     params: z.object({ menuId: z.string().min(1) }),
     query: publishedMenuQuerySchema.extend({
@@ -205,6 +209,7 @@ const getNavigationByIdRoute = createRoute({
   path: "/{id}",
   tags: ["Navigation"],
   summary: "Get navigation menu by ID",
+  operationId: "storefront.navigation.menu_get_by_id",
   request: {
     params: z.object({
       id: z.string(),

@@ -43,6 +43,11 @@ import { storefrontRoutes } from "./routes/storefront";
 import { checkoutRoutes } from "./routes/checkout";
 import { customerAuthRoutes } from "./routes/customer-auth";
 import { readinessRoutes } from "./routes/readiness";
+import { agentPrincipalMiddleware } from "./middleware/agent-principal";
+import { storefrontAgentContextRoutes } from "./routes/storefront-agent-contexts";
+import { storefrontAgentContinuationRoutes } from "./routes/storefront-agent-continuations";
+import { agentAuthRoutes } from "./routes/agent-auth";
+import { agentArtifactRoutes } from "./routes/agent-artifacts";
 import { errorResponseFromError, logApiError } from "./utils/api-response";
 import {
   getRequestCorrelation,
@@ -82,6 +87,7 @@ import { adminAttributesRoutes } from "./routes/admin/attributes";
 import { adminDashboardRoutes } from "./routes/admin/dashboard";
 import { adminSystemUtilsRoutes } from "./routes/admin/system-utils";
 import { adminTaxRoutes } from "./routes/admin/taxes";
+import { adminAgentAccessRoutes } from "./routes/admin/agent-access";
 
 // Create typed OpenAPIHono app with Cloudflare Workers Env bindings
 // basePath("/api/v1") — standalone worker receives full URLs (e.g. /api/v1/products)
@@ -212,6 +218,8 @@ app.get("/", (c) =>
 // Public Storefront routes (no auth required)
 // Mount directly on app, paths are relative
 app.route("/auth", authRoutes);
+app.route("/agent-auth", agentAuthRoutes);
+app.route("/agent-artifacts", agentArtifactRoutes);
 app.route("/attributes", attributeRoutes);
 app.route("/collections", collectionRoutes);
 app.route("/hero", heroRoutes);
@@ -225,6 +233,9 @@ app.route("/discounts", discountRoutes);
 app.route("/analytics", analyticsRoutes);
 app.route("/meta", metaConversionsRoutes);
 app.route("/storefront", storefrontRoutes);
+app.use("/storefront/agent-contexts/*", agentPrincipalMiddleware);
+app.route("/storefront/agent-contexts", storefrontAgentContextRoutes);
+app.route("/storefront/agent-continuations", storefrontAgentContinuationRoutes);
 app.route("/checkout", checkoutRoutes);
 app.use("/customer-auth/*", cookieOriginGuardMiddleware);
 app.route("/customer-auth", customerAuthRoutes);
@@ -326,6 +337,7 @@ app.route("/admin/products", adminProductsRoutes);
 app.route("/admin/auth", adminAuthManagementRoutes);
 app.route("/admin/attributes", adminAttributesRoutes);
 app.route("/admin/taxes", adminTaxRoutes);
+app.route("/admin/agent-access", adminAgentAccessRoutes);
 app.route("/admin", adminSystemUtilsRoutes);
 app.route("/admin/settings/delivery-locations", adminLocationRoutes);
 app.route("/admin/settings/checkout-languages", checkoutLanguageRoutes);

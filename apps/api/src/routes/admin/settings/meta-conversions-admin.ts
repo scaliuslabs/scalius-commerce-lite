@@ -9,7 +9,6 @@ import {
     metaPixelParityStatuses,
 } from "@scalius/core/modules/analytics";
 import { encryptCredentials } from "@scalius/core/utils/credential-encryption";
-import { redactCapiPayloadForLog } from "@scalius/core/integrations/meta/conversions-api";
 
 import { ok, created } from "../../../utils/api-response";
 import { ValidationError } from "../../../utils/api-error";
@@ -55,7 +54,13 @@ function validateConcreteCredential(fieldLabel: string, value: string | null): v
     }
 }
 
-function redactStoredRequestPayload(payload: string | null): string | null {
+function timestampForClient(value: Date | number | null): string | number | null {
+    return value instanceof Date ? value.toISOString() : value;
+}
+
+const SAFE_LOG_PAYLOAD_UNAVAILABLE = JSON.stringify({ available: false });
+
+function summarizeStoredRequestPayload(payload: string | null): string | null {
     if (!payload) {
         return payload;
     }
@@ -63,57 +68,60 @@ function redactStoredRequestPayload(payload: string | null): string | null {
     try {
         const parsed = JSON.parse(payload) as Record<string, unknown>;
         if (!Array.isArray(parsed.data)) {
-            return payload;
+            return SAFE_LOG_PAYLOAD_UNAVAILABLE;
         }
 
-        return JSON.stringify(
-            redactCapiPayloadForLog(
-                parsed as unknown as Parameters<typeof redactCapiPayloadForLog>[0],
-            ),
-            null,
-            2,
-        );
+        return JSON.stringify({
+            eventCount: parsed.data.length,
+            events: parsed.data.slice(0, 20).map((event) => {
+                if (!event || typeof event !== "object") return { eventName: "unknown" };
+                const row = event as Record<string, unknown>;
+                return {
+                    eventName: typeof row.event_name === "string"
+                        ? row.event_name.slice(0, 100)
+                        : "unknown",
+                    actionSource: typeof row.action_source === "string"
+                        ? row.action_source.slice(0, 50)
+                        : null,
+                };
+            }),
+            truncated: parsed.data.length > 20,
+        });
     } catch {
-        return payload;
+        return SAFE_LOG_PAYLOAD_UNAVAILABLE;
     }
 }
 
-function redactTokenishResponseValue(value: unknown): unknown {
-    if (Array.isArray(value)) {
-        return value.map(redactTokenishResponseValue);
-    }
-
-    if (!value || typeof value !== "object") {
-        return value;
-    }
-
-    return Object.fromEntries(
-        Object.entries(value).map(([key, nested]) => {
-            const normalizedKey = key.toLowerCase().replace(/[\s_-]+/g, "");
-            if (["token", "accesstoken", "authtoken", "authorization", "bearer"].includes(normalizedKey)) {
-                return [key, "[redacted]"];
-            }
-            return [key, redactTokenishResponseValue(nested)];
-        }),
-    );
-}
-
-function redactStoredResponsePayload(payload: string | null): string | null {
+function summarizeStoredResponsePayload(payload: string | null): string | null {
     if (!payload) {
         return payload;
     }
 
     try {
-        return JSON.stringify(redactTokenishResponseValue(JSON.parse(payload)), null, 2);
+        const parsed = JSON.parse(payload) as Record<string, unknown>;
+        const eventsReceived = Number(parsed.events_received);
+        const error = parsed.error && typeof parsed.error === "object"
+            ? parsed.error as Record<string, unknown>
+            : null;
+        return JSON.stringify({
+            eventsReceived: Number.isFinite(eventsReceived)
+                ? Math.max(0, Math.trunc(eventsReceived))
+                : null,
+            hasError: Boolean(error),
+            errorType: typeof error?.type === "string" ? error.type.slice(0, 100) : null,
+            errorCode: typeof error?.code === "number" && Number.isFinite(error.code)
+                ? Math.trunc(error.code)
+                : null,
+        });
     } catch {
-        return payload;
+        return SAFE_LOG_PAYLOAD_UNAVAILABLE;
     }
 }
 
 const metaConversionsSettingsSchema = z.object({
-    pixelId: z.string().optional(),
-    accessToken: z.string().optional(),
-    testEventCode: z.string().optional(),
+    pixelId: z.string().max(100).optional(),
+    accessToken: z.string().max(4096).optional(),
+    testEventCode: z.string().max(200).optional(),
     isEnabled: z.boolean().default(false),
     logRetentionDays: z.number().int().min(1).max(365).default(30)
 });
@@ -127,9 +135,9 @@ const metaConversionsSettingsResponseSchema = z.object({
     testEventCode: z.string().nullable(),
     isEnabled: z.boolean(),
     logRetentionDays: z.number(),
-    createdAt: z.number().nullable(),
-    updatedAt: z.number().nullable(),
-}).passthrough();
+    createdAt: z.union([z.string(), z.number()]).nullable(),
+    updatedAt: z.union([z.string(), z.number()]).nullable(),
+});
 
 const metaPixelParityResponseSchema = z.object({
     status: z.enum(metaPixelParityStatuses),
@@ -144,6 +152,7 @@ const metaPixelParityResponseSchema = z.object({
 const getSettingsRoute = createRoute({
     method: "get",
     path: "/",
+    operationId: "dashboard.meta_conversions.get",
     tags: ["Admin - Meta Conversions"],
     summary: "Get Meta Conversions API settings",
     responses: {
@@ -158,7 +167,16 @@ const getSettingsRoute = createRoute({
 app.openapi(getSettingsRoute, (async (c) => {
     const db = c.get("db");
     const settings = await db.select().from(metaConversionsSettings).where(eq(metaConversionsSettings.id, "singleton")).get();
-    const maskedSettings = settings ? { ...settings, accessToken: settings.accessToken ? MASKED_VALUE : null } : null;
+    const maskedSettings = settings ? {
+        id: settings.id,
+        pixelId: settings.pixelId,
+        accessToken: settings.accessToken ? MASKED_VALUE : null,
+        testEventCode: settings.testEventCode ? MASKED_VALUE : null,
+        isEnabled: settings.isEnabled,
+        logRetentionDays: settings.logRetentionDays,
+        createdAt: timestampForClient(settings.createdAt),
+        updatedAt: timestampForClient(settings.updatedAt),
+    } : null;
     const pixelParity = await getMetaPixelParityDiagnostics(db, settings?.pixelId).catch((error: unknown) => {
         console.warn("Meta Pixel parity diagnostics unavailable", {
             error: error instanceof Error ? error.message : String(error),
@@ -173,6 +191,7 @@ app.openapi(getSettingsRoute, (async (c) => {
 const saveSettingsRoute = createRoute({
     method: "post",
     path: "/",
+    operationId: "dashboard.meta_conversions.update",
     tags: ["Admin - Meta Conversions"],
     summary: "Save Meta Conversions API settings",
     request: { body: { content: { "application/json": { schema: metaConversionsSettingsSchema } } } },
@@ -199,7 +218,14 @@ app.openapi(saveSettingsRoute, (async (c: AppRouteContext<typeof saveSettingsRou
     const validation = c.req.valid("json");
     const existingSettings = await db.select().from(metaConversionsSettings).where(eq(metaConversionsSettings.id, "singleton")).get();
     const pixelId = optionalTrimmedValue(validation.pixelId);
-    const testEventCode = optionalTrimmedValue(validation.testEventCode);
+    const rawTestEventCode = validation.testEventCode;
+    const trimmedTestEventCode = typeof rawTestEventCode === "string"
+        ? rawTestEventCode.trim()
+        : undefined;
+    const isUsingMaskedTestEventCode = trimmedTestEventCode === MASKED_VALUE;
+    const testEventCode = isUsingMaskedTestEventCode || rawTestEventCode === undefined
+        ? existingSettings?.testEventCode ?? null
+        : optionalTrimmedValue(rawTestEventCode);
     const rawAccessToken = validation.accessToken;
     const trimmedAccessToken = typeof rawAccessToken === "string" ? rawAccessToken.trim() : undefined;
     const hasStoredAccessToken = Boolean(existingSettings?.accessToken);
@@ -211,7 +237,10 @@ app.openapi(saveSettingsRoute, (async (c: AppRouteContext<typeof saveSettingsRou
 
     validateConcreteCredential("Pixel ID", pixelId);
     validateConcreteCredential("access token", !isUsingMaskedAccessToken && trimmedAccessToken ? trimmedAccessToken : null);
-    validateConcreteCredential("test event code", testEventCode);
+    validateConcreteCredential(
+        "test event code",
+        !isUsingMaskedTestEventCode ? testEventCode : null,
+    );
 
     if (validation.isEnabled) {
         const missingFields = [
@@ -248,7 +277,16 @@ app.openapi(saveSettingsRoute, (async (c: AppRouteContext<typeof saveSettingsRou
     if (!result) throw new ValidationError("Failed to save settings");
     await clearMetaCapiBrowserCircuit(c.env);
     await invalidateApiAndScheduleStorefrontGroups(LAYOUT_CACHE_GROUPS, c);
-    const maskedResult = { ...result, accessToken: result.accessToken ? MASKED_VALUE : null };
+    const maskedResult = {
+        id: result.id,
+        pixelId: result.pixelId,
+        accessToken: result.accessToken ? MASKED_VALUE : null,
+        testEventCode: result.testEventCode ? MASKED_VALUE : null,
+        isEnabled: result.isEnabled,
+        logRetentionDays: result.logRetentionDays,
+        createdAt: timestampForClient(result.createdAt),
+        updatedAt: timestampForClient(result.updatedAt),
+    };
     return existingSettings ? ok(c, maskedResult) : created(c, maskedResult);
 }) as unknown as AppRouteHandler<typeof saveSettingsRoute>);
 
@@ -261,18 +299,19 @@ const metaConversionsLogSchema = z.object({
     requestPayload: z.string().nullable(),
     responsePayload: z.string().nullable(),
     errorMessage: z.string().nullable(),
-    createdAt: z.number().nullable(),
-}).passthrough();
+    createdAt: z.union([z.string(), z.number()]).nullable(),
+});
 
 const getLogsRoute = createRoute({
     method: "get",
     path: "/logs",
+    operationId: "dashboard.meta_conversions.logs_list",
     tags: ["Admin - Meta Conversions"],
     summary: "Get Meta Conversions API logs",
     request: {
         query: z.object({
-            page: z.coerce.number().default(1).openapi({ description: "Page number" }),
-            limit: z.coerce.number().max(100).default(20).openapi({ description: "Items per page" })
+            page: z.coerce.number().int().min(1).default(1).openapi({ description: "Page number" }),
+            limit: z.coerce.number().int().min(1).max(20).default(20).openapi({ description: "Items per page" })
         })
     },
     responses: {
@@ -301,9 +340,15 @@ app.openapi(getLogsRoute, (async (c: AppRouteContext<typeof getLogsRoute>) => {
 
     return ok(c, {
         logs: logs.map((log) => ({
-            ...log,
-            requestPayload: redactStoredRequestPayload(log.requestPayload),
-            responsePayload: redactStoredResponsePayload(log.responsePayload),
+            id: log.id,
+            eventName: log.eventName,
+            status: log.status,
+            requestPayload: summarizeStoredRequestPayload(log.requestPayload),
+            responsePayload: summarizeStoredResponsePayload(log.responsePayload),
+            errorMessage: log.errorMessage
+                ? "Meta delivery failed. Review the response summary and provider configuration."
+                : null,
+            createdAt: timestampForClient(log.createdAt),
         })),
         pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
         retention: { days: retentionDays, hours: retentionDays * 24 }
@@ -315,6 +360,7 @@ app.openapi(getLogsRoute, (async (c: AppRouteContext<typeof getLogsRoute>) => {
 const clearLogsRoute = createRoute({
     method: "delete",
     path: "/logs",
+    operationId: "dashboard.meta_conversions.logs_clear",
     tags: ["Admin - Meta Conversions"],
     summary: "Clear all Meta Conversions API logs",
     responses: {
@@ -334,6 +380,7 @@ app.openapi(clearLogsRoute, async (c) => {
 const manualCleanupRoute = createRoute({
     method: "post",
     path: "/logs",
+    operationId: "dashboard.meta_conversions.logs_cleanup",
     tags: ["Admin - Meta Conversions"],
     summary: "Trigger manual log cleanup",
     responses: {

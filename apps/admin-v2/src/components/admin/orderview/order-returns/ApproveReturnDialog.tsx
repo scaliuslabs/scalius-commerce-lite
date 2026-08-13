@@ -118,7 +118,12 @@ export function ApproveReturnDialog({
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={mutation.isPending}>Cancel</Button>
-          <Button type="button" variant={isFullRejection ? "destructive" : "default"} onClick={submit} disabled={mutation.isPending}>
+          <Button
+            type="button"
+            variant={isFullRejection ? "destructive" : "default"}
+            onClick={submit}
+            disabled={mutation.isPending}
+          >
             {mutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : isFullRejection ? <X className="mr-2 h-4 w-4" /> : <Check className="mr-2 h-4 w-4" />}
             {isFullRejection ? "Reject return" : "Save decision"}
           </Button>

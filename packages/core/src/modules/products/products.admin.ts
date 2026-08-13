@@ -35,6 +35,7 @@ import { getBarcodeIdentityKey } from "@scalius/shared/barcode-identity";
 import { loadProductOptions, loadVariantSelectedOptions } from "./products.option-model";
 import {
     buildProductAggregateRevisionGuard,
+    executeProductAggregateMutationBatch,
     isProductAggregateRevisionConflict,
     readProductAggregateRevisionResult,
     rethrowProductAggregateRevisionConflictIfStale,
@@ -1227,6 +1228,47 @@ export async function updateProduct(
             error,
         );
     }
+}
+
+/**
+ * Replaces only the bounded product-media aggregate while preserving the same
+ * association, SKU-image fallback, and aggregate-revision invariants as the
+ * full editor command. This is the semantic section command used by bounded
+ * API clients; it deliberately does not load or rewrite unrelated product
+ * text, attributes, rich content, options, or SKUs.
+ */
+export async function updateProductMediaSection(
+    db: Database,
+    productId: string,
+    expectedAggregateRevision: number,
+    submitted: UpdateProductInput["media"],
+    acknowledgedSkuImageRemovalIds: readonly string[] = [],
+): Promise<ProductAggregateRevisionResult | null> {
+    const product = await db
+        .select({ id: products.id })
+        .from(products)
+        .where(eq(products.id, productId))
+        .get();
+    if (!product) return null;
+
+    const mediaPlan = await validateProductMediaPlan(db, productId, submitted, true);
+    const submittedMediaIds = new Set(mediaPlan.rows.map((row) => row.id));
+    const removedAssociationIds = mediaPlan.existingRows
+        .map((row) => row.id)
+        .filter((associationId) => !submittedMediaIds.has(associationId));
+    const clearSkuImageIds = await assertRemovedSkuImagesAcknowledged(
+        db,
+        productId,
+        removedAssociationIds,
+        acknowledgedSkuImageRemovalIds,
+    );
+    const result = await executeProductAggregateMutationBatch(
+        db,
+        productId,
+        expectedAggregateRevision,
+        buildProductMediaUpdateStatements(db, productId, mediaPlan, clearSkuImageIds),
+    );
+    return { aggregateRevision: result.aggregateRevision };
 }
 
 /**

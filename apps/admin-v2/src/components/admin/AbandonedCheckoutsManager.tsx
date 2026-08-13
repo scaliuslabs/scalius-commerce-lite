@@ -170,7 +170,9 @@ const CheckoutRow = React.memo(
               aria-label={`View archived hosted-payment order ${display.orderId}`}
               title="View order"
             >
-              <Link to={`/admin/orders/${display.orderId}` as string}>
+              <Link
+                to={`/admin/orders/${display.orderId}` as string}
+              >
                 <ExternalLink className="h-4 w-4" />
               </Link>
             </Button>
@@ -268,7 +270,10 @@ const CheckoutCard = React.memo(
           <div className="flex items-center gap-1">
             {isHostedArchive && display.orderId ? (
               <Button variant="ghost" size="sm" asChild className="h-7 px-2 text-xs">
-                <Link to={`/admin/orders/${display.orderId}` as string} aria-label={`View archived hosted-payment order ${display.orderId}`}>
+                <Link
+                  to={`/admin/orders/${display.orderId}` as string}
+                  aria-label={`View archived hosted-payment order ${display.orderId}`}
+                >
                   <ExternalLink className="mr-1 h-3.5 w-3.5" /> Order
                 </Link>
               </Button>
@@ -351,7 +356,9 @@ const DetailsModal = ({
                 </div>
                 {display.orderId && (
                   <Button asChild variant="outline" size="sm" className="shrink-0 bg-white/70 dark:bg-black/10">
-                    <Link to={`/admin/orders/${display.orderId}` as string}>
+                    <Link
+                      to={`/admin/orders/${display.orderId}` as string}
+                    >
                       View order
                     </Link>
                   </Button>
@@ -688,7 +695,13 @@ export function AbandonedCheckoutsManager({
                 ? "The latest incomplete checkouts could not be loaded. Showing the last available result."
                 : "Incomplete checkouts could not be loaded. No records have been assumed."}
             </p>
-            <Button type="button" variant="outline" size="sm" className="h-7" onClick={() => void refetch()}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7"
+              onClick={() => void refetch()}
+            >
               Try again
             </Button>
           </div>

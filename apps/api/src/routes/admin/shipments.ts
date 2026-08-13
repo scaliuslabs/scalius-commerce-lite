@@ -32,6 +32,7 @@ const checkStatusResponseSchema = successEnvelope(z.object({
 // ─── GET /:id ────────────────────────────────────────────────────────────────
 
 const getShipmentRoute = createRoute({
+    operationId: "dashboard.shipments.get",
     method: "get",
     path: "/{id}",
     tags: ["Admin - Shipments"],
@@ -62,6 +63,7 @@ app.openapi(getShipmentRoute, async (c) => {
 // ─── DELETE /:id ─────────────────────────────────────────────────────────────
 
 const deleteShipmentRoute = createRoute({
+    operationId: "dashboard.shipments.delete",
     method: "delete",
     path: "/{id}",
     tags: ["Admin - Shipments"],
@@ -95,6 +97,7 @@ app.openapi(deleteShipmentRoute, async (c) => {
 // ─── POST /:id/check-status ─────────────────────────────────────────────────
 
 const checkStatusRoute = createRoute({
+    operationId: "dashboard.shipments.status_sync",
     method: "post",
     path: "/{id}/check-status",
     tags: ["Admin - Shipments"],

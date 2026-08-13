@@ -183,7 +183,7 @@ export async function resolveThemePreview(
   token: string,
 ): Promise<ThemePreviewData | null> {
   const normalizedToken = token.trim();
-  if (!/^tpv_[A-Za-z0-9_-]{40,80}$/.test(normalizedToken)) return null;
+  if (!/^tpv_[A-Za-z0-9_-]{48}$/.test(normalizedToken)) return null;
   try {
     const response = await fetchWithRetry(
       createApiUrl("/storefront/theme-preview/resolve"),

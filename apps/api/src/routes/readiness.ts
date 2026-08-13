@@ -174,11 +174,14 @@ async function kvCheck(name: string, kv: KVNamespace | undefined): Promise<Check
   });
 }
 
-async function r2Check(env: Env): Promise<CheckResult> {
-  if (!env.BUCKET) return missing("r2");
+async function r2Check(
+  name: string,
+  bucket: R2Bucket | undefined,
+): Promise<CheckResult> {
+  if (!bucket) return missing(name);
 
-  return runProbe("r2", true, async () => {
-    await env.BUCKET.list({ limit: 1 });
+  return runProbe(name, true, async () => {
+    await bucket.list({ limit: 1 });
     return "list limit 1";
   }, READINESS_REMOTE_PROBE_TIMEOUT_MS);
 }
@@ -189,6 +192,7 @@ function configCheck(env: Env): CheckResult {
     "API_TOKEN",
     "JWT_SECRET",
     "CREDENTIAL_ENCRYPTION_KEY",
+    "AGENT_TOKEN_PEPPER",
     "PUBLIC_API_BASE_URL",
     "STOREFRONT_URL",
     "BETTER_AUTH_URL",
@@ -205,7 +209,7 @@ function configCheck(env: Env): CheckResult {
       status: missingVars.length === 0 ? "ok" : "missing",
       detail: missingVars.length > 0
         ? `missing ${missingVars.join(", ")}`
-        : "required public runtime vars present",
+        : "required runtime vars present",
     },
   };
 }
@@ -232,7 +236,9 @@ app.get("/readyz", async (c) => {
     databaseCheck(env),
     kvCheck("api_cache_kv", env.CACHE),
     kvCheck("shared_auth_kv", env.SHARED_AUTH_CACHE),
-    r2Check(env),
+    kvCheck("oauth_kv", env.OAUTH_KV),
+    r2Check("r2", env.BUCKET),
+    r2Check("agent_artifacts_r2", env.AGENT_ARTIFACTS),
   ]);
 
   const checks = [
@@ -245,6 +251,12 @@ app.get("/readyz", async (c) => {
       env.CHECKOUT_COORDINATOR,
       ["idFromName", "get"],
       "durable object namespace",
+    ),
+    bindingMethodsCheck(
+      "agent_rate_limiter",
+      env.AGENT_RATE_LIMITER,
+      ["limit"],
+      "rate limit",
     ),
     bindingMethodsCheck(
       "search_rate_limiter",

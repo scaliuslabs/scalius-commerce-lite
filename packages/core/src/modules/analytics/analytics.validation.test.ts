@@ -43,6 +43,17 @@ const VALID_TIKTOK_PIXEL_CONFIG =
   "<script>ttq.load('C1234567890ABCDEFG');ttq.page();</script>";
 
 describe("analytics validation", () => {
+  it("bounds stored and returned analytics source", () => {
+    const result = createAnalyticsSchema.safeParse({
+      name: "Oversized custom script",
+      type: "custom",
+      config: "x".repeat(32_769),
+      location: "head",
+    });
+
+    expect(result.success).toBe(false);
+  });
+
   it("creates analytics scripts as inactive drafts by default", () => {
     const result = createAnalyticsSchema.parse({
       name: "Draft custom script",

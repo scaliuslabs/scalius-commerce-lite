@@ -161,6 +161,12 @@ export const PERMISSIONS = {
   TEAM_MANAGE_ROLES: "team.manage_roles",
 
   // =============================================
+  // Agent Access (2 permissions) - SUPER ADMIN ONLY
+  // =============================================
+  AGENT_ACCESS_VIEW: "agent_access.view",
+  AGENT_ACCESS_MANAGE: "agent_access.manage",
+
+  // =============================================
   // Dashboard (2 permissions)
   // =============================================
   DASHBOARD_VIEW: "dashboard.view",
@@ -902,6 +908,26 @@ export const PERMISSION_METADATA: Record<
     resource: "team",
     action: "manage_roles",
     category: "Team",
+    isSensitive: true,
+  },
+
+  // Agent Access
+  [PERMISSIONS.AGENT_ACCESS_VIEW]: {
+    name: PERMISSIONS.AGENT_ACCESS_VIEW,
+    displayName: "View Agent Access",
+    description: "View agent connections and safe audit activity",
+    resource: "agent_access",
+    action: "view",
+    category: "Settings",
+    isSensitive: true,
+  },
+  [PERMISSIONS.AGENT_ACCESS_MANAGE]: {
+    name: PERMISSIONS.AGENT_ACCESS_MANAGE,
+    displayName: "Manage Agent Access",
+    description: "Create, approve, rotate, narrow, and revoke agent connections",
+    resource: "agent_access",
+    action: "manage",
+    category: "Settings",
     isSensitive: true,
   },
 

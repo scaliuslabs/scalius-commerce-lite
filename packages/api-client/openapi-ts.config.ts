@@ -11,6 +11,9 @@ export default defineConfig({
     {
       name: "@hey-api/sdk",
       exportFromIndex: true,
+      operations: {
+        nesting: "id",
+      },
     },
     {
       name: "@hey-api/client-fetch",

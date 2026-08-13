@@ -275,7 +275,13 @@ describe("delivery provider cache invalidation", () => {
     });
     mocks.readStoredCredentialStrict.mockImplementation(async (value: string) => ({
       value: value === "encrypted-provider-credentials"
-        ? JSON.stringify({ clientSecret: "decrypted-secret", password: "decrypted-pass", webhookSecret: "hook-secret" })
+        ? JSON.stringify({
+          clientSecret: "decrypted-secret",
+          clientId: "client-identifier",
+          username: "merchant-identity",
+          password: "decrypted-pass",
+          webhookSecret: "hook-secret",
+        })
         : value,
       encrypted: value === "encrypted-provider-credentials",
       error: null,
@@ -292,6 +298,8 @@ describe("delivery provider cache invalidation", () => {
           type: "pathao",
           credentials: {
             clientSecret: "••••••••••••",
+            clientId: "••••••••••••",
+            username: "••••••••••••",
             password: "••••••••••••",
             webhookSecret: "••••••••••••",
           },
@@ -308,6 +316,8 @@ describe("delivery provider cache invalidation", () => {
       expect.objectContaining({
         credentials: JSON.stringify({
           clientSecret: "decrypted-secret",
+          clientId: "client-identifier",
+          username: "merchant-identity",
           password: "decrypted-pass",
           webhookSecret: "hook-secret",
         }),
@@ -328,9 +338,12 @@ describe("delivery provider cache invalidation", () => {
       value: value === "encrypted-provider-credentials"
         ? JSON.stringify({
           clientSecret: "decrypted-secret",
+          clientId: "client-identifier",
+          username: "merchant-identity",
           password: "decrypted-pass",
           webhookSecret: "hook-secret",
           baseUrl: "https://api-hermes.pathao.com",
+          unexpectedAccessToken: "must-not-leave-the-api",
         })
         : value,
       encrypted: value === "encrypted-provider-credentials",
@@ -344,14 +357,43 @@ describe("delivery provider cache invalidation", () => {
     );
 
     expect(response.status, await response.clone().text()).toBe(200);
-    const json = await response.json() as { data: Array<{ credentials: string; readiness: { status: string } }> };
-    expect(JSON.parse(json.data[0]?.credentials ?? "{}")).toEqual({
+    const json = await response.json() as { data: { providers: Array<{ credentials: string; readiness: { status: string } }> } };
+    expect(JSON.parse(json.data.providers[0]?.credentials ?? "{}")).toEqual({
       clientSecret: "••••••••••••",
+      clientId: "••••••••••••",
+      username: "••••••••••••",
       password: "••••••••••••",
       webhookSecret: "••••••••••••",
       baseUrl: "https://api-hermes.pathao.com",
     });
-    expect(json.data[0]?.readiness.status).toBe("blocked");
+    expect(json.data.providers[0]?.readiness.status).toBe("blocked");
+    expect(JSON.stringify(json)).not.toContain("must-not-leave-the-api");
+  });
+
+  it("rejects provider objects that exceed the bounded settings shape", async () => {
+    const { app, env } = createTestApp();
+    const credentials = Object.fromEntries(
+      Array.from({ length: 51 }, (_, index) => [`field_${index}`, "value"]),
+    );
+
+    const response = await app.request(
+      "/api/v1/admin/settings/delivery-providers",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "Pathao",
+          type: "pathao",
+          credentials,
+          config: {},
+          isActive: false,
+        }),
+      },
+      env,
+    );
+
+    expect(response.status).toBe(400);
+    expect(mocks.saveDeliveryProvider).not.toHaveBeenCalled();
   });
 
   it("records existing-provider test attempts and invalidates checkout caches", async () => {
@@ -364,6 +406,9 @@ describe("delivery provider cache invalidation", () => {
     );
 
     expect(response.status, await response.clone().text()).toBe(200);
+    await expect(response.clone().json()).resolves.toMatchObject({
+      data: { success: true, message: "Connection successful" },
+    });
     expect(mocks.testDeliveryProvider).toHaveBeenCalledWith(
       expect.anything(),
       "provider_pathao",
@@ -373,6 +418,38 @@ describe("delivery provider cache invalidation", () => {
       ["checkout"],
       expect.objectContaining({ env }),
     );
+  });
+
+  it("does not return upstream failure details from credential tests", async () => {
+    const { app, env } = createTestApp();
+    mocks.createProvider.mockResolvedValueOnce({
+      testConnection: vi.fn().mockResolvedValue({
+        success: false,
+        message: "Rejected token secret-provider-token",
+      }),
+    });
+
+    const response = await app.request(
+      "/api/v1/admin/settings/delivery-providers/create-test",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "Pathao",
+          type: "pathao",
+          credentials: { clientSecret: "secret-provider-token" },
+          config: {},
+        }),
+      },
+      env,
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      data: { success: false, message: "Connection failed" },
+    });
+    expect(JSON.stringify(body)).not.toContain("secret-provider-token");
   });
 
   it("does not fall back to JWT_SECRET when encrypted credentials cannot be strict-read", async () => {
@@ -404,9 +481,9 @@ describe("delivery provider cache invalidation", () => {
       undefined,
       "Delivery provider credentials",
     );
-    const json = await response.json() as { data: Array<{ credentials: string; readiness: { active: boolean } }> };
-    expect(json.data[0]?.credentials).toBe("{}");
-    expect(json.data[0]?.readiness.active).toBe(false);
+    const json = await response.json() as { data: { providers: Array<{ credentials: string; readiness: { active: boolean } }> } };
+    expect(json.data.providers[0]?.credentials).toBe("{}");
+    expect(json.data.providers[0]?.readiness.active).toBe(false);
   });
 
   it("fails closed before provider creation when CREDENTIAL_ENCRYPTION_KEY is missing", async () => {

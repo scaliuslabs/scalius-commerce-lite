@@ -110,7 +110,7 @@ function InvoicePage() {
     <div style={{ background: "#f9fafb", minHeight: "100vh" }}>
       <style dangerouslySetInnerHTML={{ __html: invoiceStyles }} />
       {isIssued ? (
-        <InvoiceActions invoiceNumber={invoiceNumber} />
+        <InvoiceActions orderId={order.id} invoiceNumber={invoiceNumber} />
       ) : (
         <InvoiceDraftActions
           orderId={order.id}

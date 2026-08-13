@@ -15,6 +15,7 @@ import { toast } from "sonner";
 
 import { usePermissions } from "@/contexts/PermissionContext";
 import { ADMIN_PERMISSIONS } from "@/lib/admin-permissions";
+import { createScannerLink } from "@/lib/api-functions/auth-management";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -112,21 +113,12 @@ export function ScannerTokenGenerator() {
     setCopied(false);
 
     try {
-      const response = await fetch("/api/scanner-token", { method: "POST" });
-      const json = (await response.json()) as {
-        success: boolean;
-        token?: string;
-        expiresAt?: number;
-        error?: string;
-      };
-
-      if (!response.ok || !json.success || !json.token) {
-        toast.error(json.error || "Scanner link could not be created");
-        return;
-      }
-
-      setToken(json.token);
-      setExpiresAt(new Date(json.expiresAt ?? Date.now() + TOKEN_LIFETIME_MS));
+      const link = await createScannerLink();
+      setToken(link.token);
+      const expiry = new Date(link.expiresAt);
+      setExpiresAt(Number.isNaN(expiry.getTime())
+        ? new Date(Date.now() + TOKEN_LIFETIME_MS)
+        : expiry);
       toast.success("Scanner link created");
     } catch {
       toast.error("Scanner link could not be created. Check the connection and try again.");

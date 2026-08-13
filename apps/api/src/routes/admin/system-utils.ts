@@ -16,6 +16,7 @@ const app = new OpenAPIHono<{ Bindings: Env }>();
 // ── List Abandoned Checkouts ──
 
 const listAbandonedCheckoutsRoute = createRoute({
+    operationId: "dashboard.abandoned_checkouts.list",
     method: "get",
     path: "/abandoned-checkouts",
     tags: ["Admin - System Utils"],
@@ -100,6 +101,7 @@ const bulkDeleteSchema = z.object({
 });
 
 const bulkDeleteCheckoutsRoute = createRoute({
+    operationId: "dashboard.abandoned_checkouts.bulk_delete_legacy",
     method: "post",
     path: "/abandoned-checkouts/bulk-delete",
     tags: ["Admin - System Utils"],
@@ -127,6 +129,7 @@ app.openapi(bulkDeleteCheckoutsRoute, async (c) => {
 // ── Bulk Delete Abandoned Checkouts (DELETE) ──
 
 const deleteCheckoutsRoute = createRoute({
+    operationId: "dashboard.abandoned_checkouts.delete",
     method: "delete",
     path: "/abandoned-checkouts",
     tags: ["Admin - System Utils"],
@@ -154,18 +157,19 @@ app.openapi(deleteCheckoutsRoute, async (c) => {
 // --- FCM Tokens ---
 
 const fcmTokenSchema = z.object({
-    token: z.string().min(1, "FCM token is required"),
-    userId: z.string().min(1, "User ID is required"),
-    deviceInfo: z.string().optional()
+    token: z.string().min(1, "FCM token is required").max(4_096),
+    userId: z.string().min(1, "User ID is required").max(128),
+    deviceInfo: z.string().max(2_048).optional()
 });
 
 const registerFcmTokenRoute = createRoute({
+    operationId: "dashboard.notifications.fcm_device_register",
     method: "post",
     path: "/fcm-token",
     tags: ["Admin - System Utils"],
     summary: "Register an FCM push notification token",
     request: {
-        body: { content: { "application/json": { schema: fcmTokenSchema } } }
+        body: { required: true, content: { "application/json": { schema: fcmTokenSchema } } }
     },
     responses: {
         200: { description: "Token registered", content: { "application/json": { schema: messageResponse } } },
@@ -216,16 +220,17 @@ app.openapi(registerFcmTokenRoute, async (c) => {
 });
 
 const cleanupSchema = z.object({
-    invalidTokens: z.array(z.string()).min(1)
+    invalidTokens: z.array(z.string().min(1).max(4_096)).min(1).max(10)
 });
 
 const cleanupFcmTokensRoute = createRoute({
+    operationId: "dashboard.notifications.fcm_token_cleanup",
     method: "post",
     path: "/fcm-token-cleanup",
     tags: ["Admin - System Utils"],
     summary: "Clean up invalid FCM tokens",
     request: {
-        body: { content: { "application/json": { schema: cleanupSchema } } }
+        body: { required: true, content: { "application/json": { schema: cleanupSchema } } }
     },
     responses: {
         200: { description: "Cleanup result", content: { "application/json": { schema: successEnvelope(z.object({ message: z.string(), cleanedCount: z.number() })) } } },

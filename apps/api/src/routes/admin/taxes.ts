@@ -7,7 +7,11 @@ import {
   deleteTaxRate,
   fromMinorUnits,
   getTaxConfiguration,
+  getTaxSettingsDocument,
+  listTaxClasses,
   listTaxClassifications,
+  listTaxJurisdictions,
+  listTaxRates,
   toMinorUnits,
   updateTaxClass,
   updateTaxClassification,
@@ -51,7 +55,17 @@ function serializeTaxRate(row: Awaited<ReturnType<typeof createTaxRate>>) {
   };
 }
 
-function serializeTaxSettings(row: Awaited<ReturnType<typeof updateTaxSettings>>) {
+function serializeTaxSettings(row: {
+  enabled: boolean;
+  pricesIncludeTax: boolean;
+  taxShipping: boolean;
+  defaultTaxClassId: string | null;
+  shippingTaxClassId: string | null;
+  displayLabel: string;
+  version: number;
+  createdAt: unknown;
+  updatedAt: unknown;
+}) {
   return {
     ...row,
     id: "default" as const,
@@ -62,9 +76,9 @@ function serializeTaxSettings(row: Awaited<ReturnType<typeof updateTaxSettings>>
 
 const nullableTimestampSchema = z.union([z.string(), z.number()]).nullable();
 const taxClassSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  description: z.string().nullable(),
+  id: z.string().max(180),
+  name: z.string().max(120),
+  description: z.string().max(500).nullable(),
   isExempt: z.boolean(),
   version: z.number().int(),
   createdAt: nullableTimestampSchema,
@@ -73,13 +87,13 @@ const taxClassSchema = z.object({
 });
 const jurisdictionTypeSchema = z.enum(["all", "city", "zone", "area"]);
 const taxRateSchema = z.object({
-  id: z.string(),
-  taxClassId: z.string(),
-  name: z.string(),
+  id: z.string().max(180),
+  taxClassId: z.string().max(180),
+  name: z.string().max(120),
   rateBps: z.number().int(),
   jurisdictionType: jurisdictionTypeSchema,
-  jurisdictionId: z.string().nullable(),
-  jurisdictionLabel: z.string().nullable(),
+  jurisdictionId: z.string().max(180).nullable(),
+  jurisdictionLabel: z.string().max(180).nullable(),
   priority: z.number().int(),
   isCompound: z.boolean(),
   isActive: z.boolean(),
@@ -95,7 +109,7 @@ const taxSettingsSchema = z.object({
   taxShipping: z.boolean(),
   defaultTaxClassId: z.string().nullable(),
   shippingTaxClassId: z.string().nullable(),
-  displayLabel: z.string(),
+  displayLabel: z.string().max(80),
   version: z.number().int(),
   createdAt: nullableTimestampSchema,
   updatedAt: nullableTimestampSchema,
@@ -105,18 +119,32 @@ const taxConfigurationSchema = z.object({
   classes: z.array(taxClassSchema),
   rates: z.array(taxRateSchema),
   jurisdictions: z.array(z.object({
-    id: z.string(),
-    name: z.string(),
+    id: z.string().max(180),
+    name: z.string().max(120),
     type: z.enum(["city", "zone", "area"]),
-    parentId: z.string().nullable(),
+    parentId: z.string().max(180).nullable(),
   })),
+});
+
+const boundedTaxListQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(50).default(25),
+  search: z.string().trim().max(180).optional(),
+});
+
+const taxJurisdictionSchema = z.object({
+  id: z.string().max(180),
+  name: z.string().max(120),
+  type: z.enum(["city", "zone", "area"]),
+  parentId: z.string().max(180).nullable(),
 });
 
 const getConfigurationRoute = createRoute({
   method: "get",
   path: "/",
+  operationId: "dashboard.taxes.configuration_get",
   tags: ["Admin - Taxes"],
-  summary: "Get tax settings, classes, and rates",
+  summary: "Get the legacy aggregate tax configuration",
   responses: {
     200: { description: "Tax configuration", content: { "application/json": { schema: successEnvelope(taxConfigurationSchema) } } },
     ...errorResponses,
@@ -139,6 +167,23 @@ app.openapi(getConfigurationRoute, async (c) => {
   });
 });
 
+const getSettingsRoute = createRoute({
+  method: "get",
+  path: "/settings",
+  operationId: "dashboard.taxes.settings_get",
+  tags: ["Admin - Taxes"],
+  summary: "Get versioned tax settings",
+  responses: {
+    200: { description: "Tax settings", content: { "application/json": { schema: successEnvelope(z.object({ settings: taxSettingsSchema })) } } },
+    ...errorResponses,
+  },
+});
+
+app.openapi(getSettingsRoute, async (c) => {
+  const settings = await getTaxSettingsDocument(c.get("db"));
+  return ok(c, { settings: serializeTaxSettings(settings) });
+});
+
 const updateSettingsBodySchema = z.object({
   expectedVersion: z.number().int().min(0),
   enabled: z.boolean(),
@@ -152,6 +197,7 @@ const updateSettingsBodySchema = z.object({
 const updateSettingsRoute = createRoute({
   method: "put",
   path: "/settings",
+  operationId: "dashboard.taxes.settings_update",
   tags: ["Admin - Taxes"],
   summary: "Update versioned tax settings",
   request: { body: { required: true, content: { "application/json": { schema: updateSettingsBodySchema } } } },
@@ -175,6 +221,35 @@ const createClassBodySchema = z.object({
   description: z.string().trim().max(500).optional().nullable(),
   isExempt: z.boolean().optional().default(false),
 }).strict();
+
+const listClassesRoute = createRoute({
+  method: "get",
+  path: "/classes",
+  operationId: "dashboard.taxes.classes_list",
+  tags: ["Admin - Taxes"],
+  summary: "List active tax classes with bounded pagination",
+  request: { query: boundedTaxListQuerySchema },
+  responses: {
+    200: { description: "Tax classes", content: { "application/json": { schema: successEnvelope(z.object({
+      items: z.array(taxClassSchema).max(50),
+      total: z.number().int().nonnegative(),
+      page: z.number().int().positive(),
+      limit: z.number().int().min(1).max(50),
+    })) } } },
+    ...errorResponses,
+  },
+});
+
+app.openapi(listClassesRoute, async (c) => {
+  const query = c.req.valid("query");
+  const result = await listTaxClasses(c.get("db"), query);
+  return ok(c, {
+    items: result.items.map(serializeTaxClass),
+    total: result.total,
+    page: query.page,
+    limit: query.limit,
+  });
+});
 const updateClassBodySchema = z.object({
   expectedVersion: z.number().int().min(1),
   name: z.string().trim().min(1).max(120),
@@ -185,6 +260,7 @@ const updateClassBodySchema = z.object({
 const createClassRoute = createRoute({
   method: "post",
   path: "/classes",
+  operationId: "dashboard.taxes.classes_create",
   tags: ["Admin - Taxes"],
   summary: "Create a tax class",
   request: { body: { required: true, content: { "application/json": { schema: createClassBodySchema } } } },
@@ -205,6 +281,7 @@ app.openapi(createClassRoute, async (c) => {
 const updateClassRoute = createRoute({
   method: "put",
   path: "/classes/{id}",
+  operationId: "dashboard.taxes.classes_update",
   tags: ["Admin - Taxes"],
   summary: "Update a versioned tax class",
   request: {
@@ -230,6 +307,7 @@ const versionQuerySchema = z.object({ expectedVersion: z.coerce.number().int().m
 const deleteClassRoute = createRoute({
   method: "delete",
   path: "/classes/{id}",
+  operationId: "dashboard.taxes.classes_delete",
   tags: ["Admin - Taxes"],
   summary: "Soft-delete an unused tax class",
   request: {
@@ -261,6 +339,37 @@ const rateBodySchema = z.object({
   isCompound: z.boolean().optional().default(false),
   isActive: z.boolean().optional().default(true),
 }).strict();
+
+const listRatesRoute = createRoute({
+  method: "get",
+  path: "/rates",
+  operationId: "dashboard.taxes.rates_list",
+  tags: ["Admin - Taxes"],
+  summary: "List active tax rates with bounded pagination",
+  request: { query: boundedTaxListQuerySchema.extend({
+    taxClassId: z.string().trim().min(1).max(180).optional(),
+  }) },
+  responses: {
+    200: { description: "Tax rates", content: { "application/json": { schema: successEnvelope(z.object({
+      items: z.array(taxRateSchema).max(50),
+      total: z.number().int().nonnegative(),
+      page: z.number().int().positive(),
+      limit: z.number().int().min(1).max(50),
+    })) } } },
+    ...errorResponses,
+  },
+});
+
+app.openapi(listRatesRoute, async (c) => {
+  const query = c.req.valid("query");
+  const result = await listTaxRates(c.get("db"), query);
+  return ok(c, {
+    items: result.items.map(serializeTaxRate),
+    total: result.total,
+    page: query.page,
+    limit: query.limit,
+  });
+});
 const updateRateBodySchema = z.object({
   expectedVersion: z.number().int().min(1),
   taxClassId: z.string().min(1).max(180).optional(),
@@ -277,6 +386,7 @@ const updateRateBodySchema = z.object({
 const createRateRoute = createRoute({
   method: "post",
   path: "/rates",
+  operationId: "dashboard.taxes.rates_create",
   tags: ["Admin - Taxes"],
   summary: "Create a merchant-configured tax rate",
   request: { body: { required: true, content: { "application/json": { schema: rateBodySchema } } } },
@@ -297,6 +407,7 @@ app.openapi(createRateRoute, async (c) => {
 const updateRateRoute = createRoute({
   method: "put",
   path: "/rates/{id}",
+  operationId: "dashboard.taxes.rates_update",
   tags: ["Admin - Taxes"],
   summary: "Update a versioned tax rate",
   request: {
@@ -321,6 +432,7 @@ app.openapi(updateRateRoute, async (c) => {
 const deleteRateRoute = createRoute({
   method: "delete",
   path: "/rates/{id}",
+  operationId: "dashboard.taxes.rates_delete",
   tags: ["Admin - Taxes"],
   summary: "Soft-delete a tax rate",
   request: { params: z.object({ id: z.string().min(1).max(180) }), query: versionQuerySchema },
@@ -338,6 +450,38 @@ app.openapi(deleteRateRoute, async (c) => {
   return ok(c, { taxRate: serializeTaxRate(taxRate) });
 });
 
+const listJurisdictionsRoute = createRoute({
+  method: "get",
+  path: "/jurisdictions",
+  operationId: "dashboard.taxes.jurisdictions_list",
+  tags: ["Admin - Taxes"],
+  summary: "List active tax jurisdictions with bounded pagination",
+  request: { query: boundedTaxListQuerySchema.extend({
+    type: z.enum(["city", "zone", "area"]).optional(),
+    parentId: z.string().trim().min(1).max(180).optional(),
+  }) },
+  responses: {
+    200: { description: "Tax jurisdictions", content: { "application/json": { schema: successEnvelope(z.object({
+      items: z.array(taxJurisdictionSchema).max(50),
+      total: z.number().int().nonnegative(),
+      page: z.number().int().positive(),
+      limit: z.number().int().min(1).max(50),
+    })) } } },
+    ...errorResponses,
+  },
+});
+
+app.openapi(listJurisdictionsRoute, async (c) => {
+  const query = c.req.valid("query");
+  const result = await listTaxJurisdictions(c.get("db"), query);
+  return ok(c, {
+    items: result.items,
+    total: result.total,
+    page: query.page,
+    limit: query.limit,
+  });
+});
+
 const classificationItemSchema = z.object({
   kind: z.enum(["product", "variant"]),
   id: z.string(),
@@ -353,6 +497,7 @@ const classificationItemSchema = z.object({
 const listClassificationsRoute = createRoute({
   method: "get",
   path: "/classifications",
+  operationId: "dashboard.taxes.classifications_list",
   tags: ["Admin - Taxes"],
   summary: "List product or SKU tax classifications",
   request: { query: z.object({
@@ -374,6 +519,7 @@ app.openapi(listClassificationsRoute, async (c) => ok(c, await listTaxClassifica
 const updateClassificationRoute = createRoute({
   method: "put",
   path: "/classifications/{kind}/{id}",
+  operationId: "dashboard.taxes.classifications_update",
   tags: ["Admin - Taxes"],
   summary: "Update a versioned product or SKU tax classification",
   request: {
@@ -410,6 +556,7 @@ app.openapi(updateClassificationRoute, async (c) => {
 const previewRoute = createRoute({
   method: "post",
   path: "/preview",
+  operationId: "dashboard.taxes.preview",
   tags: ["Admin - Taxes"],
   summary: "Preview current tax configuration server-side",
   request: { body: { required: true, content: { "application/json": { schema: z.object({

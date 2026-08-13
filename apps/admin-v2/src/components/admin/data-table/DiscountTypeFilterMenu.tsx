@@ -30,14 +30,22 @@ export function DiscountTypeFilterMenu({
           value={activeType || ""}
           onValueChange={(value) => onTypeFilterChange(value || null)}
         >
-          <DropdownMenuRadioItem value="">All Types</DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="amount_off_products">
+          <DropdownMenuRadioItem
+            value=""
+          >All Types</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem
+            value="amount_off_products"
+          >
             Amount Off Products
           </DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="amount_off_order">
+          <DropdownMenuRadioItem
+            value="amount_off_order"
+          >
             Amount Off Order
           </DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="free_shipping">
+          <DropdownMenuRadioItem
+            value="free_shipping"
+          >
             Free Shipping
           </DropdownMenuRadioItem>
         </DropdownMenuRadioGroup>

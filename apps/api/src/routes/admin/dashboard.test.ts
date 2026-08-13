@@ -105,6 +105,41 @@ describe("admin dashboard routes", () => {
         expect(mocks.getDailyActivityData).not.toHaveBeenCalled();
     });
 
+    it("returns a bounded recent-order projection without hidden customer fields", async () => {
+        mocks.getDashboardHomeSummary.mockResolvedValue({
+            stats: homeStats,
+            recentOrders: Array.from({ length: 20 }, (_, index) => ({
+                ...recentOrders[0],
+                id: `ord_${index}_${"i".repeat(300)}`,
+                customerName: `Merchant customer ${index} ${"n".repeat(1_000)}`,
+                status: `processing_${"s".repeat(200)}`,
+                customerEmail: "must-not-project@example.com",
+                receiptProof: "chk_must_not_project",
+            })),
+        });
+        const { app } = createTestApp();
+
+        const response = await app.request("/api/v1/admin/dashboard/home-summary");
+        const responseText = await response.text();
+        const body = JSON.parse(responseText);
+
+        expect(response.status).toBe(200);
+        expect(new TextEncoder().encode(responseText).byteLength).toBeLessThan(65_536);
+        expect(body.data.recentOrders).toHaveLength(11);
+        expect(body.data.recentOrders[0]).toEqual({
+            id: expect.stringMatching(/^ord_0_/),
+            customerName: expect.stringMatching(/^Merchant customer 0 /),
+            totalAmount: 42,
+            status: expect.stringMatching(/^processing_/),
+            createdAt: "2026-06-14T12:00:00.000Z",
+        });
+        expect(body.data.recentOrders[0].id).toHaveLength(128);
+        expect(body.data.recentOrders[0].customerName).toHaveLength(256);
+        expect(body.data.recentOrders[0].status).toHaveLength(64);
+        expect(responseText).not.toContain("must-not-project@example.com");
+        expect(responseText).not.toContain("chk_must_not_project");
+    });
+
     it("serves metrics summary data without PII, orders, lifetime revenue, or activity data", async () => {
         mocks.getDashboardSummaryStats.mockResolvedValue(homeStats);
         const { app, db } = createTestApp();

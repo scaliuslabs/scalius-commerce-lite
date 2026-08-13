@@ -57,6 +57,7 @@ const analyticsDetailSchema = analyticsSummarySchema.omit({
 const listRoute = createRoute({
     method: "get",
     path: "/",
+    operationId: "dashboard.analytics.list",
     tags: ["Admin - Analytics"],
     summary: "List analytics scripts without executable source",
     request: {
@@ -95,6 +96,7 @@ app.openapi(listRoute, async (c) => {
 const createRouteDefinition = createRoute({
     method: "post",
     path: "/",
+    operationId: "dashboard.analytics.create",
     tags: ["Admin - Analytics"],
     summary: "Create an inactive analytics draft",
     request: { body: { content: { "application/json": { schema: createAnalyticsSchema } } } },
@@ -144,6 +146,7 @@ const providerHealthServerSchema = z.object({
 const providerHealthRoute = createRoute({
     method: "get",
     path: "/health",
+    operationId: "dashboard.analytics.health",
     tags: ["Admin - Analytics"],
     summary: "Get analytics provider readiness without provider calls",
     responses: {
@@ -182,6 +185,7 @@ app.openapi(providerHealthRoute, async (c) => ok(c, await getAnalyticsProviderHe
 const getByIdRoute = createRoute({
     method: "get",
     path: "/{id}/source",
+    operationId: "dashboard.analytics.get",
     tags: ["Admin - Analytics"],
     summary: "Get analytics script source for the editor",
     request: { params: z.object({ id: z.string() }) },
@@ -203,6 +207,7 @@ app.openapi(getByIdRoute, async (c) => {
 const updateRoute = createRoute({
     method: "put",
     path: "/{id}",
+    operationId: "dashboard.analytics.update",
     tags: ["Admin - Analytics"],
     summary: "Update an analytics script with optimistic concurrency",
     request: {
@@ -238,6 +243,7 @@ app.openapi(updateRoute, async (c) => {
 const toggleRoute = createRoute({
     method: "post",
     path: "/{id}/toggle",
+    operationId: "dashboard.analytics.set_active",
     tags: ["Admin - Analytics"],
     summary: "Activate or deactivate an analytics script with revision protection",
     request: {
@@ -272,6 +278,7 @@ app.openapi(toggleRoute, async (c) => {
 const trashRoute = createRoute({
     method: "delete",
     path: "/{id}",
+    operationId: "dashboard.analytics.trash",
     tags: ["Admin - Analytics"],
     summary: "Move an analytics script to trash",
     request: {
@@ -301,6 +308,7 @@ app.openapi(trashRoute, async (c) => {
 const restoreRoute = createRoute({
     method: "post",
     path: "/{id}/restore",
+    operationId: "dashboard.analytics.restore",
     tags: ["Admin - Analytics"],
     summary: "Restore an analytics script as inactive",
     request: {
@@ -330,6 +338,7 @@ app.openapi(restoreRoute, async (c) => {
 const permanentDeleteRoute = createRoute({
     method: "delete",
     path: "/{id}/permanent",
+    operationId: "dashboard.analytics.delete_permanently",
     tags: ["Admin - Analytics"],
     summary: "Permanently delete a trashed analytics script",
     request: {

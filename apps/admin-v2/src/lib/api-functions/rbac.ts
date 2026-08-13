@@ -8,6 +8,7 @@ export interface RbacRole {
   description?: string | null;
   isSystem: boolean;
   permissions: string[];
+  permissionsTruncated?: boolean;
   createdAt?: string | number | Date;
   updatedAt?: string | number | Date;
 }
@@ -31,6 +32,11 @@ export interface RbacPermissionMetadata {
 
 export interface RbacRolesResponse {
   roles: RbacRole[];
+  pagination: {
+    page: number;
+    limit: number;
+    hasMore: boolean;
+  };
 }
 
 export interface RbacPermissionsResponse {
@@ -76,7 +82,18 @@ export interface RemoveUserPermissionOverrideInput {
 
 export const getRbacRoles = createServerFn({ method: "GET" }).handler(
   async () => {
-    return apiGet<RbacRolesResponse>("/rbac/roles");
+    const roles: RbacRole[] = [];
+    const limit = 1;
+    for (let page = 1; page <= 1_000; page += 1) {
+      const result = await apiGet<RbacRolesResponse>(
+        `/rbac/roles?page=${page}&limit=${limit}`,
+      );
+      roles.push(...result.roles);
+      if (!result.pagination.hasMore) {
+        return { roles, pagination: result.pagination };
+      }
+    }
+    throw new Error("Role list exceeded the supported page limit");
   },
 );
 

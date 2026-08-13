@@ -11,6 +11,7 @@ const app = new OpenAPIHono<{ Bindings: Env }>();
 const listShippingMethodsRoute = createRoute({
   method: "get",
   path: "/",
+  operationId: "storefront.shipping_methods.list",
   tags: ["Shipping Methods"],
   summary: "List all active shipping methods",
   responses: {
@@ -18,15 +19,15 @@ const listShippingMethodsRoute = createRoute({
       description: "Shipping methods list",
       content: { "application/json": { schema: successEnvelope(z.object({
         shippingMethods: z.array(z.object({
-          id: z.string(),
-          name: z.string(),
-          fee: z.number(),
-          description: z.string().nullable(),
+          id: z.string().max(128),
+          name: z.string().max(100),
+          fee: z.number().min(0),
+          description: z.string().max(255).nullable(),
           isActive: z.boolean(),
-          sortOrder: z.number(),
+          sortOrder: z.number().int(),
           createdAt: z.string().nullable(),
           updatedAt: z.string().nullable(),
-        }).passthrough()),
+        })).max(100),
       })) } },
     },
     500: errorResponses[500],

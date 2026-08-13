@@ -7,13 +7,17 @@ import {
 import { encryptCredentials } from "@scalius/core/utils/credential-encryption";
 
 function selectableRows(rows: Array<Record<string, unknown>>) {
-  return {
+  const selection = {
     get: vi.fn(async () => rows[0] ?? null),
+    orderBy: vi.fn(() => selection),
+    limit: vi.fn(() => selection),
+    offset: vi.fn(() => selection),
     then: (
       resolve: (value: Array<Record<string, unknown>>) => unknown,
       reject?: (reason: unknown) => unknown,
     ) => Promise.resolve(rows).then(resolve, reject),
   };
+  return selection;
 }
 
 function createFraudDb(rows: Array<Record<string, unknown>> = []) {

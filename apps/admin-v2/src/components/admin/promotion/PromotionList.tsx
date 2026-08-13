@@ -174,7 +174,10 @@ function PromotionCard({
           {formatSchedule(promotion)}
         </span>
         <Button asChild variant="ghost" size="sm" className="h-11 shrink-0 px-2 sm:h-8">
-          <Link to="/admin/promotions/$promotionId/edit" params={{ promotionId: promotion.id }}>
+          <Link
+            to="/admin/promotions/$promotionId/edit"
+            params={{ promotionId: promotion.id }}
+          >
             Edit <ArrowRight className="ml-1 size-3.5" />
           </Link>
         </Button>
@@ -244,7 +247,9 @@ export function PromotionList({
           </p>
           {promotions.length === 0 && canCreate ? (
             <Button asChild size="sm" className="mt-4 h-11 sm:h-9">
-              <Link to="/admin/promotions/new">Create promotion</Link>
+              <Link
+                to="/admin/promotions/new"
+              >Create promotion</Link>
             </Button>
           ) : null}
         </div>
@@ -301,7 +306,10 @@ export function PromotionList({
                     </td>
                     <td className="px-4 py-3 text-right align-top">
                       <Button asChild variant="ghost" size="icon" className="size-8" aria-label={`Edit ${promotion.name}`}>
-                        <Link to="/admin/promotions/$promotionId/edit" params={{ promotionId: promotion.id }}>
+                        <Link
+                          to="/admin/promotions/$promotionId/edit"
+                          params={{ promotionId: promotion.id }}
+                        >
                           <ArrowRight className="size-4" />
                         </Link>
                       </Button>

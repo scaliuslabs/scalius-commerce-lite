@@ -221,7 +221,7 @@ export function FraudCheckIndicator({
               )}
 
               <p className="text-xs text-[var(--muted-foreground)] text-center">
-                Data for: {fraudData.mobile_number}
+                Data for: {fraudData.mobile_number || phone}
               </p>
             </div>
           ) : (

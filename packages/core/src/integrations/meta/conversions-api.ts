@@ -240,9 +240,9 @@ export async function sendCapiEvent(
     const retryable = capiError.retryable ?? true;
     const message = error instanceof Error ? error.message : String(error);
     if (retryable) {
-      console.warn(`Retryable Meta CAPI '${event.event_name}' failure:`, message);
+      console.warn("Retryable Meta CAPI delivery failure");
     } else {
-      console.warn(`Meta CAPI '${event.event_name}' disabled until settings are fixed:`, message);
+      console.warn("Meta CAPI delivery disabled until settings are fixed");
     }
     await logCapiEvent(db, {
       ...logPayload,

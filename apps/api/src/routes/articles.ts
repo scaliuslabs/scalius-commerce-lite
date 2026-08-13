@@ -25,6 +25,7 @@ const listArticlesRoute = createRoute({
   path: "/",
   tags: ["Articles"],
   summary: "List published articles newest first",
+  operationId: "storefront.articles.list",
   request: { query: articleListQuerySchema },
   responses: {
     200: {
@@ -55,6 +56,7 @@ const getArticleRoute = createRoute({
   path: "/slug/{slug}",
   tags: ["Articles"],
   summary: "Get a published article by slug",
+  operationId: "storefront.articles.get_by_slug",
   request: {
     params: z.object({
       slug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),

@@ -58,7 +58,12 @@ export function CancelReturnDialog({
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={mutation.isPending}>Keep return</Button>
-          <Button type="button" variant="destructive" onClick={submit} disabled={mutation.isPending}>
+          <Button
+            type="button"
+            variant="destructive"
+            onClick={submit}
+            disabled={mutation.isPending}
+          >
             {mutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <X className="mr-2 h-4 w-4" />}
             Cancel return
           </Button>

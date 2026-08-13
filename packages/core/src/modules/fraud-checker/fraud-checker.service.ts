@@ -4,7 +4,7 @@
 
 import { settings } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { encryptCredentials, readStoredCredentialStrict } from "@scalius/core/utils/credential-encryption";
 import {
@@ -84,11 +84,18 @@ async function parseStoredProvider(
 export async function getFraudProviders(
   db: Database,
   encryptionKey?: string,
+  options?: { limit: number; offset: number },
 ): Promise<FraudCheckerProvider[]> {
-  const providerSettings = await db
+  const baseQuery = db
     .select()
     .from(settings)
-    .where(eq(settings.category, CATEGORY));
+    .where(eq(settings.category, CATEGORY))
+    .orderBy(desc(settings.updatedAt), desc(settings.key));
+  const providerSettings = options
+    ? await baseQuery
+      .limit(Math.max(1, Math.min(options.limit, 21)))
+      .offset(Math.max(0, options.offset))
+    : await baseQuery;
 
   const providers = await Promise.all(providerSettings.map(async (setting) => {
     const data = await parseStoredProvider(setting.value, encryptionKey);
@@ -283,10 +290,8 @@ export async function fraudLookup(
       riskLevel: result.riskLevel,
       data: result.details as FraudCheckResult["data"],
     };
-  } catch (error: unknown) {
-    throw new ServiceUnavailableError(
-      error instanceof Error ? error.message : "Fraud check lookup failed",
-    );
+  } catch {
+    throw new ServiceUnavailableError("Fraud check lookup failed");
   }
 }
 

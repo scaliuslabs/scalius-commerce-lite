@@ -157,7 +157,11 @@ export function ReceiveReturnDialog({
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={mutation.isPending}>Cancel</Button>
-          <Button type="button" onClick={submit} disabled={lines.length === 0 || mutation.isPending}>
+          <Button
+            type="button"
+            onClick={submit}
+            disabled={lines.length === 0 || mutation.isPending}
+          >
             {mutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PackageCheck className="mr-2 h-4 w-4" />}
             Record receipt
           </Button>

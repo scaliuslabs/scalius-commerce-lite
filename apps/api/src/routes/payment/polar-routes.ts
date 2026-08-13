@@ -126,6 +126,16 @@ function shouldReturnToAccount(c: { req: { query: (key: string) => string | unde
     return c.req.query("return_to") === "account" || c.req.query("returnTo") === "account";
 }
 
+function getAgentContinuationId(c: { req: { query: (key: string) => string | undefined } }): string | null {
+    const returnTo = c.req.query("return_to") ?? c.req.query("returnTo");
+    const id = c.req.query("continuation_id") ?? c.req.query("continuationId") ?? "";
+    return returnTo === "agent" && /^acn_[A-Za-z0-9_-]{20}$/.test(id) ? id : null;
+}
+
+function buildStorefrontAgentContinuationUrl(storefront: string, continuationId: string): string {
+    return new URL(`/agent/continue/${encodeURIComponent(continuationId)}`, storefront).toString();
+}
+
 function buildStorefrontOrderSuccessUrl(
     storefront: string,
     params: {
@@ -188,6 +198,10 @@ polarPaymentRoutes.get("/success", async (c) => {
                 paymentType,
             }));
         }
+        const agentContinuationId = getAgentContinuationId(c);
+        if (agentContinuationId) {
+            return c.redirect(buildStorefrontAgentContinuationUrl(storefrontUrl, agentContinuationId));
+        }
         return c.redirect(buildStorefrontOrderSuccessUrl(storefrontUrl, {
             orderId: orderId ?? "",
             payment: "polar",
@@ -219,6 +233,10 @@ polarPaymentRoutes.get("/cancel", async (c) => {
                 result: "cancelled",
                 paymentType: getCallbackPaymentType(c),
             }));
+        }
+        const agentContinuationId = getAgentContinuationId(c);
+        if (agentContinuationId) {
+            return c.redirect(buildStorefrontAgentContinuationUrl(storefrontUrl, agentContinuationId));
         }
         return c.redirect(buildStorefrontOrderSuccessUrl(storefrontUrl, {
             orderId,

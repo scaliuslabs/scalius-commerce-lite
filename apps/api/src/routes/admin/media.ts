@@ -72,6 +72,7 @@ const listRoute = createRoute({
     path: "/",
     tags: ["Admin - Media"],
     summary: "List media with stable cursor pagination",
+    operationId: "dashboard.media.list",
     request: { query: z.object({
         cursor: z.string().max(2_000).optional(),
         limit: z.coerce.number().int().min(1).max(100).default(24),
@@ -98,6 +99,7 @@ const initiateRoute = createRoute({
     path: "/uploads",
     tags: ["Admin - Media"],
     summary: "Initiate a durable image or video upload",
+    operationId: "dashboard.media.upload_initiate",
     request: { body: { content: { "application/json": { schema: initiateMediaUploadSchema } } } },
     responses: {
         201: { description: "Upload initiated", content: { "application/json": { schema: successEnvelope(z.object({ session: uploadSessionSchema })) } } },
@@ -112,6 +114,7 @@ const getUploadRoute = createRoute({
     path: "/uploads/{id}",
     tags: ["Admin - Media"],
     summary: "Read resumable upload status",
+    operationId: "dashboard.media.upload_get",
     request: { params: idParam },
     responses: {
         200: { description: "Upload status", content: { "application/json": { schema: successEnvelope(z.object({ session: uploadSessionSchema })) } } },
@@ -125,10 +128,21 @@ const uploadPartRoute = createRoute({
     path: "/uploads/{id}/parts/{partNumber}",
     tags: ["Admin - Media"],
     summary: "Stream one bounded media upload part",
+    operationId: "dashboard.media.upload_part",
     request: { params: z.object({
         id: z.string().min(8).max(160),
         partNumber: z.coerce.number().int().min(1).max(20),
-    }) },
+    }), body: {
+        required: true,
+        content: {
+            "application/octet-stream": {
+                schema: z.string()
+                    .min(1)
+                    .max(MEDIA_MULTIPART_PART_SIZE_BYTES)
+                    .openapi({ format: "binary" }),
+            },
+        },
+    } },
     responses: {
         200: { description: "Part stored", content: { "application/json": { schema: successEnvelope(z.object({
             partNumber: z.number().int().positive(),
@@ -170,6 +184,7 @@ const completeRoute = createRoute({
     path: "/uploads/{id}/complete",
     tags: ["Admin - Media"],
     summary: "Complete and reconcile a media upload",
+    operationId: "dashboard.media.upload_complete",
     request: { params: idParam },
     responses: {
         200: { description: "Media committed", content: { "application/json": { schema: successEnvelope(z.object({ file: mediaSchema })) } } },
@@ -184,6 +199,7 @@ const abortRoute = createRoute({
     path: "/uploads/{id}",
     tags: ["Admin - Media"],
     summary: "Abort a media upload",
+    operationId: "dashboard.media.upload_abort",
     request: { params: idParam },
     responses: { 204: noContentResponse, ...mediaErrorResponses, 503: serviceUnavailableResponse },
 });
@@ -197,6 +213,7 @@ const reconcileRoute = createRoute({
     path: "/uploads/reconcile",
     tags: ["Admin - Media"],
     summary: "Reconcile a bounded page of expired uploads",
+    operationId: "dashboard.media.upload_reconcile",
     request: { query: z.object({ limit: z.coerce.number().int().min(1).max(50).default(25) }) },
     responses: {
         200: { description: "Reconciliation result", content: { "application/json": { schema: successEnvelope(z.object({
@@ -212,6 +229,7 @@ const patchMediaRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Media"],
     summary: "Update ready media metadata with CAS",
+    operationId: "dashboard.media.update",
     request: { params: idParam, body: { content: { "application/json": { schema: updateMediaSchema } } } },
     responses: { 200: { description: "Media updated", content: { "application/json": { schema: successEnvelope(z.object({ file: mediaSchema })) } } }, ...mediaErrorResponses },
 });
@@ -223,15 +241,16 @@ app.openapi(patchMediaRoute, async (c) => {
     return ok(c, { file });
 });
 
-for (const [path, summary, action] of [
-    ["/{id}/trash", "Move media to trash", trashMediaFile],
-    ["/{id}/restore", "Restore trashed media", restoreMediaFile],
+for (const [path, summary, operationId, action] of [
+    ["/{id}/trash", "Move media to trash", "dashboard.media.trash", trashMediaFile],
+    ["/{id}/restore", "Restore trashed media", "dashboard.media.restore", restoreMediaFile],
 ] as const) {
     const route = createRoute({
         method: "post",
         path,
         tags: ["Admin - Media"],
         summary,
+        operationId,
         request: { params: idParam, body: { content: { "application/json": { schema: mediaVersionCommandSchema } } } },
         responses: { 200: { description: summary, content: { "application/json": { schema: successEnvelope(z.object({ file: mediaSchema })) } } }, ...mediaErrorResponses },
     });
@@ -249,6 +268,7 @@ const permanentDeleteRoute = createRoute({
     path: "/{id}/permanent",
     tags: ["Admin - Media"],
     summary: "Permanently delete unreferenced trashed media",
+    operationId: "dashboard.media.permanently_delete",
     request: { params: idParam, query: z.object({ expectedVersion: z.coerce.number().int().min(1) }) },
     responses: { 204: noContentResponse, ...mediaErrorResponses, 503: serviceUnavailableResponse },
 });
@@ -262,6 +282,7 @@ const moveRoute = createRoute({
     path: "/move",
     tags: ["Admin - Media"],
     summary: "Move ready media with per-item CAS",
+    operationId: "dashboard.media.move",
     request: { body: { content: { "application/json": { schema: moveMediaSchema } } } },
     responses: { 200: { description: "Media moved", content: { "application/json": { schema: successEnvelope(z.object({ movedCount: z.number().int() })) } } }, ...mediaErrorResponses },
 });
@@ -275,6 +296,7 @@ const listFoldersRoute = createRoute({
     path: "/folders",
     tags: ["Admin - Media"],
     summary: "List flat media folders with cursors",
+    operationId: "dashboard.media_folders.list",
     request: { query: z.object({
         cursor: z.string().max(2_000).optional(),
         limit: z.coerce.number().int().min(1).max(100).default(50),
@@ -287,6 +309,7 @@ app.openapi(listFoldersRoute, async (c) => ok(c, await listMediaFolders(c.get("d
 
 const createFolderRoute = createRoute({
     method: "post", path: "/folders", tags: ["Admin - Media"], summary: "Create a flat media folder",
+    operationId: "dashboard.media_folders.create",
     request: { body: { content: { "application/json": { schema: createFolderSchema } } } },
     responses: { 201: { description: "Folder created", content: { "application/json": { schema: successEnvelope(z.object({ folder: mediaFolderSchema })) } } }, ...mediaErrorResponses },
 });
@@ -294,6 +317,7 @@ app.openapi(createFolderRoute, async (c) => created(c, { folder: await createMed
 
 const updateFolderRoute = createRoute({
     method: "put", path: "/folders/{id}", tags: ["Admin - Media"], summary: "Rename a media folder with CAS",
+    operationId: "dashboard.media_folders.update",
     request: { params: idParam, body: { content: { "application/json": { schema: updateFolderSchema } } } },
     responses: { 200: { description: "Folder renamed", content: { "application/json": { schema: successEnvelope(z.object({ folder: mediaFolderSchema })) } } }, ...mediaErrorResponses },
 });
@@ -304,6 +328,7 @@ app.openapi(updateFolderRoute, async (c) => {
 
 const deleteFolderRoute = createRoute({
     method: "delete", path: "/folders/{id}", tags: ["Admin - Media"], summary: "Delete a media folder with CAS",
+    operationId: "dashboard.media_folders.delete",
     request: { params: idParam, query: z.object({ expectedVersion: z.coerce.number().int().min(1) }) },
     responses: { 204: noContentResponse, ...mediaErrorResponses },
 });

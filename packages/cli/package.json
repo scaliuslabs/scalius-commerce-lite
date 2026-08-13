@@ -1,0 +1,35 @@
+{
+  "name": "@scalius/cli",
+  "version": "0.1.0",
+  "description": "First-party CLI for Scalius Commerce operations",
+  "type": "module",
+  "license": "AGPL-3.0-only",
+  "bin": {
+    "scalius": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22.12"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "../../node_modules/typescript7/bin/tsc -p tsconfig.build.json && node scripts/set-bin-mode.mjs",
+    "lint": "eslint src/ test/",
+    "test": "vitest run",
+    "typecheck": "../../node_modules/typescript7/bin/tsc --noEmit"
+  },
+  "dependencies": {
+    "commander": "15.0.0",
+    "open": "11.0.0"
+  },
+  "devDependencies": {
+    "@scalius/tsconfig": "workspace:*",
+    "@types/node": "^24.13.3",
+    "vitest": "^4.1.10"
+  }
+}

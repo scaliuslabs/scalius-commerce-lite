@@ -50,6 +50,42 @@ describe("business settings cache invalidation", () => {
         vi.clearAllMocks();
     });
 
+    it("returns a bounded merchant projection without redacting usable business fields", async () => {
+        mocks.getBusinessSettings.mockResolvedValue({
+            companyName: `Scalius ${"c".repeat(1_000)}`,
+            legalName: "Scalius Commerce Ltd",
+            addressLine1: "123 Merchant Street",
+            addressLine2: "",
+            city: "Dhaka",
+            stateRegion: "Dhaka",
+            postalCode: "1200",
+            country: "Bangladesh",
+            phone: "+8801700000000",
+            email: "merchant@example.com",
+            taxId: "TAX-123",
+            invoicePrefix: "INV",
+            invoiceFooterText: "f".repeat(100_000),
+            invoiceLogoUrl: "https://images.example.com/logo.png",
+            providerSecret: "must-not-project",
+        });
+        const { app, env } = createTestApp();
+
+        const response = await app.request(
+            "/api/v1/admin/settings/business",
+            { method: "GET" },
+            env,
+        );
+        const responseText = await response.text();
+        const body = JSON.parse(responseText);
+
+        expect(response.status).toBe(200);
+        expect(new TextEncoder().encode(responseText).byteLength).toBeLessThan(65_536);
+        expect(body.data.companyName).toHaveLength(200);
+        expect(body.data.invoiceFooterText).toHaveLength(4_000);
+        expect(body.data.email).toBe("merchant@example.com");
+        expect(responseText).not.toContain("must-not-project");
+    });
+
     it("invalidates layout caches after business identity saves", async () => {
         const { app, env } = createTestApp();
 

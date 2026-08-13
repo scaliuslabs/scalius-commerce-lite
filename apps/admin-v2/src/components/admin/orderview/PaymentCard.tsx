@@ -1261,7 +1261,11 @@ export function PaymentCard({ order }: PaymentCardProps) {
           </div>
           <DialogFooter>
             <Button className="min-h-11 sm:min-h-10" variant="outline" onClick={() => setCodAction(null)}>Cancel</Button>
-            <Button className="min-h-11 sm:min-h-10" onClick={submitCODAction} disabled={codMutation.isPending || !canRecordCodCollection}>
+            <Button
+              className="min-h-11 sm:min-h-10"
+              onClick={submitCODAction}
+              disabled={codMutation.isPending || !canRecordCodCollection}
+            >
               {codMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
               Confirm Collection
             </Button>
@@ -1311,7 +1315,12 @@ export function PaymentCard({ order }: PaymentCardProps) {
           </div>
           <DialogFooter>
             <Button className="min-h-11 sm:min-h-10" variant="outline" onClick={() => setCodAction(null)}>Cancel</Button>
-            <Button className="min-h-11 sm:min-h-10" variant="destructive" onClick={submitCODAction} disabled={codMutation.isPending || !canRecordCodFailure}>
+            <Button
+              className="min-h-11 sm:min-h-10"
+              variant="destructive"
+              onClick={submitCODAction}
+              disabled={codMutation.isPending || !canRecordCodFailure}
+            >
               {codMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
               Record Failure
             </Button>
@@ -1330,7 +1339,12 @@ export function PaymentCard({ order }: PaymentCardProps) {
           </p>
           <DialogFooter>
             <Button className="min-h-11 sm:min-h-10" variant="outline" onClick={() => setCodAction(null)}>Cancel</Button>
-            <Button className="min-h-11 sm:min-h-10" variant="destructive" onClick={submitCODAction} disabled={codMutation.isPending || !canRecordCodReturn}>
+            <Button
+              className="min-h-11 sm:min-h-10"
+              variant="destructive"
+              onClick={submitCODAction}
+              disabled={codMutation.isPending || !canRecordCodReturn}
+            >
               {codMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
               Mark Returned
             </Button>
@@ -1391,7 +1405,10 @@ export function PaymentCard({ order }: PaymentCardProps) {
             <Button variant="outline" onClick={() => setIsRefundDialogOpen(false)} disabled={refundMutation.isPending}>
               Cancel
             </Button>
-            <Button onClick={handleIssueRefund} disabled={refundMutation.isPending || isRefundLocked}>
+            <Button
+              onClick={handleIssueRefund}
+              disabled={refundMutation.isPending || isRefundLocked}
+            >
               {refundMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
               Submit Refund
             </Button>

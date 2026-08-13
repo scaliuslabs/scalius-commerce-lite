@@ -193,9 +193,19 @@ export interface RollbackThemeInput extends PublishThemeDraftInput {
 }
 export interface ThemePreviewSessionInput {
   expectedDraftRevision: number;
+  path: string;
+  device: "full" | "desktop" | "mobile";
 }
 export interface ThemePreviewSessionPayload {
-  token: string;
+  continuation: {
+    url: string;
+    method: "POST";
+    fields: {
+      continuationCode: string;
+      path: string;
+      device: "full" | "desktop" | "mobile";
+    };
+  };
   draftRevision: number;
   basePublishedRevision: number;
   expiresAt: string | number;

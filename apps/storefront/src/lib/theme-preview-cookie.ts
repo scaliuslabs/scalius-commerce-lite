@@ -1,4 +1,4 @@
-import { isThemePreviewToken } from "@scalius/shared/theme-preview-handoff";
+import { isThemePreviewToken } from "@scalius/shared/theme-preview-token";
 
 export const THEME_PREVIEW_COOKIE_NAME = "stp_theme_preview";
 export const THEME_PREVIEW_COOKIE_MAX_AGE_SECONDS = 30 * 60;

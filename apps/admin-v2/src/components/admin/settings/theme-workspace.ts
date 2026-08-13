@@ -1,11 +1,6 @@
 import type { StorefrontThemeSettings } from "@scalius/shared/storefront-theme";
 
 import { normalizeThemeColors } from "./theme-draft";
-import {
-  normalizeThemePreviewDevice,
-  normalizeThemePreviewPath,
-} from "./theme-route-state";
-
 export {
   normalizeThemePreviewDevice,
   normalizeThemePreviewPath,
@@ -15,19 +10,6 @@ export {
   type ThemePreviewDevice,
   type ThemeWorkspaceSection,
 } from "./theme-route-state";
-
-export function buildThemePreviewHandoffUrl(
-  storefrontUrl: string | null | undefined,
-  path: unknown,
-  device: unknown,
-): string | null {
-  const baseUrl = parseStorefrontUrl(storefrontUrl);
-  if (!baseUrl) return null;
-  const destination = new URL("/theme-preview/handoff", baseUrl);
-  destination.searchParams.set("path", normalizeThemePreviewPath(path));
-  destination.searchParams.set("device", normalizeThemePreviewDevice(device));
-  return destination.toString();
-}
 
 export interface ThemeDraftChange {
   key: string;

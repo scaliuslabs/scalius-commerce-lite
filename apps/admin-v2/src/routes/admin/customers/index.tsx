@@ -244,7 +244,10 @@ function CustomersPage() {
             </Button>
           </Link>
           {!showTrashed && canCreate && (
-            <Link to="/admin/customers/new" className="flex-1 sm:flex-none">
+            <Link
+              to="/admin/customers/new"
+              className="flex-1 sm:flex-none"
+            >
               <Button size="sm" className="h-11 w-full sm:h-9 sm:w-auto">
                 <UserPlus className="mr-2 h-4 w-4" />
                 Add customer

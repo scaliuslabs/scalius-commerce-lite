@@ -47,6 +47,11 @@ export interface DeliveryProviderRecord {
   updatedAt?: string | number;
 }
 
+interface DeliveryProvidersResponse {
+  providers: DeliveryProviderRecord[];
+  pagination: { page: number; limit: number; hasMore: boolean };
+}
+
 export interface DeliveryProviderWriteInput {
   id?: string;
   name: string;
@@ -178,7 +183,16 @@ function toQueryParams(data: DeliveryLocationsQueryInput): Record<string, string
 
 export const getDeliveryProviders = createServerFn({ method: "GET" }).handler(
   async () => {
-    return apiGet<DeliveryProviderRecord[]>("/settings/delivery-providers");
+    const providers: DeliveryProviderRecord[] = [];
+    const limit = 10;
+    for (let page = 1; page <= 100; page += 1) {
+      const result = await apiGet<DeliveryProvidersResponse>(
+        `/settings/delivery-providers?page=${page}&limit=${limit}`,
+      );
+      providers.push(...result.providers);
+      if (!result.pagination.hasMore) return providers;
+    }
+    throw new Error("Delivery provider list exceeded the supported page limit");
   },
 );
 

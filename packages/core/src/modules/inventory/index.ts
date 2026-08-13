@@ -54,3 +54,5 @@ export * from "./inventory-operations";
 export * from "./inventory-transitions";
 export { adjustStock, setStock, lookupByBarcodeOrSku } from "./stock-adjustment";
 export type { StockAdjustResult, StockSetResult } from "./stock-adjustment";
+export * from "./inventory-label-artifacts";
+export * from "./inventory-movement-artifacts";

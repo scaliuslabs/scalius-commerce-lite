@@ -34,6 +34,11 @@ import {
 } from "@scalius/shared/brand-presentation";
 import { normalizeStorefrontOrigin } from "@scalius/shared/storefront-url";
 import {
+  runSeoDiscoveryLiveProbe,
+  type SeoDiscoveryLiveProbeResult,
+} from "@scalius/shared/seo-discovery-live-probe";
+import { ServiceUnavailableError } from "@scalius/core/errors";
+import {
   getCurrencySettings,
   isCurrencyCodeLocked,
   saveCurrencySettings,
@@ -75,6 +80,7 @@ import {
   messageResponse,
   errorResponses,
   conflictResponse,
+  serviceUnavailableResponse,
 } from "../../../schemas/responses";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const LAYOUT_CACHE_GROUPS = ["layout"] as const;
@@ -106,6 +112,9 @@ async function deleteLegacyCurrencyGatewayCache(
 // CURRENCY
 // ─────────────────────────────────────────
 
+const CURRENCY_SYMBOL_MAX_LENGTH = 16;
+const CURRENCY_EXCHANGE_RATE_MAX_LENGTH = 64;
+
 const supportedCurrencyCodeSchema = z.preprocess(
   (value) => (typeof value === "string" ? value.trim().toUpperCase() : value),
   z.enum(SUPPORTED_CURRENCY_CODES, {
@@ -115,8 +124,8 @@ const supportedCurrencyCodeSchema = z.preprocess(
 
 const currencySettingsSchema = z.object({
   currencyCode: z.enum(SUPPORTED_CURRENCY_CODES),
-  currencySymbol: z.string(),
-  usdExchangeRate: z.string(),
+  currencySymbol: z.string().max(CURRENCY_SYMBOL_MAX_LENGTH),
+  usdExchangeRate: z.string().max(CURRENCY_EXCHANGE_RATE_MAX_LENGTH),
   currencyCodeLocked: z.boolean(),
 });
 
@@ -125,6 +134,7 @@ const getCurrencyRoute = createRoute({
   path: "/currency",
   tags: ["Admin - Settings"],
   summary: "Get currency settings",
+  operationId: "dashboard.settings.currency_get",
   responses: {
     200: {
       description: "Currency settings",
@@ -140,15 +150,24 @@ app.openapi(getCurrencyRoute, async (c) => {
   const db = c.get("db");
   const result = await getCurrencySettings(db);
   const currencyCodeLocked = await isCurrencyCodeLocked(db);
-  return ok(c, { ...result, currencyCodeLocked });
+  return ok(c, {
+    ...result,
+    currencySymbol: result.currencySymbol.slice(0, CURRENCY_SYMBOL_MAX_LENGTH),
+    usdExchangeRate: result.usdExchangeRate.slice(
+      0,
+      CURRENCY_EXCHANGE_RATE_MAX_LENGTH,
+    ),
+    currencyCodeLocked,
+  });
 });
 
 const saveCurrencySchema = z.object({
   currencyCode: supportedCurrencyCodeSchema.optional(),
-  currencySymbol: z.string().optional(),
+  currencySymbol: z.string().max(CURRENCY_SYMBOL_MAX_LENGTH).optional(),
   usdExchangeRate: z
     .string()
     .trim()
+    .max(CURRENCY_EXCHANGE_RATE_MAX_LENGTH)
     .refine((value) => {
       const rate = Number(value);
       return value.length > 0 && Number.isFinite(rate) && rate > 0;
@@ -161,8 +180,12 @@ const saveCurrencyRoute = createRoute({
   path: "/currency",
   tags: ["Admin - Settings"],
   summary: "Save currency settings",
+  operationId: "dashboard.settings.currency_update",
   request: {
-    body: { content: { "application/json": { schema: saveCurrencySchema } } },
+    body: {
+      required: true,
+      content: { "application/json": { schema: saveCurrencySchema } },
+    },
   },
   responses: {
     200: {
@@ -200,6 +223,7 @@ const getGeneralRoute = createRoute({
   path: "/general",
   tags: ["Admin - Settings"],
   summary: "Get general settings (header + footer config)",
+  operationId: "dashboard.settings.general_get",
   responses: {
     200: {
       description: "General settings",
@@ -235,11 +259,29 @@ app.openapi(getGeneralRoute, async (c) => {
 // ─────────────────────────────────────────
 // HEADER
 // ─────────────────────────────────────────
+const SITE_PRESENTATION_TEXT_MAX_LENGTH = 2_000;
+const SITE_PRESENTATION_URL_MAX_LENGTH = 2_048;
+const SITE_PRESENTATION_SOCIAL_MAX_COUNT = 24;
+
+function presentationRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function presentationText(
+  value: unknown,
+  maximumLength: number,
+  fallback = "",
+): string {
+  return typeof value === "string" ? value.slice(0, maximumLength) : fallback;
+}
+
 const socialLinkSchema = z.object({
-  id: z.string(),
-  label: z.string(),
-  url: z.string(),
-  iconUrl: z.string().optional(),
+  id: z.string().max(128),
+  label: z.string().max(200),
+  url: z.string().max(SITE_PRESENTATION_URL_MAX_LENGTH),
+  iconUrl: z.string().max(SITE_PRESENTATION_URL_MAX_LENGTH).optional(),
 });
 const headerLogoWidthSchema = z
   .number()
@@ -249,21 +291,99 @@ const headerLogoWidthSchema = z
   .multipleOf(HEADER_LOGO_WIDTH_STEP);
 const headerConfigSchema = z.object({
   topBar: z.object({
-    text: z.string(),
+    text: z.string().max(SITE_PRESENTATION_TEXT_MAX_LENGTH),
     isEnabled: z.boolean().optional().default(true),
   }),
   logo: z.object({
-    src: z.string(),
-    alt: z.string(),
+    src: z.string().max(SITE_PRESENTATION_URL_MAX_LENGTH),
+    alt: z.string().max(200),
     width: headerLogoWidthSchema.optional().default(HEADER_LOGO_WIDTH_DEFAULT),
   }),
-  favicon: z.object({ src: z.string(), alt: z.string() }),
+  favicon: z.object({
+    src: z.string().max(SITE_PRESENTATION_URL_MAX_LENGTH),
+    alt: z.string().max(200),
+  }),
   contact: z.object({
-    phone: z.string(),
-    text: z.string(),
+    phone: z.string().max(64),
+    text: z.string().max(200),
     isEnabled: z.boolean().optional().default(true),
   }),
-  social: z.array(socialLinkSchema),
+  social: z.array(socialLinkSchema).max(SITE_PRESENTATION_SOCIAL_MAX_COUNT),
+});
+
+function projectSocialLinks(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, SITE_PRESENTATION_SOCIAL_MAX_COUNT).map((entry) => {
+    const link = presentationRecord(entry);
+    const iconUrl = presentationText(
+      link.iconUrl,
+      SITE_PRESENTATION_URL_MAX_LENGTH,
+    );
+    return {
+      id: presentationText(link.id, 128),
+      label: presentationText(link.label, 200),
+      url: presentationText(link.url, SITE_PRESENTATION_URL_MAX_LENGTH),
+      ...(iconUrl ? { iconUrl } : {}),
+    };
+  });
+}
+
+function projectHeaderConfig(value: unknown): z.infer<typeof headerConfigSchema> {
+  const root = presentationRecord(value);
+  const topBar = presentationRecord(root.topBar);
+  const logo = presentationRecord(root.logo);
+  const favicon = presentationRecord(root.favicon);
+  const contact = presentationRecord(root.contact);
+  const width = headerLogoWidthSchema.safeParse(logo.width);
+  return {
+    topBar: {
+      text: presentationText(topBar.text, SITE_PRESENTATION_TEXT_MAX_LENGTH),
+      isEnabled: topBar.isEnabled === true,
+    },
+    logo: {
+      src: presentationText(logo.src, SITE_PRESENTATION_URL_MAX_LENGTH),
+      alt: presentationText(logo.alt, 200),
+      width: width.success ? width.data : HEADER_LOGO_WIDTH_DEFAULT,
+    },
+    favicon: {
+      src: presentationText(favicon.src, SITE_PRESENTATION_URL_MAX_LENGTH),
+      alt: presentationText(favicon.alt, 200),
+    },
+    contact: {
+      phone: presentationText(contact.phone, 64),
+      text: presentationText(contact.text, 200),
+      isEnabled: contact.isEnabled === true,
+    },
+    social: projectSocialLinks(root.social),
+  };
+}
+
+const headerDocumentSchema = z.object({
+  config: headerConfigSchema,
+  revision: z.number().int().nonnegative(),
+});
+
+const getHeaderRoute = createRoute({
+  method: "get",
+  path: "/header",
+  operationId: "dashboard.settings_header.get_header",
+  tags: ["Admin - Settings"],
+  summary: "Get bounded header configuration and revision",
+  responses: {
+    200: {
+      description: "Header configuration",
+      content: {
+        "application/json": { schema: successEnvelope(headerDocumentSchema) },
+      },
+    },
+    ...errorResponses,
+  },
+});
+
+app.openapi(getHeaderRoute, async (c) => {
+  const settings = await getGeneralSettings(c.get("db"));
+  const config = projectHeaderConfig(settings.headerConfig);
+  return ok(c, { config, revision: settings.revisions.header });
 });
 
 const saveHeaderSchema = headerConfigSchema.extend({
@@ -273,10 +393,14 @@ const saveHeaderSchema = headerConfigSchema.extend({
 const saveHeaderRoute = createRoute({
   method: "post",
   path: "/header",
+  operationId: "dashboard.settings_header.header",
   tags: ["Admin - Settings"],
   summary: "Save header configuration",
   request: {
-    body: { content: { "application/json": { schema: saveHeaderSchema } } },
+    body: {
+      required: true,
+      content: { "application/json": { schema: saveHeaderSchema } },
+    },
   },
   responses: {
     200: {
@@ -313,11 +437,64 @@ app.openapi(saveHeaderRoute, async (c) => {
 // FOOTER
 // ─────────────────────────────────────────
 const footerConfigSchema = z.object({
-  logo: z.object({ src: z.string(), alt: z.string() }),
-  tagline: z.string().optional().default(""),
-  description: z.string().optional().default(""),
-  copyrightText: z.string().optional().default(""),
-  social: z.array(socialLinkSchema),
+  logo: z.object({
+    src: z.string().max(SITE_PRESENTATION_URL_MAX_LENGTH),
+    alt: z.string().max(200),
+  }),
+  tagline: z.string().max(SITE_PRESENTATION_TEXT_MAX_LENGTH).optional().default(""),
+  description: z.string().max(SITE_PRESENTATION_TEXT_MAX_LENGTH).optional().default(""),
+  copyrightText: z.string().max(SITE_PRESENTATION_TEXT_MAX_LENGTH).optional().default(""),
+  social: z.array(socialLinkSchema).max(SITE_PRESENTATION_SOCIAL_MAX_COUNT),
+});
+
+function projectFooterConfig(value: unknown): z.infer<typeof footerConfigSchema> {
+  const root = presentationRecord(value);
+  const logo = presentationRecord(root.logo);
+  return {
+    logo: {
+      src: presentationText(logo.src, SITE_PRESENTATION_URL_MAX_LENGTH),
+      alt: presentationText(logo.alt, 200),
+    },
+    tagline: presentationText(root.tagline, SITE_PRESENTATION_TEXT_MAX_LENGTH),
+    description: presentationText(
+      root.description,
+      SITE_PRESENTATION_TEXT_MAX_LENGTH,
+    ),
+    copyrightText: presentationText(
+      root.copyrightText,
+      SITE_PRESENTATION_TEXT_MAX_LENGTH,
+      "Your store",
+    ),
+    social: projectSocialLinks(root.social),
+  };
+}
+
+const footerDocumentSchema = z.object({
+  config: footerConfigSchema,
+  revision: z.number().int().nonnegative(),
+});
+
+const getFooterRoute = createRoute({
+  method: "get",
+  path: "/footer",
+  operationId: "dashboard.settings_footer.get_footer",
+  tags: ["Admin - Settings"],
+  summary: "Get bounded footer configuration and revision",
+  responses: {
+    200: {
+      description: "Footer configuration",
+      content: {
+        "application/json": { schema: successEnvelope(footerDocumentSchema) },
+      },
+    },
+    ...errorResponses,
+  },
+});
+
+app.openapi(getFooterRoute, async (c) => {
+  const settings = await getGeneralSettings(c.get("db"));
+  const config = projectFooterConfig(settings.footerConfig);
+  return ok(c, { config, revision: settings.revisions.footer });
 });
 
 const saveFooterSchema = footerConfigSchema.extend({
@@ -327,10 +504,14 @@ const saveFooterSchema = footerConfigSchema.extend({
 const saveFooterRoute = createRoute({
   method: "post",
   path: "/footer",
+  operationId: "dashboard.settings_footer.footer",
   tags: ["Admin - Settings"],
   summary: "Save footer configuration",
   request: {
-    body: { content: { "application/json": { schema: saveFooterSchema } } },
+    body: {
+      required: true,
+      content: { "application/json": { schema: saveFooterSchema } },
+    },
   },
   responses: {
     200: {
@@ -403,6 +584,7 @@ const getThemeRoute = createRoute({
   path: "/theme",
   tags: ["Admin - Settings"],
   summary: "Get theme settings",
+  operationId: "dashboard.theme.get",
   responses: {
     200: {
       description: "Theme settings",
@@ -439,6 +621,7 @@ const saveThemeRoute = createRoute({
   path: "/theme",
   tags: ["Admin - Settings"],
   summary: "Save theme settings",
+  operationId: "dashboard.theme.save_legacy",
   request: {
     body: { content: { "application/json": { schema: saveThemeSchema } } },
   },
@@ -498,6 +681,7 @@ const getThemeWorkspaceRoute = createRoute({
   path: "/theme/workspace",
   tags: ["Admin - Settings"],
   summary: "Get published storefront style and durable draft",
+  operationId: "dashboard.theme.workspace_get",
   responses: {
     200: {
       description: "Theme workspace",
@@ -524,6 +708,7 @@ const saveThemeDraftRoute = createRoute({
   path: "/theme/draft",
   tags: ["Admin - Settings"],
   summary: "Save the durable storefront style draft",
+  operationId: "dashboard.theme.draft_save",
   request: {
     body: { content: { "application/json": { schema: saveThemeDraftSchema } } },
   },
@@ -559,6 +744,7 @@ const rebaseThemeDraftRoute = createRoute({
   tags: ["Admin - Settings"],
   summary:
     "Rebase a storefront style draft onto the current published revision",
+  operationId: "dashboard.theme.draft_rebase",
   request: {
     body: { content: { "application/json": { schema: saveThemeDraftSchema } } },
   },
@@ -598,6 +784,7 @@ const publishThemeDraftRoute = createRoute({
   path: "/theme/publish",
   tags: ["Admin - Settings"],
   summary: "Publish the exact durable storefront style draft",
+  operationId: "dashboard.theme.publish",
   request: {
     body: {
       content: { "application/json": { schema: publishThemeDraftSchema } },
@@ -642,6 +829,7 @@ const listThemeVersionsRoute = createRoute({
   path: "/theme/versions",
   tags: ["Admin - Settings"],
   summary: "List immutable published storefront style revisions",
+  operationId: "dashboard.theme.versions_list",
   request: {
     query: z.object({
       limit: z.coerce.number().int().min(1).max(50).default(20),
@@ -673,6 +861,7 @@ const rollbackThemeRoute = createRoute({
   path: "/theme/rollback",
   tags: ["Admin - Settings"],
   summary: "Restore a published storefront style as a new revision",
+  operationId: "dashboard.theme.rollback",
   request: {
     body: {
       content: {
@@ -716,12 +905,15 @@ const createThemePreviewRoute = createRoute({
   path: "/theme/preview-session",
   tags: ["Admin - Settings"],
   summary: "Create a short-lived exact-draft storefront preview session",
+  operationId: "dashboard.theme.preview_session_create",
   request: {
     body: {
       content: {
         "application/json": {
           schema: z.object({
             expectedDraftRevision: z.number().int().positive(),
+            path: z.string().trim().min(1).max(512).default("/"),
+            device: z.enum(["full", "desktop", "mobile"]).default("full"),
           }),
         },
       },
@@ -734,7 +926,15 @@ const createThemePreviewRoute = createRoute({
         "application/json": {
           schema: successEnvelope(
             z.object({
-              token: z.string(),
+              continuation: z.object({
+                url: z.url().max(512),
+                method: z.literal("POST"),
+                fields: z.object({
+                  continuationCode: z.string().length(52).regex(/^tpc_[A-Za-z0-9_-]{48}$/),
+                  path: z.string().min(1).max(512),
+                  device: z.enum(["full", "desktop", "mobile"]),
+                }),
+              }),
               draftRevision: z.number().int().positive(),
               basePublishedRevision: z.number().int().nonnegative(),
               expiresAt: z.any(),
@@ -743,20 +943,43 @@ const createThemePreviewRoute = createRoute({
         },
       },
     },
+    503: serviceUnavailableResponse,
     ...errorResponses,
   },
 });
 
 app.openapi(createThemePreviewRoute, async (c) => {
   const user = c.get("user") as { id?: string } | undefined;
+  const body = c.req.valid("json");
+  const storefrontOrigin = normalizeStorefrontOrigin(c.env.STOREFRONT_URL);
+  if (!storefrontOrigin) {
+    throw new ServiceUnavailableError(
+      "Configure a valid HTTPS Storefront URL before opening a draft preview.",
+    );
+  }
   const preview = await createThemePreviewSession(
     c.get("db"),
-    c.req.valid("json").expectedDraftRevision,
+    body.expectedDraftRevision,
     user?.id ?? null,
   );
+  const continuationUrl = new URL("/theme-preview/continue", storefrontOrigin);
+  if (continuationUrl.toString().length > 512) {
+    throw new ServiceUnavailableError(
+      "Configure a shorter Storefront URL before opening a draft preview.",
+    );
+  }
   c.header("Cache-Control", "private, no-cache, no-store, must-revalidate");
+  c.header("Referrer-Policy", "no-referrer");
   return ok(c, {
-    token: preview.token,
+    continuation: {
+      url: continuationUrl.toString(),
+      method: "POST" as const,
+      fields: {
+        continuationCode: preview.continuationId,
+        path: body.path,
+        device: body.device,
+      },
+    },
     draftRevision: preview.draftRevision,
     basePublishedRevision: preview.basePublishedRevision,
     expiresAt: preview.expiresAt,
@@ -767,29 +990,49 @@ app.openapi(createThemePreviewRoute, async (c) => {
 // MEDIA / IMAGE OPTIMIZATION
 // ─────────────────────────────────────────
 
+const MEDIA_HOST_MAX_LENGTH = 253;
+const MEDIA_HOST_LIST_MAX_COUNT = 24;
+
 const mediaOptimizationSchema = z.object({
   enabled: z.boolean().default(true),
-  canonicalCdnUrl: z.string().default("").refine(isValidMediaHostInput, {
+  canonicalCdnUrl: z.string().max(MEDIA_HOST_MAX_LENGTH).default("").refine(isValidMediaHostInput, {
     message:
       "Use a hostname only, without paths, queries, wildcards, or credentials.",
   }),
   allowedImageHosts: z
     .array(
-      z.string().refine(isValidMediaHostInput, {
+      z.string().max(MEDIA_HOST_MAX_LENGTH).refine(isValidMediaHostInput, {
         message:
           "Use hostnames only, without paths, queries, wildcards, or credentials.",
       }),
-    )
+    ).max(MEDIA_HOST_LIST_MAX_COUNT)
     .default([]),
   canonicalHostAliases: z
     .array(
-      z.string().refine(isValidMediaHostInput, {
+      z.string().max(MEDIA_HOST_MAX_LENGTH).refine(isValidMediaHostInput, {
         message:
           "Use hostnames only, without paths, queries, wildcards, or credentials.",
       }),
-    )
+    ).max(MEDIA_HOST_LIST_MAX_COUNT)
     .default([]),
 });
+
+function projectMediaOptimizationSettings(
+  settings: Awaited<ReturnType<typeof getMediaOptimizationSettings>>,
+) {
+  return {
+    enabled: settings.enabled,
+    canonicalCdnUrl: settings.canonicalCdnUrl.slice(0, MEDIA_HOST_MAX_LENGTH),
+    allowedImageHosts: settings.allowedImageHosts.slice(
+      0,
+      MEDIA_HOST_LIST_MAX_COUNT,
+    ).map((host) => host.slice(0, MEDIA_HOST_MAX_LENGTH)),
+    canonicalHostAliases: settings.canonicalHostAliases.slice(
+      0,
+      MEDIA_HOST_LIST_MAX_COUNT,
+    ).map((host) => host.slice(0, MEDIA_HOST_MAX_LENGTH)),
+  };
+}
 const mediaOptimizationSaveResponseSchema = mediaOptimizationSchema.extend({
   message: z.string(),
 });
@@ -799,6 +1042,7 @@ const getMediaOptimizationRoute = createRoute({
   path: "/media",
   tags: ["Admin - Settings"],
   summary: "Get media and image optimization settings",
+  operationId: "dashboard.settings.media_delivery_get",
   responses: {
     200: {
       description: "Media settings",
@@ -815,7 +1059,7 @@ const getMediaOptimizationRoute = createRoute({
 app.openapi(getMediaOptimizationRoute, async (c) => {
   const db = c.get("db");
   const result = await getMediaOptimizationSettings(db);
-  return ok(c, result);
+  return ok(c, projectMediaOptimizationSettings(result));
 });
 
 const saveMediaOptimizationRoute = createRoute({
@@ -823,8 +1067,10 @@ const saveMediaOptimizationRoute = createRoute({
   path: "/media",
   tags: ["Admin - Settings"],
   summary: "Save media and image optimization settings",
+  operationId: "dashboard.settings.media_delivery_update",
   request: {
     body: {
+      required: true,
       content: {
         "application/json": { schema: mediaOptimizationSchema.partial() },
       },
@@ -848,18 +1094,62 @@ app.openapi(saveMediaOptimizationRoute, async (c) => {
   const body = c.req.valid("json");
   const saved = await saveMediaOptimizationSettings(db, body);
   await invalidateApiAndScheduleStorefrontGroups(MEDIA_CACHE_GROUPS, c);
-  return ok(c, { message: "Media settings saved successfully", ...saved });
+  return ok(c, {
+    message: "Media settings saved successfully",
+    ...projectMediaOptimizationSettings(saved),
+  });
 });
 
 // ─────────────────────────────────────────
 // SEO
 // ─────────────────────────────────────────
 
+const SEO_SITE_TITLE_MAX_LENGTH = 200;
+const SEO_HOMEPAGE_TITLE_MAX_LENGTH = 200;
+const SEO_META_DESCRIPTION_MAX_LENGTH = 1_000;
+const SEO_ROBOTS_TXT_MAX_LENGTH = 32_768;
+const SEO_FEED_TITLE_MAX_LENGTH = 200;
+const SEO_FEED_DESCRIPTION_MAX_LENGTH = 2_000;
+const SEO_POLICY_URL_MAX_LENGTH = 2_048;
+
+function projectSeoSettings(
+  settings: Awaited<ReturnType<typeof getSeoSettings>>,
+): Awaited<ReturnType<typeof getSeoSettings>> {
+  return {
+    ...settings,
+    siteTitle: settings.siteTitle.slice(0, SEO_SITE_TITLE_MAX_LENGTH),
+    homepageTitle: settings.homepageTitle.slice(0, SEO_HOMEPAGE_TITLE_MAX_LENGTH),
+    homepageMetaDescription: settings.homepageMetaDescription.slice(
+      0,
+      SEO_META_DESCRIPTION_MAX_LENGTH,
+    ),
+    robotsTxt: settings.robotsTxt.slice(0, SEO_ROBOTS_TXT_MAX_LENGTH),
+    discovery: {
+      ...settings.discovery,
+      feeds: {
+        ...settings.discovery.feeds,
+        title: settings.discovery.feeds.title.slice(0, SEO_FEED_TITLE_MAX_LENGTH),
+        description: settings.discovery.feeds.description.slice(
+          0,
+          SEO_FEED_DESCRIPTION_MAX_LENGTH,
+        ),
+      },
+    },
+    returnPolicy: {
+      ...settings.returnPolicy,
+      policyUrl: settings.returnPolicy.policyUrl.slice(
+        0,
+        SEO_POLICY_URL_MAX_LENGTH,
+      ),
+    },
+  };
+}
+
 const seoSettingsSchema = z.object({
-  siteTitle: z.string(),
-  homepageTitle: z.string(),
-  homepageMetaDescription: z.string(),
-  robotsTxt: z.string(),
+  siteTitle: z.string().max(SEO_SITE_TITLE_MAX_LENGTH),
+  homepageTitle: z.string().max(SEO_HOMEPAGE_TITLE_MAX_LENGTH),
+  homepageMetaDescription: z.string().max(SEO_META_DESCRIPTION_MAX_LENGTH),
+  robotsTxt: z.string().max(SEO_ROBOTS_TXT_MAX_LENGTH),
   discovery: z.object({
     sitemap: z.object({
       enabled: z.boolean(),
@@ -874,8 +1164,8 @@ const seoSettingsSchema = z.object({
       productCatalogEnabled: z.boolean(),
       includeUnavailableProducts: z.boolean(),
       variantStrategy: z.enum(["products", "variants"]),
-      title: z.string(),
-      description: z.string(),
+      title: z.string().max(SEO_FEED_TITLE_MAX_LENGTH),
+      description: z.string().max(SEO_FEED_DESCRIPTION_MAX_LENGTH),
     }),
     robots: z.object({
       advertiseSitemap: z.boolean(),
@@ -898,7 +1188,7 @@ const seoSettingsSchema = z.object({
     returnWindowDays: z.number().int().min(1).max(365).nullable(),
     returnFees: z.enum(SEO_RETURN_POLICY_FEES),
     returnMethod: z.enum(SEO_RETURN_POLICY_METHODS),
-    policyUrl: z.string(),
+    policyUrl: z.string().max(SEO_POLICY_URL_MAX_LENGTH),
   }),
 });
 
@@ -907,6 +1197,7 @@ const getSeoRoute = createRoute({
   path: "/seo",
   tags: ["Admin - Settings"],
   summary: "Get SEO settings",
+  operationId: "dashboard.seo.settings_get",
   responses: {
     200: {
       description: "SEO settings",
@@ -921,17 +1212,20 @@ const getSeoRoute = createRoute({
 app.openapi(getSeoRoute, async (c) => {
   const db = c.get("db");
   const result = await getSeoSettings(db);
-  return ok(c, result);
+  return ok(c, projectSeoSettings(result));
 });
 
 const productFeedDiagnosticReasonSchema = z.enum(
   PRODUCT_FEED_DIAGNOSTIC_REASONS,
 );
+const PRODUCT_FEED_DIAGNOSTIC_ID_MAX_LENGTH = 128;
+const PRODUCT_FEED_DIAGNOSTIC_NAME_MAX_LENGTH = 200;
+const PRODUCT_FEED_DIAGNOSTIC_SLUG_MAX_LENGTH = 200;
 
 const productFeedDiagnosticSampleSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  slug: z.string(),
+  id: z.string().max(PRODUCT_FEED_DIAGNOSTIC_ID_MAX_LENGTH),
+  name: z.string().max(PRODUCT_FEED_DIAGNOSTIC_NAME_MAX_LENGTH),
+  slug: z.string().max(PRODUCT_FEED_DIAGNOSTIC_SLUG_MAX_LENGTH),
   reason: productFeedDiagnosticReasonSchema,
 });
 
@@ -939,7 +1233,9 @@ const productFeedDiagnosticReasonSummarySchema = z.object({
   reason: productFeedDiagnosticReasonSchema,
   products: z.number(),
   rows: z.number(),
-  samples: z.array(productFeedDiagnosticSampleSchema),
+  samples: z
+    .array(productFeedDiagnosticSampleSchema)
+    .max(PRODUCT_FEED_DIAGNOSTIC_MAX_SAMPLE_LIMIT),
 });
 
 const productFeedDiagnosticsSchema = z.object({
@@ -961,8 +1257,31 @@ const productFeedDiagnosticsSchema = z.object({
     productsWithIssues: z.number(),
     skippedRows: z.number(),
   }),
-  reasons: z.array(productFeedDiagnosticReasonSummarySchema),
+  reasons: z
+    .array(productFeedDiagnosticReasonSummarySchema)
+    .max(PRODUCT_FEED_DIAGNOSTIC_REASONS.length),
 });
+
+function projectProductFeedDiagnostics(
+  diagnostics: Awaited<ReturnType<typeof getProductFeedDiagnostics>>,
+) {
+  return {
+    ...diagnostics,
+    reasons: diagnostics.reasons
+      .slice(0, PRODUCT_FEED_DIAGNOSTIC_REASONS.length)
+      .map((summary) => ({
+        ...summary,
+        samples: summary.samples
+          .slice(0, PRODUCT_FEED_DIAGNOSTIC_MAX_SAMPLE_LIMIT)
+          .map((sample) => ({
+            id: sample.id.slice(0, PRODUCT_FEED_DIAGNOSTIC_ID_MAX_LENGTH),
+            name: sample.name.slice(0, PRODUCT_FEED_DIAGNOSTIC_NAME_MAX_LENGTH),
+            slug: sample.slug.slice(0, PRODUCT_FEED_DIAGNOSTIC_SLUG_MAX_LENGTH),
+            reason: sample.reason,
+          })),
+      })),
+  };
+}
 
 const productFeedDiagnosticsQuerySchema = z.object({
   scanLimit: z.coerce
@@ -979,11 +1298,67 @@ const productFeedDiagnosticsQuerySchema = z.object({
     .optional(),
 });
 
+const seoDiscoveryLiveProbeCountsSchema = z.object({
+  robotsSitemapLines: z.number().optional(),
+  sitemapLocs: z.number().optional(),
+  feedItems: z.number().optional(),
+  feedLinks: z.number().optional(),
+  absoluteFeedLinks: z.number().optional(),
+  imageLinks: z.number().optional(),
+  absoluteImageLinks: z.number().optional(),
+  availabilityValues: z.number().optional(),
+  ucpValidJson: z.number().optional(),
+  ucpVersion: z.string().optional(),
+  ucpShoppingRestServices: z.number().optional(),
+  ucpCatalogCapabilities: z.number().optional(),
+  ucpForbiddenCapabilities: z.number().optional(),
+  ucpPaymentHandlers: z.number().optional(),
+});
+
+const seoDiscoveryLiveProbeResourceSchema = z.object({
+  key: z.enum([
+    "robots",
+    "sitemap",
+    "productFeed",
+    "facebookFeed",
+    "ucpProfile",
+    "staticPagesSitemap",
+    "productsSitemap",
+    "categoriesSitemap",
+    "collectionsSitemap",
+    "pagesSitemap",
+    "articlesSitemap",
+  ]),
+  kind: z.enum(["robots", "sitemap", "feed", "ucpProfile", "sitemapChild"]),
+  label: z.string(),
+  path: z.string(),
+  href: z.string().nullable(),
+  ok: z.boolean(),
+  status: z.number().int().nullable(),
+  contentType: z.string().nullable(),
+  cacheControl: z.string().nullable(),
+  counts: seoDiscoveryLiveProbeCountsSchema,
+  bodyTruncated: z.boolean().optional(),
+  disabledReason: z.string().optional(),
+  error: z.string().optional(),
+  expectedRobotsSitemapLines: z.number().int().optional(),
+  minimumSitemapLocs: z.number().int().optional(),
+});
+
+const seoDiscoveryLiveProbeResultSchema = z.object({
+  baseUrl: z.string().nullable(),
+  checkedAt: z.string(),
+  ok: z.boolean(),
+  error: z.string().optional(),
+  resources: z.array(seoDiscoveryLiveProbeResourceSchema),
+});
+
 const getSeoFeedDiagnosticsRoute = createRoute({
   method: "get",
   path: "/seo/feed-diagnostics",
   tags: ["Admin - Settings"],
   summary: "Get product feed diagnostics",
+  operationId: "dashboard.seo.feed_diagnostics",
   request: {
     query: productFeedDiagnosticsQuerySchema,
   },
@@ -1013,7 +1388,36 @@ app.openapi(getSeoFeedDiagnosticsRoute, async (c) => {
     storefrontBaseUrl: c.env.STOREFRONT_URL,
     currencyCode: currency.currencyCode,
   });
-  return ok(c, diagnostics);
+  return ok(c, projectProductFeedDiagnostics(diagnostics));
+});
+
+const getSeoLiveProbeRoute = createRoute({
+  method: "get",
+  path: "/seo/live-probe",
+  tags: ["Admin - Settings"],
+  summary: "Probe bounded public discovery resources",
+  operationId: "dashboard.seo.live_probe",
+  responses: {
+    200: {
+      description: "Bounded live discovery probe",
+      content: {
+        "application/json": {
+          schema: successEnvelope(seoDiscoveryLiveProbeResultSchema),
+        },
+      },
+    },
+    ...errorResponses,
+  },
+});
+
+app.openapi(getSeoLiveProbeRoute, async (c) => {
+  const db = c.get("db");
+  const result: SeoDiscoveryLiveProbeResult = await runSeoDiscoveryLiveProbe({
+    getDiscoveryPolicy: async () => getSeoSettings(db),
+    getStorefrontUrl: async () => getStorefrontUrlSetting(db),
+  });
+  c.header("Cache-Control", "private, no-store");
+  return ok(c, result);
 });
 
 const saveSeoDiscoverySchema = z.object({
@@ -1037,7 +1441,7 @@ const saveSeoReturnPolicySchema = z.object({
   returnMethod: z.enum(SEO_RETURN_POLICY_METHODS).optional(),
   policyUrl: z
     .string()
-    .max(2048)
+    .max(SEO_POLICY_URL_MAX_LENGTH)
     .refine(
       (value) => isValidSeoReturnPolicyUrl(value),
       "Policy URL must be blank, a same-origin path, or an absolute http(s) URL",
@@ -1046,10 +1450,13 @@ const saveSeoReturnPolicySchema = z.object({
 });
 
 const saveSeoSchema = z.object({
-  siteTitle: z.string().optional(),
-  homepageTitle: z.string().optional(),
-  homepageMetaDescription: z.string().optional(),
-  robotsTxt: z.string().optional(),
+  siteTitle: z.string().max(SEO_SITE_TITLE_MAX_LENGTH).optional(),
+  homepageTitle: z.string().max(SEO_HOMEPAGE_TITLE_MAX_LENGTH).optional(),
+  homepageMetaDescription: z
+    .string()
+    .max(SEO_META_DESCRIPTION_MAX_LENGTH)
+    .optional(),
+  robotsTxt: z.string().max(SEO_ROBOTS_TXT_MAX_LENGTH).optional(),
   discovery: saveSeoDiscoverySchema.optional(),
   returnPolicy: saveSeoReturnPolicySchema.optional(),
 });
@@ -1059,8 +1466,12 @@ const saveSeoRoute = createRoute({
   path: "/seo",
   tags: ["Admin - Settings"],
   summary: "Save SEO settings",
+  operationId: "dashboard.seo.settings_update",
   request: {
-    body: { content: { "application/json": { schema: saveSeoSchema } } },
+    body: {
+      required: true,
+      content: { "application/json": { schema: saveSeoSchema } },
+    },
   },
   responses: {
     200: {
@@ -1091,17 +1502,24 @@ app.openapi(saveSeoRoute, async (c) => {
 // STOREFRONT URL
 // ─────────────────────────────────────────
 
+const STOREFRONT_URL_MAX_LENGTH = 2_048;
+
 const getStorefrontUrlRoute = createRoute({
   method: "get",
   path: "/storefront-url",
   tags: ["Admin - Settings"],
   summary: "Get storefront URL",
+  operationId: "dashboard.settings.storefront_url_get",
   responses: {
     200: {
       description: "Storefront URL",
       content: {
         "application/json": {
-          schema: successEnvelope(z.object({ storefrontUrl: z.string() })),
+          schema: successEnvelope(
+            z.object({
+              storefrontUrl: z.string().max(STOREFRONT_URL_MAX_LENGTH),
+            }),
+          ),
         },
       },
     },
@@ -1112,7 +1530,13 @@ const getStorefrontUrlRoute = createRoute({
 app.openapi(getStorefrontUrlRoute, async (c) => {
   const db = c.get("db");
   const result = await getStorefrontUrlSetting(db);
-  return ok(c, result);
+  const storefrontUrl = normalizeStorefrontOrigin(result.storefrontUrl);
+  return ok(c, {
+    storefrontUrl:
+      storefrontUrl && storefrontUrl.length <= STOREFRONT_URL_MAX_LENGTH
+        ? storefrontUrl
+        : "",
+  });
 });
 
 const saveStorefrontUrlSchema = z.object({
@@ -1120,6 +1544,7 @@ const saveStorefrontUrlSchema = z.object({
     .string()
     .trim()
     .min(1, "Enter the public store origin.")
+    .max(STOREFRONT_URL_MAX_LENGTH)
     .refine(
       (value) => normalizeStorefrontOrigin(value) !== null,
       "Use an HTTPS origin without credentials, a path, query, or fragment. HTTP is limited to loopback development.",
@@ -1131,8 +1556,10 @@ const saveStorefrontUrlRoute = createRoute({
   path: "/storefront-url",
   tags: ["Admin - Settings"],
   summary: "Save storefront URL",
+  operationId: "dashboard.settings.storefront_url_update",
   request: {
     body: {
+      required: true,
       content: { "application/json": { schema: saveStorefrontUrlSchema } },
     },
   },
@@ -1169,7 +1596,9 @@ const homepagePresentationConfigSchema = z.object({
   categoryRail: z.object({
     enabled: z.boolean(),
     title: z.string().max(MAX_HOMEPAGE_CATEGORY_RAIL_TITLE_LENGTH),
-    categoryIds: z.array(z.string().min(1)).max(MAX_HOMEPAGE_CATEGORY_IDS),
+    categoryIds: z
+      .array(z.string().min(1).max(128))
+      .max(MAX_HOMEPAGE_CATEGORY_IDS),
   }),
   trustStrip: z.object({
     enabled: z.boolean(),
@@ -1184,6 +1613,7 @@ const homepagePresentationDocumentSchema = z.object({
 const getHomepagePresentationRoute = createRoute({
   method: "get",
   path: "/homepage-presentation",
+  operationId: "dashboard.settings_homepage_presentation.get_homepage_presentation",
   tags: ["Admin - Settings"],
   summary: "Get the ordered homepage category and trust presentation",
   responses: {
@@ -1206,10 +1636,12 @@ app.openapi(getHomepagePresentationRoute, async (c) => {
 const saveHomepagePresentationRoute = createRoute({
   method: "post",
   path: "/homepage-presentation",
+  operationId: "dashboard.settings_homepage_presentation.homepage_presentation",
   tags: ["Admin - Settings"],
   summary: "Save the ordered homepage category and trust presentation",
   request: {
     body: {
+      required: true,
       content: {
         "application/json": {
           schema: homepagePresentationConfigSchema.extend({
@@ -1247,11 +1679,37 @@ app.openapi(saveHomepagePresentationRoute, async (c) => {
 
 // ── Allowed Countries ──
 
+const COUNTRY_CODE_MAX_COUNT = 249;
+const countryCodeSchema = z.string().regex(/^[A-Z]{2}$/);
+
+function projectAllowedCountries(settings: {
+  allowedCountries: unknown[];
+  allowedCountriesMode: unknown;
+}): {
+  allowedCountries: string[];
+  allowedCountriesMode: "include" | "exclude";
+} {
+  return {
+    allowedCountries: [
+      ...new Set(
+        settings.allowedCountries
+          .filter((value): value is string => typeof value === "string")
+          .map((value) => value.trim().toUpperCase())
+          .filter((value) => /^[A-Z]{2}$/.test(value)),
+      ),
+    ].slice(0, COUNTRY_CODE_MAX_COUNT),
+    allowedCountriesMode: settings.allowedCountriesMode === "exclude"
+      ? ("exclude" as const)
+      : ("include" as const),
+  };
+}
+
 const getAllowedCountriesRoute = createRoute({
   method: "get",
   path: "/allowed-countries",
   tags: ["Admin - Settings"],
   summary: "Get allowed countries for phone numbers",
+  operationId: "dashboard.settings.customer_countries_get",
   responses: {
     200: {
       description: "Allowed countries list",
@@ -1260,10 +1718,12 @@ const getAllowedCountriesRoute = createRoute({
           schema: successEnvelope(
             z
               .object({
-                allowedCountries: z.array(z.string()),
-                allowedCountriesMode: z.string(),
+                allowedCountries: z
+                  .array(countryCodeSchema)
+                  .max(COUNTRY_CODE_MAX_COUNT),
+                allowedCountriesMode: z.enum(["include", "exclude"]),
               })
-              .passthrough(),
+              .strict(),
           ),
         },
       },
@@ -1275,7 +1735,7 @@ const getAllowedCountriesRoute = createRoute({
 app.openapi(getAllowedCountriesRoute, async (c) => {
   const db = c.get("db");
   const result = await getAllowedCountries(db);
-  return ok(c, result);
+  return ok(c, projectAllowedCountries(result));
 });
 
 const saveAllowedCountriesRoute = createRoute({
@@ -1283,12 +1743,16 @@ const saveAllowedCountriesRoute = createRoute({
   path: "/allowed-countries",
   tags: ["Admin - Settings"],
   summary: "Save allowed countries for phone numbers",
+  operationId: "dashboard.settings.customer_countries_update",
   request: {
     body: {
+      required: true,
       content: {
         "application/json": {
           schema: z.object({
-            allowedCountries: z.array(z.string()),
+            allowedCountries: z
+              .array(countryCodeSchema)
+              .max(COUNTRY_CODE_MAX_COUNT),
             mode: z.enum(["include", "exclude"]).optional().default("include"),
           }),
         },
@@ -1307,10 +1771,14 @@ const saveAllowedCountriesRoute = createRoute({
 app.openapi(saveAllowedCountriesRoute, async (c) => {
   const db = c.get("db");
   const { allowedCountries, mode } = c.req.valid("json");
+  const projected = projectAllowedCountries({
+    allowedCountries,
+    allowedCountriesMode: mode,
+  });
   const result = await saveAllowedCountries(
     db,
-    allowedCountries,
-    mode || "include",
+    projected.allowedCountries,
+    projected.allowedCountriesMode,
   );
   await invalidateApiAndScheduleStorefrontGroups(CHECKOUT_CACHE_GROUPS, c);
   return ok(c, { message: "Allowed countries saved", ...result });

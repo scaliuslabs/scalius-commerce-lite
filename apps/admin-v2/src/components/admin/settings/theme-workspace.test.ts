@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_STOREFRONT_THEME_SETTINGS } from "@scalius/shared/storefront-theme";
 
 import {
-  buildThemePreviewHandoffUrl,
   buildStorefrontReviewLinks,
   describeThemeDraftChanges,
   normalizeThemePreviewDevice,
@@ -27,19 +26,6 @@ describe("theme workspace", () => {
     expect(normalizeThemePreviewPath("/api/v1/products")).toBe("/");
     expect(normalizeThemePreviewPath("//outside.example")).toBe("/");
     expect(normalizeThemePreviewPath("/products/a?receipt=secret")).toBe("/");
-  });
-
-  it("builds a bearer-free storefront handoff URL", () => {
-    const url = buildThemePreviewHandoffUrl(
-      "https://shop.example.com/store",
-      "/products/linen-shirt",
-      "mobile",
-    );
-    expect(url).toBe(
-      "https://shop.example.com/theme-preview/handoff?path=%2Fproducts%2Flinen-shirt&device=mobile",
-    );
-    expect(url).not.toContain("token");
-    expect(buildThemePreviewHandoffUrl("javascript:alert(1)", "/", "full")).toBeNull();
   });
 
   it("describes semantic and color changes against the published revision", () => {

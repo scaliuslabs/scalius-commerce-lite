@@ -80,6 +80,7 @@ const promotionMutationResponseSchema = z.object({
 });
 
 const listRoute = createRoute({
+    operationId: "dashboard.promotions.list",
     method: "get",
     path: "/",
     tags: ["Admin - Promotions"],
@@ -115,6 +116,7 @@ app.openapi(listRoute, async (c) => {
 });
 
 const createPromotionRoute = createRoute({
+    operationId: "dashboard.promotions.create",
     method: "post",
     path: "/",
     tags: ["Admin - Promotions"],
@@ -145,6 +147,7 @@ app.openapi(createPromotionRoute, async (c) => {
 });
 
 const getRoute = createRoute({
+    operationId: "dashboard.promotions.get",
     method: "get",
     path: "/{id}",
     tags: ["Admin - Promotions"],
@@ -169,6 +172,7 @@ app.openapi(getRoute, async (c) => {
 });
 
 const updateRoute = createRoute({
+    operationId: "dashboard.promotions.update",
     method: "put",
     path: "/{id}",
     tags: ["Admin - Promotions"],
@@ -203,6 +207,7 @@ app.openapi(updateRoute, async (c) => {
 });
 
 const previewRoute = createRoute({
+    operationId: "dashboard.promotions.preview",
     method: "post",
     path: "/{id}/preview",
     tags: ["Admin - Promotions"],
@@ -259,6 +264,7 @@ const lifecycleBodySchema = z.object({
 }).strict();
 
 const activateRoute = createRoute({
+    operationId: "dashboard.promotions.activate",
     method: "post",
     path: "/{id}/activate",
     tags: ["Admin - Promotions"],
@@ -288,6 +294,7 @@ app.openapi(activateRoute, async (c) => {
 });
 
 const pauseRoute = createRoute({
+    operationId: "dashboard.promotions.pause",
     method: "post",
     path: "/{id}/pause",
     tags: ["Admin - Promotions"],
@@ -317,6 +324,7 @@ app.openapi(pauseRoute, async (c) => {
 });
 
 const archiveRoute = createRoute({
+    operationId: "dashboard.promotions.archive",
     method: "delete",
     path: "/{id}",
     tags: ["Admin - Promotions"],

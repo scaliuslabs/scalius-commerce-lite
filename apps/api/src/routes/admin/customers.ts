@@ -28,6 +28,7 @@ const app = new OpenAPIHono<{ Bindings: Env }>();
 // ── List Customers ──
 
 const listRoute = createRoute({
+    operationId: "dashboard.customers.list",
     method: "get",
     path: "/",
     tags: ["Admin - Customers"],
@@ -117,6 +118,7 @@ app.openapi(listRoute, async (c) => {
 // ── Create Customer ──
 
 const createCustomerRoute = createRoute({
+    operationId: "dashboard.customers.create",
     method: "post",
     path: "/",
     tags: ["Admin - Customers"],
@@ -140,6 +142,7 @@ app.openapi(createCustomerRoute, async (c) => {
 // ── Bulk Delete Customers ──
 
 const bulkDeleteRoute = createRoute({
+    operationId: "dashboard.customers.bulk_delete",
     method: "post",
     path: "/bulk-delete",
     tags: ["Admin - Customers"],
@@ -171,6 +174,7 @@ app.openapi(bulkDeleteRoute, async (c) => {
 // ── Get Customer By ID ──
 
 const getByIdRoute = createRoute({
+    operationId: "dashboard.customers.get",
     method: "get",
     path: "/{id}",
     tags: ["Admin - Customers"],
@@ -195,6 +199,7 @@ app.openapi(getByIdRoute, async (c) => {
 // ── Update Customer ──
 
 const updateCustomerRoute = createRoute({
+    operationId: "dashboard.customers.update",
     method: "put",
     path: "/{id}",
     tags: ["Admin - Customers"],
@@ -219,6 +224,7 @@ app.openapi(updateCustomerRoute, async (c) => {
 // ── Delete Customer ──
 
 const deleteCustomerRoute = createRoute({
+    operationId: "dashboard.customers.delete",
     method: "delete",
     path: "/{id}",
     tags: ["Admin - Customers"],
@@ -242,6 +248,7 @@ app.openapi(deleteCustomerRoute, async (c) => {
 // ── Permanent Delete Customer ──
 
 const permanentDeleteRoute = createRoute({
+    operationId: "dashboard.customers.delete_permanently",
     method: "delete",
     path: "/{id}/permanent",
     tags: ["Admin - Customers"],
@@ -264,6 +271,7 @@ app.openapi(permanentDeleteRoute, async (c) => {
 // ── Restore Customer ──
 
 const restoreCustomerRoute = createRoute({
+    operationId: "dashboard.customers.restore",
     method: "post",
     path: "/{id}/restore",
     tags: ["Admin - Customers"],
@@ -286,6 +294,7 @@ app.openapi(restoreCustomerRoute, async (c) => {
 // ── Get Customer History ──
 
 const getHistoryRoute = createRoute({
+    operationId: "dashboard.customers.history",
     method: "get",
     path: "/{id}/history",
     tags: ["Admin - Customers"],

@@ -9,6 +9,7 @@ import { deliveryProvidersRoutes } from "./settings/delivery-providers";
 import { shippingMethodsSettingsRoutes } from "./settings/shipping";
 
 type OperationDoc = {
+  operationId?: string;
   responses?: Record<string, unknown>;
 };
 
@@ -65,6 +66,10 @@ describe("ops/settings OpenAPI mutation responses", () => {
     expectResponses(spec, "/api/v1/admin/fraud-checker/lookup", "post", ["200", "400", "401", "403", "404", "503"]);
 
     expectResponses(spec, "/api/v1/admin/search", "get", ["200", "400", "401", "403", "503"]);
+    expect(operation(spec, "/api/v1/admin/search", "get").operationId)
+      .toBe("dashboard.search.get_search");
+    expect(operation(spec, "/api/v1/admin/search/reindex", "post").operationId)
+      .toBe("dashboard.search_reindex.reindex");
 
   });
 });

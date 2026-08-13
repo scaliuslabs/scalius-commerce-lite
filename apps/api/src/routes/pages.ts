@@ -44,6 +44,7 @@ const listPagesRoute = createRoute({
   path: "/",
   tags: ["Pages"],
   summary: "List published pages with pagination",
+  operationId: "storefront.pages.list",
   request: {
     query: pagesQuerySchema
   },
@@ -72,6 +73,7 @@ const getPageBySlugRoute = createRoute({
   path: "/slug/{slug}",
   tags: ["Pages"],
   summary: "Get page by slug",
+  operationId: "storefront.pages.get_by_slug",
   request: {
     params: z.object({
       slug: z.string(),
@@ -104,6 +106,7 @@ const getPageByIdRoute = createRoute({
   path: "/{id}",
   tags: ["Pages"],
   summary: "Get page by ID",
+  operationId: "storefront.pages.get_by_id",
   request: {
     params: z.object({
       id: z.string(),

@@ -44,6 +44,10 @@
     {
       "binding": "SHARED_AUTH_CACHE",
       "id": "9f577136c05144349f2b8013a4fc1cc5"
+    },
+    {
+      "binding": "OAUTH_KV",
+      "id": "f5b7dc70d0aa4f8d9013ca25e1d0e2ce"
     }
   ],
   "ratelimits": [
@@ -70,12 +74,24 @@
         "limit": 5,
         "period": 60
       }
+    },
+    {
+      "name": "AGENT_RATE_LIMITER",
+      "namespace_id": "95462029",
+      "simple": {
+        "limit": 60,
+        "period": 60
+      }
     }
   ],
   "r2_buckets": [
     {
       "binding": "BUCKET",
       "bucket_name": "scalius-media"
+    },
+    {
+      "binding": "AGENT_ARTIFACTS",
+      "bucket_name": "scalius-commerce-agent-artifacts-local"
     }
   ],
   "queues": {

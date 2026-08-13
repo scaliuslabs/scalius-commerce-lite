@@ -334,7 +334,13 @@ function ResolveSupportRequestDialog({
               ) : returnsQuery.isError ? (
                 <div className="flex min-h-20 flex-col items-center justify-center gap-2 text-center">
                   <p className="text-sm text-destructive">Returnable items could not be loaded.</p>
-                  <Button type="button" size="sm" variant="outline" className="min-h-11 sm:min-h-9" onClick={() => void returnsQuery.refetch()}>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="min-h-11 sm:min-h-9"
+                    onClick={() => void returnsQuery.refetch()}
+                  >
                     <RefreshCw className="h-4 w-4" /> Retry
                   </Button>
                 </div>

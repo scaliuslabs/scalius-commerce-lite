@@ -6,6 +6,7 @@
   "exports": {
     "./errors": "./src/errors/index.ts",
     "./modules/analytics": "./src/modules/analytics/index.ts",
+    "./modules/agent-storefront": "./src/modules/agent-storefront.ts",
     "./modules/attributes": "./src/modules/attributes/index.ts",
     "./modules/categories": "./src/modules/categories/index.ts",
     "./modules/collections": "./src/modules/collections/index.ts",

@@ -1,8 +1,11 @@
 // src/modules/orders/orders.ingest.ts
 // Synchronous storefront order commit path used by checkout-facing APIs.
 
-import { safeBatch, type Database } from "@scalius/database/client";
+import { buildBatchGuard, safeBatch, type Database } from "@scalius/database/client";
 import {
+    agentStorefrontContexts,
+    agentStorefrontContinuations,
+    agentStorefrontOrderGrants,
     customers,
     customerHistory,
     discounts,
@@ -74,6 +77,18 @@ export interface StorefrontOrderCommitResult {
 export interface StorefrontOrderCheckoutCommit<TResponse = unknown> {
     attempt: AtomicCheckoutAttempt;
     response: TResponse;
+    agentContext?: {
+        contextId: string;
+        grantId: string;
+        expectedRevision: number;
+        expiresAt: Date;
+        continuation?: {
+            id: string;
+            kind: "payment";
+            expiresAt: Date;
+            bootstrapCodeHash: string;
+        };
+    };
 }
 
 type ReservationEntry = {
@@ -784,12 +799,17 @@ export async function commitStorefrontOrderPayload(
                 response: checkoutCommit.response,
             })
             : null;
+        const agentContextPlan = checkoutCommit?.agentContext
+            ? prepareAgentStorefrontCheckoutCommit(db, payload, checkoutCommit.agentContext)
+            : null;
         const orderWrites = buildOrderWriteBatch(db, payload, customer, appliedPromotion);
         const atomicWrites: SQLiteBatchItem[] = [
             ...(checkoutAttemptPlan?.writesBeforeOrder ?? []),
+            ...(agentContextPlan?.writesBeforeOrder ?? []),
             ...inventoryPlan.statements,
             ...orderWrites,
             ...(checkoutAttemptPlan?.writesAfterOrder ?? []),
+            ...(agentContextPlan?.writesAfterOrder ?? []),
         ];
         try {
             await safeBatch(db, atomicWrites);
@@ -826,8 +846,10 @@ export async function commitStorefrontOrderPayload(
             if (idempotentReservation?.success) {
                 await safeBatch(db, [
                     ...(checkoutAttemptPlan?.writesBeforeOrder ?? []),
+                    ...(agentContextPlan?.writesBeforeOrder ?? []),
                     ...orderWrites,
                     ...(checkoutAttemptPlan?.writesAfterOrder ?? []),
+                    ...(agentContextPlan?.writesAfterOrder ?? []),
                 ] as SQLiteBatchItem[]);
                 return {
                     orderId: payload.orderData.id,
@@ -866,6 +888,70 @@ export async function commitStorefrontOrderPayload(
             alreadyCommitted: false,
         };
     }
+}
+
+function prepareAgentStorefrontCheckoutCommit(
+    db: Database,
+    payload: StorefrontOrderCommitPayload,
+    context: NonNullable<StorefrontOrderCheckoutCommit["agentContext"]>,
+): { writesBeforeOrder: SQLiteBatchItem[]; writesAfterOrder: SQLiteBatchItem[] } {
+    if (!Number.isInteger(context.expectedRevision) || context.expectedRevision < 1) {
+        throw new ValidationError("Storefront context revision is invalid.");
+    }
+    const activeContext = and(
+        eq(agentStorefrontContexts.id, context.contextId),
+        eq(agentStorefrontContexts.grantId, context.grantId),
+        eq(agentStorefrontContexts.status, "active"),
+        isNull(agentStorefrontContexts.closedAt),
+        eq(agentStorefrontContexts.revision, context.expectedRevision),
+        sql`${agentStorefrontContexts.expiresAt} > unixepoch()`,
+    );
+    const guard = buildBatchGuard(
+        db,
+        sql`EXISTS (SELECT 1 FROM ${agentStorefrontContexts} WHERE ${activeContext})`,
+        "AGENT_STOREFRONT_CONTEXT_CHECKOUT_CONFLICT",
+    ) as SQLiteBatchItem;
+    const contextWrite = db
+        .update(agentStorefrontContexts)
+        .set({
+            revision: sql`${agentStorefrontContexts.revision} + 1`,
+            cartJson: "[]",
+            discountCode: null,
+            lastUsedAt: sql`unixepoch()`,
+            updatedAt: sql`unixepoch()`,
+        })
+        .where(activeContext) as SQLiteBatchItem;
+    const orderGrantWrite = db
+        .insert(agentStorefrontOrderGrants)
+        .values({
+            contextId: context.contextId,
+            orderId: payload.orderData.id,
+            authorityKind: "created",
+            expiresAt: context.expiresAt,
+            createdAt: sql`unixepoch()`,
+        })
+        .onConflictDoNothing() as SQLiteBatchItem;
+    const continuationWrite = context.continuation
+        ? db.insert(agentStorefrontContinuations).values({
+            id: context.continuation.id,
+            contextId: context.contextId,
+            kind: context.continuation.kind,
+            orderId: payload.orderData.id,
+            status: "pending",
+            expiresAt: context.continuation.expiresAt,
+            bootstrapCodeHash: context.continuation.bootstrapCodeHash,
+            createdAt: sql`unixepoch()`,
+            updatedAt: sql`unixepoch()`,
+        }).onConflictDoNothing() as SQLiteBatchItem
+        : null;
+    return {
+        writesBeforeOrder: [guard],
+        writesAfterOrder: [
+            contextWrite,
+            orderGrantWrite,
+            ...(continuationWrite ? [continuationWrite] : []),
+        ],
+    };
 }
 
 async function finalizeCheckoutAttemptForExistingOrder(

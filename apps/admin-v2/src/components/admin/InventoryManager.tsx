@@ -245,6 +245,7 @@ export function InventoryManager({
   const [movementStartDate, setMovementStartDate] = useState("");
   const [movementEndDate, setMovementEndDate] = useState("");
   const [movementType, setMovementType] = useState<MovementTypeFilter>("all");
+  const [movementExportBusy, setMovementExportBusy] = useState(false);
   const [alertsRequestedPage, setAlertsRequestedPage] = useState(1);
   const [alertsRequestedLimit, setAlertsRequestedLimit] = useState(20);
   const [alertLocalSearch, setAlertLocalSearch] = useState("");
@@ -406,19 +407,46 @@ export function InventoryManager({
     || movementType !== "all",
   );
 
-  const movementExportHref = useMemo(() => {
-    const params = new URLSearchParams({
-      section: "movements",
-      format: "csv",
-      maxRows: "5000",
-      movementType,
-    });
-    if (movementSearch) params.set("search", movementSearch);
-    if (debouncedMovementOrderId.trim()) params.set("movementOrderId", debouncedMovementOrderId.trim());
-    if (movementStartDate) params.set("movementStartDate", movementStartDate);
-    if (movementEndDate) params.set("movementEndDate", movementEndDate);
-    return `/api/v1/admin/inventory?${params.toString()}`;
-  }, [debouncedMovementOrderId, movementEndDate, movementSearch, movementStartDate, movementType]);
+  const exportMovements = useCallback(async () => {
+    if (movementExportBusy) return;
+    setMovementExportBusy(true);
+    try {
+      const response = await fetch("/api/v1/admin/inventory/movements/export", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          search: movementSearch,
+          movementType,
+          movementOrderId: debouncedMovementOrderId.trim() || undefined,
+          movementStartDate: movementStartDate || undefined,
+          movementEndDate: movementEndDate || undefined,
+          maxRows: 5_000,
+        }),
+      });
+      if (!response.ok) throw new Error(`Movement export failed with ${response.status}`);
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `inventory-movements-${new Date().toISOString().slice(0, 10)}.csv`;
+      link.style.display = "none";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "Movement export failed");
+    } finally {
+      setMovementExportBusy(false);
+    }
+  }, [
+    debouncedMovementOrderId,
+    movementEndDate,
+    movementExportBusy,
+    movementSearch,
+    movementStartDate,
+    movementType,
+  ]);
 
   const reviewAlertSku = useCallback((alert: InventoryAlert) => {
     setLocalSearch(alert.variantSku || alert.variantId);
@@ -938,10 +966,8 @@ export function InventoryManager({
                     <X className="mr-1 h-3.5 w-3.5" /> Clear
                   </Button>
                 ) : null}
-                <Button asChild type="button" variant="outline" size="sm" className="h-8 px-2 text-xs">
-                  <a href={movementExportHref} download>
-                    <Download className="mr-1 h-3.5 w-3.5" /> Export CSV
-                  </a>
+                <Button type="button" variant="outline" size="sm" className="h-8 px-2 text-xs" disabled={movementExportBusy} onClick={() => void exportMovements()}>
+                  <Download className="mr-1 h-3.5 w-3.5" /> {movementExportBusy ? "Exporting…" : "Export CSV"}
                 </Button>
               </div>
             </div>

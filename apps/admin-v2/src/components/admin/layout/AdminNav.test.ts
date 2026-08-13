@@ -2,6 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
   BadgePercent,
+  Bot,
   Boxes,
   CircleDollarSign,
   GalleryHorizontalEnd,
@@ -19,6 +20,7 @@ import {
   type NavItem,
   type NavSubItem,
 } from "./AdminNav";
+import { ADMIN_PERMISSIONS } from "../../../lib/admin-permissions";
 
 const topLevelItems = allNavSections.flatMap((section) => section.items);
 const leafItems = topLevelItems.flatMap((item) => item.subItems ?? [item]);
@@ -52,6 +54,10 @@ describe("AdminNav icon taxonomy", () => {
       GalleryHorizontalEnd,
     );
     expect(leafItem("/admin/settings/checkout").icon).toBe(ShoppingBasket);
+    expect(leafItem("/admin/settings/agent-access").icon).toBe(Bot);
+    expect(leafItem("/admin/settings/agent-access").requiredPermission).toBe(
+      ADMIN_PERMISSIONS.AGENT_ACCESS_VIEW,
+    );
     expect(leafItem("/admin/settings/fraud-checker").icon).toBe(ShieldAlert);
   });
 

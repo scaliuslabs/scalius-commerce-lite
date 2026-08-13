@@ -93,14 +93,14 @@ vi.mock("@scalius/core/modules/notifications/notification-provider-health", () =
 
 import { systemSettingsRoutes } from "./system";
 
-function createDb() {
+function createDb(settingRows: Array<{ key: string; value: string }> = []) {
   return {
     select: vi.fn(() => ({
       from: vi.fn(() => ({
         limit: vi.fn(async () => [{ id: "site_settings_1" }]),
         where: vi.fn(() => ({
-          get: vi.fn(async () => null),
-          all: vi.fn(async () => []),
+          get: vi.fn(async () => settingRows[0] ?? null),
+          all: vi.fn(async () => settingRows),
         })),
       })),
     })),
@@ -117,7 +117,7 @@ function createDb() {
   };
 }
 
-function createTestApp() {
+function createTestApp(settingRows: Array<{ key: string; value: string }> = []) {
   const kv = {
     id: "api-cache-kv",
     delete: vi.fn(),
@@ -212,7 +212,7 @@ function createTestApp() {
     return c.json(body, status);
   });
   app.use("*", async (c, next) => {
-    c.set("db", createDb() as never);
+    c.set("db", createDb(settingRows) as never);
     await next();
   });
   app.route("/admin/settings", systemSettingsRoutes);
@@ -667,6 +667,28 @@ describe("system settings cache invalidation", () => {
     );
   });
 
+  it("bounds customer-auth provider identifiers and never returns the WhatsApp secret", async () => {
+    mocks.getWhatsAppCloudApiSettings.mockResolvedValueOnce({
+      accessToken: "raw-whatsapp-token-must-not-leak",
+      accessTokenConfigured: true,
+      phoneNumberId: "p".repeat(100_000),
+      authTemplateName: "t".repeat(100_000),
+      accessTokenSource: "encrypted",
+    });
+    const { app, env, executionCtx } = createTestApp();
+
+    const response = await requestGet(app, env, executionCtx, "/auth");
+    const responseText = await response.text();
+    const body = JSON.parse(responseText);
+
+    expect(response.status).toBe(200);
+    expect(new TextEncoder().encode(responseText).byteLength).toBeLessThan(65_536);
+    expect(body.data.whatsappAccessToken).toBe("••••••••••••");
+    expect(body.data.whatsappPhoneNumberId).toHaveLength(128);
+    expect(body.data.whatsappTemplateName).toHaveLength(128);
+    expect(responseText).not.toContain("raw-whatsapp-token-must-not-leak");
+  });
+
   it("does not resave a masked WhatsApp access token", async () => {
     const { app, env, executionCtx } = createTestApp();
 
@@ -692,6 +714,27 @@ describe("system settings cache invalidation", () => {
       ["layout"],
       expect.objectContaining({ env }),
     );
+  });
+
+  it("bounds legacy CSP reads to normalized origins below the agent response ceiling", async () => {
+    const storedSources = Array.from(
+      { length: 150 },
+      (_, index) => `https://asset-${index}.example.com`,
+    ).join(",");
+    const { app, env, executionCtx } = createTestApp([
+      { key: "csp_allowed_domains", value: storedSources },
+    ]);
+
+    const response = await requestGet(app, env, executionCtx, "/security");
+    const responseText = await response.text();
+    const body = JSON.parse(responseText);
+    const sources = body.data.cspAllowedDomains.split(",");
+
+    expect(response.status).toBe(200);
+    expect(new TextEncoder().encode(responseText).byteLength).toBeLessThan(65_536);
+    expect(sources).toHaveLength(100);
+    expect(sources[0]).toBe("https://asset-0.example.com");
+    expect(sources[99]).toBe("https://asset-99.example.com");
   });
 
   it("does not fail CSP security settings save when ExecutionContext is unavailable", async () => {
@@ -735,6 +778,38 @@ describe("system settings cache invalidation", () => {
     );
   });
 
+  it("returns normalized inherited runtime trust without caching mutable state", async () => {
+    const { app, env, executionCtx } = createTestApp();
+    Object.assign(env, {
+      STOREFRONT_URL: "https://storefront.example.com/path",
+      PUBLIC_API_BASE_URL: "https://api.example.com",
+      BETTER_AUTH_URL: "https://dashboard.example.com",
+      CDN_DOMAIN_URL: "media.example.com",
+      R2_PUBLIC_URL: "https://r2.example.com/public",
+    });
+
+    const response = await requestGet(
+      app,
+      env,
+      executionCtx,
+      "/security/runtime-sources",
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    await expect(response.json()).resolves.toEqual({
+      success: true,
+      data: [
+        expect.objectContaining({ key: "storefront", source: null }),
+        expect.objectContaining({ key: "api", source: "https://api.example.com" }),
+        expect.objectContaining({ key: "dashboard", source: "https://dashboard.example.com" }),
+        expect.objectContaining({ key: "cdn", source: "https://media.example.com" }),
+        expect.objectContaining({ key: "r2", source: null }),
+      ],
+    });
+    expect(env.CACHE.put).not.toHaveBeenCalled();
+  });
+
   it("returns email provider status without exposing provider secrets", async () => {
     const { app, env, executionCtx } = createTestApp();
 
@@ -759,6 +834,41 @@ describe("system settings cache invalidation", () => {
         readinessError: null,
       },
     });
+  });
+
+  it("bounds email sender and readiness errors below the operation ceiling", async () => {
+    mocks.readEmailSetting.mockResolvedValueOnce("s".repeat(100_000));
+    mocks.getEmailProviderReadiness.mockResolvedValueOnce({
+      configured: false,
+      provider: "resend",
+      sender: "",
+      senderConfigured: false,
+      cloudflareBindingConfigured: false,
+      resendConfigured: true,
+      error: "e".repeat(100_000),
+      blockers: [],
+    });
+    mocks.getEmailRuntimeSettings.mockResolvedValueOnce({
+      provider: "resend",
+      sender: "",
+      senderConfigured: false,
+      resendApiKey: "raw-resend-key-must-not-leak",
+      hasResendApiKey: true,
+      cloudflareBindingConfigured: false,
+      resendCredentialError: null,
+    });
+    const { app, env, executionCtx } = createTestApp();
+
+    const response = await requestGet(app, env, executionCtx, "/email");
+    const responseText = await response.text();
+    const body = JSON.parse(responseText);
+
+    expect(response.status).toBe(200);
+    expect(new TextEncoder().encode(responseText).byteLength).toBeLessThan(65_536);
+    expect(body.data.apiKey).toBe("••••••••••••");
+    expect(body.data.sender).toHaveLength(320);
+    expect(body.data.readinessError).toHaveLength(1_000);
+    expect(responseText).not.toContain("raw-resend-key-must-not-leak");
   });
 
   it("saves email provider and sender without resaving a masked Resend key", async () => {
@@ -844,6 +954,30 @@ describe("system settings cache invalidation", () => {
       expect.anything(),
       { channel: "push" },
     );
+  });
+
+  it("returns only a configured marker for the Firebase service account", async () => {
+    const privateServiceAccount = JSON.stringify({
+      client_email: "firebase-adminsdk@example.iam.gserviceaccount.com",
+      private_key: "-----BEGIN PRIVATE KEY-----\nprivate-material\n-----END PRIVATE KEY-----\n",
+      project_id: "scalius-test",
+    });
+    const { app, env, executionCtx } = createTestApp([
+      { key: "service_account", value: privateServiceAccount },
+      { key: "public_config", value: JSON.stringify({ projectId: "scalius-test" }) },
+    ]);
+
+    const response = await requestGet(app, env, executionCtx, "/firebase");
+    const text = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(text).not.toContain("private-material");
+    expect(JSON.parse(text)).toMatchObject({
+      data: {
+        serviceAccount: "••••••••••••",
+        publicConfig: { projectId: "scalius-test" },
+      },
+    });
   });
 
   it("does not resave a masked Firebase service account", async () => {

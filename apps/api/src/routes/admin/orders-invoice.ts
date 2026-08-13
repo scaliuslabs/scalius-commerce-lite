@@ -3,6 +3,7 @@ import {
   getInvoiceDocument,
   issueInvoice,
 } from "@scalius/core/modules/orders/invoice.service";
+import { renderPrintableInvoice } from "@scalius/core/modules/orders/invoice-printable-artifact";
 import { NotFoundError } from "../../utils/api-error";
 import { ok } from "../../utils/api-response";
 import {
@@ -11,6 +12,7 @@ import {
   serviceUnavailableResponse,
   successEnvelope,
 } from "../../schemas/responses";
+import { resolveCanonicalIdempotencyKey } from "./idempotency-key";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -100,8 +102,15 @@ const invoiceDataSchema = z.object({
 const paramsSchema = z.object({
   id: z.string().openapi({ description: "Order ID" }),
 });
+const invoiceOperationKeySchema = z.string().trim().min(8).max(200);
+const invoiceIdempotencyHeadersSchema = z.object({
+  "idempotency-key": invoiceOperationKeySchema.optional().openapi({
+    description: "Standard retry key. May replace body.operationKey; if both are sent they must match.",
+  }),
+});
 
 const getInvoiceRoute = createRoute({
+  operationId: "dashboard.orders.invoice_get",
   method: "get",
   path: "/{id}/invoice",
   tags: ["Admin - Orders"],
@@ -119,18 +128,20 @@ const getInvoiceRoute = createRoute({
 });
 
 const issueInvoiceRoute = createRoute({
+  operationId: "dashboard.orders.invoice_issue",
   method: "post",
   path: "/{id}/invoice",
   tags: ["Admin - Orders"],
   summary: "Issue an immutable invoice with atomic monotonic numbering",
   request: {
     params: paramsSchema,
+    headers: invoiceIdempotencyHeadersSchema,
     body: {
       required: true,
       content: {
         "application/json": {
           schema: z.object({
-            operationKey: z.string().trim().min(8).max(200),
+            operationKey: invoiceOperationKeySchema.optional(),
             expectedOrderVersion: z.number().int().min(1),
           }),
         },
@@ -148,6 +159,24 @@ const issueInvoiceRoute = createRoute({
   },
 });
 
+const printInvoiceRoute = createRoute({
+  operationId: "dashboard.orders.invoice_print",
+  method: "get",
+  path: "/{id}/invoice/print",
+  tags: ["Admin - Orders"],
+  summary: "Render a bounded self-contained printable invoice artifact",
+  request: { params: paramsSchema },
+  responses: {
+    200: {
+      description: "Private printable HTML invoice",
+      content: { "text/html": { schema: z.string() } },
+    },
+    409: conflictResponse,
+    503: serviceUnavailableResponse,
+    ...errorResponses,
+  },
+});
+
 app.openapi(getInvoiceRoute, async (c) => {
   const document = await getInvoiceDocument(c.get("db"), c.req.valid("param").id);
   if (!document) throw new NotFoundError("Order not found");
@@ -156,13 +185,38 @@ app.openapi(getInvoiceRoute, async (c) => {
 
 app.openapi(issueInvoiceRoute, async (c) => {
   const user = c.get("user") as { id?: string } | undefined;
+  const { operationKey: bodyOperationKey, ...payload } = c.req.valid("json");
+  const operationKey = resolveCanonicalIdempotencyKey(
+    c.req.valid("header")["idempotency-key"],
+    bodyOperationKey,
+    "operationKey",
+  );
   const document = await issueInvoice(
     c.get("db"),
     c.req.valid("param").id,
-    c.req.valid("json"),
+    { ...payload, operationKey },
     user?.id ?? null,
   );
   return ok(c, document);
+});
+
+app.openapi(printInvoiceRoute, async (c) => {
+  const document = await getInvoiceDocument(c.get("db"), c.req.valid("param").id);
+  if (!document) throw new NotFoundError("Order not found");
+  const basename = (document.invoiceNumber ?? `draft-${document.order.id}`)
+    .replace(/[^a-zA-Z0-9._-]/g, "-")
+    .slice(0, 100);
+  const artifact = renderPrintableInvoice(document);
+  const artifactBytes = new TextEncoder().encode(artifact).byteLength;
+  return c.html(artifact, 200, {
+    "Cache-Control": "private, no-store",
+    "Content-Disposition": `attachment; filename="invoice-${basename}.html"`,
+    "Content-Length": String(artifactBytes),
+    "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'",
+    "Referrer-Policy": "no-referrer",
+    "X-Artifact-Bytes": String(artifactBytes),
+    "X-Content-Type-Options": "nosniff",
+  });
 });
 
 export { app as adminOrdersInvoiceRoutes };

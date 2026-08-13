@@ -4,6 +4,7 @@ import {
   buildBatchGuard,
   isBatchGuardError,
   safeBatch,
+  type Database,
 } from "@scalius/database/client";
 import { checkoutLanguages } from "@scalius/database/schema";
 import { eq, and, isNull, or, like, asc, desc, ne, sql } from "drizzle-orm";
@@ -15,7 +16,6 @@ import { successEnvelope, noContentResponse, errorResponses, conflictResponse } 
 import { optionalNullableTimestampSchema, optionalTimestampSchema } from "../schemas/timestamps";
 import { invalidateApiAndScheduleStorefrontGroups } from "../utils/cache-invalidation";
 
-type CheckoutLanguageRouteApp = OpenAPIHono<{ Bindings: Env }>;
 const CHECKOUT_CACHE_GROUPS = ["checkout"] as const;
 const CHECKOUT_LANGUAGE_TRANSITION_TARGET_MISSING =
   "CHECKOUT_LANGUAGE_TRANSITION_TARGET_MISSING";
@@ -46,18 +46,73 @@ const checkoutLanguageSideEffectErrorResponses = {
   500: errorResponses[500],
 } as const;
 
+const checkoutLanguageShortTextSchema = z.string().max(80);
+const checkoutLanguageDataSchema = z.object({
+  pageTitle: checkoutLanguageShortTextSchema,
+  checkoutSectionTitle: checkoutLanguageShortTextSchema,
+  cartSectionTitle: checkoutLanguageShortTextSchema,
+  customerNameLabel: checkoutLanguageShortTextSchema,
+  customerNamePlaceholder: checkoutLanguageShortTextSchema,
+  customerPhoneLabel: checkoutLanguageShortTextSchema,
+  customerPhonePlaceholder: checkoutLanguageShortTextSchema,
+  customerPhoneHelp: checkoutLanguageShortTextSchema,
+  customerEmailLabel: checkoutLanguageShortTextSchema,
+  customerEmailPlaceholder: checkoutLanguageShortTextSchema,
+  shippingAddressLabel: checkoutLanguageShortTextSchema,
+  shippingAddressPlaceholder: checkoutLanguageShortTextSchema,
+  cityLabel: checkoutLanguageShortTextSchema,
+  zoneLabel: checkoutLanguageShortTextSchema,
+  areaLabel: checkoutLanguageShortTextSchema,
+  shippingMethodLabel: checkoutLanguageShortTextSchema,
+  orderNotesLabel: checkoutLanguageShortTextSchema,
+  orderNotesPlaceholder: checkoutLanguageShortTextSchema,
+  continueShoppingText: checkoutLanguageShortTextSchema,
+  subtotalText: checkoutLanguageShortTextSchema,
+  shippingText: checkoutLanguageShortTextSchema,
+  discountText: checkoutLanguageShortTextSchema,
+  totalText: checkoutLanguageShortTextSchema,
+  discountCodePlaceholder: checkoutLanguageShortTextSchema,
+  applyDiscountText: checkoutLanguageShortTextSchema,
+  removeDiscountText: checkoutLanguageShortTextSchema,
+  placeOrderText: checkoutLanguageShortTextSchema,
+  processingText: checkoutLanguageShortTextSchema,
+  emptyCartText: checkoutLanguageShortTextSchema,
+  termsText: z.string().max(1_000),
+  processingOrderTitle: checkoutLanguageShortTextSchema,
+  processingOrderMessage: z.string().max(500),
+  requiredFieldIndicator: checkoutLanguageShortTextSchema,
+});
+const checkoutLanguageFieldVisibilitySchema = z.object({
+  showEmailField: z.boolean(),
+  showOrderNotesField: z.boolean(),
+  showAreaField: z.boolean(),
+});
+
 const checkoutLanguageSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  code: z.string(),
-  languageData: z.union([z.string(), z.record(z.string(), z.unknown())]),
-  fieldVisibility: z.union([z.string(), z.record(z.string(), z.unknown())]),
+  id: z.string().max(64),
+  name: z.string().max(100),
+  code: z.string().max(10),
+  languageData: checkoutLanguageDataSchema,
+  fieldVisibility: checkoutLanguageFieldVisibilitySchema,
   isActive: z.boolean(),
   isDefault: z.boolean(),
   createdAt: optionalTimestampSchema,
   updatedAt: optionalTimestampSchema,
   deletedAt: optionalNullableTimestampSchema,
-}).passthrough();
+});
+
+const publicCheckoutLanguageSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  code: z.string(),
+  languageData: checkoutLanguageDataSchema,
+  fieldVisibility: checkoutLanguageFieldVisibilitySchema,
+  isActive: z.boolean(),
+  isDefault: z.boolean(),
+  createdAt: optionalTimestampSchema,
+  updatedAt: optionalTimestampSchema,
+  deletedAt: optionalNullableTimestampSchema,
+});
 
 const defaultLanguageData = {
   pageTitle: "Cart & Checkout",
@@ -101,11 +156,51 @@ const defaultFieldVisibility = {
   showAreaField: true
 };
 
+function parseStoredObject(value: unknown): Record<string, unknown> {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  if (typeof value !== "string") return {};
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+function publicCheckoutLanguageProjection(languageData: unknown, fieldVisibility: unknown) {
+  const storedLanguageData = parseStoredObject(languageData);
+  const storedFieldVisibility = parseStoredObject(fieldVisibility);
+  const projectedLanguageData = { ...defaultLanguageData };
+  for (const key of Object.keys(projectedLanguageData) as Array<keyof typeof projectedLanguageData>) {
+    const value = storedLanguageData[key];
+    if (typeof value !== "string") continue;
+    const maximumLength = key === "termsText"
+      ? 1_000
+      : key === "processingOrderMessage"
+        ? 500
+        : 80;
+    projectedLanguageData[key] = value.slice(0, maximumLength);
+  }
+  const projectedFieldVisibility = { ...defaultFieldVisibility };
+  for (const key of Object.keys(projectedFieldVisibility) as Array<keyof typeof projectedFieldVisibility>) {
+    const value = storedFieldVisibility[key];
+    if (typeof value === "boolean") projectedFieldVisibility[key] = value;
+  }
+  return {
+    languageData: projectedLanguageData,
+    fieldVisibility: projectedFieldVisibility,
+  };
+}
+
 const createCheckoutLanguageSchema = z.object({
   name: z.string().min(1, "Name is required").max(100).openapi({ description: "Language name" }),
   code: z.string().min(1, "Code is required").max(10).openapi({ description: "Language code" }),
-  languageData: z.object({}).passthrough().optional().openapi({ description: "Language strings" }),
-  fieldVisibility: z.object({}).passthrough().optional().openapi({ description: "Field visibility settings" }),
+  languageData: checkoutLanguageDataSchema.partial().optional().openapi({ description: "Language strings" }),
+  fieldVisibility: checkoutLanguageFieldVisibilitySchema.partial().optional().openapi({ description: "Field visibility settings" }),
   isActive: z.boolean().optional().default(false).openapi({ description: "Whether this language is active" }),
   isDefault: z.boolean().optional().default(false).openapi({ description: "Whether this is the default language" })
 });
@@ -149,24 +244,32 @@ function rethrowCheckoutLanguageConstraint(error: unknown): never {
 }
 
 // GET /checkout-languages/active — get active checkout language
-const getActiveRoute = createRoute({
+const publicGetActiveRoute = createRoute({
   method: "get",
   path: "/active",
+  operationId: "storefront.checkout_language.get_active",
   tags: ["Checkout Languages"],
   summary: "Get active checkout language",
   responses: {
     200: {
       description: "Active checkout language",
-      content: { "application/json": { schema: successEnvelope(z.object({ language: checkoutLanguageSchema })) } },
+      content: { "application/json": { schema: successEnvelope(z.object({ language: publicCheckoutLanguageSchema })) } },
     },
     ...errorResponses,
   }
 });
 
-function registerGetActiveRoute(target: CheckoutLanguageRouteApp) {
-  target.openapi(getActiveRoute, async (c) => {
-    const db = c.get("db");
-    let language = await db
+const adminGetActiveRoute = createRoute({
+  method: "get",
+  path: "/active",
+  operationId: "dashboard.checkout_languages.active_get",
+  tags: ["Checkout Languages"],
+  summary: "Get active checkout language",
+  responses: publicGetActiveRoute.responses,
+});
+
+async function getActiveCheckoutLanguage(db: Database) {
+  let language = await db
       .select()
       .from(checkoutLanguages)
       .where(
@@ -177,8 +280,8 @@ function registerGetActiveRoute(target: CheckoutLanguageRouteApp) {
       )
       .get();
 
-    if (!language) {
-      language = await db
+  if (!language) {
+    language = await db
         .select()
         .from(checkoutLanguages)
         .where(
@@ -188,53 +291,54 @@ function registerGetActiveRoute(target: CheckoutLanguageRouteApp) {
           ),
         )
         .get();
-    }
+  }
 
-    if (!language) {
-      const fallbackFieldVisibility = {
-        showEmailField: true,
-        showOrderNotesField: true,
-        showAreaField: true
-      };
-
-      return ok(c, {
-        language: {
-          id: "fallback",
-          name: "English (Fallback)",
-          code: "en",
-          languageData: defaultLanguageData,
-          fieldVisibility: fallbackFieldVisibility,
-          isActive: true,
-          isDefault: true
-        }
-      });
-    }
-
-    const parsedLanguage = {
-      ...language,
-      languageData: JSON.parse(language.languageData),
-      fieldVisibility: JSON.parse(language.fieldVisibility)
+  if (!language) {
+    const fallbackFieldVisibility = {
+      showEmailField: true,
+      showOrderNotesField: true,
+      showAreaField: true
     };
 
-    return ok(c, { language: parsedLanguage });
-  });
+    return {
+      language: {
+        id: "fallback",
+        name: "English (Fallback)",
+        code: "en",
+        languageData: defaultLanguageData,
+        fieldVisibility: fallbackFieldVisibility,
+        isActive: true,
+        isDefault: true
+      }
+    };
+  }
+
+  const parsedLanguage = {
+    ...language,
+    ...publicCheckoutLanguageProjection(language.languageData, language.fieldVisibility),
+  };
+
+  return { language: parsedLanguage };
 }
 
-registerGetActiveRoute(publicApp);
-registerGetActiveRoute(adminApp);
+publicApp.openapi(publicGetActiveRoute, async (c) =>
+  ok(c, await getActiveCheckoutLanguage(c.get("db"))));
+adminApp.openapi(adminGetActiveRoute, async (c) =>
+  ok(c, await getActiveCheckoutLanguage(c.get("db"))));
 
 // GET /checkout-languages — list all checkout languages
 const listRoute = createRoute({
   method: "get",
   path: "/",
+  operationId: "dashboard.checkout_languages.list",
   tags: ["Checkout Languages"],
   summary: "List all checkout languages with pagination",
   request: {
     query: z.object({
-      page: z.coerce.number().optional().default(1).openapi({ description: "Page number" }),
-      limit: z.coerce.number().optional().default(10).openapi({ description: "Items per page" }),
-      search: z.string().optional().default("").openapi({ description: "Search query" }),
-      sort: z.string().optional().default("name").openapi({ description: "Sort field" }),
+      page: z.coerce.number().int().min(1).max(1_000_000).optional().default(1).openapi({ description: "Page number" }),
+      limit: z.coerce.number().int().min(1).max(10).optional().default(10).openapi({ description: "Items per page" }),
+      search: z.string().max(100).optional().default("").openapi({ description: "Search query" }),
+      sort: z.enum(["name", "code", "isActive", "isDefault", "createdAt", "updatedAt"]).optional().default("name").openapi({ description: "Sort field" }),
       order: z.enum(["asc", "desc"]).optional().default("asc").openapi({ description: "Sort order" }),
       trashed: z.enum(["true", "false"]).optional().default("false").openapi({ description: "Show trashed items" })
     })
@@ -242,7 +346,7 @@ const listRoute = createRoute({
   responses: {
     200: {
       description: "Checkout language list with pagination",
-      content: { "application/json": { schema: successEnvelope(z.object({ languages: z.array(checkoutLanguageSchema), pagination: z.object({ page: z.number(), limit: z.number(), total: z.number(), totalPages: z.number(), hasNextPage: z.boolean(), hasPrevPage: z.boolean() }) })) } },
+      content: { "application/json": { schema: successEnvelope(z.object({ languages: z.array(checkoutLanguageSchema).max(10), pagination: z.object({ page: z.number(), limit: z.number(), total: z.number(), totalPages: z.number(), hasNextPage: z.boolean(), hasPrevPage: z.boolean() }) })) } },
     },
     ...errorResponses,
   }
@@ -294,7 +398,13 @@ adminApp.openapi(listRoute, async (c) => {
 
   const total = countResult?.count || 0;
   return ok(c, {
-    languages: results,
+    languages: results.map((language) => ({
+      ...language,
+      ...publicCheckoutLanguageProjection(
+        language.languageData,
+        language.fieldVisibility,
+      ),
+    })),
     pagination: {
       page,
       limit,
@@ -310,10 +420,12 @@ adminApp.openapi(listRoute, async (c) => {
 const createRoute2 = createRoute({
   method: "post",
   path: "/",
+  operationId: "dashboard.checkout_languages.create",
   tags: ["Checkout Languages"],
   summary: "Create a new checkout language",
   request: {
     body: {
+      required: true,
       content: {
         "application/json": {
           schema: createCheckoutLanguageSchema
@@ -380,18 +492,29 @@ adminApp.openapi(createRoute2, async (c) => {
   }
 
   await invalidateApiAndScheduleStorefrontGroups(CHECKOUT_CACHE_GROUPS, c);
-  return created(c, { language: insertedLanguage });
+  return created(c, {
+    language: insertedLanguage
+      ? {
+          ...insertedLanguage,
+          ...publicCheckoutLanguageProjection(
+            insertedLanguage.languageData,
+            insertedLanguage.fieldVisibility,
+          ),
+        }
+      : undefined,
+  });
 });
 
 // GET /checkout-languages/:id — get checkout language by ID
 const getByIdRoute = createRoute({
   method: "get",
   path: "/{id}",
+  operationId: "dashboard.checkout_languages.get",
   tags: ["Checkout Languages"],
   summary: "Get checkout language by ID",
   request: {
     params: z.object({
-      id: z.string(),
+      id: z.string().max(64),
     }),
   },
   responses: {
@@ -408,20 +531,28 @@ adminApp.openapi(getByIdRoute, async (c) => {
   const { id } = c.req.valid("param");
   const language = await db.select().from(checkoutLanguages).where(eq(checkoutLanguages.id, id)).get();
   if (!language) throw new NotFoundError("Not found");
-  return ok(c, language);
+  return ok(c, {
+    ...language,
+    ...publicCheckoutLanguageProjection(
+      language.languageData,
+      language.fieldVisibility,
+    ),
+  });
 });
 
 // PUT /checkout-languages/:id — update a checkout language
 const updateRoute = createRoute({
   method: "put",
   path: "/{id}",
+  operationId: "dashboard.checkout_languages.update",
   tags: ["Checkout Languages"],
   summary: "Update a checkout language",
   request: {
     params: z.object({
-      id: z.string(),
+      id: z.string().max(64),
     }),
     body: {
+      required: true,
       content: {
         "application/json": {
           schema: updateCheckoutLanguageSchema
@@ -505,18 +636,27 @@ adminApp.openapi(updateRoute, async (c) => {
   }
   if (!updated) throw new NotFoundError("Not found");
   await invalidateApiAndScheduleStorefrontGroups(CHECKOUT_CACHE_GROUPS, c);
-  return ok(c, { language: updated });
+  return ok(c, {
+    language: {
+      ...updated,
+      ...publicCheckoutLanguageProjection(
+        updated.languageData,
+        updated.fieldVisibility,
+      ),
+    },
+  });
 });
 
 // PATCH /checkout-languages/:id — soft delete a checkout language
 const softDeleteRoute = createRoute({
   method: "patch",
   path: "/{id}",
+  operationId: "dashboard.checkout_languages.trash",
   tags: ["Checkout Languages"],
   summary: "Soft delete a checkout language",
   request: {
     params: z.object({
-      id: z.string(),
+      id: z.string().max(64),
     }),
   },
   responses: {
@@ -540,11 +680,12 @@ adminApp.openapi(softDeleteRoute, async (c) => {
 const hardDeleteRoute = createRoute({
   method: "delete",
   path: "/{id}",
+  operationId: "dashboard.checkout_languages.delete_permanently",
   tags: ["Checkout Languages"],
   summary: "Hard delete a checkout language",
   request: {
     params: z.object({
-      id: z.string(),
+      id: z.string().max(64),
     }),
   },
   responses: {
@@ -565,11 +706,12 @@ adminApp.openapi(hardDeleteRoute, async (c) => {
 const restoreRoute = createRoute({
   method: "post",
   path: "/{id}/restore",
+  operationId: "dashboard.checkout_languages.restore",
   tags: ["Checkout Languages"],
   summary: "Restore a soft-deleted checkout language",
   request: {
     params: z.object({
-      id: z.string(),
+      id: z.string().max(64),
     }),
   },
   responses: {

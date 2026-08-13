@@ -343,7 +343,7 @@ function getPrimaryPhone(
     return phone ? normalizePhoneOrThrow(phone, phoneCountryPolicy) : undefined;
 }
 
-async function hashCustomerSessionToken(sessionToken: string, sessionHashKey: string | undefined): Promise<string> {
+export async function hashCustomerSessionToken(sessionToken: string, sessionHashKey: string | undefined): Promise<string> {
     const secret = requireCustomerSessionHashKey(sessionHashKey);
     const key = await crypto.subtle.importKey(
         "raw",

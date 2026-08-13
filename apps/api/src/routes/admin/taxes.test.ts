@@ -3,6 +3,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   getTaxConfiguration: vi.fn(),
+  getTaxSettingsDocument: vi.fn(),
+  listTaxClasses: vi.fn(),
+  listTaxRates: vi.fn(),
+  listTaxJurisdictions: vi.fn(),
   updateTaxSettings: vi.fn(),
   updateTaxRate: vi.fn(),
   invalidate: vi.fn(),
@@ -15,6 +19,10 @@ vi.mock("@scalius/core/modules/tax", async (importOriginal) => {
   return {
     ...actual,
     getTaxConfiguration: mocks.getTaxConfiguration,
+    getTaxSettingsDocument: mocks.getTaxSettingsDocument,
+    listTaxClasses: mocks.listTaxClasses,
+    listTaxRates: mocks.listTaxRates,
+    listTaxJurisdictions: mocks.listTaxJurisdictions,
     updateTaxSettings: mocks.updateTaxSettings,
     updateTaxRate: mocks.updateTaxRate,
   };
@@ -69,6 +77,43 @@ beforeEach(() => {
       { id: "zone_1", name: "Mirpur", type: "zone", parentId: "city_1" },
     ],
   });
+  mocks.getTaxSettingsDocument.mockResolvedValue(settings);
+  mocks.listTaxClasses.mockResolvedValue({
+    items: [{
+      id: "taxc_1",
+      name: "Standard",
+      description: null,
+      isExempt: false,
+      version: 1,
+      createdAt: new Date("2026-07-10T00:00:00.000Z"),
+      updatedAt: new Date("2026-07-10T00:00:00.000Z"),
+      deletedAt: null,
+    }],
+    total: 1,
+  });
+  mocks.listTaxRates.mockResolvedValue({
+    items: [{
+      id: "taxr_1",
+      taxClassId: "taxc_1",
+      name: "Dhaka",
+      rateBps: 500,
+      jurisdictionType: "city",
+      jurisdictionId: "city_1",
+      jurisdictionLabel: "Dhaka",
+      priority: 0,
+      isCompound: false,
+      isActive: true,
+      version: 1,
+      createdAt: new Date("2026-07-10T00:00:00.000Z"),
+      updatedAt: new Date("2026-07-10T00:00:00.000Z"),
+      deletedAt: null,
+    }],
+    total: 1,
+  });
+  mocks.listTaxJurisdictions.mockResolvedValue({
+    items: [{ id: "zone_1", name: "Mirpur", type: "zone", parentId: "city_1" }],
+    total: 1,
+  });
   mocks.updateTaxSettings.mockResolvedValue({ ...settings, version: 2 });
   mocks.updateTaxRate.mockResolvedValue({
     id: "taxr_1",
@@ -115,6 +160,47 @@ describe("Admin tax routes", () => {
       },
     });
     expect(mocks.invalidate).not.toHaveBeenCalled();
+  });
+
+  it("serves bounded tax settings, class, rate, and jurisdiction reads", async () => {
+    const app = createApp();
+    const [settingsResponse, classesResponse, ratesResponse, jurisdictionsResponse] = await Promise.all([
+      app.request("/api/v1/admin/taxes/settings"),
+      app.request("/api/v1/admin/taxes/classes?page=2&limit=10&search=standard"),
+      app.request("/api/v1/admin/taxes/rates?page=3&limit=5&taxClassId=taxc_1"),
+      app.request("/api/v1/admin/taxes/jurisdictions?type=zone&parentId=city_1&limit=25"),
+    ]);
+
+    expect(settingsResponse.status).toBe(200);
+    expect(classesResponse.status).toBe(200);
+    expect(ratesResponse.status).toBe(200);
+    expect(jurisdictionsResponse.status).toBe(200);
+    expect(mocks.getTaxSettingsDocument).toHaveBeenCalledWith(expect.anything());
+    expect(mocks.listTaxClasses).toHaveBeenCalledWith(expect.anything(), {
+      page: 2,
+      limit: 10,
+      search: "standard",
+    });
+    expect(mocks.listTaxRates).toHaveBeenCalledWith(expect.anything(), {
+      page: 3,
+      limit: 5,
+      taxClassId: "taxc_1",
+    });
+    expect(mocks.listTaxJurisdictions).toHaveBeenCalledWith(expect.anything(), {
+      page: 1,
+      limit: 25,
+      type: "zone",
+      parentId: "city_1",
+    });
+    await expect(classesResponse.json()).resolves.toMatchObject({
+      data: { total: 1, page: 2, limit: 10, items: [{ id: "taxc_1" }] },
+    });
+    await expect(ratesResponse.json()).resolves.toMatchObject({
+      data: { total: 1, page: 3, limit: 5, items: [{ id: "taxr_1" }] },
+    });
+    await expect(jurisdictionsResponse.json()).resolves.toMatchObject({
+      data: { total: 1, page: 1, limit: 25, items: [{ id: "zone_1" }] },
+    });
   });
 
   it("forwards the optimistic settings version and invalidates checkout reads", async () => {

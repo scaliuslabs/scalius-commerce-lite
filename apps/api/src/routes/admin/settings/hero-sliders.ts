@@ -76,6 +76,7 @@ const listRoute = createRoute({
     path: "/",
     tags: ["Admin - Hero Sliders"],
     summary: "List all hero sliders",
+    operationId: "dashboard.hero_sliders.list",
     responses: {
         200: { description: "Slider list", content: { "application/json": { schema: successEnvelope(z.array(heroSliderSchema)) } } },
         ...errorResponses,
@@ -94,6 +95,7 @@ const createSliderRoute = createRoute({
     path: "/",
     tags: ["Admin - Hero Sliders"],
     summary: "Create a hero slider",
+    operationId: "dashboard.hero_sliders.create",
     request: { body: { content: { "application/json": { schema: createHeroSliderSchema } } } },
     responses: {
         201: { description: "Slider created", content: { "application/json": { schema: successEnvelope(heroSliderSchema) } } },
@@ -117,6 +119,7 @@ const getByIdRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Hero Sliders"],
     summary: "Get a hero slider by ID",
+    operationId: "dashboard.hero_sliders.get",
     request: {
         params: z.object({ id: z.string() }),
     },
@@ -139,6 +142,7 @@ const updateSliderRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Hero Sliders"],
     summary: "Update a hero slider",
+    operationId: "dashboard.hero_sliders.update",
     request: {
         params: z.object({ id: z.string() }),
         body: { content: { "application/json": { schema: updateHeroSliderSchema } } }
@@ -166,6 +170,7 @@ const deleteSliderRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Hero Sliders"],
     summary: "Soft-delete a hero slider",
+    operationId: "dashboard.hero_sliders.trash",
     request: {
         params: z.object({ id: z.string() }),
         body: {

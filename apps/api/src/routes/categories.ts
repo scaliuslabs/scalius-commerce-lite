@@ -62,22 +62,54 @@ const storefrontCategorySchema = z.object({
   canonicalPath: z.string().nullable(),
   noIndex: z.boolean(),
   excludeFromSitemap: z.boolean(),
-}).passthrough();
+});
 
 const storefrontCategoryDetailSchema = storefrontCategorySchema.extend({
   content: z.string().nullable(),
 });
-
-type AppliedFilterValue =
-  | string
-  | number
-  | Array<{ id: string; name: string; slug: string; values: string[] }>;
 
 const productFacetSchema = z.object({
   id: z.string(),
   name: z.string(),
   slug: z.string(),
   values: z.array(z.object({ value: z.string(), count: z.number().int().min(0) })),
+});
+
+const storefrontCategoryProductSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  slug: z.string(),
+  price: z.number(),
+  discountType: z.string().nullable(),
+  discountPercentage: z.number().nullable(),
+  discountAmount: z.number().nullable(),
+  discountedPrice: z.number(),
+  priceVaries: z.boolean(),
+  freeDelivery: z.boolean(),
+  categoryId: z.string().nullable(),
+  hasVariants: z.boolean(),
+  availableForSale: z.boolean(),
+  imageUrl: z.string().nullable(),
+  imageMediaId: z.string().nullable(),
+  imageAlt: z.string().nullable(),
+  category: z.object({ id: z.string(), name: z.string(), slug: z.string() }).nullable(),
+  createdAt: z.string().nullable(),
+  updatedAt: z.string().nullable(),
+});
+
+const appliedCategoryFiltersSchema = z.object({
+  attributes: z.array(z.object({
+    id: z.string(),
+    name: z.string(),
+    slug: z.string(),
+    values: z.array(z.string()),
+  })),
+  sort: z.enum(["newest", "price-asc", "price-desc", "name-asc", "name-desc", "discount"]),
+  search: z.string().optional(),
+  minPrice: z.number().min(0).optional(),
+  maxPrice: z.number().min(0).optional(),
+  freeDelivery: z.enum(["true", "false"]).optional(),
+  hasDiscount: z.enum(["true", "false"]).optional(),
 });
 
 const publicCategorySlugSchema = z
@@ -91,6 +123,7 @@ const publicCategorySlugSchema = z
 const listCategoriesRoute = createRoute({
   method: "get",
   path: "/",
+  operationId: "storefront.categories.list",
   tags: ["Categories"],
   summary: "List all categories",
   responses: {
@@ -114,6 +147,7 @@ app.openapi(listCategoriesRoute, async (c) => {
 const getCategoryBySlugRoute = createRoute({
   method: "get",
   path: "/{slug}",
+  operationId: "storefront.categories.get",
   tags: ["Categories"],
   summary: "Get category by slug",
   request: {
@@ -145,6 +179,7 @@ app.openapi(getCategoryBySlugRoute, async (c) => {
 const getCategoryProductsRoute = createRoute({
   method: "get",
   path: "/{slug}/products",
+  operationId: "storefront.categories.list_products",
   tags: ["Categories"],
   summary: "Get products in a category with filtering",
   request: {
@@ -158,24 +193,14 @@ const getCategoryProductsRoute = createRoute({
       description: "Category products with pagination and filters",
       content: { "application/json": { schema: successEnvelope(z.object({
         category: storefrontCategoryDetailSchema,
-        products: z.array(z.object({
-          id: z.string(),
-          name: z.string(),
-          slug: z.string(),
-          price: z.number(),
-          discountType: z.string().nullable(),
-          discountPercentage: z.number().nullable(),
-          discountAmount: z.number().nullable(),
-          discountedPrice: z.number(),
-          priceVaries: z.boolean(),
-        }).passthrough()),
+        products: z.array(storefrontCategoryProductSchema),
         pagination: paginationSchema,
         priceRange: z.object({
           min: z.number().min(0),
           max: z.number().min(0),
         }),
         facets: z.array(productFacetSchema),
-        appliedFilters: z.record(z.string(), z.any()),
+        appliedFilters: appliedCategoryFiltersSchema,
       })) } },
     },
     400: errorResponses[400],
@@ -222,7 +247,7 @@ app.openapi(getCategoryProductsRoute, async (c) => {
     attributeFilters,
   });
 
-  const appliedFilters: Record<string, AppliedFilterValue> = {
+  const appliedFilters: z.infer<typeof appliedCategoryFiltersSchema> = {
     attributes: attributeFilters,
     sort: params.sort,
   };

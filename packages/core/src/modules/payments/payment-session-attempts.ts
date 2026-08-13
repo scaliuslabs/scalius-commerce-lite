@@ -25,7 +25,7 @@ export interface BuildPaymentSessionAttemptIdentityInput {
   currency: string;
   receiptToken?: string;
   proof?: {
-    kind: "receipt" | "customer_account";
+    kind: "receipt" | "customer_account" | "agent_context";
     value: string;
   };
   requestContext?: Record<string, unknown>;
@@ -177,7 +177,10 @@ export async function buildPaymentSessionAttemptIdentity(
   };
 }
 
-function resolveAttemptProof(input: BuildPaymentSessionAttemptIdentityInput): { kind: "receipt" | "customer_account"; value: string } {
+function resolveAttemptProof(input: BuildPaymentSessionAttemptIdentityInput): {
+  kind: "receipt" | "customer_account" | "agent_context";
+  value: string;
+} {
   const proof = input.proof ?? (input.receiptToken ? { kind: "receipt" as const, value: input.receiptToken } : null);
   if (!proof?.value?.trim()) {
     throw new ServiceUnavailableError("Payment session proof is unavailable. Please try again.");

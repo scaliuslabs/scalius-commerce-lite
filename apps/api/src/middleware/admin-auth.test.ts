@@ -12,6 +12,9 @@ import {
 const mocks = vi.hoisted(() => ({
   autoSeedRbacIfNeeded: vi.fn(),
   getUserPermissions: vi.fn(),
+  resolveAgentPrincipalFromBearer: vi.fn(),
+  resolveAgentPrincipalFromGrant: vi.fn(),
+  resolveDirectAgentOperation: vi.fn(),
 }));
 
 vi.mock("@scalius/core/auth/rbac/auto-seed", () => ({
@@ -22,7 +25,22 @@ vi.mock("@scalius/core/auth/rbac/helpers", () => ({
   getUserPermissions: mocks.getUserPermissions,
 }));
 
+vi.mock("../agent-access/principal", () => ({
+  resolveAgentPrincipalFromBearer: mocks.resolveAgentPrincipalFromBearer,
+  resolveAgentPrincipalFromGrant: mocks.resolveAgentPrincipalFromGrant,
+}));
+
+vi.mock("../agent-access/direct-operation", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../agent-access/direct-operation")>();
+  return {
+    ...original,
+    resolveDirectAgentOperation: (...args: Parameters<typeof original.resolveDirectAgentOperation>) =>
+      mocks.resolveDirectAgentOperation(...args) ?? original.resolveDirectAgentOperation(...args),
+  };
+});
+
 import { adminAuthMiddleware } from "./admin-auth";
+import { withAgentDispatchPrincipal } from "../agent-access/dispatch-context";
 
 const TEST_SECRET = "test-secret";
 let currentAuthUser: Record<string, unknown> = {};
@@ -93,6 +111,7 @@ function createContext(
     db?: unknown;
     liveUser?: Record<string, unknown>;
     executionCtx?: { waitUntil(promise: Promise<unknown>): void };
+    body?: BodyInit | null;
   } = {},
 ) {
   const headers = options.headers ?? {
@@ -101,6 +120,7 @@ function createContext(
   const request = new Request(`https://api.scalius.test${pathname}`, {
     method,
     headers,
+    ...(options.body !== undefined ? { body: options.body } : {}),
   });
   const db = options.db ?? createDbMock(options.liveUser);
 
@@ -125,6 +145,9 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
     vi.clearAllMocks();
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
     mocks.autoSeedRbacIfNeeded.mockResolvedValue(undefined);
+    mocks.resolveAgentPrincipalFromBearer.mockResolvedValue(null);
+    mocks.resolveAgentPrincipalFromGrant.mockResolvedValue(null);
+    mocks.resolveDirectAgentOperation.mockReturnValue(undefined);
     mockBetterAuthSession();
   });
 
@@ -321,6 +344,462 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
     expect(source).toContain("verifyBetterAuthSignedCookieValue");
     expect(source).not.toContain("getAuth(");
     expect(source).not.toContain("auth.api.getSession");
+  });
+
+  it("rejects mixed dashboard-cookie and agent credentials before authority lookup", async () => {
+    const agentToken = `sc_pat_agc_0123456789abcdefghij_${"a".repeat(43)}`;
+    const next = vi.fn().mockResolvedValue(undefined);
+
+    await expect(
+      adminAuthMiddleware(
+        createContext("/api/v1/admin/products", "GET", {
+          headers: {
+            Cookie: `better-auth.session_token=${encodeURIComponent(signTestCookieValue("test_session"))}`,
+            Authorization: `Bearer ${agentToken}`,
+          },
+        }) as never,
+        next,
+      ),
+    ).rejects.toMatchObject({
+      status: 403,
+      code: "FORBIDDEN",
+      message: "Cookie and agent credentials cannot be combined",
+    });
+
+    expect(mocks.getUserPermissions).not.toHaveBeenCalled();
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("accepts a fresh dashboard PAT principal through the normal route mapping", async () => {
+    const agentToken = `sc_pat_agc_0123456789abcdefghij_${"a".repeat(43)}`;
+    mocks.resolveAgentPrincipalFromBearer.mockResolvedValue({
+      kind: "agent",
+      grantId: "agr_0123456789abcdefghij",
+      credentialId: "agc_0123456789abcdefghij",
+      ownerUserId: "admin_1",
+      isSuperAdmin: true,
+      resource: "dashboard",
+      grantKind: "pat",
+      preset: "full",
+      permissions: new Set([PERMISSIONS.PRODUCTS_VIEW]),
+      riskCeiling: "security",
+      authorityRevision: 1,
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    const next = vi.fn().mockResolvedValue(undefined);
+    const context = createContext("/api/v1/admin/products", "GET", {
+      headers: { Authorization: `Bearer ${agentToken}` },
+      env: { AGENT_RATE_LIMITER: { limit: vi.fn().mockResolvedValue({ success: true }) } },
+    });
+
+    await adminAuthMiddleware(context as never, next);
+
+    expect(mocks.resolveAgentPrincipalFromBearer).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "db" }),
+      agentToken,
+      undefined,
+    );
+    expect(context.set).toHaveBeenCalledWith(
+      "adminPermissions",
+      new Set([PERMISSIONS.PRODUCTS_VIEW]),
+    );
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  it("authorizes the bounded raw upload part for live PAT and OAuth media authority only", async () => {
+    const agentToken = `sc_pat_agc_0123456789abcdefghij_${"a".repeat(43)}`;
+    const path = "/api/v1/admin/media/uploads/upload_session_1/parts/1";
+    const operation = {
+      operationId: "dashboard.media.upload_part",
+      exposure: "execute",
+      surface: "dashboard",
+      principals: ["admin"],
+      risk: "write",
+      maxRequestBytes: 5 * 1024 * 1024,
+    };
+    mocks.resolveDirectAgentOperation.mockReturnValue(operation);
+    const livePatPrincipal = {
+      kind: "agent",
+      grantId: "agr_0123456789abcdefghij",
+      credentialId: "agc_0123456789abcdefghij",
+      ownerUserId: "admin_1",
+      isSuperAdmin: true,
+      resource: "dashboard",
+      grantKind: "pat",
+      preset: "custom",
+      permissions: new Set([PERMISSIONS.MEDIA_UPLOAD]),
+      riskCeiling: "write",
+      authorityRevision: 1,
+      expiresAt: new Date(Date.now() + 60_000),
+    };
+    const rateLimiter = { limit: vi.fn().mockResolvedValue({ success: true }) };
+    mocks.resolveAgentPrincipalFromBearer.mockResolvedValue(livePatPrincipal);
+    const patContext = createContext(path, "PUT", {
+      headers: {
+        Authorization: `Bearer ${agentToken}`,
+        "Content-Type": "application/octet-stream",
+        "Content-Length": "3",
+      },
+      body: new Uint8Array([1, 2, 3]),
+      env: { AGENT_RATE_LIMITER: rateLimiter },
+    });
+    const patNext = vi.fn(async () => {
+      expect([...new Uint8Array(await patContext.req.raw.arrayBuffer())]).toEqual([1, 2, 3]);
+    });
+    await adminAuthMiddleware(patContext as never, patNext);
+    expect(mocks.resolveDirectAgentOperation).toHaveBeenCalledWith("PUT", path);
+    expect(patNext).toHaveBeenCalledOnce();
+
+    const liveOAuthPrincipal = {
+      ...livePatPrincipal,
+      credentialId: null,
+      grantKind: "oauth",
+    };
+    mocks.resolveAgentPrincipalFromGrant.mockResolvedValue(liveOAuthPrincipal);
+    const oauthContext = createContext(path, "PUT", {
+      headers: {
+        "Content-Type": "application/octet-stream",
+        "Content-Length": "3",
+      },
+    });
+    oauthContext.env = withAgentDispatchPrincipal(
+      { BETTER_AUTH_SECRET: TEST_SECRET } as Env,
+      liveOAuthPrincipal as never,
+    ) as never;
+    const oauthNext = vi.fn().mockResolvedValue(undefined);
+    await adminAuthMiddleware(oauthContext as never, oauthNext);
+    expect(oauthNext).toHaveBeenCalledOnce();
+
+    mocks.resolveAgentPrincipalFromBearer.mockResolvedValue({
+      ...livePatPrincipal,
+      permissions: new Set(),
+    });
+    await expect(adminAuthMiddleware(createContext(path, "PUT", {
+      headers: { Authorization: `Bearer ${agentToken}` },
+      env: { AGENT_RATE_LIMITER: rateLimiter },
+    }) as never, vi.fn())).rejects.toMatchObject({ status: 403 });
+
+    mocks.resolveAgentPrincipalFromBearer.mockResolvedValue({
+      ...livePatPrincipal,
+      resource: "storefront",
+    });
+    await expect(adminAuthMiddleware(createContext(path, "PUT", {
+      headers: { Authorization: `Bearer ${agentToken}` },
+      env: { AGENT_RATE_LIMITER: rateLimiter },
+    }) as never, vi.fn())).rejects.toMatchObject({
+      status: 403,
+      message: "Storefront credentials cannot access dashboard operations",
+    });
+
+    mocks.resolveAgentPrincipalFromBearer.mockResolvedValue(null);
+    await expect(adminAuthMiddleware(createContext(path, "PUT", {
+      headers: { Authorization: `Bearer ${agentToken}` },
+      env: { AGENT_RATE_LIMITER: rateLimiter },
+    }) as never, vi.fn())).rejects.toMatchObject({ status: 401 });
+
+    await expect(adminAuthMiddleware(createContext(path, "PUT", {
+      headers: {
+        Authorization: `Bearer ${agentToken}`,
+        Cookie: `better-auth.session_token=${encodeURIComponent(signTestCookieValue("test_session"))}`,
+      },
+    }) as never, vi.fn())).rejects.toMatchObject({
+      status: 403,
+      message: "Cookie and agent credentials cannot be combined",
+    });
+  });
+
+  it("rejects declared and streamed upload bodies above the manifest ceiling before parsing", async () => {
+    const agentToken = `sc_pat_agc_0123456789abcdefghij_${"a".repeat(43)}`;
+    const path = "/api/v1/admin/media/uploads/upload_session_1/parts/1";
+    mocks.resolveDirectAgentOperation.mockReturnValue({
+      operationId: "dashboard.media.upload_part",
+      exposure: "execute",
+      surface: "dashboard",
+      principals: ["admin"],
+      risk: "write",
+      maxRequestBytes: 5 * 1024 * 1024,
+    });
+    mocks.resolveAgentPrincipalFromBearer.mockResolvedValue({
+      kind: "agent",
+      grantId: "agr_0123456789abcdefghij",
+      credentialId: "agc_0123456789abcdefghij",
+      ownerUserId: "admin_1",
+      isSuperAdmin: true,
+      resource: "dashboard",
+      grantKind: "pat",
+      preset: "custom",
+      permissions: new Set([PERMISSIONS.MEDIA_UPLOAD]),
+      riskCeiling: "write",
+      authorityRevision: 1,
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    const env = {
+      AGENT_RATE_LIMITER: { limit: vi.fn().mockResolvedValue({ success: true }) },
+    };
+
+    await expect(adminAuthMiddleware(createContext(path, "PUT", {
+      headers: {
+        Authorization: `Bearer ${agentToken}`,
+        "Content-Type": "application/octet-stream",
+        "Content-Length": String(5 * 1024 * 1024 + 1),
+      },
+      body: new Uint8Array([1]),
+      env,
+    }) as never, vi.fn())).rejects.toMatchObject({
+      status: 413,
+      code: "PAYLOAD_TOO_LARGE",
+    });
+
+    await expect(adminAuthMiddleware(createContext(path, "PUT", {
+      headers: {
+        Authorization: `Bearer ${agentToken}`,
+        "Content-Type": "application/octet-stream",
+      },
+      body: new Uint8Array(5 * 1024 * 1024 + 1),
+      env,
+    }) as never, vi.fn())).rejects.toMatchObject({
+      status: 413,
+      code: "PAYLOAD_TOO_LARGE",
+    });
+  });
+
+  it("does not apply the direct-agent body boundary to a browser admin session", async () => {
+    mocks.getUserPermissions.mockResolvedValue(new Set([PERMISSIONS.PRODUCTS_EDIT]));
+    const next = vi.fn().mockResolvedValue(undefined);
+
+    await adminAuthMiddleware(createContext("/api/v1/admin/products/product_1", "PATCH", {
+      headers: {
+        Cookie: `better-auth.session_token=${encodeURIComponent(signTestCookieValue("test_session"))}`,
+        "Content-Type": "application/json",
+        "Content-Length": String(16 * 1024 * 1024),
+      },
+      body: "{}",
+    }) as never, next);
+
+    expect(mocks.resolveAgentPrincipalFromBearer).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    { label: "shorter", declared: 2, actual: 3 },
+    { label: "longer", declared: 4, actual: 3 },
+  ])("rejects an upload stream $label than its declared Content-Length", async ({
+    declared,
+    actual,
+  }) => {
+    const agentToken = `sc_pat_agc_0123456789abcdefghij_${"a".repeat(43)}`;
+    const path = "/api/v1/admin/media/uploads/upload_session_1/parts/1";
+    mocks.resolveDirectAgentOperation.mockReturnValue({
+      operationId: "dashboard.media.upload_part",
+      exposure: "execute",
+      surface: "dashboard",
+      principals: ["admin"],
+      risk: "write",
+      maxRequestBytes: 5 * 1024 * 1024,
+    });
+    mocks.resolveAgentPrincipalFromBearer.mockResolvedValue({
+      kind: "agent",
+      grantId: "agr_0123456789abcdefghij",
+      credentialId: "agc_0123456789abcdefghij",
+      ownerUserId: "admin_1",
+      isSuperAdmin: true,
+      resource: "dashboard",
+      grantKind: "pat",
+      preset: "custom",
+      permissions: new Set([PERMISSIONS.MEDIA_UPLOAD]),
+      riskCeiling: "write",
+      authorityRevision: 1,
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    const next = vi.fn();
+
+    await expect(adminAuthMiddleware(createContext(path, "PUT", {
+      headers: {
+        Authorization: `Bearer ${agentToken}`,
+        "Content-Type": "application/octet-stream",
+        "Content-Length": String(declared),
+      },
+      body: new Uint8Array(actual),
+      env: {
+        AGENT_RATE_LIMITER: { limit: vi.fn().mockResolvedValue({ success: true }) },
+      },
+    }) as never, next)).rejects.toMatchObject({
+      status: 400,
+      code: "INVALID_REQUEST_BODY",
+    });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("accepts only the request-scoped internal MCP principal and fresh-resolves it", async () => {
+    const principal = {
+      kind: "agent" as const,
+      grantId: "agr_0123456789abcdefghij",
+      credentialId: null,
+      ownerUserId: "admin_1",
+      isSuperAdmin: true,
+      resource: "dashboard" as const,
+      grantKind: "oauth" as const,
+      preset: "full" as const,
+      permissions: new Set([PERMISSIONS.PRODUCTS_VIEW]),
+      riskCeiling: "security" as const,
+      authorityRevision: 1,
+      expiresAt: new Date(Date.now() + 60_000),
+    };
+    mocks.resolveAgentPrincipalFromGrant.mockResolvedValue(principal);
+    const context = createContext("/api/v1/admin/products", "GET", { headers: {} });
+    context.env = withAgentDispatchPrincipal(
+      { BETTER_AUTH_SECRET: TEST_SECRET } as Env,
+      principal,
+    ) as never;
+    const next = vi.fn().mockResolvedValue(undefined);
+
+    await adminAuthMiddleware(context as never, next);
+
+    expect(mocks.resolveAgentPrincipalFromGrant).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "db" }),
+      { grantId: principal.grantId, credentialId: null, resource: "dashboard" },
+    );
+    expect(next).toHaveBeenCalledTimes(1);
+    expect((context.env as { AGENT_RATE_LIMITER?: unknown }).AGENT_RATE_LIMITER).toBeUndefined();
+  });
+
+  it("rejects header spoofing and mixed request credentials on the internal lane", async () => {
+    const next = vi.fn().mockResolvedValue(undefined);
+    await expect(adminAuthMiddleware(
+      createContext("/api/v1/admin/products", "GET", {
+        headers: { "X-Scalius-Agent-Principal": "spoofed" },
+      }) as never,
+      next,
+    )).rejects.toMatchObject({ status: 401 });
+
+    const principal = {
+      kind: "agent" as const,
+      grantId: "agr_0123456789abcdefghij",
+      credentialId: null,
+      ownerUserId: "admin_1",
+      isSuperAdmin: true,
+      resource: "dashboard" as const,
+      grantKind: "oauth" as const,
+      preset: "full" as const,
+      permissions: new Set([PERMISSIONS.PRODUCTS_VIEW]),
+      riskCeiling: "security" as const,
+      authorityRevision: 1,
+      expiresAt: new Date(Date.now() + 60_000),
+    };
+    const context = createContext("/api/v1/admin/products", "GET", {
+      headers: { Authorization: "Bearer infrastructure.jwt.token" },
+    });
+    context.env = withAgentDispatchPrincipal(
+      { BETTER_AUTH_SECRET: TEST_SECRET } as Env,
+      principal,
+    ) as never;
+    await expect(adminAuthMiddleware(context as never, next)).rejects.toMatchObject({ status: 403 });
+    expect(mocks.resolveAgentPrincipalFromGrant).not.toHaveBeenCalled();
+  });
+
+  it("rejects invalid agent and infrastructure Bearer tokens", async () => {
+    const next = vi.fn().mockResolvedValue(undefined);
+    const validShape = `sc_pat_agc_0123456789abcdefghij_${"a".repeat(43)}`;
+    await expect(adminAuthMiddleware(
+      createContext("/api/v1/admin/products", "GET", {
+        headers: { Authorization: `Bearer ${validShape}` },
+      }) as never,
+      next,
+    )).rejects.toMatchObject({ status: 401, code: "UNAUTHORIZED" });
+
+    await expect(adminAuthMiddleware(
+      createContext("/api/v1/admin/products", "GET", {
+        headers: { Authorization: "Bearer infrastructure.jwt.token" },
+      }) as never,
+      next,
+    )).rejects.toMatchObject({ status: 401, code: "UNAUTHORIZED" });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("enforces PAT audience and permission snapshot", async () => {
+    const agentToken = `sc_cli_agc_0123456789abcdefghij_${"a".repeat(43)}`;
+    const base = {
+      kind: "agent",
+      grantId: "agr_0123456789abcdefghij",
+      credentialId: "agc_0123456789abcdefghij",
+      ownerUserId: "admin_1",
+      isSuperAdmin: true,
+      grantKind: "cli",
+      preset: "custom",
+      permissions: new Set([PERMISSIONS.DASHBOARD_VIEW]),
+      riskCeiling: "read",
+      authorityRevision: 1,
+      expiresAt: new Date(Date.now() + 60_000),
+    };
+    const next = vi.fn().mockResolvedValue(undefined);
+    const rateLimiter = { limit: vi.fn().mockResolvedValue({ success: true }) };
+
+    mocks.resolveAgentPrincipalFromBearer.mockResolvedValue({ ...base, resource: "storefront" });
+    await expect(adminAuthMiddleware(
+      createContext("/api/v1/admin/products", "GET", {
+        headers: { Authorization: `Bearer ${agentToken}` },
+        env: { AGENT_RATE_LIMITER: rateLimiter },
+      }) as never,
+      next,
+    )).rejects.toMatchObject({ status: 403, message: "Storefront credentials cannot access dashboard operations" });
+
+    mocks.resolveAgentPrincipalFromBearer.mockResolvedValue({ ...base, resource: "dashboard" });
+    await expect(adminAuthMiddleware(
+      createContext("/api/v1/admin/products", "GET", {
+        headers: { Authorization: `Bearer ${agentToken}` },
+        env: { AGENT_RATE_LIMITER: rateLimiter },
+      }) as never,
+      next,
+    )).rejects.toMatchObject({ status: 403, message: "You do not have permission to perform this action" });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("enforces manifest exposure and risk before direct PAT route RBAC", async () => {
+    const agentToken = `sc_pat_agc_0123456789abcdefghij_${"a".repeat(43)}`;
+    const rateLimiter = { limit: vi.fn().mockResolvedValue({ success: true }) };
+    const base = {
+      kind: "agent",
+      grantId: "agr_0123456789abcdefghij",
+      credentialId: "agc_0123456789abcdefghij",
+      ownerUserId: "admin_1",
+      isSuperAdmin: true,
+      resource: "dashboard",
+      grantKind: "pat",
+      preset: "read",
+      permissions: new Set([
+        PERMISSIONS.PRODUCTS_VIEW,
+        PERMISSIONS.PRODUCTS_CREATE,
+        PERMISSIONS.ANALYTICS_VIEW,
+      ]),
+      riskCeiling: "read",
+      authorityRevision: 1,
+      expiresAt: new Date(Date.now() + 60_000),
+    };
+    mocks.resolveAgentPrincipalFromBearer.mockResolvedValue(base);
+
+    await expect(adminAuthMiddleware(
+      createContext("/api/v1/admin/products", "POST", {
+        headers: { Authorization: `Bearer ${agentToken}` },
+        env: { AGENT_RATE_LIMITER: rateLimiter },
+      }) as never,
+      vi.fn(),
+    )).rejects.toMatchObject({
+      status: 403,
+      message: "This dashboard operation is not available to direct agent credentials",
+    });
+
+    await expect(adminAuthMiddleware(
+      createContext("/api/v1/admin/analytics/health", "GET", {
+        headers: { Authorization: `Bearer ${agentToken}` },
+        env: { AGENT_RATE_LIMITER: rateLimiter },
+      }) as never,
+      vi.fn(),
+    )).rejects.toMatchObject({
+      status: 403,
+      message: "This dashboard operation is not available to direct agent credentials",
+    });
+
+    expect(rateLimiter.limit).toHaveBeenCalledTimes(2);
   });
 
   it("allows own-account endpoints for any verified admin with admin access", async () => {

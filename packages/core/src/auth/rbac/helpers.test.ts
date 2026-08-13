@@ -19,29 +19,38 @@ function createSelectChain() {
 }
 
 describe("RBAC permission cache", () => {
-  it("loads all role permissions in one bounded database batch", async () => {
-    const roleQuery = { from: vi.fn(() => "roles-query") };
+  it("loads a bounded role page and only its permissions", async () => {
+    const rolesResult = [
+      { id: "role_a", name: "catalog", displayName: "Catalog", description: null, isSystem: false, createdAt: 1, updatedAt: 1 },
+      { id: "role_b", name: "orders", displayName: "Orders", description: null, isSystem: false, createdAt: 1, updatedAt: 1 },
+      { id: "role_empty", name: "support", displayName: "Support", description: null, isSystem: false, createdAt: 1, updatedAt: 1 },
+    ];
+    const permissionResult = [
+      { roleId: "role_a", name: PERMISSIONS.PRODUCTS_VIEW },
+      { roleId: "role_a", name: PERMISSIONS.PRODUCTS_EDIT },
+      { roleId: "role_b", name: PERMISSIONS.ORDERS_VIEW },
+    ];
+    const roleQuery = {
+      from: vi.fn(() => ({
+        orderBy: vi.fn(() => ({
+          limit: vi.fn(() => ({
+            offset: vi.fn(async () => rolesResult),
+          })),
+        })),
+      })),
+    };
     const permissionQuery = {
       from: vi.fn(() => ({
-        innerJoin: vi.fn(() => "permissions-query"),
+        innerJoin: vi.fn(() => ({
+          where: vi.fn(async () => permissionResult),
+        })),
       })),
     };
     const db = {
       select: vi.fn()
         .mockReturnValueOnce(roleQuery)
         .mockReturnValueOnce(permissionQuery),
-      batch: vi.fn().mockResolvedValue([
-        [
-          { id: "role_a", name: "catalog" },
-          { id: "role_b", name: "orders" },
-          { id: "role_empty", name: "support" },
-        ],
-        [
-          { roleId: "role_a", name: PERMISSIONS.PRODUCTS_VIEW },
-          { roleId: "role_a", name: PERMISSIONS.PRODUCTS_EDIT },
-          { roleId: "role_b", name: PERMISSIONS.ORDERS_VIEW },
-        ],
-      ]),
+      batch: vi.fn(),
     };
 
     const result = await getAllRolesWithPermissions(db as never);
@@ -50,17 +59,39 @@ describe("RBAC permission cache", () => {
       {
         id: "role_a",
         name: "catalog",
+        displayName: "Catalog",
+        description: null,
+        isSystem: false,
+        createdAt: 1,
+        updatedAt: 1,
         permissions: [PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.PRODUCTS_EDIT],
+        permissionsTruncated: false,
       },
       {
         id: "role_b",
         name: "orders",
+        displayName: "Orders",
+        description: null,
+        isSystem: false,
+        createdAt: 1,
+        updatedAt: 1,
         permissions: [PERMISSIONS.ORDERS_VIEW],
+        permissionsTruncated: false,
       },
-      { id: "role_empty", name: "support", permissions: [] },
+      {
+        id: "role_empty",
+        name: "support",
+        displayName: "Support",
+        description: null,
+        isSystem: false,
+        createdAt: 1,
+        updatedAt: 1,
+        permissions: [],
+        permissionsTruncated: false,
+      },
     ]);
     expect(db.select).toHaveBeenCalledTimes(2);
-    expect(db.batch).toHaveBeenCalledOnce();
+    expect(db.batch).not.toHaveBeenCalled();
   });
 
   it("does not retain stale local memory after a KV permission cache miss", async () => {

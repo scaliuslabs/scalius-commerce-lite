@@ -141,6 +141,60 @@ describe("checkout language route boundaries", () => {
     expect(body.data?.language?.id).toBe("fallback");
   });
 
+  it("publishes distinct surface-qualified identities for public and admin active reads", () => {
+    const { app } = createTestApp();
+    const spec = app.getOpenAPIDocument({
+      openapi: "3.0.0",
+      info: { title: "Checkout language identity", version: "test" },
+    });
+    const publicOperation = spec.paths?.["/api/v1/checkout-languages/active"]?.get;
+    const adminOperation = spec.paths?.["/api/v1/admin/settings/checkout-languages/active"]?.get;
+
+    expect(publicOperation?.operationId).toBe("storefront.checkout_language.get_active");
+    expect(adminOperation?.operationId).toBe("dashboard.checkout_languages.active_get");
+    expect(publicOperation?.operationId).not.toBe(adminOperation?.operationId);
+    expect(publicOperation?.operationId).toMatch(/^storefront(\.[a-z][a-z0-9_]*){2,}$/);
+    expect(adminOperation?.operationId).toMatch(/^dashboard(\.[a-z][a-z0-9_]*){2,}$/);
+  });
+
+  it("publishes bounded stable identities for the complete admin language lifecycle", () => {
+    const { app } = createTestApp();
+    const spec = app.getOpenAPIDocument({
+      openapi: "3.0.0",
+      info: { title: "Checkout language lifecycle", version: "test" },
+    }) as unknown as {
+      paths: Record<string, Record<string, {
+        operationId?: string;
+        requestBody?: { required?: boolean };
+        parameters?: Array<{ name?: string; schema?: { maximum?: number } }>;
+        responses?: Record<string, { content?: Record<string, { schema?: {
+          properties?: { data?: { properties?: { languages?: { maxItems?: number } } } };
+        } }> }>;
+      }>>;
+    };
+    const base = "/api/v1/admin/settings/checkout-languages";
+    const operations = [
+      ["get", base, "dashboard.checkout_languages.list"],
+      ["post", base, "dashboard.checkout_languages.create"],
+      ["get", `${base}/{id}`, "dashboard.checkout_languages.get"],
+      ["put", `${base}/{id}`, "dashboard.checkout_languages.update"],
+      ["patch", `${base}/{id}`, "dashboard.checkout_languages.trash"],
+      ["delete", `${base}/{id}`, "dashboard.checkout_languages.delete_permanently"],
+      ["post", `${base}/{id}/restore`, "dashboard.checkout_languages.restore"],
+    ] as const;
+
+    for (const [method, path, operationId] of operations) {
+      expect(spec.paths[path]?.[method]?.operationId, `${method} ${path}`).toBe(operationId);
+    }
+    expect(spec.paths[base]?.post?.requestBody?.required).toBe(true);
+    expect(spec.paths[`${base}/{id}`]?.put?.requestBody?.required).toBe(true);
+    expect(spec.paths[base]?.get?.parameters?.find(({ name }) => name === "limit")?.schema?.maximum).toBe(10);
+    expect(
+      spec.paths[base]?.get?.responses?.["200"]?.content?.["application/json"]
+        ?.schema?.properties?.data?.properties?.languages?.maxItems,
+    ).toBe(10);
+  });
+
   it("invalidates checkout caches after admin checkout-language saves", async () => {
     const { app, env, batch } = createTestApp();
 

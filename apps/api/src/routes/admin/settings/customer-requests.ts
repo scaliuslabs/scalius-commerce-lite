@@ -51,6 +51,7 @@ function buildPolicyPayload(policy: z.infer<typeof customerRequestPolicySchema>)
 const getCustomerRequestPolicyRoute = createRoute({
   method: "get",
   path: "/customer-requests",
+  operationId: "dashboard.customer_requests.policy_get",
   tags: ["Admin - Settings"],
   summary: "Get operational customer request policy",
   responses: {
@@ -74,6 +75,7 @@ app.openapi(getCustomerRequestPolicyRoute, async (c) => {
 const saveCustomerRequestPolicyRoute = createRoute({
   method: "put",
   path: "/customer-requests",
+  operationId: "dashboard.customer_requests.policy_update",
   tags: ["Admin - Settings"],
   summary: "Save operational customer request policy",
   request: {

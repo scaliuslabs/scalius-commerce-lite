@@ -39,6 +39,7 @@ const discountMutationResultSchema = z.object({
 // ── List Discounts ──
 
 const listRoute = createRoute({
+    operationId: "dashboard.discounts.list",
     method: "get",
     path: "/",
     tags: ["Admin - Discounts"],
@@ -82,6 +83,7 @@ app.openapi(listRoute, async (c) => {
 // ── Create Discount ──
 
 const createDiscountRoute = createRoute({
+    operationId: "dashboard.discounts.create",
     method: "post",
     path: "/",
     tags: ["Admin - Discounts"],
@@ -111,6 +113,7 @@ app.openapi(createDiscountRoute, (async (c: AdminRouteContext<typeof createDisco
 // ── Bulk Delete Discounts ──
 
 const bulkDeleteRoute = createRoute({
+    operationId: "dashboard.discounts.bulk_delete",
     method: "post",
     path: "/bulk-delete",
     tags: ["Admin - Discounts"],
@@ -145,6 +148,7 @@ app.openapi(bulkDeleteRoute, async (c) => {
 // ── Bulk Restore Discounts ──
 
 const bulkRestoreRoute = createRoute({
+    operationId: "dashboard.discounts.bulk_restore",
     method: "post",
     path: "/bulk-restore",
     tags: ["Admin - Discounts"],
@@ -176,6 +180,7 @@ app.openapi(bulkRestoreRoute, async (c) => {
 // ── Get Discount By ID ──
 
 const getByIdRoute = createRoute({
+    operationId: "dashboard.discounts.get",
     method: "get",
     path: "/{id}",
     tags: ["Admin - Discounts"],
@@ -200,6 +205,7 @@ app.openapi(getByIdRoute, (async (c: AdminRouteContext<typeof getByIdRoute>) => 
 // ── Update Discount ──
 
 const updateDiscountRoute = createRoute({
+    operationId: "dashboard.discounts.update",
     method: "put",
     path: "/{id}",
     tags: ["Admin - Discounts"],
@@ -234,6 +240,7 @@ app.openapi(updateDiscountRoute, (async (c: AdminRouteContext<typeof updateDisco
 // ── Delete Discount ──
 
 const deleteDiscountRoute = createRoute({
+    operationId: "dashboard.discounts.delete",
     method: "delete",
     path: "/{id}",
     tags: ["Admin - Discounts"],
@@ -258,6 +265,7 @@ app.openapi(deleteDiscountRoute, async (c) => {
 // ── Permanent Delete Discount ──
 
 const permanentDeleteRoute = createRoute({
+    operationId: "dashboard.discounts.delete_permanently",
     method: "delete",
     path: "/{id}/permanent",
     tags: ["Admin - Discounts"],
@@ -282,6 +290,7 @@ app.openapi(permanentDeleteRoute, async (c) => {
 // ── Toggle Discount Status ──
 
 const toggleStatusRoute = createRoute({
+    operationId: "dashboard.discounts.set_active",
     method: "post",
     path: "/{id}/toggle-status",
     tags: ["Admin - Discounts"],
@@ -319,6 +328,7 @@ app.openapi(toggleStatusRoute, async (c) => {
 // ── Restore Discount ──
 
 const restoreDiscountRoute = createRoute({
+    operationId: "dashboard.discounts.restore",
     method: "post",
     path: "/{id}/restore",
     tags: ["Admin - Discounts"],

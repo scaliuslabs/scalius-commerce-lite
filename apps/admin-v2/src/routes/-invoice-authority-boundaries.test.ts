@@ -12,6 +12,12 @@ const orderHeaderSource = readFileSync(
   ),
   "utf8",
 );
+const invoiceActionsSource = readFileSync(
+  fileURLToPath(
+    new URL("../components/admin/InvoiceActions.tsx", import.meta.url),
+  ),
+  "utf8",
+);
 
 describe("invoice page authority", () => {
   it("does not redirect invoice read failures back to the order list", () => {
@@ -30,8 +36,12 @@ describe("invoice page authority", () => {
 
   it("offers print and PDF actions only after issuance", () => {
     expect(source).toContain("isIssued ? (");
-    expect(source).toContain("<InvoiceActions invoiceNumber={invoiceNumber} />");
+    expect(source).toContain('<InvoiceActions orderId={order.id} invoiceNumber={invoiceNumber} />');
     expect(orderHeaderSource).toContain("View invoice");
     expect(orderHeaderSource).not.toContain("Print Invoice");
+    expect(invoiceActionsSource).toContain(
+      "/api/v1/admin/orders/${encodeURIComponent(orderId)}/invoice/print",
+    );
+    expect(invoiceActionsSource).toContain('"noopener,noreferrer"');
   });
 });

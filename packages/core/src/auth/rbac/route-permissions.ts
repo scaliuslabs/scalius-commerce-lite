@@ -28,6 +28,50 @@ type RouteConfig = {
  */
 export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   // =============================================
+  // Agent Access API
+  // =============================================
+  "/api/v1/admin/agent-access/connections": {
+    GET: { permission: PERMISSIONS.AGENT_ACCESS_VIEW },
+  },
+  "/api/v1/admin/agent-access/connections/*": {
+    GET: { permission: PERMISSIONS.AGENT_ACCESS_VIEW },
+  },
+  "/api/v1/admin/agent-access/connections/*/events": {
+    GET: { permission: PERMISSIONS.AGENT_ACCESS_VIEW },
+  },
+  "/api/v1/admin/agent-access/tokens": {
+    POST: { permission: PERMISSIONS.AGENT_ACCESS_MANAGE },
+  },
+  "/api/v1/admin/agent-access/tokens/*/rotate": {
+    POST: { permission: PERMISSIONS.AGENT_ACCESS_MANAGE },
+  },
+  "/api/v1/admin/agent-access/grants/*": {
+    PATCH: { permission: PERMISSIONS.AGENT_ACCESS_MANAGE },
+    DELETE: { permission: PERMISSIONS.AGENT_ACCESS_MANAGE },
+  },
+  "/api/v1/admin/agent-access/revoke-all": {
+    POST: { permission: PERMISSIONS.AGENT_ACCESS_MANAGE },
+  },
+  "/api/v1/admin/agent-access/authorization-requests/*": {
+    GET: { permission: PERMISSIONS.AGENT_ACCESS_VIEW },
+  },
+  "/api/v1/admin/agent-access/authorization-requests/*/approve": {
+    POST: { permission: PERMISSIONS.AGENT_ACCESS_MANAGE },
+  },
+  "/api/v1/admin/agent-access/authorization-requests/*/deny": {
+    POST: { permission: PERMISSIONS.AGENT_ACCESS_MANAGE },
+  },
+  "/api/v1/admin/agent-access/device-authorizations/lookup": {
+    POST: { permission: PERMISSIONS.AGENT_ACCESS_MANAGE },
+  },
+  "/api/v1/admin/agent-access/device-authorizations/*/approve": {
+    POST: { permission: PERMISSIONS.AGENT_ACCESS_MANAGE },
+  },
+  "/api/v1/admin/agent-access/device-authorizations/*/deny": {
+    POST: { permission: PERMISSIONS.AGENT_ACCESS_MANAGE },
+  },
+
+  // =============================================
   // Products API
   // =============================================
   "/api/v1/admin/products": {
@@ -62,6 +106,10 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   },
   "/api/v1/admin/products/*/options/matrix": {
     PUT: { permission: PERMISSIONS.PRODUCTS_EDIT },
+  },
+  "/api/v1/admin/products/*/sections/*": {
+    GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
+    PATCH: { permission: PERMISSIONS.PRODUCTS_EDIT },
   },
   "/api/products": {
     GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
@@ -181,6 +229,9 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   "/api/v1/admin/orders/bulk-ship": {
     POST: { permission: PERMISSIONS.ORDERS_MANAGE_SHIPMENTS },
   },
+  "/api/v1/admin/orders/export": {
+    GET: { permission: PERMISSIONS.ORDERS_VIEW },
+  },
   "/api/v1/admin/orders/payment-recovery": {
     GET: { permission: PERMISSIONS.ORDERS_VIEW },
   },
@@ -253,6 +304,9 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   "/api/v1/admin/orders/*/invoice": {
     GET: { permission: PERMISSIONS.ORDERS_VIEW },
     POST: { permission: PERMISSIONS.ORDERS_ISSUE_INVOICE },
+  },
+  "/api/v1/admin/orders/*/invoice/print": {
+    GET: { permission: PERMISSIONS.ORDERS_VIEW },
   },
   "/api/v1/admin/orders/*/cod": {
     GET: { permission: PERMISSIONS.ORDERS_VIEW },
@@ -547,9 +601,11 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
     GET: { permission: PERMISSIONS.TAXES_VIEW },
   },
   "/api/v1/admin/taxes/settings": {
+    GET: { permission: PERMISSIONS.TAXES_VIEW },
     PUT: { permission: PERMISSIONS.TAXES_MANAGE },
   },
   "/api/v1/admin/taxes/classes": {
+    GET: { permission: PERMISSIONS.TAXES_VIEW },
     POST: { permission: PERMISSIONS.TAXES_MANAGE },
   },
   "/api/v1/admin/taxes/classes/*": {
@@ -557,6 +613,7 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
     DELETE: { permission: PERMISSIONS.TAXES_MANAGE },
   },
   "/api/v1/admin/taxes/rates": {
+    GET: { permission: PERMISSIONS.TAXES_VIEW },
     POST: { permission: PERMISSIONS.TAXES_MANAGE },
   },
   "/api/v1/admin/taxes/rates/*": {
@@ -564,6 +621,9 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
     DELETE: { permission: PERMISSIONS.TAXES_MANAGE },
   },
   "/api/v1/admin/taxes/classifications": {
+    GET: { permission: PERMISSIONS.TAXES_VIEW },
+  },
+  "/api/v1/admin/taxes/jurisdictions": {
     GET: { permission: PERMISSIONS.TAXES_VIEW },
   },
   "/api/v1/admin/taxes/classifications/*/*": {
@@ -647,6 +707,9 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
     POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
   },
+  "/api/v1/admin/settings/security/runtime-sources": {
+    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+  },
   "/api/v1/admin/settings/email": {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
     POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
@@ -671,6 +734,9 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
     POST: { permission: PERMISSIONS.SETTINGS_SEO_EDIT },
   },
   "/api/v1/admin/settings/seo/feed-diagnostics": {
+    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+  },
+  "/api/v1/admin/settings/seo/live-probe": {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
   },
   "/api/v1/admin/settings/firebase": {
@@ -1030,6 +1096,12 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   "/api/v1/admin/inventory/labels/preview": {
     POST: { permission: PERMISSIONS.PRODUCTS_VIEW },
   },
+  "/api/v1/admin/inventory/labels/artifact": {
+    POST: { permission: PERMISSIONS.PRODUCTS_VIEW },
+  },
+  "/api/v1/admin/inventory/movements/export": {
+    POST: { permission: PERMISSIONS.PRODUCTS_VIEW },
+  },
   "/api/v1/admin/inventory/alerts": {
     GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
     PATCH: { permission: PERMISSIONS.PRODUCTS_EDIT },
@@ -1092,6 +1164,11 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   },
   "/api/v1/admin/auth/update-profile": {
     POST: { allowAnyAdmin: true },
+  },
+  "/api/v1/admin/auth/scanner-link": {
+    POST: {
+      allOf: [PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.PRODUCTS_EDIT],
+    },
   },
   "/api/v1/admin/auth/2fa/*": {
     GET: { allowAnyAdmin: true },

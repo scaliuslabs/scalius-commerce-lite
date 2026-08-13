@@ -39,7 +39,6 @@ import {
 import { cn } from "@scalius/shared/utils";
 import {
   buildLabelCopies,
-  buildLabelDataCsv,
   clampLabelAlignmentMm,
   clampLabelPreviewPageIndex,
   DEFAULT_LABEL_PRINT_ALIGNMENT,
@@ -50,12 +49,10 @@ import {
   findCompatibleLabelPreset,
   getBarcodeFitIssue,
   getBarcodeQuietZoneModules,
-  getLabelDimensions,
   getLabelInventorySummary,
   getNonPrintingLabelVariantIds,
   getLabelPreset,
   getLabelPresetIssue,
-  getLabelPrintGridPosition,
   getLabelShortcutQuantity,
   LABEL_PRESETS,
   MAX_LABEL_COPIES,
@@ -82,7 +79,7 @@ type BarcodeLabelWorkspaceProps = {
   onSelectedVariantIdsChange: (ids: string[]) => void;
 };
 
-type PrintMode = "job" | "test";
+type ArtifactFormat = "csv" | "html" | "pdf";
 
 const DEFAULT_CUSTOM_PRESET: LabelPreset = { ...getLabelPreset("custom") };
 
@@ -245,85 +242,6 @@ function QuantityControl({
   );
 }
 
-function PrintPages({
-  pages,
-  preset,
-  content,
-  alignment,
-  formatPrice,
-  test,
-}: {
-  pages: LabelPageCell[][];
-  preset: LabelPreset;
-  content: LabelContentOptions;
-  alignment: LabelPrintAlignment;
-  formatPrice: (price: number | string) => string;
-  test: boolean;
-}) {
-  const capacity = preset.columns * preset.rows;
-  const firstCopy = pages.flat().find((copy): copy is LabelCopy => copy !== null);
-  const firstOccupiedIndex = Math.max(0, pages[0]?.findIndex((copy) => copy !== null) ?? 0);
-  const printPages = test
-    ? [Array.from({ length: capacity }, (_, index) => index === firstOccupiedIndex ? firstCopy ?? null : null)]
-    : pages.map((page) => Array.from({ length: capacity }, (_, index) => page[index] ?? null));
-  const dimensions = getLabelDimensions(preset);
-  const gridPosition = getLabelPrintGridPosition(preset, alignment);
-
-  return (
-    <div id="barcode-print-root" data-print-mode={test ? "test" : "job"}>
-      {printPages.map((page, pageIndex) => (
-        <div
-          // Page order is stable and the key must not depend on copy count.
-          key={`page-${pageIndex}`}
-          className="barcode-print-page"
-          style={{
-            width: `${preset.pageWidthMm}mm`,
-            height: `${preset.pageHeightMm}mm`,
-          }}
-        >
-          <div
-            className="barcode-print-grid"
-            style={{
-              left: `${gridPosition.leftMm}mm`,
-              top: `${gridPosition.topMm}mm`,
-              gridTemplateColumns: `repeat(${preset.columns}, ${dimensions.widthMm}mm)`,
-              gridTemplateRows: `repeat(${preset.rows}, ${dimensions.heightMm}mm)`,
-              columnGap: `${preset.gapXmm}mm`,
-              rowGap: `${preset.gapYmm}mm`,
-            }}
-          >
-            {page.map((copy, labelIndex) => (
-              <div
-                key={copy?.key ?? `empty-${labelIndex}`}
-                className={cn(
-                  "barcode-print-label",
-                  (preset.cropMarks || test) && "barcode-cut-guide",
-                )}
-              >
-                {copy ? (
-                  <LabelArtwork
-                    copy={copy}
-                    content={content}
-                    price={formatPrice(copy.variant.effectivePrice)}
-                    compact={dimensions.heightMm < 30 || dimensions.widthMm < 50}
-                  />
-                ) : test ? (
-                  <div className="grid h-full place-items-center text-[6pt] text-zinc-400">{labelIndex + 1}</div>
-                ) : null}
-              </div>
-            ))}
-          </div>
-          {test ? (
-            <div className="barcode-test-note">
-              Test at Actual size / 100% · disable browser headers and footers · {formatLabelPrintAlignment(alignment)} alignment · scan the first label before the batch
-            </div>
-          ) : null}
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function PaperPreview({
   page,
   preset,
@@ -400,7 +318,8 @@ export function BarcodeLabelWorkspace({
   const [labelOrder, setLabelOrder] = useState<LabelOrder>("selected");
   const [alignment, setAlignment] = useState<LabelPrintAlignment>(DEFAULT_LABEL_PRINT_ALIGNMENT);
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
-  const [printMode, setPrintMode] = useState<PrintMode | null>(null);
+  const [artifactBusy, setArtifactBusy] = useState<ArtifactFormat | null>(null);
+  const [artifactError, setArtifactError] = useState<string | null>(null);
 
   useEffect(() => {
     try {
@@ -562,61 +481,58 @@ export function BarcodeLabelWorkspace({
     ]).concat(Object.entries(current).filter(([id]) => !selectedVariants.some((variant) => variant.id === id)))));
   };
 
-  const startPrint = (mode: PrintMode) => {
-    if (!canPrint) return;
-    setPrintMode(mode);
+  const requestArtifact = async (format: ArtifactFormat, mode: "job" | "test" = "job") => {
+    if (artifactBusy || (format === "csv" ? !canExportLabelData : !canPrint)) return;
+    const artifactWindow = format === "html" ? window.open("about:blank", "_blank") : null;
+    if (format === "html" && !artifactWindow) {
+      setArtifactError("Allow pop-ups to open the printable label artifact.");
+      return;
+    }
+    if (artifactWindow) artifactWindow.opener = null;
+    setArtifactError(null);
+    setArtifactBusy(format);
+    try {
+      const response = await fetch("/api/v1/admin/inventory/labels/artifact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          format,
+          mode,
+          variantIds: selectedVariantIds,
+          quantities,
+          order: labelOrder,
+          preset,
+          startOffset,
+          alignment,
+          content,
+        }),
+      });
+      if (!response.ok) throw new Error(`Label artifact failed with ${response.status}`);
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      if (format === "html") {
+        artifactWindow!.location.href = url;
+        window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      } else {
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `barcode-labels-${new Date().toISOString().slice(0, 10)}.${format}`;
+        link.style.display = "none";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+      }
+    } catch (error: unknown) {
+      artifactWindow?.close();
+      setArtifactError(error instanceof Error ? error.message : "Label artifact generation failed.");
+    } finally {
+      setArtifactBusy(null);
+    }
   };
-
-  const downloadLabelData = () => {
-    if (!canExportLabelData) return;
-    const csv = buildLabelDataCsv(copies, formatPrice);
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `barcode-labels-${new Date().toISOString().slice(0, 10)}.csv`;
-    link.style.display = "none";
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
-  };
-
-  useEffect(() => {
-    if (!printMode) return;
-    const frame = window.requestAnimationFrame(() => {
-      window.print();
-      setPrintMode(null);
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [printMode]);
-
-  useEffect(() => {
-    const reset = () => setPrintMode(null);
-    window.addEventListener("afterprint", reset);
-    return () => window.removeEventListener("afterprint", reset);
-  }, []);
 
   return (
     <>
-      <style>{`
-        @media screen { #barcode-print-root { display: none; } }
-        @media print {
-          @page { size: ${preset.pageWidthMm}mm ${preset.pageHeightMm}mm; margin: 0; }
-          html, body { margin: 0 !important; padding: 0 !important; background: #fff !important; }
-          body * { visibility: hidden !important; }
-          #barcode-print-root, #barcode-print-root * { visibility: visible !important; }
-          #barcode-print-root { display: block !important; position: absolute !important; inset: 0 auto auto 0 !important; margin: 0 !important; padding: 0 !important; background: #fff !important; color: #09090b !important; }
-          .barcode-print-page { position: relative; box-sizing: border-box; overflow: hidden; break-after: page; page-break-after: always; background: #fff; }
-          .barcode-print-page:last-child { break-after: auto; page-break-after: auto; }
-          .barcode-print-grid { position: absolute; display: grid; }
-          .barcode-print-label { box-sizing: border-box; min-width: 0; min-height: 0; overflow: hidden; background: #fff; }
-          .barcode-cut-guide { outline: 0.15mm dashed #a1a1aa; outline-offset: -0.15mm; }
-          .barcode-test-note { position: absolute; right: ${preset.marginXmm}mm; bottom: 1.5mm; left: ${preset.marginXmm}mm; text-align: center; font: 7pt/1.2 sans-serif; color: #52525b; }
-          svg rect { shape-rendering: crispEdges; }
-        }
-      `}</style>
-
       <div className="label-workspace-screen mx-auto max-w-[1440px] space-y-3 px-2 pb-24 sm:px-4 sm:pb-8">
         <div className="flex flex-col gap-2 border-b py-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-start gap-2.5">
@@ -635,11 +551,14 @@ export function BarcodeLabelWorkspace({
               <div>{formatLabelCount(Math.min(copies.length, MAX_LABEL_COPIES))}</div>
               <div>{formatPageCount(pages.length)}</div>
             </div>
-            <Button type="button" variant="outline" size="sm" disabled={!canPrint} onClick={() => startPrint("test")}>
+            <Button type="button" variant="outline" size="sm" disabled={!canPrint || artifactBusy !== null} onClick={() => void requestArtifact("html", "test")}>
               <FileText className="mr-1.5 h-3.5 w-3.5" /> Test page
             </Button>
-            <Button type="button" size="sm" disabled={!canPrint} onClick={() => startPrint("job")}>
-              <Printer className="mr-1.5 h-3.5 w-3.5" /> Print or save PDF
+            <Button type="button" size="sm" disabled={!canPrint || artifactBusy !== null} onClick={() => void requestArtifact("html")}>
+              <Printer className="mr-1.5 h-3.5 w-3.5" /> Print
+            </Button>
+            <Button type="button" variant="outline" size="sm" disabled={!canPrint || artifactBusy !== null} onClick={() => void requestArtifact("pdf")}>
+              <Download className="mr-1.5 h-3.5 w-3.5" /> PDF
             </Button>
           </div>
         </div>
@@ -960,8 +879,8 @@ export function BarcodeLabelWorkspace({
                       variant="outline"
                       size="sm"
                       className="h-11 shrink-0 px-3 text-xs sm:h-7 sm:px-2"
-                      disabled={!canExportLabelData}
-                      onClick={downloadLabelData}
+                      disabled={!canExportLabelData || artifactBusy !== null}
+                      onClick={() => void requestArtifact("csv")}
                     >
                       <Download className="mr-1.5 h-3.5 w-3.5" /> Download CSV
                     </Button>
@@ -1037,19 +956,20 @@ export function BarcodeLabelWorkspace({
               {formatLabelCount(Math.min(copies.length, MAX_LABEL_COPIES))} · {formatPageCount(pages.length)}
             </div>
             <div className="truncate text-[11px] text-muted-foreground">{printReadiness}</div>
+            {artifactError ? <div className="truncate text-[11px] text-destructive">{artifactError}</div> : null}
           </div>
-          <Button type="button" variant="outline" size="sm" className="min-h-11 shrink-0" disabled={!canPrint} onClick={() => startPrint("test")}>
+          <Button type="button" variant="outline" size="sm" className="min-h-11 shrink-0" disabled={!canPrint || artifactBusy !== null} onClick={() => void requestArtifact("html", "test")}>
             <FileText className="mr-1.5 h-3.5 w-3.5" /> Test
           </Button>
-          <Button type="button" size="sm" className="min-h-11 shrink-0" disabled={!canPrint} onClick={() => startPrint("job")}>
-            <Printer className="mr-1.5 h-3.5 w-3.5" /> Print / PDF
+          <Button type="button" size="sm" className="min-h-11 shrink-0" disabled={!canPrint || artifactBusy !== null} onClick={() => void requestArtifact("html")}>
+            <Printer className="mr-1.5 h-3.5 w-3.5" /> Print
+          </Button>
+          <Button type="button" variant="outline" size="sm" className="min-h-11 shrink-0" disabled={!canPrint || artifactBusy !== null} onClick={() => void requestArtifact("pdf")}>
+            <Download className="h-3.5 w-3.5" /><span className="sr-only">Download PDF</span>
           </Button>
         </div>
       </div>
 
-      {canPrint && printMode ? (
-        <PrintPages pages={pages} preset={preset} content={content} alignment={alignment} formatPrice={formatPrice} test={printMode === "test"} />
-      ) : null}
     </>
   );
 }

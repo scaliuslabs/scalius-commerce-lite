@@ -102,7 +102,11 @@ export function DiscountMobileCard({
               !showTrashed
                 ? [
                     ...(canCreate
-                      ? [{ label: "Duplicate", icon: Copy, onClick: onDuplicate }]
+                      ? [{
+                          label: "Duplicate",
+                          icon: Copy,
+                          onClick: onDuplicate,
+                        }]
                       : []),
                     ...(canToggleStatus
                       ? [{
@@ -152,7 +156,13 @@ export function DiscountMobileCard({
       </dl>
 
       {!showTrashed && canEdit ? (
-        <Button type="button" variant="outline" size="sm" className="mt-2.5 h-11 sm:h-9" onClick={onEdit}>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="mt-2.5 h-11 sm:h-9"
+          onClick={onEdit}
+        >
           <Pencil className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
           Edit discount
         </Button>

@@ -138,6 +138,12 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 2,
         postgresStatements: 2,
       },
+      {
+        version: 56,
+        name: "0056_agent_access",
+        sqliteStatements: 46,
+        postgresStatements: 46,
+      },
     ]);
   });
 
@@ -248,6 +254,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 53, name: "0053_checkout_language_authority" },
           { version: 54, name: "0054_cache_invalidation_delivery" },
           { version: 55, name: "0055_cache_invalidation_postgres_bigint" },
+          { version: 56, name: "0056_agent_access" },
         ],
       });
     } finally {
@@ -398,7 +405,8 @@ describe("provider-neutral schema upgrades", () => {
       { version: 53, name: artifacts[3]!.name, sourceSha256: artifacts[3]!.sourceSha256 },
       { version: 54, name: artifacts[4]!.name, sourceSha256: artifacts[4]!.sourceSha256 },
       { version: 55, name: artifacts[5]!.name, sourceSha256: artifacts[5]!.sourceSha256 },
-      { version: 56, name: "0056_future", sourceSha256: "c".repeat(64) },
+      { version: 56, name: artifacts[6]!.name, sourceSha256: artifacts[6]!.sourceSha256 },
+      { version: 57, name: "0057_future", sourceSha256: "c".repeat(64) },
     ], artifacts)).toThrow(/future row/i);
   });
 

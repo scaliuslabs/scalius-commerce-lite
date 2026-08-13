@@ -6,6 +6,9 @@ import { errorResponseFromError } from "../../utils/api-response";
 const mocks = vi.hoisted(() => ({
   getInventoryOverview: vi.fn(),
   getInventoryLabelVariants: vi.fn(),
+  buildInventoryLabelArtifact: vi.fn(),
+  buildInventoryMovementCsvArtifact: vi.fn(),
+  getCurrencyConfig: vi.fn(),
   listInventoryMovements: vi.fn(),
   adjustInventory: vi.fn(),
   adjustStock: vi.fn(),
@@ -22,6 +25,8 @@ vi.mock("@scalius/core/modules/inventory", async () => {
   return {
     getInventoryOverview: mocks.getInventoryOverview,
     getInventoryLabelVariants: mocks.getInventoryLabelVariants,
+    buildInventoryLabelArtifact: mocks.buildInventoryLabelArtifact,
+    buildInventoryMovementCsvArtifact: mocks.buildInventoryMovementCsvArtifact,
     listInventoryMovements: mocks.listInventoryMovements,
     adjustInventory: mocks.adjustInventory,
     adjustStock: mocks.adjustStock,
@@ -29,8 +34,12 @@ vi.mock("@scalius/core/modules/inventory", async () => {
     lookupByBarcodeOrSku: mocks.lookupByBarcodeOrSku,
     inventoryOperationKeySchema: z.string().min(16).max(128),
     INVENTORY_LABEL_VARIANT_LIMIT: 150,
-    adjustInventorySchema: z.object({
-      operationKey: z.string().min(16),
+    INVENTORY_LABEL_ARTIFACT_MAX_COPIES: 1_000,
+    INVENTORY_LABEL_ARTIFACT_MAX_BYTES: 16 * 1024 * 1024,
+    INVENTORY_MOVEMENT_EXPORT_MAX_ROWS: 5_000,
+    INVENTORY_MOVEMENT_EXPORT_MAX_BYTES: 16 * 1024 * 1024,
+    adjustInventoryRequestSchema: z.object({
+      operationKey: z.string().min(16).optional(),
       delta: z.number().int().refine((value) => value !== 0),
       reason: z.enum(["received", "correction", "damage", "theft", "return", "other"]),
       notes: z.string().optional(),
@@ -48,6 +57,10 @@ vi.mock("@scalius/core/modules/inventory", async () => {
 
 vi.mock("@scalius/core/modules/inventory/alerts", () => ({
   acknowledgeLowStockAlert: mocks.acknowledgeLowStockAlert,
+}));
+
+vi.mock("@scalius/core/modules/settings/settings.service", () => ({
+  getCurrencyConfig: mocks.getCurrencyConfig,
 }));
 
 vi.mock("../../utils/cache-invalidation", () => ({
@@ -101,6 +114,22 @@ function createTestApp() {
     variants: [],
     missingVariantIds: [],
   });
+  mocks.getCurrencyConfig.mockResolvedValue({ code: "BDT" });
+  mocks.buildInventoryLabelArtifact.mockReturnValue({
+    body: "artifact-body",
+    contentType: "text/csv; charset=utf-8",
+    extension: "csv",
+    copyCount: 1,
+    pageCount: 1,
+    byteLength: 13,
+  });
+  mocks.buildInventoryMovementCsvArtifact.mockResolvedValue({
+    body: "movement-artifact\n",
+    contentType: "text/csv; charset=utf-8",
+    extension: "csv",
+    rowCount: 2,
+    byteLength: 18,
+  });
 
   app.onError((error, c) => {
     const { body, status } = errorResponseFromError(error);
@@ -121,12 +150,13 @@ async function postJson(
   env: Env,
   path: string,
   body: unknown,
+  headers?: Record<string, string>,
 ) {
   return app.request(
     `/api/v1/admin/inventory${path}`,
     {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...headers },
       body: JSON.stringify(body),
     },
     env,
@@ -158,6 +188,175 @@ describe("admin inventory cache invalidation", () => {
 
     expect(operation).toBeDefined();
     expect(JSON.stringify(operation)).toContain('"effectivePrice"');
+  });
+
+  it("documents the standard inventory idempotency header alongside the legacy body key", () => {
+    const { app } = createTestApp();
+    const spec = app.getOpenAPIDocument({
+      openapi: "3.0.0",
+      info: { title: "Inventory idempotency contract", version: "1.0.0" },
+    });
+    for (const [path, method] of [
+      ["/api/v1/admin/inventory/{variantId}/adjust", "post"],
+      ["/api/v1/admin/inventory/stock-adjust", "post"],
+      ["/api/v1/admin/inventory/stock-set", "post"],
+    ] as const) {
+      const operation = spec.paths?.[path]?.[method];
+      const serialized = JSON.stringify(operation);
+      expect(serialized).toContain('"name":"idempotency-key"');
+      expect(serialized).toContain('"operationKey"');
+    }
+  });
+
+  it("generates a bounded artifact from a fresh authoritative SKU projection", async () => {
+    const { app, db, env } = createTestApp();
+    const variant = {
+      id: "var_1",
+      productName: "Product One",
+      sku: "SKU-1",
+      optionLabel: null,
+      effectivePrice: 125,
+      barcode: "036000291452",
+      barcodeType: "upc",
+    };
+    mocks.getInventoryLabelVariants.mockResolvedValueOnce({
+      variants: [variant],
+      missingVariantIds: [],
+    });
+
+    const response = await postJson(app, env, "/labels/artifact", {
+      format: "csv",
+      mode: "job",
+      variantIds: ["var_1"],
+      quantities: { var_1: 1 },
+      order: "selected",
+      preset: {
+        pageWidthMm: 210,
+        pageHeightMm: 297,
+        columns: 3,
+        rows: 8,
+        marginXmm: 8,
+        marginYmm: 8,
+        gapXmm: 2,
+        gapYmm: 2,
+        cropMarks: true,
+      },
+      startOffset: 0,
+      alignment: { xMm: 0, yMm: 0 },
+      content: {
+        showProduct: true,
+        showVariant: true,
+        showSku: true,
+        showPrice: true,
+      },
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("artifact-body");
+    expect(response.headers.get("content-disposition")).toContain("attachment; filename=\"barcode-labels-");
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(response.headers.get("x-label-copy-count")).toBe("1");
+    expect(response.headers.get("content-length")).toBe("13");
+    expect(response.headers.get("x-artifact-max-bytes")).toBe(String(16 * 1024 * 1024));
+    expect(mocks.getInventoryLabelVariants).toHaveBeenCalledWith(db, ["var_1"]);
+    expect(mocks.buildInventoryLabelArtifact).toHaveBeenCalledWith([variant], expect.objectContaining({
+      quantities: { var_1: 1 },
+    }), "BDT");
+  });
+
+  it.each([
+    ["csv", "text/csv; charset=utf-8"],
+    ["html", "text/html; charset=utf-8"],
+    ["pdf", "application/pdf"],
+  ] as const)("serves %s label artifacts as one attachment transport", async (format, contentType) => {
+    const { app, env } = createTestApp();
+    mocks.getInventoryLabelVariants.mockResolvedValueOnce({
+      variants: [{
+        id: "var_1",
+        productName: "Product One",
+        sku: "SKU-1",
+        optionLabel: null,
+        effectivePrice: 125,
+        barcode: "036000291452",
+        barcodeType: "upc",
+      }],
+      missingVariantIds: [],
+    });
+    mocks.buildInventoryLabelArtifact.mockReturnValueOnce({
+      body: "artifact-body",
+      contentType,
+      extension: format,
+      copyCount: 1,
+      pageCount: 1,
+      byteLength: 13,
+    });
+
+    const response = await postJson(app, env, "/labels/artifact", {
+      format,
+      mode: "job",
+      variantIds: ["var_1"],
+      quantities: { var_1: 1 },
+      order: "selected",
+      preset: {
+        pageWidthMm: 210,
+        pageHeightMm: 297,
+        columns: 3,
+        rows: 8,
+        marginXmm: 8,
+        marginYmm: 8,
+        gapXmm: 2,
+        gapYmm: 2,
+        cropMarks: true,
+      },
+      startOffset: 0,
+      alignment: { xMm: 0, yMm: 0 },
+      content: {
+        showProduct: true,
+        showVariant: true,
+        showSku: true,
+        showPrice: true,
+      },
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-disposition")).toMatch(
+      new RegExp(`^attachment; filename="barcode-labels-\\d{4}-\\d{2}-\\d{2}\\.${format}"$`),
+    );
+    expect(response.headers.get("content-type")).toContain(contentType.split(";")[0]!);
+  });
+
+  it("rejects oversized label artifacts before reading SKU facts", async () => {
+    const { app, env } = createTestApp();
+    const response = await postJson(app, env, "/labels/artifact", {
+      format: "pdf",
+      mode: "job",
+      variantIds: ["var_1"],
+      quantities: { var_1: 1_001 },
+      order: "selected",
+      preset: {
+        pageWidthMm: 210,
+        pageHeightMm: 297,
+        columns: 3,
+        rows: 8,
+        marginXmm: 8,
+        marginYmm: 8,
+        gapXmm: 2,
+        gapYmm: 2,
+        cropMarks: true,
+      },
+      startOffset: 0,
+      alignment: { xMm: 0, yMm: 0 },
+      content: {
+        showProduct: true,
+        showVariant: true,
+        showSku: true,
+        showPrice: true,
+      },
+    });
+
+    expect(response.status).toBe(400);
+    expect(mocks.getInventoryLabelVariants).not.toHaveBeenCalled();
+    expect(mocks.buildInventoryLabelArtifact).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -282,6 +481,57 @@ describe("admin inventory cache invalidation", () => {
     expect(mocks.invalidateProductAvailabilityCaches).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ["/var_1/adjust", { operationKey: "invop_body_mismatch_01", delta: 2, reason: "received" }, () => mocks.adjustInventory],
+    ["/stock-adjust", { operationKey: "invop_body_mismatch_02", variantId: "var_1", adjustment: 2 }, () => mocks.adjustStock],
+    ["/stock-set", { operationKey: "invop_body_mismatch_03", variantId: "var_1", newStock: 7 }, () => mocks.setStock],
+  ] as const)("rejects mismatched standard and legacy idempotency keys at %s", async (path, body, coreCall) => {
+    const { app, env } = createTestApp();
+
+    const response = await postJson(app, env, path, body, {
+      "Idempotency-Key": "invop_header_mismatch_01",
+    });
+
+    expect(response.status).toBe(400);
+    expect(coreCall()).not.toHaveBeenCalled();
+  });
+
+  it("forwards one standard header key unchanged across inventory retries", async () => {
+    const { app, env } = createTestApp();
+    const body = { variantId: "var_1", adjustment: 2, reason: "retry proof" };
+    const headers = { "Idempotency-Key": "invop_header_retry_0001" };
+
+    const first = await postJson(app, env, "/stock-adjust", body, headers);
+    const retry = await postJson(app, env, "/stock-adjust", body, headers);
+
+    expect(first.status).toBe(200);
+    expect(retry.status).toBe(200);
+    expect(mocks.adjustStock).toHaveBeenCalledTimes(2);
+    expect(mocks.adjustStock.mock.calls.map((call) => call[3])).toEqual([
+      "invop_header_retry_0001",
+      "invop_header_retry_0001",
+    ]);
+  });
+
+  it("accepts matching standard and legacy keys as one canonical operation", async () => {
+    const { app, env } = createTestApp();
+    const operationKey = "invop_equal_keys_00001";
+
+    const response = await postJson(app, env, "/var_1/adjust", {
+      operationKey,
+      delta: 2,
+      reason: "received",
+    }, { "Idempotency-Key": operationKey });
+
+    expect(response.status).toBe(200);
+    expect(mocks.adjustInventory).toHaveBeenCalledWith(
+      expect.anything(),
+      "var_1",
+      expect.objectContaining({ operationKey }),
+      "user_1",
+    );
+  });
+
   it("forwards bounded movement filters and a stable cursor to the inventory service", async () => {
     const { app, env } = createTestApp();
 
@@ -307,66 +557,46 @@ describe("admin inventory cache invalidation", () => {
     );
   });
 
-  it("streams bounded, formula-safe movement CSV through sequential cursor pages", async () => {
+  it("serves the dedicated bounded movement artifact with equivalent filters", async () => {
     const { app, env } = createTestApp();
-    const movement = {
-      id: "move_1",
-      variantId: "var_1",
-      orderId: "ord_1",
-      type: "adjusted",
-      quantity: 2,
-      previousStock: 3,
-      newStock: 5,
-      notes: "+warehouse note",
-      createdBy: "admin_1",
-      actorName: "Admin One",
-      actorType: "admin",
-      ledgerVersion: 2,
-      pool: "regular",
-      reservationGeneration: 1,
-      stockVersionBefore: 4,
-      stockVersionAfter: 5,
-      stockDelta: 2,
-      previousReservedStock: 0,
-      newReservedStock: 0,
-      reservedStockDelta: 0,
-      previousPreorderStock: 0,
-      newPreorderStock: 0,
-      preorderStockDelta: 0,
-      createdAt: 1_720_000_000,
-      variantSku: "=SKU-FORMULA",
-      productName: "Product One",
-    };
-    mocks.listInventoryMovements
-      .mockResolvedValueOnce({
-        movements: [movement],
-        pageInfo: { limit: 1, hasMore: true, nextCursor: "1720000000|move_1" },
-      })
-      .mockResolvedValueOnce({
-        movements: [{ ...movement, id: "move_0", variantSku: "SKU-2" }],
-        pageInfo: { limit: 1, hasMore: false, nextCursor: null },
-      });
-
-    const response = await app.request(
-      "/api/v1/admin/inventory?section=movements&format=csv&maxRows=2&movementOrderId=ord_1",
-      undefined,
-      env,
-    );
+    const response = await postJson(app, env, "/movements/export", {
+      search: "SKU",
+      movementType: "adjusted",
+      movementOrderId: "ord_1",
+      movementStartDate: "2026-08-01",
+      movementEndDate: "2026-08-02",
+      maxRows: 2,
+    });
     const csv = await response.text();
 
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toContain("text/csv");
     expect(response.headers.get("content-disposition")).toContain("inventory-movements-");
     expect(response.headers.get("cache-control")).toBe("private, no-store");
-    expect(csv).toContain('"\'=SKU-FORMULA"');
-    expect(csv).toContain('"\'+warehouse note"');
-    expect(csv).toContain('"Admin One"');
-    expect(mocks.listInventoryMovements).toHaveBeenCalledTimes(2);
-    expect(mocks.listInventoryMovements.mock.calls[1]?.[1]).toEqual(expect.objectContaining({
-      cursor: "1720000000|move_1",
-      limit: 1,
+    expect(response.headers.get("content-length")).toBe("18");
+    expect(response.headers.get("x-export-row-count")).toBe("2");
+    expect(response.headers.get("x-artifact-max-bytes")).toBe(String(16 * 1024 * 1024));
+    expect(csv).toBe("movement-artifact\n");
+    expect(mocks.buildInventoryMovementCsvArtifact).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      search: "SKU",
+      movementType: "adjusted",
       orderId: "ord_1",
+      maxRows: 2,
+      startDate: expect.any(Date),
+      endDate: expect.any(Date),
     }));
+  });
+
+  it("keeps inventory.list JSON-only after splitting movement exports", async () => {
+    const { app, env } = createTestApp();
+    const response = await app.request(
+      "/api/v1/admin/inventory?section=movements&format=csv&maxRows=2",
+      undefined,
+      env,
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("application/json");
+    expect(mocks.buildInventoryMovementCsvArtifact).not.toHaveBeenCalled();
   });
 
   it("forwards bounded alert filters, search, and pagination to the inventory service", async () => {

@@ -227,11 +227,17 @@ function OrderDetailErrorComponent({
         {error.message || "The order detail service did not return a usable response."}
       </p>
       <div className="mt-5 flex flex-wrap gap-2">
-        <Button type="button" size="sm" onClick={reset}>
+        <Button
+          type="button"
+          size="sm"
+          onClick={reset}
+        >
           Try again
         </Button>
         <Button asChild type="button" size="sm" variant="outline">
-          <Link to="/admin/orders">Back to orders</Link>
+          <Link to="/admin/orders">
+            Back to orders
+          </Link>
         </Button>
       </div>
     </section>

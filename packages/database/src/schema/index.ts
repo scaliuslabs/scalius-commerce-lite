@@ -21,3 +21,4 @@ export * from "./content";
 export * from "./navigation";
 export * from "./system";
 export * from "./tax";
+export * from "./agent-access";

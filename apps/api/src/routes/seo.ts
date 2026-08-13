@@ -64,6 +64,7 @@ const returnPolicySchema = z.object({
 const getSeoSettingsRoute = createRoute({
   method: "get",
   path: "/",
+  operationId: "storefront.seo.get",
   tags: ["SEO"],
   summary: "Get SEO settings",
   responses: {

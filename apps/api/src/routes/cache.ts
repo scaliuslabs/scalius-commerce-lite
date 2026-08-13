@@ -26,6 +26,7 @@ const getGroupsRoute = createRoute({
   path: "/groups",
   tags: ["Cache"],
   summary: "List public cache domains",
+  operationId: "dashboard.cache.groups_list",
   responses: {
     200: {
       description: "Public cache domains and mutation-path mapping",
@@ -56,6 +57,7 @@ const clearAllRoute = createRoute({
   path: "/clear",
   tags: ["Cache"],
   summary: "Purge every public cache domain",
+  operationId: "dashboard.cache.purge_all",
   responses: {
     200: {
       description: "Public caches purged",
@@ -77,8 +79,10 @@ const clearGroupRoute = createRoute({
   path: "/clear-group",
   tags: ["Cache"],
   summary: "Purge selected public cache domains",
+  operationId: "dashboard.cache.purge_groups",
   request: {
     body: {
+      required: true,
       content: {
         "application/json": {
           schema: z.object({ groups: z.array(z.string()).min(1) }),

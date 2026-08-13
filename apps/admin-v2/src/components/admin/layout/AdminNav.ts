@@ -20,6 +20,7 @@ import {
   ShieldAlert,
   Bell,
   UserCog,
+  Bot,
   Warehouse,
   Palette,
   Package,
@@ -55,6 +56,7 @@ export const NAV_PERMISSIONS = {
   SETTINGS_FRAUD_CHECKER_VIEW: ADMIN_PERMISSIONS.SETTINGS_FRAUD_CHECKER_VIEW,
   SETTINGS_CACHE_VIEW: ADMIN_PERMISSIONS.SETTINGS_CACHE_VIEW,
   TAXES_VIEW: ADMIN_PERMISSIONS.TAXES_VIEW,
+  AGENT_ACCESS_VIEW: ADMIN_PERMISSIONS.AGENT_ACCESS_VIEW,
 } as const;
 
 export interface NavIconProps {
@@ -282,6 +284,12 @@ export const allNavSections: NavSection[] = [
             name: "Account",
             href: "/admin/settings/account",
             icon: UserCog,
+          },
+          {
+            name: "Agent Access",
+            href: "/admin/settings/agent-access",
+            icon: Bot,
+            requiredPermission: NAV_PERMISSIONS.AGENT_ACCESS_VIEW,
           },
           {
             name: "Notifications",

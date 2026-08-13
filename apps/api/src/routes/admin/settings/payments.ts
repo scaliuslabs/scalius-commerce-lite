@@ -303,6 +303,7 @@ const paymentMethodsResponseSchema = z.object({
 const getPaymentMethodsRoute = createRoute({
     method: "get",
     path: "/payment-methods",
+    operationId: "dashboard.payments.methods_get",
     tags: ["Admin - Settings"],
     summary: "Get active payment methods",
     responses: {
@@ -415,9 +416,10 @@ app.openapi(getPaymentMethodsRoute, async (c) => {
 const savePaymentMethodsRoute = createRoute({
     method: "post",
     path: "/payment-methods",
+    operationId: "dashboard.payments.methods_update",
     tags: ["Admin - Settings"],
     summary: "Save payment methods configuration",
-    request: { body: { content: { "application/json": { schema: updateMethodsSchema } } } },
+    request: { body: { required: true, content: { "application/json": { schema: updateMethodsSchema } } } },
     responses: {
         200: { description: "Payment methods saved", content: { "application/json": { schema: messageResponse } } },
         ...errorResponses,
@@ -508,6 +510,7 @@ const stripeSettingsResponseSchema = z.object({
 const getStripeRoute = createRoute({
     method: "get",
     path: "/stripe",
+    operationId: "dashboard.payments.stripe_get",
     tags: ["Admin - Settings"],
     summary: "Get Stripe settings",
     responses: {
@@ -534,9 +537,10 @@ app.openapi(getStripeRoute, async (c) => {
 const saveStripeRoute = createRoute({
     method: "post",
     path: "/stripe",
+    operationId: "dashboard.payments.stripe_update",
     tags: ["Admin - Settings"],
     summary: "Save Stripe settings",
-    request: { body: { content: { "application/json": { schema: saveStripeSchema } } } },
+    request: { body: { required: true, content: { "application/json": { schema: saveStripeSchema } } } },
     responses: {
         200: { description: "Stripe settings saved", content: { "application/json": { schema: messageResponse } } },
         ...errorResponses,
@@ -596,6 +600,7 @@ const sslCommerzSettingsResponseSchema = z.object({
 const getSSLCommerzRoute = createRoute({
     method: "get",
     path: "/sslcommerz",
+    operationId: "dashboard.payments.sslcommerz_get",
     tags: ["Admin - Settings"],
     summary: "Get SSLCommerz settings",
     responses: {
@@ -620,9 +625,10 @@ app.openapi(getSSLCommerzRoute, async (c) => {
 const saveSSLCommerzRoute = createRoute({
     method: "post",
     path: "/sslcommerz",
+    operationId: "dashboard.payments.sslcommerz_update",
     tags: ["Admin - Settings"],
     summary: "Save SSLCommerz settings",
-    request: { body: { content: { "application/json": { schema: saveSSLCommerzSchema } } } },
+    request: { body: { required: true, content: { "application/json": { schema: saveSSLCommerzSchema } } } },
     responses: {
         200: { description: "SSLCommerz settings saved", content: { "application/json": { schema: messageResponse } } },
         ...errorResponses,
@@ -680,6 +686,7 @@ const polarSettingsResponseSchema = z.object({
 const getPolarRoute = createRoute({
     method: "get",
     path: "/polar",
+    operationId: "dashboard.payments.polar_get",
     tags: ["Admin - Settings"],
     summary: "Get Polar settings",
     responses: {
@@ -705,9 +712,10 @@ app.openapi(getPolarRoute, async (c) => {
 const savePolarRoute = createRoute({
     method: "post",
     path: "/polar",
+    operationId: "dashboard.payments.polar_update",
     tags: ["Admin - Settings"],
     summary: "Save Polar settings",
-    request: { body: { content: { "application/json": { schema: savePolarSchema } } } },
+    request: { body: { required: true, content: { "application/json": { schema: savePolarSchema } } } },
     responses: {
         200: { description: "Polar settings saved", content: { "application/json": { schema: messageResponse } } },
         ...errorResponses,

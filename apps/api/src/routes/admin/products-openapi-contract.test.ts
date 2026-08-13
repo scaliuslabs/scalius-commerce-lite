@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { adminProductsRoutes } from "./products";
 
 type OperationDoc = {
+    operationId?: string;
     responses?: Record<string, unknown>;
     requestBody?: unknown;
 };
@@ -99,5 +100,24 @@ describe("admin product mutation OpenAPI responses", () => {
         const list = JSON.stringify(spec.paths?.["/api/v1/admin/products"]?.get);
         expect(list).toContain('"mediaCount"');
         expect(list).not.toContain('"imageCount"');
+    });
+
+    it("documents bounded semantic reads and revision-guarded range writes", () => {
+        const spec = buildAdminProductsSpec();
+        const path = spec.paths?.["/api/v1/admin/products/{id}/sections/{section}"];
+        const read = JSON.stringify(path?.get);
+        const write = JSON.stringify(path?.patch);
+
+        expect(path?.get?.operationId).toBe("dashboard.products.get_section");
+        expect(path?.patch?.operationId).toBe("dashboard.products.update_section");
+        expect(read).toContain('"nextOffset"');
+        expect(read).toContain('"maxLength":12000');
+        expect(read).toContain('"maxItems":10');
+        expect(read).toContain('"additional_info_text"');
+        expect(write).toContain('"expectedAggregateRevision"');
+        expect(write).toContain('"deleteCount"');
+        expect(write).toContain('"maxLength":12000');
+        expect(write).toContain('"409"');
+        expect(write).toContain("PRODUCT_REVISION_CONFLICT");
     });
 });

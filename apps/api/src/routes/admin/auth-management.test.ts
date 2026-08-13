@@ -50,6 +50,7 @@ const mocks = vi.hoisted(() => ({
     createdAt: new Date("2026-08-03T00:00:00.000Z"),
   })),
   verifyPendingTotpCode: vi.fn(),
+  createScannerTokenClaim: vi.fn(async () => undefined),
 }));
 
 vi.mock("@scalius/core/auth", () => ({
@@ -75,6 +76,10 @@ vi.mock("@scalius/core/auth", () => ({
 
 vi.mock("@scalius/core/auth/rbac/auto-seed", () => ({
   autoSeedRbacIfNeeded: mocks.autoSeedRbacIfNeeded,
+}));
+
+vi.mock("@scalius/core/auth/scanner-token-claims", () => ({
+  createScannerTokenClaim: mocks.createScannerTokenClaim,
 }));
 
 import { errorResponseFromError } from "../../utils/api-response";
@@ -287,6 +292,9 @@ function createTestApp(
     if (options.session !== null) {
       c.set("session", options.session ?? { id: "session_1" });
     }
+    if (options.user?.role === "agent") {
+      c.set("agentPrincipal", { ownerUserId: "user_1" } as never);
+    }
     c.set(
       "adminPermissions",
       options.adminPermissions ?? new Set(["team.manage", "team.manage_roles"]),
@@ -358,7 +366,14 @@ function createAdminUserListDbMock(options: {
         leftJoin: vi.fn(() => ({
           leftJoin: vi.fn(() => ({
             leftJoin: vi.fn(() => ({
-              where: vi.fn(async () => adminUsers),
+              where: vi.fn(() => ({
+                orderBy: vi.fn(() => ({
+                  limit: vi.fn((limit: number) => ({
+                    offset: vi.fn(async (offset: number) =>
+                      adminUsers.slice(offset, offset + limit)),
+                  })),
+                })),
+              })),
             })),
           })),
         })),
@@ -600,6 +615,7 @@ function createAdminResendSetupDbMock(options: {
 function createAccountSessionsDbMock(options: {
   currentSession?: Record<string, unknown> | null;
   otherSessions?: Array<Record<string, unknown>>;
+  agentOwnedSessions?: Array<Record<string, unknown>>;
   revokedSessionIds?: string[];
 } = {}) {
   const baseSession = {
@@ -631,6 +647,10 @@ function createAccountSessionsDbMock(options: {
     },
   ];
   const revokedSessionIds = options.revokedSessionIds ?? ["session_2"];
+  const agentOwnedSessions = options.agentOwnedSessions ?? [
+    ...(currentSession ? [currentSession] : []),
+    ...otherSessions,
+  ];
   const deleteReturning = vi.fn(async () =>
     revokedSessionIds.map((id) => ({ id })),
   );
@@ -646,13 +666,14 @@ function createAccountSessionsDbMock(options: {
       return {
         from: vi.fn(() => ({
           where: vi.fn(() =>
-            currentSelectIndex === 0
-              ? { get: vi.fn(async () => currentSession) }
-              : {
-                  orderBy: vi.fn(() => ({
-                    limit: vi.fn(async () => otherSessions),
-                  })),
-                },
+            ({
+              get: vi.fn(async () => currentSession),
+              orderBy: vi.fn(() => ({
+                limit: vi.fn(async () => currentSelectIndex === 0
+                  ? agentOwnedSessions
+                  : otherSessions),
+              })),
+            }),
           ),
         })),
       };
@@ -888,6 +909,39 @@ describe("admin auth management user permissions", () => {
     expect(db.select).toHaveBeenCalledTimes(2);
   });
 
+  it("bounds administrator enrichment and reports truncation explicitly", async () => {
+    const roleRows = Array.from({ length: 21 }, (_, index) => ({
+      id: `role_${index}`,
+      name: `role_${index}`,
+      displayName: `Role ${index}`,
+    }));
+    const overrideRows = Array.from({ length: 101 }, (_, index) => ({
+      permissionName: `permission.${index}`,
+      granted: index % 2 === 0,
+    }));
+    const db = createAdminUserListDbMock({ roleRows, overrideRows });
+    const app = createTestApp(db);
+
+    const response = await app.request("/api/v1/admin/auth/users", { method: "GET" });
+    const body = await response.json() as {
+      data?: { users?: Array<{
+        roles: unknown[];
+        rolesTruncated: boolean;
+        overrides: { grants: string[]; denials: string[] };
+        overridesTruncated: boolean;
+      }> };
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.data?.users?.[0]?.roles).toHaveLength(20);
+    expect(body.data?.users?.[0]?.rolesTruncated).toBe(true);
+    expect([
+      ...(body.data?.users?.[0]?.overrides.grants ?? []),
+      ...(body.data?.users?.[0]?.overrides.denials ?? []),
+    ]).toHaveLength(100);
+    expect(body.data?.users?.[0]?.overridesTruncated).toBe(true);
+  });
+
   it("projects indefinite bans as suspended administrator state", async () => {
     const db = createAdminUserListDbMock({
       adminUsers: [{
@@ -970,13 +1024,23 @@ describe("admin auth management user permissions", () => {
     });
     const app = createTestApp(db);
 
-    const response = await app.request("/api/v1/admin/auth/users", { method: "GET" });
-    const body = await response.json() as {
-      data?: { users?: Array<{ id: string; invitation: { status: string } | null }> };
+    const firstResponse = await app.request("/api/v1/admin/auth/users?page=1&limit=2", { method: "GET" });
+    const secondResponse = await app.request("/api/v1/admin/auth/users?page=2&limit=2", { method: "GET" });
+    const firstBody = await firstResponse.json() as {
+      data?: { users?: Array<{ id: string; invitation: { status: string } | null }>; pagination?: { hasMore: boolean } };
+    };
+    const secondBody = await secondResponse.json() as {
+      data?: { users?: Array<{ id: string; invitation: { status: string } | null }>; pagination?: { hasMore: boolean } };
     };
 
-    expect(response.status).toBe(200);
-    expect(body.data?.users?.map(({ id, invitation }) => ({
+    expect(firstResponse.status).toBe(200);
+    expect(secondResponse.status).toBe(200);
+    expect(firstBody.data?.pagination?.hasMore).toBe(true);
+    expect(secondBody.data?.pagination?.hasMore).toBe(false);
+    expect([
+      ...(firstBody.data?.users ?? []),
+      ...(secondBody.data?.users ?? []),
+    ].map(({ id, invitation }) => ({
       id,
       status: invitation?.status,
     }))).toEqual([
@@ -1207,7 +1271,6 @@ describe("admin auth management team invites", () => {
       }),
     }, { BETTER_AUTH_URL: "https://admin.scalius.test" } as never);
 
-    expect(response.status, await response.clone().text()).toBe(201);
     expect(mocks.prepareCredentialIdentity).toHaveBeenCalledWith({
       name: "Ops Admin",
       email: "ops@example.com",
@@ -1832,7 +1895,103 @@ describe("admin auth management 2FA method changes", () => {
   });
 });
 
+describe("admin scanner device pairing", () => {
+  it("creates a short-lived D1 claim and returns only the one-time device token", async () => {
+    const db = {
+      select: vi.fn(() => ({
+        from: vi.fn(() => ({
+          where: vi.fn(() => ({
+            get: vi.fn(async () => ({
+              name: "Store Owner",
+              email: "owner@example.com",
+            })),
+          })),
+        })),
+      })),
+    };
+    const app = createTestApp(db);
+
+    const response = await app.request("/api/v1/admin/auth/scanner-link", {
+      method: "POST",
+    });
+    expect(response.status, await response.clone().text()).toBe(201);
+    const body = await response.json() as {
+      data?: { token?: string; expiresAt?: string };
+    };
+
+    expect(body.data?.token).toMatch(/^sct_[a-f0-9]{64}$/);
+    expect(body.data?.expiresAt).toEqual(expect.any(String));
+    expect(response.headers.get("cache-control")).toContain("no-store");
+    expect(mocks.createScannerTokenClaim).toHaveBeenCalledWith(
+      db,
+      expect.objectContaining({
+        token: body.data?.token,
+        adminId: "user_1",
+        adminName: "Store Owner",
+      }),
+    );
+    expect(JSON.stringify(body)).not.toContain("owner@example.com");
+  });
+});
+
 describe("admin account session lifecycle", () => {
+  it("lets an agent owner list sanitized browser sessions without a browser session", async () => {
+    const db = createAccountSessionsDbMock();
+    const app = createTestApp(db, {
+      session: null,
+      user: { role: "agent" },
+    });
+
+    const response = await app.request("/api/v1/admin/auth/sessions", {
+      method: "GET",
+    }, TEST_ACCOUNT_SESSION_ENV);
+    const body = await response.json() as {
+      data?: { sessions?: Array<{ current: boolean }> };
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.data?.sessions).toHaveLength(2);
+    expect(body.data?.sessions?.every(({ current }) => current === false)).toBe(true);
+    expect(JSON.stringify(body)).not.toContain("raw_session_token");
+    expect(JSON.stringify(body)).not.toContain("203.0.113.42");
+  });
+
+  it("lets an agent owner revoke a visible owned browser session", async () => {
+    const db = createAccountSessionsDbMock({ revokedSessionIds: ["session_2"] });
+    const app = createTestApp(db, {
+      session: null,
+      user: { role: "agent" },
+    });
+    const commandId = await getTestAccountSessionCommandId("session_2");
+
+    const response = await app.request(
+      `/api/v1/admin/auth/sessions/${commandId}`,
+      { method: "DELETE" },
+      TEST_ACCOUNT_SESSION_ENV,
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(db.__deleteReturning).toHaveBeenCalledOnce();
+  });
+
+  it("lets an agent owner revoke all owned browser sessions", async () => {
+    const db = createAccountSessionsDbMock({
+      revokedSessionIds: ["session_1", "session_2"],
+    });
+    const app = createTestApp(db, {
+      session: null,
+      user: { role: "agent" },
+    });
+
+    const response = await app.request("/api/v1/admin/auth/sessions", {
+      method: "DELETE",
+    }, TEST_ACCOUNT_SESSION_ENV);
+    const body = await response.json() as { data?: { revokedCount?: number } };
+
+    expect(response.status).toBe(200);
+    expect(body.data?.revokedCount).toBe(2);
+  });
+
   it("lists only sanitized session presentation data and identifies the current session", async () => {
     const db = createAccountSessionsDbMock();
     const app = createTestApp(db);

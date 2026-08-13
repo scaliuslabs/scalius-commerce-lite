@@ -81,6 +81,9 @@ const PAGE_PERMISSION_MAP: Record<string, PagePermissionConfig> = {
 
   // Settings - Account is always accessible (own account management)
   "/admin/settings/account": { allowAnyAdmin: true },
+  "/admin/settings/agent-access": {
+    permission: PERMISSIONS.AGENT_ACCESS_VIEW,
+  },
   "/admin/settings": { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
   "/admin/settings/theme": { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
   "/admin/settings/notifications": {
@@ -107,6 +110,12 @@ const DYNAMIC_PAGE_PERMISSIONS: Array<{
   pattern: RegExp;
   config: PagePermissionConfig;
 }> = [
+  // OAuth connection consent is an authority mutation, not a read-only page.
+  {
+    pattern: /^\/admin\/settings\/agent-access\/authorize\/[^/]+$/,
+    config: { permission: PERMISSIONS.AGENT_ACCESS_MANAGE },
+  },
+
   // Products
   {
     pattern: /^\/admin\/products\/[^/]+\/edit$/,
