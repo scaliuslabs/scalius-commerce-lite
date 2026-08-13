@@ -241,7 +241,7 @@ describe("OpenAPI operation indexing", () => {
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
-  it("revalidates a contract after the five-minute local freshness window", async () => {
+  it("keeps a multi-step workflow on one contract and revalidates after thirty minutes", async () => {
     const directory = await mkdtemp(join(tmpdir(), "scalius-openapi-"));
     let calls = 0;
     const fetch = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
@@ -256,7 +256,10 @@ describe("OpenAPI operation indexing", () => {
     await store.putCredential("default", { token: validToken(), createdAt: "2026-08-13T00:00:00.000Z" });
     const profile = await store.resolveProfile();
     expect(indexOperations(await loadOpenApi(runtime, profile))).toHaveLength(6);
-    await runtime.sleep(5 * 60 * 1_000);
+    await runtime.sleep(29 * 60 * 1_000);
+    expect(indexOperations(await loadOpenApi(runtime, profile))).toHaveLength(6);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    await runtime.sleep(60 * 1_000);
     expect(indexOperations(await loadOpenApi(runtime, profile))).toHaveLength(6);
     expect(fetch).toHaveBeenCalledTimes(2);
   });
