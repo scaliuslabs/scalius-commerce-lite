@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { createApiUrl, fetchWithRetry } from "@/lib/api/client";
 import { createAgentContinuationCookieHeader } from "@/lib/agent-continuation-cookie";
+import { browserContinuationRelayResponse } from "@/lib/browser-continuation-relay";
 
 export const prerender = false;
 
@@ -33,13 +34,17 @@ function isTrustedBootstrapOrigin(request: Request): boolean {
   try {
     const submitted = new URL(origin);
     const target = new URL(request.url);
-    if (submitted.origin === target.origin) return true;
-    return submitted.protocol === "http:" &&
-      ["127.0.0.1", "localhost", "[::1]"].includes(submitted.hostname);
+    return submitted.origin === target.origin;
   } catch {
     return false;
   }
 }
+
+export const GET: APIRoute = async () => browserContinuationRelayResponse([{
+  name: "continuationCode",
+  pattern: BOOTSTRAP_CODE.source,
+  maxBytes: 68,
+}]);
 
 export const POST: APIRoute = async ({ request }) => {
   if (!isTrustedBootstrapOrigin(request)) {

@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/api/client", () => mocks);
 
-import { POST } from "../../pages/agent/continue";
+import { GET, POST } from "../../pages/agent/continue";
 
 const CODE = `acb_${"a".repeat(20)}_${"b".repeat(43)}`;
 const ID = `acn_${"a".repeat(20)}`;
@@ -39,12 +39,8 @@ describe("agent storefront body-only bootstrap", () => {
     }));
   });
 
-  it.each([
-    "http://127.0.0.1:43123",
-    "http://localhost:43123",
-    "http://[::1]:43123",
-    "https://storefront.example.test",
-  ])("accepts the reviewed body-only handoff from %s", async (origin) => {
+  it("accepts the reviewed same-origin body-only handoff", async () => {
+    const origin = "https://storefront.example.test";
     const response = await POST(request(origin, "existing_storefront_cookie=value"));
     expect(response.status).toBe(303);
     expect(response.headers.get("Location")).toBe(`/agent/continue/${ID}`);
@@ -61,7 +57,7 @@ describe("agent storefront body-only bootstrap", () => {
     );
   });
 
-  it.each(["https://evil.example.test", "null", "file://"])(
+  it.each(["https://evil.example.test", "http://127.0.0.1:43123", "null", "file://"])(
     "rejects an untrusted browser origin %s before exchange",
     async (origin) => {
       const response = await POST(request(origin));
@@ -69,4 +65,16 @@ describe("agent storefront body-only bootstrap", () => {
       expect(mocks.fetchWithRetry).not.toHaveBeenCalled();
     },
   );
+
+  it("serves a private relay that clears window.name before same-origin submission", async () => {
+    const response = await GET({} as never);
+    const html = await response.text();
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Cache-Control")).toContain("no-store");
+    expect(response.headers.get("Content-Security-Policy")).toContain("form-action 'self'");
+    expect(html).toContain('const raw = window.name;');
+    expect(html).toContain('window.name = "";');
+    expect(html).toContain('form.method = "post";');
+    expect(html).not.toContain(CODE);
+  });
 });

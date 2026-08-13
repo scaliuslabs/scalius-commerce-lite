@@ -156,7 +156,7 @@ export function createProgram(runtime: Runtime): Command {
       writeResult(runtime, globalOptions(command).output, result, `${id}\n${JSON.stringify(result, null, 2)}`);
     });
   operations.command("run")
-    .description("run one executable or non-sensitive continuation operation")
+    .description("run one reviewed executable or continuation operation")
     .argument("<operationId>")
     .option("--input <json|@file|->", "structured path/query/body input")
     .option("--file <path|field=@path>", "stream a reviewed raw file or attach a multipart field", collectFile, [])

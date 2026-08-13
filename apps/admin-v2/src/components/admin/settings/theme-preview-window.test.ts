@@ -29,39 +29,25 @@ describe("theme preview continuation window", () => {
     );
   });
 
-  it("posts the one-time code in a form body to the exact storefront window", async () => {
-    let submitted: {
-      action: string;
-      method: string;
-      target: string;
-      fields: Record<string, string>;
-    } | null = null;
-    const submit = vi.spyOn(HTMLFormElement.prototype, "submit")
-      .mockImplementation(function capture(this: HTMLFormElement) {
-        submitted = {
-          action: this.action,
-          method: this.method,
-          target: this.target,
-          fields: Object.fromEntries(
-            [...this.querySelectorAll<HTMLInputElement>("input")]
-              .map((input) => [input.name, input.value]),
-          ),
-        };
-      });
+  it("hands the one-time code to the exact storefront relay through window memory", async () => {
+    const replace = vi.fn();
+    const previewWindow = {
+      name: "scalius-theme-preview-test",
+      location: { replace },
+    } as unknown as Window;
 
     await expect(submitThemePreview({
-      previewWindow: { name: "scalius-theme-preview-test" } as Window,
+      previewWindow,
       storefrontUrl: "https://storefront.example.test",
       continuation: CONTINUATION,
     })).resolves.toBeUndefined();
-    expect(submit).toHaveBeenCalledOnce();
-    expect(submitted).toEqual({
-      action: CONTINUATION.url,
-      method: "post",
-      target: "scalius-theme-preview-test",
-      fields: { continuationCode: CODE, path: "/", device: "full" },
-    });
-    expect(document.body.querySelector("form")).toBeNull();
+    expect(replace).toHaveBeenCalledWith(CONTINUATION.url);
+    expect(previewWindow.name).toMatch(/^scalius-continuation-v1:[A-Za-z0-9_-]+$/);
+    expect(previewWindow.name).not.toContain(CODE);
+    const encoded = previewWindow.name.split(":", 2)[1]!;
+    expect(JSON.parse(Buffer.from(encoded, "base64url").toString("utf8"))).toEqual(
+      CONTINUATION.fields,
+    );
   });
 
   it("rejects URL-carried, off-origin, and malformed continuation codes", async () => {

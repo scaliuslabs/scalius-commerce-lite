@@ -9,12 +9,9 @@ const mocks = vi.hoisted(() => ({
   fetchWithRetry: vi.fn(),
 }));
 
-vi.mock("cloudflare:workers", () => ({
-  env: { DASHBOARD_URL: "https://dashboard.example.test/admin" },
-}));
 vi.mock("@/lib/api/client", () => mocks);
 
-import { ALL, POST } from "../../pages/theme-preview/continue";
+import { ALL, GET, POST } from "../../pages/theme-preview/continue";
 
 const CONTINUATION_CODE = `tpc_${"a".repeat(48)}`;
 const TOKEN = `tpv_${"b".repeat(48)}`;
@@ -24,7 +21,7 @@ function context(fields: Record<string, string> = {
   continuationCode: CONTINUATION_CODE,
   path: "/search?q=lamp",
   device: "mobile",
-}, origin = "https://dashboard.example.test") {
+}, origin = "https://storefront.example.test") {
   const body = new URLSearchParams(fields).toString();
   return {
     request: new Request(ROUTE_URL, {
@@ -42,7 +39,7 @@ function context(fields: Record<string, string> = {
 function rawContext(body: string, contentLength?: string) {
   const headers: Record<string, string> = {
     "Content-Type": "application/x-www-form-urlencoded",
-    "Origin": "https://dashboard.example.test",
+    "Origin": "https://storefront.example.test",
   };
   if (contentLength !== undefined) headers["Content-Length"] = contentLength;
   return {
@@ -85,7 +82,7 @@ describe("theme preview continuation route", () => {
     expect(response.headers.get("Referrer-Policy")).toBe("no-referrer");
   });
 
-  it("requires the configured dashboard origin and the exact bounded form shape", async () => {
+  it("requires the exact storefront origin and bounded form shape", async () => {
     await expect(POST(context(undefined, "https://evil.example.test")))
       .resolves.toMatchObject({ status: 403 });
     await expect(POST(context({
@@ -115,6 +112,17 @@ describe("theme preview continuation route", () => {
     expect(mocks.fetchWithRetry).not.toHaveBeenCalled();
   });
 
+  it("serves a private relay without continuation material", async () => {
+    const response = await GET({} as never);
+    const html = await response.text();
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Cache-Control")).toContain("no-store");
+    expect(response.headers.get("Content-Security-Policy")).toContain("form-action 'self'");
+    expect(html).toContain('window.name = "";');
+    expect(html).toContain("continuationCode");
+    expect(html).not.toContain(CONTINUATION_CODE);
+  });
+
   it("fails malformed, expired, and replayed continuations closed", async () => {
     await expect(POST(context({
       continuationCode: "bad",
@@ -132,7 +140,7 @@ describe("theme preview continuation route", () => {
   it("allows only POST and never caches or leaks a referrer", async () => {
     const response = await ALL({} as never);
     expect(response.status).toBe(405);
-    expect(response.headers.get("Allow")).toBe("POST");
+    expect(response.headers.get("Allow")).toBe("GET, POST");
     expect(response.headers.get("Cache-Control")).toContain("no-store");
     expect(response.headers.get("Referrer-Policy")).toBe("no-referrer");
   });
