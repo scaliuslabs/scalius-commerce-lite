@@ -265,10 +265,22 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
                 sideEffectSettings?.adminChannels,
             ).order_created ?? [];
             const allowedCountries = resolveAllowedCountriesFromRows(categoryRows("phone"));
-            const activePaymentMethods = await resolveActivePaymentMethodsFromRows(
-                genericRows,
-                credentialEncryptionKey,
-            );
+            let activePaymentMethods: PaymentMethodsConfig;
+            try {
+                activePaymentMethods = await resolveActivePaymentMethodsFromRows(
+                    genericRows,
+                    credentialEncryptionKey,
+                );
+            } catch (error) {
+                if (error instanceof Error && !("code" in error)) {
+                    Object.defineProperty(error, "code", {
+                        configurable: true,
+                        enumerable: false,
+                        value: "CHECKOUT_PAYMENT_SETTINGS",
+                    });
+                }
+                throw error;
+            }
             const taxAuthority = taxPlan.resolve(results.slice(8, 11));
             const authorityRevision = Number(sideEffectSettings?.revision);
             if (!Number.isSafeInteger(authorityRevision) || authorityRevision < 1) {
@@ -380,7 +392,30 @@ export async function loadStorefrontCheckoutAuthority(
     credentialEncryptionKey?: string,
 ): Promise<StorefrontCheckoutAuthoritySnapshot> {
     const plan = createStorefrontCheckoutAuthorityReadPlan(db, input);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch tuple limitation.
-    const results = await db.batch(plan.statements as any);
-    return plan.resolve(results as unknown[], credentialEncryptionKey);
+    let results: unknown[];
+    try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch tuple limitation.
+        results = await db.batch(plan.statements as any) as unknown[];
+    } catch (error) {
+        if (error instanceof Error && !("code" in error)) {
+            Object.defineProperty(error, "code", {
+                configurable: true,
+                enumerable: false,
+                value: "CHECKOUT_AUTHORITY_BATCH",
+            });
+        }
+        throw error;
+    }
+    try {
+        return await plan.resolve(results, credentialEncryptionKey);
+    } catch (error) {
+        if (error instanceof Error && !("code" in error)) {
+            Object.defineProperty(error, "code", {
+                configurable: true,
+                enumerable: false,
+                value: "CHECKOUT_AUTHORITY_RESOLVE",
+            });
+        }
+        throw error;
+    }
 }
