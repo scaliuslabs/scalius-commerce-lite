@@ -26,6 +26,15 @@ const MAX_BATCH_REFERENCE_DEPTH = 32;
 const MAX_BATCH_EXPANDED_BYTES = 1024 * 1024;
 const FORBIDDEN_POINTER_SEGMENTS = new Set(["__proto__", "prototype", "constructor"]);
 
+function operationsForProfile(
+  profile: ResolvedProfile,
+  operations: IndexedOperation[],
+): IndexedOperation[] {
+  if (profile.tokenSource !== "disk") return operations;
+  const resource = profile.credential?.resource ?? "dashboard";
+  return operations.filter(({ agent }) => agent.surface === resource);
+}
+
 function isObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -474,7 +483,7 @@ export async function operationsSearch(
   limit = 20,
 ): Promise<Record<string, unknown>> {
   const { operations } = await getIndexedOperations(runtime, profile);
-  const matches = searchOperations(operations, query).slice(0, limit).map(({ id, method, path, operation, agent }) => ({
+  const matches = searchOperations(operationsForProfile(profile, operations), query).slice(0, limit).map(({ id, method, path, operation, agent }) => ({
     operationId: id,
     summary: operation.summary ?? null,
     tags: operation.tags ?? [],
@@ -496,7 +505,7 @@ export async function operationsDescribe(
   full = false,
 ): Promise<Record<string, unknown>> {
   const { document, operations } = await getIndexedOperations(runtime, profile);
-  const selected = findOperation(operations, id);
+  const selected = findOperation(operationsForProfile(profile, operations), id);
   return {
     operationId: selected.id,
     summary: selected.operation.summary ?? null,
@@ -516,7 +525,7 @@ export async function operationsDescribe(
 
 export async function operationsRun(runtime: Runtime, profile: ResolvedProfile, id: string, options: RunOperationOptions): Promise<OperationExecutionResult> {
   const { document, operations } = await getIndexedOperations(runtime, profile);
-  return executeOperation(runtime, profile, document, findOperation(operations, id), options);
+  return executeOperation(runtime, profile, document, findOperation(operationsForProfile(profile, operations), id), options);
 }
 
 interface BatchStep {
