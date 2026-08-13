@@ -5,7 +5,10 @@ import { storefrontAgentContextRoutes } from "./storefront-agent-contexts";
 type Operation = {
   operationId?: string;
   parameters?: Array<{ in?: string; name?: string; required?: boolean }>;
-  requestBody?: { required?: boolean };
+  requestBody?: {
+    required?: boolean;
+    content?: { "application/json"?: { schema?: { properties?: Record<string, { description?: string; example?: string }> } } };
+  };
 };
 
 function buildSpec(): { paths?: Record<string, Record<string, Operation>> } {
@@ -92,5 +95,16 @@ describe("storefront agent context OpenAPI contract", () => {
       name: "idempotency-key",
       required: false,
     }));
+  });
+
+  it("teaches agents to send unambiguous international phone numbers", () => {
+    const phone = buildSpec().paths?.[
+      "/api/v1/storefront/agent-contexts/{contextId}/checkout/submit"
+    ]?.post?.requestBody?.content?.["application/json"]?.schema?.properties?.customerPhone;
+
+    expect(phone).toMatchObject({
+      description: expect.stringContaining("international E.164"),
+      example: "+8801712345678",
+    });
   });
 });

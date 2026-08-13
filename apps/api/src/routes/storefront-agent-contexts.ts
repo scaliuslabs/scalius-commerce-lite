@@ -133,8 +133,13 @@ const cartProjectionSchema = z.object({
   }).optional(),
 });
 
+const agentCustomerPhoneSchema = phoneNumberSchema.openapi({
+  description: "Customer phone number. Use international E.164 form to avoid country ambiguity (for example, +8801712345678).",
+  example: "+8801712345678",
+});
+
 const checkoutInputSchema = z.object({
-  customerPhone: phoneNumberSchema.optional().nullable(),
+  customerPhone: agentCustomerPhoneSchema.optional().nullable(),
 }).strict();
 
 const checkoutQuoteSchema = z.object({
@@ -190,7 +195,7 @@ const checkoutSubmitSchema = z.object({
   expectedRevision: revisionSchema,
   idempotencyKey: checkoutIdempotencyKeySchema.optional(),
   customerName: z.string().trim().min(3).max(100),
-  customerPhone: phoneNumberSchema,
+  customerPhone: agentCustomerPhoneSchema,
   customerEmail: z.email().nullable(),
   shippingAddress: z.string().trim().min(10).max(500),
   notes: z.string().trim().max(500).nullable(),

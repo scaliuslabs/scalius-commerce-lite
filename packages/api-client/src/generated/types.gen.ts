@@ -4552,6 +4552,9 @@ export type PutApiV1StorefrontAgentContextsByContextIdDeliveryResponse = PutApiV
 
 export type PostApiV1StorefrontAgentContextsByContextIdCheckoutValidateData = {
     body: {
+        /**
+         * Customer phone number. Use international E.164 form to avoid country ambiguity (for example, +8801712345678).
+         */
         customerPhone?: string | null;
     };
     path: {
@@ -4708,6 +4711,9 @@ export type PostApiV1StorefrontAgentContextsByContextIdCheckoutValidateResponse 
 
 export type PostApiV1StorefrontAgentContextsByContextIdCheckoutQuoteData = {
     body: {
+        /**
+         * Customer phone number. Use international E.164 form to avoid country ambiguity (for example, +8801712345678).
+         */
         customerPhone?: string | null;
     };
     path: {
@@ -4833,6 +4839,9 @@ export type PostApiV1StorefrontAgentContextsByContextIdCheckoutSubmitData = {
         expectedRevision: number;
         idempotencyKey?: string;
         customerName: string;
+        /**
+         * Customer phone number. Use international E.164 form to avoid country ambiguity (for example, +8801712345678).
+         */
         customerPhone: string;
         customerEmail: string | null;
         shippingAddress: string;
