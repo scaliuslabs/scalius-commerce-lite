@@ -54,6 +54,12 @@ with a bounded read. The live finalized OpenAPI contract—not a model-specific
 prompt—is authoritative for fields, RBAC, risk, revisions, idempotency, byte
 limits, artifacts, uploads, and continuations.
 
+Dashboard MCP, storefront MCP, and CLI are outcome-equivalent surfaces over
+that contract. MCP does not require a shell: it imports public media by URL and
+returns one-use authenticated artifact links. Local file reads and direct saves
+remain optional host capabilities, not missing commerce features or a reason to
+require the CLI.
+
 The CLI keeps a reviewed contract locally for 30 minutes so one complex workflow
 does not repeatedly download and re-index hundreds of operations. The server
 still re-authorizes the live credential, grant, permission, revision, and risk

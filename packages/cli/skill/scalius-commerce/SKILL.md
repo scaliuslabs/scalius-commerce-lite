@@ -15,13 +15,15 @@ This is a portable Agent Skill, not harness-specific prompting. If the two Scali
 2. Describe only the likely operation. The default MCP description is compact; request `full=true` only when ready to construct the exact input. Do not load unrelated schemas.
 3. Read its risk, RBAC, revision, idempotency, batch, byte, artifact, upload, and continuation policy.
 4. Resolve human names with the domain's bounded summary/form operation before constructing input.
-5. Execute through MCP for JSON workflows. Use the CLI for local files and direct artifact saves.
+5. Execute through either MCP or CLI. They expose the same reviewed merchant outcomes: MCP returns authenticated artifact links and public-URL media imports, while capable local hosts may additionally stream private files or save artifacts directly.
 6. Verify the outcome with a bounded read. For writes, verify revision/state; for artifacts, verify byte count and digest when supplied.
 7. Preserve request IDs and report intentional exclusions rather than attempting hidden routes.
 
 CLI JSON input is always `{ "path": {...}, "query": {...}, "body": ... }`. Pass `--yes` for writes. Pass `--idempotency-key` only when the described policy is `supported` or `required`. On a revision conflict, reread current state and reconcile; never blindly retry stale input.
 
 Use `operations.batch` only for independent reads or an explicitly sequential reviewed workflow. Keep financial, destructive, continuation, upload, and artifact actions out of speculative batches.
+
+Never treat the CLI as a prerequisite for an MCP workflow. If an outcome appears in only one interface, first search and describe the live contract again; if it is genuinely unavailable, report a parity defect instead of inventing a direct HTTP workaround. Local filesystem access is a client capability, not a commerce capability: use public-URL import or an authenticated resource link when the MCP host cannot read or write local files.
 
 ## Choose the relevant guide
 
