@@ -445,8 +445,8 @@ describe("CLI program", () => {
       "--output", "json", "operations", "batch", "--input",
       JSON.stringify({
         steps: [
-          { operationId: "dashboard.products.get", input: { path: { id: "p1" } } },
-          { operationId: "dashboard.products.get", input: { path: { id: "p2" } } },
+          { id: "first-product", operationId: "dashboard.products.get", input: { path: { id: "p1" } } },
+          { id: "second-product", operationId: "dashboard.products.get", input: { path: { id: "p2" } } },
         ],
       }),
     ]);
@@ -455,7 +455,21 @@ describe("CLI program", () => {
       "https://api.example.com/api/v1/admin/products/p1",
       "https://api.example.com/api/v1/admin/products/p2",
     ]);
-    expect(JSON.parse(runtime.stdoutText()).count).toBe(2);
+    expect(JSON.parse(runtime.stdoutText())).toMatchObject({
+      count: 2,
+      results: [{ index: 0, id: "first-product", ok: true }, { index: 1, id: "second-product", ok: true }],
+    });
+  });
+
+  it("rejects duplicate or unsafe batch step ids", async () => {
+    const runtime = await authenticatedRuntime(vi.fn(async () => Response.json(executableSpec())) as typeof globalThis.fetch);
+    for (const steps of [
+      [{ id: "same", operationId: "dashboard.products.get" }, { id: "same", operationId: "dashboard.products.get" }],
+      [{ id: "contains spaces", operationId: "dashboard.products.get" }],
+    ]) {
+      expect(await runProgram(runtime, ["operations", "batch", "--input", JSON.stringify({ steps })])).toBe(5);
+    }
+    expect(runtime.stderrText()).toContain("Batch step");
   });
 
   it("resolves bounded JSON Pointers from completed batch results", async () => {
