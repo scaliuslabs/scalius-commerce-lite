@@ -22,7 +22,8 @@ describe("scanner access workspace", () => {
   it("keeps token claim and device-session language distinct", () => {
     expect(source).toContain("The first device to open this link claims it");
     expect(source).not.toContain("The QR link can be claimed once");
-    expect(source).toContain("expiresAt ?? Date.now() + TOKEN_LIFETIME_MS");
+    expect(source).toContain("Number.isNaN(expiry.getTime())");
+    expect(source).toContain("new Date(Date.now() + TOKEN_LIFETIME_MS)");
   });
 
   it("keeps the one-time claim proof out of request URLs and history", () => {

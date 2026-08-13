@@ -144,6 +144,7 @@ export function DevicePairingPage({
               </div>
             ) : !device ? (
               <form
+                method="post"
                 className="space-y-4"
                 onSubmit={(event) => {
                   event.preventDefault();

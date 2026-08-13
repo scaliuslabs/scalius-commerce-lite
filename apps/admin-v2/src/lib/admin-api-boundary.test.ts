@@ -13,8 +13,6 @@ const serverOnlyModules = new Set([
   "auth-management.ts",
   "cache.ts",
   "firebase.ts",
-  "security-runtime.ts",
-  "seo-discovery-live-probe-rpc.ts",
 ]);
 
 describe("admin API transport boundary", () => {
