@@ -146,10 +146,14 @@ describe("CLI program", () => {
     const compactResult = JSON.parse(compact.stdoutText()) as Record<string, unknown>;
     expect(compactResult).not.toHaveProperty("responses");
     expect(compactResult.responseStatuses).toEqual(["201"]);
+    expect(compactResult.constructionHint).toBe("Use --full only when constructing the exact input.");
+    expect(JSON.stringify(compactResult)).not.toContain('"properties"');
 
     const full = await authenticatedRuntime(fetch as typeof globalThis.fetch);
     expect(await runProgram(full, ["--output", "json", "operations", "describe", "dashboard.products.create", "--full"])).toBe(0);
-    expect(JSON.parse(full.stdoutText())).toHaveProperty("responses.201");
+    const fullResult = JSON.parse(full.stdoutText());
+    expect(fullResult).toHaveProperty("responses.201");
+    expect(fullResult).toHaveProperty("requestBody.content.application/json.schema.type", "object");
   });
 
   it("executes only the fixed method and path from OpenAPI", async () => {

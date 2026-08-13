@@ -53,6 +53,76 @@ function requestBody(document: OpenApiDocument, operation: IndexedOperation): Op
   return resolveRef(document, operation.operation.requestBody) as OpenApiRequestBody | undefined;
 }
 
+function compactSchemaType(schema: Record<string, unknown>): string {
+  if (typeof schema.type === "string") return schema.type;
+  if (Array.isArray(schema.type)) return schema.type.filter((value) => typeof value === "string").join("|");
+  if (Array.isArray(schema.enum)) return "enum";
+  if (Array.isArray(schema.oneOf)) return "oneOf";
+  if (Array.isArray(schema.anyOf)) return "anyOf";
+  return "unknown";
+}
+
+function compactSchema(document: OpenApiDocument, value: unknown): Record<string, unknown> {
+  const resolved = resolveRef(document, value);
+  if (!isObject(resolved)) return { type: "unknown" };
+  const required = new Set(
+    Array.isArray(resolved.required)
+      ? resolved.required.filter((field): field is string => typeof field === "string")
+      : [],
+  );
+  const properties = isObject(resolved.properties)
+    ? Object.entries(resolved.properties).map(([name, property]) => {
+      const field = resolveRef(document, property);
+      const record = isObject(field) ? field : {};
+      return {
+        name,
+        type: compactSchemaType(record),
+        required: required.has(name),
+        ...(record.nullable === true ? { nullable: true } : {}),
+        ...(Array.isArray(record.enum) && record.enum.length <= 20 ? { enum: record.enum } : {}),
+        ...(typeof record.minLength === "number" ? { minLength: record.minLength } : {}),
+        ...(typeof record.maxLength === "number" ? { maxLength: record.maxLength } : {}),
+        ...(typeof record.minItems === "number" ? { minItems: record.minItems } : {}),
+        ...(typeof record.maxItems === "number" ? { maxItems: record.maxItems } : {}),
+        ...(record.default !== undefined ? { default: record.default } : {}),
+      };
+    })
+    : undefined;
+  return {
+    type: compactSchemaType(resolved),
+    ...(properties ? { fields: properties } : {}),
+  };
+}
+
+function compactRequestBody(
+  document: OpenApiDocument,
+  operation: IndexedOperation,
+): Record<string, unknown> | null {
+  const body = requestBody(document, operation);
+  if (!body?.content) return null;
+  return {
+    required: body.required === true,
+    content: Object.entries(body.content).map(([mediaType, declaration]) => ({
+      mediaType,
+      schema: compactSchema(document, declaration.schema),
+    })),
+  };
+}
+
+function compactParameters(document: OpenApiDocument, operation: IndexedOperation): Record<string, unknown>[] {
+  return operation.pathParameters.map((parameter) => {
+    const schema = resolveRef(document, parameter.schema);
+    const record = isObject(schema) ? schema : {};
+    return {
+      name: parameter.name ?? null,
+      in: parameter.in ?? null,
+      required: parameter.required === true,
+      type: compactSchemaType(record),
+      ...(Array.isArray(record.enum) && record.enum.length <= 20 ? { enum: record.enum } : {}),
+    };
+  });
+}
+
 function requireRecord(value: unknown, field: string): Record<string, unknown> {
   if (value === undefined) return {};
   if (!isObject(value)) throw new CliError(5, "invalid_input", `${field} must be an object.`);
@@ -515,10 +585,11 @@ export async function operationsDescribe(
     path: selected.path,
     agent: selected.agent,
     rbac: selected.operation["x-scalius-rbac"] ?? null,
-    parameters: selected.pathParameters,
-    requestBody: requestBody(document, selected) ?? null,
+    parameters: full ? selected.pathParameters : compactParameters(document, selected),
+    requestBody: full ? requestBody(document, selected) ?? null : compactRequestBody(document, selected),
     ...(full ? { responses: selected.operation.responses ?? {} } : {
       responseStatuses: Object.keys(selected.operation.responses ?? {}).sort(),
+      constructionHint: "Use --full only when constructing the exact input.",
     }),
   };
 }

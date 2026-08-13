@@ -54,6 +54,13 @@ with a bounded read. The live finalized OpenAPI contract—not a model-specific
 prompt—is authoritative for fields, RBAC, risk, revisions, idempotency, byte
 limits, artifacts, uploads, and continuations.
 
+The CLI keeps a reviewed contract locally for 30 minutes so one complex workflow
+does not repeatedly download and re-index hundreds of operations. The server
+still re-authorizes the live credential, grant, permission, revision, and risk
+ceiling on every request. Default descriptions flatten only top-level input
+fields; `operations describe <id> --full` returns the exact nested construction
+schema and responses.
+
 The skill teaches one compact discovery and safety loop, then loads only the relevant domain guide. `media upload` validates signatures, extensions, and byte limits, reuses one live contract in-process, performs the resumable initiate/part/complete sequence, aborts an incomplete session on failure, and returns committed media IDs. Supported images are JPEG, PNG, GIF, WebP, and AVIF up to 20 MiB; supported video is MP4 and WebM up to 100 MiB.
 
 `operations run` input has three fields: `path`, `query`, and `body`. JSON bodies are measured after serialization as UTF-8 and rejected locally when they exceed the live operation's reviewed request limit; the same check applies to each resolved batch step. Multipart operations accept repeatable `--file field=@path` arguments for binary fields declared by OpenAPI. Reviewed raw upload operations accept exactly one `--file path`; the CLI streams it as `application/octet-stream` with an exact `Content-Length` and enforces matching live schema and operation byte bounds. Raw file input never accepts stdin and never runs in a batch. `--save path` is enabled only for contract-declared artifact output; those downloads enforce the reviewed media type, disposition, filename, declared length, and actual byte limit before atomically publishing the destination. Mutating operations require `--yes`; operations marked as requiring idempotency also require `--idempotency-key`.

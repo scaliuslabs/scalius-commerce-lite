@@ -18,7 +18,9 @@ import type {
 const METHODS = ["get", "post", "put", "patch", "delete", "head", "options"] as const;
 const OPERATION_ID = /^(?:dashboard|storefront|system)(?:\.[a-z][a-z0-9_]*){2,}$/;
 const CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1_000;
-const CACHE_REVALIDATE_AFTER_MS = 5 * 60 * 1_000;
+// Keep one multi-step agent workflow on a single reviewed contract. Credentials,
+// grants, and request authorization are still checked by the server per call.
+const CACHE_REVALIDATE_AFTER_MS = 30 * 60 * 1_000;
 const ARTIFACT_MEDIA_TYPE = /^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/;
 const MAX_ARTIFACT_BYTES = 16 * 1024 * 1024;
 const MAX_REQUEST_BYTES = 16 * 1024 * 1024;
