@@ -51,6 +51,7 @@ const expectedOperations: Expected[] = [
   ["get", "/api/v1/products/{slug}/sections/{section}", "storefront.products.get_section"],
   ["get", "/api/v1/products/{slug}", "storefront.products.get"],
   ["get", "/api/v1/categories", "storefront.categories.list"],
+  ["get", "/api/v1/categories/summaries", "storefront.categories.list_summaries"],
   ["get", "/api/v1/categories/{slug}", "storefront.categories.get"],
   ["get", "/api/v1/categories/{slug}/sections/{section}", "storefront.categories.get_section"],
   ["get", "/api/v1/categories/{slug}/products", "storefront.categories.list_products"],

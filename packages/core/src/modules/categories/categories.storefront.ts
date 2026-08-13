@@ -43,6 +43,52 @@ export async function getPublicCategories(db: Database) {
     }));
 }
 
+/** Bounded public discovery rows; rich text is reconstructed through getPublicCategorySection. */
+export async function getPublicCategorySummaries(
+    db: Database,
+    options: { page?: number; limit?: number } = {},
+) {
+    const page = Number.isSafeInteger(options.page) && Number(options.page) > 0
+        ? Number(options.page)
+        : 1;
+    const limit = Number.isSafeInteger(options.limit)
+        ? Math.min(Math.max(Number(options.limit), 1), 50)
+        : 20;
+    const where = and(...publicCategoryConditions());
+    const countQuery = db
+        .select({ count: sql<number>`count(*)` })
+        .from(categories)
+        .where(where);
+    const rowsQuery = db
+        .select({
+            id: categories.id,
+            name: categories.name,
+            slug: categories.slug,
+            imageUrl: categories.imageUrl,
+            descriptionCharacters: sql<number>`length(coalesce(${categories.description}, ''))`,
+            contentCharacters: sql<number>`length(coalesce(${categories.content}, ''))`,
+            updatedAt: sql<number>`CAST(${categories.updatedAt} AS INTEGER)`,
+        })
+        .from(categories)
+        .where(where)
+        .orderBy(categories.name)
+        .limit(limit)
+        .offset((page - 1) * limit);
+    const [counts, rows] = await db.batch([countQuery, rowsQuery]);
+    const total = Number(counts[0]?.count ?? 0);
+    return {
+        categories: rows.map((category) => ({
+            ...category,
+            descriptionCharacters: Number(category.descriptionCharacters ?? 0),
+            contentCharacters: Number(category.contentCharacters ?? 0),
+            updatedAt: category.updatedAt
+                ? new Date(Number(category.updatedAt) * 1000).toISOString()
+                : null,
+        })),
+        pagination: { total, page, limit, totalPages: Math.ceil(total / limit) },
+    };
+}
+
 /**
  * Returns a single category by slug for the storefront.
  * Returns null if not found or soft-deleted.

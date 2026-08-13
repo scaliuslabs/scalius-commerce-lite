@@ -61733,7 +61733,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
       "Categories"
     ],
     "surface": "storefront",
-    "exposure": "execute",
+    "exposure": "excluded",
     "principals": [
       "customer",
       "visitor"
@@ -61742,7 +61742,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "openWorld": false,
     "idempotency": "none",
     "revision": "none",
-    "batch": "parallel",
+    "batch": "forbidden",
     "transport": "json",
     "maxResponseBytes": 65536,
     "maxRequestBytes": 16384,
@@ -61751,98 +61751,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "requiredClientAction": null,
     "artifactOutput": null,
     "continuationOutput": null,
+    "exclusionReason": "Unbounded browser category aggregate can exceed the structured-result ceiling; use storefront.categories.list_summaries plus storefront.categories.get_section.",
     "rbac": {
       "type": "public"
     },
-    "inputSchema": {},
-    "outputSchema": {
-      "type": "object",
-      "properties": {
-        "success": {
-          "type": "boolean",
-          "enum": [
-            true
-          ]
-        },
-        "data": {
-          "type": "object",
-          "properties": {
-            "categories": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "id": {
-                    "type": "string"
-                  },
-                  "name": {
-                    "type": "string"
-                  },
-                  "slug": {
-                    "type": "string"
-                  },
-                  "description": {
-                    "type": "string",
-                    "nullable": true
-                  },
-                  "imageUrl": {
-                    "type": "string",
-                    "nullable": true
-                  },
-                  "createdAt": {
-                    "type": "string",
-                    "nullable": true
-                  },
-                  "updatedAt": {
-                    "type": "string",
-                    "nullable": true
-                  },
-                  "metaTitle": {
-                    "type": "string",
-                    "nullable": true
-                  },
-                  "metaDescription": {
-                    "type": "string",
-                    "nullable": true
-                  },
-                  "canonicalPath": {
-                    "type": "string",
-                    "nullable": true
-                  },
-                  "noIndex": {
-                    "type": "boolean"
-                  },
-                  "excludeFromSitemap": {
-                    "type": "boolean"
-                  }
-                },
-                "required": [
-                  "id",
-                  "name",
-                  "slug",
-                  "description",
-                  "imageUrl",
-                  "createdAt",
-                  "updatedAt",
-                  "metaTitle",
-                  "metaDescription",
-                  "canonicalPath",
-                  "noIndex",
-                  "excludeFromSitemap"
-                ]
-              }
-            }
-          },
-          "required": [
-            "categories"
-          ]
-        }
-      },
-      "required": [
-        "success",
-        "data"
-      ]
-    }
+    "inputSchema": null,
+    "outputSchema": null
   },
   {
     "operationId": "storefront.categories.list_product_summaries",
@@ -62359,6 +62273,157 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     },
     "inputSchema": null,
     "outputSchema": null
+  },
+  {
+    "operationId": "storefront.categories.list_summaries",
+    "method": "GET",
+    "pathTemplate": "/api/v1/categories/summaries",
+    "summary": "List bounded public category summaries",
+    "tags": [
+      "Categories"
+    ],
+    "surface": "storefront",
+    "exposure": "execute",
+    "principals": [
+      "customer",
+      "visitor"
+    ],
+    "risk": "read",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "parallel",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 16384,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "rbac": {
+      "type": "public"
+    },
+    "inputSchema": {
+      "parameters": [
+        {
+          "schema": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100000,
+            "default": 1
+          },
+          "required": false,
+          "name": "page",
+          "in": "query"
+        },
+        {
+          "schema": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50,
+            "default": 20
+          },
+          "required": false,
+          "name": "limit",
+          "in": "query"
+        }
+      ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "categories": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "maxLength": 180
+                  },
+                  "name": {
+                    "type": "string",
+                    "maxLength": 100
+                  },
+                  "slug": {
+                    "type": "string",
+                    "maxLength": 100
+                  },
+                  "imageUrl": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 2048
+                  },
+                  "descriptionCharacters": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "contentCharacters": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "updatedAt": {
+                    "type": "string",
+                    "nullable": true
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "slug",
+                  "imageUrl",
+                  "descriptionCharacters",
+                  "contentCharacters",
+                  "updatedAt"
+                ]
+              },
+              "maxItems": 50
+            },
+            "pagination": {
+              "type": "object",
+              "properties": {
+                "page": {
+                  "type": "number"
+                },
+                "limit": {
+                  "type": "number"
+                },
+                "total": {
+                  "type": "number"
+                },
+                "totalPages": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "page",
+                "limit",
+                "total",
+                "totalPages"
+              ]
+            }
+          },
+          "required": [
+            "categories",
+            "pagination"
+          ]
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    }
   },
   {
     "operationId": "storefront.checkout_language.get_active",

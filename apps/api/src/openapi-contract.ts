@@ -1209,7 +1209,7 @@ const LIVE_BROWSER_OPERATION_POLICIES: ReadonlyArray<readonly [
 const FOUNDATION_STOREFRONT_READ_BOUNDS = [
   ["storefront.products.list", 65_536],
   ["storefront.products.get_section", 61_440],
-  ["storefront.categories.list", 65_536],
+  ["storefront.categories.list_summaries", 65_536],
   ["storefront.categories.get_section", 32_768],
   ["storefront.categories.list_product_summaries", 65_536],
   ["storefront.collections.list", 65_536],
@@ -1230,6 +1230,8 @@ const FOUNDATION_STOREFRONT_READ_BOUNDS = [
 ] as const;
 
 const FOUNDATION_STOREFRONT_EXCLUSIONS = {
+  "storefront.categories.list":
+    "Unbounded browser category aggregate can exceed the structured-result ceiling; use storefront.categories.list_summaries plus storefront.categories.get_section.",
   "storefront.categories.get":
     "Unbounded browser category aggregate; use storefront.categories.get_section for reconstructable bounded detail.",
   "storefront.categories.list_products":
