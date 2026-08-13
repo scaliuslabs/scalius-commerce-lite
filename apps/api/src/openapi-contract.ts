@@ -833,6 +833,7 @@ const CATALOG_READ_OPERATION_IDS = [
   "dashboard.categories.get",
   "dashboard.categories.get_section",
   "dashboard.attributes.list",
+  "dashboard.attributes.list_summaries",
   "dashboard.attribute_values.list",
   "dashboard.collections.form_options",
   "dashboard.collections.category_options",
@@ -1965,6 +1966,15 @@ const REVIEWED_AGENT_OPERATIONS_BY_ID: Readonly<
       exposure: "excluded",
       exclusionReason:
         "Legacy oversized category aggregate; use dashboard.categories.get_section.",
+    },
+  ),
+  "dashboard.attributes.list": dashboardOperationMetadata(
+    "dashboard.attributes.list",
+    {
+      risk: "read",
+      exposure: "excluded",
+      exclusionReason:
+        "Legacy dashboard list may include up to 500 preset values per attribute; use dashboard.attributes.list_summaries and dashboard.attribute_values.list.",
     },
   ),
   "dashboard.collections.get": dashboardOperationMetadata(

@@ -54,7 +54,7 @@ export interface UpdateAttributeInput {
 }
 
 export interface AttributePayload {
-  attribute: AttributeDto;
+  attribute: Pick<AttributeDto, "id" | "name" | "slug" | "filterable">;
 }
 
 export interface MessagePayload {

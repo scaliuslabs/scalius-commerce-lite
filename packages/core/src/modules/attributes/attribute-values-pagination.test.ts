@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
     addAttributeValue,
     createAttribute,
+    listAttributeAgentSummaries,
     listAttributes,
     listAttributeValues,
     renameAttributeValue,
@@ -194,6 +195,48 @@ describe("attribute value pagination", () => {
         expect(result.values).toHaveLength(5);
         expect(new Set(result.values.map((value) => value.value)).size).toBe(5);
         expect(Math.max(...boundParameterCounts)).toBeLessThanOrEqual(100);
+    });
+
+    it("lists compact agent summaries without loading preset arrays", async () => {
+        const maximumOptions = Array.from(
+            { length: 500 },
+            (_, index) => `${String(index).padStart(3, "0")}-${"x".repeat(96)}`,
+        );
+        for (let index = 0; index < 50; index += 1) {
+            insertAttribute(`attribute-${String(index).padStart(2, "0")}`, maximumOptions);
+        }
+
+        const result = await listAttributeAgentSummaries(db, { limit: 50 });
+
+        expect(result.attributes).toHaveLength(50);
+        expect(result.attributes.every((attribute) => !("options" in attribute))).toBe(true);
+        expect(Buffer.byteLength(JSON.stringify(result), "utf8")).toBeLessThan(65_536);
+    });
+
+    it("returns bounded mutation acknowledgements for maximum preset input", async () => {
+        const maximumOptions = Array.from(
+            { length: 500 },
+            (_, index) => `${String(index).padStart(3, "0")}-${"x".repeat(96)}`,
+        );
+
+        const created = await createAttribute(db, {
+            name: "Maximum presets",
+            slug: "maximum-presets",
+            filterable: true,
+            options: maximumOptions,
+        });
+        const updated = await updateAttribute(db, created.attribute!.id, {
+            options: maximumOptions.map((value) => value.replace(/x$/, "y")),
+        });
+
+        expect(created.attribute).toEqual(expect.objectContaining({
+            name: "Maximum presets",
+            slug: "maximum-presets",
+        }));
+        expect(created.attribute).not.toHaveProperty("options");
+        expect(updated.attribute).not.toHaveProperty("options");
+        expect(Buffer.byteLength(JSON.stringify({ created, updated }), "utf8"))
+            .toBeLessThan(2_048);
     });
 
     it("rejects normalized preset duplicates and rename-to-existing preset collisions", async () => {

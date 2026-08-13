@@ -3907,12 +3907,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           "schema": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 100,
+            "maximum": 50,
             "default": 20,
-            "description": "Items per page"
+            "description": "Items per page (max 50)"
           },
           "required": false,
-          "description": "Items per page",
+          "description": "Items per page (max 50)",
           "name": "limit",
           "in": "query"
         }
@@ -3931,10 +3931,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           "type": "object",
           "properties": {
             "attributeId": {
-              "type": "string"
+              "type": "string",
+              "maxLength": 180
             },
             "attributeName": {
-              "type": "string"
+              "type": "string",
+              "maxLength": 100
             },
             "values": {
               "type": "array",
@@ -3942,7 +3944,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "type": "object",
                 "properties": {
                   "value": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 100
                   },
                   "productCount": {
                     "type": "number"
@@ -3963,8 +3966,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "sampleProducts": {
                     "type": "array",
                     "items": {
-                      "type": "string"
-                    }
+                      "type": "string",
+                      "maxLength": 100
+                    },
+                    "maxItems": 5
                   }
                 },
                 "required": [
@@ -3974,7 +3979,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "isPreset",
                   "sampleProducts"
                 ]
-              }
+              },
+              "maxItems": 50
             },
             "totalValues": {
               "type": "number"
@@ -4315,67 +4321,26 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "type": "object",
               "properties": {
                 "id": {
-                  "type": "string"
+                  "type": "string",
+                  "maxLength": 180
                 },
                 "name": {
-                  "type": "string"
+                  "type": "string",
+                  "maxLength": 100
                 },
                 "slug": {
-                  "type": "string"
+                  "type": "string",
+                  "maxLength": 100
                 },
                 "filterable": {
                   "type": "boolean"
-                },
-                "options": {
-                  "type": "array",
-                  "nullable": true,
-                  "items": {
-                    "type": "string"
-                  }
-                },
-                "createdAt": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "number"
-                    }
-                  ]
-                },
-                "updatedAt": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "number"
-                    }
-                  ]
-                },
-                "deletedAt": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "number"
-                    },
-                    {
-                      "nullable": true
-                    }
-                  ]
                 }
               },
               "required": [
                 "id",
                 "name",
                 "slug",
-                "filterable",
-                "options",
-                "createdAt",
-                "updatedAt",
-                "deletedAt"
+                "filterable"
               ]
             }
           },
@@ -4443,6 +4408,40 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
       "Admin - Attributes"
     ],
     "surface": "dashboard",
+    "exposure": "excluded",
+    "principals": [
+      "admin"
+    ],
+    "risk": "read",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "forbidden",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "exclusionReason": "Legacy dashboard list may include up to 500 preset values per attribute; use dashboard.attributes.list_summaries and dashboard.attribute_values.list.",
+    "rbac": {
+      "type": "permission",
+      "permission": "attributes.view"
+    },
+    "inputSchema": null,
+    "outputSchema": null
+  },
+  {
+    "operationId": "dashboard.attributes.list_summaries",
+    "method": "GET",
+    "pathTemplate": "/api/v1/admin/attributes/summaries",
+    "summary": "List bounded attribute summaries",
+    "tags": [
+      "Admin - Attributes"
+    ],
+    "surface": "dashboard",
     "exposure": "execute",
     "principals": [
       "admin"
@@ -4470,11 +4469,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           "schema": {
             "type": "integer",
             "minimum": 1,
-            "default": 1,
-            "description": "Page number"
+            "default": 1
           },
           "required": false,
-          "description": "Page number",
           "name": "page",
           "in": "query"
         },
@@ -4482,12 +4479,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           "schema": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 500,
-            "default": 10,
-            "description": "Items per page (max 500)"
+            "maximum": 50,
+            "default": 20
           },
           "required": false,
-          "description": "Items per page (max 500)",
           "name": "limit",
           "in": "query"
         },
@@ -4495,11 +4490,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           "schema": {
             "type": "string",
             "maxLength": 120,
-            "default": "",
-            "description": "Search term"
+            "default": ""
           },
           "required": false,
-          "description": "Search term",
           "name": "search",
           "in": "query"
         },
@@ -4513,11 +4506,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "createdAt",
               "updatedAt"
             ],
-            "default": "name",
-            "description": "Sort field"
+            "default": "name"
           },
           "required": false,
-          "description": "Sort field",
           "name": "sort",
           "in": "query"
         },
@@ -4528,22 +4519,18 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "asc",
               "desc"
             ],
-            "default": "asc",
-            "description": "Sort order"
+            "default": "asc"
           },
           "required": false,
-          "description": "Sort order",
           "name": "order",
           "in": "query"
         },
         {
           "schema": {
             "type": "string",
-            "maxLength": 9000,
-            "description": "Comma-separated attribute IDs (max 90)"
+            "maxLength": 9000
           },
           "required": false,
-          "description": "Comma-separated attribute IDs (max 90)",
           "name": "ids",
           "in": "query"
         },
@@ -4553,11 +4540,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "enum": [
               "true",
               "false"
-            ],
-            "description": "Show trashed items"
+            ]
           },
           "required": false,
-          "description": "Show trashed items",
           "name": "trashed",
           "in": "query"
         }
@@ -4581,43 +4566,19 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "type": "object",
                 "properties": {
                   "id": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 180
                   },
                   "name": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 100
                   },
                   "slug": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 100
                   },
                   "filterable": {
                     "type": "boolean"
-                  },
-                  "options": {
-                    "type": "array",
-                    "nullable": true,
-                    "items": {
-                      "type": "string"
-                    }
-                  },
-                  "createdAt": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      }
-                    ]
-                  },
-                  "updatedAt": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      }
-                    ]
                   },
                   "deletedAt": {
                     "anyOf": [
@@ -4631,9 +4592,6 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "nullable": true
                       }
                     ]
-                  },
-                  "valueCount": {
-                    "type": "number"
                   }
                 },
                 "required": [
@@ -4641,11 +4599,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "name",
                   "slug",
                   "filterable",
-                  "options",
-                  "createdAt",
-                  "updatedAt",
-                  "deletedAt",
-                  "valueCount"
+                  "deletedAt"
                 ]
               }
             },
@@ -4892,67 +4846,26 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "type": "object",
               "properties": {
                 "id": {
-                  "type": "string"
+                  "type": "string",
+                  "maxLength": 180
                 },
                 "name": {
-                  "type": "string"
+                  "type": "string",
+                  "maxLength": 100
                 },
                 "slug": {
-                  "type": "string"
+                  "type": "string",
+                  "maxLength": 100
                 },
                 "filterable": {
                   "type": "boolean"
-                },
-                "options": {
-                  "type": "array",
-                  "nullable": true,
-                  "items": {
-                    "type": "string"
-                  }
-                },
-                "createdAt": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "number"
-                    }
-                  ]
-                },
-                "updatedAt": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "number"
-                    }
-                  ]
-                },
-                "deletedAt": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "number"
-                    },
-                    {
-                      "nullable": true
-                    }
-                  ]
                 }
               },
               "required": [
                 "id",
                 "name",
                 "slug",
-                "filterable",
-                "options",
-                "createdAt",
-                "updatedAt",
-                "deletedAt"
+                "filterable"
               ]
             }
           },

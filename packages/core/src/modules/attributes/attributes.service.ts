@@ -18,6 +18,7 @@ import type { CreateAttributeInput, UpdateAttributeInput } from "./attributes.va
 type SQLiteBatchItem = BatchItem<"sqlite">;
 const MAX_ATTRIBUTE_BULK_IDS = 90;
 const MAX_ATTRIBUTE_PAGE_SIZE = 500;
+const MAX_ATTRIBUTE_AGENT_PAGE_SIZE = 50;
 const MAX_ATTRIBUTE_VALUE_LENGTH = 100;
 
 function attributeIdentityKey(value: string): string {
@@ -191,6 +192,79 @@ export async function listAttributes(
     };
 }
 
+/**
+ * Compact attribute discovery for agent clients. The dashboard list retains
+ * preset options for its editor, but those options can legitimately contain
+ * 500 x 100-character values per row and therefore cannot be advertised as a
+ * bounded structured agent response.
+ */
+export async function listAttributeAgentSummaries(
+    db: Database,
+    options: {
+        page?: number;
+        limit?: number;
+        search?: string;
+        sort?: string;
+        order?: "asc" | "desc";
+        showTrashed?: boolean;
+        ids?: string[];
+    } = {},
+) {
+    const page = Math.max(1, Math.floor(options.page ?? 1));
+    const limit = Math.min(
+        MAX_ATTRIBUTE_AGENT_PAGE_SIZE,
+        Math.max(1, Math.floor(options.limit ?? 20)),
+    );
+    const conditions: SQL[] = [
+        options.showTrashed
+            ? sql`${productAttributes.deletedAt} IS NOT NULL`
+            : sql`${productAttributes.deletedAt} IS NULL`,
+    ];
+    const search = options.search?.trim();
+    if (search) {
+        conditions.push(or(
+            like(productAttributes.name, `%${search}%`),
+            like(productAttributes.slug, `%${search}%`),
+        )!);
+    }
+    if (options.ids !== undefined) {
+        const ids = normalizeAttributeIds(options.ids);
+        conditions.push(ids.length > 0
+            ? sql`${productAttributes.id} IN (
+                SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(ids)})
+            )`
+            : sql`0 = 1`);
+    }
+    const where = and(...conditions);
+    const allowedSortFields = ["name", "slug", "filterable", "createdAt", "updatedAt"] as const;
+    type SortField = typeof allowedSortFields[number];
+    const sort = allowedSortFields.includes(options.sort as SortField)
+        ? options.sort as SortField
+        : "name";
+    const sortColumn = productAttributes[sort];
+    const countRows = await db.select({ count: count(productAttributes.id) })
+        .from(productAttributes)
+        .where(where);
+    const attributes = await db
+        .select({
+            id: productAttributes.id,
+            name: productAttributes.name,
+            slug: productAttributes.slug,
+            filterable: productAttributes.filterable,
+            deletedAt: productAttributes.deletedAt,
+        })
+        .from(productAttributes)
+        .where(where)
+        .orderBy(options.order === "desc" ? desc(sortColumn) : asc(sortColumn))
+        .limit(limit)
+        .offset((page - 1) * limit);
+    const total = Number(countRows[0]?.count ?? 0);
+    return {
+        attributes,
+        pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    };
+}
+
 // ─────────────────────────────────────────
 // Mutations
 // ─────────────────────────────────────────
@@ -224,7 +298,13 @@ export async function createAttribute(
             createdAt: sql`(cast(strftime('%s','now') as int))`,
             updatedAt: sql`(cast(strftime('%s','now') as int))`
         })
-        .returning();
+        .returning({
+            id: productAttributes.id,
+            name: productAttributes.name,
+            slug: productAttributes.slug,
+            filterable: productAttributes.filterable,
+        });
+    if (!insertedAttribute) throw new Error("Attribute insert did not return a row");
 
     return { attribute: insertedAttribute };
 }
@@ -261,7 +341,12 @@ export async function updateAttribute(
             updatedAt: sql`(cast(strftime('%s','now') as int))`
         })
         .where(and(eq(productAttributes.id, id), isNull(productAttributes.deletedAt)))
-        .returning();
+        .returning({
+            id: productAttributes.id,
+            name: productAttributes.name,
+            slug: productAttributes.slug,
+            filterable: productAttributes.filterable,
+        });
 
     if (!updatedAttribute) throw new NotFoundError("Attribute not found");
 

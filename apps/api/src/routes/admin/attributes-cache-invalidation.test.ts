@@ -7,6 +7,7 @@ import { errorResponseFromError } from "../../utils/api-response";
 const mocks = vi.hoisted(() => ({
   invalidateApiAndScheduleStorefrontGroups: vi.fn(),
   listAttributes: vi.fn(),
+  listAttributeAgentSummaries: vi.fn(),
   createAttribute: vi.fn(),
   updateAttribute: vi.fn(),
   deleteAttribute: vi.fn(),
@@ -26,6 +27,7 @@ vi.mock("../../utils/cache-invalidation", () => ({
 
 vi.mock("@scalius/core/modules/attributes/attributes.service", () => ({
   listAttributes: mocks.listAttributes,
+  listAttributeAgentSummaries: mocks.listAttributeAgentSummaries,
   createAttribute: mocks.createAttribute,
   updateAttribute: mocks.updateAttribute,
   deleteAttribute: mocks.deleteAttribute,
@@ -62,6 +64,16 @@ function createTestApp() {
       updatedAt: 1,
       deletedAt: null,
     },
+  });
+  mocks.listAttributeAgentSummaries.mockResolvedValue({
+    attributes: [{
+      id: "attr_1",
+      name: "Color",
+      slug: "color",
+      filterable: true,
+      deletedAt: null,
+    }],
+    pagination: { page: 1, limit: 50, total: 1, totalPages: 1 },
   });
   mocks.renameAttributeValue.mockResolvedValue(undefined);
   mocks.listAttributeValues.mockResolvedValue({

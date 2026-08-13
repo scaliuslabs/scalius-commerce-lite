@@ -160,7 +160,13 @@ export function AttributeManager({
         data: { name, slug, filterable: true, options: [] },
       });
       const created = data.attribute;
-      rememberDefinitions([created]);
+      rememberDefinitions([{
+        ...created,
+        options: null,
+        createdAt: 0,
+        updatedAt: 0,
+        deletedAt: null,
+      }]);
       commitAssignments([
         ...assignedAttributes,
         { attributeId: created.id, value: "", name: created.name, slug: created.slug },
