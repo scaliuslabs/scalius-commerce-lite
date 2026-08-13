@@ -55,7 +55,10 @@ import {
 } from "./utils/http-correlation";
 import { serveMediaRoute } from "./routes/media-server";
 import { getCorsOriginContext } from "@scalius/shared/cors-helper";
-import { finalizeOpenApiContract } from "./openapi-contract";
+import {
+  OPENAPI_CONTRACT_ETAG,
+  OPENAPI_CONTRACT_JSON,
+} from "./generated/openapi-contract.gen";
 
 // Admin routes
 import { adminAuthMiddleware } from "./middleware/admin-auth";
@@ -357,25 +360,14 @@ app.get("/docs", swaggerUI({ url: "/api/v1/openapi.json" }));
 
 // Add OpenAPI specification
 app.get("/openapi.json", (c) => {
-  try {
-    const spec = finalizeOpenApiContract(
-      app.getOpenAPIDocument({
-        openapi: "3.0.0",
-        info: {
-          title: "Scalius Commerce API",
-          version: "1.0.0",
-          description:
-            "E-commerce platform API powering admin dashboard and storefront",
-        },
-        servers: [{ url: "/", description: "Default" }],
-      }),
-    );
-    c.header("Cache-Control", "no-store");
-    return c.json(spec);
-  } catch (error: unknown) {
-    console.error("OpenAPI spec generation error:", error);
-    throw error;
+  c.header("Cache-Control", "public, max-age=0, must-revalidate");
+  c.header("ETag", OPENAPI_CONTRACT_ETAG);
+  if (c.req.header("If-None-Match") === OPENAPI_CONTRACT_ETAG) {
+    return c.body(null, 304);
   }
+  return c.body(OPENAPI_CONTRACT_JSON, 200, {
+    "Content-Type": "application/json; charset=UTF-8",
+  });
 });
 
 // Register the security scheme for the OpenAPI spec
