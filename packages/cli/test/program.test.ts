@@ -15,6 +15,38 @@ async function authenticatedRuntime(fetch: typeof globalThis.fetch) {
   return runtime;
 }
 
+async function storefrontRuntime(fetch: typeof globalThis.fetch) {
+  const directory = await mkdtemp(join(tmpdir(), "scalius-cli-storefront-"));
+  const runtime = createTestRuntime({ directory, fetch });
+  const store = new ConfigStore(runtime);
+  await store.putProfile("storefront", "https://api.example.com");
+  await store.putCredential("storefront", {
+    token: validToken(),
+    resource: "storefront",
+    createdAt: "2026-08-13T00:00:00.000Z",
+  });
+  return runtime;
+}
+
+function mixedAudienceSpec(): Record<string, unknown> {
+  const spec = specWithContinuations();
+  const paths = spec.paths as Record<string, Record<string, Record<string, unknown>>>;
+  paths["/api/v1/products"] = {
+    get: {
+      operationId: "storefront.products.list",
+      summary: "List storefront products",
+      responses: { "200": { description: "Products" } },
+      "x-scalius-agent": {
+        surface: "storefront", exposure: "execute", principals: ["visitor", "customer"],
+        risk: "read", openWorld: false, idempotency: "none", revision: "none",
+        batch: "parallel", transport: "json", maximumResponseBytes: 65_536,
+        maxRequestBytes: 16_384, sensitiveOutput: false, oneTimeSecretOutput: false,
+      },
+    },
+  };
+  return spec;
+}
+
 function specWithCreateRequestLimit(maxRequestBytes: number): Record<string, unknown> {
   const spec = executableSpec();
   const paths = spec.paths as Record<string, Record<string, Record<string, unknown>>>;
@@ -81,6 +113,28 @@ describe("CLI program", () => {
     expect(runtime.stderrText()).toBe("");
   });
 
+  it("shows and describes only operations for the paired credential audience", async () => {
+    let operationCalls = 0;
+    const fetch = vi.fn(async (input: string | URL | Request) => {
+      if (String(input).endsWith("/openapi.json")) return Response.json(mixedAudienceSpec());
+      operationCalls += 1;
+      return Response.json({ products: [] });
+    });
+    const runtime = await storefrontRuntime(fetch as typeof globalThis.fetch);
+
+    expect(await runProgram(runtime, ["--profile", "storefront", "--output", "json", "operations", "search", "", "--limit", "100"])).toBe(0);
+    const output = JSON.parse(runtime.stdoutText()) as { operations: Array<{ surface: string }> };
+    expect(output.operations.length).toBeGreaterThan(0);
+    expect(output.operations.every(({ surface }) => surface === "storefront")).toBe(true);
+
+    const describeRuntime = await storefrontRuntime(fetch as typeof globalThis.fetch);
+    expect(await runProgram(describeRuntime, [
+      "--profile", "storefront", "--output", "json", "operations", "describe", "dashboard.products.get",
+    ])).toBe(5);
+    expect(describeRuntime.stderrText()).toContain("Executable operation 'dashboard.products.get' is not in the live server contract");
+    expect(operationCalls).toBe(0);
+  });
+
   it("keeps search and describe compact unless full responses are requested", async () => {
     const fetch = vi.fn(async () => Response.json(executableSpec(), { headers: { ETag: '"v1"' } }));
     const runtime = await authenticatedRuntime(fetch as typeof globalThis.fetch);
@@ -125,9 +179,9 @@ describe("CLI program", () => {
       calls.push(url);
       return Response.json({ status: "pending" });
     });
-    const runtime = await authenticatedRuntime(fetch as typeof globalThis.fetch);
+    const runtime = await storefrontRuntime(fetch as typeof globalThis.fetch);
     expect(await runProgram(runtime, [
-      "--output", "json", "operations", "run", "storefront.continuations.get",
+      "--profile", "storefront", "--output", "json", "operations", "run", "storefront.continuations.get",
       "--input", JSON.stringify({ path: { contextId: "ctx_1", continuationId: "acn_1" } }),
     ])).toBe(0);
     expect(calls).toEqual([
