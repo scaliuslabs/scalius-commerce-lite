@@ -10,3 +10,41 @@
 8. Close disposable contexts when the workflow finishes.
 
 Use public reads as `visitor`; private profile/order actions require a live customer-bound context. Dashboard credentials do not impersonate customers.
+
+## Fast cart setup
+
+Use one sequential CLI batch for context creation, cart mutation, and delivery selection. Reference only completed prior results with JSON Pointers so IDs and revisions never need manual copying:
+
+```json
+{
+  "steps": [
+    { "operationId": "storefront.context.create", "input": {} },
+    {
+      "operationId": "storefront.cart.add",
+      "input": {
+        "path": { "contextId": { "$ref": "#/results/0/data/data/id" } },
+        "body": {
+          "revision": { "$ref": "#/results/0/data/data/revision" },
+          "variantId": "<variant-id>",
+          "quantity": 1
+        }
+      }
+    },
+    {
+      "operationId": "storefront.delivery.set",
+      "input": {
+        "path": { "contextId": { "$ref": "#/results/0/data/data/id" } },
+        "body": {
+          "revision": { "$ref": "#/results/1/data/data/context/revision" },
+          "cityId": "<city-id>",
+          "zoneId": "<zone-id>",
+          "areaId": null,
+          "shippingMethodId": "<shipping-method-id>"
+        }
+      }
+    }
+  ]
+}
+```
+
+Keep checkout submission outside the batch: review the final cart/quote first, then supply its own explicit idempotency key and confirmation.

@@ -17,7 +17,7 @@ describe("agent continuation browser cookie", () => {
     expect(header).toContain("Max-Age=1800");
     expect(header).toContain("Path=/");
     expect(header).toContain("HttpOnly");
-    expect(header).toContain("SameSite=Strict");
+    expect(header).toContain("SameSite=Lax");
     expect(header).toContain("Secure");
     expect(readAgentContinuationCookie(`other=x; ${name}=${continuationId}`, continuationId))
       .toBe(continuationId);
