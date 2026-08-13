@@ -127,7 +127,17 @@ export const phoneNumberSchema = z
   .string()
   .min(7, "Phone number too short")
   .max(16, "Phone number too long")
-  .transform((val) => validateAndFormatPhone(val));
+  .transform((val, context) => {
+    try {
+      return validateAndFormatPhone(val);
+    } catch (error: unknown) {
+      context.addIssue({
+        code: "custom",
+        message: error instanceof Error ? error.message : "Invalid phone number format",
+      });
+      return z.NEVER;
+    }
+  });
 
 /**
  * Updates customer stats based on an order

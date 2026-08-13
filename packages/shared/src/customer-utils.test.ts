@@ -4,6 +4,7 @@ import {
   assertPhoneCountryAllowed,
   calculateCustomerStats,
   normalizePhoneCountryPolicy,
+  phoneNumberSchema,
   validateAndFormatPhone,
 } from "./customer-utils";
 
@@ -53,5 +54,15 @@ describe("phone country policy", () => {
       countries: ["BD"],
       mode: "exclude",
     });
+  });
+
+  it("reports invalid input as a schema issue instead of throwing from the transform", () => {
+    expect(() => phoneNumberSchema.safeParse("01700000000")).not.toThrow();
+    const invalid = phoneNumberSchema.safeParse("01700000000");
+    expect(invalid.success).toBe(false);
+    if (!invalid.success) {
+      expect(invalid.error.issues[0]?.message).toBe("Invalid phone number format");
+    }
+    expect(phoneNumberSchema.parse("+8801712345678")).toBe("+8801712345678");
   });
 });
