@@ -62,6 +62,10 @@ export function browserContinuationRelayResponse(
       input.value = value;
       form.append(input);
     }
+    const button = document.createElement("button");
+    button.type = "submit";
+    button.textContent = "Continue securely";
+    form.append(button);
     document.body.replaceChildren(form);
     form.submit();
   } catch {
