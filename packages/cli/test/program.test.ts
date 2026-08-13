@@ -61,6 +61,13 @@ function specWithContinuations(): Record<string, unknown> {
 }
 
 describe("CLI program", () => {
+  it("reports the version from the published package manifest", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "scalius-version-test-"));
+    const runtime = createTestRuntime({ directory });
+    expect(await runProgram(runtime, ["--version"])).toBe(0);
+    expect(runtime.stdoutText().trim()).toBe("0.2.2");
+  });
+
   it("searches the live OpenAPI contract with deterministic JSON stdout", async () => {
     const fetch = vi.fn(async () => Response.json(executableSpec(), { headers: { ETag: '"v1"' } }));
     const runtime = await authenticatedRuntime(fetch as typeof globalThis.fetch);

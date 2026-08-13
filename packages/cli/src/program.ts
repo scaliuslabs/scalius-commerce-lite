@@ -1,4 +1,5 @@
 import { Command, CommanderError, Option } from "commander";
+import { readFileSync } from "node:fs";
 import { login, importToken, authStatus, logout, revoke } from "./auth.js";
 import { ConfigStore } from "./config.js";
 import { asCliError, CliError } from "./errors.js";
@@ -22,6 +23,16 @@ interface RunOptions {
   yes: boolean;
   save?: string;
   overwrite: boolean;
+}
+
+function packageVersion(): string {
+  const manifest = JSON.parse(
+    readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+  ) as { version?: unknown };
+  if (typeof manifest.version !== "string" || !/^\d+\.\d+\.\d+$/.test(manifest.version)) {
+    throw new CliError(8, "invalid_package", "The installed Scalius package version is invalid.");
+  }
+  return manifest.version;
 }
 
 function globalOptions(command: Command): GlobalOptions {
@@ -69,7 +80,7 @@ export function createProgram(runtime: Runtime): Command {
   program
     .name("scalius")
     .description("Discover and execute Scalius Commerce operations")
-    .version("0.2.0")
+    .version(packageVersion())
     .option("--profile <name>", "configuration profile")
     .addOption(new Option("--output <format>", "output format").choices(["human", "json"]).default("human"))
     .showHelpAfterError()
