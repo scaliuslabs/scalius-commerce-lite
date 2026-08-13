@@ -982,7 +982,7 @@ const COMMERCE_OPERATION_TUPLES: readonly DashboardOperationTuple[] = [
   ["dashboard.customers.delete_permanently", "destructive", false, "none", "none", "forbidden"],
   ["dashboard.customers.restore", "write", false, "none", "none", "sequential"],
   ["dashboard.customers.history", "read", false, "none", "none", "parallel"],
-  ["dashboard.abandoned_checkouts.list", "read", false, "none", "none", "parallel"],
+  ["dashboard.abandoned_checkouts.summaries_list", "read", false, "none", "none", "parallel"],
   ["dashboard.abandoned_checkouts.delete", "destructive", false, "none", "none", "forbidden"],
   ["dashboard.discounts.list", "read", false, "none", "none", "parallel"],
   ["dashboard.discounts.create", "write", false, "none", "none", "sequential"],
@@ -2178,6 +2178,15 @@ const REVIEWED_AGENT_OPERATIONS_BY_ID: Readonly<
       risk: "destructive",
       exposure: "excluded",
       exclusionReason: "Legacy duplicate; use DELETE /admin/abandoned-checkouts.",
+    },
+  ),
+  "dashboard.abandoned_checkouts.list": dashboardOperationMetadata(
+    "dashboard.abandoned_checkouts.list",
+    {
+      risk: "read",
+      exposure: "excluded",
+      exclusionReason:
+        "Browser detail projection contains buyer PII and serialized checkout state; use dashboard.abandoned_checkouts.summaries_list for bounded routine agent listing.",
     },
   ),
   "dashboard.shipments.get": dashboardOperationMetadata(

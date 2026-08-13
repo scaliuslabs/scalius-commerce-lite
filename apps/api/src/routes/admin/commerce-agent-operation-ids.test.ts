@@ -81,6 +81,7 @@ const EXPECTED_OPERATIONS = {
   "POST /api/v1/admin/promotions/{id}/pause": "dashboard.promotions.pause",
   "DELETE /api/v1/admin/promotions/{id}": "dashboard.promotions.archive",
   "GET /api/v1/admin/abandoned-checkouts": "dashboard.abandoned_checkouts.list",
+  "GET /api/v1/admin/abandoned-checkouts/summaries": "dashboard.abandoned_checkouts.summaries_list",
   "POST /api/v1/admin/abandoned-checkouts/bulk-delete": "dashboard.abandoned_checkouts.bulk_delete_legacy",
   "DELETE /api/v1/admin/abandoned-checkouts": "dashboard.abandoned_checkouts.delete",
   "GET /api/v1/admin/shipments/{id}": "dashboard.shipments.get",

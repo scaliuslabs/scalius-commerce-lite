@@ -50443,6 +50443,121 @@ export type GetApiV1AdminAbandonedCheckoutsResponses = {
 
 export type GetApiV1AdminAbandonedCheckoutsResponse = GetApiV1AdminAbandonedCheckoutsResponses[keyof GetApiV1AdminAbandonedCheckoutsResponses];
 
+export type GetApiV1AdminAbandonedCheckoutsSummariesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        page?: number;
+        limit?: number;
+        search?: string;
+        order?: 'asc' | 'desc';
+    };
+    url: '/api/v1/admin/abandoned-checkouts/summaries';
+};
+
+export type GetApiV1AdminAbandonedCheckoutsSummariesErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminAbandonedCheckoutsSummariesError = GetApiV1AdminAbandonedCheckoutsSummariesErrors[keyof GetApiV1AdminAbandonedCheckoutsSummariesErrors];
+
+export type GetApiV1AdminAbandonedCheckoutsSummariesResponses = {
+    /**
+     * PII-minimized abandoned checkout summaries
+     */
+    200: {
+        success: true;
+        data: {
+            checkouts: Array<{
+                id: string;
+                kind: 'cart' | 'stale_hosted_payment_order' | 'unknown';
+                stage: 'session_created' | 'cart_started' | 'info_captured' | 'archived_hosted_payment' | 'unreadable';
+                itemCount: number;
+                total: number;
+                hasCustomerContact: boolean;
+                orderId: string | null;
+                paymentMethod: 'stripe' | 'sslcommerz' | 'polar' | null;
+                paymentStatus: 'unpaid' | 'failed' | null;
+                createdAt: string | number;
+                updatedAt: string | number;
+            }>;
+            pagination: {
+                page: number;
+                limit: number;
+                total: number;
+                totalPages: number;
+            };
+        };
+    };
+};
+
+export type GetApiV1AdminAbandonedCheckoutsSummariesResponse = GetApiV1AdminAbandonedCheckoutsSummariesResponses[keyof GetApiV1AdminAbandonedCheckoutsSummariesResponses];
+
 export type PostApiV1AdminAbandonedCheckoutsBulkDeleteData = {
     body?: {
         ids: Array<string>;

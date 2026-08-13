@@ -103,6 +103,40 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
       "Admin - System Utils"
     ],
     "surface": "dashboard",
+    "exposure": "excluded",
+    "principals": [
+      "admin"
+    ],
+    "risk": "read",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "forbidden",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "exclusionReason": "Browser detail projection contains buyer PII and serialized checkout state; use dashboard.abandoned_checkouts.summaries_list for bounded routine agent listing.",
+    "rbac": {
+      "type": "permission",
+      "permission": "orders.view"
+    },
+    "inputSchema": null,
+    "outputSchema": null
+  },
+  {
+    "operationId": "dashboard.abandoned_checkouts.summaries_list",
+    "method": "GET",
+    "pathTemplate": "/api/v1/admin/abandoned-checkouts/summaries",
+    "summary": "List compact abandoned checkout summaries for agent workflows",
+    "tags": [
+      "Admin - System Utils"
+    ],
+    "surface": "dashboard",
     "exposure": "execute",
     "principals": [
       "admin"
@@ -128,59 +162,45 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
       "parameters": [
         {
           "schema": {
-            "type": "number",
-            "nullable": true,
-            "default": 1,
-            "description": "Page number"
+            "type": "integer",
+            "minimum": 1,
+            "default": 1
           },
           "required": false,
-          "description": "Page number",
           "name": "page",
           "in": "query"
         },
         {
           "schema": {
-            "type": "number",
-            "nullable": true,
+            "type": "integer",
+            "minimum": 1,
             "maximum": 100,
-            "default": 20,
-            "description": "Items per page"
+            "default": 20
           },
           "required": false,
-          "description": "Items per page",
           "name": "limit",
           "in": "query"
         },
         {
           "schema": {
             "type": "string",
-            "default": "",
-            "description": "Search term"
+            "maxLength": 160,
+            "default": ""
           },
           "required": false,
-          "description": "Search term",
           "name": "search",
           "in": "query"
         },
         {
           "schema": {
             "type": "string",
-            "default": "updatedAt",
-            "description": "Sort field"
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "default": "desc"
           },
           "required": false,
-          "description": "Sort field",
-          "name": "sort",
-          "in": "query"
-        },
-        {
-          "schema": {
-            "type": "string",
-            "default": "desc",
-            "description": "Sort order"
-          },
-          "required": false,
-          "description": "Sort order",
           "name": "order",
           "in": "query"
         }
@@ -204,18 +224,62 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "type": "object",
                 "properties": {
                   "id": {
-                    "type": "string"
-                  },
-                  "checkoutId": {
                     "type": "string",
-                    "nullable": true
+                    "maxLength": 160
                   },
-                  "customerPhone": {
+                  "kind": {
                     "type": "string",
-                    "nullable": true
+                    "enum": [
+                      "cart",
+                      "stale_hosted_payment_order",
+                      "unknown"
+                    ]
                   },
-                  "checkoutData": {
-                    "type": "string"
+                  "stage": {
+                    "type": "string",
+                    "enum": [
+                      "session_created",
+                      "cart_started",
+                      "info_captured",
+                      "archived_hosted_payment",
+                      "unreadable"
+                    ]
+                  },
+                  "itemCount": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "total": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "hasCustomerContact": {
+                    "type": "boolean"
+                  },
+                  "orderId": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 160
+                  },
+                  "paymentMethod": {
+                    "type": "string",
+                    "nullable": true,
+                    "enum": [
+                      "stripe",
+                      "sslcommerz",
+                      "polar",
+                      null
+                    ]
+                  },
+                  "paymentStatus": {
+                    "type": "string",
+                    "nullable": true,
+                    "enum": [
+                      "unpaid",
+                      "failed",
+                      null
+                    ]
                   },
                   "createdAt": {
                     "anyOf": [
@@ -240,29 +304,34 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 },
                 "required": [
                   "id",
-                  "checkoutId",
-                  "customerPhone",
-                  "checkoutData",
+                  "kind",
+                  "stage",
+                  "itemCount",
+                  "total",
+                  "hasCustomerContact",
+                  "orderId",
+                  "paymentMethod",
+                  "paymentStatus",
                   "createdAt",
                   "updatedAt"
-                ],
-                "additionalProperties": {}
-              }
+                ]
+              },
+              "maxItems": 100
             },
             "pagination": {
               "type": "object",
               "properties": {
                 "page": {
-                  "type": "number"
+                  "type": "integer"
                 },
                 "limit": {
-                  "type": "number"
+                  "type": "integer"
                 },
                 "total": {
-                  "type": "number"
+                  "type": "integer"
                 },
                 "totalPages": {
-                  "type": "number"
+                  "type": "integer"
                 }
               },
               "required": [

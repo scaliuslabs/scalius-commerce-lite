@@ -6,6 +6,7 @@ import { createId } from "@paralleldrive/cuid2";
 import { sql, inArray, desc, asc, and, count } from "drizzle-orm";
 import { abandonedCheckouts, adminFcmTokens } from "@scalius/database/schema";
 import { ftsMatch } from "@scalius/core/search";
+import { projectAbandonedCheckoutAgentSummary } from "@scalius/core/modules/orders";
 
 import { ok, noContent } from "../../utils/api-response";
 import { UnauthorizedError, ForbiddenError } from "../../utils/api-error";
@@ -92,6 +93,93 @@ app.openapi(listAbandonedCheckoutsRoute, async (c) => {
         console.error("Error fetching abandoned checkouts:", error);
         throw error;
     }
+});
+
+const abandonedCheckoutAgentSummarySchema = z.object({
+    id: z.string().max(160),
+    kind: z.enum(["cart", "stale_hosted_payment_order", "unknown"]),
+    stage: z.enum(["session_created", "cart_started", "info_captured", "archived_hosted_payment", "unreadable"]),
+    itemCount: z.number().int().min(0).max(100),
+    total: z.number().min(0),
+    hasCustomerContact: z.boolean(),
+    orderId: z.string().max(160).nullable(),
+    paymentMethod: z.enum(["stripe", "sslcommerz", "polar"]).nullable(),
+    paymentStatus: z.enum(["unpaid", "failed"]).nullable(),
+    createdAt: z.union([z.string(), z.number()]),
+    updatedAt: z.union([z.string(), z.number()]),
+});
+
+const listAbandonedCheckoutSummariesRoute = createRoute({
+    operationId: "dashboard.abandoned_checkouts.summaries_list",
+    method: "get",
+    path: "/abandoned-checkouts/summaries",
+    tags: ["Admin - System Utils"],
+    summary: "List compact abandoned checkout summaries for agent workflows",
+    request: {
+        query: z.object({
+            page: z.coerce.number().int().min(1).default(1),
+            limit: z.coerce.number().int().min(1).max(100).default(20),
+            search: z.string().max(160).optional().default(""),
+            order: z.enum(["asc", "desc"]).default("desc"),
+        }),
+    },
+    responses: {
+        200: {
+            description: "PII-minimized abandoned checkout summaries",
+            content: { "application/json": { schema: successEnvelope(z.object({
+                checkouts: z.array(abandonedCheckoutAgentSummarySchema).max(100),
+                pagination: z.object({
+                    page: z.number().int(),
+                    limit: z.number().int(),
+                    total: z.number().int(),
+                    totalPages: z.number().int(),
+                }),
+            })) } },
+        },
+        ...errorResponses,
+    },
+});
+
+app.openapi(listAbandonedCheckoutSummariesRoute, async (c) => {
+    const db = c.get("db");
+    const { page, limit, search, order } = c.req.valid("query");
+    const offset = (page - 1) * limit;
+    const whereConditions = [];
+    if (search) {
+        const digitsOnly = search.replace(/[^0-9]/g, "");
+        const compactSearch = search.replace(/\s/g, "");
+        const looksLikePhone = digitsOnly.length >= 4
+            && compactSearch.length > 0
+            && digitsOnly.length / compactSearch.length > 0.5;
+        const ftsCondition = ftsMatch(db, "abandoned_checkouts_fts", "abandoned_checkouts", search);
+        if (looksLikePhone && ftsCondition) {
+            whereConditions.push(sql`(${ftsCondition} OR ${abandonedCheckouts.customerPhone} LIKE ${"%" + digitsOnly + "%"})`);
+        } else if (looksLikePhone) {
+            whereConditions.push(sql`${abandonedCheckouts.customerPhone} LIKE ${"%" + digitsOnly + "%"}`);
+        } else if (ftsCondition) {
+            whereConditions.push(ftsCondition);
+        }
+    }
+    const combinedWhere = whereConditions.length > 0 ? and(...whereConditions) : undefined;
+    const rows = await db.select({
+        id: abandonedCheckouts.id,
+        customerPhone: abandonedCheckouts.customerPhone,
+        checkoutData: abandonedCheckouts.checkoutData,
+        createdAt: abandonedCheckouts.createdAt,
+        updatedAt: abandonedCheckouts.updatedAt,
+    }).from(abandonedCheckouts).where(combinedWhere)
+        .orderBy(order === "asc" ? asc(abandonedCheckouts.updatedAt) : desc(abandonedCheckouts.updatedAt))
+        .limit(limit).offset(offset);
+    const totalResult = await db.select({ total: count() }).from(abandonedCheckouts).where(combinedWhere);
+    const total = totalResult[0]?.total ?? 0;
+
+    return ok(c, {
+        checkouts: rows.map(({ checkoutData, customerPhone, ...row }) => ({
+            ...row,
+            ...projectAbandonedCheckoutAgentSummary(checkoutData, Boolean(customerPhone)),
+        })),
+        pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    });
 });
 
 // ── Bulk Delete Abandoned Checkouts (POST) ──

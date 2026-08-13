@@ -19,10 +19,98 @@ export interface NormalizedAbandonedCheckoutSnapshot {
     checkoutDataString: string;
 }
 
+export interface AbandonedCheckoutAgentSummary {
+    kind: "cart" | "stale_hosted_payment_order" | "unknown";
+    stage: "session_created" | "cart_started" | "info_captured" | "archived_hosted_payment" | "unreadable";
+    itemCount: number;
+    total: number;
+    hasCustomerContact: boolean;
+    orderId: string | null;
+    paymentMethod: "stripe" | "sslcommerz" | "polar" | null;
+    paymentStatus: "unpaid" | "failed" | null;
+}
+
 function asRecord(value: unknown): UnknownRecord | null {
     return value && typeof value === "object" && !Array.isArray(value)
         ? value as UnknownRecord
         : null;
+}
+
+function finiteMoney(value: unknown): number | null {
+    return typeof value === "number" && Number.isFinite(value) && value >= 0
+        ? Math.min(1_000_000_000_000, value)
+        : null;
+}
+
+/** Compact agent list projection. Buyer identity and raw checkout JSON stay out. */
+export function projectAbandonedCheckoutAgentSummary(
+    checkoutData: string,
+    hasStoredPhone: boolean,
+): AbandonedCheckoutAgentSummary {
+    try {
+        const data = asRecord(JSON.parse(checkoutData));
+        if (!data) throw new Error("Checkout data is not an object");
+
+        const paymentMethod = data.paymentMethod === "stripe"
+            || data.paymentMethod === "sslcommerz"
+            || data.paymentMethod === "polar"
+            ? data.paymentMethod
+            : null;
+        const paymentStatus = data.paymentStatus === "unpaid" || data.paymentStatus === "failed"
+            ? data.paymentStatus
+            : null;
+        const orderId = cleanText(data.id, 160) ?? null;
+        if (orderId && paymentMethod && paymentStatus) {
+            return {
+                kind: "stale_hosted_payment_order",
+                stage: "archived_hosted_payment",
+                itemCount: 0,
+                total: finiteMoney(data.totalAmount) ?? 0,
+                hasCustomerContact: hasStoredPhone || Boolean(
+                    cleanText(data.customerPhone, 32) || cleanText(data.customerEmail, 320),
+                ),
+                orderId,
+                paymentMethod,
+                paymentStatus,
+            };
+        }
+
+        const cart = asRecord(data.cart);
+        const itemCount = Array.isArray(cart?.items)
+            ? Math.min(MAX_CART_ITEMS, cart.items.length)
+            : 0;
+        const hasCustomerContact = hasStoredPhone || Boolean(
+            cleanText(data.customerPhone, 32)
+            || cleanText(data.customerEmail, 320)
+            || cleanText(data.customerName, 160)
+            || cleanText(data.shippingAddress, MAX_TEXT_LENGTH),
+        );
+        return {
+            kind: "cart",
+            stage: hasCustomerContact
+                ? "info_captured"
+                : itemCount > 0
+                    ? "cart_started"
+                    : "session_created",
+            itemCount,
+            total: finiteMoney(cart?.totalAmount) ?? 0,
+            hasCustomerContact,
+            orderId: null,
+            paymentMethod: null,
+            paymentStatus: null,
+        };
+    } catch {
+        return {
+            kind: "unknown",
+            stage: "unreadable",
+            itemCount: 0,
+            total: 0,
+            hasCustomerContact: hasStoredPhone,
+            orderId: null,
+            paymentMethod: null,
+            paymentStatus: null,
+        };
+    }
 }
 
 function cleanText(value: unknown, maxLength = MAX_TEXT_LENGTH): string | undefined {

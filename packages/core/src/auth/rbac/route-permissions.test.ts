@@ -4,6 +4,13 @@ import { PERMISSIONS } from "./permissions";
 import { getRoutePermission } from "./route-permissions";
 
 describe("route permissions", () => {
+  it("maps compact abandoned-checkout summaries to order read authority", () => {
+    expect(getRoutePermission(
+      "/api/v1/admin/abandoned-checkouts/summaries",
+      "GET",
+    )).toEqual({ permission: PERMISSIONS.ORDERS_VIEW });
+  });
+
   it("separates content edits from activation and publishing authority", () => {
     expect(getRoutePermission(
       "/api/v1/admin/analytics/analytics_1",
