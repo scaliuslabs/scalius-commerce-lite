@@ -214,8 +214,6 @@ export async function listCategories(
         showTrashed?: boolean;
         sort?: "name" | "status" | "createdAt" | "updatedAt";
         order?: "asc" | "desc";
-        /** Avoid selecting merchant rich text and long discovery fields. */
-        agentSummary?: boolean;
     } = {},
 ) {
     const {
@@ -226,7 +224,6 @@ export async function listCategories(
         showTrashed = false,
         sort = "updatedAt",
         order = "desc",
-        agentSummary = false,
     } = options;
     const page = Number.isSafeInteger(rawPage) && rawPage > 0 ? rawPage : 1;
     const limit = Number.isSafeInteger(rawLimit)
@@ -269,11 +266,11 @@ export async function listCategories(
             id: categories.id,
             name: categories.name,
             slug: categories.slug,
-            description: agentSummary ? sql<string | null>`NULL` : categories.description,
-            imageUrl: agentSummary ? sql<string | null>`NULL` : categories.imageUrl,
-            metaTitle: agentSummary ? sql<string | null>`NULL` : categories.metaTitle,
-            metaDescription: agentSummary ? sql<string | null>`NULL` : categories.metaDescription,
-            canonicalPath: agentSummary ? sql<string | null>`NULL` : categories.canonicalPath,
+            description: categories.description,
+            imageUrl: categories.imageUrl,
+            metaTitle: categories.metaTitle,
+            metaDescription: categories.metaDescription,
+            canonicalPath: categories.canonicalPath,
             noIndex: categories.noIndex,
             excludeFromSitemap: categories.excludeFromSitemap,
             status: categories.status,
@@ -331,18 +328,64 @@ export async function listCategoryAgentSummaries(
         order?: "asc" | "desc";
     } = {},
 ) {
-    const result = await listCategories(db, { ...options, agentSummary: true });
+    const {
+        page: rawPage = 1,
+        limit: rawLimit = 20,
+        search = "",
+        status,
+        showTrashed = false,
+        sort = "updatedAt",
+        order = "desc",
+    } = options;
+    const page = Number.isSafeInteger(rawPage) && rawPage > 0 ? rawPage : 1;
+    const limit = Number.isSafeInteger(rawLimit)
+        ? Math.min(Math.max(rawLimit, 1), 50)
+        : 20;
+    const conditions: (SQL | undefined)[] = [
+        showTrashed ? isNotNull(categories.deletedAt) : isNull(categories.deletedAt),
+    ];
+    if (search) conditions.push(ftsMatch(db, "categories_fts", "categories", search));
+    if (status) conditions.push(eq(categories.status, status));
+    const where = and(...conditions);
+    const sortField = sort === "name"
+        ? categories.name
+        : sort === "status"
+            ? categories.status
+            : sort === "createdAt"
+                ? categories.createdAt
+                : categories.updatedAt;
+    const [counts, rows] = await db.batch([
+        db.select({ count: sql<number>`count(*)` }).from(categories).where(where),
+        db.select({
+            id: categories.id,
+            name: categories.name,
+            slug: categories.slug,
+            status: categories.status,
+            revision: categories.revision,
+            productCount: categoryAssignedProductCountProjection(),
+            publishReady: sql<number>`CASE
+                WHEN ${buyerResolvableCategoryProductExists(categories.id)} THEN 1
+                ELSE 0
+            END`,
+        })
+            .from(categories)
+            .where(where)
+            .limit(limit)
+            .offset((page - 1) * limit)
+            .orderBy(order === "asc" ? asc(sortField) : desc(sortField)),
+    ]);
+    const total = Number(counts[0]?.count ?? 0);
     return {
-        categories: result.categories.map((category) => ({
+        categories: rows.map((category) => ({
             id: category.id,
             name: category.name.slice(0, 100),
             slug: category.slug.slice(0, 100),
             status: category.status,
             revision: category.revision,
-            productCount: category.productCount,
-            publishReady: category.publishReady,
+            productCount: Number(category.productCount ?? 0),
+            publishReady: Boolean(category.publishReady),
         })),
-        pagination: result.pagination,
+        pagination: { total, page, limit, totalPages: Math.ceil(total / limit) },
     };
 }
 
