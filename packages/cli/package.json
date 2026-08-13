@@ -1,7 +1,25 @@
 {
-  "name": "@scalius/cli",
+  "name": "scalius",
   "version": "0.1.0",
-  "description": "First-party CLI for Scalius Commerce operations",
+  "description": "Secure CLI for every reviewed Scalius Commerce operation",
+  "keywords": [
+    "scalius",
+    "commerce",
+    "ecommerce",
+    "cli",
+    "mcp",
+    "automation"
+  ],
+  "author": "Scalius Labs",
+  "homepage": "https://github.com/scaliuslabs/scalius-commerce-lite#readme",
+  "bugs": {
+    "url": "https://github.com/scaliuslabs/scalius-commerce-lite/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/scaliuslabs/scalius-commerce-lite.git",
+    "directory": "packages/cli"
+  },
   "type": "module",
   "license": "AGPL-3.0-only",
   "bin": {
@@ -20,6 +38,7 @@
   "scripts": {
     "build": "../../node_modules/typescript7/bin/tsc -p tsconfig.build.json && node scripts/set-bin-mode.mjs",
     "lint": "eslint src/ test/",
+    "prepublishOnly": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
     "test": "vitest run",
     "typecheck": "../../node_modules/typescript7/bin/tsc --noEmit"
   },
