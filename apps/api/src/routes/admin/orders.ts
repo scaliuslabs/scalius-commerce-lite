@@ -389,6 +389,7 @@ app.openapi(catalogProductsRoute, async (c) => {
         activeOnly: true,
         sort: "name",
         order: "asc",
+        agentSummary: true,
     });
     return ok(c, result);
 });

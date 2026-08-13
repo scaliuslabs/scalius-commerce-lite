@@ -63,6 +63,7 @@ describe("admin orders route boundaries", () => {
             ?.split("// ─── GET / (List)")[0] ?? "";
 
         expect(catalogRoute).toContain('path: "/catalog-products"');
+        expect(catalogRoute).toContain("agentSummary: true");
         expect(catalogRoute).toContain(".max(20)");
         expect(catalogRoute).toContain(".max(100)");
         expect(catalogRoute).toContain("activeOnly: true");
