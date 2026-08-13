@@ -23,6 +23,7 @@ import {
 } from "@/lib/public-worker-cache";
 import { BUILD_ID } from "@/config/build-id";
 import { deferProductGlobalStylesheet } from "@/lib/product-style-delivery";
+import { isBrowserContinuationRelayPathname } from "@/lib/browser-continuation-relay";
 
 function getEnv(): Env | null {
   try {
@@ -94,7 +95,9 @@ const responsePolicyMiddleware = defineMiddleware(async (context, next) => {
     }
   }
 
-  const securedResponse = await setPageCspHeader(response, env ?? undefined);
+  const securedResponse = isBrowserContinuationRelayPathname(url.pathname)
+    ? response
+    : await setPageCspHeader(response, env ?? undefined);
   return deferProductGlobalStylesheet(securedResponse, url.pathname);
 });
 
@@ -129,9 +132,12 @@ const transportSecurityMiddleware = defineMiddleware(
     const redirect = redirectPlaintextRequest(request);
     if (redirect) return redirect;
 
-    return applyBaselineSecurityHeaders(request, await next(), {
-      frameProtection: "same-origin",
+    const privateRelay = isBrowserContinuationRelayPathname(new URL(request.url).pathname);
+    const response = applyBaselineSecurityHeaders(request, await next(), {
+      frameProtection: privateRelay ? "deny" : "same-origin",
     });
+    if (privateRelay) response.headers.set("Referrer-Policy", "no-referrer");
+    return response;
   },
 );
 

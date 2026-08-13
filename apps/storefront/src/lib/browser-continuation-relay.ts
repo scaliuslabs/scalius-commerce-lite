@@ -1,11 +1,16 @@
 const RELAY_PREFIX = "scalius-continuation-v1:";
 const MAX_RELAY_NAME_LENGTH = 16_384;
 const MAX_RELAY_PAYLOAD_BYTES = 8_192;
+const RELAY_PATHS = new Set(["/agent/continue", "/theme-preview/continue"]);
 
 export interface BrowserContinuationRelayField {
   name: string;
   pattern: string;
   maxBytes: number;
+}
+
+export function isBrowserContinuationRelayPathname(pathname: string): boolean {
+  return RELAY_PATHS.has(pathname);
 }
 
 const PRIVATE_HEADERS = {

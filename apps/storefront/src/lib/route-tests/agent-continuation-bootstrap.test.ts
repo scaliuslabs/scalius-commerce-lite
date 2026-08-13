@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/api/client", () => mocks);
 
 import { GET, POST } from "../../pages/agent/continue";
+import { isBrowserContinuationRelayPathname } from "../browser-continuation-relay";
 
 const CODE = `acb_${"a".repeat(20)}_${"b".repeat(43)}`;
 const ID = `acn_${"a".repeat(20)}`;
@@ -78,5 +79,12 @@ describe("agent storefront body-only bootstrap", () => {
     expect(html).toContain('button.textContent = "Continue securely";');
     expect(html).toContain("form.submit();");
     expect(html).not.toContain(CODE);
+  });
+
+  it("identifies only the two exact private relay paths", () => {
+    expect(isBrowserContinuationRelayPathname("/agent/continue")).toBe(true);
+    expect(isBrowserContinuationRelayPathname("/theme-preview/continue")).toBe(true);
+    expect(isBrowserContinuationRelayPathname("/agent/continue/anything")).toBe(false);
+    expect(isBrowserContinuationRelayPathname("/")).toBe(false);
   });
 });
