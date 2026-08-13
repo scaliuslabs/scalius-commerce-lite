@@ -842,7 +842,7 @@ export const postApiV1StorefrontAgentContinuationsByContinuationIdPaymentStart =
 });
 
 /**
- * Reconcile a provider-confirmed Stripe payment inside the buyer-only tab
+ * Reconcile a provider-confirmed payment inside the buyer-only tab
  */
 export const postApiV1StorefrontAgentContinuationsByContinuationIdPaymentReconcile = <ThrowOnError extends boolean = false>(options: Options<PostApiV1StorefrontAgentContinuationsByContinuationIdPaymentReconcileData, ThrowOnError>): RequestResult<PostApiV1StorefrontAgentContinuationsByContinuationIdPaymentReconcileResponses, PostApiV1StorefrontAgentContinuationsByContinuationIdPaymentReconcileErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1StorefrontAgentContinuationsByContinuationIdPaymentReconcileResponses, PostApiV1StorefrontAgentContinuationsByContinuationIdPaymentReconcileErrors, ThrowOnError>({
     security: [{
