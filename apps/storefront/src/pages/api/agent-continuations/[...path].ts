@@ -14,6 +14,7 @@ const POST_ACTIONS = new Set([
   "customer/send-otp",
   "customer/verify-otp",
   "payment/start",
+  "payment/reconcile",
   "recovery/send-otp",
   "recovery/verify-otp",
 ]);

@@ -6935,6 +6935,124 @@ export type PostApiV1StorefrontAgentContinuationsByContinuationIdPaymentStartRes
 
 export type PostApiV1StorefrontAgentContinuationsByContinuationIdPaymentStartResponse = PostApiV1StorefrontAgentContinuationsByContinuationIdPaymentStartResponses[keyof PostApiV1StorefrontAgentContinuationsByContinuationIdPaymentStartResponses];
 
+export type PostApiV1StorefrontAgentContinuationsByContinuationIdPaymentReconcileData = {
+    body: {
+        [key: string]: never;
+    };
+    path: {
+        continuationId: string;
+    };
+    query?: never;
+    url: '/api/v1/storefront/agent-continuations/{continuationId}/payment/reconcile';
+};
+
+export type PostApiV1StorefrontAgentContinuationsByContinuationIdPaymentReconcileErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1StorefrontAgentContinuationsByContinuationIdPaymentReconcileError = PostApiV1StorefrontAgentContinuationsByContinuationIdPaymentReconcileErrors[keyof PostApiV1StorefrontAgentContinuationsByContinuationIdPaymentReconcileErrors];
+
+export type PostApiV1StorefrontAgentContinuationsByContinuationIdPaymentReconcileResponses = {
+    /**
+     * Provider reconciliation state
+     */
+    200: {
+        success: true;
+        data: {
+            status: 'pending' | 'scheduled' | 'settled';
+            providerStatus: string | null;
+        };
+    };
+    /**
+     * Confirmed payment scheduled for settlement
+     */
+    202: {
+        success: true;
+        data: {
+            status: 'scheduled';
+            providerStatus: string | null;
+        };
+    };
+};
+
+export type PostApiV1StorefrontAgentContinuationsByContinuationIdPaymentReconcileResponse = PostApiV1StorefrontAgentContinuationsByContinuationIdPaymentReconcileResponses[keyof PostApiV1StorefrontAgentContinuationsByContinuationIdPaymentReconcileResponses];
+
 export type PostApiV1StorefrontAgentContinuationsByContinuationIdRecoverySendOtpData = {
     body: {
         channel?: 'email' | 'sms' | 'whatsapp';

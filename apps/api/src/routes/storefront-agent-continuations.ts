@@ -52,6 +52,7 @@ import {
   isPaymentSessionProcessingResult,
 } from "./payment/payment-session-create";
 import { acceptedPaymentSessionProcessing, paymentSessionProcessingResponse } from "./payment/payment-session-response";
+import { reconcileStripeOrderPayment } from "./payment/stripe-reconciliation";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -373,6 +374,47 @@ app.openapi(startPaymentRoute, async (c) => {
   return isPaymentSessionProcessingResult(session)
     ? acceptedPaymentSessionProcessing(c, session)
     : ok(c, session);
+});
+
+const reconcilePaymentRoute = createRoute({
+  method: "post",
+  path: "/{continuationId}/payment/reconcile",
+  operationId: "system.storefront_continuations.payment_reconcile",
+  tags: ["Internal Storefront Continuations"],
+  summary: "Reconcile a provider-confirmed Stripe payment inside the buyer-only tab",
+  security: [{ bearerAuth: [] }],
+  request: {
+    params: continuationPathSchema,
+    body: { required: true, content: { "application/json": { schema: z.object({}).strict() } } },
+  },
+  responses: {
+    200: { description: "Provider reconciliation state", content: { "application/json": { schema: successEnvelope(z.object({
+      status: z.enum(["pending", "scheduled", "settled"]),
+      providerStatus: z.string().nullable(),
+    })) } } },
+    202: { description: "Confirmed payment scheduled for settlement", content: { "application/json": { schema: successEnvelope(z.object({
+      status: z.literal("scheduled"),
+      providerStatus: z.string().nullable(),
+    })) } } },
+    503: serviceUnavailableResponse,
+    ...continuationErrors,
+  },
+});
+app.openapi(reconcilePaymentRoute, async (c) => {
+  privateNoStore(c);
+  const access = await assertHostedContinuationOrderAccess(
+    c.get("db"),
+    c.req.valid("param").continuationId,
+  );
+  const { data, accepted } = await reconcileStripeOrderPayment({
+    db: c.get("db"), env: c.env, orderId: access.orderId,
+  });
+  return accepted
+    ? c.json({ success: true as const, data: {
+      status: "scheduled" as const,
+      providerStatus: data.providerStatus,
+    } }, 202)
+    : ok(c, data);
 });
 
 const sendRecoveryOtpRoute = createRoute({

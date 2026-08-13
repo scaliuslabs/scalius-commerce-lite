@@ -11,6 +11,7 @@ describe("agent continuation same-origin proxy", () => {
   it("uses an exact continuation/action allowlist and service authentication", () => {
     expect(source).toContain("/^acn_[A-Za-z0-9_-]{20}$/");
     expect(source).toContain("POST_ACTIONS");
+    expect(source).toContain('"payment/reconcile"');
     expect(source).toContain("shouldRejectCrossOriginCookieRequest");
     expect(source).toContain("readAgentContinuationCookie");
     expect(source).toContain('request.headers.get("cookie")');

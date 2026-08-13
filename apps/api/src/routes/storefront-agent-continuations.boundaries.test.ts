@@ -35,9 +35,9 @@ describe("hosted storefront continuation boundaries", () => {
     const operationIds = [...source.matchAll(/operationId: "([^"]+)"/g)]
       .map((match) => match[1])
       .filter((id): id is string => Boolean(id));
-    expect(operationIds).toHaveLength(8);
+    expect(operationIds).toHaveLength(9);
     expect(operationIds.every((id) => id.startsWith("system.storefront_continuations."))).toBe(true);
-    expect(source.match(/security: \[\{ bearerAuth: \[\] \}\]/g)).toHaveLength(8);
+    expect(source.match(/security: \[\{ bearerAuth: \[\] \}\]/g)).toHaveLength(9);
   });
 
   it("rejects a theme preview exchange without service authentication", async () => {
