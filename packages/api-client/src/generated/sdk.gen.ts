@@ -2981,7 +2981,7 @@ export const postApiV1AdminInventoryMovementsExport = <ThrowOnError extends bool
 });
 
 /**
- * Get inventory alerts
+ * Get low-stock and out-of-stock product inventory alerts
  *
  * Find low-stock, out-of-stock, and other inventory issues needing attention.
  */

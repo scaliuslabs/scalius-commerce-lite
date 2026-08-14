@@ -74,17 +74,20 @@ describe("finalized API OpenAPI interop", () => {
 
     const commonMerchantQuestions: Array<[string, string]> = [
       ["what are today's sales?", "dashboard.home.activity"],
+      ["how much did we sell today?", "dashboard.home.activity"],
       ["sales this month", "dashboard.home.summary"],
       ["orders needing fulfillment", "dashboard.orders.list"],
+      ["orders waiting to ship", "dashboard.orders.list"],
       ["low stock issues", "dashboard.inventory_alerts.list"],
+      ["low stock products", "dashboard.inventory_alerts.list"],
       ["new customers", "dashboard.customers.list"],
       ["payment problems", "dashboard.orders.payment_recovery_list"],
       ["is my store healthy?", "dashboard.checkout.readiness_get"],
+      ["is my store ready?", "dashboard.checkout.readiness_get"],
       ["analytics status", "dashboard.analytics.health"],
     ];
     for (const [question, expectedOperationId] of commonMerchantQuestions) {
-      expect(searchOperations(operations, question).map(({ id }) => id), question)
-        .toContain(expectedOperationId);
+      expect(searchOperations(operations, question)[0]?.id, question).toBe(expectedOperationId);
     }
   }, 15_000);
 });

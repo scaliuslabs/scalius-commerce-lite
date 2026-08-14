@@ -350,7 +350,7 @@ const alertsRoute = createRoute({
     path: "/alerts",
     operationId: "dashboard.inventory_alerts.list",
     tags: ["Admin - Inventory"],
-    summary: "Get inventory alerts",
+    summary: "Get low-stock and out-of-stock product inventory alerts",
     description: "Find low-stock, out-of-stock, and other inventory issues needing attention.",
     request: {
         query: z.object({
