@@ -287,7 +287,51 @@ function rawFilePolicy(document: OpenApiDocument, operation: IndexedOperation): 
   };
 }
 
-function serializeJsonBody(operation: IndexedOperation, value: unknown): string {
+function declaredJsonBodyProperties(
+  document: OpenApiDocument,
+  operation: IndexedOperation,
+): Set<string> | undefined {
+  const declaration = requestBody(document, operation)?.content?.["application/json"];
+  const root = resolveRef(document, declaration?.schema);
+  if (!isObject(root) || (root.additionalProperties !== undefined && root.additionalProperties !== false)) {
+    return undefined;
+  }
+  const candidates = [root];
+  for (const key of ["oneOf", "anyOf", "allOf"] as const) {
+    if (Array.isArray(root[key])) {
+      for (const candidate of root[key]) {
+        const resolved = resolveRef(document, candidate);
+        if (isObject(resolved)) candidates.push(resolved);
+      }
+    }
+  }
+  const declared = new Set<string>();
+  for (const candidate of candidates) {
+    const properties = isObject(candidate.properties) ? candidate.properties : undefined;
+    if (properties) Object.keys(properties).forEach((key) => declared.add(key));
+  }
+  return declared.size > 0 ? declared : undefined;
+}
+
+function validateJsonBodyProperties(
+  document: OpenApiDocument,
+  operation: IndexedOperation,
+  value: unknown,
+): void {
+  if (!isObject(value)) return;
+  const declared = declaredJsonBodyProperties(document, operation);
+  if (!declared) return;
+  const unknown = Object.keys(value).filter((key) => !declared.has(key)).sort();
+  if (unknown.length === 0) return;
+  throw new CliError(
+    5,
+    "unknown_body_property",
+    `Unknown body property '${unknown[0]}'. Allowed properties: ${[...declared].sort().join(", ")}.`,
+  );
+}
+
+function serializeJsonBody(document: OpenApiDocument, operation: IndexedOperation, value: unknown): string {
+  validateJsonBodyProperties(document, operation, value);
   let serialized: string | undefined;
   try {
     serialized = JSON.stringify(value);
@@ -545,7 +589,7 @@ export async function executeOperation(
     }
   } else if (options.input.body !== undefined) {
     headers.set("Content-Type", "application/json");
-    body = serializeJsonBody(operation, options.input.body);
+    body = serializeJsonBody(document, operation, options.input.body);
     response = await fetchWithNetworkErrors(runtime, url.toString(), {
       method: operation.method,
       headers,

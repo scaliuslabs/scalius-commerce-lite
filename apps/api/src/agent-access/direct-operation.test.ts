@@ -3,15 +3,15 @@ import { resolveDirectAgentOperation } from "./direct-operation";
 
 describe("direct agent operation manifest matching", () => {
   it("matches an exact executable method and path", () => {
-    expect(resolveDirectAgentOperation("GET", "/api/v1/admin/products")).toMatchObject({
-      operationId: "dashboard.products.list",
+    expect(resolveDirectAgentOperation("GET", "/api/v1/admin/products/summaries")).toMatchObject({
+      operationId: "dashboard.products.list_summaries",
       exposure: "execute",
       risk: "read",
     });
   });
 
   it("does not treat a method mismatch as the same operation", () => {
-    expect(resolveDirectAgentOperation("PATCH", "/api/v1/admin/products")).toBeNull();
+    expect(resolveDirectAgentOperation("PATCH", "/api/v1/admin/products/summaries")).toBeNull();
   });
 
   it("returns excluded manifest entries so the authority layer can deny them", () => {
