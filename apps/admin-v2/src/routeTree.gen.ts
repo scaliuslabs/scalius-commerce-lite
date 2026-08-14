@@ -82,6 +82,7 @@ import { Route as AdminProductsProductIdEditRouteImport } from './routes/admin/p
 import { Route as AdminPromotionsPromotionIdEditRouteImport } from './routes/admin/promotions/$promotionId/edit'
 import { Route as ApiV1AdminSplatRouteImport } from './routes/api/v1/admin/$'
 import { Route as AdminSettingsAgentAccessAuthorizeRequestIdRouteImport } from './routes/admin/settings/agent-access.authorize.$requestId'
+import { Route as AdminSettingsAgentAccessContinueHandoffIdRouteImport } from './routes/admin/settings/agent-access.continue.$handoffId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -466,6 +467,12 @@ const AdminSettingsAgentAccessAuthorizeRequestIdRoute =
     path: '/authorize/$requestId',
     getParentRoute: () => AdminSettingsAgentAccessRoute,
   } as any)
+const AdminSettingsAgentAccessContinueHandoffIdRoute =
+  AdminSettingsAgentAccessContinueHandoffIdRouteImport.update({
+    id: '/continue/$handoffId',
+    path: '/continue/$handoffId',
+    getParentRoute: () => AdminSettingsAgentAccessRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -541,6 +548,7 @@ export interface FileRoutesByFullPath {
   '/admin/orders/$orderId/': typeof AdminOrdersOrderIdIndexRoute
   '/admin/products/$productId/': typeof AdminProductsProductIdIndexRoute
   '/admin/settings/agent-access/authorize/$requestId': typeof AdminSettingsAgentAccessAuthorizeRequestIdRoute
+  '/admin/settings/agent-access/continue/$handoffId': typeof AdminSettingsAgentAccessContinueHandoffIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -615,6 +623,7 @@ export interface FileRoutesByTo {
   '/admin/orders/$orderId': typeof AdminOrdersOrderIdIndexRoute
   '/admin/products/$productId': typeof AdminProductsProductIdIndexRoute
   '/admin/settings/agent-access/authorize/$requestId': typeof AdminSettingsAgentAccessAuthorizeRequestIdRoute
+  '/admin/settings/agent-access/continue/$handoffId': typeof AdminSettingsAgentAccessContinueHandoffIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -691,6 +700,7 @@ export interface FileRoutesById {
   '/admin/orders/$orderId/': typeof AdminOrdersOrderIdIndexRoute
   '/admin/products/$productId/': typeof AdminProductsProductIdIndexRoute
   '/admin/settings/agent-access/authorize/$requestId': typeof AdminSettingsAgentAccessAuthorizeRequestIdRoute
+  '/admin/settings/agent-access/continue/$handoffId': typeof AdminSettingsAgentAccessContinueHandoffIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -768,6 +778,7 @@ export interface FileRouteTypes {
     | '/admin/orders/$orderId/'
     | '/admin/products/$productId/'
     | '/admin/settings/agent-access/authorize/$requestId'
+    | '/admin/settings/agent-access/continue/$handoffId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -842,6 +853,7 @@ export interface FileRouteTypes {
     | '/admin/orders/$orderId'
     | '/admin/products/$productId'
     | '/admin/settings/agent-access/authorize/$requestId'
+    | '/admin/settings/agent-access/continue/$handoffId'
   id:
     | '__root__'
     | '/'
@@ -917,6 +929,7 @@ export interface FileRouteTypes {
     | '/admin/orders/$orderId/'
     | '/admin/products/$productId/'
     | '/admin/settings/agent-access/authorize/$requestId'
+    | '/admin/settings/agent-access/continue/$handoffId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -1446,17 +1459,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminSettingsAgentAccessAuthorizeRequestIdRouteImport
       parentRoute: typeof AdminSettingsAgentAccessRoute
     }
+    '/admin/settings/agent-access/continue/$handoffId': {
+      id: '/admin/settings/agent-access/continue/$handoffId'
+      path: '/continue/$handoffId'
+      fullPath: '/admin/settings/agent-access/continue/$handoffId'
+      preLoaderRoute: typeof AdminSettingsAgentAccessContinueHandoffIdRouteImport
+      parentRoute: typeof AdminSettingsAgentAccessRoute
+    }
   }
 }
 
 interface AdminSettingsAgentAccessRouteChildren {
   AdminSettingsAgentAccessAuthorizeRequestIdRoute: typeof AdminSettingsAgentAccessAuthorizeRequestIdRoute
+  AdminSettingsAgentAccessContinueHandoffIdRoute: typeof AdminSettingsAgentAccessContinueHandoffIdRoute
 }
 
 const AdminSettingsAgentAccessRouteChildren: AdminSettingsAgentAccessRouteChildren =
   {
     AdminSettingsAgentAccessAuthorizeRequestIdRoute:
       AdminSettingsAgentAccessAuthorizeRequestIdRoute,
+    AdminSettingsAgentAccessContinueHandoffIdRoute:
+      AdminSettingsAgentAccessContinueHandoffIdRoute,
   }
 
 const AdminSettingsAgentAccessRouteWithChildren =

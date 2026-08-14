@@ -171,7 +171,7 @@ describe("agent browser handoff relational authority", () => {
       env,
     );
     expect(created.url).toBe(
-      `https://dashboard.example.test/api/v1/admin/agent-access/browser-handoffs/${created.handoffId}`,
+      `https://dashboard.example.test/admin/settings/agent-access/continue/${created.handoffId}`,
     );
     const row = sqlite.prepare("SELECT encrypted_action encryptedAction FROM agent_browser_handoffs").get() as {
       encryptedAction: string;

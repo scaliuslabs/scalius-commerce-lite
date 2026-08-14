@@ -225,7 +225,7 @@ describe("MCP secure browser handoff chain", () => {
       expect.objectContaining({
         type: "resource_link",
         uri: expect.stringMatching(
-          /^https:\/\/dashboard\.example\.test\/api\/v1\/admin\/agent-access\/browser-handoffs\/abh_[A-Za-z0-9_-]{20}$/,
+          /^https:\/\/dashboard\.example\.test\/admin\/settings\/agent-access\/continue\/abh_[A-Za-z0-9_-]{20}$/,
         ),
       }),
     ]));

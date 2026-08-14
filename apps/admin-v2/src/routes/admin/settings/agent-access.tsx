@@ -34,15 +34,13 @@ export const Route = createFileRoute("/admin/settings/agent-access")({
 });
 
 function AgentAccessRoute() {
-  const isAuthorizationChild = useRouterState({
+  const isAgentAccessChild = useRouterState({
     select: (state) =>
-      state.location.pathname.startsWith(
-        "/admin/settings/agent-access/authorize/",
-      ),
+      state.location.pathname !== "/admin/settings/agent-access",
   });
   const context = Route.useRouteContext();
 
-  if (isAuthorizationChild) return <Outlet />;
+  if (isAgentAccessChild) return <Outlet />;
 
   return (
     <AgentAccessSettingsPage
