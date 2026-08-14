@@ -1,6 +1,6 @@
 const SEARCH_STOP_WORDS = new Set([
   "a", "an", "are", "can", "did", "do", "for", "give", "how", "i", "is", "last", "low", "many", "me", "much", "my", "mine",
-  "and", "month", "need", "needing", "of", "on", "our", "please", "s", "show", "tell", "the", "this", "to", "total", "waiting", "we", "what", "which", "with",
+  "and", "have", "month", "need", "needing", "of", "on", "our", "please", "s", "show", "tell", "the", "this", "to", "total", "waiting", "we", "what", "which", "with",
 ]);
 
 const MERCHANT_TERM_GROUPS = [
@@ -14,6 +14,10 @@ const MERCHANT_TERM_GROUPS = [
   ["customer", "customers", "buyer", "buyers", "shopper", "shoppers"],
   ["fulfill", "fulfil", "fulfillment", "fulfilment", "unfulfilled", "ship", "shipped", "shipping", "shipment", "shipments", "delivery", "deliveries"],
   ["payment", "payments", "gateway", "gateways"],
+  ["method", "methods", "option", "options"],
+  ["count", "counts", "number", "summary", "total"],
+  ["pending", "unpaid", "overdue", "stuck"],
+  ["refund", "refunds", "return", "returns"],
   ["recent", "latest", "new", "list", "activity", "summary"],
   ["operational", "health", "healthy", "ready", "readiness", "status", "store", "checkout", "configuration"],
 ] as const;
@@ -53,29 +57,55 @@ function storefrontWorkflowTargets(queryWords: Set<string>): string[] {
   return [];
 }
 
+function merchantIntentTarget(queryWords: Set<string>): string | null {
+  const has = (...concepts: string[]) => concepts.some((concept) => queryWords.has(concept));
+  if (has("today", "yesterday", "daily", "day") && has(
+    "sale", "sales", "sell", "sold", "revenue", "gmv", "order", "orders", "customer", "customers", "buyer", "buyers",
+  )) return "dashboard.home.activity";
+  if (has("sale", "sales", "sell", "sold", "revenue", "gmv")) return "dashboard.home.summary";
+  if (has("product", "products", "catalog", "merchandise") && has("count", "counts", "number", "summary", "total", "many")) {
+    return "dashboard.products.stats";
+  }
+  if (has("customer", "customers", "buyer", "buyers", "shopper", "shoppers") && has("count", "counts", "number", "summary", "total", "many")) {
+    return "dashboard.home.summary";
+  }
+  if (has("refund", "refunds", "return", "returns") && has("need", "needing", "attention", "issue", "issues", "problem", "problems", "stuck")) {
+    return "dashboard.orders.list";
+  }
+  if (has("order", "orders") && has("recent", "latest", "new", "pending", "unpaid", "overdue", "refund", "refunds", "return", "returns")) {
+    return "dashboard.orders.list";
+  }
+  if (has("order", "orders") && has("fulfill", "fulfil", "fulfillment", "fulfilment", "unfulfilled", "ship", "shipped", "shipping", "delivery")) {
+    return "dashboard.orders.list";
+  }
+  if (has("inventory", "stock") && has("low", "out", "issue", "issues", "problem", "problems", "alert", "alerts")) {
+    return "dashboard.inventory_alerts.list";
+  }
+  if (has("inventory", "stock") && has("status", "summary", "count", "counts", "number", "total", "current")) {
+    return "dashboard.inventory.list";
+  }
+  if (has("payment", "payments", "gateway", "gateways") && has("method", "methods", "option", "options", "enabled", "configured", "available")) {
+    return "dashboard.payments.methods_get";
+  }
+  if (has("payment", "payments") && has("issue", "issues", "problem", "problems", "failed", "failure", "failures", "recovery")) {
+    return "dashboard.orders.payment_recovery_list";
+  }
+  if (has("store", "checkout", "ready", "readiness") && has("health", "healthy", "ready", "readiness", "status")) {
+    return "dashboard.checkout.readiness_get";
+  }
+  if (has("analytics") && has("health", "healthy", "status")) return "dashboard.analytics.health";
+  if (has("customer", "customers", "buyer", "buyers", "shopper", "shoppers") && has("new", "recent", "latest", "list")) {
+    return "dashboard.customers.list";
+  }
+  return null;
+}
+
 function intentBonus(searchableText: string, query: string): number {
   const queryWords = new Set(words(query));
-  const has = (...concepts: string[]) => concepts.some((concept) => queryWords.has(concept));
   const workflowTargetIndex = storefrontWorkflowTargets(queryWords)
     .findIndex((operationId) => searchableText.toLocaleLowerCase().includes(operationId));
   if (workflowTargetIndex >= 0) return 120 - (workflowTargetIndex * 25);
-  const target = has("sale", "sales", "sell", "sold", "revenue", "gmv") && has("today", "yesterday", "daily", "day")
-    ? "dashboard.home.activity"
-    : has("sale", "sales", "sell", "sold", "revenue", "gmv")
-      ? "dashboard.home.summary"
-      : has("order", "orders") && has("fulfill", "fulfil", "fulfillment", "fulfilment", "unfulfilled", "ship", "shipped", "shipping", "delivery")
-        ? "dashboard.orders.list"
-        : has("inventory", "stock") && has("low", "out", "issue", "issues", "problem", "problems", "alert", "alerts")
-          ? "dashboard.inventory_alerts.list"
-          : has("payment", "payments") && has("issue", "issues", "problem", "problems", "failed", "failure", "failures", "recovery")
-            ? "dashboard.orders.payment_recovery_list"
-            : has("store", "checkout", "ready", "readiness") && has("health", "healthy", "ready", "readiness", "status")
-              ? "dashboard.checkout.readiness_get"
-              : has("analytics") && has("health", "healthy", "status")
-                ? "dashboard.analytics.health"
-                : has("customer", "customers", "buyer", "buyers", "shopper", "shoppers") && has("new", "recent", "latest", "list")
-                  ? "dashboard.customers.list"
-                  : null;
+  const target = merchantIntentTarget(queryWords);
   return target && searchableText.toLocaleLowerCase().includes(target) ? 60 : 0;
 }
 
