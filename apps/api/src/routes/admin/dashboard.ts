@@ -196,8 +196,14 @@ const dashboardActivityRoute = createRoute({
     path: "/activity",
     tags: ["Admin - Dashboard"],
     summary: "Get dashboard daily activity chart data",
-    description: "Answer daily or today's sales, revenue, order-count, and new-customer questions with a bounded 90-day activity series.",
+    description: "Answer daily or today's sales, revenue, order-count, and new-customer questions. Request days=1 for a minimal current-day result; the dashboard defaults to 90 days.",
     operationId: "dashboard.home.activity",
+    request: {
+        query: z.object({
+            days: z.coerce.number().int().min(1).max(90).optional().default(90)
+                .openapi({ description: "Merchant-calendar days ending today; use 1 for today's summary" }),
+        }),
+    },
     responses: {
         200: {
             description: "Dashboard daily activity data",
@@ -208,8 +214,9 @@ const dashboardActivityRoute = createRoute({
 
 app.openapi(dashboardActivityRoute, async (c) => {
     const db = c.get("db");
+    const { days } = c.req.valid("query");
 
-    const dailyActivityData = await getDailyActivityData(db, 90);
+    const dailyActivityData = await getDailyActivityData(db, days);
 
     return ok(c, { dailyActivityData: projectDailyActivity(dailyActivityData) });
 });

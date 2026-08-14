@@ -3910,7 +3910,7 @@ export const getApiV1AdminDashboardSummary = <ThrowOnError extends boolean = fal
 /**
  * Get dashboard daily activity chart data
  *
- * Answer daily or today's sales, revenue, order-count, and new-customer questions with a bounded 90-day activity series.
+ * Answer daily or today's sales, revenue, order-count, and new-customer questions. Request days=1 for a minimal current-day result; the dashboard defaults to 90 days.
  */
 export const getApiV1AdminDashboardActivity = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminDashboardActivityData, ThrowOnError>): RequestResult<GetApiV1AdminDashboardActivityResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminDashboardActivityResponses, unknown, ThrowOnError>({
     security: [{

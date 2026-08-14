@@ -26393,7 +26393,12 @@ export type GetApiV1AdminDashboardSummaryResponse = GetApiV1AdminDashboardSummar
 export type GetApiV1AdminDashboardActivityData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * Merchant-calendar days ending today; use 1 for today's summary
+         */
+        days?: number;
+    };
     url: '/api/v1/admin/dashboard/activity';
 };
 

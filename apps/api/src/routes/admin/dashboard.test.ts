@@ -199,6 +199,30 @@ describe("admin dashboard routes", () => {
         expect(mocks.getRecentOrders).not.toHaveBeenCalled();
     });
 
+    it("serves a minimal merchant-day result when an agent requests one day", async () => {
+        mocks.getDailyActivityData.mockResolvedValue(dailyActivityData);
+        const { app, db } = createTestApp();
+
+        const response = await app.request("/api/v1/admin/dashboard/activity?days=1");
+        const body = await response.json();
+
+        expect(response.status).toBe(200);
+        expect(body).toEqual({ success: true, data: { dailyActivityData } });
+        expect(mocks.getDailyActivityData).toHaveBeenCalledWith(db, 1);
+    });
+
+    it.each(["0", "91", "1.5", "not-a-number"])(
+        "rejects an invalid activity day window (%s)",
+        async (days) => {
+            const { app } = createTestApp();
+
+            const response = await app.request(`/api/v1/admin/dashboard/activity?days=${days}`);
+
+            expect(response.status).toBe(400);
+            expect(mocks.getDailyActivityData).not.toHaveBeenCalled();
+        },
+    );
+
     it("keeps the legacy combined endpoint available", async () => {
         mocks.getDashboardStats.mockResolvedValue(stats);
         mocks.getRecentOrders.mockResolvedValue(recentOrders);
