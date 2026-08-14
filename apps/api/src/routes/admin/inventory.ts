@@ -217,6 +217,7 @@ const listRoute = createRoute({
     operationId: "dashboard.inventory.list",
     tags: ["Admin - Inventory"],
     summary: "Get inventory overview",
+    description: "Answer inventory and stock-status questions with bounded variant, movement, or alert pages.",
     request: {
         query: z.object({
             section: z.enum(["variants", "movements", "alerts"]).optional().default("variants").openapi({ description: "Section type" }),
@@ -349,6 +350,7 @@ const alertsRoute = createRoute({
     operationId: "dashboard.inventory_alerts.list",
     tags: ["Admin - Inventory"],
     summary: "Get inventory alerts",
+    description: "Find low-stock, out-of-stock, and other inventory issues needing attention.",
     request: {
         query: z.object({
             status: z.enum(["active", "acknowledged", "resolved", "all"]).optional().default("active").openapi({ description: "Alert status" })

@@ -1872,6 +1872,8 @@ export const deleteApiV1AdminCollectionsByIdPermanent = <ThrowOnError extends bo
 
 /**
  * List all customers
+ *
+ * Find recent or new customers and search bounded customer summaries.
  */
 export const getApiV1AdminCustomers = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminCustomersData, ThrowOnError>): RequestResult<GetApiV1AdminCustomersResponses, GetApiV1AdminCustomersErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminCustomersResponses, GetApiV1AdminCustomersErrors, ThrowOnError>({
     security: [{
@@ -2940,6 +2942,8 @@ export const putApiV1AdminMediaFoldersById = <ThrowOnError extends boolean = fal
 
 /**
  * Get inventory overview
+ *
+ * Answer inventory and stock-status questions with bounded variant, movement, or alert pages.
  */
 export const getApiV1AdminInventory = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminInventoryData, ThrowOnError>): RequestResult<GetApiV1AdminInventoryResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminInventoryResponses, unknown, ThrowOnError>({
     security: [{
@@ -2978,6 +2982,8 @@ export const postApiV1AdminInventoryMovementsExport = <ThrowOnError extends bool
 
 /**
  * Get inventory alerts
+ *
+ * Find low-stock, out-of-stock, and other inventory issues needing attention.
  */
 export const getApiV1AdminInventoryAlerts = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminInventoryAlertsData, ThrowOnError>): RequestResult<GetApiV1AdminInventoryAlertsResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminInventoryAlertsResponses, unknown, ThrowOnError>({
     security: [{
@@ -3709,6 +3715,8 @@ export const postApiV1AdminAnalytics = <ThrowOnError extends boolean = false>(op
 
 /**
  * Get analytics provider readiness without provider calls
+ *
+ * Check analytics health, operational status, configuration issues, and provider readiness.
  */
 export const getApiV1AdminAnalyticsHealth = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminAnalyticsHealthData, ThrowOnError>): RequestResult<GetApiV1AdminAnalyticsHealthResponses, GetApiV1AdminAnalyticsHealthErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminAnalyticsHealthResponses, GetApiV1AdminAnalyticsHealthErrors, ThrowOnError>({
     security: [{
@@ -3848,6 +3856,8 @@ export const deleteApiV1AdminAnalyticsByIdPermanent = <ThrowOnError extends bool
 
 /**
  * Get lightweight dashboard home metrics and recent orders
+ *
+ * Answer current-month sales, revenue, customer, order, and recent-order summary questions.
  */
 export const getApiV1AdminDashboardHomeSummary = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminDashboardHomeSummaryData, ThrowOnError>): RequestResult<GetApiV1AdminDashboardHomeSummaryResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminDashboardHomeSummaryResponses, unknown, ThrowOnError>({
     security: [{
@@ -3899,6 +3909,8 @@ export const getApiV1AdminDashboardSummary = <ThrowOnError extends boolean = fal
 
 /**
  * Get dashboard daily activity chart data
+ *
+ * Answer daily or today's sales, revenue, order-count, and new-customer questions with a bounded 90-day activity series.
  */
 export const getApiV1AdminDashboardActivity = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminDashboardActivityData, ThrowOnError>): RequestResult<GetApiV1AdminDashboardActivityResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminDashboardActivityResponses, unknown, ThrowOnError>({
     security: [{
@@ -4968,6 +4980,8 @@ export const postApiV1AdminSettingsPolar = <ThrowOnError extends boolean = false
 
 /**
  * Get checkout readiness
+ *
+ * Check store checkout health, operational readiness, and blocking configuration issues.
  */
 export const getApiV1AdminSettingsCheckoutReadiness = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsCheckoutReadinessData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsCheckoutReadinessResponses, GetApiV1AdminSettingsCheckoutReadinessErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsCheckoutReadinessResponses, GetApiV1AdminSettingsCheckoutReadinessErrors, ThrowOnError>({
     security: [{
@@ -6270,6 +6284,8 @@ export const getApiV1AdminOrdersCatalogProducts = <ThrowOnError extends boolean 
 
 /**
  * List orders with pagination and filters
+ *
+ * Find recent orders and orders needing fulfillment, shipping, payment, or lifecycle attention.
  */
 export const getApiV1AdminOrders = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminOrdersData, ThrowOnError>): RequestResult<GetApiV1AdminOrdersResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminOrdersResponses, unknown, ThrowOnError>({
     security: [{
@@ -6325,6 +6341,8 @@ export const getApiV1AdminOrdersExport = <ThrowOnError extends boolean = false>(
 
 /**
  * List hosted-payment recovery orders
+ *
+ * Find failed or incomplete payment attempts that need merchant or buyer attention.
  */
 export const getApiV1AdminOrdersPaymentRecovery = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminOrdersPaymentRecoveryData, ThrowOnError>): RequestResult<GetApiV1AdminOrdersPaymentRecoveryResponses, GetApiV1AdminOrdersPaymentRecoveryErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminOrdersPaymentRecoveryResponses, GetApiV1AdminOrdersPaymentRecoveryErrors, ThrowOnError>({
     security: [{
@@ -6604,6 +6622,8 @@ export const getApiV1AdminOrdersByIdFormData = <ThrowOnError extends boolean = f
 
 /**
  * Get product and category dashboard statistics
+ *
+ * Answer quick product, catalog, category, and merchandising count questions.
  */
 export const getApiV1AdminProductsStats = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminProductsStatsData, ThrowOnError>): RequestResult<GetApiV1AdminProductsStatsResponses, GetApiV1AdminProductsStatsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminProductsStatsResponses, GetApiV1AdminProductsStatsErrors, ThrowOnError>({
     security: [{

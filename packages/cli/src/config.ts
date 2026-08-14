@@ -150,6 +150,10 @@ export class ConfigStore {
     const credentials = await this.loadCredentials();
     credentials.credentials[name] = credential;
     await this.saveCredentials(credentials);
+    const config = await this.loadConfig();
+    const resource = credential.resource ?? "dashboard";
+    config.activeProfiles = { ...config.activeProfiles, [resource]: name };
+    await this.saveConfig(config);
   }
 
   async removeCredential(name: string): Promise<boolean> {
@@ -157,6 +161,14 @@ export class ConfigStore {
     const existed = name in credentials.credentials;
     delete credentials.credentials[name];
     await this.saveCredentials(credentials);
+    if (existed) {
+      const config = await this.loadConfig();
+      const activeProfiles = Object.fromEntries(
+        Object.entries(config.activeProfiles ?? {}).filter(([, active]) => active !== name),
+      ) as ConfigFile["activeProfiles"];
+      config.activeProfiles = activeProfiles;
+      await this.saveConfig(config);
+    }
     return existed;
   }
 
@@ -183,6 +195,62 @@ export class ConfigStore {
       server,
       ...(credential ? { token: validateToken(credential.token), tokenSource: "disk" as const, credential } : {}),
     };
+  }
+
+  async resolveProfileForResource(
+    resource: "dashboard" | "storefront",
+    requested?: string,
+    requireToken = true,
+  ): Promise<ResolvedProfile> {
+    if (this.runtime.env.SCALIUS_TOKEN?.trim()) return this.resolveProfile(requested, requireToken);
+    const [config, credentials] = await Promise.all([this.loadConfig(), this.loadCredentials()]);
+    let name = requested;
+    if (!name) {
+      const activeName = config.activeProfile;
+      const activeCredential = activeName ? credentials.credentials[activeName] : undefined;
+      if (!name && activeCredential && (activeCredential.resource ?? "dashboard") === resource) {
+        name = activeName;
+      }
+      const activeServer = activeName ? config.profiles[activeName]?.server : undefined;
+      if (!name && activeServer) {
+        name = Object.keys(config.profiles).sort().find((candidate) => {
+          const credential = credentials.credentials[candidate];
+          return config.profiles[candidate]?.server === activeServer && credential &&
+            (credential.resource ?? "dashboard") === resource;
+        });
+      }
+      if (!name && activeName && activeServer) {
+        throw new CliError(
+          3,
+          "audience_not_authenticated",
+          `The active store has no authenticated ${resource} profile. Run 'scalius auth login --resource ${resource} --server ${activeServer} --profile-name <name>'.`,
+        );
+      }
+      const activeForResource = config.activeProfiles?.[resource];
+      if (!name && activeForResource) name = activeForResource;
+      if (!name) {
+        name = Object.keys(config.profiles).sort().find((candidate) => {
+          const credential = credentials.credentials[candidate];
+          return credential && (credential.resource ?? "dashboard") === resource;
+        });
+      }
+    }
+    if (!name) {
+      throw new CliError(
+        3,
+        "audience_not_authenticated",
+        `No authenticated ${resource} profile is available. Run 'scalius auth login --resource ${resource} --server <origin> --profile-name <name>'.`,
+      );
+    }
+    const profile = await this.resolveProfile(name, requireToken);
+    if (profile.credential && (profile.credential.resource ?? "dashboard") !== resource) {
+      throw new CliError(
+        3,
+        "profile_audience_mismatch",
+        `Profile '${profile.name}' is for ${profile.credential.resource ?? "dashboard"}; this operation requires a ${resource} profile.`,
+      );
+    }
+    return profile;
   }
 
   cachePath(profileName: string): string {

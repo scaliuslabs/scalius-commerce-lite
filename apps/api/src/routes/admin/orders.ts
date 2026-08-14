@@ -402,6 +402,7 @@ const listOrdersRoute = createRoute({
     path: "/",
     tags: ["Admin - Orders"],
     summary: "List orders with pagination and filters",
+    description: "Find recent orders and orders needing fulfillment, shipping, payment, or lifecycle attention.",
     request: {
         query: z.object({
             page: z.coerce.number().optional().default(1).openapi({ description: "Page number" }),
@@ -578,6 +579,7 @@ const paymentRecoveryListRoute = createRoute({
     path: "/payment-recovery",
     tags: ["Admin - Orders"],
     summary: "List hosted-payment recovery orders",
+    description: "Find failed or incomplete payment attempts that need merchant or buyer attention.",
     request: {
         query: z.object({
             page: z.coerce.number().optional().default(1).openapi({ description: "Page number" }),

@@ -9,9 +9,23 @@ Treat the store's live operation contract as authority. Do not invent routes, he
 
 This is a portable Agent Skill, not harness-specific prompting. If the two Scalius MCP servers are unavailable, read [references/setup.md](references/setup.md), run `scalius setup --harness <name> --server <api-origin>`, and follow its credential-free native setup instructions.
 
+## Fast answers
+
+For a read-only merchant question, prefer one bounded answer operation over broad discovery:
+
+- Sales, revenue, order count, and new customers by day: `dashboard.home.activity`; current summary and recent orders: `dashboard.home.summary`.
+- Orders needing attention: `dashboard.orders.list` with the smallest relevant lifecycle, payment, or fulfillment filter.
+- Stock issues: `dashboard.inventory_alerts.list`; inventory status or movements: `dashboard.inventory.list`.
+- Product/catalog counts: `dashboard.products.stats`; customer lookup: `dashboard.customers.list`.
+- Payment issues: `dashboard.orders.payment_recovery_list`; store health: `dashboard.checkout.readiness_get`; analytics health: `dashboard.analytics.health`.
+
+Use the dashboard MCP for merchant/admin questions and the storefront MCP for buyer, catalog-browsing, cart, checkout, and customer-account questions. The CLI selects the matching authenticated audience from an operation ID; for discovery, use `scalius ops search "<natural merchant question>" --surface dashboard|storefront`. If the known operation is unavailable to the live grant, search and describe—never bypass authorization.
+
+Answer with the requested period and currency plus 3–8 useful facts. State whether a metric is a count, gross amount, net amount, or recovery queue. Never total a partial page; use an aggregate operation or paginate its declared bounded result. Do not describe a known read operation again unless its live contract changed or exact filters are unclear.
+
 ## Operating loop
 
-1. Search with two or three task words. In CLI use `scalius ops search "create product"`; in MCP use `operations.search` with the same phrase.
+1. For an uncommon task, search with task words or a natural merchant question. In CLI use `scalius ops search "orders needing fulfillment" --surface dashboard`; in MCP use `operations.search` with the same phrase.
 2. Describe only the likely operation. The default MCP description is compact; request `full=true` only when ready to construct the exact input. Do not load unrelated schemas.
 3. Read its risk, RBAC, revision, idempotency, batch, byte, artifact, upload, and continuation policy.
 4. Resolve human names with the domain's bounded summary/form operation before constructing input.

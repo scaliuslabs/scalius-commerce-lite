@@ -553,7 +553,10 @@ export async function operationsSearch(
   limit = 20,
 ): Promise<Record<string, unknown>> {
   const { operations } = await getIndexedOperations(runtime, profile);
-  const matches = searchOperations(operationsForProfile(profile, operations), query).slice(0, limit).map(({ id, method, path, operation, agent }) => ({
+  const naturalQuestion = Boolean(query && /\s/u.test(query.trim()));
+  const matches = searchOperations(operationsForProfile(profile, operations), query)
+    .filter(({ agent }) => !naturalQuestion || agent.risk === "read")
+    .slice(0, limit).map(({ id, method, path, operation, agent }) => ({
     operationId: id,
     summary: operation.summary ?? null,
     tags: operation.tags ?? [],

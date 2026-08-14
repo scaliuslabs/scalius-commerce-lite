@@ -28,6 +28,7 @@ import {
   summarizeOperation,
 } from "./operations";
 import { containsStepReference, resolveStepReferences } from "./references";
+import { merchantOperationQueryScore } from "./merchant-search";
 
 const pathValueSchema = z.union([z.string(), z.number(), z.boolean()]);
 const queryValueSchema = z.union([
@@ -235,16 +236,14 @@ async function requireToolPrincipal(deps: McpServerDependencies): Promise<AgentP
   return principal;
 }
 
-function operationMatchesQuery(operation: AgentOperationManifestEntry, query: string): boolean {
-  const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
-  if (terms.length === 0) return true;
+function operationQueryScore(operation: AgentOperationManifestEntry, query: string): number | null {
   const haystack = [
     operation.operationId,
     operation.summary,
     operation.description,
     ...operation.tags,
   ].filter(Boolean).join(" ").toLowerCase();
-  return terms.every((term) => haystack.includes(term));
+  return merchantOperationQueryScore(haystack, query);
 }
 
 async function executeOne(
@@ -291,10 +290,19 @@ export function createAgentMcpServer(deps: McpServerDependencies): McpServer {
     async ({ query, limit }) => {
       try {
         const principal = await requireToolPrincipal(deps);
-        const operations = (await listAuthorizedOperations(deps.surface, principal))
-          .filter((operation) => operationMatchesQuery(operation, query))
+        const rankedOperations = (await listAuthorizedOperations(deps.surface, principal))
+          .map((operation, index) => {
+            const matchScore = operationQueryScore(operation, query);
+            return { operation, index, score: matchScore === null ? null : matchScore + (operation.risk === "read" ? 25 : 0) };
+          })
+          .filter(({ score }) => score !== null)
+          .sort((left, right) => right.score! - left.score! || left.index - right.index);
+        const hasReadMatch = rankedOperations.some(({ operation }) => operation.risk === "read");
+        const preferReadMatches = query.trim().split(/\s+/).length > 1 && hasReadMatch;
+        const operations = rankedOperations
+          .filter(({ operation }) => !preferReadMatches || operation.risk === "read")
           .slice(0, limit)
-          .map(summarizeOperation);
+          .map(({ operation }) => summarizeOperation(operation));
         return formatAgentToolResult({ ok: true, operations, count: operations.length });
       } catch (error) {
         return safeToolError(error);

@@ -11,10 +11,11 @@ export async function listProfiles(runtime: Runtime): Promise<Record<string, unk
       name,
       server: profile.server,
       active: config.activeProfile === name,
+      activeFor: Object.entries(config.activeProfiles ?? {}).filter(([, active]) => active === name).map(([resource]) => resource),
       authenticated: Boolean(credentials.credentials[name]) || Boolean(runtime.env.SCALIUS_TOKEN?.trim()),
       resource: credentials.credentials[name]?.resource ?? null,
     }));
-  return { activeProfile: config.activeProfile ?? null, profiles };
+  return { activeProfile: config.activeProfile ?? null, activeProfiles: config.activeProfiles ?? {}, profiles };
 }
 
 export async function useProfile(runtime: Runtime, nameValue: string): Promise<Record<string, unknown>> {
@@ -23,6 +24,9 @@ export async function useProfile(runtime: Runtime, nameValue: string): Promise<R
   const config = await store.loadConfig();
   if (!config.profiles[name]) throw new CliError(2, "profile_not_found", `Profile '${name}' does not exist.`);
   config.activeProfile = name;
+  const credentials = await store.loadCredentials();
+  const resource = credentials.credentials[name]?.resource ?? "dashboard";
+  config.activeProfiles = { ...config.activeProfiles, [resource]: name };
   await store.saveConfig(config);
   return { status: "active", profile: name, server: config.profiles[name].server };
 }

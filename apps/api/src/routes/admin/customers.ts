@@ -33,6 +33,7 @@ const listRoute = createRoute({
     path: "/",
     tags: ["Admin - Customers"],
     summary: "List all customers",
+    description: "Find recent or new customers and search bounded customer summaries.",
     request: {
         query: z.object({
             page: z.coerce.number().default(1).openapi({ description: "Page number" }),

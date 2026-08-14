@@ -23,6 +23,7 @@ export interface Profile {
 export interface ConfigFile {
   version: 1;
   activeProfile?: string;
+  activeProfiles?: Partial<Record<"dashboard" | "storefront", string>>;
   profiles: Record<string, Profile>;
 }
 
