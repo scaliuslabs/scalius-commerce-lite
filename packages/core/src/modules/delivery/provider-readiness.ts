@@ -36,6 +36,7 @@ type DeliveryProviderReadinessInput = {
 };
 
 type DeliveryProviderSummaryInput = DeliveryProviderReadinessInput & {
+  credentialsReadable?: boolean;
   isActive?: boolean | null;
   currentFingerprint?: string | null;
   lastTestAttemptAt?: Date | number | string | null;
@@ -308,7 +309,15 @@ export async function getDeliveryProviderSetupFingerprint(
 export function getDeliveryProviderReadinessSummary(
   input: DeliveryProviderSummaryInput,
 ): DeliveryProviderReadinessSummary {
-  const activationBlockers = getDeliveryProviderActivationBlockers(input);
+  const credentialsUnreadable = input.credentialsReadable === false;
+  const activationBlockers = credentialsUnreadable
+    ? [{
+        source: "credentials" as const,
+        key: "credentials",
+        label: "Credentials",
+        message: "Stored credentials cannot be decrypted with the configured credential key.",
+      }]
+    : getDeliveryProviderActivationBlockers(input);
   const configured = activationBlockers.length === 0;
   const successAt = timestampMs(input.lastTestSuccessAt);
   const failureAt = timestampMs(input.lastTestFailureAt);
@@ -330,10 +339,13 @@ export function getDeliveryProviderReadinessSummary(
   }
   if (!configured) {
     blockers.push({
-      code: activationBlockers.some((blocker) => blocker.key === "credentials" || blocker.key === "config")
+      code: credentialsUnreadable
+        || activationBlockers.some((blocker) => blocker.key === "credentials" || blocker.key === "config")
         ? "unreadable"
         : "unconfigured",
-      message: "Delivery provider setup is incomplete or unreadable.",
+      message: credentialsUnreadable
+        ? "Delivery provider credentials cannot be decrypted with the configured credential key. Re-enter and retest the provider credentials."
+        : "Delivery provider setup is incomplete or unreadable.",
     });
   } else if (!tested) {
     blockers.push({

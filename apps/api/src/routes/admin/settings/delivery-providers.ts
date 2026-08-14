@@ -188,6 +188,7 @@ async function serializeProviderForClient(
     env: Record<string, unknown>,
 ) {
     const credentialsForReadiness = await decryptStoredCredentials(provider.credentials, env).catch(() => null);
+    const credentialsReadable = credentialsForReadiness !== null;
     const maskedCredentials = credentialsForReadiness
         ? await maskCredentialsForClient(provider.type, provider.credentials, env).catch(() => "{}")
         : "{}";
@@ -207,6 +208,7 @@ async function serializeProviderForClient(
     const readiness = getDeliveryProviderReadinessSummary({
         type: provider.type,
         credentials: credentialsForReadiness,
+        credentialsReadable,
         config: provider.config,
         isActive: provider.isActive,
         currentFingerprint,
