@@ -14,10 +14,10 @@ This is a portable Agent Skill, not harness-specific prompting. If the two Scali
 For a read-only merchant question, prefer one bounded answer operation over broad discovery:
 
 - Sales, revenue, order count, and new customers by day: `dashboard.home.activity` with `query.days=1` for today; current summary and recent orders: `dashboard.home.summary`.
-- Order lists, fulfillment, pending payment, returns, or refunds: `dashboard.orders.list` with the smallest relevant filter.
+- Order lists, pending payment, returns, or refunds: `dashboard.orders.list` with the smallest relevant filter. For orders needing fulfillment use `statusGroup=open` plus `fulfillmentStatus=pending`; add merchant-calendar dates only when requested.
 - Stock issues: `dashboard.inventory_alerts.list`; inventory status or movements: `dashboard.inventory.list`.
-- Product/catalog counts: `dashboard.products.stats`; customer totals: `dashboard.home.summary`; customer lookup: `dashboard.customers.list`.
-- Payment issues: `dashboard.orders.payment_recovery_list`; enabled methods: `dashboard.payments.methods_get`; store health: `dashboard.checkout.readiness_get`; analytics health: `dashboard.analytics.health`.
+- Product/catalog counts: `dashboard.products.stats`; customer totals: `dashboard.home.summary`; customer lookup: `dashboard.customers.list`. For top customers use `sort=totalSpent`, `order=desc`, and a small `limit`.
+- Payment issues: `dashboard.orders.payment_recovery_list`; use `state=needs_attention` only for failures requiring action, and omit `state` for the full recovery queue. Enabled methods: `dashboard.payments.methods_get`; store health: `dashboard.checkout.readiness_get`; analytics health: `dashboard.analytics.health`.
 
 Treat every date-only filter and daily/monthly metric as the merchant calendar in `Asia/Dhaka`. Absolute API timestamps remain UTC instants; do not relabel an activity row by parsing its `YYYY-MM-DD` key in the agent host's local timezone. For “today,” request `dashboard.home.activity` with `query.days=1`; for “yesterday,” request `query.days=2` and select the earlier merchant date key. Do not infer the day from the agent machine's timezone.
 
