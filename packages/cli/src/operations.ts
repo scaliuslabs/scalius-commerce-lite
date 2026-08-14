@@ -63,6 +63,8 @@ function compactSchemaType(schema: Record<string, unknown>): string {
   return "unknown";
 }
 
+const MAX_COMPACT_SCHEMA_DEPTH = 7;
+
 function compactSchemaDetails(
   document: OpenApiDocument,
   value: unknown,
@@ -93,8 +95,13 @@ function compactSchemaDetails(
     ...(typeof resolved.minItems === "number" ? { minItems: resolved.minItems } : {}),
     ...(typeof resolved.maxItems === "number" ? { maxItems: resolved.maxItems } : {}),
     ...(resolved.default !== undefined ? { default: resolved.default } : {}),
-    ...(isObject(item) ? { itemsType: compactSchemaType(item) } : {}),
-    ...(depth < 5 && alternatives.length > 0 && alternatives.length <= 4
+    ...(isObject(item) ? {
+      itemsType: compactSchemaType(item),
+      ...(depth < MAX_COMPACT_SCHEMA_DEPTH && compactSchemaType(item) === "object"
+        ? { items: compactSchema(document, item, depth + 1) }
+        : {}),
+    } : {}),
+    ...(depth < MAX_COMPACT_SCHEMA_DEPTH && alternatives.length > 0 && alternatives.length <= 4
       ? { variants: alternatives.map((candidate) => compactSchema(document, candidate, depth + 1)) }
       : {}),
   };
@@ -112,13 +119,13 @@ function compactSchema(
       ? resolved.required.filter((field): field is string => typeof field === "string")
       : [],
   );
-  const properties = isObject(resolved.properties)
+  const properties = depth < MAX_COMPACT_SCHEMA_DEPTH && isObject(resolved.properties)
     ? Object.entries(resolved.properties).map(([name, property]) => {
       const field = resolveRef(document, property);
       return {
         name,
         required: required.has(name),
-        ...compactSchemaDetails(document, field, depth + 1),
+        ...compactSchema(document, field, depth + 1),
       };
     })
     : undefined;

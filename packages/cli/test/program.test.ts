@@ -286,6 +286,90 @@ describe("CLI program", () => {
     });
   });
 
+  it("describes bounded object-array item fields without requiring the full schema", async () => {
+    const spec = executableSpec();
+    const paths = spec.paths as Record<string, Record<string, Record<string, unknown>>>;
+    paths["/api/v1/admin/products"]!.post!.requestBody = {
+      required: true,
+      content: {
+        "application/json": {
+          schema: {
+            type: "object",
+            required: ["items"],
+            properties: {
+              items: {
+                type: "array",
+                minItems: 1,
+                maxItems: 99,
+                items: {
+                  type: "object",
+                  required: ["variantId", "quantity"],
+                  properties: {
+                    variantId: { type: "string", minLength: 1 },
+                    quantity: { type: "integer", minimum: 1, maximum: 999 },
+                  },
+                },
+              },
+              shipment: {
+                type: "object",
+                properties: {
+                  providerId: { type: "string", minLength: 1 },
+                  options: {
+                    type: "object",
+                    properties: { pickup: { type: "boolean", default: false } },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    };
+    const fetch = vi.fn(async () => Response.json(spec));
+    const runtime = await authenticatedRuntime(fetch as typeof globalThis.fetch);
+
+    expect(await runProgram(runtime, [
+      "--output", "json", "operations", "describe", "dashboard.products.create",
+    ])).toBe(0);
+    expect(JSON.parse(runtime.stdoutText()).requestBody).toMatchObject({
+      content: [{
+        schema: {
+          fields: [
+            {
+              name: "items",
+              required: true,
+              type: "array",
+              minItems: 1,
+              maxItems: 99,
+              itemsType: "object",
+              items: {
+                type: "object",
+                fields: [
+                  { name: "variantId", required: true, type: "string", minLength: 1 },
+                  { name: "quantity", required: true, type: "integer", minimum: 1, maximum: 999 },
+                ],
+              },
+            },
+            {
+              name: "shipment",
+              required: false,
+              type: "object",
+              fields: [
+                { name: "providerId", required: false, type: "string", minLength: 1 },
+                {
+                  name: "options",
+                  required: false,
+                  type: "object",
+                  fields: [{ name: "pickup", required: false, type: "boolean", default: false }],
+                },
+              ],
+            },
+          ],
+        },
+      }],
+    });
+  });
+
   it("executes only the fixed method and path from OpenAPI", async () => {
     const calls: Array<{ url: string; init?: RequestInit }> = [];
     const fetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {

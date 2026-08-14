@@ -3,6 +3,12 @@ import { AGENT_OPERATIONS_BY_ID } from "../../generated/agent-operations.gen";
 import type { AgentOperationManifestEntry } from "../../openapi/agent-operation-manifest";
 import { describeOperation } from "./operations";
 
+interface CompactField {
+  name: string;
+  fields?: CompactField[];
+  items?: { fields?: CompactField[] };
+}
+
 const operation = {
   operationId: "dashboard.products.create",
   method: "POST",
@@ -124,6 +130,16 @@ describe("MCP operation descriptions", () => {
       mediaType: "application/octet-stream",
       schema: { type: "string", format: "binary", minLength: 1, maxLength: 5_242_880 },
     }]);
+
+    const product = describeOperation(AGENT_OPERATIONS_BY_ID["dashboard.products.create"]!);
+    const productFields = (product.inputContract?.body?.content[0]?.schema as { fields?: CompactField[] }).fields ?? [];
+    const optionMatrix = productFields.find(({ name }) => name === "optionMatrix");
+    const options = optionMatrix?.fields?.find(({ name }) => name === "options");
+    const values = options?.items?.fields?.find(({ name }) => name === "values");
+    expect(values?.items?.fields).toEqual([
+      expect.objectContaining({ name: "id" }),
+      expect.objectContaining({ name: "value", maxLength: 100 }),
+    ]);
   });
 
   it("keeps provider alternatives and their nested credential fields discoverable", () => {
@@ -200,6 +216,86 @@ describe("MCP operation descriptions", () => {
       variants: [
         { type: "literal", value: 48 },
         { type: "literal", value: 12 },
+      ],
+    });
+  });
+
+  it("keeps bounded object-array item fields discoverable", () => {
+    const described = describeOperation({
+      ...operation,
+      operationId: "dashboard.orders.create",
+      inputSchema: {
+        parameters: [],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["items"],
+                properties: {
+                  items: {
+                    type: "array",
+                    minItems: 1,
+                    maxItems: 99,
+                    items: {
+                      type: "object",
+                      required: ["variantId", "quantity"],
+                      properties: {
+                        variantId: { type: "string", minLength: 1 },
+                        quantity: { type: "integer", minimum: 1, maximum: 999 },
+                      },
+                    },
+                  },
+                  shipment: {
+                    type: "object",
+                    properties: {
+                      providerId: { type: "string", minLength: 1 },
+                      options: {
+                        type: "object",
+                        properties: { pickup: { type: "boolean", default: false } },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    } satisfies AgentOperationManifestEntry);
+
+    expect(described.inputContract?.body?.content[0]?.schema).toMatchObject({
+      fields: [
+        {
+          name: "items",
+          required: true,
+          type: "array",
+          minItems: 1,
+          maxItems: 99,
+          itemsType: "object",
+          items: {
+            type: "object",
+            fields: [
+              { name: "variantId", required: true, type: "string", minLength: 1 },
+              { name: "quantity", required: true, type: "integer", minimum: 1, maximum: 999 },
+            ],
+          },
+        },
+        {
+          name: "shipment",
+          required: false,
+          type: "object",
+          fields: [
+            { name: "providerId", required: false, type: "string", minLength: 1 },
+            {
+              name: "options",
+              required: false,
+              type: "object",
+              fields: [{ name: "pickup", required: false, type: "boolean", default: false }],
+            },
+          ],
+        },
       ],
     });
   });
