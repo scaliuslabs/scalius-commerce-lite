@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { matchesMerchantOperationQuery, merchantOperationQueryScore } from "./merchant-search";
+import { matchesMerchantOperationQuery, merchantOperationQueryScore, prefersReadOnlyMerchantResults } from "./merchant-search";
 
 describe("merchant operation search", () => {
   it.each([
@@ -54,5 +54,13 @@ describe("merchant operation search", () => {
     ];
     const scores = ids.map((id) => merchantOperationQueryScore(id, query)!);
     expect(scores).toEqual([...scores].sort((left, right) => right - left));
+  });
+
+  it.each([
+    ["manually fulfill an order", "dashboard.orders.fulfill"],
+    ["ship an order with Pathao", "dashboard.orders.create_shipment"],
+  ])("routes the explicit shipment action %s to %s", (query, operationId) => {
+    expect(prefersReadOnlyMerchantResults(query)).toBe(false);
+    expect(merchantOperationQueryScore(operationId, query)).toBeGreaterThan(50);
   });
 });

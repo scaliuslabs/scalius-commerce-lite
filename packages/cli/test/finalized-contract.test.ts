@@ -85,6 +85,8 @@ describe("finalized API OpenAPI interop", () => {
       ["orders pending payment", "dashboard.orders.list"],
       ["orders needing fulfillment", "dashboard.orders.list"],
       ["orders waiting to ship", "dashboard.orders.list"],
+      ["manually fulfill an order", "dashboard.orders.fulfill"],
+      ["ship an order with Pathao", "dashboard.orders.create_shipment"],
       ["refunds needing attention", "dashboard.orders.list"],
       ["returns needing attention", "dashboard.orders.list"],
       ["low stock issues", "dashboard.inventory_alerts.list"],

@@ -59,6 +59,12 @@ function storefrontWorkflowTargets(queryWords: Set<string>): string[] {
 
 function merchantIntentTarget(queryWords: Set<string>): string | null {
   const has = (...concepts: string[]) => concepts.some((concept) => queryWords.has(concept));
+  if (has("manual", "manually") && has("fulfill", "fulfil", "fulfillment", "fulfilment", "ship", "shipment")) {
+    return "dashboard.orders.fulfill";
+  }
+  if (has("provider", "courier", "pathao", "steadfast") && has("create", "ship", "shipping", "shipment")) {
+    return "dashboard.orders.create_shipment";
+  }
   if (has("today", "yesterday", "daily", "day") && has(
     "sale", "sales", "sell", "sold", "revenue", "gmv", "order", "orders", "customer", "customers", "buyer", "buyers",
   )) return "dashboard.home.activity";
@@ -106,11 +112,14 @@ function intentBonus(searchableText: string, query: string): number {
     .findIndex((operationId) => searchableText.toLocaleLowerCase().includes(operationId));
   if (workflowTargetIndex >= 0) return 120 - (workflowTargetIndex * 25);
   const target = merchantIntentTarget(queryWords);
+  if (target && ["dashboard.orders.fulfill", "dashboard.orders.create_shipment"].includes(target)
+    && searchableText.toLocaleLowerCase().split("\n", 1)[0] === target) return 120;
   return target && searchableText.toLocaleLowerCase().includes(target) ? 60 : 0;
 }
 
 export function prefersReadOnlyMerchantResults(query: string): boolean {
   const queryWords = new Set(words(query));
+  if (["dashboard.orders.fulfill", "dashboard.orders.create_shipment"].includes(merchantIntentTarget(queryWords) ?? "")) return false;
   return ![
     "add", "apply", "begin", "buy", "cancel", "change", "checkout", "create", "delete", "make", "place",
     "publish", "purchase", "remove", "restore", "save", "set", "start", "submit", "update", "upload",
