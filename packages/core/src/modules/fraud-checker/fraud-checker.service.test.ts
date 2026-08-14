@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   getFraudProvider,
   getFraudProviders,
+  fraudLookup,
   saveFraudProvider,
 } from "./fraud-checker.service";
 import { encryptCredentials } from "@scalius/core/utils/credential-encryption";
@@ -147,5 +148,30 @@ describe("fraud checker provider credential storage", () => {
 
     await expect(getFraudProvider(db as never, "provider_fraudbd", wrongKey)).resolves.toBeNull();
     await expect(getFraudProviders(db as never, wrongKey)).resolves.toEqual([]);
+  });
+
+  it("rejects non-public provider URLs before storage or lookup dispatch", async () => {
+    const { db, writes } = createFraudDb();
+
+    await expect(saveFraudProvider(db as never, {
+      name: "Unsafe",
+      apiUrl: "https://127.0.0.1/check",
+      apiKey: "merchant-key",
+      isActive: false,
+      providerType: "default",
+    }, credentialKey())).rejects.toThrow("public HTTPS hostname");
+    expect(writes).toHaveLength(0);
+
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    await expect(fraudLookup({
+      id: "legacy_unsafe",
+      name: "Unsafe legacy row",
+      apiUrl: "https://fraud.internal/check",
+      apiKey: "merchant-key",
+      isActive: true,
+      providerType: "default",
+    }, "+8801700000000")).rejects.toThrow("public HTTPS hostname");
+    expect(fetchMock).not.toHaveBeenCalled();
+    fetchMock.mockRestore();
   });
 });

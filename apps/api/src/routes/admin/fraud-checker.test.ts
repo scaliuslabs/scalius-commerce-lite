@@ -20,7 +20,8 @@ vi.mock("../../utils/encryption-key", () => ({
   requireEncryptionKey: mocks.requireEncryptionKey,
 }));
 
-vi.mock("@scalius/core/modules/fraud-checker/fraud-checker.service", () => ({
+vi.mock("@scalius/core/modules/fraud-checker/fraud-checker.service", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@scalius/core/modules/fraud-checker/fraud-checker.service")>(),
   getFraudProviders: mocks.getFraudProviders,
   getFraudProvider: mocks.getFraudProvider,
   saveFraudProvider: mocks.saveFraudProvider,
@@ -303,6 +304,29 @@ describe("admin fraud checker credential handling", () => {
         name: "Unsafe",
         apiUrl: "https://user:password@example.com/check?token=secret",
         apiKey: "new-key",
+        isActive: false,
+      }),
+    }, env);
+
+    expect(response.status).toBe(400);
+    expect(mocks.saveFraudProvider).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    "https://127.0.0.1/check",
+    "https://localhost/check",
+    "https://fraud.internal/check",
+    "https://fraud.example.test:8443/check",
+  ])("rejects non-public provider URL %s", async (apiUrl) => {
+    const { app, env } = createTestApp();
+
+    const response = await app.request("/api/v1/admin/fraud-checker", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Unsafe",
+        apiUrl,
+        apiKey: "merchant-key",
         isActive: false,
       }),
     }, env);
