@@ -1,7 +1,7 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import type { RouteConfig, RouteHandler } from "@hono/zod-openapi";
 import { metaConversionsSettings, metaConversionsLogs } from "@scalius/database/schema";
-import { sql, eq, desc, count } from "drizzle-orm";
+import { eq, desc, count } from "drizzle-orm";
 import { manualLogCleanup } from "@scalius/core/modules/analytics/meta.service";
 import {
     buildUnavailableMetaPixelParityDiagnostics,
@@ -122,8 +122,8 @@ const metaConversionsSettingsSchema = z.object({
     pixelId: z.string().max(100).optional(),
     accessToken: z.string().max(4096).optional(),
     testEventCode: z.string().max(200).optional(),
-    isEnabled: z.boolean().default(false),
-    logRetentionDays: z.number().int().min(1).max(365).default(30)
+    isEnabled: z.boolean().optional(),
+    logRetentionDays: z.number().int().min(1).max(365).optional()
 });
 
 // ── Get Settings ──
@@ -217,7 +217,13 @@ app.openapi(saveSettingsRoute, (async (c: AppRouteContext<typeof saveSettingsRou
     const db = c.get("db");
     const validation = c.req.valid("json");
     const existingSettings = await db.select().from(metaConversionsSettings).where(eq(metaConversionsSettings.id, "singleton")).get();
-    const pixelId = optionalTrimmedValue(validation.pixelId);
+    const pixelId = validation.pixelId === undefined
+        ? existingSettings?.pixelId ?? null
+        : optionalTrimmedValue(validation.pixelId);
+    const isEnabled = validation.isEnabled ?? existingSettings?.isEnabled ?? false;
+    const logRetentionDays = validation.logRetentionDays
+        ?? existingSettings?.logRetentionDays
+        ?? 30;
     const rawTestEventCode = validation.testEventCode;
     const trimmedTestEventCode = typeof rawTestEventCode === "string"
         ? rawTestEventCode.trim()
@@ -242,7 +248,7 @@ app.openapi(saveSettingsRoute, (async (c: AppRouteContext<typeof saveSettingsRou
         !isUsingMaskedTestEventCode ? testEventCode : null,
     );
 
-    if (validation.isEnabled) {
+    if (isEnabled) {
         const missingFields = [
             pixelId ? null : "Pixel ID",
             hasEffectiveAccessToken ? null : "access token",
@@ -265,12 +271,13 @@ app.openapi(saveSettingsRoute, (async (c: AppRouteContext<typeof saveSettingsRou
             : null;
     }
 
+    const now = new Date();
     const resultArr = existingSettings
         ? await db.update(metaConversionsSettings)
-            .set({ pixelId, accessToken, testEventCode, isEnabled: validation.isEnabled, logRetentionDays: validation.logRetentionDays, updatedAt: sql`(cast(strftime('%s','now') as int))` })
+            .set({ pixelId, accessToken, testEventCode, isEnabled, logRetentionDays, updatedAt: now })
             .where(eq(metaConversionsSettings.id, "singleton")).returning()
         : await db.insert(metaConversionsSettings)
-            .values({ id: "singleton", pixelId, accessToken: accessToken ?? null, testEventCode, isEnabled: validation.isEnabled, logRetentionDays: validation.logRetentionDays, createdAt: sql`(cast(strftime('%s','now') as int))`, updatedAt: sql`(cast(strftime('%s','now') as int))` })
+            .values({ id: "singleton", pixelId, accessToken: accessToken ?? null, testEventCode, isEnabled, logRetentionDays, createdAt: now, updatedAt: now })
             .returning();
     const result = resultArr[0];
 
