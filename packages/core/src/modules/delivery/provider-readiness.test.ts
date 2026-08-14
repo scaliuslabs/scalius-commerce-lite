@@ -74,6 +74,23 @@ describe("delivery provider activation readiness", () => {
     ]);
   });
 
+  it.each([
+    "https://127.0.0.1/api/v1",
+    "https://localhost/api/v1",
+    "https://courier.internal/api/v1",
+    "https://portal.steadfast.com.bd:8443/api/v1",
+  ])("blocks non-public provider base URL %s", (baseUrl) => {
+    expect(getDeliveryProviderActivationBlockers({
+      type: "steadfast",
+      credentials: {
+        baseUrl,
+        apiKey: "steadfast-api-4821",
+        secretKey: "steadfast-secret-9417",
+      },
+      config: {},
+    })).toEqual(expect.arrayContaining([expect.objectContaining({ key: "baseUrl" })]));
+  });
+
   it("throws a typed validation error with blocker details", () => {
     expect(() => assertDeliveryProviderReadyForActivation({
       type: "steadfast",

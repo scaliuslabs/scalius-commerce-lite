@@ -566,6 +566,8 @@ const createTestRoute = createRoute({
 app.openapi(createTestRoute, async (c) => {
     const { type, credentials, config, name } = c.req.valid("json");
 
+    assertDeliveryProviderReadyForActivation({ type, credentials, config });
+
     const mockProvider = {
         id: "test_" + Date.now().toString(),
         name,
