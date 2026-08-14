@@ -146,7 +146,7 @@ export async function createAgentBrowserHandoff(
   ]);
   return {
     handoffId,
-    url: `${dashboardOrigin(env)}/api/v1/admin/agent-access/browser-handoffs/${handoffId}`,
+    url: `${dashboardOrigin(env)}/admin/settings/agent-access/continue/${handoffId}`,
     expiresAt: expiresAt.toISOString(),
   };
 }

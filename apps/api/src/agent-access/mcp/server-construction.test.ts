@@ -111,13 +111,13 @@ describe("MCP server construction", () => {
   it("returns only a non-secret authenticated browser resource link", () => {
     const formatted = formatAgentBrowserHandoffResult({
       handoffId: "abh_0123456789abcdefghij",
-      url: "https://dashboard.example.test/api/v1/admin/agent-access/browser-handoffs/abh_0123456789abcdefghij",
+      url: "https://dashboard.example.test/admin/settings/agent-access/continue/abh_0123456789abcdefghij",
       expiresAt: "2026-08-14T12:05:00.000Z",
     });
     expect(formatted.content).toEqual(expect.arrayContaining([
       expect.objectContaining({
         type: "resource_link",
-        uri: expect.stringContaining("/browser-handoffs/abh_0123456789abcdefghij"),
+        uri: expect.stringContaining("/agent-access/continue/abh_0123456789abcdefghij"),
       }),
     ]));
     expect(JSON.stringify(formatted)).not.toContain("continuationCode");
