@@ -454,6 +454,34 @@ app.openapi(updateLocationRoute, async (c) => {
     }
 });
 
+// ── Reset Pathao Import ──
+
+// Register this static DELETE route before /{id}; Hono resolves same-method
+// routes in registration order, so the generic location route must not consume
+// the reserved import-pathao segment.
+const resetPathaoImportRoute = createRoute({
+    method: "delete",
+    path: "/import-pathao",
+    operationId: "dashboard.delivery_locations.pathao_import_reset",
+    tags: ["Admin - Delivery Locations"],
+    summary: "Reset Pathao location import progress",
+    responses: {
+        200: {
+            description: "Pathao import progress reset",
+            content: { "application/json": { schema: messageResponse } },
+        },
+        ...errorResponses,
+    },
+});
+
+app.openapi(resetPathaoImportRoute, async (c) => {
+    const kv = (c.env as Record<string, unknown>).CACHE as KVNamespace | undefined;
+    if (!kv) throw new ValidationError("KV not available");
+
+    await resetPathaoImportProgress(kv);
+    return ok(c, { message: "Import progress reset. You can start a fresh import." });
+});
+
 // ── Delete Location ──
 
 const deleteLocationRoute = createRoute({
@@ -620,32 +648,6 @@ app.openapi(getPathaoImportStatusRoute, async (c) => {
 
     const status = await getPathaoImportStatus(kv);
     return ok(c, status);
-});
-
-/**
- * DELETE /import-pathao — Reset import progress (for retrying or re-importing).
- */
-const resetPathaoImportRoute = createRoute({
-    method: "delete",
-    path: "/import-pathao",
-    operationId: "dashboard.delivery_locations.pathao_import_reset",
-    tags: ["Admin - Delivery Locations"],
-    summary: "Reset Pathao location import progress",
-    responses: {
-        200: {
-            description: "Pathao import progress reset",
-            content: { "application/json": { schema: messageResponse } },
-        },
-        ...errorResponses,
-    },
-});
-
-app.openapi(resetPathaoImportRoute, async (c) => {
-    const kv = (c.env as Record<string, unknown>).CACHE as KVNamespace | undefined;
-    if (!kv) throw new ValidationError("KV not available");
-
-    await resetPathaoImportProgress(kv);
-    return ok(c, { message: "Import progress reset. You can start a fresh import." });
 });
 
 export { app as adminLocationRoutes };

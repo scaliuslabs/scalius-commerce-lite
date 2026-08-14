@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   updateLocation: vi.fn(),
   getLocationById: vi.fn(),
   getCheckoutDeliveryReadiness: vi.fn(),
+  resetPathaoImportProgress: vi.fn(),
 }));
 
 vi.mock("../../../utils/cache-invalidation", () => ({
@@ -23,6 +24,12 @@ vi.mock("@scalius/core/modules/delivery/locations", () => ({
 
 vi.mock("@scalius/core/modules/settings/checkout-readiness", () => ({
   getCheckoutDeliveryReadiness: mocks.getCheckoutDeliveryReadiness,
+}));
+
+vi.mock("@scalius/core/modules/delivery/pathao-location-import", () => ({
+  getPathaoImportStatus: vi.fn(),
+  processPathaoImportChunk: vi.fn(),
+  resetPathaoImportProgress: mocks.resetPathaoImportProgress,
 }));
 
 import { adminLocationRoutes } from "./delivery-locations";
@@ -102,6 +109,25 @@ describe("delivery location cache invalidation", () => {
       ["checkout"],
       expect.objectContaining({ env }),
     );
+  });
+
+  it("routes Pathao reset to the static import endpoint before the location ID route", async () => {
+    mocks.resetPathaoImportProgress.mockResolvedValueOnce(undefined);
+    const { app, env } = createTestApp();
+
+    const response = await app.request(
+      "/api/v1/admin/settings/delivery-locations/import-pathao",
+      { method: "DELETE" },
+      env,
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      success: true,
+      data: { message: "Import progress reset. You can start a fresh import." },
+    });
+    expect(mocks.resetPathaoImportProgress).toHaveBeenCalledWith(env.CACHE);
+    expect(mocks.getLocationById).not.toHaveBeenCalled();
   });
 
   it("trims location names at the request boundary", async () => {
