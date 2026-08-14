@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 
 import type { ThemeVersionPayload } from "~/lib/api-functions/settings";
+import { formatAdminTimestamp } from "~/lib/admin-time";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -372,10 +373,5 @@ function formatVersionDate(value: string | number): string {
   const numeric = typeof value === "number" && value < 10_000_000_000
     ? value * 1000
     : value;
-  const date = new Date(numeric);
-  if (Number.isNaN(date.getTime())) return "Date unavailable";
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(date);
+  return formatAdminTimestamp(numeric) ?? "Date unavailable";
 }

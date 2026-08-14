@@ -26,6 +26,13 @@ const ADMIN_DATE_FORMATTER = new Intl.DateTimeFormat("en-US", {
   day: "numeric",
 });
 
+const ADMIN_TIME_FORMATTER = new Intl.DateTimeFormat("en-US", {
+  timeZone: ADMIN_TIME_ZONE,
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+});
+
 function toAdminDate(
   value: AdminTimestamp | null | undefined,
 ): Date | null {
@@ -45,6 +52,13 @@ export function formatAdminDate(
 ): string | null {
   const date = toAdminDate(value);
   return date ? ADMIN_DATE_FORMATTER.format(date) : null;
+}
+
+export function formatAdminTime(
+  value: AdminTimestamp | null | undefined,
+): string | null {
+  const date = toAdminDate(value);
+  return date ? ADMIN_TIME_FORMATTER.format(date) : null;
 }
 
 export function formatAdminCalendarDate(

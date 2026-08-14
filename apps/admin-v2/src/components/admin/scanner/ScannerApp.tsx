@@ -16,6 +16,7 @@ import { ScanFlash, type FlashState } from "./ScanFlash";
 import { ScanHistory } from "./ScanHistory";
 import { LastScanBar } from "./LastScanBar";
 import { unwrapEnvelope } from "@/lib/api-helpers";
+import { formatAdminTime } from "@/lib/admin-time";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -825,10 +826,7 @@ export function ScannerApp({ token }: ScannerAppProps) {
                 <Clock className="h-3.5 w-3.5" />
                 <span>
                   Session started{" "}
-                  {new Date(sessionStart.current).toLocaleTimeString([], {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
+                  {formatAdminTime(sessionStart.current) ?? "Unknown time"}
                 </span>
               </div>
             </div>

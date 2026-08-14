@@ -1872,7 +1872,7 @@ describe("admin route graph boundaries", () => {
       "utf8",
     );
     expect(formatterSource).toContain(
-      'export const ADMIN_TIME_ZONE = "Asia/Dhaka"',
+      "export const ADMIN_TIME_ZONE = COMMERCE_TIME_ZONE",
     );
     expect(formatterSource).toContain('new Intl.DateTimeFormat("en-US"');
   });

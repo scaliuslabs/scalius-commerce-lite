@@ -45,12 +45,7 @@ import {
 } from "~/lib/api-functions/auth-management";
 import { accountSessionsQueryOptions } from "~/lib/api-query-options/auth-management";
 import { queryKeys } from "~/lib/query-keys";
-
-const SESSION_DATE_FORMATTER = new Intl.DateTimeFormat("en-BD", {
-  month: "short",
-  day: "numeric",
-  year: "numeric",
-});
+import { formatAdminDate } from "~/lib/admin-time";
 
 function formatSessionRelativeDate(value: string): string {
   const date = new Date(value);
@@ -59,9 +54,7 @@ function formatSessionRelativeDate(value: string): string {
 }
 
 function formatSessionDate(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Unknown";
-  return SESSION_DATE_FORMATTER.format(date);
+  return formatAdminDate(value) ?? "Unknown";
 }
 
 function SessionDeviceIcon({ type }: { type: AccountSession["deviceType"] }) {
