@@ -20858,7 +20858,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "operationId": "dashboard.inventory_alerts.list",
     "method": "GET",
     "pathTemplate": "/api/v1/admin/inventory/alerts",
-    "summary": "Get inventory alerts",
+    "summary": "Get low-stock and out-of-stock product inventory alerts",
     "description": "Find low-stock, out-of-stock, and other inventory issues needing attention.",
     "tags": [
       "Admin - Inventory"
