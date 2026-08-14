@@ -32,7 +32,7 @@ const variantMutationSchema = z.object({
     imageId: z.string().trim().min(10).max(80)
         .regex(/^pmed_[A-Za-z0-9_-]+$/u)
         .nullable(),
-    weight: z.number().min(0).nullable(),
+    weight: z.number().min(0).nullable().describe("Weight in grams."),
     sku: z.string().min(3, "SKU must be at least 3 characters"),
     price: variantPriceSchema,
     stock: z.number()

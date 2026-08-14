@@ -63,7 +63,7 @@ const matrixVariantInputSchema = z.object({
     price: z.number().min(0).max(MAX_PRODUCT_PRICE),
     stock: z.number().int().min(0),
     trackInventory: z.boolean(),
-    weight: z.number().min(0).nullable(),
+    weight: z.number().min(0).nullable().describe("Weight in grams."),
     barcode: z.string().trim().max(50).nullable(),
     barcodeType: z.enum(["ean13", "upc", "isbn", "gtin", "code128", "custom"]).nullable(),
     discountType: z.enum(["percentage", "flat"]),

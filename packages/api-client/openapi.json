@@ -155793,7 +155793,8 @@
                             "weight": {
                               "type": "number",
                               "nullable": true,
-                              "minimum": 0
+                              "minimum": 0,
+                              "description": "Weight in grams."
                             },
                             "barcode": {
                               "type": "string",
@@ -162386,7 +162387,8 @@
                   "weight": {
                     "type": "number",
                     "nullable": true,
-                    "minimum": 0
+                    "minimum": 0,
+                    "description": "Weight in grams."
                   },
                   "sku": {
                     "type": "string",
@@ -163789,7 +163791,8 @@
                   "weight": {
                     "type": "number",
                     "nullable": true,
-                    "minimum": 0
+                    "minimum": 0,
+                    "description": "Weight in grams."
                   },
                   "sku": {
                     "type": "string",
@@ -165118,7 +165121,8 @@
                         "weight": {
                           "type": "number",
                           "nullable": true,
-                          "minimum": 0
+                          "minimum": 0,
+                          "description": "Weight in grams."
                         },
                         "barcode": {
                           "type": "string",

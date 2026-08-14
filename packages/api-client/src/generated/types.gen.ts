@@ -42734,6 +42734,9 @@ export type PostApiV1AdminProductsData = {
                 price: number;
                 stock: number;
                 trackInventory: boolean;
+                /**
+                 * Weight in grams.
+                 */
                 weight: number | null;
                 barcode: string | null;
                 barcodeType: 'ean13' | 'upc' | 'isbn' | 'gtin' | 'code128' | 'custom' | null;
@@ -44501,6 +44504,9 @@ export type PostApiV1AdminProductsByIdVariantsData = {
     body: {
         selectedOptionValueIds: Array<string>;
         imageId: string | null;
+        /**
+         * Weight in grams.
+         */
         weight: number | null;
         sku: string;
         price: number;
@@ -44815,6 +44821,9 @@ export type PutApiV1AdminProductsByIdVariantsByVariantIdData = {
     body: {
         selectedOptionValueIds: Array<string>;
         imageId: string | null;
+        /**
+         * Weight in grams.
+         */
         weight: number | null;
         sku: string;
         price: number;
@@ -45012,6 +45021,9 @@ export type PutApiV1AdminProductsByIdOptionsMatrixData = {
             price: number;
             stock: number;
             trackInventory: boolean;
+            /**
+             * Weight in grams.
+             */
             weight: number | null;
             barcode: string | null;
             barcodeType: 'ean13' | 'upc' | 'isbn' | 'gtin' | 'code128' | 'custom' | null;
