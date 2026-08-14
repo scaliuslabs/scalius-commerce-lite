@@ -610,6 +610,20 @@ export async function operationsSearch(
   return { query: query ?? null, count: matches.length, operations: matches };
 }
 
+export async function operationsRefresh(
+  runtime: Runtime,
+  profile: ResolvedProfile,
+): Promise<Record<string, unknown>> {
+  const { operations } = await getIndexedOperations(runtime, profile, true);
+  const visible = operationsForProfile(profile, operations);
+  return {
+    status: "refreshed",
+    profile: profile.name,
+    surface: profile.credential?.resource ?? "dashboard",
+    operationCount: visible.length,
+  };
+}
+
 export async function operationsDescribe(
   runtime: Runtime,
   profile: ResolvedProfile,

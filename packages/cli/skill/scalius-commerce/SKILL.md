@@ -35,6 +35,8 @@ Answer with the requested period and currency plus 3–8 useful facts. State whe
 6. Verify the outcome with a bounded read. For writes, verify revision/state; for artifacts, verify byte count and digest when supplied.
 7. Preserve request IDs and report intentional exclusions rather than attempting hidden routes.
 
+If a store was just upgraded and a described schema looks stale, run `scalius ops refresh --surface dashboard|storefront` once, then describe the operation again. Do not compensate for a stale contract by guessing fields or units.
+
 CLI JSON input is always `{ "path": {...}, "query": {...}, "body": ... }`. Pass `--yes` for writes. Pass `--idempotency-key` only when the described policy is `supported` or `required`. On a revision conflict, reread current state and reconcile; never blindly retry stale input.
 
 Use `operations.batch` only for independent reads or an explicitly sequential reviewed workflow. Keep financial, destructive, continuation, upload, and artifact actions out of speculative batches.
