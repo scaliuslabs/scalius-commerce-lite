@@ -47,6 +47,7 @@ const notificationEventsSchema = <T extends z.ZodTypeAny>(channel: T) => z.objec
 
 const channelsSchema = z.record(z.string(), z.array(z.string()));
 const adminChannelsSchema = notificationEventsSchema(z.literal("push"));
+const customerChannelsSchema = notificationEventsSchema(z.enum(["email", "sms", "whatsapp"]));
 
 const whatsappTemplateSchema = z.object({
     templateName: z.string().min(1).max(512).regex(/^[a-z0-9_]+$/),
@@ -75,9 +76,9 @@ const customerNotificationSettingsSchema = z.object({
 });
 
 const updateCustomerNotificationSettingsSchema = z.object({
-    channels: channelsSchema,
+    channels: customerChannelsSchema,
     whatsappTemplate: whatsappTemplateSchema.optional(),
-});
+}).strict();
 
 // GET /notification-channels
 const getChannelsRoute = createRoute({

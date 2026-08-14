@@ -36639,7 +36639,21 @@ export type GetApiV1AdminSettingsNotificationChannelsResponse = GetApiV1AdminSet
 export type PutApiV1AdminSettingsNotificationChannelsData = {
     body: {
         channels: {
-            [key: string]: Array<string>;
+            order_created: Array<'email' | 'sms' | 'whatsapp'>;
+            order_confirmed: Array<'email' | 'sms' | 'whatsapp'>;
+            order_processing: Array<'email' | 'sms' | 'whatsapp'>;
+            order_shipped: Array<'email' | 'sms' | 'whatsapp'>;
+            order_delivered: Array<'email' | 'sms' | 'whatsapp'>;
+            order_completed: Array<'email' | 'sms' | 'whatsapp'>;
+            order_cancelled: Array<'email' | 'sms' | 'whatsapp'>;
+            order_returned: Array<'email' | 'sms' | 'whatsapp'>;
+            refund_processing: Array<'email' | 'sms' | 'whatsapp'>;
+            refund_failed: Array<'email' | 'sms' | 'whatsapp'>;
+            order_refunded: Array<'email' | 'sms' | 'whatsapp'>;
+            order_partially_refunded: Array<'email' | 'sms' | 'whatsapp'>;
+            payment_balance_paid: Array<'email' | 'sms' | 'whatsapp'>;
+            support_request_submitted: Array<'email' | 'sms' | 'whatsapp'>;
+            support_request_status_updated: Array<'email' | 'sms' | 'whatsapp'>;
         };
         whatsappTemplate?: {
             templateName: string;

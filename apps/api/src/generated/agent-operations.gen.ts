@@ -29230,12 +29230,191 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "properties": {
                 "channels": {
                   "type": "object",
-                  "additionalProperties": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
+                  "properties": {
+                    "order_created": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "email",
+                          "sms",
+                          "whatsapp"
+                        ]
+                      }
+                    },
+                    "order_confirmed": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "email",
+                          "sms",
+                          "whatsapp"
+                        ]
+                      }
+                    },
+                    "order_processing": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "email",
+                          "sms",
+                          "whatsapp"
+                        ]
+                      }
+                    },
+                    "order_shipped": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "email",
+                          "sms",
+                          "whatsapp"
+                        ]
+                      }
+                    },
+                    "order_delivered": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "email",
+                          "sms",
+                          "whatsapp"
+                        ]
+                      }
+                    },
+                    "order_completed": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "email",
+                          "sms",
+                          "whatsapp"
+                        ]
+                      }
+                    },
+                    "order_cancelled": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "email",
+                          "sms",
+                          "whatsapp"
+                        ]
+                      }
+                    },
+                    "order_returned": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "email",
+                          "sms",
+                          "whatsapp"
+                        ]
+                      }
+                    },
+                    "refund_processing": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "email",
+                          "sms",
+                          "whatsapp"
+                        ]
+                      }
+                    },
+                    "refund_failed": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "email",
+                          "sms",
+                          "whatsapp"
+                        ]
+                      }
+                    },
+                    "order_refunded": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "email",
+                          "sms",
+                          "whatsapp"
+                        ]
+                      }
+                    },
+                    "order_partially_refunded": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "email",
+                          "sms",
+                          "whatsapp"
+                        ]
+                      }
+                    },
+                    "payment_balance_paid": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "email",
+                          "sms",
+                          "whatsapp"
+                        ]
+                      }
+                    },
+                    "support_request_submitted": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "email",
+                          "sms",
+                          "whatsapp"
+                        ]
+                      }
+                    },
+                    "support_request_status_updated": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "email",
+                          "sms",
+                          "whatsapp"
+                        ]
+                      }
                     }
-                  }
+                  },
+                  "required": [
+                    "order_created",
+                    "order_confirmed",
+                    "order_processing",
+                    "order_shipped",
+                    "order_delivered",
+                    "order_completed",
+                    "order_cancelled",
+                    "order_returned",
+                    "refund_processing",
+                    "refund_failed",
+                    "order_refunded",
+                    "order_partially_refunded",
+                    "payment_balance_paid",
+                    "support_request_submitted",
+                    "support_request_status_updated"
+                  ],
+                  "additionalProperties": false
                 },
                 "whatsappTemplate": {
                   "type": "object",
@@ -29261,7 +29440,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               },
               "required": [
                 "channels"
-              ]
+              ],
+              "additionalProperties": false
             }
           }
         }
