@@ -125,4 +125,82 @@ describe("MCP operation descriptions", () => {
       schema: { type: "string", format: "binary", minLength: 1, maxLength: 5_242_880 },
     }]);
   });
+
+  it("keeps provider alternatives and their nested credential fields discoverable", () => {
+    const providerOperation = {
+      ...operation,
+      operationId: "dashboard.delivery_providers.create",
+      inputSchema: {
+        parameters: [],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                oneOf: [
+                  {
+                    type: "object",
+                    required: ["type", "credentials"],
+                    properties: {
+                      type: { type: "string", enum: ["pathao"] },
+                      credentials: {
+                        anyOf: [
+                          { type: "string", description: "Legacy dashboard JSON." },
+                          {
+                            type: "object",
+                            properties: {
+                              clientId: {
+                                type: "string",
+                                maxLength: 512,
+                                description: "Required before activation.",
+                              },
+                              deliveryType: { anyOf: [{ const: 48 }, { const: 12 }] },
+                            },
+                          },
+                        ],
+                      },
+                    },
+                  },
+                  {
+                    type: "object",
+                    required: ["type"],
+                    properties: { type: { type: "string", enum: ["steadfast"] } },
+                  },
+                ],
+              },
+            },
+          },
+        },
+      },
+    } satisfies AgentOperationManifestEntry;
+
+    const described = describeOperation(providerOperation);
+    const schema = described.inputContract?.body?.content[0]?.schema as {
+      variants?: Array<{ fields?: Array<{
+        name: string;
+        enum?: unknown[];
+        variants?: Array<{ fields?: Array<Record<string, unknown>> }>;
+      }> }>;
+    };
+    expect(schema.variants?.map((variant) => variant.fields?.find(({ name }) => name === "type")?.enum)).toEqual([
+      ["pathao"],
+      ["steadfast"],
+    ]);
+    expect(schema.variants?.[0]?.fields?.find(({ name }) => name === "credentials")?.variants?.[1]?.fields).toContainEqual({
+      name: "clientId",
+      required: false,
+      type: "string",
+      maxLength: 512,
+      description: "Required before activation.",
+    });
+    expect(schema.variants?.[0]?.fields?.find(({ name }) => name === "credentials")?.variants?.[1]?.fields).toContainEqual({
+      name: "deliveryType",
+      required: false,
+      type: "anyOf",
+      variants: [
+        { type: "literal", value: 48 },
+        { type: "literal", value: 12 },
+      ],
+    });
+  });
 });

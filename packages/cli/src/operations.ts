@@ -57,12 +57,54 @@ function compactSchemaType(schema: Record<string, unknown>): string {
   if (typeof schema.type === "string") return schema.type;
   if (Array.isArray(schema.type)) return schema.type.filter((value) => typeof value === "string").join("|");
   if (Array.isArray(schema.enum)) return "enum";
+  if (schema.const !== undefined) return "literal";
   if (Array.isArray(schema.oneOf)) return "oneOf";
   if (Array.isArray(schema.anyOf)) return "anyOf";
   return "unknown";
 }
 
-function compactSchema(document: OpenApiDocument, value: unknown): Record<string, unknown> {
+function compactSchemaDetails(
+  document: OpenApiDocument,
+  value: unknown,
+  depth = 0,
+): Record<string, unknown> {
+  const resolved = resolveRef(document, value);
+  if (!isObject(resolved)) return { type: "unknown" };
+  const alternatives = Array.isArray(resolved.oneOf)
+    ? resolved.oneOf
+    : Array.isArray(resolved.anyOf)
+      ? resolved.anyOf
+      : [];
+  const item = resolveRef(document, resolved.items);
+  return {
+    type: compactSchemaType(resolved),
+    ...(typeof resolved.description === "string"
+      ? { description: resolved.description.slice(0, 240) }
+      : {}),
+    ...(resolved.nullable === true ? { nullable: true } : {}),
+    ...(Array.isArray(resolved.enum) && resolved.enum.length <= 20 ? { enum: resolved.enum } : {}),
+    ...(resolved.const !== undefined ? { value: resolved.const } : {}),
+    ...(typeof resolved.format === "string" ? { format: resolved.format } : {}),
+    ...(typeof resolved.pattern === "string" ? { pattern: resolved.pattern } : {}),
+    ...(typeof resolved.minLength === "number" ? { minLength: resolved.minLength } : {}),
+    ...(typeof resolved.maxLength === "number" ? { maxLength: resolved.maxLength } : {}),
+    ...(typeof resolved.minimum === "number" ? { minimum: resolved.minimum } : {}),
+    ...(typeof resolved.maximum === "number" ? { maximum: resolved.maximum } : {}),
+    ...(typeof resolved.minItems === "number" ? { minItems: resolved.minItems } : {}),
+    ...(typeof resolved.maxItems === "number" ? { maxItems: resolved.maxItems } : {}),
+    ...(resolved.default !== undefined ? { default: resolved.default } : {}),
+    ...(isObject(item) ? { itemsType: compactSchemaType(item) } : {}),
+    ...(depth < 5 && alternatives.length > 0 && alternatives.length <= 4
+      ? { variants: alternatives.map((candidate) => compactSchema(document, candidate, depth + 1)) }
+      : {}),
+  };
+}
+
+function compactSchema(
+  document: OpenApiDocument,
+  value: unknown,
+  depth = 0,
+): Record<string, unknown> {
   const resolved = resolveRef(document, value);
   if (!isObject(resolved)) return { type: "unknown" };
   const required = new Set(
@@ -73,23 +115,15 @@ function compactSchema(document: OpenApiDocument, value: unknown): Record<string
   const properties = isObject(resolved.properties)
     ? Object.entries(resolved.properties).map(([name, property]) => {
       const field = resolveRef(document, property);
-      const record = isObject(field) ? field : {};
       return {
         name,
-        type: compactSchemaType(record),
         required: required.has(name),
-        ...(record.nullable === true ? { nullable: true } : {}),
-        ...(Array.isArray(record.enum) && record.enum.length <= 20 ? { enum: record.enum } : {}),
-        ...(typeof record.minLength === "number" ? { minLength: record.minLength } : {}),
-        ...(typeof record.maxLength === "number" ? { maxLength: record.maxLength } : {}),
-        ...(typeof record.minItems === "number" ? { minItems: record.minItems } : {}),
-        ...(typeof record.maxItems === "number" ? { maxItems: record.maxItems } : {}),
-        ...(record.default !== undefined ? { default: record.default } : {}),
+        ...compactSchemaDetails(document, field, depth + 1),
       };
     })
     : undefined;
   return {
-    type: compactSchemaType(resolved),
+    ...compactSchemaDetails(document, resolved, depth),
     ...(properties ? { fields: properties } : {}),
   };
 }

@@ -55,6 +55,54 @@ function specWithCreateRequestLimit(maxRequestBytes: number): Record<string, unk
   return spec;
 }
 
+function specWithProviderAlternatives(): Record<string, unknown> {
+  const spec = executableSpec();
+  const paths = spec.paths as Record<string, Record<string, Record<string, unknown>>>;
+  const operation = paths["/api/v1/admin/products"]!.post!;
+  operation.operationId = "dashboard.delivery_providers.create";
+  operation.summary = "Create delivery provider";
+  operation.requestBody = {
+    required: true,
+    content: {
+      "application/json": {
+        schema: {
+          oneOf: [
+            {
+              type: "object",
+              required: ["type", "credentials"],
+              properties: {
+                type: { type: "string", enum: ["pathao"] },
+                credentials: {
+                  anyOf: [
+                    { type: "string", description: "Legacy dashboard JSON." },
+                    {
+                      type: "object",
+                      properties: {
+                        clientId: {
+                          type: "string",
+                          maxLength: 512,
+                          description: "Required before activation.",
+                        },
+                        deliveryType: { anyOf: [{ const: 48 }, { const: 12 }] },
+                      },
+                    },
+                  ],
+                },
+              },
+            },
+            {
+              type: "object",
+              required: ["type"],
+              properties: { type: { type: "string", enum: ["steadfast"] } },
+            },
+          ],
+        },
+      },
+    },
+  };
+  return spec;
+}
+
 function specWithContinuations(): Record<string, unknown> {
   const spec = executableSpec();
   const paths = spec.paths as Record<string, Record<string, Record<string, unknown>>>;
@@ -189,6 +237,40 @@ describe("CLI program", () => {
     const fullResult = JSON.parse(full.stdoutText());
     expect(fullResult).toHaveProperty("responses.201");
     expect(fullResult).toHaveProperty("requestBody.content.application/json.schema.type", "object");
+  });
+
+  it("describes provider alternatives with nested fields without requiring the full schema", async () => {
+    const fetch = vi.fn(async () => Response.json(specWithProviderAlternatives()));
+    const runtime = await authenticatedRuntime(fetch as typeof globalThis.fetch);
+    expect(await runProgram(runtime, [
+      "--output", "json", "operations", "describe", "dashboard.delivery_providers.create",
+    ])).toBe(0);
+    const output = JSON.parse(runtime.stdoutText()) as {
+      requestBody: { content: Array<{ schema: {
+        variants: Array<{ fields: Array<{ name: string; enum?: string[]; variants?: Array<{ fields?: Array<Record<string, unknown>> }> }> }>;
+      } }> };
+    };
+    const alternatives = output.requestBody.content[0]!.schema.variants;
+    expect(alternatives.map((variant) => variant.fields.find(({ name }) => name === "type")?.enum)).toEqual([
+      ["pathao"],
+      ["steadfast"],
+    ]);
+    expect(alternatives[0]?.fields.find(({ name }) => name === "credentials")?.variants?.[1]?.fields).toContainEqual({
+      name: "clientId",
+      required: false,
+      type: "string",
+      maxLength: 512,
+      description: "Required before activation.",
+    });
+    expect(alternatives[0]?.fields.find(({ name }) => name === "credentials")?.variants?.[1]?.fields).toContainEqual({
+      name: "deliveryType",
+      required: false,
+      type: "anyOf",
+      variants: [
+        { type: "literal", value: 48 },
+        { type: "literal", value: 12 },
+      ],
+    });
   });
 
   it("executes only the fixed method and path from OpenAPI", async () => {

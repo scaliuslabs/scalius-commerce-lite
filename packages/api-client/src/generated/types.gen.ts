@@ -34651,12 +34651,78 @@ export type GetApiV1AdminSettingsDeliveryProvidersResponse = GetApiV1AdminSettin
 export type PostApiV1AdminSettingsDeliveryProvidersData = {
     body: {
         name: string;
-        type: string;
+        type: 'pathao';
         credentials: string | {
-            [key: string]: unknown;
+            /**
+             * Optional Pathao API origin; defaults to https://api-hermes.pathao.com.
+             */
+            baseUrl?: string;
+            /**
+             * Pathao client ID; required before activation.
+             */
+            clientId?: string;
+            /**
+             * Pathao client secret; required before activation.
+             */
+            clientSecret?: string;
+            /**
+             * Pathao account username; required before activation.
+             */
+            username?: string;
+            /**
+             * Pathao account password; required before activation.
+             */
+            password?: string;
+            /**
+             * Optional shared secret used to verify Pathao webhooks.
+             */
+            webhookSecret?: string;
         };
         config: string | {
-            [key: string]: unknown;
+            /**
+             * Pathao store ID; required before activation.
+             */
+            storeId?: string;
+            /**
+             * 48 for normal delivery or 12 for on-demand delivery; defaults to 48.
+             */
+            defaultDeliveryType?: 48 | 12;
+            /**
+             * 2 for parcel or 1 for document; defaults to 2.
+             */
+            defaultItemType?: 2 | 1;
+            /**
+             * Default parcel weight in kilograms; defaults to 0.5.
+             */
+            defaultItemWeight?: number;
+        };
+        isActive?: boolean;
+    } | {
+        name: string;
+        type: 'steadfast';
+        credentials: string | {
+            /**
+             * Optional Steadfast API origin; defaults to https://portal.steadfast.com.bd/api/v1.
+             */
+            baseUrl?: string;
+            /**
+             * Steadfast API key; required before activation.
+             */
+            apiKey?: string;
+            /**
+             * Steadfast secret key; required before activation.
+             */
+            secretKey?: string;
+            /**
+             * Optional shared secret used to verify Steadfast webhooks.
+             */
+            webhookSecret?: string;
+        };
+        config: string | {
+            /**
+             * Default cash-on-delivery amount; defaults to 0.
+             */
+            defaultCodAmount?: number;
         };
         isActive?: boolean;
     };
@@ -34792,12 +34858,79 @@ export type PutApiV1AdminSettingsDeliveryProvidersData = {
     body: {
         id: string;
         name: string;
-        type: string;
+        type: 'pathao';
         credentials?: string | {
-            [key: string]: unknown;
+            /**
+             * Optional Pathao API origin; defaults to https://api-hermes.pathao.com.
+             */
+            baseUrl?: string;
+            /**
+             * Pathao client ID; required before activation.
+             */
+            clientId?: string;
+            /**
+             * Pathao client secret; required before activation.
+             */
+            clientSecret?: string;
+            /**
+             * Pathao account username; required before activation.
+             */
+            username?: string;
+            /**
+             * Pathao account password; required before activation.
+             */
+            password?: string;
+            /**
+             * Optional shared secret used to verify Pathao webhooks.
+             */
+            webhookSecret?: string;
         };
         config?: string | {
-            [key: string]: unknown;
+            /**
+             * Pathao store ID; required before activation.
+             */
+            storeId?: string;
+            /**
+             * 48 for normal delivery or 12 for on-demand delivery; defaults to 48.
+             */
+            defaultDeliveryType?: 48 | 12;
+            /**
+             * 2 for parcel or 1 for document; defaults to 2.
+             */
+            defaultItemType?: 2 | 1;
+            /**
+             * Default parcel weight in kilograms; defaults to 0.5.
+             */
+            defaultItemWeight?: number;
+        };
+        isActive?: boolean;
+    } | {
+        id: string;
+        name: string;
+        type: 'steadfast';
+        credentials?: string | {
+            /**
+             * Optional Steadfast API origin; defaults to https://portal.steadfast.com.bd/api/v1.
+             */
+            baseUrl?: string;
+            /**
+             * Steadfast API key; required before activation.
+             */
+            apiKey?: string;
+            /**
+             * Steadfast secret key; required before activation.
+             */
+            secretKey?: string;
+            /**
+             * Optional shared secret used to verify Steadfast webhooks.
+             */
+            webhookSecret?: string;
+        };
+        config?: string | {
+            /**
+             * Default cash-on-delivery amount; defaults to 0.
+             */
+            defaultCodAmount?: number;
         };
         isActive?: boolean;
     };
@@ -34967,12 +35100,77 @@ export type PutApiV1AdminSettingsDeliveryProvidersResponse = PutApiV1AdminSettin
 
 export type PostApiV1AdminSettingsDeliveryProvidersCreateTestData = {
     body: {
-        type: string;
+        type: 'pathao';
         credentials: string | {
-            [key: string]: unknown;
+            /**
+             * Optional Pathao API origin; defaults to https://api-hermes.pathao.com.
+             */
+            baseUrl?: string;
+            /**
+             * Pathao client ID; required before activation.
+             */
+            clientId?: string;
+            /**
+             * Pathao client secret; required before activation.
+             */
+            clientSecret?: string;
+            /**
+             * Pathao account username; required before activation.
+             */
+            username?: string;
+            /**
+             * Pathao account password; required before activation.
+             */
+            password?: string;
+            /**
+             * Optional shared secret used to verify Pathao webhooks.
+             */
+            webhookSecret?: string;
         };
         config: string | {
-            [key: string]: unknown;
+            /**
+             * Pathao store ID; required before activation.
+             */
+            storeId?: string;
+            /**
+             * 48 for normal delivery or 12 for on-demand delivery; defaults to 48.
+             */
+            defaultDeliveryType?: 48 | 12;
+            /**
+             * 2 for parcel or 1 for document; defaults to 2.
+             */
+            defaultItemType?: 2 | 1;
+            /**
+             * Default parcel weight in kilograms; defaults to 0.5.
+             */
+            defaultItemWeight?: number;
+        };
+        name?: string;
+    } | {
+        type: 'steadfast';
+        credentials: string | {
+            /**
+             * Optional Steadfast API origin; defaults to https://portal.steadfast.com.bd/api/v1.
+             */
+            baseUrl?: string;
+            /**
+             * Steadfast API key; required before activation.
+             */
+            apiKey?: string;
+            /**
+             * Steadfast secret key; required before activation.
+             */
+            secretKey?: string;
+            /**
+             * Optional shared secret used to verify Steadfast webhooks.
+             */
+            webhookSecret?: string;
+        };
+        config: string | {
+            /**
+             * Default cash-on-delivery amount; defaults to 0.
+             */
+            defaultCodAmount?: number;
         };
         name?: string;
     };

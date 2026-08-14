@@ -33,15 +33,6 @@ const DELIVERY_PROVIDER_PAGE_LIMIT = 10;
 type AppRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>;
 type AppRouteContext<R extends RouteConfig> = Parameters<AppRouteHandler<R>>[0];
 
-const boundedProviderObjectSchema = z.record(z.string().max(100), z.unknown()).superRefine((value, ctx) => {
-    if (Object.keys(value).length > 50 || JSON.stringify(value).length > 32_768) {
-        ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: "Provider settings must be at most 32 KiB with at most 50 fields",
-        });
-    }
-});
-
 function parseJsonObject(value: string): Record<string, unknown> {
     const parsed = JSON.parse(value);
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
@@ -331,13 +322,52 @@ app.openapi(listRoute, async (c) => {
 
 // ── Create Provider ──
 
-const createDeliveryProviderSchema = z.object({
-    name: z.string().min(1).max(100),
-    type: z.string().min(1).max(50),
-    credentials: z.union([z.string().max(32_768), boundedProviderObjectSchema]),
-    config: z.union([z.string().max(32_768), boundedProviderObjectSchema]),
-    isActive: z.boolean().optional().default(false),
-});
+const encodedProviderObjectSchema = z.string().max(32_768).describe(
+    "Legacy JSON-encoded object accepted for dashboard compatibility; CLI and MCP callers should send the typed object variant.",
+);
+const pathaoCredentialsSchema = z.object({
+    baseUrl: z.string().max(2_048).optional().describe("Optional Pathao API origin; defaults to https://api-hermes.pathao.com."),
+    clientId: z.string().max(512).optional().describe("Pathao client ID; required before activation."),
+    clientSecret: z.string().max(2_048).optional().describe("Pathao client secret; required before activation."),
+    username: z.string().max(320).optional().describe("Pathao account username; required before activation."),
+    password: z.string().max(2_048).optional().describe("Pathao account password; required before activation."),
+    webhookSecret: z.string().max(512).optional().describe("Optional shared secret used to verify Pathao webhooks."),
+}).strict();
+const pathaoConfigSchema = z.object({
+    storeId: z.string().max(100).optional().describe("Pathao store ID; required before activation."),
+    defaultDeliveryType: z.union([z.literal(48), z.literal(12)]).optional().describe("48 for normal delivery or 12 for on-demand delivery; defaults to 48."),
+    defaultItemType: z.union([z.literal(2), z.literal(1)]).optional().describe("2 for parcel or 1 for document; defaults to 2."),
+    defaultItemWeight: z.number().min(0.1).max(50).optional().describe("Default parcel weight in kilograms; defaults to 0.5."),
+}).strict();
+const steadfastCredentialsSchema = z.object({
+    baseUrl: z.string().max(2_048).optional().describe("Optional Steadfast API origin; defaults to https://portal.steadfast.com.bd/api/v1."),
+    apiKey: z.string().max(2_048).optional().describe("Steadfast API key; required before activation."),
+    secretKey: z.string().max(2_048).optional().describe("Steadfast secret key; required before activation."),
+    webhookSecret: z.string().max(512).optional().describe("Optional shared secret used to verify Steadfast webhooks."),
+}).strict();
+const steadfastConfigSchema = z.object({
+    defaultCodAmount: z.number().min(0).max(1_000_000_000).optional().describe("Default cash-on-delivery amount; defaults to 0."),
+}).strict();
+
+const providerObjectInput = <T extends z.ZodTypeAny>(schema: T) =>
+    z.union([encodedProviderObjectSchema, schema]);
+
+const createDeliveryProviderSchema = z.discriminatedUnion("type", [
+    z.object({
+        name: z.string().min(1).max(100),
+        type: z.literal("pathao"),
+        credentials: providerObjectInput(pathaoCredentialsSchema),
+        config: providerObjectInput(pathaoConfigSchema),
+        isActive: z.boolean().optional().default(false),
+    }),
+    z.object({
+        name: z.string().min(1).max(100),
+        type: z.literal("steadfast"),
+        credentials: providerObjectInput(steadfastCredentialsSchema),
+        config: providerObjectInput(steadfastConfigSchema),
+        isActive: z.boolean().optional().default(false),
+    }),
+]);
 
 const createProviderRoute = createRoute({
     method: "post",
@@ -391,14 +421,24 @@ app.openapi(createProviderRoute, (async (c: AppRouteContext<typeof createProvide
 
 // ── Update Provider ──
 
-const updateDeliveryProviderSchema = z.object({
-    id: z.string().min(1),
-    name: z.string().min(1).max(100),
-    type: z.string().min(1).max(50),
-    credentials: z.union([z.string().max(32_768), boundedProviderObjectSchema]).optional(),
-    config: z.union([z.string().max(32_768), boundedProviderObjectSchema]).optional(),
-    isActive: z.boolean().optional(),
-});
+const updateDeliveryProviderSchema = z.discriminatedUnion("type", [
+    z.object({
+        id: z.string().min(1).max(100),
+        name: z.string().min(1).max(100),
+        type: z.literal("pathao"),
+        credentials: providerObjectInput(pathaoCredentialsSchema).optional(),
+        config: providerObjectInput(pathaoConfigSchema).optional(),
+        isActive: z.boolean().optional(),
+    }),
+    z.object({
+        id: z.string().min(1).max(100),
+        name: z.string().min(1).max(100),
+        type: z.literal("steadfast"),
+        credentials: providerObjectInput(steadfastCredentialsSchema).optional(),
+        config: providerObjectInput(steadfastConfigSchema).optional(),
+        isActive: z.boolean().optional(),
+    }),
+]);
 
 const updateProviderRoute = createRoute({
     method: "put",
@@ -488,12 +528,20 @@ app.openapi(updateProviderRoute, (async (c: AppRouteContext<typeof updateProvide
 
 // ── Create Test Provider ──
 
-const createTestSchema = z.object({
-    type: z.string().min(1).max(50),
-    credentials: z.union([z.string().max(32_768), boundedProviderObjectSchema]),
-    config: z.union([z.string().max(32_768), boundedProviderObjectSchema]),
-    name: z.string().max(100).optional().default("Test Provider"),
-});
+const createTestSchema = z.discriminatedUnion("type", [
+    z.object({
+        type: z.literal("pathao"),
+        credentials: providerObjectInput(pathaoCredentialsSchema),
+        config: providerObjectInput(pathaoConfigSchema),
+        name: z.string().max(100).optional().default("Test Provider"),
+    }),
+    z.object({
+        type: z.literal("steadfast"),
+        credentials: providerObjectInput(steadfastCredentialsSchema),
+        config: providerObjectInput(steadfastConfigSchema),
+        name: z.string().max(100).optional().default("Test Provider"),
+    }),
+]);
 
 const testResultSchema = z.object({
     success: z.boolean(),

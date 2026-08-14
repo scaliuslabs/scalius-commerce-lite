@@ -315,8 +315,8 @@ describe("delivery provider cache invalidation", () => {
       expect.anything(),
       expect.objectContaining({
         credentials: JSON.stringify({
-          clientSecret: "decrypted-secret",
           clientId: "client-identifier",
+          clientSecret: "decrypted-secret",
           username: "merchant-identity",
           password: "decrypted-pass",
           webhookSecret: "hook-secret",
@@ -387,6 +387,45 @@ describe("delivery provider cache invalidation", () => {
           credentials,
           config: {},
           isActive: false,
+        }),
+      },
+      env,
+    );
+
+    expect(response.status).toBe(400);
+    expect(mocks.saveDeliveryProvider).not.toHaveBeenCalled();
+  });
+
+  it("publishes only supported provider types with discoverable typed credentials", () => {
+    const { app } = createTestApp();
+    const document = app.getOpenAPIDocument({
+      openapi: "3.1.0",
+      info: { title: "Delivery provider contract", version: "test" },
+    });
+    const create = document.paths?.["/api/v1/admin/settings/delivery-providers"]?.post;
+    const serialized = JSON.stringify(create?.requestBody);
+
+    expect(serialized).toContain('"pathao"');
+    expect(serialized).toContain('"steadfast"');
+    expect(serialized).toContain('"clientId"');
+    expect(serialized).toContain('"clientSecret"');
+    expect(serialized).toContain('"apiKey"');
+    expect(serialized).toContain('"secretKey"');
+    expect(serialized).toContain("required before activation");
+  });
+
+  it("rejects unsupported provider types before touching provider storage", async () => {
+    const { app, env } = createTestApp();
+    const response = await app.request(
+      "/api/v1/admin/settings/delivery-providers",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "Unknown courier",
+          type: "unknown",
+          credentials: {},
+          config: {},
         }),
       },
       env,

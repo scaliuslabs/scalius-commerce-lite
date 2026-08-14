@@ -76,17 +76,27 @@ function compactSchemaType(schema: Record<string, unknown>): string {
     if (types.length > 0) return types.join("|");
   }
   if (Array.isArray(schema.enum)) return "enum";
+  if (schema.const !== undefined) return "literal";
   if (Array.isArray(schema.oneOf)) return "oneOf";
   if (Array.isArray(schema.anyOf)) return "anyOf";
   return "unknown";
 }
 
-function compactSchemaDetails(schema: Record<string, unknown>) {
+function compactSchemaDetails(schema: Record<string, unknown>, depth = 0): Record<string, unknown> {
   const itemSchema = isRecord(schema.items) ? schema.items : null;
+  const alternatives = Array.isArray(schema.oneOf)
+    ? schema.oneOf
+    : Array.isArray(schema.anyOf)
+      ? schema.anyOf
+      : [];
   return {
     type: compactSchemaType(schema),
+    ...(typeof schema.description === "string"
+      ? { description: schema.description.slice(0, 240) }
+      : {}),
     ...(schema.nullable === true ? { nullable: true } : {}),
     ...(Array.isArray(schema.enum) && schema.enum.length <= 20 ? { enum: schema.enum } : {}),
+    ...(schema.const !== undefined ? { value: schema.const } : {}),
     ...(typeof schema.format === "string" ? { format: schema.format } : {}),
     ...(typeof schema.pattern === "string" ? { pattern: schema.pattern } : {}),
     ...(typeof schema.minLength === "number" ? { minLength: schema.minLength } : {}),
@@ -97,10 +107,13 @@ function compactSchemaDetails(schema: Record<string, unknown>) {
     ...(typeof schema.maxItems === "number" ? { maxItems: schema.maxItems } : {}),
     ...(schema.default !== undefined ? { default: schema.default } : {}),
     ...(itemSchema ? { itemsType: compactSchemaType(itemSchema) } : {}),
+    ...(depth < 5 && alternatives.length > 0 && alternatives.length <= 4
+      ? { variants: alternatives.map((candidate) => compactSchema(candidate, depth + 1)) }
+      : {}),
   };
 }
 
-function compactSchema(schema: unknown) {
+function compactSchema(schema: unknown, depth = 0): Record<string, unknown> {
   if (!isRecord(schema)) return { type: "unknown" };
   const required = new Set(
     Array.isArray(schema.required)
@@ -111,11 +124,11 @@ function compactSchema(schema: unknown) {
     ? Object.entries(schema.properties).map(([name, value]) => ({
       name,
       required: required.has(name),
-      ...compactSchemaDetails(isRecord(value) ? value : {}),
+      ...compactSchemaDetails(isRecord(value) ? value : {}, depth + 1),
     }))
     : null;
   return {
-    ...compactSchemaDetails(schema),
+    ...compactSchemaDetails(schema, depth),
     ...(fields ? { fields } : {}),
   };
 }
