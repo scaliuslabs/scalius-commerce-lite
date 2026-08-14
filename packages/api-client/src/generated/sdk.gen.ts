@@ -7180,7 +7180,9 @@ export const postApiV1AdminAuth2FaVerify = <ThrowOnError extends boolean = false
 });
 
 /**
- * Revoke all other sessions for the current user
+ * Sign out browser sessions
+ *
+ * A dashboard browser keeps its current session and signs out every other device. An agent credential has no browser session to preserve, so CLI and MCP calls sign out every browser session for the owner.
  */
 export const deleteApiV1AdminAuthSessions = <ThrowOnError extends boolean = false>(options?: Options<DeleteApiV1AdminAuthSessionsData, ThrowOnError>): RequestResult<DeleteApiV1AdminAuthSessionsResponses, DeleteApiV1AdminAuthSessionsErrors, ThrowOnError> => (options?.client ?? client).delete<DeleteApiV1AdminAuthSessionsResponses, DeleteApiV1AdminAuthSessionsErrors, ThrowOnError>({
     security: [{

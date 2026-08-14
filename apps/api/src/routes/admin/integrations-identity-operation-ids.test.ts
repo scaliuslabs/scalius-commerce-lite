@@ -164,4 +164,13 @@ describe("integrations and administrator identity operation IDs", () => {
       }
     }
   });
+
+  it("states the agent-specific session revocation semantics explicitly", () => {
+    const operation = buildSpec().paths["/api/v1/admin/auth/sessions"]?.delete;
+
+    expect(operation?.summary).toBe("Sign out browser sessions");
+    expect(operation?.description).toContain(
+      "CLI and MCP calls sign out every browser session",
+    );
+  });
 });

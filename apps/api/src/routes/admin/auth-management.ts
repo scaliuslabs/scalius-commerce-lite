@@ -1915,7 +1915,9 @@ const revokeOtherAccountSessionsRoute = createRoute({
     path: "/sessions",
     operationId: "dashboard.account.sessions.revoke_others",
     tags: ["Admin - Auth Management"],
-    summary: "Revoke all other sessions for the current user",
+    summary: "Sign out browser sessions",
+    description:
+        "A dashboard browser keeps its current session and signs out every other device. An agent credential has no browser session to preserve, so CLI and MCP calls sign out every browser session for the owner.",
     responses: {
         200: {
             description: "Other sessions revoked",

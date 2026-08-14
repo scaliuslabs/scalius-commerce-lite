@@ -934,7 +934,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "operationId": "dashboard.account.sessions.revoke_others",
     "method": "DELETE",
     "pathTemplate": "/api/v1/admin/auth/sessions",
-    "summary": "Revoke all other sessions for the current user",
+    "summary": "Sign out browser sessions",
+    "description": "A dashboard browser keeps its current session and signs out every other device. An agent credential has no browser session to preserve, so CLI and MCP calls sign out every browser session for the owner.",
     "tags": [
       "Admin - Auth Management"
     ],
