@@ -70,7 +70,7 @@ describe("MCP server construction", () => {
     expect(JSON.stringify(formatted)).not.toContain("Authorization");
   });
 
-  it("puts sensitive continuation fields in structured content only", () => {
+  it("fails closed without returning sensitive continuation fields", () => {
     const code = `tpc_${"b".repeat(48)}`;
     const formatted = formatAgentToolResult({
       ok: true,
@@ -93,10 +93,15 @@ describe("MCP server construction", () => {
         },
       },
     });
-    expect(formatted.content[0]?.text).not.toContain(code);
-    expect(formatted.content[0]?.text).toContain("POST fields");
-    expect(JSON.stringify(formatted.structuredContent).match(new RegExp(code, "g")))
-      .toHaveLength(1);
+    expect(formatted.isError).toBe(true);
+    expect(JSON.stringify(formatted)).not.toContain(code);
+    expect(formatted.structuredContent).toEqual({
+      ok: false,
+      error: {
+        code: "sensitive_continuation_not_supported",
+        message: expect.stringContaining("Scalius CLI"),
+      },
+    });
   });
 
   it("does not duplicate a large structured result into compatibility text", () => {

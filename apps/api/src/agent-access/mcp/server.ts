@@ -79,12 +79,20 @@ export function formatAgentToolResult(value: Record<string, unknown>) {
     };
   }
   if (oneTimeResult?.sensitiveContinuation === true) {
+    const safe = {
+      ok: false,
+      error: {
+        code: "sensitive_continuation_not_supported",
+        message: "Sensitive browser continuations are unavailable through generic MCP clients; use the Scalius CLI or dashboard browser flow",
+      },
+    };
     return {
+      isError: true,
       content: [{
         type: "text" as const,
-        text: "Secure continuation returned in structured content; submit its POST fields without placing them in a URL",
+        text: JSON.stringify(safe),
       }],
-      structuredContent: value,
+      structuredContent: safe,
     };
   }
   if (oneTimeResult?.artifact) {
