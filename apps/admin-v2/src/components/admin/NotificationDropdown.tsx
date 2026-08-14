@@ -99,7 +99,7 @@ function formatRelativeTime(timestamp: number): string {
   if (days < 7) return `${days}d ago`;
 
   const date = new Date(timestamp);
-  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "Asia/Dhaka" });
 }
 
 const NOTIFICATION_ICONS: Record<AdminNotification["type"], typeof Bell> = {

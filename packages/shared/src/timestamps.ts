@@ -4,6 +4,8 @@
 // NOTE: For Drizzle schema defaults, use UNIX_NOW from @scalius/database/schema (shared.ts).
 // These utilities are for service/application-layer timestamp operations.
 
+import { COMMERCE_TIME_ZONE } from "./commerce-time";
+
 /** Convert Unix epoch seconds to ISO 8601 string for API responses */
 export function toISOString(unixSeconds: number): string {
   return new Date(unixSeconds * 1000).toISOString();
@@ -76,6 +78,7 @@ export function formatDate(
       hour: "numeric",
       minute: "2-digit",
       hour12: true,
+      timeZone: COMMERCE_TIME_ZONE,
     });
   } catch (error: unknown) {
     console.error("Error formatting date:", error);
@@ -104,6 +107,7 @@ export function formatDateShort(
     year: "numeric",
     month: "short",
     day: "numeric",
+    timeZone: COMMERCE_TIME_ZONE,
   });
 }
 
@@ -144,6 +148,7 @@ export function formatRelativeDate(
       hour: "numeric",
       minute: "2-digit",
       hour12: true,
+      timeZone: COMMERCE_TIME_ZONE,
     });
   }
 
@@ -154,6 +159,7 @@ export function formatRelativeDate(
     hour: "numeric",
     minute: "2-digit",
     hour12: true,
+    timeZone: COMMERCE_TIME_ZONE,
   });
 }
 
@@ -184,5 +190,6 @@ export function formatDateVerbose(
     second: "2-digit",
     hour12: true,
     timeZoneName: "short",
+    timeZone: COMMERCE_TIME_ZONE,
   });
 }

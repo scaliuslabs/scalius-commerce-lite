@@ -119,4 +119,14 @@ describe("DashboardChart SVG model", () => {
       "Revenue (\u09F3): \u09F32,400, Orders: 4, New Customers: 3",
     );
   });
+
+  it("formats date-only chart keys without shifting them to the previous day", () => {
+    expect(
+      formatDashboardChartPointLabel(
+        { ...dailyActivityData[0]!, date: "2026-08-14" },
+        "\u09F3",
+        chartConfig,
+      ),
+    ).toContain("Aug 14, 2026.");
+  });
 });

@@ -37,6 +37,7 @@ import {
   getInventoryLabelPreview,
 } from "@/lib/api-functions/inventory";
 import { cn } from "@scalius/shared/utils";
+import { adminCalendarDateKey } from "~/lib/admin-time";
 import {
   buildLabelCopies,
   clampLabelAlignmentMm,
@@ -516,7 +517,7 @@ export function BarcodeLabelWorkspace({
       } else {
         const link = document.createElement("a");
         link.href = url;
-        link.download = `barcode-labels-${new Date().toISOString().slice(0, 10)}.${format}`;
+        link.download = `barcode-labels-${adminCalendarDateKey()}.${format}`;
         link.style.display = "none";
         document.body.appendChild(link);
         link.click();

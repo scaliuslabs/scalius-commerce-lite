@@ -58,6 +58,7 @@ import {
     invalidateProductAvailabilityCaches,
 } from "../../utils/cache-invalidation";
 import { parseBangladeshDateOnlyBoundary } from "./order-date-filter";
+import { commerceCalendarDateKey } from "@scalius/shared/commerce-time";
 import { enqueueOrderNotificationsForStatus } from "../../utils/order-notification-queue";
 import {
     listOrderPaymentSessionAttempts,
@@ -555,7 +556,7 @@ app.openapi(exportOrdersRoute, async (c) => {
         : total > artifact.rowCount
             ? "rows"
             : "none";
-    const filename = `orders-${new Date().toISOString().slice(0, 10)}.csv`;
+    const filename = `orders-${commerceCalendarDateKey()}.csv`;
     return c.body(csvStream(artifact.chunks), 200, {
         "Content-Type": "text/csv; charset=utf-8",
         "Content-Disposition": `attachment; filename="${filename}"`,
@@ -731,7 +732,7 @@ app.openapi(paymentRecoveryExportRoute, async (c) => {
         : total > artifact.rowCount
             ? "rows"
             : "none";
-    const filename = `payment-recovery-${new Date().toISOString().slice(0, 10)}.csv`;
+    const filename = `payment-recovery-${commerceCalendarDateKey()}.csv`;
     return c.body(csvStream(artifact.chunks), 200, {
         "Content-Type": "text/csv; charset=utf-8",
         "Content-Disposition": `attachment; filename="${filename}"`,

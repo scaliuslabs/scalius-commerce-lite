@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   ADMIN_TIME_ZONE,
   formatAdminDate,
+  formatAdminCalendarDate,
   formatAdminTimestamp,
+  adminCalendarDateKey,
 } from "./admin-time";
 import {
   formatOrderDate,
@@ -23,6 +25,12 @@ describe("admin commerce time", () => {
 
     expect(formatOrderDate(value)).toBe(formatAdminDate(value));
     expect(formatOrderTimestamp(value)).toBe(formatAdminTimestamp(value));
+  });
+
+  it("keeps date-only activity keys and generated filenames on the merchant day", () => {
+    expect(formatAdminCalendarDate("2026-07-19")).toBe("Jul 19, 2026");
+    expect(adminCalendarDateKey(new Date("2026-07-18T20:53:00.000Z")))
+      .toBe("2026-07-19");
   });
 
   it("fails closed for missing or invalid timestamps", () => {

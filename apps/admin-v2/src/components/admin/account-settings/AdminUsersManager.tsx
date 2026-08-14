@@ -590,7 +590,7 @@ function AdminStatusBadge({
     ? getInvitationTiming(invitation?.expiresAt)
     : null;
   const title = invitation?.expiresAt && status === "invite_pending"
-    ? `Setup link expires ${new Date(invitation.expiresAt).toLocaleString()}.`
+    ? `Setup link expires ${new Date(invitation.expiresAt).toLocaleString(undefined, { timeZone: "Asia/Dhaka" })}.`
     : copy.description;
   const tone = status === "ready"
     ? "border-primary/25 bg-primary/5 text-primary"

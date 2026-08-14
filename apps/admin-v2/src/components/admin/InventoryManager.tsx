@@ -59,6 +59,7 @@ import {
 import { useDebounce } from "@/hooks/use-debounce";
 import { useCatalogActionPermissions } from "@/hooks/use-catalog-action-permissions";
 import type { InventoryWorkspaceSection } from "./inventory-workspace";
+import { adminCalendarDateKey } from "~/lib/admin-time";
 
 // ---------- Types ----------
 
@@ -183,7 +184,7 @@ function timeAgo(dateValue: string | number) {
   if (diffHours < 24) return `${diffHours}h ago`;
   const diffDays = Math.floor(diffHours / 24);
   if (diffDays < 7) return `${diffDays}d ago`;
-  return date.toLocaleDateString("en-US");
+  return date.toLocaleDateString("en-US", { timeZone: "Asia/Dhaka" });
 }
 
 function InventorySummaryStrip({ stats }: { stats: InventoryStats }) {
@@ -428,7 +429,7 @@ export function InventoryManager({
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `inventory-movements-${new Date().toISOString().slice(0, 10)}.csv`;
+      link.download = `inventory-movements-${adminCalendarDateKey()}.csv`;
       link.style.display = "none";
       document.body.appendChild(link);
       link.click();
