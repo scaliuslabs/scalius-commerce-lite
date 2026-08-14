@@ -7,7 +7,7 @@ const MERCHANT_TERM_GROUPS = [
   ["today", "yesterday", "daily", "day", "week", "weekly"],
   ["sale", "sales", "sell", "sold", "revenue", "gmv", "activity", "summary"],
   ["order", "orders"],
-  ["issue", "issues", "problem", "problems", "failure", "failures", "failed", "attention", "alert", "alerts", "recovery", "blocking"],
+  ["issue", "issues", "problem", "problems", "failure", "failures", "fail", "failed", "failing", "decline", "declined", "attention", "alert", "alerts", "recovery", "blocking"],
   ["health", "healthy", "readiness"],
   ["inventory", "inventories", "stock"],
   ["product", "products", "catalog", "merchandise"],
@@ -19,6 +19,7 @@ const MERCHANT_TERM_GROUPS = [
   ["pending", "unpaid", "overdue", "stuck"],
   ["refund", "refunds", "return", "returns"],
   ["recent", "latest", "new", "list", "activity", "summary"],
+  ["top", "best", "highest", "valuable", "value", "spending", "spender", "spenders"],
   ["operational", "health", "healthy", "ready", "readiness", "status", "store", "checkout", "configuration"],
 ] as const;
 
@@ -84,6 +85,7 @@ function merchantIntentTarget(queryWords: Set<string>): string | null {
   if (has("order", "orders") && has("fulfill", "fulfil", "fulfillment", "fulfilment", "unfulfilled", "ship", "shipped", "shipping", "delivery")) {
     return "dashboard.orders.list";
   }
+  if (has("fulfill", "fulfil", "fulfillment", "fulfilment", "unfulfilled")) return "dashboard.orders.list";
   if (has("inventory", "stock") && has("low", "out", "issue", "issues", "problem", "problems", "alert", "alerts")) {
     return "dashboard.inventory_alerts.list";
   }
@@ -93,7 +95,9 @@ function merchantIntentTarget(queryWords: Set<string>): string | null {
   if (has("payment", "payments", "gateway", "gateways") && has("method", "methods", "option", "options", "enabled", "configured", "available")) {
     return "dashboard.payments.methods_get";
   }
-  if (has("payment", "payments") && has("issue", "issues", "problem", "problems", "failed", "failure", "failures", "recovery")) {
+  if (has("payment", "payments") && has(
+    "issue", "issues", "problem", "problems", "fail", "failed", "failing", "failure", "failures", "decline", "declined", "recovery",
+  )) {
     return "dashboard.orders.payment_recovery_list";
   }
   if (has("store", "checkout", "ready", "readiness") && has("health", "healthy", "ready", "readiness", "status")) {
@@ -103,6 +107,9 @@ function merchantIntentTarget(queryWords: Set<string>): string | null {
   if (has("customer", "customers", "buyer", "buyers", "shopper", "shoppers") && has("new", "recent", "latest", "list")) {
     return "dashboard.customers.list";
   }
+  if (has("customer", "customers", "buyer", "buyers", "shopper", "shoppers") && has(
+    "top", "best", "highest", "valuable", "value", "spending", "spender", "spenders",
+  )) return "dashboard.customers.list";
   return null;
 }
 
