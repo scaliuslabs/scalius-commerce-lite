@@ -160,6 +160,7 @@ function formatDate(value: string | number) {
     : new Intl.DateTimeFormat(undefined, {
         dateStyle: "medium",
         timeStyle: "short",
+        timeZone: "Asia/Dhaka",
       }).format(date);
 }
 

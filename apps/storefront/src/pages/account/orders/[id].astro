@@ -227,12 +227,12 @@ const orderId = Astro.params.id ?? "";
 
   function formatDate(value: string | null): string {
     if (!value) return "Pending";
-    return new Date(value).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+    return new Date(value).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric", timeZone: "Asia/Dhaka" });
   }
 
   function formatDateTime(value: string | null): string {
     if (!value) return "Pending";
-    return new Date(value).toLocaleString(undefined, { year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+    return new Date(value).toLocaleString(undefined, { year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "Asia/Dhaka" });
   }
 
   function formatMoney(amount: unknown): string {

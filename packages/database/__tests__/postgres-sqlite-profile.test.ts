@@ -67,6 +67,20 @@ describe("PostgreSQL SQLite-profile compiler", () => {
     expect(compiled.sql).toContain("AS bigint) = $2");
   });
 
+  it("keeps merchant epoch-day bucketing portable and timezone-independent", () => {
+    const compiled = compileSqliteStatementForPostgres(
+      "SELECT CAST((created_at + ?) / 86400 AS INTEGER) AS day FROM orders "
+        + "GROUP BY CAST((created_at + ?) / 86400 AS INTEGER)",
+      2,
+    );
+
+    expect(compiled.sql).toBe(
+      "SELECT CAST((created_at + $1) / 86400 AS bigint) AS day FROM orders "
+        + "GROUP BY CAST((created_at + $2) / 86400 AS bigint)",
+    );
+    expect(compiled.sql).not.toMatch(/time zone|strftime|datetime/i);
+  });
+
   it("preserves mixed-case raw aliases and reconstructs named transport rows", () => {
     const compiled = compileSqliteStatementForPostgres(
       "SELECT value AS variantId, CAST(value AS INTEGER) AS stockVersion FROM source",

@@ -15,6 +15,7 @@ import {
 } from "../../utils/cache-invalidation";
 import { nullableTimestampSchema } from "../../schemas/timestamps";
 import { parseBangladeshDateOnlyBoundary } from "./order-date-filter";
+import { commerceCalendarDateKey } from "@scalius/shared/commerce-time";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -330,7 +331,7 @@ app.openapi(movementsExportRoute, async (c) => {
         endDate,
         maxRows: input.maxRows,
     });
-    const filename = `inventory-movements-${new Date().toISOString().slice(0, 10)}.csv`;
+    const filename = `inventory-movements-${commerceCalendarDateKey()}.csv`;
     c.header("Content-Type", artifact.contentType);
     c.header("Content-Disposition", `attachment; filename="${filename}"`);
     c.header("Content-Length", String(artifact.byteLength));
@@ -539,7 +540,7 @@ app.openapi(labelArtifactRoute, async (c) => {
         if (error instanceof Error) throw new ValidationError(error.message);
         throw error;
     }
-    const filename = `barcode-labels-${new Date().toISOString().slice(0, 10)}.${artifact.extension}`;
+    const filename = `barcode-labels-${commerceCalendarDateKey()}.${artifact.extension}`;
     c.header("Content-Type", artifact.contentType);
     c.header("Content-Disposition", `attachment; filename="${filename}"`);
     c.header("Cache-Control", "private, no-store");

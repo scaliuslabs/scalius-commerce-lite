@@ -30,6 +30,7 @@ import type { DateRange } from "react-day-picker";
 import { ordersQueryOptions } from "~/lib/api-query-options/orders";
 import { warmRouteQuery } from "~/lib/route-query-warming";
 import { formatDateOnly, parseDateOnly } from "~/lib/date-only";
+import { adminCalendarDateKey } from "~/lib/admin-time";
 import {
   useUpdateOrderStatus,
   useArchiveOrders,
@@ -843,8 +844,8 @@ function OrdersPage() {
       const link = document.createElement("a");
       link.href = url;
       link.download = recoveryExportParams
-        ? `payment-recovery-${new Date().toISOString().slice(0, 10)}.csv`
-        : `orders-${new Date().toISOString().slice(0, 10)}.csv`;
+        ? `payment-recovery-${adminCalendarDateKey()}.csv`
+        : `orders-${adminCalendarDateKey()}.csv`;
       document.body.appendChild(link);
       link.click();
       link.remove();

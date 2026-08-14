@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../ui/select";
-import { formatDateShort } from "@scalius/shared/timestamps";
+import { formatAdminCalendarDate } from "~/lib/admin-time";
 import {
   getDailyActivityDataForRange,
   hasDailyActivityData,
@@ -124,13 +124,7 @@ function toPathNumber(value: number) {
 }
 
 function formatAxisDate(value: string) {
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return date.toLocaleDateString("en-US", {
+  return formatAdminCalendarDate(value, {
     month: "short",
     day: "numeric",
   });
@@ -375,7 +369,7 @@ export function formatDashboardChartPointLabel(
     })
     .join(", ");
 
-  return `${formatDateShort(point.date)}. ${values}`;
+  return `${formatAdminCalendarDate(point.date)}. ${values}`;
 }
 
 const DailyActivityEmptyState = () => (
@@ -420,7 +414,7 @@ function DailyActivityTooltip({
     >
       <div className="flex flex-col space-y-1">
         <span className="text-[0.7rem] uppercase text-muted-foreground">
-          {formatDateShort(activePoint.point.date)}
+          {formatAdminCalendarDate(activePoint.point.date)}
         </span>
         <div className="space-y-1.5">
           {chartSeries.map((series) => {

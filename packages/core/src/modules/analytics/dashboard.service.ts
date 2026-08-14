@@ -5,6 +5,13 @@
 import { safeBatch, type Database } from "@scalius/database/client";
 import { products, customers, orders } from "@scalius/database/schema";
 import { and, sql, desc } from "drizzle-orm";
+import {
+    COMMERCE_UTC_OFFSET_SECONDS,
+    commerceCalendarDateKey,
+    commerceCalendarDayBounds,
+    commerceMonthBounds,
+    shiftCommerceCalendarDateKey,
+} from "@scalius/shared/commerce-time";
 import { retryTransientD1 } from "../../utils/transient-d1";
 
 const DASHBOARD_QUERY_RETRY_DELAYS_MS = [150, 350, 750] as const;
@@ -71,12 +78,12 @@ type CurrentMonthRow = {
 type MonthComparisonRow = { count: number; revenue: number | null };
 type TotalRevenueRow = { total: number | null };
 type DailyOrderRow = {
-    date: string;
+    day: number;
     orderCount: number;
     totalRevenue: number;
 };
 type DailyCustomerRow = {
-    date: string;
+    day: number;
     customerCount: number;
 };
 type RecentOrderRow = {
@@ -84,22 +91,13 @@ type RecentOrderRow = {
     customerName: string;
     totalAmount: number;
     status: string;
-    createdAt: string;
+    createdAt: Date | string;
 };
 
 function getDashboardMonthBounds() {
-    const now = new Date();
-    const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const firstDayOfLastMonth = new Date(
-        now.getFullYear(),
-        now.getMonth() - 1,
-        1,
-    );
-
-    const firstDayOfMonthTs = Math.floor(firstDayOfMonth.getTime() / 1000);
-    const firstDayOfLastMonthTs = Math.floor(
-        firstDayOfLastMonth.getTime() / 1000,
-    );
+    const bounds = commerceMonthBounds();
+    const firstDayOfMonthTs = bounds.currentMonthStart;
+    const firstDayOfLastMonthTs = bounds.previousMonthStart;
 
     return { firstDayOfMonthTs, firstDayOfLastMonthTs };
 }
@@ -163,7 +161,7 @@ function getRecentOrdersQuery(db: Database, limit: number) {
             customerName: orders.customerName,
             totalAmount: orders.totalAmount,
             status: orders.status,
-            createdAt: sql<string>`datetime(${orders.createdAt}, 'unixepoch')`,
+            createdAt: orders.createdAt,
         })
         .from(orders)
         .where(sql`${orders.deletedAt} is null`)
@@ -332,17 +330,26 @@ export async function getRecentOrders(db: Database, limit = 5) {
  * last N days (filling in zero-rows for days with no data).
  */
 export async function getDailyActivityData(db: Database, days: number) {
-    const now = new Date();
-    const startDate = new Date(now);
-    startDate.setDate(now.getDate() - days);
-    const startDateTs = Math.floor(startDate.getTime() / 1000);
+    if (!Number.isInteger(days) || days < 1 || days > 90) {
+        throw new RangeError("Dashboard activity days must be between 1 and 90.");
+    }
+
+    const endDateKey = commerceCalendarDateKey();
+    const startDateKey = shiftCommerceCalendarDateKey(endDateKey, -(days - 1));
+    const startDateTs = commerceCalendarDayBounds(startDateKey).start;
+    // Integer epoch-day bucketing is supported identically by SQLite/Turso and
+    // PostgreSQL and avoids relying on a database session timezone.
+    const merchantDay = (column: typeof orders.createdAt | typeof customers.createdAt) =>
+        sql<number>`cast((${column} + ${COMMERCE_UTC_OFFSET_SECONDS}) / 86400 as integer)`;
+    const orderDay = merchantDay(orders.createdAt);
+    const customerDay = merchantDay(customers.createdAt);
 
     const [dailyOrderData, dailyCustomerData] = await runDashboardQuery(
         `daily_activity_${days}d`,
         () => safeBatch(db, [
             db
                 .select({
-                    date: sql<string>`strftime('%Y-%m-%d', datetime(${orders.createdAt}, 'unixepoch'))`,
+                    day: orderDay.mapWith(Number),
                     orderCount: sql<number>`count(*)`.mapWith(Number),
                     totalRevenue: sql<number>`sum(${orders.totalAmount})`.mapWith(Number),
                 })
@@ -354,15 +361,11 @@ export async function getDailyActivityData(db: Database, days: number) {
                         sql`${orders.status} NOT IN ('cancelled', 'returned')`,
                     ),
                 )
-                .groupBy(
-                    sql`strftime('%Y-%m-%d', datetime(${orders.createdAt}, 'unixepoch'))`,
-                )
-                .orderBy(
-                    sql`strftime('%Y-%m-%d', datetime(${orders.createdAt}, 'unixepoch')) asc`,
-                ),
+                .groupBy(orderDay)
+                .orderBy(sql`${orderDay} asc`),
             db
                 .select({
-                    date: sql<string>`strftime('%Y-%m-%d', datetime(${customers.createdAt}, 'unixepoch'))`,
+                    day: customerDay.mapWith(Number),
                     customerCount: sql<number>`count(*)`.mapWith(Number),
                 })
                 .from(customers)
@@ -372,29 +375,22 @@ export async function getDailyActivityData(db: Database, days: number) {
                         sql`${customers.createdAt} >= ${startDateTs}`,
                     ),
                 )
-                .groupBy(
-                    sql`strftime('%Y-%m-%d', datetime(${customers.createdAt}, 'unixepoch'))`,
-                )
-                .orderBy(
-                    sql`strftime('%Y-%m-%d', datetime(${customers.createdAt}, 'unixepoch')) asc`,
-                ),
+                .groupBy(customerDay)
+                .orderBy(sql`${customerDay} asc`),
         ]) as Promise<[DailyOrderRow[], DailyCustomerRow[]]>,
     );
 
     const result = [];
-    const currentDate = new Date(startDate);
-    currentDate.setHours(0, 0, 0, 0);
 
-    const endDate = new Date(now);
-    endDate.setHours(0, 0, 0, 0);
-
-    const orderMap = new Map(dailyOrderData.map((item) => [item.date, item]));
+    const dayKey = (day: number) =>
+        new Date(day * 86_400_000).toISOString().slice(0, 10);
+    const orderMap = new Map(dailyOrderData.map((item) => [dayKey(item.day), item]));
     const customerMap = new Map(
-        dailyCustomerData.map((item) => [item.date, item]),
+        dailyCustomerData.map((item) => [dayKey(item.day), item]),
     );
 
-    while (currentDate <= endDate) {
-        const dateStr = currentDate.toISOString().split("T")[0] ?? "";
+    for (let index = 0; index < days; index += 1) {
+        const dateStr = shiftCommerceCalendarDateKey(startDateKey, index);
         const orderEntry = orderMap.get(dateStr);
         const customerEntry = customerMap.get(dateStr);
         result.push({
@@ -403,7 +399,6 @@ export async function getDailyActivityData(db: Database, days: number) {
             revenue: orderEntry ? orderEntry.totalRevenue : 0,
             newCustomers: customerEntry ? customerEntry.customerCount : 0,
         });
-        currentDate.setDate(currentDate.getDate() + 1);
     }
 
     return result;

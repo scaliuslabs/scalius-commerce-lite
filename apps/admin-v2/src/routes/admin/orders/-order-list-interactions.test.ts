@@ -299,7 +299,7 @@ describe("order list interactions", () => {
     expect(paramsSource).toContain("if (!search.paymentRecovery) return null");
     expect(paramsSource).toContain('params.set("state", search.paymentRecovery)');
     expect(routeSource).toContain('"/api/v1/admin/orders/payment-recovery/export"');
-    expect(routeSource).toContain('`payment-recovery-${new Date().toISOString().slice(0, 10)}.csv`');
+    expect(routeSource).toContain('`payment-recovery-${adminCalendarDateKey()}.csv`');
     expect(routeSource).toContain('response.headers.get("X-Export-Row-Count")');
     expect(routeSource).toContain('response.headers.get("X-Export-Limited") === "true"');
     expect(routeSource).toContain("buildRecoveryExportSearchParams(search)");

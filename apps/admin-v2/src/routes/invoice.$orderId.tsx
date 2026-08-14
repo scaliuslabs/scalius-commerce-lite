@@ -96,6 +96,7 @@ function InvoicePage() {
   const invoiceDate = toInvoiceDate(document.issuedAt ?? order.createdAt);
   const formattedDate = invoiceDate.toLocaleDateString("en-GB", {
     day: "2-digit", month: "short", year: "numeric",
+    timeZone: "Asia/Dhaka",
   });
 
   const addressParts = [

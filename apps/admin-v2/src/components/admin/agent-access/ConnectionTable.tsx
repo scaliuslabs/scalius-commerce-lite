@@ -23,6 +23,7 @@ import type { AgentConnection } from "./types";
 const DATE_FORMATTER = new Intl.DateTimeFormat("en-BD", {
   dateStyle: "medium",
   timeStyle: "short",
+  timeZone: "Asia/Dhaka",
 });
 
 function formatDate(value: string | null): string {
