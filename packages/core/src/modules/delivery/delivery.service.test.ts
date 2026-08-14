@@ -501,6 +501,26 @@ describe("testDeliveryProvider durable proof", () => {
     expect(updates[0]).toHaveProperty("lastTestAttemptAt");
     expect(updates[1]).toHaveProperty("lastTestFailureAt");
   });
+
+  it("does not dispatch tests for a saved provider with a non-public base URL", async () => {
+    const provider = await readyPathaoProvider({
+      credentials: JSON.stringify({
+        ...completePathaoCredentials,
+        baseUrl: "https://127.0.0.1/api/v1",
+      }),
+    });
+    const { db, updates } = createSequentialSelectDb([[provider]]);
+
+    await expect(testDeliveryProvider(db as never, "provider_pathao", TEST_FINGERPRINT_KEY))
+      .resolves.toMatchObject({
+        success: false,
+        message: expect.stringContaining("cannot be activated"),
+      });
+
+    expect(mocks.createProvider).not.toHaveBeenCalled();
+    expect(updates[0]).toHaveProperty("lastTestAttemptAt");
+    expect(updates[1]).toHaveProperty("lastTestFailureAt");
+  });
 });
 
 describe("delivery provider active-state authority", () => {

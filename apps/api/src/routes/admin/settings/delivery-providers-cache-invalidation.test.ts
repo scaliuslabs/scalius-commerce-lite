@@ -476,8 +476,14 @@ describe("delivery provider cache invalidation", () => {
         body: JSON.stringify({
           name: "Pathao",
           type: "pathao",
-          credentials: { clientSecret: "secret-provider-token" },
-          config: {},
+          credentials: {
+            baseUrl: "https://api-hermes.pathao.com",
+            clientId: "client-4821",
+            clientSecret: "secret-provider-token",
+            username: "merchant@example.test",
+            password: "pathao-password-4821",
+          },
+          config: { storeId: "store-4821" },
         }),
       },
       env,
@@ -489,6 +495,32 @@ describe("delivery provider cache invalidation", () => {
       data: { success: false, message: "Connection failed" },
     });
     expect(JSON.stringify(body)).not.toContain("secret-provider-token");
+  });
+
+  it("rejects non-public provider URLs before testing credentials", async () => {
+    const { app, env } = createTestApp();
+
+    const response = await app.request(
+      "/api/v1/admin/settings/delivery-providers/create-test",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "Unsafe Steadfast",
+          type: "steadfast",
+          credentials: {
+            baseUrl: "https://127.0.0.1/api/v1",
+            apiKey: "steadfast-api-4821",
+            secretKey: "steadfast-secret-9417",
+          },
+          config: {},
+        }),
+      },
+      env,
+    );
+
+    expect(response.status).toBe(400);
+    expect(mocks.createProvider).not.toHaveBeenCalled();
   });
 
   it("does not fall back to JWT_SECRET when encrypted credentials cannot be strict-read", async () => {

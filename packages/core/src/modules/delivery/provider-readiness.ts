@@ -97,12 +97,25 @@ function getBaseUrlIssue(value: unknown): string | null {
       parsed.protocol !== "https:"
       || parsed.username
       || parsed.password
+      || (parsed.port && parsed.port !== "443")
       || parsed.search
       || parsed.hash
     ) {
-      return "Base URL must be an absolute HTTPS origin/path without credentials, query parameters, or a fragment.";
+      return "Base URL must be an absolute public HTTPS origin/path without credentials, a custom port, query parameters, or a fragment.";
     }
-    if (parsed.hostname === "example.com" || parsed.hostname.endsWith(".example.com")) {
+    const hostname = parsed.hostname.toLowerCase();
+    if (
+      !hostname.includes(".")
+      || hostname === "localhost"
+      || hostname.endsWith(".localhost")
+      || hostname.endsWith(".local")
+      || hostname.endsWith(".internal")
+      || /^\[.*\]$/.test(hostname)
+      || /^\d{1,3}(?:\.\d{1,3}){3}$/.test(hostname)
+    ) {
+      return "Base URL must use a public HTTPS hostname.";
+    }
+    if (hostname === "example.com" || hostname.endsWith(".example.com")) {
       return "Base URL looks like a placeholder. Save the real provider URL before activation.";
     }
     return null;

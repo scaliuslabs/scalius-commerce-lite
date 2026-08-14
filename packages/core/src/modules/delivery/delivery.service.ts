@@ -374,6 +374,11 @@ export async function testDeliveryProvider(db: Database, id: string, encryptionK
       throw new ServiceUnavailableError("CREDENTIAL_ENCRYPTION_KEY is required to test provider readiness.");
     }
     const credentials = await readDeliveryProviderCredentials(provider.credentials, encryptionKey);
+    assertDeliveryProviderReadyForActivation({
+      type: provider.type,
+      credentials,
+      config: provider.config,
+    });
     const fingerprint = await getDeliveryProviderSetupFingerprint({
       type: provider.type,
       credentials,
