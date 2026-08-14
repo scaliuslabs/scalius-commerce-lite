@@ -307,6 +307,42 @@ describe("Meta Conversions admin settings", () => {
         expect(body.data?.testEventCode).toBe("••••••••••••");
     });
 
+    it("preserves every omitted setting during a partial agent update", async () => {
+        const db = createDb();
+        const { response, body } = await saveSettings(db, { isEnabled: false });
+
+        expect(response.status).toBe(200);
+        expect(db.settings).toMatchObject({
+            pixelId: "1234567890",
+            accessToken: "encrypted-token",
+            testEventCode: "stored-test-code",
+            isEnabled: false,
+            logRetentionDays: 30,
+        });
+        expect(body.data).toMatchObject({
+            pixelId: "1234567890",
+            accessToken: "••••••••••••",
+            testEventCode: "••••••••••••",
+            isEnabled: false,
+            logRetentionDays: 30,
+        });
+        expect(mocks.encryptCredentials).not.toHaveBeenCalled();
+    });
+
+    it("uses safe defaults only when creating a new settings row", async () => {
+        const db = createDb({ settings: null });
+        const { response, body } = await saveSettings(db, {});
+
+        expect(response.status).toBe(201);
+        expect(body.data).toMatchObject({
+            pixelId: null,
+            accessToken: null,
+            testEventCode: null,
+            isEnabled: false,
+            logRetentionDays: 30,
+        });
+    });
+
     it("rejects enabling with a masked token when no stored token exists", async () => {
         const db = createDb({ settings: null });
         const { response, body } = await saveSettings(db, {
