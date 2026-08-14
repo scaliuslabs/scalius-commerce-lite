@@ -7015,15 +7015,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   ]
                 },
                 "deletedAt": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "number"
-                    },
-                    {}
-                  ]
+                  "$ref": "#/components/schemas/NullableTimestamp"
                 }
               },
               "required": [
@@ -7516,15 +7508,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   ]
                 },
                 "deletedAt": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "number"
-                    },
-                    {}
-                  ]
+                  "$ref": "#/components/schemas/NullableTimestamp"
                 }
               },
               "required": [
@@ -7876,15 +7860,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               ]
             },
             "deletedAt": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "number"
-                },
-                {}
-              ]
+              "$ref": "#/components/schemas/NullableTimestamp"
             }
           },
           "required": [
@@ -8272,15 +8248,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     ]
                   },
                   "deletedAt": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {}
-                    ]
+                    "$ref": "#/components/schemas/NullableTimestamp"
                   }
                 },
                 "required": [
@@ -8940,15 +8908,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   ]
                 },
                 "deletedAt": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "number"
-                    },
-                    {}
-                  ]
+                  "$ref": "#/components/schemas/NullableTimestamp"
                 }
               },
               "required": [
@@ -10186,37 +10146,13 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "type": "boolean"
                     },
                     "createdAt": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "number"
-                        },
-                        {}
-                      ]
+                      "$ref": "#/components/schemas/NullableTimestamp"
                     },
                     "updatedAt": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "number"
-                        },
-                        {}
-                      ]
+                      "$ref": "#/components/schemas/NullableTimestamp"
                     },
                     "deletedAt": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "number"
-                        },
-                        {}
-                      ]
+                      "$ref": "#/components/schemas/NullableTimestamp"
                     },
                     "metaTitle": {
                       "type": "string",
@@ -10489,37 +10425,13 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "type": "boolean"
                   },
                   "createdAt": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {}
-                    ]
+                    "$ref": "#/components/schemas/NullableTimestamp"
                   },
                   "updatedAt": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {}
-                    ]
+                    "$ref": "#/components/schemas/NullableTimestamp"
                   },
                   "deletedAt": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {}
-                    ]
+                    "$ref": "#/components/schemas/NullableTimestamp"
                   }
                 },
                 "required": [
@@ -11874,15 +11786,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "additionalProperties": {}
             },
             "publishedAt": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "number"
-                },
-                {}
-              ]
+              "$ref": "#/components/schemas/NullableTimestamp"
             },
             "sortOrder": {
               "type": "number"
@@ -11892,37 +11796,13 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "minimum": 1
             },
             "createdAt": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "number"
-                },
-                {}
-              ]
+              "$ref": "#/components/schemas/NullableTimestamp"
             },
             "updatedAt": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "number"
-                },
-                {}
-              ]
+              "$ref": "#/components/schemas/NullableTimestamp"
             },
             "deletedAt": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "number"
-                },
-                {}
-              ]
+              "$ref": "#/components/schemas/NullableTimestamp"
             }
           },
           "required": [
@@ -12243,15 +12123,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "additionalProperties": {}
                   },
                   "publishedAt": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {}
-                    ]
+                    "$ref": "#/components/schemas/NullableTimestamp"
                   },
                   "sortOrder": {
                     "type": "number"
@@ -12261,37 +12133,13 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "minimum": 1
                   },
                   "createdAt": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {}
-                    ]
+                    "$ref": "#/components/schemas/NullableTimestamp"
                   },
                   "updatedAt": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {}
-                    ]
+                    "$ref": "#/components/schemas/NullableTimestamp"
                   },
                   "deletedAt": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {}
-                    ]
+                    "$ref": "#/components/schemas/NullableTimestamp"
                   }
                 },
                 "required": [
@@ -13531,15 +13379,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "nullable": true
             },
             "accountClaimedAt": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "number"
-                },
-                {}
-              ]
+              "$ref": "#/components/schemas/NullableTimestamp"
             },
             "totalOrders": {
               "type": "number"
@@ -13548,15 +13388,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "type": "number"
             },
             "lastOrderAt": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "number"
-                },
-                {}
-              ]
+              "$ref": "#/components/schemas/NullableTimestamp"
             },
             "createdAt": {
               "anyOf": [
@@ -13579,15 +13411,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               ]
             },
             "deletedAt": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "number"
-                },
-                {}
-              ]
+              "$ref": "#/components/schemas/NullableTimestamp"
             }
           },
           "required": [
@@ -13759,15 +13583,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "nullable": true
                 },
                 "accountClaimedAt": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "number"
-                    },
-                    {}
-                  ]
+                  "$ref": "#/components/schemas/NullableTimestamp"
                 },
                 "totalOrders": {
                   "type": "number"
@@ -13776,15 +13592,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "type": "number"
                 },
                 "lastOrderAt": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "number"
-                    },
-                    {}
-                  ]
+                  "$ref": "#/components/schemas/NullableTimestamp"
                 },
                 "createdAt": {
                   "anyOf": [
@@ -13807,15 +13615,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   ]
                 },
                 "deletedAt": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "number"
-                    },
-                    {}
-                  ]
+                  "$ref": "#/components/schemas/NullableTimestamp"
                 }
               },
               "required": [
@@ -17442,15 +17242,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               ]
             },
             "endDate": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "number"
-                },
-                {}
-              ]
+              "$ref": "#/components/schemas/NullableTimestamp"
             },
             "isActive": {
               "type": "boolean"
@@ -17476,15 +17268,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               ]
             },
             "deletedAt": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "number"
-                },
-                {}
-              ]
+              "$ref": "#/components/schemas/NullableTimestamp"
             }
           },
           "required": [
@@ -17702,15 +17486,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     ]
                   },
                   "endDate": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {}
-                    ]
+                    "$ref": "#/components/schemas/NullableTimestamp"
                   },
                   "isActive": {
                     "type": "boolean"
@@ -17736,15 +17512,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     ]
                   },
                   "deletedAt": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {}
-                    ]
+                    "$ref": "#/components/schemas/NullableTimestamp"
                   }
                 },
                 "required": [
@@ -19126,15 +18894,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               ]
             },
             "deletedAt": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "number"
-                },
-                {}
-              ]
+              "$ref": "#/components/schemas/NullableTimestamp"
             }
           },
           "required": [
@@ -19301,15 +19061,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               ]
             },
             "deletedAt": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "number"
-                },
-                {}
-              ]
+              "$ref": "#/components/schemas/NullableTimestamp"
             }
           },
           "required": [
@@ -19467,15 +19219,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 ]
               },
               "deletedAt": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "number"
-                  },
-                  {}
-                ]
+                "$ref": "#/components/schemas/NullableTimestamp"
               }
             },
             "required": [
@@ -19662,15 +19406,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               ]
             },
             "deletedAt": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "number"
-                },
-                {}
-              ]
+              "$ref": "#/components/schemas/NullableTimestamp"
             }
           },
           "required": [
@@ -19912,15 +19648,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               ]
             },
             "deletedAt": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "number"
-                },
-                {}
-              ]
+              "$ref": "#/components/schemas/NullableTimestamp"
             }
           },
           "required": [
@@ -20710,37 +20438,13 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "type": "string"
                   },
                   "alertSentAt": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {}
-                    ]
+                    "$ref": "#/components/schemas/NullableTimestamp"
                   },
                   "acknowledgedAt": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {}
-                    ]
+                    "$ref": "#/components/schemas/NullableTimestamp"
                   },
                   "resolvedAt": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {}
-                    ]
+                    "$ref": "#/components/schemas/NullableTimestamp"
                   },
                   "createdAt": {
                     "anyOf": [
@@ -21919,37 +21623,13 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "type": "string"
                   },
                   "alertSentAt": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {}
-                    ]
+                    "$ref": "#/components/schemas/NullableTimestamp"
                   },
                   "acknowledgedAt": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {}
-                    ]
+                    "$ref": "#/components/schemas/NullableTimestamp"
                   },
                   "resolvedAt": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {}
-                    ]
+                    "$ref": "#/components/schemas/NullableTimestamp"
                   },
                   "createdAt": {
                     "anyOf": [
@@ -22588,15 +22268,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   ]
                 },
                 "deletedAt": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "number"
-                    },
-                    {}
-                  ]
+                  "$ref": "#/components/schemas/NullableTimestamp"
                 }
               },
               "required": [
@@ -22777,15 +22449,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     ]
                   },
                   "deletedAt": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {}
-                    ]
+                    "$ref": "#/components/schemas/NullableTimestamp"
                   }
                 },
                 "required": [
@@ -22948,15 +22612,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   ]
                 },
                 "deletedAt": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "number"
-                    },
-                    {}
-                  ]
+                  "$ref": "#/components/schemas/NullableTimestamp"
                 }
               },
               "required": [
@@ -23150,26 +22806,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   ]
                 },
                 "trashedAt": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "number"
-                    },
-                    {}
-                  ]
+                  "$ref": "#/components/schemas/NullableTimestamp"
                 },
                 "deletedAt": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "number"
-                    },
-                    {}
-                  ]
+                  "$ref": "#/components/schemas/NullableTimestamp"
                 }
               },
               "required": [
@@ -23443,26 +23083,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     ]
                   },
                   "trashedAt": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {}
-                    ]
+                    "$ref": "#/components/schemas/NullableTimestamp"
                   },
                   "deletedAt": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {}
-                    ]
+                    "$ref": "#/components/schemas/NullableTimestamp"
                   }
                 },
                 "required": [
@@ -23848,26 +23472,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   ]
                 },
                 "trashedAt": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "number"
-                    },
-                    {}
-                  ]
+                  "$ref": "#/components/schemas/NullableTimestamp"
                 },
                 "deletedAt": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "number"
-                    },
-                    {}
-                  ]
+                  "$ref": "#/components/schemas/NullableTimestamp"
                 }
               },
               "required": [
@@ -24069,26 +23677,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   ]
                 },
                 "trashedAt": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "number"
-                    },
-                    {}
-                  ]
+                  "$ref": "#/components/schemas/NullableTimestamp"
                 },
                 "deletedAt": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "number"
-                    },
-                    {}
-                  ]
+                  "$ref": "#/components/schemas/NullableTimestamp"
                 }
               },
               "required": [
@@ -24337,26 +23929,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   ]
                 },
                 "trashedAt": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "number"
-                    },
-                    {}
-                  ]
+                  "$ref": "#/components/schemas/NullableTimestamp"
                 },
                 "deletedAt": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "number"
-                    },
-                    {}
-                  ]
+                  "$ref": "#/components/schemas/NullableTimestamp"
                 }
               },
               "required": [
@@ -24586,26 +24162,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   ]
                 },
                 "trashedAt": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "number"
-                    },
-                    {}
-                  ]
+                  "$ref": "#/components/schemas/NullableTimestamp"
                 },
                 "deletedAt": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "number"
-                    },
-                    {}
-                  ]
+                  "$ref": "#/components/schemas/NullableTimestamp"
                 }
               },
               "required": [
@@ -30884,15 +30444,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "nullable": true
             },
             "lastChecked": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "number"
-                },
-                {}
-              ]
+              "$ref": "#/components/schemas/NullableTimestamp"
             },
             "shipmentItems": {
               "type": "string",
@@ -31342,15 +30894,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "type": "boolean"
                   },
                   "deletedAt": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {}
-                    ]
+                    "$ref": "#/components/schemas/NullableTimestamp"
                   },
                   "discountPercentage": {
                     "type": "number",
@@ -31461,15 +31005,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                           "type": "boolean"
                         },
                         "preorderDate": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            },
-                            {}
-                          ]
+                          "$ref": "#/components/schemas/NullableTimestamp"
                         },
                         "preorderMessage": {
                           "type": "string",
@@ -31522,15 +31058,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                           ]
                         },
                         "deletedAt": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            },
-                            {}
-                          ]
+                          "$ref": "#/components/schemas/NullableTimestamp"
                         },
                         "stockVersion": {
                           "type": "number"
@@ -31916,15 +31444,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "nullable": true
                   },
                   "lastChecked": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {}
-                    ]
+                    "$ref": "#/components/schemas/NullableTimestamp"
                   },
                   "shipmentItems": {
                     "type": "string",
@@ -32228,15 +31748,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               ]
             },
             "deletedAt": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "number"
-                },
-                {}
-              ]
+              "$ref": "#/components/schemas/NullableTimestamp"
             },
             "itemCount": {
               "type": "number"
@@ -32350,15 +31862,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "nullable": true
                 },
                 "lastChecked": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "number"
-                    },
-                    {}
-                  ]
+                  "$ref": "#/components/schemas/NullableTimestamp"
                 },
                 "updatedAt": {
                   "anyOf": [
@@ -32444,15 +31948,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "type": "boolean"
                 },
                 "updatedAt": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "number"
-                    },
-                    {}
-                  ]
+                  "$ref": "#/components/schemas/NullableTimestamp"
                 }
               },
               "required": [
@@ -32510,15 +32006,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "type": "boolean"
                 },
                 "updatedAt": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "number"
-                    },
-                    {}
-                  ]
+                  "$ref": "#/components/schemas/NullableTimestamp"
                 }
               },
               "required": [
@@ -32580,70 +32068,22 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "type": "string"
                   },
                   "createdAt": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {}
-                    ]
+                    "$ref": "#/components/schemas/NullableTimestamp"
                   },
                   "updatedAt": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {}
-                    ]
+                    "$ref": "#/components/schemas/NullableTimestamp"
                   },
                   "nextProbeAt": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {}
-                    ]
+                    "$ref": "#/components/schemas/NullableTimestamp"
                   },
                   "lastProbeAt": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {}
-                    ]
+                    "$ref": "#/components/schemas/NullableTimestamp"
                   },
                   "refundedAt": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {}
-                    ]
+                    "$ref": "#/components/schemas/NullableTimestamp"
                   },
                   "failedAt": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {}
-                    ]
+                    "$ref": "#/components/schemas/NullableTimestamp"
                   },
                   "reason": {
                     "type": "string"
@@ -32745,26 +32185,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "type": "number"
                 },
                 "nextProbeAt": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "number"
-                    },
-                    {}
-                  ]
+                  "$ref": "#/components/schemas/NullableTimestamp"
                 },
                 "lastProbeAt": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "number"
-                    },
-                    {}
-                  ]
+                  "$ref": "#/components/schemas/NullableTimestamp"
                 },
                 "providerStatus": {
                   "type": "string",
@@ -32882,48 +32306,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "nullable": true
                   },
                   "submittedAt": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {}
-                    ]
+                    "$ref": "#/components/schemas/NullableTimestamp"
                   },
                   "resolvedAt": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {}
-                    ]
+                    "$ref": "#/components/schemas/NullableTimestamp"
                   },
                   "createdAt": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {}
-                    ]
+                    "$ref": "#/components/schemas/NullableTimestamp"
                   },
                   "updatedAt": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {}
-                    ]
+                    "$ref": "#/components/schemas/NullableTimestamp"
                   }
                 },
                 "required": [
@@ -34455,15 +33847,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "nullable": true
                       },
                       "lastChecked": {
-                        "anyOf": [
-                          {
-                            "type": "string"
-                          },
-                          {
-                            "type": "number"
-                          },
-                          {}
-                        ]
+                        "$ref": "#/components/schemas/NullableTimestamp"
                       },
                       "updatedAt": {
                         "anyOf": [
@@ -34549,15 +33933,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "type": "boolean"
                       },
                       "updatedAt": {
-                        "anyOf": [
-                          {
-                            "type": "string"
-                          },
-                          {
-                            "type": "number"
-                          },
-                          {}
-                        ]
+                        "$ref": "#/components/schemas/NullableTimestamp"
                       }
                     },
                     "required": [
@@ -34615,15 +33991,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "type": "boolean"
                       },
                       "updatedAt": {
-                        "anyOf": [
-                          {
-                            "type": "string"
-                          },
-                          {
-                            "type": "number"
-                          },
-                          {}
-                        ]
+                        "$ref": "#/components/schemas/NullableTimestamp"
                       }
                     },
                     "required": [
@@ -34680,26 +34048,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "type": "number"
                       },
                       "nextProbeAt": {
-                        "anyOf": [
-                          {
-                            "type": "string"
-                          },
-                          {
-                            "type": "number"
-                          },
-                          {}
-                        ]
+                        "$ref": "#/components/schemas/NullableTimestamp"
                       },
                       "lastProbeAt": {
-                        "anyOf": [
-                          {
-                            "type": "string"
-                          },
-                          {
-                            "type": "number"
-                          },
-                          {}
-                        ]
+                        "$ref": "#/components/schemas/NullableTimestamp"
                       },
                       "providerStatus": {
                         "type": "string",
@@ -35704,15 +35056,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "type": "boolean"
                 },
                 "updatedAt": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "number"
-                    },
-                    {}
-                  ]
+                  "$ref": "#/components/schemas/NullableTimestamp"
                 }
               },
               "required": [
@@ -36053,15 +35397,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "nullable": true
                       },
                       "lastChecked": {
-                        "anyOf": [
-                          {
-                            "type": "string"
-                          },
-                          {
-                            "type": "number"
-                          },
-                          {}
-                        ]
+                        "$ref": "#/components/schemas/NullableTimestamp"
                       },
                       "updatedAt": {
                         "anyOf": [
@@ -36147,15 +35483,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "type": "boolean"
                       },
                       "updatedAt": {
-                        "anyOf": [
-                          {
-                            "type": "string"
-                          },
-                          {
-                            "type": "number"
-                          },
-                          {}
-                        ]
+                        "$ref": "#/components/schemas/NullableTimestamp"
                       }
                     },
                     "required": [
@@ -36213,15 +35541,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "type": "boolean"
                       },
                       "updatedAt": {
-                        "anyOf": [
-                          {
-                            "type": "string"
-                          },
-                          {
-                            "type": "number"
-                          },
-                          {}
-                        ]
+                        "$ref": "#/components/schemas/NullableTimestamp"
                       }
                     },
                     "required": [
@@ -36278,26 +35598,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "type": "number"
                       },
                       "nextProbeAt": {
-                        "anyOf": [
-                          {
-                            "type": "string"
-                          },
-                          {
-                            "type": "number"
-                          },
-                          {}
-                        ]
+                        "$ref": "#/components/schemas/NullableTimestamp"
                       },
                       "lastProbeAt": {
-                        "anyOf": [
-                          {
-                            "type": "string"
-                          },
-                          {
-                            "type": "number"
-                          },
-                          {}
-                        ]
+                        "$ref": "#/components/schemas/NullableTimestamp"
                       },
                       "providerStatus": {
                         "type": "string",
@@ -36703,70 +36007,22 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "type": "string"
                   },
                   "createdAt": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {}
-                    ]
+                    "$ref": "#/components/schemas/NullableTimestamp"
                   },
                   "updatedAt": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {}
-                    ]
+                    "$ref": "#/components/schemas/NullableTimestamp"
                   },
                   "nextProbeAt": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {}
-                    ]
+                    "$ref": "#/components/schemas/NullableTimestamp"
                   },
                   "lastProbeAt": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {}
-                    ]
+                    "$ref": "#/components/schemas/NullableTimestamp"
                   },
                   "refundedAt": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {}
-                    ]
+                    "$ref": "#/components/schemas/NullableTimestamp"
                   },
                   "failedAt": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {}
-                    ]
+                    "$ref": "#/components/schemas/NullableTimestamp"
                   },
                   "reason": {
                     "type": "string"
@@ -36868,26 +36124,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "type": "number"
                 },
                 "nextProbeAt": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "number"
-                    },
-                    {}
-                  ]
+                  "$ref": "#/components/schemas/NullableTimestamp"
                 },
                 "lastProbeAt": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "number"
-                    },
-                    {}
-                  ]
+                  "$ref": "#/components/schemas/NullableTimestamp"
                 },
                 "providerStatus": {
                   "type": "string",
@@ -37035,15 +36275,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "nullable": true
                   },
                   "claimExpiresAt": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {}
-                    ]
+                    "$ref": "#/components/schemas/NullableTimestamp"
                   },
                   "createdAt": {
                     "anyOf": [
@@ -39249,15 +38481,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "nullable": true
             },
             "lastChecked": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "number"
-                },
-                {}
-              ]
+              "$ref": "#/components/schemas/NullableTimestamp"
             },
             "shipmentItems": {
               "type": "string",
@@ -39758,15 +38982,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "nullable": true
               },
               "lastChecked": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "number"
-                  },
-                  {}
-                ]
+                "$ref": "#/components/schemas/NullableTimestamp"
               },
               "shipmentItems": {
                 "type": "string",
@@ -40044,48 +39260,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "nullable": true
                 },
                 "submittedAt": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "number"
-                    },
-                    {}
-                  ]
+                  "$ref": "#/components/schemas/NullableTimestamp"
                 },
                 "resolvedAt": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "number"
-                    },
-                    {}
-                  ]
+                  "$ref": "#/components/schemas/NullableTimestamp"
                 },
                 "createdAt": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "number"
-                    },
-                    {}
-                  ]
+                  "$ref": "#/components/schemas/NullableTimestamp"
                 },
                 "updatedAt": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "number"
-                    },
-                    {}
-                  ]
+                  "$ref": "#/components/schemas/NullableTimestamp"
                 }
               },
               "required": [
@@ -40163,48 +39347,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "nullable": true
                   },
                   "submittedAt": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {}
-                    ]
+                    "$ref": "#/components/schemas/NullableTimestamp"
                   },
                   "resolvedAt": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {}
-                    ]
+                    "$ref": "#/components/schemas/NullableTimestamp"
                   },
                   "createdAt": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {}
-                    ]
+                    "$ref": "#/components/schemas/NullableTimestamp"
                   },
                   "updatedAt": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {}
-                    ]
+                    "$ref": "#/components/schemas/NullableTimestamp"
                   }
                 },
                 "required": [
@@ -41874,15 +41026,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "type": "boolean"
             },
             "preorderDate": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "number"
-                },
-                {}
-              ]
+              "$ref": "#/components/schemas/NullableTimestamp"
             },
             "preorderMessage": {
               "type": "string",
@@ -41935,15 +41079,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               ]
             },
             "deletedAt": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "number"
-                },
-                {}
-              ]
+              "$ref": "#/components/schemas/NullableTimestamp"
             },
             "stockVersion": {
               "type": "number"
@@ -42127,15 +41263,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "type": "boolean"
                   },
                   "preorderDate": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {}
-                    ]
+                    "$ref": "#/components/schemas/NullableTimestamp"
                   },
                   "preorderMessage": {
                     "type": "string",
@@ -42188,15 +41316,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     ]
                   },
                   "deletedAt": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {}
-                    ]
+                    "$ref": "#/components/schemas/NullableTimestamp"
                   },
                   "stockVersion": {
                     "type": "number"
@@ -42568,15 +41688,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "type": "boolean"
             },
             "preorderDate": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "number"
-                },
-                {}
-              ]
+              "$ref": "#/components/schemas/NullableTimestamp"
             },
             "preorderMessage": {
               "type": "string",
@@ -42629,15 +41741,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               ]
             },
             "deletedAt": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "number"
-                },
-                {}
-              ]
+              "$ref": "#/components/schemas/NullableTimestamp"
             },
             "stockVersion": {
               "type": "number"
@@ -59462,15 +58566,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "additionalProperties": {}
                 },
                 "publishedAt": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "number"
-                    },
-                    {}
-                  ]
+                  "$ref": "#/components/schemas/NullableTimestamp"
                 },
                 "sortOrder": {
                   "type": "number"
@@ -59480,37 +58576,13 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "minimum": 1
                 },
                 "createdAt": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "number"
-                    },
-                    {}
-                  ]
+                  "$ref": "#/components/schemas/NullableTimestamp"
                 },
                 "updatedAt": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "number"
-                    },
-                    {}
-                  ]
+                  "$ref": "#/components/schemas/NullableTimestamp"
                 },
                 "deletedAt": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "number"
-                    },
-                    {}
-                  ]
+                  "$ref": "#/components/schemas/NullableTimestamp"
                 }
               },
               "required": [
@@ -59760,15 +58832,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "additionalProperties": {}
                   },
                   "publishedAt": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {}
-                    ]
+                    "$ref": "#/components/schemas/NullableTimestamp"
                   },
                   "sortOrder": {
                     "type": "number"
@@ -59778,37 +58842,13 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "minimum": 1
                   },
                   "createdAt": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {}
-                    ]
+                    "$ref": "#/components/schemas/NullableTimestamp"
                   },
                   "updatedAt": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {}
-                    ]
+                    "$ref": "#/components/schemas/NullableTimestamp"
                   },
                   "deletedAt": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {}
-                    ]
+                    "$ref": "#/components/schemas/NullableTimestamp"
                   }
                 },
                 "required": [
@@ -63260,15 +62300,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   ]
                 },
                 "deletedAt": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "number"
-                    },
-                    {}
-                  ]
+                  "$ref": "#/components/schemas/NullableTimestamp"
                 }
               },
               "required": [
@@ -71824,15 +70856,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "additionalProperties": {}
                 },
                 "publishedAt": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "number"
-                    },
-                    {}
-                  ]
+                  "$ref": "#/components/schemas/NullableTimestamp"
                 },
                 "sortOrder": {
                   "type": "number"
@@ -71842,37 +70866,13 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "minimum": 1
                 },
                 "createdAt": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "number"
-                    },
-                    {}
-                  ]
+                  "$ref": "#/components/schemas/NullableTimestamp"
                 },
                 "updatedAt": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "number"
-                    },
-                    {}
-                  ]
+                  "$ref": "#/components/schemas/NullableTimestamp"
                 },
                 "deletedAt": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "number"
-                    },
-                    {}
-                  ]
+                  "$ref": "#/components/schemas/NullableTimestamp"
                 }
               },
               "required": [
@@ -72097,15 +71097,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "additionalProperties": {}
                 },
                 "publishedAt": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "number"
-                    },
-                    {}
-                  ]
+                  "$ref": "#/components/schemas/NullableTimestamp"
                 },
                 "sortOrder": {
                   "type": "number"
@@ -72115,37 +71107,13 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "minimum": 1
                 },
                 "createdAt": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "number"
-                    },
-                    {}
-                  ]
+                  "$ref": "#/components/schemas/NullableTimestamp"
                 },
                 "updatedAt": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "number"
-                    },
-                    {}
-                  ]
+                  "$ref": "#/components/schemas/NullableTimestamp"
                 },
                 "deletedAt": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "number"
-                    },
-                    {}
-                  ]
+                  "$ref": "#/components/schemas/NullableTimestamp"
                 }
               },
               "required": [
@@ -72406,15 +71374,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "additionalProperties": {}
                   },
                   "publishedAt": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {}
-                    ]
+                    "$ref": "#/components/schemas/NullableTimestamp"
                   },
                   "sortOrder": {
                     "type": "number"
@@ -72424,37 +71384,13 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "minimum": 1
                   },
                   "createdAt": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {}
-                    ]
+                    "$ref": "#/components/schemas/NullableTimestamp"
                   },
                   "updatedAt": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {}
-                    ]
+                    "$ref": "#/components/schemas/NullableTimestamp"
                   },
                   "deletedAt": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {}
-                    ]
+                    "$ref": "#/components/schemas/NullableTimestamp"
                   }
                 },
                 "required": [
