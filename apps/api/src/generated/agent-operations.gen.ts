@@ -41197,7 +41197,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "weight": {
                         "type": "number",
                         "nullable": true,
-                        "minimum": 0
+                        "minimum": 0,
+                        "description": "Weight in grams."
                       },
                       "barcode": {
                         "type": "string",
@@ -41365,7 +41366,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "weight": {
                   "type": "number",
                   "nullable": true,
-                  "minimum": 0
+                  "minimum": 0,
+                  "description": "Weight in grams."
                 },
                 "sku": {
                   "type": "string",
@@ -42027,7 +42029,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "weight": {
                   "type": "number",
                   "nullable": true,
-                  "minimum": 0
+                  "minimum": 0,
+                  "description": "Weight in grams."
                 },
                 "sku": {
                   "type": "string",
@@ -42757,7 +42760,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                           "weight": {
                             "type": "number",
                             "nullable": true,
-                            "minimum": 0
+                            "minimum": 0,
+                            "description": "Weight in grams."
                           },
                           "barcode": {
                             "type": "string",
