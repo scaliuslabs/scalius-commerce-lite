@@ -78,6 +78,42 @@ describe("agent in-process request construction", () => {
     expect(request.headers.get("Content-Type")).toBe("application/json");
   });
 
+  it("rejects unknown JSON body properties before a route can silently strip them", async () => {
+    const source = operation({
+      inputSchema: {
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  name: { type: "string" },
+                  permissions: { type: "array", items: { type: "string" } },
+                },
+                required: ["name"],
+              },
+            },
+          },
+        },
+      },
+    });
+    expect(() => buildInternalRequest(
+      source,
+      { body: { name: "Catalog editor", permissionKeys: ["products.view"] } },
+      { PUBLIC_API_BASE_URL: "https://api.example.test" } as Env,
+      "request-unknown-body",
+    )).toThrowError("Unknown body property 'permissionKeys'. Allowed properties: name, permissions.");
+
+    const request = buildInternalRequest(
+      source,
+      { body: { name: "Catalog editor", permissions: ["products.view"] } },
+      { PUBLIC_API_BASE_URL: "https://api.example.test" } as Env,
+      "request-declared-body",
+    );
+    expect(await request.json()).toEqual({ name: "Catalog editor", permissions: ["products.view"] });
+  });
+
   it("builds the JSON request that initiates a reviewed continuation", async () => {
     const source = operation({
       operationId: "storefront.orders.payment.begin",

@@ -548,6 +548,41 @@ describe("CLI program", () => {
     expect(operationCalls).toBe(0);
   });
 
+  it("rejects unknown JSON body properties before fetch and names the allowed fields", async () => {
+    const spec = executableSpec();
+    const paths = spec.paths as Record<string, Record<string, Record<string, unknown>>>;
+    paths["/api/v1/admin/products"]!.post!.requestBody = {
+      required: true,
+      content: {
+        "application/json": {
+          schema: {
+            type: "object",
+            properties: {
+              name: { type: "string" },
+              permissions: { type: "array", items: { type: "string" } },
+            },
+            required: ["name"],
+          },
+        },
+      },
+    };
+    let operationCalls = 0;
+    const fetch = vi.fn(async (input: string | URL | Request) => {
+      if (String(input).endsWith("/openapi.json")) return Response.json(spec);
+      operationCalls += 1;
+      return Response.json({});
+    });
+    const runtime = await authenticatedRuntime(fetch as typeof globalThis.fetch);
+    expect(await runProgram(runtime, [
+      "operations", "run", "dashboard.products.create",
+      "--input", JSON.stringify({ body: { name: "A", permissionKeys: ["products.view"] } }),
+      "--yes", "--idempotency-key", "request-unknown-body",
+    ])).toBe(5);
+    expect(runtime.stderrText()).toContain("Unknown body property 'permissionKeys'");
+    expect(runtime.stderrText()).toContain("Allowed properties: name, permissions");
+    expect(operationCalls).toBe(0);
+  });
+
   it("counts multibyte JSON as UTF-8 bytes rather than JavaScript characters", async () => {
     const body = { value: "é" };
     const serialized = JSON.stringify(body);

@@ -198,6 +198,55 @@ function requireCanonicalApiOrigin(env: Env): string {
   }
 }
 
+function declaredJsonBodyProperties(operation: AgentOperationManifestEntry): Set<string> | undefined {
+  const input = operation.inputSchema;
+  if (!input || typeof input !== "object" || Array.isArray(input)) return undefined;
+  const requestBody = (input as Record<string, unknown>).requestBody;
+  if (!requestBody || typeof requestBody !== "object" || Array.isArray(requestBody)) return undefined;
+  const content = (requestBody as Record<string, unknown>).content;
+  if (!content || typeof content !== "object" || Array.isArray(content)) return undefined;
+  const json = (content as Record<string, unknown>)["application/json"];
+  if (!json || typeof json !== "object" || Array.isArray(json)) return undefined;
+  const schema = (json as Record<string, unknown>).schema;
+  if (!schema || typeof schema !== "object" || Array.isArray(schema)) return undefined;
+  const root = schema as Record<string, unknown>;
+  if (root.additionalProperties !== undefined && root.additionalProperties !== false) return undefined;
+  const candidates: Record<string, unknown>[] = [root];
+  for (const key of ["oneOf", "anyOf", "allOf"] as const) {
+    const alternatives = root[key];
+    if (Array.isArray(alternatives)) {
+      for (const candidate of alternatives) {
+        if (candidate && typeof candidate === "object" && !Array.isArray(candidate)) {
+          candidates.push(candidate as Record<string, unknown>);
+        }
+      }
+    }
+  }
+  const declared = new Set<string>();
+  for (const candidate of candidates) {
+    const properties = candidate.properties;
+    if (properties && typeof properties === "object" && !Array.isArray(properties)) {
+      Object.keys(properties).forEach((key) => declared.add(key));
+    }
+  }
+  return declared.size > 0 ? declared : undefined;
+}
+
+function validateAgentJsonBodyProperties(
+  operation: AgentOperationManifestEntry,
+  body: unknown,
+): void {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return;
+  const declared = declaredJsonBodyProperties(operation);
+  if (!declared) return;
+  const unknown = Object.keys(body).filter((key) => !declared.has(key)).sort();
+  if (unknown.length === 0) return;
+  throw new AgentDispatchError(
+    "unknown_body_property",
+    `Unknown body property '${unknown[0]}'. Allowed properties: ${[...declared].sort().join(", ")}.`,
+  );
+}
+
 export function buildInternalRequest(
   operation: AgentOperationManifestEntry,
   input: AgentOperationInput,
@@ -234,6 +283,7 @@ export function buildInternalRequest(
 
   let body: string | undefined;
   if (input.body !== undefined) {
+    validateAgentJsonBodyProperties(operation, input.body);
     try {
       body = JSON.stringify(input.body);
     } catch {
