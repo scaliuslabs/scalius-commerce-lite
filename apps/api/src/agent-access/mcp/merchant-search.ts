@@ -112,9 +112,10 @@ function intentBonus(searchableText: string, query: string): number {
     .findIndex((operationId) => searchableText.toLocaleLowerCase().includes(operationId));
   if (workflowTargetIndex >= 0) return 120 - (workflowTargetIndex * 25);
   const target = merchantIntentTarget(queryWords);
+  const normalizedText = searchableText.toLocaleLowerCase();
   if (target && ["dashboard.orders.fulfill", "dashboard.orders.create_shipment"].includes(target)
-    && searchableText.toLocaleLowerCase().split("\n", 1)[0] === target) return 120;
-  return target && searchableText.toLocaleLowerCase().includes(target) ? 60 : 0;
+    && (normalizedText === target || normalizedText.startsWith(`${target}\n`) || normalizedText.startsWith(`${target} `))) return 120;
+  return target && normalizedText.includes(target) ? 60 : 0;
 }
 
 export function prefersReadOnlyMerchantResults(query: string): boolean {

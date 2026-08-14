@@ -61,6 +61,6 @@ describe("merchant operation search", () => {
     ["ship an order with Pathao", "dashboard.orders.create_shipment"],
   ])("routes the explicit shipment action %s to %s", (query, operationId) => {
     expect(prefersReadOnlyMerchantResults(query)).toBe(false);
-    expect(merchantOperationQueryScore(operationId, query)).toBeGreaterThan(50);
+    expect(merchantOperationQueryScore(`${operationId} operation summary`, query)).toBeGreaterThan(100);
   });
 });
