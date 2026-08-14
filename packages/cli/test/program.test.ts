@@ -161,6 +161,23 @@ describe("CLI program", () => {
     expect(runtime.stderrText()).toBe("");
   });
 
+  it("explicitly refreshes a cached live contract for the selected audience", async () => {
+    let version = 1;
+    const fetch = vi.fn(async (_input: string | URL | Request, _init?: RequestInit) => Response.json(executableSpec(), {
+      headers: { ETag: `"v${version++}"` },
+    }));
+    const runtime = await authenticatedRuntime(fetch as typeof globalThis.fetch);
+
+    expect(await runProgram(runtime, ["--output", "json", "operations", "search", "product"])).toBe(0);
+    expect(await runProgram(runtime, ["--output", "json", "operations", "refresh", "--surface", "dashboard"])).toBe(0);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(runtime.stdoutText()).toContain('"status": "refreshed"');
+    expect(runtime.stdoutText()).toContain('"surface": "dashboard"');
+    expect(runtime.stdoutText()).toContain('"operationCount": 6');
+    const secondRequest = fetch.mock.calls[1]?.[1] as RequestInit | undefined;
+    expect(new Headers(secondRequest?.headers).has("If-None-Match")).toBe(false);
+  });
+
   it("shows and describes only operations for the paired credential audience", async () => {
     let operationCalls = 0;
     const fetch = vi.fn(async (input: string | URL | Request) => {

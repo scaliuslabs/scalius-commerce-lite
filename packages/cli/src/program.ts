@@ -5,7 +5,7 @@ import { ConfigStore } from "./config.js";
 import { asCliError, CliError } from "./errors.js";
 import { collectFile, readBatchInput, readInput } from "./input.js";
 import { uploadMediaFiles } from "./media.js";
-import { operationsBatch, operationsDescribe, operationsRun, operationsSearch } from "./operations.js";
+import { operationsBatch, operationsDescribe, operationsRefresh, operationsRun, operationsSearch } from "./operations.js";
 import { writeError, writeResult } from "./output.js";
 import { listProfiles, showProfile, useProfile } from "./profiles.js";
 import { AGENT_HARNESSES, installSkill, setupHarness, type AgentHarness } from "./skill.js";
@@ -206,6 +206,13 @@ export function createProgram(runtime: Runtime): Command {
     });
 
   const operations = program.command("operations").alias("ops").description("discover and execute operations");
+  operations.command("refresh")
+    .description("refresh the cached live operation contract")
+    .addOption(new Option("--surface <audience>", "operation audience").choices(["dashboard", "storefront"]).default("dashboard"))
+    .action(async (options: { surface: "dashboard" | "storefront" }, command) => {
+      const result = await operationsRefresh(runtime, await resolveForResource(runtime, command, options.surface));
+      writeResult(runtime, globalOptions(command).output, result, `Refreshed ${String(result.operationCount)} ${options.surface} operation(s).`);
+    });
   operations.command("search")
     .description("search the live operation contract")
     .argument("[query]")

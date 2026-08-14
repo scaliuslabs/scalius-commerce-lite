@@ -220,13 +220,18 @@ async function writeCache(path: string, cache: CachedContract): Promise<void> {
   }
 }
 
-export async function loadOpenApi(runtime: Runtime, profile: ResolvedProfile): Promise<OpenApiDocument> {
+export async function loadOpenApi(
+  runtime: Runtime,
+  profile: ResolvedProfile,
+  forceRefresh = false,
+): Promise<OpenApiDocument> {
   if (!profile.token) throw new CliError(3, "not_authenticated", "Authentication is required.");
   const store = new ConfigStore(runtime);
   const path = store.cachePath(profile.name);
   const cached = await readCache(path, profile.server);
   const cachedAge = cached ? runtime.now() - Date.parse(cached.fetchedAt) : Number.POSITIVE_INFINITY;
   if (
+    !forceRefresh &&
     cached &&
     Number.isFinite(cachedAge) &&
     cachedAge >= 0 &&
@@ -235,7 +240,7 @@ export async function loadOpenApi(runtime: Runtime, profile: ResolvedProfile): P
     return cached.document;
   }
   const headers = bearerHeaders(profile.token);
-  if (cached?.etag) headers.set("If-None-Match", cached.etag);
+  if (!forceRefresh && cached?.etag) headers.set("If-None-Match", cached.etag);
   const url = `${profile.server}/api/v1/openapi.json`;
   try {
     const response = await fetchWithNetworkErrors(runtime, url, { headers });
@@ -268,8 +273,12 @@ export async function loadOpenApi(runtime: Runtime, profile: ResolvedProfile): P
   }
 }
 
-export async function getIndexedOperations(runtime: Runtime, profile: ResolvedProfile): Promise<{ document: OpenApiDocument; operations: IndexedOperation[] }> {
-  const document = await loadOpenApi(runtime, profile);
+export async function getIndexedOperations(
+  runtime: Runtime,
+  profile: ResolvedProfile,
+  forceRefresh = false,
+): Promise<{ document: OpenApiDocument; operations: IndexedOperation[] }> {
+  const document = await loadOpenApi(runtime, profile, forceRefresh);
   return { document, operations: indexOperations(document) };
 }
 
