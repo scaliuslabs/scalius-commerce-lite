@@ -2653,6 +2653,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "method": "GET",
     "pathTemplate": "/api/v1/admin/analytics/health",
     "summary": "Get analytics provider readiness without provider calls",
+    "description": "Check analytics health, operational status, configuration issues, and provider readiness.",
     "tags": [
       "Admin - Analytics"
     ],
@@ -9179,6 +9180,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "method": "GET",
     "pathTemplate": "/api/v1/admin/settings/checkout-readiness",
     "summary": "Get checkout readiness",
+    "description": "Check store checkout health, operational readiness, and blocking configuration issues.",
     "tags": [
       "Admin - Settings"
     ],
@@ -14030,6 +14032,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "method": "GET",
     "pathTemplate": "/api/v1/admin/customers",
     "summary": "List all customers",
+    "description": "Find recent or new customers and search bounded customer summaries.",
     "tags": [
       "Admin - Customers"
     ],
@@ -19944,6 +19947,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "method": "GET",
     "pathTemplate": "/api/v1/admin/dashboard/activity",
     "summary": "Get dashboard daily activity chart data",
+    "description": "Answer daily or today's sales, revenue, order-count, and new-customer questions with a bounded 90-day activity series.",
     "tags": [
       "Admin - Dashboard"
     ],
@@ -20375,6 +20379,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "method": "GET",
     "pathTemplate": "/api/v1/admin/dashboard/home-summary",
     "summary": "Get lightweight dashboard home metrics and recent orders",
+    "description": "Answer current-month sales, revenue, customer, order, and recent-order summary questions.",
     "tags": [
       "Admin - Dashboard"
     ],
@@ -20622,6 +20627,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "method": "GET",
     "pathTemplate": "/api/v1/admin/inventory/alerts",
     "summary": "Get inventory alerts",
+    "description": "Find low-stock, out-of-stock, and other inventory issues needing attention.",
     "tags": [
       "Admin - Inventory"
     ],
@@ -21438,6 +21444,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "method": "GET",
     "pathTemplate": "/api/v1/admin/inventory",
     "summary": "Get inventory overview",
+    "description": "Answer inventory and stock-status questions with bounded variant, movement, or alert pages.",
     "tags": [
       "Admin - Inventory"
     ],
@@ -33898,6 +33905,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "method": "GET",
     "pathTemplate": "/api/v1/admin/orders",
     "summary": "List orders with pagination and filters",
+    "description": "Find recent orders and orders needing fulfillment, shipping, payment, or lifecycle attention.",
     "tags": [
       "Admin - Orders"
     ],
@@ -35565,6 +35573,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "method": "GET",
     "pathTemplate": "/api/v1/admin/orders/payment-recovery",
     "summary": "List hosted-payment recovery orders",
+    "description": "Find failed or incomplete payment attempts that need merchant or buyer attention.",
     "tags": [
       "Admin - Orders"
     ],
@@ -44713,6 +44722,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "method": "GET",
     "pathTemplate": "/api/v1/admin/products/stats",
     "summary": "Get product and category dashboard statistics",
+    "description": "Answer quick product, catalog, category, and merchandising count questions.",
     "tags": [
       "Admin - Products"
     ],

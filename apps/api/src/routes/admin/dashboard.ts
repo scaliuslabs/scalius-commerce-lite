@@ -120,6 +120,7 @@ const dashboardHomeSummaryRoute = createRoute({
     path: "/home-summary",
     tags: ["Admin - Dashboard"],
     summary: "Get lightweight dashboard home metrics and recent orders",
+    description: "Answer current-month sales, revenue, customer, order, and recent-order summary questions.",
     operationId: "dashboard.home.summary",
     responses: {
         200: {
@@ -195,6 +196,7 @@ const dashboardActivityRoute = createRoute({
     path: "/activity",
     tags: ["Admin - Dashboard"],
     summary: "Get dashboard daily activity chart data",
+    description: "Answer daily or today's sales, revenue, order-count, and new-customer questions with a bounded 90-day activity series.",
     operationId: "dashboard.home.activity",
     responses: {
         200: {

@@ -52,6 +52,57 @@ describe("configuration", () => {
     expect((await store.loadCredentials()).credentials).toEqual({});
   });
 
+  it("remembers and resolves an authenticated profile for each audience", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "scalius-cli-audiences-"));
+    const runtime = createTestRuntime({ directory });
+    const store = new ConfigStore(runtime);
+    await store.putProfile("admin", "https://api.example.com");
+    await store.putCredential("admin", {
+      token: validToken(), resource: "dashboard", createdAt: "2026-08-13T00:00:00.000Z",
+    });
+    await store.putProfile("buyer", "https://api.example.com");
+    await store.putCredential("buyer", {
+      token: validToken(), resource: "storefront", createdAt: "2026-08-13T00:00:00.000Z",
+    });
+
+    expect((await store.resolveProfile()).name).toBe("buyer");
+    expect((await store.resolveProfileForResource("dashboard")).name).toBe("admin");
+    expect((await store.resolveProfileForResource("storefront")).name).toBe("buyer");
+    await expect(store.resolveProfileForResource("dashboard", "buyer")).rejects.toMatchObject({
+      errorCode: "profile_audience_mismatch",
+    });
+    await store.removeCredential("buyer");
+    expect((await store.loadConfig()).activeProfiles?.storefront).toBeUndefined();
+  });
+
+  it("prefers the matching audience profile on the active store origin", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "scalius-cli-stores-"));
+    const runtime = createTestRuntime({ directory });
+    const store = new ConfigStore(runtime);
+    await store.putProfile("first-admin", "https://first.example.com");
+    await store.putCredential("first-admin", { token: validToken(), resource: "dashboard", createdAt: "2026-08-13T00:00:00.000Z" });
+    await store.putProfile("second-admin", "https://second.example.com");
+    await store.putCredential("second-admin", { token: validToken(), resource: "dashboard", createdAt: "2026-08-13T00:00:00.000Z" });
+    await store.putProfile("first-buyer", "https://first.example.com");
+    await store.putCredential("first-buyer", { token: validToken(), resource: "storefront", createdAt: "2026-08-13T00:00:00.000Z" });
+
+    expect((await store.resolveProfileForResource("dashboard")).name).toBe("first-admin");
+  });
+
+  it("never crosses store origins while auto-selecting an audience", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "scalius-cli-origin-boundary-"));
+    const runtime = createTestRuntime({ directory });
+    const store = new ConfigStore(runtime);
+    await store.putProfile("other-admin", "https://other.example.com");
+    await store.putCredential("other-admin", { token: validToken(), resource: "dashboard", createdAt: "2026-08-13T00:00:00.000Z" });
+    await store.putProfile("active-buyer", "https://active.example.com");
+    await store.putCredential("active-buyer", { token: validToken(), resource: "storefront", createdAt: "2026-08-13T00:00:00.000Z" });
+
+    await expect(store.resolveProfileForResource("dashboard")).rejects.toMatchObject({
+      errorCode: "audience_not_authenticated",
+    });
+  });
+
   it("streams downloads atomically and refuses to replace existing files by default", async () => {
     const directory = await mkdtemp(join(tmpdir(), "scalius-download-"));
     const destination = join(directory, "report.csv");

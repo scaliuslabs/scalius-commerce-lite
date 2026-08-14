@@ -9,7 +9,7 @@ import { operationsBatch, operationsDescribe, operationsRun, operationsSearch } 
 import { writeError, writeResult } from "./output.js";
 import { listProfiles, showProfile, useProfile } from "./profiles.js";
 import { AGENT_HARNESSES, installSkill, setupHarness, type AgentHarness } from "./skill.js";
-import type { OutputMode, Runtime } from "./types.js";
+import type { OutputMode, Runtime, StructuredInput } from "./types.js";
 
 interface GlobalOptions {
   output: OutputMode;
@@ -69,6 +69,39 @@ function operationResultSummary(value: Record<string, unknown>): string {
 async function resolve(runtime: Runtime, command: Command, requireToken = true) {
   const store = new ConfigStore(runtime);
   return store.resolveProfile(globalOptions(command).profile, requireToken);
+}
+
+function resourceForOperationId(operationId: string): "dashboard" | "storefront" {
+  if (operationId.startsWith("dashboard.")) return "dashboard";
+  if (operationId.startsWith("storefront.")) return "storefront";
+  throw new CliError(2, "invalid_operation_id", "Operation IDs must start with dashboard. or storefront..");
+}
+
+function resourceForBatch(input: StructuredInput): "dashboard" | "storefront" {
+  const value = input.body ?? input;
+  if (!value || typeof value !== "object" || !Array.isArray((value as { steps?: unknown }).steps)) {
+    throw new CliError(5, "invalid_batch", "Batch input must contain a steps array.");
+  }
+  const resources = new Set((value as { steps: Array<{ operationId?: unknown }> }).steps.map((step) =>
+    typeof step?.operationId === "string" ? resourceForOperationId(step.operationId) : "invalid"
+  ));
+  if (resources.has("invalid") || resources.size !== 1) {
+    throw new CliError(5, "mixed_audience_batch", "Every batch step must use the same dashboard or storefront audience.");
+  }
+  return [...resources][0] as "dashboard" | "storefront";
+}
+
+async function resolveForResource(
+  runtime: Runtime,
+  command: Command,
+  resource: "dashboard" | "storefront",
+  requireToken = true,
+) {
+  return new ConfigStore(runtime).resolveProfileForResource(
+    resource,
+    globalOptions(command).profile,
+    requireToken,
+  );
 }
 
 export function createProgram(runtime: Runtime): Command {
@@ -177,12 +210,18 @@ export function createProgram(runtime: Runtime): Command {
     .description("search the live operation contract")
     .argument("[query]")
     .option("--limit <count>", "maximum results (1-100)", "20")
-    .action(async (query: string | undefined, options: { limit: string }, command) => {
+    .addOption(new Option("--surface <audience>", "operation audience").choices(["dashboard", "storefront"]))
+    .action(async (query: string | undefined, options: { limit: string; surface?: "dashboard" | "storefront" }, command) => {
       const limit = Number(options.limit);
       if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
         throw new CliError(2, "invalid_limit", "Search limit must be an integer from 1 to 100.");
       }
-      const result = await operationsSearch(runtime, await resolve(runtime, command), query, limit);
+      const profile = options.surface
+        ? await resolveForResource(runtime, command, options.surface)
+        : globalOptions(command).profile
+          ? await resolve(runtime, command)
+          : await resolveForResource(runtime, command, "dashboard");
+      const result = await operationsSearch(runtime, profile, query, limit);
       writeResult(runtime, globalOptions(command).output, result, operationSearchSummary(result));
     });
   operations.command("describe")
@@ -190,7 +229,7 @@ export function createProgram(runtime: Runtime): Command {
     .argument("<operationId>")
     .option("--full", "include every response schema", false)
     .action(async (id: string, options: { full: boolean }, command) => {
-      const result = await operationsDescribe(runtime, await resolve(runtime, command), id, options.full);
+      const result = await operationsDescribe(runtime, await resolveForResource(runtime, command, resourceForOperationId(id)), id, options.full);
       writeResult(runtime, globalOptions(command).output, result, `${id}\n${JSON.stringify(result, null, 2)}`);
     });
   operations.command("run")
@@ -204,7 +243,7 @@ export function createProgram(runtime: Runtime): Command {
     .option("--overwrite", "replace an existing --save destination", false)
     .action(async (id: string, options: RunOptions, command) => {
       const input = await readInput(runtime, options.input);
-      const result = await operationsRun(runtime, await resolve(runtime, command), id, {
+      const result = await operationsRun(runtime, await resolveForResource(runtime, command, resourceForOperationId(id)), id, {
         input,
         files: options.file,
         idempotencyKey: options.idempotencyKey,
@@ -220,7 +259,7 @@ export function createProgram(runtime: Runtime): Command {
     .option("--yes", "confirm local risk warnings", false)
     .action(async (options: { input: string; yes: boolean }, command) => {
       const input = await readBatchInput(runtime, options.input);
-      const result = await operationsBatch(runtime, await resolve(runtime, command), input, options.yes);
+      const result = await operationsBatch(runtime, await resolveForResource(runtime, command, resourceForBatch(input)), input, options.yes);
       writeResult(runtime, globalOptions(command).output, result, `Completed ${String(result.count)} batch step(s).\n${JSON.stringify(result.results, null, 2)}`);
     });
 
@@ -232,7 +271,7 @@ export function createProgram(runtime: Runtime): Command {
     .option("--yes", "confirm the write", false)
     .action(async (files: string[], options: { folderId?: string; yes: boolean }, command) => {
       if (!options.yes) throw new CliError(2, "confirmation_required", "Media upload writes to the store. Re-run with --yes after reviewing the files.");
-      const result = await uploadMediaFiles(runtime, await resolve(runtime, command), files, options.folderId);
+      const result = await uploadMediaFiles(runtime, await resolveForResource(runtime, command, "dashboard"), files, options.folderId);
       writeResult(runtime, globalOptions(command).output, result);
     });
 

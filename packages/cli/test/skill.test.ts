@@ -19,6 +19,8 @@ describe("portable Scalius skill and MCP setup", () => {
     expect(installed).toMatchObject({ status: "installed", skill: "scalius-commerce", harness });
     const skill = await readFile(join(directory, ...segments, "scalius-commerce", "SKILL.md"), "utf8");
     expect(skill).toContain("Treat the store's live operation contract as authority");
+    expect(skill).toContain("## Fast answers");
+    expect(skill).toContain("--surface dashboard|storefront");
     await expect(installSkill(runtime, harness, false)).rejects.toMatchObject({ errorCode: "skill_exists" });
     await expect(installSkill(runtime, harness, true)).resolves.toMatchObject({ status: "updated" });
   });

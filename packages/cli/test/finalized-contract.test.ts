@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { indexOperations } from "../src/openapi.js";
+import { indexOperations, searchOperations } from "../src/openapi.js";
 import type { OpenApiDocument } from "../src/types.js";
 
 describe("finalized API OpenAPI interop", () => {
@@ -71,5 +71,20 @@ describe("finalized API OpenAPI interop", () => {
       ]);
     expect(operations.find(({ id }) => id === "dashboard.theme.preview_session_create")?.agent.continuationOutput)
       .toEqual(expect.objectContaining({ sensitiveFields: ["continuationCode"] }));
+
+    const commonMerchantQuestions: Array<[string, string]> = [
+      ["what are today's sales?", "dashboard.home.activity"],
+      ["sales this month", "dashboard.home.summary"],
+      ["orders needing fulfillment", "dashboard.orders.list"],
+      ["low stock issues", "dashboard.inventory_alerts.list"],
+      ["new customers", "dashboard.customers.list"],
+      ["payment problems", "dashboard.orders.payment_recovery_list"],
+      ["is my store healthy?", "dashboard.checkout.readiness_get"],
+      ["analytics status", "dashboard.analytics.health"],
+    ];
+    for (const [question, expectedOperationId] of commonMerchantQuestions) {
+      expect(searchOperations(operations, question).map(({ id }) => id), question)
+        .toContain(expectedOperationId);
+    }
   }, 15_000);
 });

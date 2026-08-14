@@ -56506,6 +56506,7 @@
           "Admin - Customers"
         ],
         "summary": "List all customers",
+        "description": "Find recent or new customers and search bounded customer summaries.",
         "parameters": [
           {
             "schema": {
@@ -78602,6 +78603,7 @@
           "Admin - Inventory"
         ],
         "summary": "Get inventory overview",
+        "description": "Answer inventory and stock-status questions with bounded variant, movement, or alert pages.",
         "parameters": [
           {
             "schema": {
@@ -79627,6 +79629,7 @@
           "Admin - Inventory"
         ],
         "summary": "Get inventory alerts",
+        "description": "Find low-stock, out-of-stock, and other inventory issues needing attention.",
         "parameters": [
           {
             "schema": {
@@ -93094,6 +93097,7 @@
           "Admin - Analytics"
         ],
         "summary": "Get analytics provider readiness without provider calls",
+        "description": "Check analytics health, operational status, configuration issues, and provider readiness.",
         "responses": {
           "200": {
             "description": "Analytics provider health",
@@ -96003,6 +96007,7 @@
           "Admin - Dashboard"
         ],
         "summary": "Get lightweight dashboard home metrics and recent orders",
+        "description": "Answer current-month sales, revenue, customer, order, and recent-order summary questions.",
         "operationId": "dashboard.home.summary",
         "responses": {
           "200": {
@@ -96538,6 +96543,7 @@
           "Admin - Dashboard"
         ],
         "summary": "Get dashboard daily activity chart data",
+        "description": "Answer daily or today's sales, revenue, order-count, and new-customer questions with a bounded 90-day activity series.",
         "operationId": "dashboard.home.activity",
         "responses": {
           "200": {
@@ -119229,6 +119235,7 @@
           "Admin - Settings"
         ],
         "summary": "Get checkout readiness",
+        "description": "Check store checkout health, operational readiness, and blocking configuration issues.",
         "responses": {
           "200": {
             "description": "Checkout readiness",
@@ -146862,6 +146869,7 @@
           "Admin - Orders"
         ],
         "summary": "List orders with pagination and filters",
+        "description": "Find recent orders and orders needing fulfillment, shipping, payment, or lifecycle attention.",
         "parameters": [
           {
             "schema": {
@@ -148401,6 +148409,7 @@
           "Admin - Orders"
         ],
         "summary": "List hosted-payment recovery orders",
+        "description": "Find failed or incomplete payment attempts that need merchant or buyer attention.",
         "parameters": [
           {
             "schema": {
@@ -154954,6 +154963,7 @@
           "Admin - Products"
         ],
         "summary": "Get product and category dashboard statistics",
+        "description": "Answer quick product, catalog, category, and merchandising count questions.",
         "responses": {
           "200": {
             "description": "Product stats",

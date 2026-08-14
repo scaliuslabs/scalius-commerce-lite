@@ -130,9 +130,44 @@ describe("CLI program", () => {
     const describeRuntime = await storefrontRuntime(fetch as typeof globalThis.fetch);
     expect(await runProgram(describeRuntime, [
       "--profile", "storefront", "--output", "json", "operations", "describe", "dashboard.products.get",
-    ])).toBe(5);
-    expect(describeRuntime.stderrText()).toContain("Executable operation 'dashboard.products.get' is not in the live server contract");
+    ])).toBe(3);
+    expect(describeRuntime.stderrText()).toContain("Profile 'storefront' is for storefront; this operation requires a dashboard profile");
     expect(operationCalls).toBe(0);
+  });
+
+  it("automatically selects the credential audience required by an operation ID", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "scalius-cli-routing-"));
+    const fetch = vi.fn(async (input: string | URL | Request) => {
+      if (String(input).endsWith("/openapi.json")) return Response.json(mixedAudienceSpec());
+      return Response.json({ products: [] });
+    });
+    const runtime = createTestRuntime({ directory, fetch: fetch as typeof globalThis.fetch });
+    const store = new ConfigStore(runtime);
+    await store.putProfile("admin", "https://api.example.com");
+    await store.putCredential("admin", { token: validToken(), resource: "dashboard", createdAt: "2026-08-13T00:00:00.000Z" });
+    await store.putProfile("buyer", "https://api.example.com");
+    await store.putCredential("buyer", { token: validToken(), resource: "storefront", createdAt: "2026-08-13T00:00:00.000Z" });
+
+    expect(await runProgram(runtime, ["--output", "json", "operations", "describe", "dashboard.products.get"])).toBe(0);
+    expect(JSON.parse(runtime.stdoutText()).operationId).toBe("dashboard.products.get");
+  });
+
+  it("defaults merchant search to dashboard and allows an explicit storefront surface", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "scalius-cli-search-routing-"));
+    const fetch = vi.fn(async () => Response.json(mixedAudienceSpec()));
+    const runtime = createTestRuntime({ directory, fetch: fetch as typeof globalThis.fetch });
+    const store = new ConfigStore(runtime);
+    await store.putProfile("admin", "https://api.example.com");
+    await store.putCredential("admin", { token: validToken(), resource: "dashboard", createdAt: "2026-08-13T00:00:00.000Z" });
+    await store.putProfile("buyer", "https://api.example.com");
+    await store.putCredential("buyer", { token: validToken(), resource: "storefront", createdAt: "2026-08-13T00:00:00.000Z" });
+
+    expect(await runProgram(runtime, ["--output", "json", "operations", "search", "product"])).toBe(0);
+    expect((JSON.parse(runtime.stdoutText()).operations as Array<{ surface: string }>).every(({ surface }) => surface === "dashboard")).toBe(true);
+
+    const storefront = createTestRuntime({ directory, fetch: fetch as typeof globalThis.fetch });
+    expect(await runProgram(storefront, ["--output", "json", "operations", "search", "product", "--surface", "storefront"])).toBe(0);
+    expect((JSON.parse(storefront.stdoutText()).operations as Array<{ surface: string }>).every(({ surface }) => surface === "storefront")).toBe(true);
   });
 
   it("keeps search and describe compact unless full responses are requested", async () => {

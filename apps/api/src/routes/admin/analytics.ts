@@ -149,6 +149,7 @@ const providerHealthRoute = createRoute({
     operationId: "dashboard.analytics.health",
     tags: ["Admin - Analytics"],
     summary: "Get analytics provider readiness without provider calls",
+    description: "Check analytics health, operational status, configuration issues, and provider readiness.",
     responses: {
         200: {
             description: "Analytics provider health",

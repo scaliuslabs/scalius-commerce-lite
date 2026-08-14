@@ -210,6 +210,7 @@ const statsRoute = createRoute({
     operationId: "dashboard.products.stats",
     tags: ["Admin - Products"],
     summary: "Get product and category dashboard statistics",
+    description: "Answer quick product, catalog, category, and merchandising count questions.",
     responses: {
         200: {
             description: "Product stats",

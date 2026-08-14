@@ -144,6 +144,34 @@ describe("OpenAPI operation indexing", () => {
     expect(searchOperations(operations, "Products")).toHaveLength(2);
   });
 
+  it("understands common merchant phrasing without requiring operation jargon", () => {
+    const operations = indexOperations(executableSpec());
+    findOperation(operations, "dashboard.products.get").operation.description = "Answer daily revenue and order questions.";
+    findOperation(operations, "dashboard.products.create").operation.description = "Create catalog merchandise.";
+    expect(searchOperations(operations, "what are today's sales?").map(({ id }) => id)).toEqual([
+      "dashboard.products.get",
+    ]);
+    expect(searchOperations(operations, "please create catalog merchandise").map(({ id }) => id)).toEqual([
+      "dashboard.products.create",
+    ]);
+  });
+
+  it("ranks exact merchant language ahead of synonym-only matches", () => {
+    const operations = indexOperations(executableSpec());
+    findOperation(operations, "dashboard.products.get").operation.description = "Find orders needing fulfillment.";
+    findOperation(operations, "dashboard.products.create").operation.description = "Create a shipping filter for orders.";
+    expect(searchOperations(operations, "orders needing fulfillment").map(({ id }) => id)).toEqual([
+      "dashboard.products.get",
+    ]);
+  });
+
+  it("retains matching writes when no read operation can answer the request", () => {
+    const operations = indexOperations(executableSpec());
+    expect(searchOperations(operations, "create product").map(({ id }) => id)).toEqual([
+      "dashboard.products.create",
+    ]);
+  });
+
   it("does not permit arbitrary paths disguised as operation IDs", () => {
     const operations = indexOperations(executableSpec());
     expect(() => findOperation(operations, "https://attacker.example/evil")).toThrow(CliError);

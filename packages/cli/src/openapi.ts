@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { ConfigStore } from "./config.js";
 import { CliError } from "./errors.js";
+import { merchantOperationQueryScore } from "./merchant-search.js";
 import { bearerHeaders, fetchWithNetworkErrors, responseError } from "./http.js";
 import type {
   AgentArtifactOutput,
@@ -280,10 +281,18 @@ export function findOperation(operations: IndexedOperation[], id: string): Index
 }
 
 export function searchOperations(operations: IndexedOperation[], query?: string): IndexedOperation[] {
-  const terms = query?.trim().toLocaleLowerCase().split(/\s+/u).filter(Boolean) ?? [];
-  if (terms.length === 0) return operations;
-  return operations.filter(({ id, operation }) => {
+  const normalizedQuery = query?.trim() ?? "";
+  if (!normalizedQuery) return operations;
+  const ranked = operations.map((candidate, index) => {
+    const { id, operation } = candidate;
     const text = [id, operation.summary, operation.description, ...(operation.tags ?? [])].filter(Boolean).join("\n").toLocaleLowerCase();
-    return terms.every((term) => text.includes(term));
-  });
+    const matchScore = merchantOperationQueryScore(text, normalizedQuery);
+    return { candidate, index, score: matchScore === null ? null : matchScore + (candidate.agent.risk === "read" ? 25 : 0) };
+  }).filter(({ score }) => score !== null);
+  const hasReadMatch = ranked.some(({ candidate }) => candidate.agent.risk === "read");
+  const preferReadMatches = normalizedQuery.split(/\s+/u).length > 1 && hasReadMatch;
+  return ranked
+    .sort((left, right) => right.score! - left.score! || left.index - right.index)
+    .filter(({ candidate }) => !preferReadMatches || candidate.agent.risk === "read")
+    .map(({ candidate }) => candidate);
 }
