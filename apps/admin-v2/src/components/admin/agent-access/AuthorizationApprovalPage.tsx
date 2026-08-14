@@ -20,6 +20,7 @@ import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Skeleton } from "~/components/ui/skeleton";
 import { getServerFnError } from "~/lib/api-helpers";
+import { formatAdminTimestamp } from "~/lib/admin-time";
 
 import {
   approveAgentAuthorizationRequest,
@@ -222,10 +223,7 @@ export function AuthorizationApprovalPage({
                   Client ID: {request.clientId}
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Request expires {new Intl.DateTimeFormat("en-BD", {
-                    dateStyle: "medium",
-                    timeStyle: "short",
-                  }).format(new Date(request.expiresAt))}
+                  Request expires {formatAdminTimestamp(request.expiresAt) ?? "at an unknown time"}
                 </p>
                 {request.requestedPermissions.length > 0 ? (
                   <div className="mt-3">

@@ -8,6 +8,7 @@ import {
   Package,
 } from "lucide-react";
 import type { ScanResult } from "./ScannerApp";
+import { formatAdminTime } from "~/lib/admin-time";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -25,11 +26,7 @@ interface ScanHistoryProps {
 // ---------------------------------------------------------------------------
 
 function formatTime(ts: number): string {
-  return new Date(ts).toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
+  return formatAdminTime(ts) ?? "Unknown time";
 }
 
 function formatElapsed(ts: number): string {

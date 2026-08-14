@@ -4,6 +4,7 @@ import {
   formatAdminDate,
   formatAdminCalendarDate,
   formatAdminTimestamp,
+  formatAdminTime,
   adminCalendarDateKey,
 } from "./admin-time";
 import {
@@ -18,6 +19,7 @@ describe("admin commerce time", () => {
     expect(ADMIN_TIME_ZONE).toBe("Asia/Dhaka");
     expect(formatAdminDate(unixSeconds)).toBe("Jul 19, 2026");
     expect(formatAdminTimestamp(unixSeconds)).toBe("Jul 19, 2026, 2:53 AM");
+    expect(formatAdminTime(unixSeconds)).toBe("02:53:00 AM");
   });
 
   it("keeps order formatting on the same shared admin boundary", () => {
@@ -37,5 +39,6 @@ describe("admin commerce time", () => {
     expect(formatAdminDate(null)).toBeNull();
     expect(formatAdminTimestamp(undefined)).toBeNull();
     expect(formatAdminTimestamp("not-a-date")).toBeNull();
+    expect(formatAdminTime("not-a-date")).toBeNull();
   });
 });

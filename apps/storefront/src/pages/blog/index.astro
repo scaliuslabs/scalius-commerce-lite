@@ -9,6 +9,7 @@ import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import { htmlToPlainText } from "@scalius/shared/html-sanitize";
 import { normalizeSeoDiscoverySettings } from "@scalius/shared/seo-discovery";
+import { COMMERCE_TIME_ZONE } from "@scalius/shared/commerce-time";
 
 const pageParam = Number(Astro.url.searchParams.get("page") ?? "1");
 const page = Number.isInteger(pageParam) && pageParam > 0 ? pageParam : 1;
@@ -77,7 +78,10 @@ function parsedDate(value: number | null): Date | null {
 function dateFor(value: number | null): string | null {
   const date = parsedDate(value);
   return date
-    ? new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(date)
+    ? new Intl.DateTimeFormat("en", {
+        dateStyle: "medium",
+        timeZone: COMMERCE_TIME_ZONE,
+      }).format(date)
     : null;
 }
 
