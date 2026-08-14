@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { getAdminOrderStatusTransitions } from "./admin-order-status-policy";
+import {
+  getAdminOrderStatusTransitions,
+  isAdminOrderStatus,
+} from "./admin-order-status-policy";
 
 describe("admin order status policy", () => {
+  it("rejects values outside the reviewed order status contract", () => {
+    expect(isAdminOrderStatus("pending")).toBe(true);
+    expect(isAdminOrderStatus("arbitrary-provider-status")).toBe(false);
+    expect(getAdminOrderStatusTransitions("arbitrary-provider-status")).toEqual([]);
+  });
   it("keeps refund and return states out of generic status changes", () => {
     for (const status of ["returned", "refunded", "partially_refunded"]) {
       expect(getAdminOrderStatusTransitions(status)).toEqual([]);

@@ -233,7 +233,22 @@ export function useDeliveryLocations() {
       const message = getServerFnError(err, "Import failed");
       toast.error(message);
       setImportProgress((prev) =>
-        prev ? { ...prev, status: "error", error: message } : null,
+        prev
+          ? { ...prev, status: "error", error: message }
+          : {
+              status: "error",
+              phase: "cities",
+              progress: { current: 0, total: 0, label: "Import failed" },
+              stats: {
+                citiesCreated: 0,
+                citiesUpdated: 0,
+                zonesCreated: 0,
+                zonesUpdated: 0,
+                areasCreated: 0,
+                areasUpdated: 0,
+              },
+              error: message,
+            },
       );
     } finally {
       setImporting(false);
