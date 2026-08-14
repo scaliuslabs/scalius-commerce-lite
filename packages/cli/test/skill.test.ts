@@ -21,6 +21,12 @@ describe("portable Scalius skill and MCP setup", () => {
     expect(skill).toContain("Treat the store's live operation contract as authority");
     expect(skill).toContain("## Fast answers");
     expect(skill).toContain("--surface dashboard|storefront");
+    const catalogMedia = await readFile(
+      join(directory, ...segments, "scalius-commerce", "references", "catalog-media.md"),
+      "utf8",
+    );
+    expect(catalogMedia).toContain("describe `dashboard.products.create` once");
+    expect(catalogMedia).toContain("scalius media upload image-1.jpg image-2.png --yes");
     await expect(installSkill(runtime, harness, false)).rejects.toMatchObject({ errorCode: "skill_exists" });
     await expect(installSkill(runtime, harness, true)).resolves.toMatchObject({ status: "updated" });
   });
