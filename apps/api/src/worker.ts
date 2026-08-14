@@ -129,5 +129,13 @@ export default class ApiWorker extends WorkerEntrypoint<Env> {
       // Artifact expiry and object cleanup retry on the next scheduled run and
       // never hide successful commerce maintenance.
     }
+    try {
+      const { getDb } = await import("@scalius/database/client");
+      const { expireAgentBrowserHandoffs } = await import("./agent-access/browser-handoffs");
+      await expireAgentBrowserHandoffs(getDb(this.env));
+    } catch {
+      // Browser handoffs expire in five minutes and are one-use. Relational
+      // cleanup is retryable and must not hide successful commerce work.
+    }
   }
 }

@@ -247,6 +247,72 @@ export const agentArtifactHandles = sqliteTable("agent_artifact_handles", {
     ),
 ]);
 
+export const agentBrowserHandoffs = sqliteTable("agent_browser_handoffs", {
+    id: text("id").primaryKey(),
+    grantId: text("grant_id")
+        .notNull()
+        .references(() => agentGrants.id, { onDelete: "no action" }),
+    credentialId: text("credential_id")
+        .references(() => agentCredentials.id, { onDelete: "no action" }),
+    ownerUserId: text("owner_user_id")
+        .notNull()
+        .references(() => user.id, { onDelete: "no action" }),
+    resource: text("resource", { enum: ["dashboard", "storefront"] }).notNull(),
+    operationId: text("operation_id").notNull(),
+    authorityRevision: integer("authority_revision").notNull(),
+    encryptedAction: text("encrypted_action").notNull(),
+    status: text("status", { enum: ["active", "consumed", "expired"] })
+        .notNull()
+        .default("active"),
+    expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+    consumedAt: integer("consumed_at", { mode: "timestamp" }),
+    createdAt: integer("created_at", { mode: "timestamp" })
+        .notNull()
+        .default(UNIX_NOW),
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+        .notNull()
+        .default(UNIX_NOW),
+}, (table) => [
+    index("agent_browser_handoffs_owner_status_expiry_idx")
+        .on(table.ownerUserId, table.status, table.expiresAt),
+    index("agent_browser_handoffs_grant_status_expiry_idx")
+        .on(table.grantId, table.status, table.expiresAt),
+    index("agent_browser_handoffs_status_expiry_idx").on(table.status, table.expiresAt),
+    check("agent_browser_handoffs_id_shape", agentIdCheck(table.id, "abh_")),
+    check(
+        "agent_browser_handoffs_resource",
+        sql`${table.resource} IN ('dashboard', 'storefront')`,
+    ),
+    check(
+        "agent_browser_handoffs_operation_id",
+        sql`length(trim(${table.operationId})) BETWEEN 1 AND 240`,
+    ),
+    check("agent_browser_handoffs_authority_revision", sql`${table.authorityRevision} > 0`),
+    check(
+        "agent_browser_handoffs_encrypted_action",
+        sql`length(${table.encryptedAction}) BETWEEN 32 AND 8192`,
+    ),
+    check(
+        "agent_browser_handoffs_status",
+        sql`${table.status} IN ('active', 'consumed', 'expired')`,
+    ),
+    check(
+        "agent_browser_handoffs_expiry",
+        sql`${table.expiresAt} > ${table.createdAt} AND ${table.expiresAt} <= ${table.createdAt} + 300`,
+    ),
+    check(
+        "agent_browser_handoffs_state",
+        sql`(
+            ${table.status} IN ('active', 'expired') AND ${table.consumedAt} IS NULL
+        ) OR (
+            ${table.status} = 'consumed'
+            AND ${table.consumedAt} IS NOT NULL
+            AND ${table.consumedAt} >= ${table.createdAt}
+            AND ${table.consumedAt} <= ${table.expiresAt}
+        )`,
+    ),
+]);
+
 export const agentAuthorizationRequests = sqliteTable("agent_authorization_requests", {
     id: text("id").primaryKey(),
     encryptedRequest: text("encrypted_request"),
@@ -725,6 +791,7 @@ export const agentStorefrontContinuations = sqliteTable("agent_storefront_contin
 export type AgentGrant = InferSelectModel<typeof agentGrants>;
 export type AgentCredential = InferSelectModel<typeof agentCredentials>;
 export type AgentArtifactHandle = InferSelectModel<typeof agentArtifactHandles>;
+export type AgentBrowserHandoff = InferSelectModel<typeof agentBrowserHandoffs>;
 export type AgentAuthorizationRequest = InferSelectModel<typeof agentAuthorizationRequests>;
 export type AgentDeviceAuthorization = InferSelectModel<typeof agentDeviceAuthorizations>;
 export type AgentAuditEvent = InferSelectModel<typeof agentAuditEvents>;

@@ -1,4 +1,5 @@
 import type { APIRoute } from "astro";
+import { env as cfEnv } from "cloudflare:workers";
 import { createApiUrl, fetchWithRetry } from "@/lib/api/client";
 import { createAgentContinuationCookieHeader } from "@/lib/agent-continuation-cookie";
 import {
@@ -31,11 +32,20 @@ function asRecord(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
-export const GET: APIRoute = async () => browserContinuationRelayResponse([{
-  name: "continuationCode",
-  pattern: BOOTSTRAP_CODE.source,
-  maxBytes: 68,
-}]);
+export const GET: APIRoute = async () => {
+  const apiOrigin = (() => {
+    try {
+      return new URL((cfEnv as Env).PUBLIC_API_BASE_URL ?? "").origin;
+    } catch {
+      return "";
+    }
+  })();
+  return browserContinuationRelayResponse([{
+    name: "continuationCode",
+    pattern: BOOTSTRAP_CODE.source,
+    maxBytes: 68,
+  }], apiOrigin ? [apiOrigin] : []);
+};
 
 export const POST: APIRoute = async ({ request }) => {
   if (!isTrustedBrowserContinuationPostOrigin(request)) {

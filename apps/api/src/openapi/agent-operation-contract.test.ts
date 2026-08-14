@@ -285,8 +285,24 @@ describe("agent operation contract", () => {
   });
 
   it("exposes only the reviewed self-service connection and grant management subset", () => {
+    const browserHandoffOperations = manifest.filter((operation) =>
+      operation.pathTemplate.startsWith(
+        "/api/v1/admin/agent-access/browser-handoffs/",
+      ),
+    );
+    expect(browserHandoffOperations).toHaveLength(2);
+    expect(browserHandoffOperations.every((operation) =>
+      operation.exposure === "excluded" &&
+      operation.rbac.type === "unmapped" &&
+      operation.risk === "security" &&
+      operation.batch === "forbidden"
+    )).toBe(true);
+
     const managementOperations = manifest.filter((operation) =>
-      operation.pathTemplate.startsWith("/api/v1/admin/agent-access/"),
+      operation.pathTemplate.startsWith("/api/v1/admin/agent-access/") &&
+      !operation.pathTemplate.startsWith(
+        "/api/v1/admin/agent-access/browser-handoffs/",
+      ),
     );
     expect(managementOperations).toHaveLength(14);
     const executableIds = managementOperations

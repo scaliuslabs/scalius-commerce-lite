@@ -79,11 +79,18 @@ export const GET: APIRoute = async () => {
       return "";
     }
   })();
+  const apiOrigin = (() => {
+    try {
+      return new URL((cfEnv as Env).PUBLIC_API_BASE_URL ?? "").origin;
+    } catch {
+      return "";
+    }
+  })();
   return browserContinuationRelayResponse([
     { name: "continuationCode", pattern: CONTINUATION_CODE.source, maxBytes: 52 },
     { name: "path", pattern: "^/[^\\r\\n]{0,511}$", maxBytes: 512 },
     { name: "device", pattern: "^(?:full|desktop|mobile)$", maxBytes: 7 },
-  ], dashboardOrigin ? [dashboardOrigin] : []);
+  ], [dashboardOrigin, apiOrigin].filter(Boolean));
 };
 
 export const POST: APIRoute = async ({ request, url }) => {

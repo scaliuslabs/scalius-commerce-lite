@@ -51050,6 +51050,195 @@ export type PostApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdDenyResponses
 
 export type PostApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdDenyResponse = PostApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdDenyResponses[keyof PostApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdDenyResponses];
 
+export type GetApiV1AdminAgentAccessBrowserHandoffsByHandoffIdData = {
+    body?: never;
+    path: {
+        handoffId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/agent-access/browser-handoffs/{handoffId}';
+};
+
+export type GetApiV1AdminAgentAccessBrowserHandoffsByHandoffIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminAgentAccessBrowserHandoffsByHandoffIdError = GetApiV1AdminAgentAccessBrowserHandoffsByHandoffIdErrors[keyof GetApiV1AdminAgentAccessBrowserHandoffsByHandoffIdErrors];
+
+export type GetApiV1AdminAgentAccessBrowserHandoffsByHandoffIdResponses = {
+    /**
+     * Private browser handoff page
+     */
+    200: string;
+};
+
+export type GetApiV1AdminAgentAccessBrowserHandoffsByHandoffIdResponse = GetApiV1AdminAgentAccessBrowserHandoffsByHandoffIdResponses[keyof GetApiV1AdminAgentAccessBrowserHandoffsByHandoffIdResponses];
+
+export type PostApiV1AdminAgentAccessBrowserHandoffsByHandoffIdData = {
+    body?: never;
+    path: {
+        handoffId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/agent-access/browser-handoffs/{handoffId}';
+};
+
+export type PostApiV1AdminAgentAccessBrowserHandoffsByHandoffIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminAgentAccessBrowserHandoffsByHandoffIdError = PostApiV1AdminAgentAccessBrowserHandoffsByHandoffIdErrors[keyof PostApiV1AdminAgentAccessBrowserHandoffsByHandoffIdErrors];
+
+export type PostApiV1AdminAgentAccessBrowserHandoffsByHandoffIdResponses = {
+    /**
+     * Private browser action
+     */
+    200: {
+        success: true;
+        data: {
+            action: {
+                url: string;
+                method: 'POST';
+                fields: {
+                    [key: string]: string;
+                };
+            };
+        };
+    };
+};
+
+export type PostApiV1AdminAgentAccessBrowserHandoffsByHandoffIdResponse = PostApiV1AdminAgentAccessBrowserHandoffsByHandoffIdResponses[keyof PostApiV1AdminAgentAccessBrowserHandoffsByHandoffIdResponses];
+
 export type DeleteApiV1AdminAbandonedCheckoutsData = {
     body: {
         ids: Array<string>;

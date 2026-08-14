@@ -9,12 +9,12 @@ function operation(operationId: string) {
 }
 
 describe("MCP operation exposure", () => {
-  it("keeps model-visible operations while hiding sensitive browser continuations", () => {
+  it("includes reviewed continuations while retaining excluded workflow holds", () => {
     expect(isMcpOperationExposure(operation("dashboard.products.get_section"))).toBe(true);
     expect(isMcpOperationExposure(operation("storefront.continuations.get"))).toBe(true);
-    expect(isMcpOperationExposure(operation("dashboard.theme.preview_session_create"))).toBe(false);
-    expect(isMcpOperationExposure(operation("storefront.customer_auth.begin"))).toBe(false);
-    expect(isMcpOperationExposure(operation("storefront.orders.payment.begin"))).toBe(false);
-    expect(isMcpOperationExposure(operation("storefront.payment_recovery.begin"))).toBe(false);
+    expect(isMcpOperationExposure(operation("dashboard.theme.preview_session_create"))).toBe(true);
+    expect(isMcpOperationExposure(operation("storefront.customer_auth.begin"))).toBe(true);
+    expect(isMcpOperationExposure(operation("storefront.orders.payment.begin"))).toBe(true);
+    expect(isMcpOperationExposure(operation("storefront.payment_recovery.begin"))).toBe(true);
   });
 });

@@ -144,6 +144,12 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 46,
         postgresStatements: 46,
       },
+      {
+        version: 57,
+        name: "0057_agent_browser_handoffs",
+        sqliteStatements: 5,
+        postgresStatements: 5,
+      },
     ]);
   });
 
@@ -161,6 +167,19 @@ describe("provider-neutral schema upgrades", () => {
       source.slice(0, -1).map((statement) =>
         `${compileSqliteDdlForPostgres(statement).replace(/;\s*$/, "")};`,
       ),
+    );
+  });
+
+  it("compiles SQLite substring guards into native PostgreSQL expressions", () => {
+    expect(compileSqliteDdlForPostgres(
+      `CHECK(instr("artifact"."filename", '/') = 0 AND instr("artifact"."filename", char(92)) = 0)`,
+    )).toBe(
+      `CHECK(position('/' in "artifact"."filename") = 0 AND position(chr(92) in "artifact"."filename") = 0)`,
+    );
+    expect(compileSqliteDdlForPostgres(
+      `CHECK(instr(coalesce("item"."query", ''), '#') = 0)`,
+    )).toBe(
+      `CHECK(position('#' in coalesce("item"."query", '')) = 0)`,
     );
   });
 
@@ -255,6 +274,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 54, name: "0054_cache_invalidation_delivery" },
           { version: 55, name: "0055_cache_invalidation_postgres_bigint" },
           { version: 56, name: "0056_agent_access" },
+          { version: 57, name: "0057_agent_browser_handoffs" },
         ],
       });
     } finally {
@@ -406,7 +426,8 @@ describe("provider-neutral schema upgrades", () => {
       { version: 54, name: artifacts[4]!.name, sourceSha256: artifacts[4]!.sourceSha256 },
       { version: 55, name: artifacts[5]!.name, sourceSha256: artifacts[5]!.sourceSha256 },
       { version: 56, name: artifacts[6]!.name, sourceSha256: artifacts[6]!.sourceSha256 },
-      { version: 57, name: "0057_future", sourceSha256: "c".repeat(64) },
+      { version: 57, name: artifacts[7]!.name, sourceSha256: artifacts[7]!.sourceSha256 },
+      { version: 58, name: "0058_future", sourceSha256: "c".repeat(64) },
     ], artifacts)).toThrow(/future row/i);
   });
 
