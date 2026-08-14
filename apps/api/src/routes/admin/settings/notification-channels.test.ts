@@ -68,6 +68,25 @@ const completeAdminChannels = (override: Record<string, string[]> = {}) => ({
     ...override,
 });
 
+const completeCustomerChannels = (override: Record<string, string[]> = {}) => ({
+    order_created: ["email"],
+    order_confirmed: ["email"],
+    order_processing: ["email"],
+    order_shipped: ["email"],
+    order_delivered: ["email"],
+    order_completed: ["email"],
+    order_cancelled: ["email"],
+    order_returned: ["email"],
+    refund_processing: ["email"],
+    refund_failed: ["email"],
+    order_refunded: ["email"],
+    order_partially_refunded: ["email"],
+    payment_balance_paid: ["email"],
+    support_request_submitted: [],
+    support_request_status_updated: ["email"],
+    ...override,
+});
+
 function createTestApp() {
     const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1/admin/settings");
     const env = {
@@ -237,7 +256,7 @@ describe("notification channel settings routes", () => {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-                channels: { order_created: ["email", "sms"] },
+                channels: completeCustomerChannels({ order_created: ["email", "sms"] }),
             }),
         }, env);
         const body = await response.json() as { success: boolean; error: { message: string } };
@@ -247,24 +266,22 @@ describe("notification channel settings routes", () => {
         expect(body.error.message).toContain("Configure an active SMS provider before enabling SMS order notifications.");
     });
 
-    it("maps unsupported customer push saves to a customer-safe 400", async () => {
-        mocks.updateNotificationChannels.mockRejectedValueOnce(
-            new ValidationError("Customer push notifications are not implemented yet. Use Email, SMS, or WhatsApp for customer order notifications."),
-        );
+    it("rejects unsupported customer push before mutation", async () => {
         const { app, env } = createTestApp();
 
         const response = await app.request("/api/v1/admin/settings/notification-channels", {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-                channels: { order_created: ["email", "push"] },
+                channels: completeCustomerChannels({ order_created: ["email", "push"] }),
             }),
         }, env);
         const body = await response.json() as { success: boolean; error: { message: string } };
 
         expect(response.status).toBe(400);
         expect(body.success).toBe(false);
-        expect(body.error.message).toContain("Customer push notifications are not implemented yet.");
+        expect(body.error.message).toContain("email");
+        expect(mocks.updateNotificationChannels).not.toHaveBeenCalled();
     });
 
     it("clears paused WhatsApp sends after saving the order template", async () => {
@@ -289,7 +306,22 @@ describe("notification channel settings routes", () => {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-                channels: { order_created: ["whatsapp"] },
+                channels: completeCustomerChannels({
+                    order_created: ["whatsapp"],
+                    order_confirmed: [],
+                    order_processing: [],
+                    order_shipped: [],
+                    order_delivered: [],
+                    order_completed: [],
+                    order_cancelled: [],
+                    order_returned: [],
+                    refund_processing: [],
+                    refund_failed: [],
+                    order_refunded: [],
+                    order_partially_refunded: [],
+                    payment_balance_paid: [],
+                    support_request_status_updated: [],
+                }),
                 whatsappTemplate: {
                     templateName: "order_status_update",
                     languageCode: "en_US",
@@ -300,7 +332,13 @@ describe("notification channel settings routes", () => {
         expect(response.status).toBe(200);
         expect(mocks.updateNotificationChannels).toHaveBeenCalledWith(
             { id: "db" },
-            { order_created: ["whatsapp"] },
+            completeCustomerChannels({
+                order_created: ["whatsapp"],
+                order_confirmed: [], order_processing: [], order_shipped: [], order_delivered: [],
+                order_completed: [], order_cancelled: [], order_returned: [], refund_processing: [],
+                refund_failed: [], order_refunded: [], order_partially_refunded: [], payment_balance_paid: [],
+                support_request_status_updated: [],
+            }),
             "credential-key",
             env,
         );
@@ -308,6 +346,22 @@ describe("notification channel settings routes", () => {
             { id: "db" },
             { channel: "whatsapp" },
         );
+    });
+
+    it.each([
+        ["partial event maps", { channels: { order_created: ["email"] } }],
+        ["unsupported customer channels", { channels: completeCustomerChannels({ order_created: ["push"] }) }],
+        ["unknown event keys", { channels: { ...completeCustomerChannels(), arbitrary_event: [] } }],
+    ])("rejects malformed customer notification settings: %s", async (_label, payload) => {
+        const { app, env } = createTestApp();
+        const response = await app.request("/api/v1/admin/settings/notification-channels", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+        }, env);
+
+        expect(response.status).toBe(400);
+        expect(mocks.updateNotificationChannels).not.toHaveBeenCalled();
     });
 
     it("returns Firebase push readiness with admin notification channels", async () => {

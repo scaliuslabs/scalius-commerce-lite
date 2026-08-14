@@ -358,6 +358,7 @@ export async function updateNotificationChannels(
     encryptionKey?: string,
     env?: Record<string, unknown>,
 ): Promise<Record<string, string[]>> {
+    const currentChannels = await getNotificationChannels(db);
     // Normalize from whatever format the UI sends
     const requestedChannels = normalizeParsedChannels(input, { allowUnsupported: true });
 
@@ -372,7 +373,7 @@ export async function updateNotificationChannels(
         channels[status] = statusChannels.filter(isValidNotificationChannel);
     }
 
-    if (channelsRequireEmail(channels)) {
+    if (channelWasEnabled(channels, currentChannels, "email")) {
         const emailReadiness = await getEmailProviderReadiness({ db, encryptionKey, env });
         if (!emailReadiness.configured) {
             throw new ValidationError(
@@ -389,7 +390,7 @@ export async function updateNotificationChannels(
         });
     }
 
-    if (channelsRequireSms(channels)) {
+    if (channelWasEnabled(channels, currentChannels, "sms")) {
         const smsReadiness = await getSmsProviderReadiness(db, encryptionKey);
         if (!smsReadiness.configured) {
             throw new ValidationError(
@@ -404,7 +405,7 @@ export async function updateNotificationChannels(
         }
     }
 
-    if (channelsRequireWhatsApp(channels)) {
+    if (channelWasEnabled(channels, currentChannels, "whatsapp")) {
         if (!(await isWhatsAppCloudApiConfigured(db, encryptionKey))) {
             throw new ValidationError("Configure Meta WhatsApp Cloud API credentials before enabling WhatsApp order notifications.");
         }
@@ -418,6 +419,16 @@ export async function updateNotificationChannels(
     const { upsertSetting } = await import("../payments/gateway-settings");
     await upsertSetting(db, NOTIFICATIONS_CATEGORY, "order_channels", JSON.stringify(channels));
     return channels;
+}
+
+function channelWasEnabled(
+    channels: Record<string, string[]>,
+    currentChannels: Record<string, string[]>,
+    channel: NotificationChannel,
+): boolean {
+    return Object.entries(channels).some(([event, selected]) =>
+        selected.includes(channel) && !currentChannels[event]?.includes(channel),
+    );
 }
 
 export async function isWhatsAppCloudApiConfigured(
@@ -479,24 +490,6 @@ function normalizeOrderWhatsAppTemplateSettings(
     }
 
     return { templateName, languageCode };
-}
-
-function channelsRequireWhatsApp(channels: Record<string, string[]>): boolean {
-    return Object.values(channels).some((statusChannels) =>
-        statusChannels.includes("whatsapp"),
-    );
-}
-
-function channelsRequireEmail(channels: Record<string, string[]>): boolean {
-    return Object.values(channels).some((statusChannels) =>
-        statusChannels.includes("email"),
-    );
-}
-
-function channelsRequireSms(channels: Record<string, string[]>): boolean {
-    return Object.values(channels).some((statusChannels) =>
-        statusChannels.includes("sms"),
-    );
 }
 
 function channelsRequirePush(channels: Record<string, string[]>): boolean {

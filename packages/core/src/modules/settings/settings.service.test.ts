@@ -253,7 +253,7 @@ describe("notification channel settings", () => {
             provider: "cloudflare",
             error: "Configure Cloudflare Email or save a Resend API key before enabling email delivery.",
         });
-        const db = createSettingsDb();
+        const db = createSettingsDb(JSON.stringify({ order_created: [] }));
 
         const promise = updateNotificationChannels(db as never, {
             order_created: ["email"],
@@ -295,6 +295,44 @@ describe("notification channel settings", () => {
                 : null,
         );
         const db = createSettingsDb();
+
+        await expect(updateNotificationChannels(db as never, {
+            order_created: ["sms"],
+        }, "credential-key")).rejects.toMatchObject({
+            name: "ValidationError",
+            message: "sms/gennet paused",
+        });
+        expect(mocks.upsertSetting).not.toHaveBeenCalled();
+    });
+
+    it("allows unrelated changes when a previously enabled SMS provider is paused", async () => {
+        mocks.getNotificationProviderBlock.mockImplementation(async (_db, options: { channel: string; provider: string }) =>
+            options.channel === "sms" && options.provider === "gennet"
+                ? { channel: "sms", provider: "gennet", reason: "HTTP 401 unauthorized", blockedAt: 1_782_684_758 }
+                : null,
+        );
+        const saved = JSON.stringify({ order_created: ["sms"] });
+        const db = createSettingsDb(saved);
+
+        await expect(updateNotificationChannels(db as never, {
+            order_created: ["sms"],
+            order_confirmed: ["email"],
+        }, "credential-key")).resolves.toMatchObject({
+            order_created: ["sms"],
+            order_confirmed: ["email"],
+        });
+
+        expect(mocks.getSmsProviderReadiness).not.toHaveBeenCalled();
+        expect(mocks.upsertSetting).toHaveBeenCalledOnce();
+    });
+
+    it("still rejects newly enabling a paused SMS provider", async () => {
+        mocks.getNotificationProviderBlock.mockImplementation(async (_db, options: { channel: string; provider: string }) =>
+            options.channel === "sms" && options.provider === "gennet"
+                ? { channel: "sms", provider: "gennet", reason: "HTTP 401 unauthorized", blockedAt: 1_782_684_758 }
+                : null,
+        );
+        const db = createSettingsDb(JSON.stringify({ order_created: [] }));
 
         await expect(updateNotificationChannels(db as never, {
             order_created: ["sms"],
