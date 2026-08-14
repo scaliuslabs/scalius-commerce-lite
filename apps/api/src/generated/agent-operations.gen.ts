@@ -15456,52 +15456,220 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
         "content": {
           "application/json": {
             "schema": {
-              "type": "object",
-              "properties": {
-                "name": {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 100
-                },
-                "type": {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 50
-                },
-                "credentials": {
-                  "anyOf": [
-                    {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "name": {
                       "type": "string",
-                      "maxLength": 32768
+                      "minLength": 1,
+                      "maxLength": 100
                     },
-                    {
-                      "type": "object",
-                      "additionalProperties": {}
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "pathao"
+                      ]
+                    },
+                    "credentials": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 32768,
+                          "description": "Legacy JSON-encoded object accepted for dashboard compatibility; CLI and MCP callers should send the typed object variant."
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "baseUrl": {
+                              "type": "string",
+                              "maxLength": 2048,
+                              "description": "Optional Pathao API origin; defaults to https://api-hermes.pathao.com."
+                            },
+                            "clientId": {
+                              "type": "string",
+                              "maxLength": 512,
+                              "description": "Pathao client ID; required before activation."
+                            },
+                            "clientSecret": {
+                              "type": "string",
+                              "maxLength": 2048,
+                              "description": "Pathao client secret; required before activation."
+                            },
+                            "username": {
+                              "type": "string",
+                              "maxLength": 320,
+                              "description": "Pathao account username; required before activation."
+                            },
+                            "password": {
+                              "type": "string",
+                              "maxLength": 2048,
+                              "description": "Pathao account password; required before activation."
+                            },
+                            "webhookSecret": {
+                              "type": "string",
+                              "maxLength": 512,
+                              "description": "Optional shared secret used to verify Pathao webhooks."
+                            }
+                          },
+                          "additionalProperties": false
+                        }
+                      ]
+                    },
+                    "config": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 32768,
+                          "description": "Legacy JSON-encoded object accepted for dashboard compatibility; CLI and MCP callers should send the typed object variant."
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "storeId": {
+                              "type": "string",
+                              "maxLength": 100,
+                              "description": "Pathao store ID; required before activation."
+                            },
+                            "defaultDeliveryType": {
+                              "anyOf": [
+                                {
+                                  "type": "number",
+                                  "enum": [
+                                    48
+                                  ]
+                                },
+                                {
+                                  "type": "number",
+                                  "enum": [
+                                    12
+                                  ]
+                                }
+                              ],
+                              "description": "48 for normal delivery or 12 for on-demand delivery; defaults to 48."
+                            },
+                            "defaultItemType": {
+                              "anyOf": [
+                                {
+                                  "type": "number",
+                                  "enum": [
+                                    2
+                                  ]
+                                },
+                                {
+                                  "type": "number",
+                                  "enum": [
+                                    1
+                                  ]
+                                }
+                              ],
+                              "description": "2 for parcel or 1 for document; defaults to 2."
+                            },
+                            "defaultItemWeight": {
+                              "type": "number",
+                              "minimum": 0.1,
+                              "maximum": 50,
+                              "description": "Default parcel weight in kilograms; defaults to 0.5."
+                            }
+                          },
+                          "additionalProperties": false
+                        }
+                      ]
+                    },
+                    "isActive": {
+                      "type": "boolean",
+                      "default": false
                     }
+                  },
+                  "required": [
+                    "name",
+                    "type",
+                    "credentials",
+                    "config"
                   ]
                 },
-                "config": {
-                  "anyOf": [
-                    {
+                {
+                  "type": "object",
+                  "properties": {
+                    "name": {
                       "type": "string",
-                      "maxLength": 32768
+                      "minLength": 1,
+                      "maxLength": 100
                     },
-                    {
-                      "type": "object",
-                      "additionalProperties": {}
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "steadfast"
+                      ]
+                    },
+                    "credentials": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 32768,
+                          "description": "Legacy JSON-encoded object accepted for dashboard compatibility; CLI and MCP callers should send the typed object variant."
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "baseUrl": {
+                              "type": "string",
+                              "maxLength": 2048,
+                              "description": "Optional Steadfast API origin; defaults to https://portal.steadfast.com.bd/api/v1."
+                            },
+                            "apiKey": {
+                              "type": "string",
+                              "maxLength": 2048,
+                              "description": "Steadfast API key; required before activation."
+                            },
+                            "secretKey": {
+                              "type": "string",
+                              "maxLength": 2048,
+                              "description": "Steadfast secret key; required before activation."
+                            },
+                            "webhookSecret": {
+                              "type": "string",
+                              "maxLength": 512,
+                              "description": "Optional shared secret used to verify Steadfast webhooks."
+                            }
+                          },
+                          "additionalProperties": false
+                        }
+                      ]
+                    },
+                    "config": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 32768,
+                          "description": "Legacy JSON-encoded object accepted for dashboard compatibility; CLI and MCP callers should send the typed object variant."
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "defaultCodAmount": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 1000000000,
+                              "description": "Default cash-on-delivery amount; defaults to 0."
+                            }
+                          },
+                          "additionalProperties": false
+                        }
+                      ]
+                    },
+                    "isActive": {
+                      "type": "boolean",
+                      "default": false
                     }
+                  },
+                  "required": [
+                    "name",
+                    "type",
+                    "credentials",
+                    "config"
                   ]
-                },
-                "isActive": {
-                  "type": "boolean",
-                  "default": false
                 }
-              },
-              "required": [
-                "name",
-                "type",
-                "credentials",
-                "config"
               ]
             }
           }
@@ -16372,47 +16540,210 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
         "content": {
           "application/json": {
             "schema": {
-              "type": "object",
-              "properties": {
-                "type": {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 50
-                },
-                "credentials": {
-                  "anyOf": [
-                    {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
                       "type": "string",
-                      "maxLength": 32768
+                      "enum": [
+                        "pathao"
+                      ]
                     },
-                    {
-                      "type": "object",
-                      "additionalProperties": {}
+                    "credentials": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 32768,
+                          "description": "Legacy JSON-encoded object accepted for dashboard compatibility; CLI and MCP callers should send the typed object variant."
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "baseUrl": {
+                              "type": "string",
+                              "maxLength": 2048,
+                              "description": "Optional Pathao API origin; defaults to https://api-hermes.pathao.com."
+                            },
+                            "clientId": {
+                              "type": "string",
+                              "maxLength": 512,
+                              "description": "Pathao client ID; required before activation."
+                            },
+                            "clientSecret": {
+                              "type": "string",
+                              "maxLength": 2048,
+                              "description": "Pathao client secret; required before activation."
+                            },
+                            "username": {
+                              "type": "string",
+                              "maxLength": 320,
+                              "description": "Pathao account username; required before activation."
+                            },
+                            "password": {
+                              "type": "string",
+                              "maxLength": 2048,
+                              "description": "Pathao account password; required before activation."
+                            },
+                            "webhookSecret": {
+                              "type": "string",
+                              "maxLength": 512,
+                              "description": "Optional shared secret used to verify Pathao webhooks."
+                            }
+                          },
+                          "additionalProperties": false
+                        }
+                      ]
+                    },
+                    "config": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 32768,
+                          "description": "Legacy JSON-encoded object accepted for dashboard compatibility; CLI and MCP callers should send the typed object variant."
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "storeId": {
+                              "type": "string",
+                              "maxLength": 100,
+                              "description": "Pathao store ID; required before activation."
+                            },
+                            "defaultDeliveryType": {
+                              "anyOf": [
+                                {
+                                  "type": "number",
+                                  "enum": [
+                                    48
+                                  ]
+                                },
+                                {
+                                  "type": "number",
+                                  "enum": [
+                                    12
+                                  ]
+                                }
+                              ],
+                              "description": "48 for normal delivery or 12 for on-demand delivery; defaults to 48."
+                            },
+                            "defaultItemType": {
+                              "anyOf": [
+                                {
+                                  "type": "number",
+                                  "enum": [
+                                    2
+                                  ]
+                                },
+                                {
+                                  "type": "number",
+                                  "enum": [
+                                    1
+                                  ]
+                                }
+                              ],
+                              "description": "2 for parcel or 1 for document; defaults to 2."
+                            },
+                            "defaultItemWeight": {
+                              "type": "number",
+                              "minimum": 0.1,
+                              "maximum": 50,
+                              "description": "Default parcel weight in kilograms; defaults to 0.5."
+                            }
+                          },
+                          "additionalProperties": false
+                        }
+                      ]
+                    },
+                    "name": {
+                      "type": "string",
+                      "maxLength": 100,
+                      "default": "Test Provider"
                     }
+                  },
+                  "required": [
+                    "type",
+                    "credentials",
+                    "config"
                   ]
                 },
-                "config": {
-                  "anyOf": [
-                    {
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
                       "type": "string",
-                      "maxLength": 32768
+                      "enum": [
+                        "steadfast"
+                      ]
                     },
-                    {
-                      "type": "object",
-                      "additionalProperties": {}
+                    "credentials": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 32768,
+                          "description": "Legacy JSON-encoded object accepted for dashboard compatibility; CLI and MCP callers should send the typed object variant."
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "baseUrl": {
+                              "type": "string",
+                              "maxLength": 2048,
+                              "description": "Optional Steadfast API origin; defaults to https://portal.steadfast.com.bd/api/v1."
+                            },
+                            "apiKey": {
+                              "type": "string",
+                              "maxLength": 2048,
+                              "description": "Steadfast API key; required before activation."
+                            },
+                            "secretKey": {
+                              "type": "string",
+                              "maxLength": 2048,
+                              "description": "Steadfast secret key; required before activation."
+                            },
+                            "webhookSecret": {
+                              "type": "string",
+                              "maxLength": 512,
+                              "description": "Optional shared secret used to verify Steadfast webhooks."
+                            }
+                          },
+                          "additionalProperties": false
+                        }
+                      ]
+                    },
+                    "config": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 32768,
+                          "description": "Legacy JSON-encoded object accepted for dashboard compatibility; CLI and MCP callers should send the typed object variant."
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "defaultCodAmount": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 1000000000,
+                              "description": "Default cash-on-delivery amount; defaults to 0."
+                            }
+                          },
+                          "additionalProperties": false
+                        }
+                      ]
+                    },
+                    "name": {
+                      "type": "string",
+                      "maxLength": 100,
+                      "default": "Test Provider"
                     }
+                  },
+                  "required": [
+                    "type",
+                    "credentials",
+                    "config"
                   ]
-                },
-                "name": {
-                  "type": "string",
-                  "maxLength": 100,
-                  "default": "Test Provider"
                 }
-              },
-              "required": [
-                "type",
-                "credentials",
-                "config"
               ]
             }
           }
@@ -16486,54 +16817,226 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
         "content": {
           "application/json": {
             "schema": {
-              "type": "object",
-              "properties": {
-                "id": {
-                  "type": "string",
-                  "minLength": 1
-                },
-                "name": {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 100
-                },
-                "type": {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 50
-                },
-                "credentials": {
-                  "anyOf": [
-                    {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "id": {
                       "type": "string",
-                      "maxLength": 32768
+                      "minLength": 1,
+                      "maxLength": 100
                     },
-                    {
-                      "type": "object",
-                      "additionalProperties": {}
+                    "name": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "pathao"
+                      ]
+                    },
+                    "credentials": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 32768,
+                          "description": "Legacy JSON-encoded object accepted for dashboard compatibility; CLI and MCP callers should send the typed object variant."
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "baseUrl": {
+                              "type": "string",
+                              "maxLength": 2048,
+                              "description": "Optional Pathao API origin; defaults to https://api-hermes.pathao.com."
+                            },
+                            "clientId": {
+                              "type": "string",
+                              "maxLength": 512,
+                              "description": "Pathao client ID; required before activation."
+                            },
+                            "clientSecret": {
+                              "type": "string",
+                              "maxLength": 2048,
+                              "description": "Pathao client secret; required before activation."
+                            },
+                            "username": {
+                              "type": "string",
+                              "maxLength": 320,
+                              "description": "Pathao account username; required before activation."
+                            },
+                            "password": {
+                              "type": "string",
+                              "maxLength": 2048,
+                              "description": "Pathao account password; required before activation."
+                            },
+                            "webhookSecret": {
+                              "type": "string",
+                              "maxLength": 512,
+                              "description": "Optional shared secret used to verify Pathao webhooks."
+                            }
+                          },
+                          "additionalProperties": false
+                        }
+                      ]
+                    },
+                    "config": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 32768,
+                          "description": "Legacy JSON-encoded object accepted for dashboard compatibility; CLI and MCP callers should send the typed object variant."
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "storeId": {
+                              "type": "string",
+                              "maxLength": 100,
+                              "description": "Pathao store ID; required before activation."
+                            },
+                            "defaultDeliveryType": {
+                              "anyOf": [
+                                {
+                                  "type": "number",
+                                  "enum": [
+                                    48
+                                  ]
+                                },
+                                {
+                                  "type": "number",
+                                  "enum": [
+                                    12
+                                  ]
+                                }
+                              ],
+                              "description": "48 for normal delivery or 12 for on-demand delivery; defaults to 48."
+                            },
+                            "defaultItemType": {
+                              "anyOf": [
+                                {
+                                  "type": "number",
+                                  "enum": [
+                                    2
+                                  ]
+                                },
+                                {
+                                  "type": "number",
+                                  "enum": [
+                                    1
+                                  ]
+                                }
+                              ],
+                              "description": "2 for parcel or 1 for document; defaults to 2."
+                            },
+                            "defaultItemWeight": {
+                              "type": "number",
+                              "minimum": 0.1,
+                              "maximum": 50,
+                              "description": "Default parcel weight in kilograms; defaults to 0.5."
+                            }
+                          },
+                          "additionalProperties": false
+                        }
+                      ]
+                    },
+                    "isActive": {
+                      "type": "boolean"
                     }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "type"
                   ]
                 },
-                "config": {
-                  "anyOf": [
-                    {
+                {
+                  "type": "object",
+                  "properties": {
+                    "id": {
                       "type": "string",
-                      "maxLength": 32768
+                      "minLength": 1,
+                      "maxLength": 100
                     },
-                    {
-                      "type": "object",
-                      "additionalProperties": {}
+                    "name": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "steadfast"
+                      ]
+                    },
+                    "credentials": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 32768,
+                          "description": "Legacy JSON-encoded object accepted for dashboard compatibility; CLI and MCP callers should send the typed object variant."
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "baseUrl": {
+                              "type": "string",
+                              "maxLength": 2048,
+                              "description": "Optional Steadfast API origin; defaults to https://portal.steadfast.com.bd/api/v1."
+                            },
+                            "apiKey": {
+                              "type": "string",
+                              "maxLength": 2048,
+                              "description": "Steadfast API key; required before activation."
+                            },
+                            "secretKey": {
+                              "type": "string",
+                              "maxLength": 2048,
+                              "description": "Steadfast secret key; required before activation."
+                            },
+                            "webhookSecret": {
+                              "type": "string",
+                              "maxLength": 512,
+                              "description": "Optional shared secret used to verify Steadfast webhooks."
+                            }
+                          },
+                          "additionalProperties": false
+                        }
+                      ]
+                    },
+                    "config": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 32768,
+                          "description": "Legacy JSON-encoded object accepted for dashboard compatibility; CLI and MCP callers should send the typed object variant."
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "defaultCodAmount": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 1000000000,
+                              "description": "Default cash-on-delivery amount; defaults to 0."
+                            }
+                          },
+                          "additionalProperties": false
+                        }
+                      ]
+                    },
+                    "isActive": {
+                      "type": "boolean"
                     }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "type"
                   ]
-                },
-                "isActive": {
-                  "type": "boolean"
                 }
-              },
-              "required": [
-                "id",
-                "name",
-                "type"
               ]
             }
           }
