@@ -40,6 +40,11 @@ const EXPIRED_CLAIM_DELETABLE_STATUSES = new Set<string>([
   ShipmentStatus.CANCELLED,
 ]);
 
+const DELETABLE_SHIPMENT_STATUSES = new Set<string>([
+  ShipmentStatus.FAILED,
+  ShipmentStatus.CANCELLED,
+]);
+
 export const ORDER_SHIPMENT_LIST_LIMIT = 100;
 
 async function readDeliveryProviderCredentials(
@@ -738,7 +743,6 @@ export async function deleteShipmentRecord(db: Database, id: string) {
   if (shipment.status === ShipmentStatus.RECONCILE_REQUIRED) {
     throw new ConflictError("Cannot delete a shipment that requires reconciliation");
   }
-
   const orderClaim = await db
     .select({
       shipmentClaimId: orders.shipmentClaimId,
@@ -767,6 +771,12 @@ export async function deleteShipmentRecord(db: Database, id: string) {
         })
         .where(and(eq(orders.id, shipment.orderId), eq(orders.shipmentClaimId, shipment.id)));
     }
+  }
+
+  if (!DELETABLE_SHIPMENT_STATUSES.has(shipment.status)) {
+    throw new ConflictError(
+      "Only failed or cancelled shipment attempts can be deleted. Active and fulfilled shipment history must be preserved.",
+    );
   }
 
   await db.delete(deliveryShipments).where(eq(deliveryShipments.id, id));

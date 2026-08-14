@@ -34,7 +34,7 @@ Multi-courier delivery management with provider factory pattern. Supports Pathao
 | `getLatestShipment` | `(db, orderId)` | Most recent shipment for an order |
 | `getShipments` | `(db, orderId)` | All shipments for an order, ordered by createdAt desc |
 | `checkShipmentStatus` | `(db, shipmentId, encryptionKey?)` | Requires the shipment provider to still be active, polls provider API, updates DB record |
-| `deleteShipmentRecord` | `(db, id)` | Hard delete shipment only after claim/reconciliation safety checks. Rejects active order shipment claims, `reconcile_required`, and unresolved expired claimed rows; clears stale failed/cancelled claims before deletion. |
+| `deleteShipmentRecord` | `(db, id)` | Hard delete only failed/cancelled shipment attempts after claim/reconciliation safety checks. Active and fulfilled shipment history is immutable; stale failed/cancelled claims are cleared before deletion. |
 
 ## Tracking Functions (`tracking.ts`)
 

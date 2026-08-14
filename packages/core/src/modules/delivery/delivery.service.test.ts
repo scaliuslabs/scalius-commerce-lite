@@ -319,7 +319,7 @@ describe("deleteShipmentRecord claim safety", () => {
     expect(deletes).toEqual(["delivery_shipments"]);
   });
 
-  it("allows unrelated shipment deletion when an order only has an expired claim for another shipment", async () => {
+  it("rejects deletion of active shipments even when an unrelated order claim expired", async () => {
     const { db, updates, deletes } = createDeleteShipmentDb({
       shipment: shipment(ShipmentStatus.PENDING),
       orderClaim: {
@@ -328,9 +328,25 @@ describe("deleteShipmentRecord claim safety", () => {
       },
     });
 
-    await expect(deleteShipmentRecord(db as never, "shp_1")).resolves.toBe(true);
+    await expect(deleteShipmentRecord(db as never, "shp_1"))
+      .rejects.toThrow("Active and fulfilled shipment history must be preserved");
     expect(updates).toHaveLength(0);
-    expect(deletes).toEqual(["delivery_shipments"]);
+    expect(deletes).toHaveLength(0);
+  });
+
+  it("rejects deletion of manual in-transit fulfillment shipments", async () => {
+    const { db, updates, deletes } = createDeleteShipmentDb({
+      shipment: shipment(ShipmentStatus.IN_TRANSIT),
+      orderClaim: {
+        shipmentClaimId: null,
+        shipmentClaimExpiresAt: null,
+      },
+    });
+
+    await expect(deleteShipmentRecord(db as never, "shp_1"))
+      .rejects.toThrow("Active and fulfilled shipment history must be preserved");
+    expect(updates).toHaveLength(0);
+    expect(deletes).toHaveLength(0);
   });
 });
 

@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { useRouter } from "@tanstack/react-router";
 import { formatDate } from "@scalius/shared/utils";
 import ShipmentStatusIndicator from "./ShipmentStatusIndicator";
+import { canDeleteShipment, canRefreshShipment } from "@/lib/shipment-action-policy";
 import {
   getProviderReadinessLabel,
   getProviderReadinessMessage,
@@ -449,7 +450,7 @@ const DeliveryShipmentManager: FC<DeliveryShipmentManagerProps> = ({
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm">
                         <div className="flex space-x-2">
-                          <button
+                          {canRefreshShipment(shipment) && <button
                             onClick={() => handleCheckStatus(shipment.id)}
                             className="text-blue-600 hover:text-blue-800 disabled:opacity-50 disabled:cursor-not-allowed"
                             disabled={isChecking[shipment.id]}
@@ -457,14 +458,14 @@ const DeliveryShipmentManager: FC<DeliveryShipmentManagerProps> = ({
                             {isChecking[shipment.id]
                               ? "Checking..."
                               : "Check Status"}
-                          </button>
-                          <button
+                          </button>}
+                          {canDeleteShipment(shipment) && <button
                             onClick={() => handleDeleteShipment(shipment.id)}
                             className="text-red-600 hover:text-red-800 disabled:opacity-50 disabled:cursor-not-allowed"
                             disabled={isDeleting[shipment.id]}
                           >
                             {isDeleting[shipment.id] ? "Deleting..." : "Delete"}
-                          </button>
+                          </button>}
                         </div>
                       </td>
                     </tr>
