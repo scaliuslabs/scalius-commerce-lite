@@ -20179,7 +20179,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "method": "GET",
     "pathTemplate": "/api/v1/admin/dashboard/activity",
     "summary": "Get dashboard daily activity chart data",
-    "description": "Answer daily or today's sales, revenue, order-count, and new-customer questions with a bounded 90-day activity series.",
+    "description": "Answer daily or today's sales, revenue, order-count, and new-customer questions. Request days=1 for a minimal current-day result; the dashboard defaults to 90 days.",
     "tags": [
       "Admin - Dashboard"
     ],
@@ -20205,7 +20205,23 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
       "type": "permission",
       "permission": "dashboard.view"
     },
-    "inputSchema": {},
+    "inputSchema": {
+      "parameters": [
+        {
+          "schema": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 90,
+            "default": 90,
+            "description": "Merchant-calendar days ending today; use 1 for today's summary"
+          },
+          "required": false,
+          "description": "Merchant-calendar days ending today; use 1 for today's summary",
+          "name": "days",
+          "in": "query"
+        }
+      ]
+    },
     "outputSchema": {
       "type": "object",
       "properties": {
