@@ -46,4 +46,13 @@ describe("LocationFormDialog external mapping boundaries", () => {
     expect(source).toContain("`${location.name} — ${cityName}`");
     expect(source).not.toContain("type: parentType, limit: 500");
   });
+
+  it("keeps first-chunk Pathao failures visible with recovery actions", () => {
+    const source = readFileSync(HOOK_SOURCE, "utf8");
+
+    expect(source).toContain('status: "error"');
+    expect(source).toContain('progress: { current: 0, total: 0, label: "Import failed" }');
+    expect(source).toContain("error: message");
+    expect(source).not.toContain('prev ? { ...prev, status: "error", error: message } : null');
+  });
 });

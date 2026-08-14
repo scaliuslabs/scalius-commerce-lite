@@ -16,7 +16,10 @@ import { AlertTriangle, Receipt, Loader2 } from "lucide-react";
 import type { Order } from "./types";
 import { useUpdateOrderStatus } from "@/lib/api-mutations/orders";
 import { useOrderActionPermissions } from "@/hooks/use-order-action-permissions";
-import { getAdminOrderStatusTransitions } from "@/lib/admin-order-status-policy";
+import {
+  getAdminOrderStatusTransitions,
+  isAdminOrderStatus,
+} from "@/lib/admin-order-status-policy";
 
 interface OrderStatusCardProps {
   order: Order;
@@ -32,6 +35,10 @@ export function OrderStatusCard({ order }: OrderStatusCardProps) {
   const shipmentLocked = order.shipmentRecovery?.activeLock === true;
 
   const handleStatusChange = (newStatus: string) => {
+    if (!isAdminOrderStatus(newStatus)) {
+      toast.error("Invalid order status");
+      return;
+    }
     if (!canChangeStatus) {
       toast.error("Status change unavailable", {
         description: "Your role can view orders but cannot change order status.",

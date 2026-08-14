@@ -53,6 +53,7 @@ import {
   buildOrderExportSearchParams,
   buildRecoveryExportSearchParams,
 } from "./-order-export-search-params";
+import { isAdminOrderStatus } from "~/lib/admin-order-status-policy";
 
 const ArchiveOrderDialog = lazy(() =>
   import("~/components/admin/order-list/ArchiveOrderDialog").then((module) => ({
@@ -534,6 +535,11 @@ function OrdersPage() {
 
   const handleStatusUpdate = useCallback(
     (orderId: string, newStatus: string) => {
+      const normalizedStatus = newStatus.toLowerCase();
+      if (!isAdminOrderStatus(normalizedStatus)) {
+        toast.error("Invalid order status");
+        return;
+      }
       if (!orderActions.canChangeOrderStatus) {
         toast.error("Status change unavailable", {
           description: "Your role can view orders but cannot change order status.",
@@ -542,7 +548,7 @@ function OrdersPage() {
       }
       setUpdatingStatusIds((prev) => new Set(prev).add(orderId));
       statusMutation.mutate(
-        { orderId, status: newStatus.toLowerCase() },
+        { orderId, status: normalizedStatus },
         {
           onSettled: () => {
             setUpdatingStatusIds((prev) => {
