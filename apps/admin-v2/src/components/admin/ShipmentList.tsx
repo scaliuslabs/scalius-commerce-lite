@@ -11,6 +11,7 @@ import {
   type OrderShipmentDto,
   type RefreshedShipmentPayload,
 } from "@/lib/api-functions/orders";
+import { canDeleteShipment, canRefreshShipment } from "@/lib/shipment-action-policy";
 
 type ShipmentMetadata = Record<string, unknown> | string | null;
 type ShipmentTimestamp = string | number;
@@ -263,7 +264,7 @@ const ShipmentList: FC<ShipmentListProps> = ({ orderId, onRefresh }) => {
                   {formatDate(shipment.createdAt)}
                 </td>
                 <td className="px-4 py-3 text-right space-x-2">
-                  <button
+                  {canRefreshShipment(shipment) && <button
                     onClick={() => handleRefreshStatus(shipment)}
                     className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 items-center space-x-1 inline-flex"
                     disabled={isRefreshing[shipment.id]}
@@ -310,19 +311,19 @@ const ShipmentList: FC<ShipmentListProps> = ({ orderId, onRefresh }) => {
                         <span>Refresh</span>
                       </>
                     )}
-                  </button>
+                  </button>}
                   <button
                     onClick={() => handleViewDetails(shipment)}
                     className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
                   >
                     Details
                   </button>
-                  <button
+                  {canDeleteShipment(shipment) && <button
                     onClick={() => handleDelete(shipment)}
                     className="px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200"
                   >
                     Delete
-                  </button>
+                  </button>}
                 </td>
               </tr>
             ))}
