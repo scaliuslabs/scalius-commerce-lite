@@ -1,6 +1,6 @@
 {
   "name": "scalius",
-  "version": "0.2.7",
+  "version": "0.2.8",
   "description": "Secure CLI for every reviewed Scalius Commerce operation",
   "keywords": [
     "scalius",

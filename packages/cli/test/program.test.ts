@@ -218,6 +218,19 @@ describe("CLI program", () => {
     expect((JSON.parse(storefront.stdoutText()).operations as Array<{ surface: string }>).every(({ surface }) => surface === "storefront")).toBe(true);
   });
 
+  it("does not hide authorized writes from multi-word task searches", async () => {
+    const fetch = vi.fn(async () => Response.json(executableSpec()));
+    const runtime = await authenticatedRuntime(fetch as typeof globalThis.fetch);
+
+    expect(await runProgram(runtime, ["--output", "json", "operations", "search", "create product"])).toBe(0);
+    expect(JSON.parse(runtime.stdoutText())).toMatchObject({
+      operations: [expect.objectContaining({
+        operationId: "dashboard.products.create",
+        risk: "write",
+      })],
+    });
+  });
+
   it("keeps search and describe compact unless full responses are requested", async () => {
     const fetch = vi.fn(async () => Response.json(executableSpec(), { headers: { ETag: '"v1"' } }));
     const runtime = await authenticatedRuntime(fetch as typeof globalThis.fetch);
