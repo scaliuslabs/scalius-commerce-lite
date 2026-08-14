@@ -104,6 +104,7 @@ const credentialId = "agc_0123456789abcdefghij";
 const ownerUserId = "owner-1";
 const encryptionKey = Buffer.alloc(32, 7).toString("base64");
 const env = {
+  BETTER_AUTH_URL: "https://dashboard.example.test",
   PUBLIC_API_BASE_URL: "https://api.example.test",
   STOREFRONT_URL: "https://shop.example.test",
   CREDENTIAL_ENCRYPTION_KEY: encryptionKey,
@@ -170,7 +171,7 @@ describe("agent browser handoff relational authority", () => {
       env,
     );
     expect(created.url).toBe(
-      `https://api.example.test/api/v1/admin/agent-access/browser-handoffs/${created.handoffId}`,
+      `https://dashboard.example.test/api/v1/admin/agent-access/browser-handoffs/${created.handoffId}`,
     );
     const row = sqlite.prepare("SELECT encrypted_action encryptedAction FROM agent_browser_handoffs").get() as {
       encryptedAction: string;

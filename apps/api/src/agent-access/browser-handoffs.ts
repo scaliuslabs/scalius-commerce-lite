@@ -27,12 +27,18 @@ function requireEncryptionKey(env: Env): string {
   return key;
 }
 
-function apiOrigin(env: Env): string {
-  const value = env.PUBLIC_API_BASE_URL?.trim();
-  if (!value) throw new Error("PUBLIC_API_BASE_URL is required for agent browser handoffs");
+function dashboardOrigin(env: Env): string {
+  const value = env.BETTER_AUTH_URL?.trim();
+  if (!value) throw new Error("BETTER_AUTH_URL is required for agent browser handoffs");
   const url = new URL(value);
-  if (url.protocol !== "https:" && url.hostname !== "localhost") {
-    throw new Error("PUBLIC_API_BASE_URL must be HTTPS outside localhost");
+  if (
+    (url.protocol !== "https:" && url.hostname !== "localhost") ||
+    url.username ||
+    url.password ||
+    url.search ||
+    url.hash
+  ) {
+    throw new Error("BETTER_AUTH_URL must be a safe dashboard origin");
   }
   return url.origin;
 }
@@ -140,7 +146,7 @@ export async function createAgentBrowserHandoff(
   ]);
   return {
     handoffId,
-    url: `${apiOrigin(env)}/api/v1/admin/agent-access/browser-handoffs/${handoffId}`,
+    url: `${dashboardOrigin(env)}/api/v1/admin/agent-access/browser-handoffs/${handoffId}`,
     expiresAt: expiresAt.toISOString(),
   };
 }

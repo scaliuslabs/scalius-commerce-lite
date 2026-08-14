@@ -202,6 +202,7 @@ describe("MCP secure browser handoff chain", () => {
     `).run(grantId, ownerUserId, now + 3_600);
     const env = {
       DB: test.binding,
+      BETTER_AUTH_URL: "https://dashboard.example.test",
       PUBLIC_API_BASE_URL: "https://api.example.test",
       STOREFRONT_URL: "https://storefront.example.test",
       CREDENTIAL_ENCRYPTION_KEY: Buffer.alloc(32, 9).toString("base64"),
@@ -224,7 +225,7 @@ describe("MCP secure browser handoff chain", () => {
       expect.objectContaining({
         type: "resource_link",
         uri: expect.stringMatching(
-          /^https:\/\/api\.example\.test\/api\/v1\/admin\/agent-access\/browser-handoffs\/abh_[A-Za-z0-9_-]{20}$/,
+          /^https:\/\/dashboard\.example\.test\/api\/v1\/admin\/agent-access\/browser-handoffs\/abh_[A-Za-z0-9_-]{20}$/,
         ),
       }),
     ]));
