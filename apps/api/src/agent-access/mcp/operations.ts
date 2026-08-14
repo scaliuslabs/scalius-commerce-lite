@@ -69,12 +69,69 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+function compactSchemaType(schema: Record<string, unknown>): string {
+  if (typeof schema.type === "string") return schema.type;
+  if (Array.isArray(schema.type)) {
+    const types = schema.type.filter((value): value is string => typeof value === "string");
+    if (types.length > 0) return types.join("|");
+  }
+  if (Array.isArray(schema.enum)) return "enum";
+  if (Array.isArray(schema.oneOf)) return "oneOf";
+  if (Array.isArray(schema.anyOf)) return "anyOf";
+  return "unknown";
+}
+
+function compactSchemaDetails(schema: Record<string, unknown>) {
+  const itemSchema = isRecord(schema.items) ? schema.items : null;
+  return {
+    type: compactSchemaType(schema),
+    ...(schema.nullable === true ? { nullable: true } : {}),
+    ...(Array.isArray(schema.enum) && schema.enum.length <= 20 ? { enum: schema.enum } : {}),
+    ...(typeof schema.format === "string" ? { format: schema.format } : {}),
+    ...(typeof schema.pattern === "string" ? { pattern: schema.pattern } : {}),
+    ...(typeof schema.minLength === "number" ? { minLength: schema.minLength } : {}),
+    ...(typeof schema.maxLength === "number" ? { maxLength: schema.maxLength } : {}),
+    ...(typeof schema.minimum === "number" ? { minimum: schema.minimum } : {}),
+    ...(typeof schema.maximum === "number" ? { maximum: schema.maximum } : {}),
+    ...(typeof schema.minItems === "number" ? { minItems: schema.minItems } : {}),
+    ...(typeof schema.maxItems === "number" ? { maxItems: schema.maxItems } : {}),
+    ...(schema.default !== undefined ? { default: schema.default } : {}),
+    ...(itemSchema ? { itemsType: compactSchemaType(itemSchema) } : {}),
+  };
+}
+
+function compactSchema(schema: unknown) {
+  if (!isRecord(schema)) return { type: "unknown" };
+  const required = new Set(
+    Array.isArray(schema.required)
+      ? schema.required.filter((field): field is string => typeof field === "string")
+      : [],
+  );
+  const fields = isRecord(schema.properties)
+    ? Object.entries(schema.properties).map(([name, value]) => ({
+      name,
+      required: required.has(name),
+      ...compactSchemaDetails(isRecord(value) ? value : {}),
+    }))
+    : null;
+  return {
+    ...compactSchemaDetails(schema),
+    ...(fields ? { fields } : {}),
+  };
+}
+
 function compactInputContract(inputSchema: unknown) {
   if (!isRecord(inputSchema)) return null;
   const parameters = Array.isArray(inputSchema.parameters) ? inputSchema.parameters : [];
   const parameter = (location: "path" | "query") => parameters.flatMap((candidate) => {
     if (!isRecord(candidate) || candidate.in !== location || typeof candidate.name !== "string") return [];
-    return [{ name: candidate.name, required: candidate.required === true }];
+    const schema = isRecord(candidate.schema) ? candidate.schema : {};
+    return [{
+      name: candidate.name,
+      required: candidate.required === true,
+      ...compactSchemaDetails(schema),
+      ...(typeof candidate.description === "string" ? { description: candidate.description } : {}),
+    }];
   });
   const requestBody = isRecord(inputSchema.requestBody) ? inputSchema.requestBody : null;
   const content = requestBody && isRecord(requestBody.content) ? requestBody.content : null;
@@ -98,6 +155,12 @@ function compactInputContract(inputSchema: unknown) {
         contentTypes,
         requiredProperties: required,
         optionalProperties: properties.filter((name) => !required.includes(name)),
+        content: content
+          ? Object.entries(content).map(([mediaType, declaration]) => ({
+            mediaType,
+            schema: compactSchema(isRecord(declaration) ? declaration.schema : null),
+          }))
+          : [],
       }
       : null,
   };
