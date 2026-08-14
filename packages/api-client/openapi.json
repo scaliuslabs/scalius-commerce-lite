@@ -54,7 +54,20 @@
         "description": "Scoped PAT or CLI credential bound to a live agent grant."
       }
     },
-    "schemas": {},
+    "schemas": {
+      "NullableTimestamp": {
+        "type": "string",
+        "nullable": true,
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "number"
+          }
+        ]
+      }
+    },
     "parameters": {}
   },
   "paths": {
@@ -6290,15 +6303,7 @@
                                 "additionalProperties": {}
                               },
                               "publishedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "sortOrder": {
                                 "type": "number"
@@ -6308,37 +6313,13 @@
                                 "minimum": 1
                               },
                               "createdAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "updatedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "deletedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               }
                             },
                             "required": [
@@ -6633,15 +6614,7 @@
                               "additionalProperties": {}
                             },
                             "publishedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             },
                             "sortOrder": {
                               "type": "number"
@@ -6651,37 +6624,13 @@
                               "minimum": 1
                             },
                             "createdAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             },
                             "updatedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             },
                             "deletedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             }
                           },
                           "required": [
@@ -7027,15 +6976,7 @@
                               "additionalProperties": {}
                             },
                             "publishedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             },
                             "sortOrder": {
                               "type": "number"
@@ -7045,37 +6986,13 @@
                               "minimum": 1
                             },
                             "createdAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             },
                             "updatedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             },
                             "deletedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             }
                           },
                           "required": [
@@ -7408,15 +7325,7 @@
                                 "additionalProperties": {}
                               },
                               "publishedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "sortOrder": {
                                 "type": "number"
@@ -7426,37 +7335,13 @@
                                 "minimum": 1
                               },
                               "createdAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "updatedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "deletedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               }
                             },
                             "required": [
@@ -7752,15 +7637,7 @@
                               "additionalProperties": {}
                             },
                             "publishedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             },
                             "sortOrder": {
                               "type": "number"
@@ -7770,37 +7647,13 @@
                               "minimum": 1
                             },
                             "createdAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             },
                             "updatedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             },
                             "deletedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             }
                           },
                           "required": [
@@ -9499,15 +9352,7 @@
                               "additionalProperties": {}
                             },
                             "publishedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             },
                             "sortOrder": {
                               "type": "number"
@@ -9517,37 +9362,13 @@
                               "minimum": 1
                             },
                             "createdAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             },
                             "updatedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             },
                             "deletedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             }
                           },
                           "required": [
@@ -28654,15 +28475,7 @@
                                 "nullable": true
                               },
                               "createdAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "latestShipment": {
                                 "type": "object",
@@ -28698,37 +28511,13 @@
                                     "nullable": true
                                   },
                                   "lastChecked": {
-                                    "anyOf": [
-                                      {
-                                        "type": "string"
-                                      },
-                                      {
-                                        "type": "number"
-                                      },
-                                      {}
-                                    ]
+                                    "$ref": "#/components/schemas/NullableTimestamp"
                                   },
                                   "updatedAt": {
-                                    "anyOf": [
-                                      {
-                                        "type": "string"
-                                      },
-                                      {
-                                        "type": "number"
-                                      },
-                                      {}
-                                    ]
+                                    "$ref": "#/components/schemas/NullableTimestamp"
                                   },
                                   "createdAt": {
-                                    "anyOf": [
-                                      {
-                                        "type": "string"
-                                      },
-                                      {
-                                        "type": "number"
-                                      },
-                                      {}
-                                    ]
+                                    "$ref": "#/components/schemas/NullableTimestamp"
                                   }
                                 },
                                 "required": [
@@ -29324,26 +29113,10 @@
                               "nullable": true
                             },
                             "createdAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             },
                             "updatedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             }
                           },
                           "required": [
@@ -29447,15 +29220,7 @@
                                 "type": "string"
                               },
                               "createdAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               }
                             },
                             "required": [
@@ -29527,37 +29292,13 @@
                                 "type": "boolean"
                               },
                               "lastChecked": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "updatedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "createdAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               }
                             },
                             "required": [
@@ -29607,26 +29348,10 @@
                                 "nullable": true
                               },
                               "createdAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "updatedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               }
                             },
                             "required": [
@@ -29689,70 +29414,22 @@
                                 "type": "string"
                               },
                               "createdAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "updatedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "nextProbeAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "lastProbeAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "refundedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "failedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               }
                             },
                             "required": [
@@ -29817,26 +29494,10 @@
                               "type": "number"
                             },
                             "nextProbeAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             },
                             "lastProbeAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             },
                             "providerStatus": {
                               "type": "string",
@@ -29910,48 +29571,16 @@
                                 "nullable": true
                               },
                               "submittedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "resolvedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "createdAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "updatedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               }
                             },
                             "required": [
@@ -30033,48 +29662,16 @@
                               "type": "string"
                             },
                             "depositPaidAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             },
                             "balancePaidAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             },
                             "createdAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             },
                             "updatedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             }
                           },
                           "required": [
@@ -30113,37 +29710,13 @@
                               "nullable": true
                             },
                             "lastAttemptAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             },
                             "collectedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             },
                             "updatedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             }
                           },
                           "required": [
@@ -30183,70 +29756,22 @@
                                 "nullable": true
                               },
                               "acceptedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "deliveredAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "failedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "skippedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "updatedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "createdAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               }
                             },
                             "required": [
@@ -30292,15 +29817,7 @@
                                 "type": "string"
                               },
                               "happenedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "details": {
                                 "type": "string",
@@ -30780,48 +30297,16 @@
                               "nullable": true
                             },
                             "submittedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             },
                             "resolvedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             },
                             "createdAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             },
                             "updatedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             }
                           },
                           "required": [
@@ -30894,48 +30379,16 @@
                                 "nullable": true
                               },
                               "submittedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "resolvedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "createdAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "updatedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               }
                             },
                             "required": [
@@ -32169,15 +31622,7 @@
                               ]
                             },
                             "deletedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             }
                           },
                           "required": [
@@ -51836,37 +51281,13 @@
                                 "type": "boolean"
                               },
                               "createdAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "updatedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "deletedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               }
                             },
                             "required": [
@@ -55053,37 +54474,13 @@
                                   "type": "boolean"
                                 },
                                 "createdAt": {
-                                  "anyOf": [
-                                    {
-                                      "type": "string"
-                                    },
-                                    {
-                                      "type": "number"
-                                    },
-                                    {}
-                                  ]
+                                  "$ref": "#/components/schemas/NullableTimestamp"
                                 },
                                 "updatedAt": {
-                                  "anyOf": [
-                                    {
-                                      "type": "string"
-                                    },
-                                    {
-                                      "type": "number"
-                                    },
-                                    {}
-                                  ]
+                                  "$ref": "#/components/schemas/NullableTimestamp"
                                 },
                                 "deletedAt": {
-                                  "anyOf": [
-                                    {
-                                      "type": "string"
-                                    },
-                                    {
-                                      "type": "number"
-                                    },
-                                    {}
-                                  ]
+                                  "$ref": "#/components/schemas/NullableTimestamp"
                                 },
                                 "metaTitle": {
                                   "type": "string",
@@ -55327,37 +54724,13 @@
                           "type": "boolean"
                         },
                         "createdAt": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            },
-                            {}
-                          ]
+                          "$ref": "#/components/schemas/NullableTimestamp"
                         },
                         "updatedAt": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            },
-                            {}
-                          ]
+                          "$ref": "#/components/schemas/NullableTimestamp"
                         },
                         "deletedAt": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            },
-                            {}
-                          ]
+                          "$ref": "#/components/schemas/NullableTimestamp"
                         },
                         "description": {
                           "type": "string",
@@ -57476,15 +56849,7 @@
                           "nullable": true
                         },
                         "accountClaimedAt": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            },
-                            {}
-                          ]
+                          "$ref": "#/components/schemas/NullableTimestamp"
                         },
                         "totalOrders": {
                           "type": "number"
@@ -57493,15 +56858,7 @@
                           "type": "number"
                         },
                         "lastOrderAt": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            },
-                            {}
-                          ]
+                          "$ref": "#/components/schemas/NullableTimestamp"
                         },
                         "createdAt": {
                           "anyOf": [
@@ -57524,15 +56881,7 @@
                           ]
                         },
                         "deletedAt": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            },
-                            {}
-                          ]
+                          "$ref": "#/components/schemas/NullableTimestamp"
                         }
                       },
                       "required": [
@@ -58487,15 +57836,7 @@
                               "nullable": true
                             },
                             "accountClaimedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             },
                             "totalOrders": {
                               "type": "number"
@@ -58504,15 +57845,7 @@
                               "type": "number"
                             },
                             "lastOrderAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             },
                             "createdAt": {
                               "anyOf": [
@@ -58535,15 +57868,7 @@
                               ]
                             },
                             "deletedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             }
                           },
                           "required": [
@@ -59283,15 +58608,7 @@
                                 "additionalProperties": {}
                               },
                               "publishedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "sortOrder": {
                                 "type": "number"
@@ -59301,37 +58618,13 @@
                                 "minimum": 1
                               },
                               "createdAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "updatedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "deletedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               }
                             },
                             "required": [
@@ -62109,15 +61402,7 @@
                           "additionalProperties": {}
                         },
                         "publishedAt": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            },
-                            {}
-                          ]
+                          "$ref": "#/components/schemas/NullableTimestamp"
                         },
                         "sortOrder": {
                           "type": "number"
@@ -62127,37 +61412,13 @@
                           "minimum": 1
                         },
                         "createdAt": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            },
-                            {}
-                          ]
+                          "$ref": "#/components/schemas/NullableTimestamp"
                         },
                         "updatedAt": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            },
-                            {}
-                          ]
+                          "$ref": "#/components/schemas/NullableTimestamp"
                         },
                         "deletedAt": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            },
-                            {}
-                          ]
+                          "$ref": "#/components/schemas/NullableTimestamp"
                         }
                       },
                       "required": [
@@ -63813,15 +63074,7 @@
                                 ]
                               },
                               "endDate": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "isActive": {
                                 "type": "boolean"
@@ -63847,15 +63100,7 @@
                                 ]
                               },
                               "deletedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               }
                             },
                             "required": [
@@ -65147,15 +64392,7 @@
                           ]
                         },
                         "endDate": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            },
-                            {}
-                          ]
+                          "$ref": "#/components/schemas/NullableTimestamp"
                         },
                         "isActive": {
                           "type": "boolean"
@@ -65181,15 +64418,7 @@
                           ]
                         },
                         "deletedAt": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            },
-                            {}
-                          ]
+                          "$ref": "#/components/schemas/NullableTimestamp"
                         }
                       },
                       "required": [
@@ -71143,26 +70372,10 @@
                                 ]
                               },
                               "trashedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "deletedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               }
                             },
                             "required": [
@@ -72186,26 +71399,10 @@
                               ]
                             },
                             "trashedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             },
                             "deletedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             }
                           },
                           "required": [
@@ -73937,26 +73134,10 @@
                               ]
                             },
                             "trashedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             },
                             "deletedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             }
                           },
                           "required": [
@@ -74888,26 +74069,10 @@
                               ]
                             },
                             "trashedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             },
                             "deletedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             }
                           },
                           "required": [
@@ -75389,26 +74554,10 @@
                               ]
                             },
                             "trashedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             },
                             "deletedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             }
                           },
                           "required": [
@@ -75890,26 +75039,10 @@
                               ]
                             },
                             "trashedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             },
                             "deletedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             }
                           },
                           "required": [
@@ -77077,15 +76210,7 @@
                                 ]
                               },
                               "deletedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               }
                             },
                             "required": [
@@ -77509,15 +76634,7 @@
                               ]
                             },
                             "deletedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             }
                           },
                           "required": [
@@ -77936,15 +77053,7 @@
                               ]
                             },
                             "deletedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             }
                           },
                           "required": [
@@ -79056,37 +78165,13 @@
                                 "type": "string"
                               },
                               "alertSentAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "acknowledgedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "resolvedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "createdAt": {
                                 "anyOf": [
@@ -79690,37 +78775,13 @@
                                 "type": "string"
                               },
                               "alertSentAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "acknowledgedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "resolvedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "createdAt": {
                                 "anyOf": [
@@ -91531,15 +90592,7 @@
                           "nullable": true
                         },
                         "lastChecked": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            },
-                            {}
-                          ]
+                          "$ref": "#/components/schemas/NullableTimestamp"
                         },
                         "shipmentItems": {
                           "type": "string",
@@ -129126,15 +128179,7 @@
                             ]
                           },
                           "deletedAt": {
-                            "anyOf": [
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "number"
-                              },
-                              {}
-                            ]
+                            "$ref": "#/components/schemas/NullableTimestamp"
                           }
                         },
                         "required": [
@@ -129611,15 +128656,7 @@
                           ]
                         },
                         "deletedAt": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            },
-                            {}
-                          ]
+                          "$ref": "#/components/schemas/NullableTimestamp"
                         }
                       },
                       "required": [
@@ -130066,15 +129103,7 @@
                           ]
                         },
                         "deletedAt": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            },
-                            {}
-                          ]
+                          "$ref": "#/components/schemas/NullableTimestamp"
                         }
                       },
                       "required": [
@@ -130556,15 +129585,7 @@
                           ]
                         },
                         "deletedAt": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            },
-                            {}
-                          ]
+                          "$ref": "#/components/schemas/NullableTimestamp"
                         }
                       },
                       "required": [
@@ -131028,15 +130049,7 @@
                           ]
                         },
                         "deletedAt": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            },
-                            {}
-                          ]
+                          "$ref": "#/components/schemas/NullableTimestamp"
                         }
                       },
                       "required": [
@@ -137528,15 +136541,7 @@
                                 "nullable": true
                               },
                               "lastChecked": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "shipmentItems": {
                                 "type": "string",
@@ -138036,15 +137041,7 @@
                             "nullable": true
                           },
                           "lastChecked": {
-                            "anyOf": [
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "number"
-                              },
-                              {}
-                            ]
+                            "$ref": "#/components/schemas/NullableTimestamp"
                           },
                           "shipmentItems": {
                             "type": "string",
@@ -138273,15 +137270,7 @@
                           "nullable": true
                         },
                         "lastChecked": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            },
-                            {}
-                          ]
+                          "$ref": "#/components/schemas/NullableTimestamp"
                         },
                         "shipmentItems": {
                           "type": "string",
@@ -138624,15 +137613,7 @@
                           "nullable": true
                         },
                         "lastChecked": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            },
-                            {}
-                          ]
+                          "$ref": "#/components/schemas/NullableTimestamp"
                         },
                         "shipmentItems": {
                           "type": "string",
@@ -142943,48 +141924,16 @@
                               "nullable": true
                             },
                             "submittedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             },
                             "resolvedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             },
                             "createdAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             },
                             "updatedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             }
                           },
                           "required": [
@@ -143062,48 +142011,16 @@
                                 "nullable": true
                               },
                               "submittedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "resolvedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "createdAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "updatedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               }
                             },
                             "required": [
@@ -147397,15 +146314,7 @@
                                     "nullable": true
                                   },
                                   "lastChecked": {
-                                    "anyOf": [
-                                      {
-                                        "type": "string"
-                                      },
-                                      {
-                                        "type": "number"
-                                      },
-                                      {}
-                                    ]
+                                    "$ref": "#/components/schemas/NullableTimestamp"
                                   },
                                   "updatedAt": {
                                     "anyOf": [
@@ -147491,15 +146400,7 @@
                                     "type": "boolean"
                                   },
                                   "updatedAt": {
-                                    "anyOf": [
-                                      {
-                                        "type": "string"
-                                      },
-                                      {
-                                        "type": "number"
-                                      },
-                                      {}
-                                    ]
+                                    "$ref": "#/components/schemas/NullableTimestamp"
                                   }
                                 },
                                 "required": [
@@ -147557,15 +146458,7 @@
                                     "type": "boolean"
                                   },
                                   "updatedAt": {
-                                    "anyOf": [
-                                      {
-                                        "type": "string"
-                                      },
-                                      {
-                                        "type": "number"
-                                      },
-                                      {}
-                                    ]
+                                    "$ref": "#/components/schemas/NullableTimestamp"
                                   }
                                 },
                                 "required": [
@@ -147622,26 +146515,10 @@
                                     "type": "number"
                                   },
                                   "nextProbeAt": {
-                                    "anyOf": [
-                                      {
-                                        "type": "string"
-                                      },
-                                      {
-                                        "type": "number"
-                                      },
-                                      {}
-                                    ]
+                                    "$ref": "#/components/schemas/NullableTimestamp"
                                   },
                                   "lastProbeAt": {
-                                    "anyOf": [
-                                      {
-                                        "type": "string"
-                                      },
-                                      {
-                                        "type": "number"
-                                      },
-                                      {}
-                                    ]
+                                    "$ref": "#/components/schemas/NullableTimestamp"
                                   },
                                   "providerStatus": {
                                     "type": "string",
@@ -148867,15 +147744,7 @@
                                     "nullable": true
                                   },
                                   "lastChecked": {
-                                    "anyOf": [
-                                      {
-                                        "type": "string"
-                                      },
-                                      {
-                                        "type": "number"
-                                      },
-                                      {}
-                                    ]
+                                    "$ref": "#/components/schemas/NullableTimestamp"
                                   },
                                   "updatedAt": {
                                     "anyOf": [
@@ -148961,15 +147830,7 @@
                                     "type": "boolean"
                                   },
                                   "updatedAt": {
-                                    "anyOf": [
-                                      {
-                                        "type": "string"
-                                      },
-                                      {
-                                        "type": "number"
-                                      },
-                                      {}
-                                    ]
+                                    "$ref": "#/components/schemas/NullableTimestamp"
                                   }
                                 },
                                 "required": [
@@ -149027,15 +147888,7 @@
                                     "type": "boolean"
                                   },
                                   "updatedAt": {
-                                    "anyOf": [
-                                      {
-                                        "type": "string"
-                                      },
-                                      {
-                                        "type": "number"
-                                      },
-                                      {}
-                                    ]
+                                    "$ref": "#/components/schemas/NullableTimestamp"
                                   }
                                 },
                                 "required": [
@@ -149092,26 +147945,10 @@
                                     "type": "number"
                                   },
                                   "nextProbeAt": {
-                                    "anyOf": [
-                                      {
-                                        "type": "string"
-                                      },
-                                      {
-                                        "type": "number"
-                                      },
-                                      {}
-                                    ]
+                                    "$ref": "#/components/schemas/NullableTimestamp"
                                   },
                                   "lastProbeAt": {
-                                    "anyOf": [
-                                      {
-                                        "type": "string"
-                                      },
-                                      {
-                                        "type": "number"
-                                      },
-                                      {}
-                                    ]
+                                    "$ref": "#/components/schemas/NullableTimestamp"
                                   },
                                   "providerStatus": {
                                     "type": "string",
@@ -151094,15 +149931,7 @@
                               "type": "boolean"
                             },
                             "updatedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             }
                           },
                           "required": [
@@ -151615,15 +150444,7 @@
                           ]
                         },
                         "deletedAt": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            },
-                            {}
-                          ]
+                          "$ref": "#/components/schemas/NullableTimestamp"
                         },
                         "itemCount": {
                           "type": "number"
@@ -151737,15 +150558,7 @@
                               "nullable": true
                             },
                             "lastChecked": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             },
                             "updatedAt": {
                               "anyOf": [
@@ -151831,15 +150644,7 @@
                               "type": "boolean"
                             },
                             "updatedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             }
                           },
                           "required": [
@@ -151897,15 +150702,7 @@
                               "type": "boolean"
                             },
                             "updatedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             }
                           },
                           "required": [
@@ -151967,70 +150764,22 @@
                                 "type": "string"
                               },
                               "createdAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "updatedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "nextProbeAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "lastProbeAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "refundedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "failedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "reason": {
                                 "type": "string"
@@ -152132,26 +150881,10 @@
                               "type": "number"
                             },
                             "nextProbeAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             },
                             "lastProbeAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             },
                             "providerStatus": {
                               "type": "string",
@@ -152269,48 +151002,16 @@
                                 "nullable": true
                               },
                               "submittedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "resolvedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "createdAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "updatedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               }
                             },
                             "required": [
@@ -153543,70 +152244,22 @@
                                 "type": "string"
                               },
                               "createdAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "updatedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "nextProbeAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "lastProbeAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "refundedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "failedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "reason": {
                                 "type": "string"
@@ -153708,26 +152361,10 @@
                               "type": "number"
                             },
                             "nextProbeAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             },
                             "lastProbeAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             },
                             "providerStatus": {
                               "type": "string",
@@ -153875,15 +152512,7 @@
                                 "nullable": true
                               },
                               "claimExpiresAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "createdAt": {
                                 "anyOf": [
@@ -154708,15 +153337,7 @@
                                 "type": "boolean"
                               },
                               "deletedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "discountPercentage": {
                                 "type": "number",
@@ -154827,15 +153448,7 @@
                                       "type": "boolean"
                                     },
                                     "preorderDate": {
-                                      "anyOf": [
-                                        {
-                                          "type": "string"
-                                        },
-                                        {
-                                          "type": "number"
-                                        },
-                                        {}
-                                      ]
+                                      "$ref": "#/components/schemas/NullableTimestamp"
                                     },
                                     "preorderMessage": {
                                       "type": "string",
@@ -154888,15 +153501,7 @@
                                       ]
                                     },
                                     "deletedAt": {
-                                      "anyOf": [
-                                        {
-                                          "type": "string"
-                                        },
-                                        {
-                                          "type": "number"
-                                        },
-                                        {}
-                                      ]
+                                      "$ref": "#/components/schemas/NullableTimestamp"
                                     },
                                     "stockVersion": {
                                       "type": "number"
@@ -160650,15 +159255,7 @@
                           ]
                         },
                         "deletedAt": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            },
-                            {}
-                          ]
+                          "$ref": "#/components/schemas/NullableTimestamp"
                         },
                         "category": {
                           "type": "object",
@@ -160770,15 +159367,7 @@
                                 "type": "boolean"
                               },
                               "preorderDate": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "preorderMessage": {
                                 "type": "string",
@@ -160831,15 +159420,7 @@
                                 ]
                               },
                               "deletedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "stockVersion": {
                                 "type": "number"
@@ -163471,15 +162052,7 @@
                           "type": "boolean"
                         },
                         "preorderDate": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            },
-                            {}
-                          ]
+                          "$ref": "#/components/schemas/NullableTimestamp"
                         },
                         "preorderMessage": {
                           "type": "string",
@@ -163532,15 +162105,7 @@
                           ]
                         },
                         "deletedAt": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            },
-                            {}
-                          ]
+                          "$ref": "#/components/schemas/NullableTimestamp"
                         },
                         "stockVersion": {
                           "type": "number"
@@ -164137,15 +162702,7 @@
                                 "type": "boolean"
                               },
                               "preorderDate": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "preorderMessage": {
                                 "type": "string",
@@ -164198,15 +162755,7 @@
                                 ]
                               },
                               "deletedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "stockVersion": {
                                 "type": "number"
@@ -164906,15 +163455,7 @@
                           "type": "boolean"
                         },
                         "preorderDate": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            },
-                            {}
-                          ]
+                          "$ref": "#/components/schemas/NullableTimestamp"
                         },
                         "preorderMessage": {
                           "type": "string",
@@ -164967,15 +163508,7 @@
                           ]
                         },
                         "deletedAt": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            },
-                            {}
-                          ]
+                          "$ref": "#/components/schemas/NullableTimestamp"
                         },
                         "stockVersion": {
                           "type": "number"
@@ -172465,15 +170998,7 @@
                                 ]
                               },
                               "deletedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               },
                               "valueCount": {
                                 "type": "number"
@@ -192998,15 +191523,7 @@
                               ]
                             },
                             "deletedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             }
                           },
                           "required": [
@@ -193641,15 +192158,7 @@
                                 ]
                               },
                               "deletedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               }
                             },
                             "required": [
@@ -194416,15 +192925,7 @@
                               ]
                             },
                             "deletedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             }
                           },
                           "required": [
@@ -194935,15 +193436,7 @@
                           ]
                         },
                         "deletedAt": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            },
-                            {}
-                          ]
+                          "$ref": "#/components/schemas/NullableTimestamp"
                         }
                       },
                       "required": [
@@ -195678,15 +194171,7 @@
                               ]
                             },
                             "deletedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
+                              "$ref": "#/components/schemas/NullableTimestamp"
                             }
                           },
                           "required": [

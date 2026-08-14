@@ -4,6 +4,8 @@ export type ClientOptions = {
     baseUrl: `${string}://${string}` | (string & {});
 };
 
+export type NullableTimestamp = string | number | null;
+
 export type GetApiV1AuthTokenData = {
     body?: never;
     path?: never;
@@ -1852,12 +1854,12 @@ export type GetApiV1PagesResponses = {
                     updatedAt?: string | number;
                     [key: string]: unknown;
                 } | null;
-                publishedAt?: string | number | unknown;
+                publishedAt?: NullableTimestamp;
                 sortOrder: number;
                 revision: number;
-                createdAt: string | number | unknown;
-                updatedAt: string | number | unknown;
-                deletedAt: string | number | unknown;
+                createdAt: NullableTimestamp;
+                updatedAt: NullableTimestamp;
+                deletedAt: NullableTimestamp;
             }>;
             pagination: {
                 page: number;
@@ -1957,12 +1959,12 @@ export type GetApiV1PagesSlugBySlugResponses = {
                     updatedAt?: string | number;
                     [key: string]: unknown;
                 } | null;
-                publishedAt?: string | number | unknown;
+                publishedAt?: NullableTimestamp;
                 sortOrder: number;
                 revision: number;
-                createdAt: string | number | unknown;
-                updatedAt: string | number | unknown;
-                deletedAt: string | number | unknown;
+                createdAt: NullableTimestamp;
+                updatedAt: NullableTimestamp;
+                deletedAt: NullableTimestamp;
             };
         };
     };
@@ -2045,12 +2047,12 @@ export type GetApiV1PagesByIdResponses = {
                     updatedAt?: string | number;
                     [key: string]: unknown;
                 } | null;
-                publishedAt?: string | number | unknown;
+                publishedAt?: NullableTimestamp;
                 sortOrder: number;
                 revision: number;
-                createdAt: string | number | unknown;
-                updatedAt: string | number | unknown;
-                deletedAt: string | number | unknown;
+                createdAt: NullableTimestamp;
+                updatedAt: NullableTimestamp;
+                deletedAt: NullableTimestamp;
             };
         };
     };
@@ -2124,12 +2126,12 @@ export type GetApiV1ArticlesResponses = {
                     updatedAt?: string | number;
                     [key: string]: unknown;
                 } | null;
-                publishedAt?: string | number | unknown;
+                publishedAt?: NullableTimestamp;
                 sortOrder: number;
                 revision: number;
-                createdAt: string | number | unknown;
-                updatedAt: string | number | unknown;
-                deletedAt: string | number | unknown;
+                createdAt: NullableTimestamp;
+                updatedAt: NullableTimestamp;
+                deletedAt: NullableTimestamp;
             }>;
             pagination: {
                 page: number;
@@ -2229,12 +2231,12 @@ export type GetApiV1ArticlesSlugBySlugResponses = {
                     updatedAt?: string | number;
                     [key: string]: unknown;
                 } | null;
-                publishedAt?: string | number | unknown;
+                publishedAt?: NullableTimestamp;
                 sortOrder: number;
                 revision: number;
-                createdAt: string | number | unknown;
-                updatedAt: string | number | unknown;
-                deletedAt: string | number | unknown;
+                createdAt: NullableTimestamp;
+                updatedAt: NullableTimestamp;
+                deletedAt: NullableTimestamp;
             };
         };
     };
@@ -2692,12 +2694,12 @@ export type GetApiV1StorefrontPagesSlugBySlugResponses = {
                     updatedAt?: string | number;
                     [key: string]: unknown;
                 } | null;
-                publishedAt?: string | number | unknown;
+                publishedAt?: NullableTimestamp;
                 sortOrder: number;
                 revision: number;
-                createdAt: string | number | unknown;
-                updatedAt: string | number | unknown;
-                deletedAt: string | number | unknown;
+                createdAt: NullableTimestamp;
+                updatedAt: NullableTimestamp;
+                deletedAt: NullableTimestamp;
             };
         };
     };
@@ -8029,7 +8031,7 @@ export type GetApiV1CustomerAuthOrdersResponses = {
                 zoneName: string | null;
                 areaName?: string | null;
                 notes: string | null;
-                createdAt: string | number | unknown;
+                createdAt: NullableTimestamp;
                 latestShipment?: {
                     id: string;
                     providerType: string;
@@ -8039,9 +8041,9 @@ export type GetApiV1CustomerAuthOrdersResponses = {
                     trackingId: string | null;
                     trackingUrl: string | null;
                     courierName: string | null;
-                    lastChecked: string | number | unknown;
-                    updatedAt: string | number | unknown;
-                    createdAt: string | number | unknown;
+                    lastChecked: NullableTimestamp;
+                    updatedAt: NullableTimestamp;
+                    createdAt: NullableTimestamp;
                 } | null;
                 items: Array<{
                     productId: string;
@@ -8204,8 +8206,8 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                 zoneName: string | null;
                 areaName: string | null;
                 notes: string | null;
-                createdAt: string | number | unknown;
-                updatedAt: string | number | unknown;
+                createdAt: NullableTimestamp;
+                updatedAt: NullableTimestamp;
                 [key: string]: unknown;
             };
             items: Array<{
@@ -8226,7 +8228,7 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                 taxableAmountMinor: number | null;
                 taxAmountMinor: number;
                 fulfillmentStatus: string;
-                createdAt: string | number | unknown;
+                createdAt: NullableTimestamp;
                 [key: string]: unknown;
             }>;
             shipments: Array<{
@@ -8241,9 +8243,9 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                 note: string | null;
                 shipmentAmount: number | null;
                 isFinalShipment: boolean;
-                lastChecked: string | number | unknown;
-                updatedAt: string | number | unknown;
-                createdAt: string | number | unknown;
+                lastChecked: NullableTimestamp;
+                updatedAt: NullableTimestamp;
+                createdAt: NullableTimestamp;
                 [key: string]: unknown;
             }>;
             payments: Array<{
@@ -8254,8 +8256,8 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                 paymentType: string;
                 status: string;
                 codReceiptUrl: string | null;
-                createdAt: string | number | unknown;
-                updatedAt: string | number | unknown;
+                createdAt: NullableTimestamp;
+                updatedAt: NullableTimestamp;
                 [key: string]: unknown;
             }>;
             refundAttempts: Array<{
@@ -8270,12 +8272,12 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                 severity: 'info' | 'success' | 'warning' | 'danger';
                 label: string;
                 message: string;
-                createdAt: string | number | unknown;
-                updatedAt: string | number | unknown;
-                nextProbeAt: string | number | unknown;
-                lastProbeAt: string | number | unknown;
-                refundedAt: string | number | unknown;
-                failedAt: string | number | unknown;
+                createdAt: NullableTimestamp;
+                updatedAt: NullableTimestamp;
+                nextProbeAt: NullableTimestamp;
+                lastProbeAt: NullableTimestamp;
+                refundedAt: NullableTimestamp;
+                failedAt: NullableTimestamp;
             }>;
             activeRefundOperation: {
                 active: true;
@@ -8287,8 +8289,8 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                 currency: string;
                 gateway: string;
                 attemptCount: number;
-                nextProbeAt: string | number | unknown;
-                lastProbeAt: string | number | unknown;
+                nextProbeAt: NullableTimestamp;
+                lastProbeAt: NullableTimestamp;
                 providerStatus: string | null;
             } | null;
             supportRequests: Array<{
@@ -8303,10 +8305,10 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                 actionLabel: string;
                 reason: string;
                 message: string | null;
-                submittedAt: string | number | unknown;
-                resolvedAt: string | number | unknown;
-                createdAt: string | number | unknown;
-                updatedAt: string | number | unknown;
+                submittedAt: NullableTimestamp;
+                resolvedAt: NullableTimestamp;
+                createdAt: NullableTimestamp;
+                updatedAt: NullableTimestamp;
             }>;
             supportRequestActions: Array<{
                 type: 'cancel_pre_shipment' | 'return' | 'refund';
@@ -8322,10 +8324,10 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                 balanceDue: number;
                 balanceDueDate: string | null;
                 status: string;
-                depositPaidAt: string | number | unknown;
-                balancePaidAt: string | number | unknown;
-                createdAt: string | number | unknown;
-                updatedAt: string | number | unknown;
+                depositPaidAt: NullableTimestamp;
+                balancePaidAt: NullableTimestamp;
+                createdAt: NullableTimestamp;
+                updatedAt: NullableTimestamp;
                 [key: string]: unknown;
             } | null;
             cod: {
@@ -8334,9 +8336,9 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                 failureReason: string | null;
                 collectedAmount: number | null;
                 receiptUrl: string | null;
-                lastAttemptAt: string | number | unknown;
-                collectedAt: string | number | unknown;
-                updatedAt: string | number | unknown;
+                lastAttemptAt: NullableTimestamp;
+                collectedAt: NullableTimestamp;
+                updatedAt: NullableTimestamp;
                 [key: string]: unknown;
             } | null;
             notifications: Array<{
@@ -8346,12 +8348,12 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                 status: string;
                 provider: string;
                 providerStatus: string | null;
-                acceptedAt: string | number | unknown;
-                deliveredAt: string | number | unknown;
-                failedAt: string | number | unknown;
-                skippedAt: string | number | unknown;
-                updatedAt: string | number | unknown;
-                createdAt: string | number | unknown;
+                acceptedAt: NullableTimestamp;
+                deliveredAt: NullableTimestamp;
+                failedAt: NullableTimestamp;
+                skippedAt: NullableTimestamp;
+                updatedAt: NullableTimestamp;
+                createdAt: NullableTimestamp;
                 [key: string]: unknown;
             }>;
             timeline: Array<{
@@ -8359,7 +8361,7 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                 type: 'order' | 'payment' | 'refund' | 'request' | 'shipment' | 'notification';
                 status: string;
                 label: string;
-                happenedAt: string | number | unknown;
+                happenedAt: NullableTimestamp;
                 details?: string | null;
             }>;
             paymentRecovery: {
@@ -8493,10 +8495,10 @@ export type PostApiV1CustomerAuthOrdersByIdSupportRequestsResponses = {
                 actionLabel: string;
                 reason: string;
                 message: string | null;
-                submittedAt: string | number | unknown;
-                resolvedAt: string | number | unknown;
-                createdAt: string | number | unknown;
-                updatedAt: string | number | unknown;
+                submittedAt: NullableTimestamp;
+                resolvedAt: NullableTimestamp;
+                createdAt: NullableTimestamp;
+                updatedAt: NullableTimestamp;
             };
             supportRequests: Array<{
                 id: string;
@@ -8510,10 +8512,10 @@ export type PostApiV1CustomerAuthOrdersByIdSupportRequestsResponses = {
                 actionLabel: string;
                 reason: string;
                 message: string | null;
-                submittedAt: string | number | unknown;
-                resolvedAt: string | number | unknown;
-                createdAt: string | number | unknown;
-                updatedAt: string | number | unknown;
+                submittedAt: NullableTimestamp;
+                resolvedAt: NullableTimestamp;
+                createdAt: NullableTimestamp;
+                updatedAt: NullableTimestamp;
             }>;
             supportRequestActions: Array<{
                 type: 'cancel_pre_shipment' | 'return' | 'refund';
@@ -8823,7 +8825,7 @@ export type GetApiV1CheckoutLanguagesActiveResponses = {
                 isDefault: boolean;
                 createdAt?: string | number;
                 updatedAt?: string | number;
-                deletedAt?: string | number | unknown;
+                deletedAt?: NullableTimestamp;
             };
         };
     };
@@ -14139,9 +14141,9 @@ export type GetApiV1AdminCollectionsResponses = {
                 canonicalPath: string | null;
                 noIndex: boolean;
                 excludeFromSitemap: boolean;
-                createdAt: string | number | unknown;
-                updatedAt: string | number | unknown;
-                deletedAt: string | number | unknown;
+                createdAt: NullableTimestamp;
+                updatedAt: NullableTimestamp;
+                deletedAt: NullableTimestamp;
             }>;
             pagination: {
                 page: number;
@@ -15011,9 +15013,9 @@ export type GetApiV1AdminCollectionsByIdSectionsBySectionResponses = {
                 canonicalPath: string | null;
                 noIndex: boolean;
                 excludeFromSitemap: boolean;
-                createdAt: string | number | unknown;
-                updatedAt: string | number | unknown;
-                deletedAt: string | number | unknown;
+                createdAt: NullableTimestamp;
+                updatedAt: NullableTimestamp;
+                deletedAt: NullableTimestamp;
                 metaTitle: string | null;
                 metaDescription: string | null;
                 descriptionCharacters: number;
@@ -15164,9 +15166,9 @@ export type GetApiV1AdminCollectionsByIdResponses = {
             canonicalPath: string | null;
             noIndex: boolean;
             excludeFromSitemap: boolean;
-            createdAt: string | number | unknown;
-            updatedAt: string | number | unknown;
-            deletedAt: string | number | unknown;
+            createdAt: NullableTimestamp;
+            updatedAt: NullableTimestamp;
+            deletedAt: NullableTimestamp;
             description: string | null;
             content: string | null;
             metaTitle: string | null;
@@ -15786,13 +15788,13 @@ export type GetApiV1AdminCustomersByIdResponses = {
             cityName: string | null;
             zoneName: string | null;
             areaName: string | null;
-            accountClaimedAt: string | number | unknown;
+            accountClaimedAt: NullableTimestamp;
             totalOrders: number;
             totalSpent: number;
-            lastOrderAt: string | number | unknown;
+            lastOrderAt: NullableTimestamp;
             createdAt: string | number;
             updatedAt: string | number;
-            deletedAt: string | number | unknown;
+            deletedAt: NullableTimestamp;
         };
     };
 };
@@ -16041,13 +16043,13 @@ export type GetApiV1AdminCustomersByIdHistoryResponses = {
                 cityName: string | null;
                 zoneName: string | null;
                 areaName: string | null;
-                accountClaimedAt: string | number | unknown;
+                accountClaimedAt: NullableTimestamp;
                 totalOrders: number;
                 totalSpent: number;
-                lastOrderAt: string | number | unknown;
+                lastOrderAt: NullableTimestamp;
                 createdAt: string | number;
                 updatedAt: string | number;
-                deletedAt?: string | number | unknown;
+                deletedAt?: NullableTimestamp;
             };
             history: Array<{
                 id: string;
@@ -16242,12 +16244,12 @@ export type GetApiV1AdminPagesResponses = {
                     updatedAt?: string | number;
                     [key: string]: unknown;
                 } | null;
-                publishedAt?: string | number | unknown;
+                publishedAt?: NullableTimestamp;
                 sortOrder: number;
                 revision: number;
-                createdAt: string | number | unknown;
-                updatedAt: string | number | unknown;
-                deletedAt: string | number | unknown;
+                createdAt: NullableTimestamp;
+                updatedAt: NullableTimestamp;
+                deletedAt: NullableTimestamp;
             }>;
             pagination: {
                 page: number;
@@ -17137,12 +17139,12 @@ export type GetApiV1AdminPagesByIdResponses = {
                 updatedAt?: string | number;
                 [key: string]: unknown;
             } | null;
-            publishedAt?: string | number | unknown;
+            publishedAt?: NullableTimestamp;
             sortOrder: number;
             revision: number;
-            createdAt: string | number | unknown;
-            updatedAt: string | number | unknown;
-            deletedAt: string | number | unknown;
+            createdAt: NullableTimestamp;
+            updatedAt: NullableTimestamp;
+            deletedAt: NullableTimestamp;
         };
     };
 };
@@ -17516,11 +17518,11 @@ export type GetApiV1AdminDiscountsResponses = {
                 limitOnePerCustomer: boolean;
                 customerSegment: string | null;
                 startDate: string | number;
-                endDate: string | number | unknown;
+                endDate: NullableTimestamp;
                 isActive: boolean;
                 createdAt: string | number;
                 updatedAt: string | number;
-                deletedAt: string | number | unknown;
+                deletedAt: NullableTimestamp;
             }>;
             pagination: {
                 page: number;
@@ -17926,11 +17928,11 @@ export type GetApiV1AdminDiscountsByIdResponses = {
             limitOnePerCustomer: boolean;
             customerSegment: string | null;
             startDate: string | number;
-            endDate: string | number | unknown;
+            endDate: NullableTimestamp;
             isActive: boolean;
             createdAt: string | number;
             updatedAt: string | number;
-            deletedAt: string | number | unknown;
+            deletedAt: NullableTimestamp;
         };
     };
 };
@@ -19470,8 +19472,8 @@ export type GetApiV1AdminMediaResponses = {
                 version: number;
                 createdAt: string | number;
                 updatedAt: string | number;
-                trashedAt: string | number | unknown;
-                deletedAt: string | number | unknown;
+                trashedAt: NullableTimestamp;
+                deletedAt: NullableTimestamp;
             }>;
             pagination: {
                 limit: number;
@@ -19750,8 +19752,8 @@ export type PostApiV1AdminMediaUploadsImportUrlResponses = {
                 version: number;
                 createdAt: string | number;
                 updatedAt: string | number;
-                trashedAt: string | number | unknown;
-                deletedAt: string | number | unknown;
+                trashedAt: NullableTimestamp;
+                deletedAt: NullableTimestamp;
             };
         };
     };
@@ -20238,8 +20240,8 @@ export type PostApiV1AdminMediaUploadsByIdCompleteResponses = {
                 version: number;
                 createdAt: string | number;
                 updatedAt: string | number;
-                trashedAt: string | number | unknown;
-                deletedAt: string | number | unknown;
+                trashedAt: NullableTimestamp;
+                deletedAt: NullableTimestamp;
             };
         };
     };
@@ -20483,8 +20485,8 @@ export type PatchApiV1AdminMediaByIdResponses = {
                 version: number;
                 createdAt: string | number;
                 updatedAt: string | number;
-                trashedAt: string | number | unknown;
-                deletedAt: string | number | unknown;
+                trashedAt: NullableTimestamp;
+                deletedAt: NullableTimestamp;
             };
         };
     };
@@ -20612,8 +20614,8 @@ export type PostApiV1AdminMediaByIdTrashResponses = {
                 version: number;
                 createdAt: string | number;
                 updatedAt: string | number;
-                trashedAt: string | number | unknown;
-                deletedAt: string | number | unknown;
+                trashedAt: NullableTimestamp;
+                deletedAt: NullableTimestamp;
             };
         };
     };
@@ -20741,8 +20743,8 @@ export type PostApiV1AdminMediaByIdRestoreResponses = {
                 version: number;
                 createdAt: string | number;
                 updatedAt: string | number;
-                trashedAt: string | number | unknown;
-                deletedAt: string | number | unknown;
+                trashedAt: NullableTimestamp;
+                deletedAt: NullableTimestamp;
             };
         };
     };
@@ -21077,7 +21079,7 @@ export type GetApiV1AdminMediaFoldersResponses = {
                 version: number;
                 createdAt: string | number;
                 updatedAt: string | number;
-                deletedAt: string | number | unknown;
+                deletedAt: NullableTimestamp;
             }>;
             pagination: {
                 limit: number;
@@ -21194,7 +21196,7 @@ export type PostApiV1AdminMediaFoldersResponses = {
                 version: number;
                 createdAt: string | number;
                 updatedAt: string | number;
-                deletedAt: string | number | unknown;
+                deletedAt: NullableTimestamp;
             };
         };
     };
@@ -21411,7 +21413,7 @@ export type PutApiV1AdminMediaFoldersByIdResponses = {
                 version: number;
                 createdAt: string | number;
                 updatedAt: string | number;
-                deletedAt: string | number | unknown;
+                deletedAt: NullableTimestamp;
             };
         };
     };
@@ -21543,9 +21545,9 @@ export type GetApiV1AdminInventoryResponses = {
                 currentQty: number;
                 threshold: number;
                 alertStatus: string;
-                alertSentAt: string | number | unknown;
-                acknowledgedAt: string | number | unknown;
-                resolvedAt: string | number | unknown;
+                alertSentAt: NullableTimestamp;
+                acknowledgedAt: NullableTimestamp;
+                resolvedAt: NullableTimestamp;
                 createdAt: string | number;
                 updatedAt: string | number;
                 productName: string | null;
@@ -21705,9 +21707,9 @@ export type GetApiV1AdminInventoryAlertsResponses = {
                 currentQty: number;
                 threshold: number;
                 alertStatus: string;
-                alertSentAt: string | number | unknown;
-                acknowledgedAt: string | number | unknown;
-                resolvedAt: string | number | unknown;
+                alertSentAt: NullableTimestamp;
+                acknowledgedAt: NullableTimestamp;
+                resolvedAt: NullableTimestamp;
                 createdAt: string | number;
                 updatedAt: string | number;
                 productName: string | null;
@@ -25093,7 +25095,7 @@ export type GetApiV1AdminShipmentsByIdResponses = {
             courierName: string | null;
             note: string | null;
             metadata: string | null;
-            lastChecked: string | number | unknown;
+            lastChecked: NullableTimestamp;
             shipmentItems: string | null;
             shipmentAmount: number | null;
             isFinalShipment: boolean | null;
@@ -35476,7 +35478,7 @@ export type GetApiV1AdminSettingsHeroSlidersResponses = {
             revision: number;
             createdAt: string | number;
             updatedAt: string | number;
-            deletedAt: string | number | unknown;
+            deletedAt: NullableTimestamp;
             [key: string]: unknown;
         }>;
     };
@@ -35609,7 +35611,7 @@ export type PostApiV1AdminSettingsHeroSlidersResponses = {
             revision: number;
             createdAt: string | number;
             updatedAt: string | number;
-            deletedAt: string | number | unknown;
+            deletedAt: NullableTimestamp;
             [key: string]: unknown;
         };
     };
@@ -35733,7 +35735,7 @@ export type DeleteApiV1AdminSettingsHeroSlidersByIdResponses = {
             revision: number;
             createdAt: string | number;
             updatedAt: string | number;
-            deletedAt: string | number | unknown;
+            deletedAt: NullableTimestamp;
             [key: string]: unknown;
         };
     };
@@ -35844,7 +35846,7 @@ export type GetApiV1AdminSettingsHeroSlidersByIdResponses = {
             revision: number;
             createdAt: string | number;
             updatedAt: string | number;
-            deletedAt: string | number | unknown;
+            deletedAt: NullableTimestamp;
             [key: string]: unknown;
         };
     };
@@ -35979,7 +35981,7 @@ export type PutApiV1AdminSettingsHeroSlidersByIdResponses = {
             revision: number;
             createdAt: string | number;
             updatedAt: string | number;
-            deletedAt: string | number | unknown;
+            deletedAt: NullableTimestamp;
             [key: string]: unknown;
         };
     };
@@ -37663,7 +37665,7 @@ export type GetApiV1AdminOrdersByIdFulfillResponses = {
                 courierName: string | null;
                 note: string | null;
                 metadata: string | null;
-                lastChecked: string | number | unknown;
+                lastChecked: NullableTimestamp;
                 shipmentItems: string | null;
                 shipmentAmount: number | null;
                 isFinalShipment: boolean | null;
@@ -37797,7 +37799,7 @@ export type GetApiV1AdminOrdersByIdShipmentsResponses = {
             courierName: string | null;
             note: string | null;
             metadata: string | null;
-            lastChecked: string | number | unknown;
+            lastChecked: NullableTimestamp;
             shipmentItems: string | null;
             shipmentAmount: number | null;
             isFinalShipment: boolean | null;
@@ -37896,7 +37898,7 @@ export type PostApiV1AdminOrdersByIdShipmentsResponses = {
             courierName: string | null;
             note: string | null;
             metadata: string | null;
-            lastChecked: string | number | unknown;
+            lastChecked: NullableTimestamp;
             shipmentItems: string | null;
             shipmentAmount: number | null;
             isFinalShipment: boolean | null;
@@ -38039,7 +38041,7 @@ export type GetApiV1AdminOrdersByIdShipmentsByShipmentIdResponses = {
             courierName: string | null;
             note: string | null;
             metadata: string | null;
-            lastChecked: string | number | unknown;
+            lastChecked: NullableTimestamp;
             shipmentItems: string | null;
             shipmentAmount: number | null;
             isFinalShipment: boolean | null;
@@ -39192,10 +39194,10 @@ export type PutApiV1AdminOrdersByIdSupportRequestsByRequestIdStatusResponses = {
                 reason: string;
                 message: string | null;
                 returnId: string | null;
-                submittedAt: string | number | unknown;
-                resolvedAt: string | number | unknown;
-                createdAt: string | number | unknown;
-                updatedAt: string | number | unknown;
+                submittedAt: NullableTimestamp;
+                resolvedAt: NullableTimestamp;
+                createdAt: NullableTimestamp;
+                updatedAt: NullableTimestamp;
             };
             supportRequests: Array<{
                 id: string;
@@ -39210,10 +39212,10 @@ export type PutApiV1AdminOrdersByIdSupportRequestsByRequestIdStatusResponses = {
                 reason: string;
                 message: string | null;
                 returnId: string | null;
-                submittedAt: string | number | unknown;
-                resolvedAt: string | number | unknown;
-                createdAt: string | number | unknown;
-                updatedAt: string | number | unknown;
+                submittedAt: NullableTimestamp;
+                resolvedAt: NullableTimestamp;
+                createdAt: NullableTimestamp;
+                updatedAt: NullableTimestamp;
             }>;
         };
     };
@@ -40296,7 +40298,7 @@ export type GetApiV1AdminOrdersResponses = {
                     rawStatus: string | null;
                     externalId: string | null;
                     trackingId: string | null;
-                    lastChecked: string | number | unknown;
+                    lastChecked: NullableTimestamp;
                     updatedAt: string | number;
                     createdAt: string | number;
                 } | null;
@@ -40311,7 +40313,7 @@ export type GetApiV1AdminOrdersResponses = {
                     providerType: string | null;
                     canRefresh: boolean;
                     canRetryCreate: boolean;
-                    updatedAt: string | number | unknown;
+                    updatedAt: NullableTimestamp;
                 };
                 paymentRecovery: {
                     state: 'none' | 'awaiting_payment' | 'processing' | 'needs_attention';
@@ -40323,7 +40325,7 @@ export type GetApiV1AdminOrdersResponses = {
                     attempts: number;
                     activeProcessing: boolean;
                     staleProcessing: boolean;
-                    updatedAt: string | number | unknown;
+                    updatedAt: NullableTimestamp;
                 };
                 activeRefundOperation: {
                     active: true;
@@ -40335,8 +40337,8 @@ export type GetApiV1AdminOrdersResponses = {
                     currency: string;
                     gateway: string;
                     attemptCount: number;
-                    nextProbeAt: string | number | unknown;
-                    lastProbeAt: string | number | unknown;
+                    nextProbeAt: NullableTimestamp;
+                    lastProbeAt: NullableTimestamp;
                     providerStatus: string | null;
                 } | null;
                 fullEditReadiness: {
@@ -40717,7 +40719,7 @@ export type GetApiV1AdminOrdersPaymentRecoveryResponses = {
                     rawStatus: string | null;
                     externalId: string | null;
                     trackingId: string | null;
-                    lastChecked: string | number | unknown;
+                    lastChecked: NullableTimestamp;
                     updatedAt: string | number;
                     createdAt: string | number;
                 } | null;
@@ -40732,7 +40734,7 @@ export type GetApiV1AdminOrdersPaymentRecoveryResponses = {
                     providerType: string | null;
                     canRefresh: boolean;
                     canRetryCreate: boolean;
-                    updatedAt: string | number | unknown;
+                    updatedAt: NullableTimestamp;
                 };
                 paymentRecovery: {
                     state: 'none' | 'awaiting_payment' | 'processing' | 'needs_attention';
@@ -40744,7 +40746,7 @@ export type GetApiV1AdminOrdersPaymentRecoveryResponses = {
                     attempts: number;
                     activeProcessing: boolean;
                     staleProcessing: boolean;
-                    updatedAt: string | number | unknown;
+                    updatedAt: NullableTimestamp;
                 };
                 activeRefundOperation: {
                     active: true;
@@ -40756,8 +40758,8 @@ export type GetApiV1AdminOrdersPaymentRecoveryResponses = {
                     currency: string;
                     gateway: string;
                     attemptCount: number;
-                    nextProbeAt: string | number | unknown;
-                    lastProbeAt: string | number | unknown;
+                    nextProbeAt: NullableTimestamp;
+                    lastProbeAt: NullableTimestamp;
                     providerStatus: string | null;
                 } | null;
                 fullEditReadiness: {
@@ -41305,7 +41307,7 @@ export type PostApiV1AdminOrdersByIdPaymentRecoveryLinkResponses = {
                 attempts: number;
                 activeProcessing: boolean;
                 staleProcessing: boolean;
-                updatedAt: string | number | unknown;
+                updatedAt: NullableTimestamp;
             };
         };
     };
@@ -41387,7 +41389,7 @@ export type GetApiV1AdminOrdersByIdResponses = {
             version: number;
             createdAt: string | number;
             updatedAt: string | number;
-            deletedAt: string | number | unknown;
+            deletedAt: NullableTimestamp;
             itemCount: number;
             items: Array<{
                 id: string;
@@ -41414,7 +41416,7 @@ export type GetApiV1AdminOrdersByIdResponses = {
                 rawStatus: string | null;
                 externalId: string | null;
                 trackingId: string | null;
-                lastChecked: string | number | unknown;
+                lastChecked: NullableTimestamp;
                 updatedAt: string | number;
                 createdAt: string | number;
             } | null;
@@ -41429,7 +41431,7 @@ export type GetApiV1AdminOrdersByIdResponses = {
                 providerType: string | null;
                 canRefresh: boolean;
                 canRetryCreate: boolean;
-                updatedAt: string | number | unknown;
+                updatedAt: NullableTimestamp;
             };
             paymentRecovery: {
                 state: 'none' | 'awaiting_payment' | 'processing' | 'needs_attention';
@@ -41441,7 +41443,7 @@ export type GetApiV1AdminOrdersByIdResponses = {
                 attempts: number;
                 activeProcessing: boolean;
                 staleProcessing: boolean;
-                updatedAt: string | number | unknown;
+                updatedAt: NullableTimestamp;
             };
             refundAttempts: Array<{
                 id: string;
@@ -41455,12 +41457,12 @@ export type GetApiV1AdminOrdersByIdResponses = {
                 severity: 'info' | 'success' | 'warning' | 'danger';
                 label: string;
                 message: string;
-                createdAt: string | number | unknown;
-                updatedAt: string | number | unknown;
-                nextProbeAt: string | number | unknown;
-                lastProbeAt: string | number | unknown;
-                refundedAt: string | number | unknown;
-                failedAt: string | number | unknown;
+                createdAt: NullableTimestamp;
+                updatedAt: NullableTimestamp;
+                nextProbeAt: NullableTimestamp;
+                lastProbeAt: NullableTimestamp;
+                refundedAt: NullableTimestamp;
+                failedAt: NullableTimestamp;
                 reason?: string;
                 refundPaymentId?: string;
                 sourcePaymentId?: string;
@@ -41483,8 +41485,8 @@ export type GetApiV1AdminOrdersByIdResponses = {
                 currency: string;
                 gateway: string;
                 attemptCount: number;
-                nextProbeAt: string | number | unknown;
-                lastProbeAt: string | number | unknown;
+                nextProbeAt: NullableTimestamp;
+                lastProbeAt: NullableTimestamp;
                 providerStatus: string | null;
                 reason?: string | null;
                 sourceTransactionId?: string | null;
@@ -41510,10 +41512,10 @@ export type GetApiV1AdminOrdersByIdResponses = {
                 reason: string;
                 message: string | null;
                 returnId: string | null;
-                submittedAt: string | number | unknown;
-                resolvedAt: string | number | unknown;
-                createdAt: string | number | unknown;
-                updatedAt: string | number | unknown;
+                submittedAt: NullableTimestamp;
+                resolvedAt: NullableTimestamp;
+                createdAt: NullableTimestamp;
+                updatedAt: NullableTimestamp;
             }>;
         };
     };
@@ -41804,12 +41806,12 @@ export type GetApiV1AdminOrdersByIdPaymentsResponses = {
                 severity: 'info' | 'success' | 'warning' | 'danger';
                 label: string;
                 message: string;
-                createdAt: string | number | unknown;
-                updatedAt: string | number | unknown;
-                nextProbeAt: string | number | unknown;
-                lastProbeAt: string | number | unknown;
-                refundedAt: string | number | unknown;
-                failedAt: string | number | unknown;
+                createdAt: NullableTimestamp;
+                updatedAt: NullableTimestamp;
+                nextProbeAt: NullableTimestamp;
+                lastProbeAt: NullableTimestamp;
+                refundedAt: NullableTimestamp;
+                failedAt: NullableTimestamp;
                 reason?: string;
                 refundPaymentId?: string;
                 sourcePaymentId?: string;
@@ -41832,8 +41834,8 @@ export type GetApiV1AdminOrdersByIdPaymentsResponses = {
                 currency: string;
                 gateway: string;
                 attemptCount: number;
-                nextProbeAt: string | number | unknown;
-                lastProbeAt: string | number | unknown;
+                nextProbeAt: NullableTimestamp;
+                lastProbeAt: NullableTimestamp;
                 providerStatus: string | null;
                 reason?: string | null;
                 sourceTransactionId?: string | null;
@@ -41865,7 +41867,7 @@ export type GetApiV1AdminOrdersByIdPaymentsResponses = {
                 providerSessionId: string | null;
                 providerCorrelationId: string | null;
                 lastError: string | null;
-                claimExpiresAt: string | number | unknown;
+                claimExpiresAt: NullableTimestamp;
                 createdAt: string | number;
                 updatedAt: string | number;
                 activeProcessing: boolean;
@@ -42057,7 +42059,7 @@ export type GetApiV1AdminOrdersByIdFormDataResponses = {
                 name: string;
                 price: number;
                 isActive: boolean;
-                deletedAt: string | number | unknown;
+                deletedAt: NullableTimestamp;
                 discountPercentage: number | null;
                 discountType: string | null;
                 discountAmount: number | null;
@@ -42085,7 +42087,7 @@ export type GetApiV1AdminOrdersByIdFormDataResponses = {
                     trackInventory?: boolean;
                     lowStockThreshold?: number | null;
                     allowPreorder?: boolean;
-                    preorderDate?: string | number | unknown;
+                    preorderDate?: NullableTimestamp;
                     preorderMessage?: string | null;
                     allowBackorder?: boolean;
                     backorderLimit?: number;
@@ -42096,7 +42098,7 @@ export type GetApiV1AdminOrdersByIdFormDataResponses = {
                     barcodeType?: string | null;
                     createdAt?: string | number;
                     updatedAt?: string | number;
-                    deletedAt?: string | number | unknown;
+                    deletedAt?: NullableTimestamp;
                     stockVersion?: number;
                     version?: number;
                 }>;
@@ -43627,7 +43629,7 @@ export type GetApiV1AdminProductsByIdResponses = {
             freeDelivery: boolean;
             createdAt: string | number;
             updatedAt: string | number;
-            deletedAt: string | number | unknown;
+            deletedAt: NullableTimestamp;
             category: {
                 name: string | null;
             } | null;
@@ -43655,7 +43657,7 @@ export type GetApiV1AdminProductsByIdResponses = {
                 trackInventory?: boolean;
                 lowStockThreshold?: number | null;
                 allowPreorder?: boolean;
-                preorderDate?: string | number | unknown;
+                preorderDate?: NullableTimestamp;
                 preorderMessage?: string | null;
                 allowBackorder?: boolean;
                 backorderLimit?: number;
@@ -43666,7 +43668,7 @@ export type GetApiV1AdminProductsByIdResponses = {
                 barcodeType?: string | null;
                 createdAt?: string | number;
                 updatedAt?: string | number;
-                deletedAt?: string | number | unknown;
+                deletedAt?: NullableTimestamp;
                 stockVersion?: number;
                 version?: number;
             }>;
@@ -44276,7 +44278,7 @@ export type GetApiV1AdminProductsByIdVariantsResponses = {
                 trackInventory?: boolean;
                 lowStockThreshold?: number | null;
                 allowPreorder?: boolean;
-                preorderDate?: string | number | unknown;
+                preorderDate?: NullableTimestamp;
                 preorderMessage?: string | null;
                 allowBackorder?: boolean;
                 backorderLimit?: number;
@@ -44287,7 +44289,7 @@ export type GetApiV1AdminProductsByIdVariantsResponses = {
                 barcodeType?: string | null;
                 createdAt?: string | number;
                 updatedAt?: string | number;
-                deletedAt?: string | number | unknown;
+                deletedAt?: NullableTimestamp;
                 stockVersion?: number;
                 version?: number;
             }>;
@@ -44457,7 +44459,7 @@ export type PostApiV1AdminProductsByIdVariantsResponses = {
             trackInventory?: boolean;
             lowStockThreshold?: number | null;
             allowPreorder?: boolean;
-            preorderDate?: string | number | unknown;
+            preorderDate?: NullableTimestamp;
             preorderMessage?: string | null;
             allowBackorder?: boolean;
             backorderLimit?: number;
@@ -44468,7 +44470,7 @@ export type PostApiV1AdminProductsByIdVariantsResponses = {
             barcodeType?: string | null;
             createdAt?: string | number;
             updatedAt?: string | number;
-            deletedAt?: string | number | unknown;
+            deletedAt?: NullableTimestamp;
             stockVersion?: number;
             version?: number;
             aggregateRevision: number;
@@ -44772,7 +44774,7 @@ export type PutApiV1AdminProductsByIdVariantsByVariantIdResponses = {
             trackInventory?: boolean;
             lowStockThreshold?: number | null;
             allowPreorder?: boolean;
-            preorderDate?: string | number | unknown;
+            preorderDate?: NullableTimestamp;
             preorderMessage?: string | null;
             allowBackorder?: boolean;
             backorderLimit?: number;
@@ -44783,7 +44785,7 @@ export type PutApiV1AdminProductsByIdVariantsByVariantIdResponses = {
             barcodeType?: string | null;
             createdAt?: string | number;
             updatedAt?: string | number;
-            deletedAt?: string | number | unknown;
+            deletedAt?: NullableTimestamp;
             stockVersion?: number;
             version?: number;
             aggregateRevision: number;
@@ -46726,7 +46728,7 @@ export type GetApiV1AdminAttributesResponses = {
                 options: Array<string> | null;
                 createdAt: string | number;
                 updatedAt: string | number;
-                deletedAt: string | number | unknown;
+                deletedAt: NullableTimestamp;
                 valueCount: number;
             }>;
             pagination: {
@@ -52501,7 +52503,7 @@ export type GetApiV1AdminSettingsCheckoutLanguagesActiveResponses = {
                 isDefault: boolean;
                 createdAt?: string | number;
                 updatedAt?: string | number;
-                deletedAt?: string | number | unknown;
+                deletedAt?: NullableTimestamp;
             };
         };
     };
@@ -52667,7 +52669,7 @@ export type GetApiV1AdminSettingsCheckoutLanguagesResponses = {
                 isDefault: boolean;
                 createdAt?: string | number;
                 updatedAt?: string | number;
-                deletedAt?: string | number | unknown;
+                deletedAt?: NullableTimestamp;
             }>;
             pagination: {
                 page: number;
@@ -52868,7 +52870,7 @@ export type PostApiV1AdminSettingsCheckoutLanguagesResponses = {
                 isDefault: boolean;
                 createdAt?: string | number;
                 updatedAt?: string | number;
-                deletedAt?: string | number | unknown;
+                deletedAt?: NullableTimestamp;
             };
         };
     };
@@ -53077,7 +53079,7 @@ export type GetApiV1AdminSettingsCheckoutLanguagesByIdResponses = {
             isDefault: boolean;
             createdAt?: string | number;
             updatedAt?: string | number;
-            deletedAt?: string | number | unknown;
+            deletedAt?: NullableTimestamp;
         };
     };
 };
@@ -53354,7 +53356,7 @@ export type PutApiV1AdminSettingsCheckoutLanguagesByIdResponses = {
                 isDefault: boolean;
                 createdAt?: string | number;
                 updatedAt?: string | number;
-                deletedAt?: string | number | unknown;
+                deletedAt?: NullableTimestamp;
             };
         };
     };
