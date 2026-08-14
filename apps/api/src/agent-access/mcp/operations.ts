@@ -4,12 +4,8 @@ import { loadAgentAccessBackend } from "../backend";
 import type { AgentResource, AgentPrincipal } from "../types";
 
 export function isMcpOperationExposure(operation: AgentOperationManifestEntry): boolean {
-  // A generic MCP tool result has no harness-independent secret channel. The
-  // protocol's result `_meta` is client metadata, but hosts decide whether it
-  // reaches the model. Keep browser bootstrap fields out of MCP entirely;
-  // secure CLI/browser clients can consume these continuation contracts.
   return operation.exposure === "execute" ||
-    operation.exposure === "continuation" && !operation.sensitiveOutput;
+    operation.exposure === "continuation";
 }
 
 function authorizationInput(operation: AgentOperationManifestEntry) {

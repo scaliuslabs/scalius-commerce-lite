@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { createAgentMcpServer, formatAgentToolResult } from "./server";
+import {
+  createAgentMcpServer,
+  formatAgentBrowserHandoffResult,
+  formatAgentToolResult,
+} from "./server";
 
 describe("MCP server construction", () => {
   it("constructs with exactly the supported four tools without module-init schema errors", () => {
@@ -102,6 +106,22 @@ describe("MCP server construction", () => {
         message: expect.stringContaining("Scalius CLI"),
       },
     });
+  });
+
+  it("returns only a non-secret authenticated browser resource link", () => {
+    const formatted = formatAgentBrowserHandoffResult({
+      handoffId: "abh_0123456789abcdefghij",
+      url: "https://api.example.test/api/v1/admin/agent-access/browser-handoffs/abh_0123456789abcdefghij",
+      expiresAt: "2026-08-14T12:05:00.000Z",
+    });
+    expect(formatted.content).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        type: "resource_link",
+        uri: expect.stringContaining("/browser-handoffs/abh_0123456789abcdefghij"),
+      }),
+    ]));
+    expect(JSON.stringify(formatted)).not.toContain("continuationCode");
+    expect(JSON.stringify(formatted)).not.toContain("fields");
   });
 
   it("does not duplicate a large structured result into compatibility text", () => {

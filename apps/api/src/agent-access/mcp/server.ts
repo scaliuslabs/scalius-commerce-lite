@@ -1,6 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/server";
 import { getMcpAuthContext } from "agents/mcp/server";
 import { z } from "zod";
+import { getDb } from "@scalius/database/client";
 import type { AgentOperationManifestEntry } from "../../openapi/agent-operation-manifest";
 import { loadAgentAccessBackend } from "../backend";
 import {
@@ -21,6 +22,7 @@ import {
 } from "../limits";
 import type { AgentOAuthProps, AgentPrincipal, AgentResource } from "../types";
 import { isAgentOAuthProps } from "./auth";
+import { createAgentBrowserHandoff } from "../browser-handoffs";
 import {
   describeOperation,
   getAuthorizedOperation,
@@ -181,6 +183,36 @@ export function formatAgentToolResult(value: Record<string, unknown>) {
         : `Structured result returned (${utf8ByteLength(text)} UTF-8 bytes)`,
     }],
     structuredContent: value,
+  };
+}
+
+export function formatAgentBrowserHandoffResult(handoff: {
+  handoffId: string;
+  url: string;
+  expiresAt: string;
+}) {
+  return {
+    content: [
+      {
+        type: "text" as const,
+        text: "A secure browser step is ready. Open the linked Scalius page to continue; no credential is present in the URL.",
+      },
+      {
+        type: "resource_link" as const,
+        uri: handoff.url,
+        name: "Continue securely in Scalius",
+        mimeType: "text/html",
+        description: "Short-lived, one-use handoff requiring the same 2FA-verified Scalius administrator",
+      },
+    ],
+    structuredContent: {
+      ok: true,
+      result: {
+        status: "browser_action_required",
+        handoffId: handoff.handoffId,
+        expiresAt: handoff.expiresAt,
+      },
+    },
   };
 }
 
@@ -401,6 +433,30 @@ export function createAgentMcpServer(deps: McpServerDependencies): McpServer {
           env: deps.env,
           ctx: deps.ctx,
         });
+        if (result.sensitiveContinuation === true) {
+          const continuation = result.data && typeof result.data === "object"
+            ? (result.data as { continuation?: unknown }).continuation
+            : null;
+          if (!continuation || typeof continuation !== "object") {
+            throw new AgentDispatchError(
+              "invalid_continuation_response",
+              "Operation returned an invalid continuation",
+              502,
+            );
+          }
+          const handoff = await createAgentBrowserHandoff(
+            getDb(deps.env),
+            principal,
+            operation.operationId,
+            continuation as {
+              url: string;
+              method: "POST";
+              fields: Record<string, string>;
+            },
+            deps.env,
+          );
+          return formatAgentBrowserHandoffResult(handoff);
+        }
         return formatAgentToolResult({ ok: result.ok, result });
       } catch (error) {
         return safeToolError(error);

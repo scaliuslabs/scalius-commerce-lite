@@ -35,4 +35,13 @@ describe("agent access management route boundaries", () => {
     expect(source).toContain("session?.twoFactorVerified !== true");
     expect(source).toContain("assertSuperAdmin(c);");
   });
+
+  it("keeps sensitive browser handoffs human-only and reauthorizes the source operation", () => {
+    expect(source).toContain("Secure browser handoffs require the same 2FA-verified dashboard session");
+    expect(source).toContain("c.get(\"agentPrincipal\")");
+    expect(source).toContain("principal.authorityRevision !== claimed.authorityRevision");
+    expect(source).toContain("operation.exposure !== \"continuation\"");
+    expect(source).toContain("operation.sensitiveOutput !== true");
+    expect(source).toContain("authorizeOperation(principal, operation, c.env)");
+  });
 });

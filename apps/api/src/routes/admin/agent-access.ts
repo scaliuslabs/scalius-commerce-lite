@@ -1,5 +1,9 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { nanoid } from "nanoid";
+import { claimAgentBrowserHandoff } from "../../agent-access/browser-handoffs";
+import { loadAgentAccessBackend } from "../../agent-access/backend";
+import { resolveAgentOperationById } from "../../agent-access/direct-operation";
+import { resolveAgentPrincipalFromGrant } from "../../agent-access/principal";
 import {
   approveAuthorizationRequest,
   approveDeviceAuthorization,
@@ -98,6 +102,87 @@ function requireEncryptionKey(env: Env): string {
 
 function noStore(c: { header(name: string, value: string): void }) {
   c.header("Cache-Control", "private, no-store");
+}
+
+function assertBrowserHandoffSession(c: {
+  get(key: "user"): { id: string; twoFactorEnabled?: boolean };
+  get(key: "session"): { twoFactorVerified?: boolean | null } | undefined;
+  get(key: "agentPrincipal"): AgentPrincipal | undefined;
+}): string {
+  const user = c.get("user");
+  if (
+    c.get("agentPrincipal") ||
+    user.twoFactorEnabled !== true ||
+    c.get("session")?.twoFactorVerified !== true
+  ) {
+    throw new ForbiddenError(
+      "Secure browser handoffs require the same 2FA-verified dashboard session",
+    );
+  }
+  return user.id;
+}
+
+export function browserHandoffPage(): Response {
+  const nonceBytes = crypto.getRandomValues(new Uint8Array(18));
+  const nonce = btoa(String.fromCharCode(...nonceBytes));
+  const script = `(() => {
+  const button = document.querySelector("button");
+  const status = document.querySelector("p");
+  const fail = (message) => { status.textContent = message; button.disabled = false; };
+  button.addEventListener("click", async () => {
+    button.disabled = true;
+    status.textContent = "Preparing secure handoff…";
+    const popup = window.open("about:blank", "scalius-secure-continuation");
+    if (!popup) return fail("Allow popups for this Scalius page, then try again.");
+    try {
+      const response = await fetch(window.location.pathname, {
+        method: "POST",
+        headers: { "Accept": "application/json" },
+        credentials: "same-origin",
+        cache: "no-store",
+      });
+      const payload = await response.json();
+      const action = payload && payload.data && payload.data.action;
+      const destination = new URL(action && action.url);
+      if (!response.ok || action.method !== "POST" || !action.fields ||
+          destination.protocol !== "https:" || destination.search || destination.hash) throw new Error();
+      const timeout = window.setTimeout(() => {
+        window.removeEventListener("message", receive);
+        try { popup.close(); } catch {}
+        fail("The secure handoff expired. Run the operation again.");
+      }, 20000);
+      const receive = (event) => {
+        if (event.source !== popup || event.origin !== destination.origin || !event.data) return;
+        if (event.data.type === "scalius-continuation-ready-v1") {
+          popup.postMessage({ type: "scalius-continuation-fields-v1", fields: action.fields }, destination.origin);
+        } else if (event.data.type === "scalius-continuation-accepted-v1") {
+          window.clearTimeout(timeout);
+          window.removeEventListener("message", receive);
+          status.textContent = "Secure browser step opened.";
+        }
+      };
+      window.addEventListener("message", receive);
+      popup.location.replace(destination.toString());
+    } catch {
+      try { popup.close(); } catch {}
+      fail("This handoff is unavailable, expired, or no longer authorized.");
+    }
+  });
+})();`;
+  return new Response(
+    `<!doctype html><html><head><meta charset="utf-8"><meta name="referrer" content="no-referrer"><meta name="robots" content="noindex,nofollow,noarchive"><title>Continue securely in Scalius</title></head><body><main><h1>Continue securely in Scalius</h1><p>This one-use step requires your current 2FA-verified dashboard session.</p><button type="button">Continue</button></main><script nonce="${nonce}">${script}</script></body></html>`,
+    {
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "private, no-store",
+        "Content-Security-Policy": `default-src 'none'; script-src 'nonce-${nonce}'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`,
+        "Referrer-Policy": "no-referrer",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "DENY",
+        "X-Robots-Tag": "noindex, nofollow, noarchive",
+      },
+    },
+  );
 }
 
 const listConnectionsRoute = createRoute({
@@ -418,6 +503,80 @@ const denyDeviceRoute = createRoute({
 app.openapi(denyDeviceRoute, async (c) => {
   const user = assertSuperAdmin(c);
   return ok(c, await denyDeviceAuthorization(c.get("db"), c.req.valid("param").deviceId, user.id));
+});
+
+const browserHandoffParams = z.object({
+  handoffId: z.string().regex(/^abh_[A-Za-z0-9_-]{20}$/),
+});
+const openBrowserHandoffRoute = createRoute({
+  method: "get",
+  path: "/browser-handoffs/{handoffId}",
+  operationId: "dashboard.agent_access.browser_handoff.open",
+  tags: ["Admin - Agent Access"],
+  summary: "Open a secure agent browser handoff",
+  description: "Browser-only page for a one-use continuation bound to the same 2FA-verified administrator.",
+  request: { params: browserHandoffParams },
+  responses: {
+    200: { description: "Private browser handoff page", content: { "text/html": { schema: z.string() } } },
+    ...errorResponses,
+  },
+});
+app.openapi(openBrowserHandoffRoute, async (c) => {
+  assertBrowserHandoffSession(c);
+  return browserHandoffPage();
+});
+
+const claimBrowserHandoffRoute = createRoute({
+  method: "post",
+  path: "/browser-handoffs/{handoffId}",
+  operationId: "dashboard.agent_access.browser_handoff.claim",
+  tags: ["Admin - Agent Access"],
+  summary: "Claim a secure agent browser handoff",
+  description: "Browser-only one-use claim; sensitive POST fields remain inside the authenticated browser.",
+  request: { params: browserHandoffParams },
+  responses: {
+    200: {
+      description: "Private browser action",
+      content: { "application/json": { schema: successEnvelope(z.object({
+        action: z.object({
+          url: z.url().max(512),
+          method: z.literal("POST"),
+          fields: z.record(z.string(), z.string().max(512)),
+        }),
+      })) } },
+    },
+    ...errorResponses,
+  },
+});
+app.openapi(claimBrowserHandoffRoute, async (c) => {
+  const ownerUserId = assertBrowserHandoffSession(c);
+  const claimed = await claimAgentBrowserHandoff(
+    c.get("db"),
+    c.req.valid("param").handoffId,
+    ownerUserId,
+    c.env,
+  );
+  if (!claimed) throw new NotFoundError("This secure browser handoff is unavailable or expired");
+  const principal = await resolveAgentPrincipalFromGrant(c.get("db"), {
+    grantId: claimed.grantId,
+    credentialId: claimed.credentialId,
+    resource: claimed.resource,
+  });
+  const operation = resolveAgentOperationById(claimed.operationId);
+  if (
+    !principal ||
+    principal.ownerUserId !== ownerUserId ||
+    principal.authorityRevision !== claimed.authorityRevision ||
+    !operation ||
+    operation.surface !== claimed.resource ||
+    operation.exposure !== "continuation" ||
+    operation.sensitiveOutput !== true ||
+    !await (await loadAgentAccessBackend()).authorizeOperation(principal, operation, c.env)
+  ) {
+    throw new ForbiddenError("This secure browser handoff is no longer authorized");
+  }
+  noStore(c);
+  return ok(c, { action: claimed.action });
 });
 
 export const adminAgentAccessRoutes = app;

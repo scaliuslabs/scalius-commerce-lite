@@ -567,6 +567,38 @@ const REVIEWED_AGENT_OPERATIONS: Readonly<
     "dashboard.agent_access.connections.events_list",
     { risk: "read", sensitiveOutput: false, oneTimeSecretOutput: false },
   ),
+  "GET /admin/agent-access/browser-handoffs/{handoffId}": reviewedExclusionMetadata(
+    "dashboard.agent_access.browser_handoff.open",
+    {
+      surface: "dashboard",
+      principals: ["admin"],
+      risk: "security",
+      openWorld: false,
+      idempotency: "none",
+      transport: "json",
+      maximumResponseBytes: 16_384,
+      maxRequestBytes: 16_384,
+      sensitiveOutput: false,
+      exclusionReason:
+        "Browser-only handoff page bound to the same 2FA-verified administrator; agents receive only its non-secret resource link.",
+    },
+  ),
+  "POST /admin/agent-access/browser-handoffs/{handoffId}": reviewedExclusionMetadata(
+    "dashboard.agent_access.browser_handoff.claim",
+    {
+      surface: "dashboard",
+      principals: ["admin"],
+      risk: "security",
+      openWorld: false,
+      idempotency: "none",
+      transport: "json",
+      maximumResponseBytes: 8_192,
+      maxRequestBytes: 16_384,
+      sensitiveOutput: true,
+      exclusionReason:
+        "Browser-only one-use claim returns sensitive continuation fields solely inside the authenticated browser session.",
+    },
+  ),
   "POST /admin/agent-access/tokens": agentAccessManagementMetadata(
     "dashboard.agent_access.tokens.create",
     { risk: "security", sensitiveOutput: true, oneTimeSecretOutput: true },

@@ -1628,6 +1628,74 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "outputSchema": null
   },
   {
+    "operationId": "dashboard.agent_access.browser_handoff.claim",
+    "method": "POST",
+    "pathTemplate": "/api/v1/admin/agent-access/browser-handoffs/{handoffId}",
+    "summary": "Claim a secure agent browser handoff",
+    "description": "Browser-only one-use claim; sensitive POST fields remain inside the authenticated browser.",
+    "tags": [
+      "Admin - Agent Access"
+    ],
+    "surface": "dashboard",
+    "exposure": "excluded",
+    "principals": [
+      "admin"
+    ],
+    "risk": "security",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "forbidden",
+    "transport": "json",
+    "maxResponseBytes": 8192,
+    "maxRequestBytes": 16384,
+    "sensitiveOutput": true,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "exclusionReason": "Browser-only one-use claim returns sensitive continuation fields solely inside the authenticated browser session.",
+    "rbac": {
+      "type": "unmapped"
+    },
+    "inputSchema": null,
+    "outputSchema": null
+  },
+  {
+    "operationId": "dashboard.agent_access.browser_handoff.open",
+    "method": "GET",
+    "pathTemplate": "/api/v1/admin/agent-access/browser-handoffs/{handoffId}",
+    "summary": "Open a secure agent browser handoff",
+    "description": "Browser-only page for a one-use continuation bound to the same 2FA-verified administrator.",
+    "tags": [
+      "Admin - Agent Access"
+    ],
+    "surface": "dashboard",
+    "exposure": "excluded",
+    "principals": [
+      "admin"
+    ],
+    "risk": "security",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "forbidden",
+    "transport": "json",
+    "maxResponseBytes": 16384,
+    "maxRequestBytes": 16384,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "exclusionReason": "Browser-only handoff page bound to the same 2FA-verified administrator; agents receive only its non-secret resource link.",
+    "rbac": {
+      "type": "unmapped"
+    },
+    "inputSchema": null,
+    "outputSchema": null
+  },
+  {
     "operationId": "dashboard.agent_access.connections.events_list",
     "method": "GET",
     "pathTemplate": "/api/v1/admin/agent-access/connections/{grantId}/events",

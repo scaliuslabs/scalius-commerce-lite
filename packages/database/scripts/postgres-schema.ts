@@ -73,10 +73,61 @@ function compileNumericJsonChecks(sql: string): string {
   );
 }
 
+function compileInstrCalls(sql: string): string {
+  let output = "";
+  let cursor = 0;
+  while (cursor < sql.length) {
+    const match = /\binstr\s*\(/iy;
+    match.lastIndex = cursor;
+    const found = match.exec(sql);
+    if (!found) {
+      output += sql[cursor]!;
+      cursor += 1;
+      continue;
+    }
+    const open = match.lastIndex - 1;
+    let end = open + 1;
+    let depth = 1;
+    let comma = -1;
+    let quote: "'" | '"' | "`" | null = null;
+    while (end < sql.length && depth > 0) {
+      const character = sql[end]!;
+      if (quote) {
+        if (character === quote) {
+          if (sql[end + 1] === quote) end += 2;
+          else {
+            quote = null;
+            end += 1;
+          }
+        } else end += 1;
+        continue;
+      }
+      if (character === "'" || character === '"' || character === "`") {
+        quote = character;
+        end += 1;
+        continue;
+      }
+      if (character === "(") depth += 1;
+      else if (character === ")") depth -= 1;
+      else if (character === "," && depth === 1 && comma < 0) comma = end;
+      end += 1;
+    }
+    if (depth !== 0 || comma < 0) {
+      throw new Error("Unsupported SQLite instr() expression.");
+    }
+    const close = end - 1;
+    const haystack = compileInstrCalls(sql.slice(open + 1, comma).trim());
+    const needle = compileInstrCalls(sql.slice(comma + 1, close).trim());
+    output += `position(${needle} in ${haystack})`;
+    cursor = end;
+  }
+  return output;
+}
+
 /** Compile trusted canonical SQLite DDL/body SQL into the Postgres profile. */
 export function compileSqliteDdlForPostgres(sql: string): string {
   let source = compileSqliteNullSafeComparisons(
-    compileNumericJsonChecks(compileGlobPatterns(sql)),
+    compileInstrCalls(compileNumericJsonChecks(compileGlobPatterns(sql))),
   )
     .replace(/\)\s+WITHOUT\s+ROWID\b/gi, ")")
     .replace(/\bAUTOINCREMENT\b/gi, "")
@@ -174,6 +225,7 @@ export function compileSqliteDdlForPostgres(sql: string): string {
       if (normalized === "integer" || normalized === "int") output += "bigint";
       else if (normalized === "real") output += "double precision";
       else if (normalized === "blob") output += "bytea";
+      else if (normalized === "char" && followedByCall) output += "chr";
       else if (normalized === "true") output += "1";
       else if (normalized === "false") output += "0";
       else if (normalized === "json" && followedByCall) {

@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 56,
-  name: "0056_agent_access",
+  version: 57,
+  name: "0057_agent_browser_handoffs",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -58,8 +58,13 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     sourceSha256: "1fef4f2d630a3dbd5de4255b37b9d4896e325f99f6975d3c486fd1252e47cda4",
   },
   {
-    ...CURRENT_DATABASE_SCHEMA,
+    version: 56,
+    name: "0056_agent_access",
     sourceSha256: "ca86ab76f26135b9e6ea259c40c474e6e83ef510ed7544ecb990a4fbc09d1af4",
+  },
+  {
+    ...CURRENT_DATABASE_SCHEMA,
+    sourceSha256: "21a478e92ac14c9b36488179f3a9c36ce847700fa99c74e85089798b709db155",
   },
 ] as const;
 
