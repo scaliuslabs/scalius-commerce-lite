@@ -370,6 +370,43 @@ describe("delivery provider cache invalidation", () => {
     expect(JSON.stringify(json)).not.toContain("must-not-leave-the-api");
   });
 
+  it("reports stored credentials that cannot be decrypted as unreadable", async () => {
+    const { app, env } = createTestApp();
+    mocks.getDeliveryProviders.mockResolvedValueOnce([{
+      ...providerRecord,
+      credentials: "encrypted-provider-credentials",
+    }]);
+    mocks.readStoredCredentialStrict.mockResolvedValue({
+      value: "",
+      encrypted: true,
+      error: "Delivery provider credentials could not be decrypted with the configured credential key.",
+    });
+
+    const response = await app.request(
+      "/api/v1/admin/settings/delivery-providers",
+      { method: "GET" },
+      env,
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    const json = await response.json() as {
+      data: { providers: Array<{ credentials: string; readiness: {
+        configured: boolean;
+        blockers: Array<{ code: string; message: string }>;
+      } }> };
+    };
+    expect(json.data.providers[0]).toMatchObject({
+      credentials: "{}",
+      readiness: {
+        configured: false,
+        blockers: [{
+          code: "unreadable",
+          message: expect.stringContaining("cannot be decrypted"),
+        }],
+      },
+    });
+  });
+
   it("rejects provider objects that exceed the bounded settings shape", async () => {
     const { app, env } = createTestApp();
     const credentials = Object.fromEntries(

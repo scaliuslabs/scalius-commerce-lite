@@ -124,6 +124,29 @@ describe("delivery provider durable readiness summary", () => {
     secretKey: "steadfast-secret-9417",
   };
 
+  it("reports encrypted credentials that cannot be read as unreadable, not unconfigured", () => {
+    expect(getDeliveryProviderReadinessSummary({
+      type: "pathao",
+      credentials: null,
+      credentialsReadable: false,
+      config: { storeId: "232926" },
+      isActive: true,
+    })).toMatchObject({
+      status: "blocked",
+      configured: false,
+      tested: false,
+      active: false,
+      blockers: [{
+        code: "unreadable",
+        message: expect.stringContaining("cannot be decrypted"),
+      }],
+      activationBlockers: [{
+        source: "credentials",
+        key: "credentials",
+      }],
+    });
+  });
+
   it("does not count a successful test unless the fingerprint matches the current setup", async () => {
     const fingerprint = await getDeliveryProviderSetupFingerprint({
       type: "steadfast",
