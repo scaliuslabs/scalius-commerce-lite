@@ -61,6 +61,42 @@ export interface FraudCheckResult {
 
 const CATEGORY = "fraud-checker";
 
+export function getFraudProviderUrlIssue(value: string): string | null {
+  try {
+    const parsed = new URL(value);
+    const hostname = parsed.hostname.toLowerCase();
+    if (
+      parsed.protocol !== "https:"
+      || parsed.username
+      || parsed.password
+      || (parsed.port && parsed.port !== "443")
+      || parsed.search
+      || parsed.hash
+    ) {
+      return "Provider URL must be an absolute public HTTPS URL without credentials, a custom port, query parameters, or a fragment.";
+    }
+    if (
+      !hostname.includes(".")
+      || hostname === "localhost"
+      || hostname.endsWith(".localhost")
+      || hostname.endsWith(".local")
+      || hostname.endsWith(".internal")
+      || /^\[.*\]$/.test(hostname)
+      || /^\d{1,3}(?:\.\d{1,3}){3}$/.test(hostname)
+    ) {
+      return "Provider URL must use a public HTTPS hostname.";
+    }
+    return null;
+  } catch {
+    return "Provider URL must be a valid absolute public HTTPS URL.";
+  }
+}
+
+function assertFraudProviderUrl(value: string): void {
+  const issue = getFraudProviderUrlIssue(value);
+  if (issue) throw new ValidationError(issue);
+}
+
 async function parseStoredProvider(
   value: string,
   encryptionKey?: string,
@@ -143,6 +179,8 @@ export async function saveFraudProvider(
   if (!encryptionKey) {
     throw new ServiceUnavailableError("CREDENTIAL_ENCRYPTION_KEY is required to store provider credentials.");
   }
+
+  assertFraudProviderUrl(provider.apiUrl);
 
   const providerType = provider.providerType ?? "default";
   if (!isFraudCheckProviderType(providerType)) {
@@ -270,6 +308,7 @@ export async function fraudLookup(
   provider: FraudCheckerProvider,
   phone: string,
 ): Promise<FraudCheckResult> {
+  assertFraudProviderUrl(provider.apiUrl);
   const checkProvider = getFraudCheckProvider(
     provider.providerType ?? "default",
   );

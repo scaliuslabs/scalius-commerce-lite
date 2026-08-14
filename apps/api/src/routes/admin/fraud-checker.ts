@@ -2,7 +2,7 @@
 // Admin OpenAPI routes for fraud checker providers.
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { getFraudProviders, getFraudProvider, saveFraudProvider, deleteFraudProvider, testFraudProvider, fraudLookupWithActiveProvider } from "@scalius/core/modules/fraud-checker/fraud-checker.service";
+import { getFraudProviders, getFraudProvider, saveFraudProvider, deleteFraudProvider, testFraudProvider, fraudLookupWithActiveProvider, getFraudProviderUrlIssue } from "@scalius/core/modules/fraud-checker/fraud-checker.service";
 import { FRAUD_CHECK_PROVIDER_TYPES } from "@scalius/core/modules/fraud-checker/provider";
 import { getCredentialEncryptionKey, requireEncryptionKey } from "../../utils/encryption-key";
 import { ValidationError } from "../../utils/api-error";
@@ -15,19 +15,7 @@ const FRAUD_PROVIDER_PAGE_LIMIT = 20;
 const providerTypeSchema = z.enum(FRAUD_CHECK_PROVIDER_TYPES);
 
 function safeProviderUrlForClient(value: string): string {
-    try {
-        const parsed = new URL(value);
-        if (
-            parsed.protocol !== "https:"
-            || parsed.username
-            || parsed.password
-            || parsed.search
-            || parsed.hash
-        ) return "";
-        return parsed.toString();
-    } catch {
-        return "";
-    }
+    return getFraudProviderUrlIssue(value) ? "" : new URL(value).toString();
 }
 
 function maskProviderSecrets(provider: {
@@ -53,17 +41,11 @@ function maskProviderSecrets(provider: {
 }
 
 const secureProviderUrlSchema = z.string().url().max(2048).superRefine((value, ctx) => {
-    const parsed = new URL(value);
-    if (
-        parsed.protocol !== "https:"
-        || parsed.username
-        || parsed.password
-        || parsed.search
-        || parsed.hash
-    ) {
+    const issue = getFraudProviderUrlIssue(value);
+    if (issue) {
         ctx.addIssue({
             code: z.ZodIssueCode.custom,
-            message: "Provider URL must be HTTPS and cannot include credentials, a query, or a fragment",
+            message: issue,
         });
     }
 });
