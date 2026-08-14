@@ -46,6 +46,7 @@ type ContextRow = typeof agentStorefrontContexts.$inferSelect;
 
 const PAYMENT_CONTINUATION_TTL_MS = 30 * 60 * 1_000;
 const CHECKOUT_ATTEMPT_REQUEST_KEY_PREFIX = "checkout_submit:v1:";
+const AGENT_CHECKOUT_REQUEST_HASH_PREFIX = "agent-input:v1:";
 
 async function withCheckoutStage<T>(
   infrastructureCode: string,
@@ -127,6 +128,37 @@ async function requestKeyForCheckout(requestId: string): Promise<string> {
   return `${CHECKOUT_ATTEMPT_REQUEST_KEY_PREFIX}${await sha256Hex(requestId)}`;
 }
 
+export async function buildAgentStorefrontCheckoutRequestHash(
+  contextId: string,
+  input: AgentStorefrontCheckoutSubmitInput,
+): Promise<string> {
+  const normalized = JSON.stringify({
+    contextId,
+    expectedRevision: input.expectedRevision,
+    customerName: input.customerName.trim(),
+    customerPhone: input.customerPhone.trim(),
+    customerEmail: input.customerEmail?.trim().toLowerCase() ?? null,
+    shippingAddress: input.shippingAddress.trim(),
+    notes: input.notes?.trim() || null,
+    paymentMethod: input.paymentMethod,
+  });
+  return `${AGENT_CHECKOUT_REQUEST_HASH_PREFIX}${await sha256Hex(normalized)}`;
+}
+
+export function assertAgentStorefrontCheckoutReplayHash(
+  storedHash: string,
+  submittedHash: string,
+): void {
+  // Rows committed before agent-input:v1 did not persist an ingress hash. Keep
+  // those historical orders replayable; every new agent checkout is strict.
+  if (!storedHash.startsWith(AGENT_CHECKOUT_REQUEST_HASH_PREFIX)) return;
+  if (storedHash !== submittedHash) {
+    throw new ConflictError(
+      "This idempotency key was already used for different checkout details. Use a new key for a changed checkout.",
+    );
+  }
+}
+
 async function loadOwnedContext(
   db: Database,
   grantId: string,
@@ -173,15 +205,18 @@ async function replayCommittedCheckout(
   db: Database,
   contextId: string,
   requestKey: string,
+  requestHash: string,
 ): Promise<AgentStorefrontCheckoutSubmitView | null> {
   const attempt = await db.select({
     status: checkoutAttempts.status,
     orderId: checkoutAttempts.orderId,
+    requestHash: checkoutAttempts.requestHash,
     responsePayload: checkoutAttempts.responsePayload,
   }).from(checkoutAttempts)
     .where(eq(checkoutAttempts.requestKey, requestKey))
     .get();
   if (!attempt) return null;
+  assertAgentStorefrontCheckoutReplayHash(attempt.requestHash, requestHash);
   if (attempt.status === "processing") {
     const context = await db.select({ revision: agentStorefrontContexts.revision })
       .from(agentStorefrontContexts)
@@ -271,8 +306,9 @@ export async function submitAgentStorefrontCheckout(
   const now = options.now ?? new Date();
   const requestId = checkoutRequestId(contextId, input.idempotencyKey);
   const requestKey = await requestKeyForCheckout(requestId);
+  const requestHash = await buildAgentStorefrontCheckoutRequestHash(contextId, input);
   const owned = await loadOwnedContext(db, grantId, contextId);
-  const replay = await replayCommittedCheckout(db, contextId, requestKey);
+  const replay = await replayCommittedCheckout(db, contextId, requestKey, requestHash);
   if (replay) return { response: replay, postCommitPayload: null, availabilityVariantIds: [] };
   assertActiveContext(owned, input.expectedRevision, now);
   if (!owned.cityId || !owned.zoneId || !owned.shippingMethodId) {
@@ -337,8 +373,10 @@ export async function submitAgentStorefrontCheckout(
     paymentMethod: input.paymentMethod,
     inventoryPool: InventoryPool.REGULAR,
   };
-  const attemptIdentity = await withCheckoutStage("AGENT_CHECKOUT_IDENTITY", () =>
-    buildCheckoutAttemptIdentity(data));
+  const attemptIdentity = {
+    ...await withCheckoutStage("AGENT_CHECKOUT_IDENTITY", () => buildCheckoutAttemptIdentity(data)),
+    requestHash,
+  };
   const existing = await withCheckoutStage("AGENT_CHECKOUT_REPLAY", () =>
     resolveExistingCheckoutAttempt<AgentStorefrontCheckoutSubmitView>(db, attemptIdentity));
   if (existing?.status === "replay") {
