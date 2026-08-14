@@ -25736,14 +25736,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "maxLength": 200
                 },
                 "isEnabled": {
-                  "type": "boolean",
-                  "default": false
+                  "type": "boolean"
                 },
                 "logRetentionDays": {
                   "type": "integer",
                   "minimum": 1,
-                  "maximum": 365,
-                  "default": 30
+                  "maximum": 365
                 }
               }
             }
