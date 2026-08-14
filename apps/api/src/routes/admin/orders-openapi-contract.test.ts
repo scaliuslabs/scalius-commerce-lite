@@ -1,14 +1,17 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { describe, expect, it } from "vitest";
+import { ORDER_STATUSES } from "@scalius/shared/order-state";
 import { adminOrdersRoutes } from "./orders";
 
 type OperationDoc = {
     responses?: Record<string, unknown>;
     parameters?: Array<{ name?: string; in?: string }>;
+    requestBody?: { content?: { "application/json"?: { schema?: OpenApiSchema } } };
 };
 
 type OpenApiSchema = {
     required?: string[];
+    enum?: unknown[];
     properties?: Record<string, OpenApiSchema>;
     items?: OpenApiSchema;
 };
@@ -151,6 +154,11 @@ describe("admin order mutation OpenAPI responses", () => {
             "404",
             "409",
         ]);
+        expect(
+            spec.paths?.["/api/v1/admin/orders/{id}/status"]?.put
+                ?.requestBody?.content?.["application/json"]?.schema
+                ?.properties?.status?.enum,
+        ).toEqual(ORDER_STATUSES);
         expectResponses(spec, "/api/v1/admin/orders/{id}/cod", "post", [
             "200",
             "400",

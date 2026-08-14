@@ -18,6 +18,7 @@ import {
 } from "../../utils/order-notification-queue";
 import { checkAndSyncShipmentStatus } from "./shipment-status-sync";
 import { shipmentCreationOptionsSchema } from "@scalius/core/modules/orders/orders.validation";
+import { ORDER_STATUSES } from "@scalius/shared/order-state";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -118,7 +119,7 @@ const updateStatusRoute = createRoute({
     summary: "Update order status",
     request: {
         params: z.object({ id: z.string() }),
-        body: { content: { "application/json": { schema: z.object({ status: z.string() }) } } }
+        body: { content: { "application/json": { schema: z.object({ status: z.enum(ORDER_STATUSES) }) } } }
     },
     responses: {
         200: {

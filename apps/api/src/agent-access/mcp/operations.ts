@@ -69,6 +69,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+const MAX_COMPACT_SCHEMA_DEPTH = 7;
+
 function compactSchemaType(schema: Record<string, unknown>): string {
   if (typeof schema.type === "string") return schema.type;
   if (Array.isArray(schema.type)) {
@@ -106,8 +108,13 @@ function compactSchemaDetails(schema: Record<string, unknown>, depth = 0): Recor
     ...(typeof schema.minItems === "number" ? { minItems: schema.minItems } : {}),
     ...(typeof schema.maxItems === "number" ? { maxItems: schema.maxItems } : {}),
     ...(schema.default !== undefined ? { default: schema.default } : {}),
-    ...(itemSchema ? { itemsType: compactSchemaType(itemSchema) } : {}),
-    ...(depth < 5 && alternatives.length > 0 && alternatives.length <= 4
+    ...(itemSchema ? {
+      itemsType: compactSchemaType(itemSchema),
+      ...(depth < MAX_COMPACT_SCHEMA_DEPTH && compactSchemaType(itemSchema) === "object"
+        ? { items: compactSchema(itemSchema, depth + 1) }
+        : {}),
+    } : {}),
+    ...(depth < MAX_COMPACT_SCHEMA_DEPTH && alternatives.length > 0 && alternatives.length <= 4
       ? { variants: alternatives.map((candidate) => compactSchema(candidate, depth + 1)) }
       : {}),
   };
@@ -120,11 +127,11 @@ function compactSchema(schema: unknown, depth = 0): Record<string, unknown> {
       ? schema.required.filter((field): field is string => typeof field === "string")
       : [],
   );
-  const fields = isRecord(schema.properties)
+  const fields = depth < MAX_COMPACT_SCHEMA_DEPTH && isRecord(schema.properties)
     ? Object.entries(schema.properties).map(([name, value]) => ({
       name,
       required: required.has(name),
-      ...compactSchemaDetails(isRecord(value) ? value : {}, depth + 1),
+      ...compactSchema(isRecord(value) ? value : {}, depth + 1),
     }))
     : null;
   return {

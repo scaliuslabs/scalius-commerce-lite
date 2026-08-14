@@ -37621,7 +37621,7 @@ export type PutApiV1AdminSettingsCustomerRequestsResponse = PutApiV1AdminSetting
 
 export type PutApiV1AdminOrdersByIdStatusData = {
     body: {
-        status: string;
+        status: 'pending' | 'processing' | 'confirmed' | 'shipped' | 'delivered' | 'completed' | 'cancelled' | 'returned' | 'refunded' | 'partially_refunded' | 'incomplete';
     };
     path: {
         id: string;

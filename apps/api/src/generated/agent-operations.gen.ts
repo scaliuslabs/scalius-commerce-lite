@@ -40137,7 +40137,20 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "type": "object",
               "properties": {
                 "status": {
-                  "type": "string"
+                  "type": "string",
+                  "enum": [
+                    "pending",
+                    "processing",
+                    "confirmed",
+                    "shipped",
+                    "delivered",
+                    "completed",
+                    "cancelled",
+                    "returned",
+                    "refunded",
+                    "partially_refunded",
+                    "incomplete"
+                  ]
                 }
               },
               "required": [
