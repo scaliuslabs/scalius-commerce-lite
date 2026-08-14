@@ -28,7 +28,7 @@ import {
   summarizeOperation,
 } from "./operations";
 import { containsStepReference, resolveStepReferences } from "./references";
-import { merchantOperationQueryScore } from "./merchant-search";
+import { merchantOperationQueryScore, prefersReadOnlyMerchantResults } from "./merchant-search";
 
 const pathValueSchema = z.union([z.string(), z.number(), z.boolean()]);
 const queryValueSchema = z.union([
@@ -306,7 +306,9 @@ export function createAgentMcpServer(deps: McpServerDependencies): McpServer {
           .filter(({ score }) => score !== null)
           .sort((left, right) => right.score! - left.score! || left.index - right.index);
         const hasReadMatch = rankedOperations.some(({ operation }) => operation.risk === "read");
-        const preferReadMatches = query.trim().split(/\s+/).length > 1 && hasReadMatch;
+        const preferReadMatches = query.trim().split(/\s+/).length > 1
+          && hasReadMatch
+          && prefersReadOnlyMerchantResults(query);
         const operations = rankedOperations
           .filter(({ operation }) => !preferReadMatches || operation.risk === "read")
           .slice(0, limit)

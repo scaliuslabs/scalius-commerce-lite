@@ -15,6 +15,10 @@ describe("merchant operation search", () => {
     ["recent customers and buyer summaries", "new shoppers"],
     ["orders filtered by fulfillment status", "orders needing delivery"],
     ["orders filtered by fulfillment status", "orders waiting to ship"],
+    ["storefront.context.create create context", "start a cart and checkout with delivery"],
+    ["storefront.products.list list products", "buy a product"],
+    ["storefront.checkout.submit submit checkout", "place an order"],
+    ["storefront.cart.add add cart item", "add a product to my cart"],
   ])("matches %s from natural request %s", (text, query) => {
     expect(matchesMerchantOperationQuery(text, query)).toBe(true);
   });
@@ -26,5 +30,18 @@ describe("merchant operation search", () => {
   it("scores exact merchant words above synonym-only matches", () => {
     expect(merchantOperationQueryScore("orders needing fulfillment", "orders needing fulfillment")!)
       .toBeGreaterThan(merchantOperationQueryScore("orders shipping filter", "orders needing fulfillment")!);
+  });
+
+  it("ranks a multi-step storefront workflow in execution order", () => {
+    const query = "start a cart and checkout with delivery";
+    const ids = [
+      "storefront.context.create",
+      "storefront.cart.add",
+      "storefront.delivery.set",
+      "storefront.checkout.quote",
+      "storefront.checkout.submit",
+    ];
+    const scores = ids.map((id) => merchantOperationQueryScore(id, query)!);
+    expect(scores).toEqual([...scores].sort((left, right) => right - left));
   });
 });

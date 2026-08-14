@@ -85,6 +85,10 @@ describe("finalized API OpenAPI interop", () => {
       ["is my store healthy?", "dashboard.checkout.readiness_get"],
       ["is my store ready?", "dashboard.checkout.readiness_get"],
       ["analytics status", "dashboard.analytics.health"],
+      ["start a cart and checkout with delivery", "storefront.context.create"],
+      ["buy a product", "storefront.products.list"],
+      ["place an order", "storefront.checkout.submit"],
+      ["add a product to my cart", "storefront.cart.add"],
     ];
     for (const [question, expectedOperationId] of commonMerchantQuestions) {
       expect(searchOperations(operations, question)[0]?.id, question).toBe(expectedOperationId);

@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { ConfigStore } from "./config.js";
 import { CliError } from "./errors.js";
-import { merchantOperationQueryScore } from "./merchant-search.js";
+import { merchantOperationQueryScore, prefersReadOnlyMerchantResults } from "./merchant-search.js";
 import { bearerHeaders, fetchWithNetworkErrors, responseError } from "./http.js";
 import type {
   AgentArtifactOutput,
@@ -299,7 +299,9 @@ export function searchOperations(operations: IndexedOperation[], query?: string)
     return { candidate, index, score: matchScore === null ? null : matchScore + (candidate.agent.risk === "read" ? 25 : 0) };
   }).filter(({ score }) => score !== null);
   const hasReadMatch = ranked.some(({ candidate }) => candidate.agent.risk === "read");
-  const preferReadMatches = normalizedQuery.split(/\s+/u).length > 1 && hasReadMatch;
+  const preferReadMatches = normalizedQuery.split(/\s+/u).length > 1
+    && hasReadMatch
+    && prefersReadOnlyMerchantResults(normalizedQuery);
   return ranked
     .sort((left, right) => right.score! - left.score! || left.index - right.index)
     .filter(({ candidate }) => !preferReadMatches || candidate.agent.risk === "read")
