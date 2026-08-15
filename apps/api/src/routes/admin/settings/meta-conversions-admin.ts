@@ -2,7 +2,11 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import type { RouteConfig, RouteHandler } from "@hono/zod-openapi";
 import { metaConversionsSettings, metaConversionsLogs } from "@scalius/database/schema";
 import { eq, desc, count } from "drizzle-orm";
-import { manualLogCleanup } from "@scalius/core/modules/analytics/meta.service";
+import {
+    manualLogCleanup,
+    summarizeMetaRequestPayload,
+    summarizeMetaResponsePayload,
+} from "@scalius/core/modules/analytics/meta.service";
 import {
     buildUnavailableMetaPixelParityDiagnostics,
     getMetaPixelParityDiagnostics,
@@ -56,101 +60,6 @@ function validateConcreteCredential(fieldLabel: string, value: string | null): v
 
 function timestampForClient(value: Date | number | null): string | number | null {
     return value instanceof Date ? value.toISOString() : value;
-}
-
-const SAFE_LOG_PAYLOAD_UNAVAILABLE = JSON.stringify({ available: false });
-
-function summarizeStoredRequestPayload(payload: string | null): string | null {
-    if (!payload) {
-        return payload;
-    }
-
-    try {
-        const parsed = JSON.parse(payload) as Record<string, unknown>;
-        if (!Array.isArray(parsed.data)) {
-            const eventCount = typeof parsed.eventCount === "number"
-                && Number.isInteger(parsed.eventCount)
-                && parsed.eventCount >= 0
-                ? parsed.eventCount
-                : null;
-            if (eventCount === null || !Array.isArray(parsed.events)) {
-                return SAFE_LOG_PAYLOAD_UNAVAILABLE;
-            }
-
-            return JSON.stringify({
-                eventCount,
-                events: parsed.events.slice(0, 20).map((event) => {
-                    if (!event || typeof event !== "object") return { eventName: "unknown" };
-                    const row = event as Record<string, unknown>;
-                    return {
-                        eventName: typeof row.eventName === "string"
-                            ? row.eventName.slice(0, 100)
-                            : "unknown",
-                        actionSource: typeof row.actionSource === "string"
-                            ? row.actionSource.slice(0, 50)
-                            : null,
-                    };
-                }),
-                truncated: parsed.truncated === true || eventCount > 20,
-            });
-        }
-
-        return JSON.stringify({
-            eventCount: parsed.data.length,
-            events: parsed.data.slice(0, 20).map((event) => {
-                if (!event || typeof event !== "object") return { eventName: "unknown" };
-                const row = event as Record<string, unknown>;
-                return {
-                    eventName: typeof row.event_name === "string"
-                        ? row.event_name.slice(0, 100)
-                        : "unknown",
-                    actionSource: typeof row.action_source === "string"
-                        ? row.action_source.slice(0, 50)
-                        : null,
-                };
-            }),
-            truncated: parsed.data.length > 20,
-        });
-    } catch {
-        return SAFE_LOG_PAYLOAD_UNAVAILABLE;
-    }
-}
-
-function summarizeStoredResponsePayload(payload: string | null): string | null {
-    if (!payload) {
-        return payload;
-    }
-
-    try {
-        const parsed = JSON.parse(payload) as Record<string, unknown>;
-        const rawEventsReceived = parsed.events_received ?? parsed.eventsReceived;
-        const eventsReceived = typeof rawEventsReceived === "number"
-            ? rawEventsReceived
-            : Number.NaN;
-        const error = parsed.error && typeof parsed.error === "object"
-            ? parsed.error as Record<string, unknown>
-            : null;
-        const storedHasError = parsed.hasError === true;
-        const storedErrorType = typeof parsed.errorType === "string"
-            ? parsed.errorType.slice(0, 100)
-            : null;
-        const storedErrorCode = typeof parsed.errorCode === "number"
-            && Number.isFinite(parsed.errorCode)
-            ? Math.trunc(parsed.errorCode)
-            : null;
-        return JSON.stringify({
-            eventsReceived: Number.isFinite(eventsReceived)
-                ? Math.max(0, Math.trunc(eventsReceived))
-                : null,
-            hasError: Boolean(error) || storedHasError,
-            errorType: typeof error?.type === "string" ? error.type.slice(0, 100) : storedErrorType,
-            errorCode: typeof error?.code === "number" && Number.isFinite(error.code)
-                ? Math.trunc(error.code)
-                : storedErrorCode,
-        });
-    } catch {
-        return SAFE_LOG_PAYLOAD_UNAVAILABLE;
-    }
 }
 
 const metaConversionsSettingsSchema = z.object({
@@ -388,8 +297,8 @@ app.openapi(getLogsRoute, (async (c: AppRouteContext<typeof getLogsRoute>) => {
             eventId: log.eventId,
             eventName: log.eventName,
             status: log.status,
-            requestPayload: summarizeStoredRequestPayload(log.requestPayload),
-            responsePayload: summarizeStoredResponsePayload(log.responsePayload),
+            requestPayload: summarizeMetaRequestPayload(log.requestPayload),
+            responsePayload: summarizeMetaResponsePayload(log.responsePayload) ?? null,
             errorMessage: log.errorMessage
                 ? "Meta delivery failed. Review the response summary and provider configuration."
                 : null,

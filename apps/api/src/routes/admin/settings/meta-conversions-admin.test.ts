@@ -437,7 +437,7 @@ describe("Meta Conversions admin settings", () => {
         expect(response.status).toBe(200);
         expect(body.data.logs[0]?.requestPayload).toBe('{"available":false}');
         expect(body.data.logs[0]?.responsePayload).toBe(
-            '{"eventsReceived":null,"hasError":true,"errorType":null,"errorCode":null}',
+            '{"eventsReceived":null,"hasError":true,"errorType":null,"errorCode":null,"messageCount":null,"providerTraceId":null}',
         );
         expect(body.data.logs[0]?.errorMessage).toContain("Meta delivery failed");
         expect(JSON.stringify(body)).not.toContain("secret-token");
@@ -453,7 +453,26 @@ describe("Meta Conversions admin settings", () => {
                 status: "success",
                 requestPayload: JSON.stringify({
                     eventCount: 1,
-                    events: [{ eventName: "AddToCart", actionSource: "website" }],
+                    events: [{
+                        eventName: "AddToCart",
+                        actionSource: "website",
+                        source: {
+                            origin: "https://store.example",
+                            path: "/products/runners?receiptToken=must-not-survive",
+                        },
+                        matchSignals: {
+                            fields: ["client_ip_address", "client_user_agent", "em", "fbp"],
+                        },
+                        commerce: {
+                            fields: ["content_ids", "contents", "currency", "value"],
+                            currency: "BDT",
+                            value: 1_250,
+                            contentIdCount: 1,
+                            lineCount: 1,
+                            quantity: 2,
+                        },
+                    }],
+                    testMode: true,
                     truncated: false,
                 }),
                 responsePayload: JSON.stringify({
@@ -461,6 +480,8 @@ describe("Meta Conversions admin settings", () => {
                     hasError: false,
                     errorType: null,
                     errorCode: null,
+                    messageCount: 0,
+                    providerTraceId: "trace-safe-2",
                 }),
                 errorMessage: null,
                 eventTime: 1_797_438_840,
@@ -481,8 +502,8 @@ describe("Meta Conversions admin settings", () => {
         expect(log).toMatchObject({
             eventId: "evt_safe_2",
             eventTime: 1_797_438_840,
-            requestPayload: '{"eventCount":1,"events":[{"eventName":"AddToCart","actionSource":"website"}],"truncated":false}',
-            responsePayload: '{"eventsReceived":1,"hasError":false,"errorType":null,"errorCode":null}',
+            requestPayload: '{"eventCount":1,"events":[{"eventName":"AddToCart","actionSource":"website","source":{"origin":"https://store.example","path":"/products/runners"},"matchSignals":{"count":4,"fields":["client_ip_address","client_user_agent","em","fbp"],"hashedFields":["em"],"ipAddressSupplied":true,"userAgentSupplied":true},"commerce":{"fields":["content_ids","contents","currency","value"],"currency":"BDT","value":1250,"contentType":null,"contentCount":1,"lineCount":1,"quantity":2,"itemCount":null,"orderIdSupplied":false,"searchStringSupplied":false}}],"testMode":true,"truncated":false}',
+            responsePayload: '{"eventsReceived":1,"hasError":false,"errorType":null,"errorCode":null,"messageCount":0,"providerTraceId":"trace-safe-2"}',
         });
     });
 });
