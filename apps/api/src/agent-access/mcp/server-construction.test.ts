@@ -1,11 +1,19 @@
 import { describe, expect, it } from "vitest";
 import {
+  AGENT_MCP_INSTRUCTIONS,
   createAgentMcpServer,
   formatAgentBrowserHandoffResult,
   formatAgentToolResult,
 } from "./server";
 
 describe("MCP server construction", () => {
+  it("publishes one concise cross-tool operating loop", () => {
+    expect(AGENT_MCP_INSTRUCTIONS.toLowerCase()).toContain("search");
+    expect(AGENT_MCP_INSTRUCTIONS.toLowerCase()).toContain("describe");
+    expect(AGENT_MCP_INSTRUCTIONS).toContain("operations.batch");
+    expect(AGENT_MCP_INSTRUCTIONS.length).toBeLessThan(320);
+  });
+
   it("constructs with exactly the supported four tools without module-init schema errors", () => {
     const server = createAgentMcpServer({
       surface: "dashboard",

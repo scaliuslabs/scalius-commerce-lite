@@ -86,6 +86,8 @@ interface McpServerDependencies {
   ctx: ExecutionContext;
 }
 
+export const AGENT_MCP_INSTRUCTIONS = "Search by merchant intent, describe only the selected operation, execute, then verify with a bounded read. For dependent steps, use one operations.batch call with $step references; never invent IDs, revisions, prices, stock, or secrets.";
+
 export function formatAgentToolResult(value: Record<string, unknown>) {
   const oneTimeResult = typeof value.result === "object" && value.result !== null
     ? value.result as Partial<AgentOperationResult>
@@ -327,6 +329,8 @@ export function createAgentMcpServer(deps: McpServerDependencies): McpServer {
     name: `scalius-${deps.surface}`,
     title: `Scalius ${deps.surface} operations`,
     version: "1.0.0",
+  }, {
+    instructions: AGENT_MCP_INSTRUCTIONS,
   });
 
   server.registerTool(
