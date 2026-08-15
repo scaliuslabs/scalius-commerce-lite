@@ -44,6 +44,7 @@ describe("Meta CAPI workspace presentation", () => {
   it("provides explicit errors, accessible controls, and a mobile delivery view", () => {
     const settings = readSource("./MetaConversionsSettingsForm.tsx");
     const logs = readSource("./MetaConversionsLogs.tsx");
+    const details = readSource("./LogDetails.tsx");
     const hook = readSource("./hooks/useMetaConversionsLogs.ts");
 
     expect(settings).toContain('aria-label={showAccessToken ? "Hide access token"');
@@ -52,6 +53,8 @@ describe("Meta CAPI workspace presentation", () => {
     expect(logs).toContain("${log.eventName} ${log.eventId}");
     expect(logs).toContain('className="space-y-3 md:hidden"');
     expect(logs).toContain("aria-expanded={expandedLog === log.id}");
+    expect(details).toContain("Privacy-safe request summary");
+    expect(details).toContain("never customer identifiers or credentials");
     expect(hook).toContain("logsError");
     expect(
       readSource("./hooks/useMetaConversionsSettings.ts"),

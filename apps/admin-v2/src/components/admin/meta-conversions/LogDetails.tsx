@@ -16,7 +16,10 @@ export function LogDetails({ log }: LogDetailsProps) {
   return (
     <div className="mt-3 space-y-4 rounded-md bg-muted/50 p-3">
       <div>
-        <h4 className="mb-2 text-sm font-medium">Redacted request</h4>
+        <h4 className="mb-1 text-sm font-medium">Privacy-safe request summary</h4>
+        <p className="mb-2 text-xs text-muted-foreground">
+          Shows which matching and commerce fields were supplied, never customer identifiers or credentials.
+        </p>
         <div className="w-full overflow-hidden">
           <pre className="text-xs bg-background p-3 rounded border overflow-x-auto whitespace-pre-wrap break-all">
             {JSON.stringify(safeJsonParse(log.requestPayload), null, 2)}

@@ -72,8 +72,23 @@ describe("logCapiEvent", () => {
         data: [{
           event_name: "Purchase",
           action_source: "website",
-          user_data: { em: ["hashed-email"], ph: ["hashed-phone"] },
-          custom_data: { order_id: "order-secret" },
+          event_source_url: "https://store.example/order-success?orderId=order-secret",
+          user_data: {
+            em: ["hashed-email"],
+            ph: ["hashed-phone"],
+            client_ip_address: "203.0.113.10",
+            client_user_agent: "Private Browser Signature",
+            fbp: "fb.1.private",
+          },
+          custom_data: {
+            order_id: "order-secret",
+            currency: "BDT",
+            value: 1_000,
+            content_ids: ["sku-secret"],
+            contents: [{ id: "sku-secret", quantity: 2 }],
+            num_items: 2,
+            search_string: "private search",
+          },
         }],
         test_event_code: "TEST-secret",
       }),
@@ -83,6 +98,8 @@ describe("logCapiEvent", () => {
           code: 190,
           message: "Invalid token secret-provider-token",
         },
+        messages: [{ code: "warning" }],
+        fbtrace_id: "trace-safe-1",
       }),
       errorMessage: "owner@example.com token secret-provider-token",
       eventTime: 1_800_000_000,
@@ -91,7 +108,31 @@ describe("logCapiEvent", () => {
     expect(values).toHaveBeenCalledWith(expect.objectContaining({
       requestPayload: JSON.stringify({
         eventCount: 1,
-        events: [{ eventName: "Purchase", actionSource: "website" }],
+        events: [{
+          eventName: "Purchase",
+          actionSource: "website",
+          source: { origin: "https://store.example", path: "/order-success" },
+          matchSignals: {
+            count: 5,
+            fields: ["client_ip_address", "client_user_agent", "em", "fbp", "ph"],
+            hashedFields: ["em", "ph"],
+            ipAddressSupplied: true,
+            userAgentSupplied: true,
+          },
+          commerce: {
+            fields: ["content_ids", "contents", "currency", "num_items", "order_id", "search_string", "value"],
+            currency: "BDT",
+            value: 1_000,
+            contentType: null,
+            contentCount: 1,
+            lineCount: 1,
+            quantity: 2,
+            itemCount: 2,
+            orderIdSupplied: true,
+            searchStringSupplied: true,
+          },
+        }],
+        testMode: true,
         truncated: false,
       }),
       responsePayload: JSON.stringify({
@@ -99,11 +140,18 @@ describe("logCapiEvent", () => {
         hasError: true,
         errorType: "OAuthException",
         errorCode: 190,
+        messageCount: 1,
+        providerTraceId: "trace-safe-1",
       }),
       errorMessage: "Meta delivery failed. Review provider configuration.",
     }));
     expect(JSON.stringify(values.mock.calls)).not.toContain("hashed-email");
+    expect(JSON.stringify(values.mock.calls)).not.toContain("203.0.113.10");
+    expect(JSON.stringify(values.mock.calls)).not.toContain("Private Browser Signature");
+    expect(JSON.stringify(values.mock.calls)).not.toContain("fb.1.private");
     expect(JSON.stringify(values.mock.calls)).not.toContain("order-secret");
+    expect(JSON.stringify(values.mock.calls)).not.toContain("sku-secret");
+    expect(JSON.stringify(values.mock.calls)).not.toContain("private search");
     expect(JSON.stringify(values.mock.calls)).not.toContain("secret-provider-token");
     expect(JSON.stringify(values.mock.calls)).not.toContain("owner@example.com");
   });
