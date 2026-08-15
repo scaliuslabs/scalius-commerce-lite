@@ -42,11 +42,13 @@ function createDb(options: {
     analyticsError?: Error;
     logs?: Array<{
         id: string;
+        eventId: string;
         eventName: string | null;
         status: string | null;
         requestPayload: string | null;
         responsePayload: string | null;
         errorMessage: string | null;
+        eventTime: number | null;
         createdAt: number | null;
     }>;
 } = {}) {
@@ -401,6 +403,7 @@ describe("Meta Conversions admin settings", () => {
         const db = createDb({
             logs: [{
                 id: "log_1",
+                eventId: "evt_1",
                 eventName: "Purchase",
                 status: "failed",
                 requestPayload: "raw-secret-that-is-not-json",
@@ -412,6 +415,7 @@ describe("Meta Conversions admin settings", () => {
                     },
                 }),
                 errorMessage: "Upstream rejected owner@example.com with token secret-token",
+                eventTime: 123,
                 createdAt: 1,
             }],
         });
@@ -438,5 +442,47 @@ describe("Meta Conversions admin settings", () => {
         expect(body.data.logs[0]?.errorMessage).toContain("Meta delivery failed");
         expect(JSON.stringify(body)).not.toContain("secret-token");
         expect(JSON.stringify(body)).not.toContain("owner@example.com");
+    });
+
+    it("preserves already-redacted delivery summaries, event identity, and event time", async () => {
+        const db = createDb({
+            logs: [{
+                id: "log_2",
+                eventId: "evt_safe_2",
+                eventName: "AddToCart",
+                status: "success",
+                requestPayload: JSON.stringify({
+                    eventCount: 1,
+                    events: [{ eventName: "AddToCart", actionSource: "website" }],
+                    truncated: false,
+                }),
+                responsePayload: JSON.stringify({
+                    eventsReceived: 1,
+                    hasError: false,
+                    errorType: null,
+                    errorCode: null,
+                }),
+                errorMessage: null,
+                eventTime: 1_797_438_840,
+                createdAt: 1_797_438_841,
+            }],
+        });
+        const { app, env } = createTestApp(db);
+
+        const response = await app.request("/api/v1/admin/settings/meta-conversions/logs", {
+            method: "GET",
+        }, env);
+        const body = await response.json() as {
+            data: { logs: Array<Record<string, unknown>> };
+        };
+        const log = body.data.logs[0];
+
+        expect(response.status).toBe(200);
+        expect(log).toMatchObject({
+            eventId: "evt_safe_2",
+            eventTime: 1_797_438_840,
+            requestPayload: '{"eventCount":1,"events":[{"eventName":"AddToCart","actionSource":"website"}],"truncated":false}',
+            responsePayload: '{"eventsReceived":1,"hasError":false,"errorType":null,"errorCode":null}',
+        });
     });
 });

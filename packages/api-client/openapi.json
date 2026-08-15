@@ -131858,6 +131858,9 @@
                               "id": {
                                 "type": "string"
                               },
+                              "eventId": {
+                                "type": "string"
+                              },
                               "eventName": {
                                 "type": "string",
                                 "nullable": true
@@ -131878,6 +131881,17 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "eventTime": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  },
+                                  {}
+                                ]
+                              },
                               "createdAt": {
                                 "anyOf": [
                                   {
@@ -131892,11 +131906,13 @@
                             },
                             "required": [
                               "id",
+                              "eventId",
                               "eventName",
                               "status",
                               "requestPayload",
                               "responsePayload",
                               "errorMessage",
+                              "eventTime",
                               "createdAt"
                             ]
                           }
