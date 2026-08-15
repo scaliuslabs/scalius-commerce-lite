@@ -29,6 +29,7 @@ vi.mock("~/middleware/rbac.server", () => ({
 }));
 
 vi.mock("@tanstack/react-start", () => ({
+  createServerOnlyFn: (handler: () => unknown) => handler,
   createServerFn: () => ({
     handler: (handler: () => unknown) => handler,
   }),
@@ -132,7 +133,7 @@ describe("admin setup guard cache", () => {
   it("caches successful admin-exists reads for hot auth guards", async () => {
     const db = createAdminExistsDb([1, 0]);
     mocks.cfEnv.DB = db.db;
-    const { checkAdminExists } = await import("./auth.fns");
+    const { checkAdminExistsHandler: checkAdminExists } = await import("./auth.fns");
 
     await expect(checkAdminExists()).resolves.toBe(true);
     await expect(checkAdminExists()).resolves.toBe(true);
@@ -151,7 +152,7 @@ describe("admin setup guard cache", () => {
   it("does not treat RBAC-only admin state as unbootstrapped on login", async () => {
     const db = createAdminExistsDb([1]);
     mocks.cfEnv.DB = db.db;
-    const { loginPageGuard } = await import("./auth.fns");
+    const { loginPageGuardHandler: loginPageGuard } = await import("./auth.fns");
 
     await expect(loginPageGuard()).resolves.toBeNull();
 
@@ -164,7 +165,7 @@ describe("admin setup guard cache", () => {
   it("does not cache a missing admin so first setup can recover immediately", async () => {
     const db = createAdminExistsDb([0, 1]);
     mocks.cfEnv.DB = db.db;
-    const { checkAdminExists } = await import("./auth.fns");
+    const { checkAdminExistsHandler: checkAdminExists } = await import("./auth.fns");
 
     await expect(checkAdminExists()).resolves.toBe(false);
     await expect(checkAdminExists()).resolves.toBe(true);
@@ -175,7 +176,10 @@ describe("admin setup guard cache", () => {
   it("deduplicates concurrent cold admin-exists reads inside one isolate", async () => {
     const warmupDb = createAdminExistsDb([0]);
     mocks.cfEnv.DB = warmupDb.db;
-    const { checkAdminExists, clearAdminExistsCache } = await import("./auth.fns");
+    const {
+      checkAdminExistsHandler: checkAdminExists,
+      clearAdminExistsCache,
+    } = await import("./auth.fns");
 
     await expect(checkAdminExists()).resolves.toBe(false);
     clearAdminExistsCache();
@@ -203,7 +207,7 @@ describe("admin setup guard cache", () => {
     vi.setSystemTime(new Date("2026-06-19T00:00:00.000Z"));
     const db = createAdminExistsDb([1, 1]);
     mocks.cfEnv.DB = db.db;
-    const { checkAdminExists } = await import("./auth.fns");
+    const { checkAdminExistsHandler: checkAdminExists } = await import("./auth.fns");
 
     await expect(checkAdminExists()).resolves.toBe(true);
 
@@ -232,7 +236,7 @@ describe("admin setup guard cache", () => {
       isSuperAdmin: true,
       hasAdminAccess: true,
     });
-    const { adminRouteGuard } = await import("./auth.fns");
+    const { adminRouteGuardHandler: adminRouteGuard } = await import("./auth.fns");
 
     await expect(adminRouteGuard()).resolves.toMatchObject({
       isSuperAdmin: true,
@@ -245,7 +249,7 @@ describe("admin setup guard cache", () => {
       "admin",
       true,
     );
-    const sessionQuery = compileQuery(db.get.mock.calls[1]?.[0] as SQL);
+    const sessionQuery = compileQuery(db.get.mock.calls[0]?.[0] as SQL);
     expect(sessionQuery.params).toEqual(["token"]);
   });
 
@@ -265,7 +269,7 @@ describe("admin setup guard cache", () => {
     });
     mocks.cfEnv.DB = db.db;
     mocks.getRequestHeader.mockReturnValue(`better-auth.session_token=${await signCookieValue("token")}`);
-    const { adminRouteGuard } = await import("./auth.fns");
+    const { adminRouteGuardHandler: adminRouteGuard } = await import("./auth.fns");
 
     await expect(adminRouteGuard()).rejects.toEqual({
       redirect: { to: "/auth/forgot-password" },
@@ -290,7 +294,7 @@ describe("admin setup guard cache", () => {
     });
     mocks.cfEnv.DB = db.db;
     mocks.getRequestHeader.mockReturnValue(`better-auth.session_token=${await signCookieValue("token")}`);
-    const { adminRouteGuard } = await import("./auth.fns");
+    const { adminRouteGuardHandler: adminRouteGuard } = await import("./auth.fns");
 
     await expect(adminRouteGuard()).rejects.toEqual({
       redirect: { to: "/auth/setup-2fa" },
@@ -315,13 +319,13 @@ describe("admin setup guard cache", () => {
     });
     mocks.cfEnv.DB = db.db;
     mocks.getRequestHeader.mockReturnValue(`better-auth.session_token=${await signCookieValue("token")}`);
-    const { redirectIfAuthenticated } = await import("./auth.fns");
+    const { redirectIfAuthenticatedHandler: redirectIfAuthenticated } = await import("./auth.fns");
 
     await expect(redirectIfAuthenticated()).resolves.toBeNull();
   });
 
   it("returns no session without querying session state when no cookie is present", async () => {
-    const { getSessionInfo } = await import("./auth.fns");
+    const { getSessionInfoHandler: getSessionInfo } = await import("./auth.fns");
 
     await expect(getSessionInfo()).resolves.toBeNull();
 
@@ -331,17 +335,30 @@ describe("admin setup guard cache", () => {
   it("lets the login page render without session lookup when no cookie is present", async () => {
     const db = createAdminExistsDb([1]);
     mocks.cfEnv.DB = db.db;
-    const { loginPageGuard } = await import("./auth.fns");
+    const { loginPageGuardHandler: loginPageGuard } = await import("./auth.fns");
 
     await expect(loginPageGuard()).resolves.toBeNull();
 
     expect(db.get).toHaveBeenCalledTimes(1);
   });
 
+  it("fails closed without hanging when the admin-principal read stalls", async () => {
+    vi.useFakeTimers();
+    const db = createDeferredAdminExistsDb();
+    mocks.cfEnv.DB = db.db;
+    const { loginPageGuardHandler: loginPageGuard } = await import("./auth.fns");
+
+    const guard = loginPageGuard();
+    await vi.advanceTimersByTimeAsync(3_000);
+
+    await expect(guard).resolves.toBeNull();
+    expect(db.get).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps setup recovery ahead of login no-cookie fast path", async () => {
     const db = createAdminExistsDb([0]);
     mocks.cfEnv.DB = db.db;
-    const { loginPageGuard } = await import("./auth.fns");
+    const { loginPageGuardHandler: loginPageGuard } = await import("./auth.fns");
 
     await expect(loginPageGuard()).rejects.toEqual({
       redirect: { to: "/auth/setup" },
@@ -353,31 +370,31 @@ describe("admin setup guard cache", () => {
   it("redirects anonymous admin requests without session or RBAC reads", async () => {
     const db = createAdminExistsDb([1]);
     mocks.cfEnv.DB = db.db;
-    const { adminRouteGuard } = await import("./auth.fns");
+    const { adminRouteGuardHandler: adminRouteGuard } = await import("./auth.fns");
 
     await expect(adminRouteGuard()).rejects.toEqual({
       redirect: { to: "/auth/login" },
     });
 
-    expect(db.get).toHaveBeenCalledTimes(1);
+    expect(db.get).not.toHaveBeenCalled();
     expect(mocks.loadUserPermissions).not.toHaveBeenCalled();
   });
 
-  it("keeps setup recovery ahead of admin no-cookie login redirects", async () => {
+  it("routes anonymous admin requests through the login setup guard", async () => {
     const db = createAdminExistsDb([0]);
     mocks.cfEnv.DB = db.db;
-    const { adminRouteGuard } = await import("./auth.fns");
+    const { adminRouteGuardHandler: adminRouteGuard } = await import("./auth.fns");
 
     await expect(adminRouteGuard()).rejects.toEqual({
-      redirect: { to: "/auth/setup" },
+      redirect: { to: "/auth/login" },
     });
 
-    expect(db.get).toHaveBeenCalledTimes(1);
+    expect(db.get).not.toHaveBeenCalled();
     expect(mocks.loadUserPermissions).not.toHaveBeenCalled();
   });
 
   it("leaves forgot-password reachable without session lookup when no cookie is present", async () => {
-    const { redirectIfAuthenticated } = await import("./auth.fns");
+    const { redirectIfAuthenticatedHandler: redirectIfAuthenticated } = await import("./auth.fns");
 
     await expect(redirectIfAuthenticated()).resolves.toBeNull();
 
