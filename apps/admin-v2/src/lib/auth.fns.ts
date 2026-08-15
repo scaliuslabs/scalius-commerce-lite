@@ -4,7 +4,7 @@
  * Used by auth page routes for session checks, admin-exists checks, etc.
  */
 
-import { createServerFn } from "@tanstack/react-start";
+import { createServerFn, createServerOnlyFn } from "@tanstack/react-start";
 import { redirect } from "@tanstack/react-router";
 import { getDb, type Database } from "@scalius/database/client";
 import { getAdminSessionFromCookieHeader } from "./admin-session.server";
@@ -12,6 +12,7 @@ import { getAdminSessionFromCookieHeader } from "./admin-session.server";
 type AdminDb = Pick<Database, "get">;
 
 const ADMIN_EXISTS_CACHE_TTL_MS = 5 * 60_000;
+const ADMIN_EXISTS_READ_TIMEOUT_MS = 3_000;
 
 let adminExistsCache: { value: true; expiresAt: number } | null = null;
 let adminExistsInFlight: Promise<boolean> | null = null;
@@ -37,10 +38,20 @@ async function queryAdminExists(db: AdminDb): Promise<boolean> {
     import("@scalius/core/auth/admin-setup"),
     import("@scalius/core/utils/transient-d1"),
   ]);
-  const result = await retryTransientD1(() =>
-    adminPrincipalExists(db),
-  );
-  return result;
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      retryTransientD1(() => adminPrincipalExists(db)),
+      new Promise<never>((_, reject) => {
+        timeout = setTimeout(
+          () => reject(new Error("Admin principal read timed out.")),
+          ADMIN_EXISTS_READ_TIMEOUT_MS,
+        );
+      }),
+    ]);
+  } finally {
+    if (timeout !== undefined) clearTimeout(timeout);
+  }
 }
 
 export function clearAdminExistsCache() {
@@ -85,7 +96,7 @@ async function getCachedAdminExists(db: AdminDb): Promise<boolean> {
  * Get current auth session. Returns { user, session } or null.
  * Used by auth pages to redirect already-logged-in users.
  */
-export const getSessionInfo = createServerFn().handler(async () => {
+export const getSessionInfoHandler = createServerOnlyFn(async () => {
   const { getRequestHeader } = await import("@tanstack/react-start/server");
   const env = await getWorkerEnv();
   const db = getDb(env);
@@ -113,10 +124,12 @@ export const getSessionInfo = createServerFn().handler(async () => {
   };
 });
 
+export const getSessionInfo = createServerFn().handler(getSessionInfoHandler);
+
 /**
  * Check if any admin user exists in the shared Better Auth D1 database.
  */
-export const checkAdminExists = createServerFn().handler(async () => {
+export const checkAdminExistsHandler = createServerOnlyFn(async () => {
   const env = await getWorkerEnv();
   const db = getDb(env);
   try {
@@ -129,13 +142,15 @@ export const checkAdminExists = createServerFn().handler(async () => {
   }
 });
 
+export const checkAdminExists = createServerFn().handler(checkAdminExistsHandler);
+
 /**
  * Login page guard — matches original admin-detection middleware behavior:
  * 1. If no admin users exist -> redirect to /auth/setup
  * 2. If user has a valid session with 2FA verified (or no 2FA) -> redirect to /admin
  * 3. If user has session but 2FA not verified -> redirect to /auth/two-factor
  */
-export const loginPageGuard = createServerFn().handler(async () => {
+export const loginPageGuardHandler = createServerOnlyFn(async () => {
   const { getRequestHeader } = await import("@tanstack/react-start/server");
 
   // Check if any admin exists in the shared Better Auth D1 database.
@@ -177,29 +192,18 @@ export const loginPageGuard = createServerFn().handler(async () => {
   return null;
 });
 
+export const loginPageGuard = createServerFn().handler(loginPageGuardHandler);
+
 /**
  * Admin route guard — matches original admin-detection + RBAC middleware:
- * 1. If no admin users exist -> redirect to /auth/setup
- * 2. If not authenticated -> redirect to /auth/login
- * 3. If 2FA enabled but not verified -> redirect to /auth/two-factor
- * 4. Loads RBAC permissions and returns user context
+ * 1. If not authenticated -> redirect to /auth/login (whose guard owns setup detection)
+ * 2. If 2FA enabled but not verified -> redirect to /auth/two-factor
+ * 3. Loads RBAC permissions and returns user context
  */
-export const adminRouteGuard = createServerFn().handler(async () => {
+export const adminRouteGuardHandler = createServerOnlyFn(async () => {
   const { getRequestHeader } = await import("@tanstack/react-start/server");
   const env = await getWorkerEnv();
   const db = getDb(env);
-
-  // Check if any admin exists in the shared Better Auth D1 database.
-  let adminExists = true; // fail-closed
-  try {
-    adminExists = await getCachedAdminExists(db);
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : "";
-    if (msg.includes("no such table")) adminExists = false;
-  }
-  if (!adminExists) {
-    throw redirect({ to: "/auth/setup" });
-  }
 
   // Check session
   const authResult = await getAdminSessionFromCookieHeader(
@@ -256,11 +260,13 @@ export const adminRouteGuard = createServerFn().handler(async () => {
   };
 });
 
+export const adminRouteGuard = createServerFn().handler(adminRouteGuardHandler);
+
 /**
  * Simple redirect if user has ANY valid session.
  * Used in beforeLoad of forgot-password page.
  */
-export const redirectIfAuthenticated = createServerFn().handler(async () => {
+export const redirectIfAuthenticatedHandler = createServerOnlyFn(async () => {
   const { getRequestHeader } = await import("@tanstack/react-start/server");
   const env = await getWorkerEnv();
   const db = getDb(env);
@@ -278,3 +284,7 @@ export const redirectIfAuthenticated = createServerFn().handler(async () => {
   }
   return null;
 });
+
+export const redirectIfAuthenticated = createServerFn().handler(
+  redirectIfAuthenticatedHandler,
+);

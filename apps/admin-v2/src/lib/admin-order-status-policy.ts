@@ -1,7 +1,7 @@
 import {
   OrderStatus as OrderStatusValues,
   type OrderStatus,
-} from "@/types/api-responses";
+} from "~/types/api-responses";
 
 const ADMIN_STATUS_TRANSITIONS: Readonly<Partial<Record<OrderStatus, readonly OrderStatus[]>>> = {
   incomplete: ["pending", "cancelled"],
