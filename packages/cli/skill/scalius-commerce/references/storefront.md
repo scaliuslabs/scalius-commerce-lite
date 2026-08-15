@@ -13,7 +13,7 @@ Use public reads as `visitor`; private profile/order actions require a live cust
 
 ## Fast cart setup
 
-Use one sequential CLI batch for context creation, cart mutation, and delivery selection. Reference only completed prior results with JSON Pointers so IDs and revisions never need manual copying:
+Use one sequential batch for context creation, cart mutation, and delivery selection. In MCP, give each step an `id` and reference a prior result as `{"$step":"create","pointer":"/data/data/id"}`; the cart revision is at `/data/data/context/revision`. In the CLI, use the JSON Pointer form below. This keeps IDs and revisions out of manual copy/paste:
 
 ```json
 {

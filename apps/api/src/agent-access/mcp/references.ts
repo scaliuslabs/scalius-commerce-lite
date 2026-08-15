@@ -1,5 +1,6 @@
 const REFERENCE_KEY = "$step";
-const JSON_POINTER_PATTERN = /^(?:\/(?:[^~/]|~[01])*)*$/;
+export const AGENT_STEP_ID_PATTERN = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/;
+export const AGENT_STEP_POINTER_PATTERN = /^(?:\/(?:[^~/]|~[01])*)*$/;
 const MAX_REFERENCE_COUNT = 100;
 const MAX_REFERENCE_DEPTH = 32;
 const MAX_EXPANDED_BYTES = 1024 * 1024;
@@ -21,10 +22,9 @@ export function isStepReference(value: unknown): value is AgentStepReference {
   const keys = Object.keys(value);
   return (
     keys.every((key) => key === REFERENCE_KEY || key === "pointer") &&
-    typeof value.$step === "string" &&
-    value.$step.length > 0 &&
+    typeof value.$step === "string" && AGENT_STEP_ID_PATTERN.test(value.$step) &&
     (value.pointer === undefined ||
-      (typeof value.pointer === "string" && JSON_POINTER_PATTERN.test(value.pointer)))
+      (typeof value.pointer === "string" && AGENT_STEP_POINTER_PATTERN.test(value.pointer)))
   );
 }
 
@@ -33,7 +33,7 @@ function unescapePointerToken(token: string): string {
 }
 
 export function readJsonPointer(value: unknown, pointer = ""): unknown {
-  if (!JSON_POINTER_PATTERN.test(pointer)) throw new Error("Invalid JSON Pointer");
+  if (!AGENT_STEP_POINTER_PATTERN.test(pointer)) throw new Error("Invalid JSON Pointer");
   if (!pointer) return value;
   let current = value;
   for (const rawToken of pointer.slice(1).split("/")) {

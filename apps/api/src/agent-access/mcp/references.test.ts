@@ -1,11 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { containsStepReference, readJsonPointer, resolveStepReferences } from "./references";
+import { containsStepReference, isStepReference, readJsonPointer, resolveStepReferences } from "./references";
 
 describe("bounded batch references", () => {
   it("resolves earlier bounded results through RFC 6901 pointers", () => {
-    const completed = new Map([["one", { result: { data: { id: "prod_1" } } }]]);
-    expect(resolveStepReferences({ body: { productId: { $step: "one", pointer: "/result/data/id" } } }, completed))
+    const completed = new Map([["one", { data: { data: { id: "prod_1" } } }]]);
+    expect(resolveStepReferences({ body: { productId: { $step: "one", pointer: "/data/data/id" } } }, completed))
       .toEqual({ body: { productId: "prod_1" } });
+  });
+
+  it("accepts only references to valid batch step IDs and pointers", () => {
+    expect(isStepReference({ $step: "create", pointer: "/data/id" })).toBe(true);
+    expect(isStepReference({ $step: "1-invalid", pointer: "/data/id" })).toBe(false);
+    expect(isStepReference({ $step: "create", pointer: "data/id" })).toBe(false);
   });
 
   it("rejects future references, poison keys, excess count, depth, and expansion", () => {

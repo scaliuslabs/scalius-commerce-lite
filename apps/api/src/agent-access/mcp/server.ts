@@ -29,7 +29,12 @@ import {
   listAuthorizedOperations,
   summarizeOperation,
 } from "./operations";
-import { containsStepReference, resolveStepReferences } from "./references";
+import {
+  AGENT_STEP_ID_PATTERN,
+  AGENT_STEP_POINTER_PATTERN,
+  containsStepReference,
+  resolveStepReferences,
+} from "./references";
 import { merchantOperationQueryScore, prefersReadOnlyMerchantResults } from "./merchant-search";
 
 const pathValueSchema = z.union([z.string(), z.number(), z.boolean()]);
@@ -54,10 +59,24 @@ const operationInputSchema = z.object({
   body: z.unknown().optional(),
   idempotencyKey: z.string().min(8).max(200).optional(),
 }).strict();
+const stepReferenceSchema = z.object({
+  $step: z.string().regex(AGENT_STEP_ID_PATTERN),
+  pointer: z.string().regex(AGENT_STEP_POINTER_PATTERN).optional(),
+}).strict();
+const batchOperationInputSchema = z.object({
+  path: z.record(z.string(), z.union([pathValueSchema, stepReferenceSchema]))
+    .refine((value) => Object.keys(value).length <= 50, "At most 50 path parameters are allowed")
+    .optional(),
+  query: z.record(z.string(), z.union([queryValueSchema, stepReferenceSchema]))
+    .refine((value) => Object.keys(value).length <= 100, "At most 100 query parameters are allowed")
+    .optional(),
+  body: z.unknown().optional(),
+  idempotencyKey: z.union([z.string().min(8).max(200), stepReferenceSchema]).optional(),
+}).strict();
 const batchStepSchema = z.object({
-  id: z.string().regex(/^[A-Za-z][A-Za-z0-9_-]{0,63}$/),
+  id: z.string().regex(AGENT_STEP_ID_PATTERN),
   operationId: z.string().min(1).max(240),
-  input: operationInputSchema.optional(),
+  input: batchOperationInputSchema.optional(),
 }).strict();
 const MCP_TEXT_COMPATIBILITY_BYTES = 4 * 1024;
 
@@ -468,7 +487,7 @@ export function createAgentMcpServer(deps: McpServerDependencies): McpServer {
     "operations.batch",
     {
       title: "Execute operation batch",
-      description: "Execute up to 20 authorized operations; writes are sequential and reads use at most two lanes.",
+      description: "Execute up to 20 authorized operations. Later inputs may use {$step:'id',pointer:'/data/data/id'}; writes are sequential and reads use at most two lanes.",
       inputSchema: z.object({
         steps: z.array(batchStepSchema).min(1).max(AGENT_MAX_BATCH_STEPS),
         stopOnError: z.boolean().default(true),
@@ -518,7 +537,12 @@ export function createAgentMcpServer(deps: McpServerDependencies): McpServer {
           if (candidates.length > 0) {
             const wave = await Promise.all(candidates.map(async (candidate) => {
               try {
-                const result = await executeOne(deps, principal, candidate.operationId, candidate.input ?? {});
+                const result = await executeOne(
+                  deps,
+                  principal,
+                  candidate.operationId,
+                  (candidate.input ?? {}) as AgentOperationInput,
+                );
                 return { id: candidate.id, ok: result.ok, result };
               } catch (error) {
                 const safe = safeToolError(error).structuredContent;
