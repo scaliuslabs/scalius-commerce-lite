@@ -259,7 +259,13 @@ describe("CLI program", () => {
     const compactResult = JSON.parse(compact.stdoutText()) as Record<string, unknown>;
     expect(compactResult).not.toHaveProperty("responses");
     expect(compactResult.responseStatuses).toEqual(["201"]);
-    expect(compactResult.constructionHint).toBe("Use --full only when constructing the exact input.");
+    expect(compactResult.constructionHint).toContain("input.path or input.query");
+    expect(compactResult.inputShape).toEqual({
+      path: [],
+      query: [],
+      body: "required",
+      idempotencyKey: "required",
+    });
     expect(JSON.stringify(compactResult)).not.toContain('"properties"');
 
     const full = await authenticatedRuntime(fetch as typeof globalThis.fetch);
@@ -404,6 +410,18 @@ describe("CLI program", () => {
     expect(calls[1]?.url).toBe("https://api.example.com/api/v1/admin/products/p%2F1?expand=variants&expand=media");
     expect(calls[1]?.init?.method).toBe("GET");
     expect(new Headers(calls[1]?.init?.headers).get("Authorization")).toMatch(/^Bearer sc_cli_/);
+  });
+
+  it("explains the compact path/query/body input model on malformed input", async () => {
+    const runtime = await authenticatedRuntime(
+      vi.fn(async () => Response.json(executableSpec())) as typeof globalThis.fetch,
+    );
+    expect(await runProgram(runtime, [
+      "operations", "run", "dashboard.products.get",
+      "--input", '{"expand":"variants"}',
+    ])).toBe(5);
+    expect(runtime.stderrText()).toContain("under 'path' or 'query'");
+    expect(runtime.stderrText()).toContain("under 'body'");
   });
 
   it("runs a non-sensitive JSON continuation status operation", async () => {

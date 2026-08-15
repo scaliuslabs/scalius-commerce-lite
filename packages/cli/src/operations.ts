@@ -164,6 +164,23 @@ function compactParameters(document: OpenApiDocument, operation: IndexedOperatio
   });
 }
 
+function compactInputShape(
+  document: OpenApiDocument,
+  operation: IndexedOperation,
+): Record<string, unknown> {
+  const names = (location: "path" | "query") =>
+    operation.pathParameters
+      .filter((parameter) => parameter.in === location && parameter.name)
+      .map((parameter) => parameter.name!);
+  const body = requestBody(document, operation);
+  return {
+    path: names("path"),
+    query: names("query"),
+    body: body ? (body.required === true ? "required" : "optional") : "none",
+    idempotencyKey: operation.agent.idempotency ?? "none",
+  };
+}
+
 function requireRecord(value: unknown, field: string): Record<string, unknown> {
   if (value === undefined) return {};
   if (!isObject(value)) throw new CliError(5, "invalid_input", `${field} must be an object.`);
@@ -688,8 +705,9 @@ export async function operationsDescribe(
     parameters: full ? selected.pathParameters : compactParameters(document, selected),
     requestBody: full ? requestBody(document, selected) ?? null : compactRequestBody(document, selected),
     ...(full ? { responses: selected.operation.responses ?? {} } : {
+      inputShape: compactInputShape(document, selected),
       responseStatuses: Object.keys(selected.operation.responses ?? {}).sort(),
-      constructionHint: "Use --full only when constructing the exact input.",
+      constructionHint: "Group URL values under input.path or input.query and JSON payload fields under input.body; use --full only for exact nested schemas.",
     }),
   };
 }

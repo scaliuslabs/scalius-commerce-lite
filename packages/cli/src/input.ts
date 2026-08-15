@@ -53,7 +53,11 @@ export async function readInput(runtime: Runtime, source?: string): Promise<Stru
   const input = parsed as Record<string, unknown>;
   for (const key of Object.keys(input)) {
     if (key !== "path" && key !== "query" && key !== "body") {
-      throw new CliError(5, "invalid_input", `Unknown operation input field '${key}'.`);
+      throw new CliError(
+        5,
+        "invalid_input",
+        `Unknown operation input field '${key}'. Group URL values under 'path' or 'query' and JSON payload fields under 'body'.`,
+      );
     }
   }
   for (const key of ["path", "query"] as const) {
