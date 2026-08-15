@@ -387,7 +387,7 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
       expiresAt: new Date(Date.now() + 60_000),
     });
     const next = vi.fn().mockResolvedValue(undefined);
-    const context = createContext("/api/v1/admin/products", "GET", {
+    const context = createContext("/api/v1/admin/products/summaries", "GET", {
       headers: { Authorization: `Bearer ${agentToken}` },
       env: { AGENT_RATE_LIMITER: { limit: vi.fn().mockResolvedValue({ success: true }) } },
     });
@@ -646,7 +646,7 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
       expiresAt: new Date(Date.now() + 60_000),
     };
     mocks.resolveAgentPrincipalFromGrant.mockResolvedValue(principal);
-    const context = createContext("/api/v1/admin/products", "GET", { headers: {} });
+    const context = createContext("/api/v1/admin/products/summaries", "GET", { headers: {} });
     context.env = withAgentDispatchPrincipal(
       { BETTER_AUTH_SECRET: TEST_SECRET } as Env,
       principal,
@@ -736,7 +736,7 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
 
     mocks.resolveAgentPrincipalFromBearer.mockResolvedValue({ ...base, resource: "storefront" });
     await expect(adminAuthMiddleware(
-      createContext("/api/v1/admin/products", "GET", {
+      createContext("/api/v1/admin/products/summaries", "GET", {
         headers: { Authorization: `Bearer ${agentToken}` },
         env: { AGENT_RATE_LIMITER: rateLimiter },
       }) as never,
@@ -745,7 +745,7 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
 
     mocks.resolveAgentPrincipalFromBearer.mockResolvedValue({ ...base, resource: "dashboard" });
     await expect(adminAuthMiddleware(
-      createContext("/api/v1/admin/products", "GET", {
+      createContext("/api/v1/admin/products/summaries", "GET", {
         headers: { Authorization: `Bearer ${agentToken}` },
         env: { AGENT_RATE_LIMITER: rateLimiter },
       }) as never,
