@@ -103,6 +103,17 @@ function merchantIntentTarget(queryWords: Set<string>): string | null {
   if (has("store", "checkout", "ready", "readiness") && has("health", "healthy", "ready", "readiness", "status")) {
     return "dashboard.checkout.readiness_get";
   }
+  if (has("setting", "settings", "configuration", "config")) {
+    if (has("shipping", "shipment", "delivery")) return "dashboard.shipping_methods.list";
+    if (has("tax", "taxes")) return "dashboard.taxes.settings_get";
+    if (has("payment", "payments", "gateway", "gateways")) return "dashboard.payments.methods_get";
+    if (has("email", "mail")) return "dashboard.settings.email_get";
+    if (has("sms", "text", "message", "messaging")) return "dashboard.settings_sms.get_sms";
+    if (has("auth", "authentication", "login", "sign-in", "signin")) return "dashboard.settings.customer_auth_get";
+    if (has("seo", "search", "discovery")) return "dashboard.seo.settings_get";
+    if (has("theme", "style", "design")) return "dashboard.theme.workspace_get";
+    if (has("store", "business", "company", "merchant")) return "dashboard.settings.business_get";
+  }
   if (has("analytics") && has("health", "healthy", "status")) return "dashboard.analytics.health";
   if (has("customer", "customers", "buyer", "buyers", "shopper", "shoppers") && has("new", "recent", "latest", "list")) {
     return "dashboard.customers.list";
