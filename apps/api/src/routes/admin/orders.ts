@@ -78,6 +78,7 @@ import {
     ORDER_CSV_ARTIFACT_MAX_BYTES,
 } from "@scalius/core/modules/orders/order-csv-export";
 import { resolveCanonicalIdempotencyKey } from "./idempotency-key";
+import { projectOrderListResult } from "./order-list-projection";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -468,7 +469,7 @@ app.openapi(listOrdersRoute, async (c) => {
         startDate: parseBangladeshDateOnlyBoundary(query.startDate, "start"),
         endDate: parseBangladeshDateOnlyBoundary(query.endDate, "end")
     });
-    return ok(c, result);
+    return ok(c, projectOrderListResult(result));
 });
 
 // ─── GET /export (bounded CSV artifact) ────────────────────────────────────
@@ -632,7 +633,7 @@ app.openapi(paymentRecoveryListRoute, async (c) => {
         startDate: parseBangladeshDateOnlyBoundary(query.startDate, "start"),
         endDate: parseBangladeshDateOnlyBoundary(query.endDate, "end"),
     });
-    return ok(c, result);
+    return ok(c, projectOrderListResult(result));
 });
 
 const paymentRecoveryExportRoute = createRoute({
