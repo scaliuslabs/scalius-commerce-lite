@@ -15,7 +15,10 @@ describe("MCP server construction", () => {
     expect(server.toolInputSchemaJson("operations.search")).toBeDefined();
     expect(server.toolInputSchemaJson("operations.describe")).toBeDefined();
     expect(server.toolInputSchemaJson("operations.execute")).toBeDefined();
-    expect(server.toolInputSchemaJson("operations.batch")).toBeDefined();
+    const batchSchema = server.toolInputSchemaJson("operations.batch");
+    expect(batchSchema).toBeDefined();
+    expect(JSON.stringify(batchSchema)).toContain('"$step"');
+    expect(JSON.stringify(batchSchema)).toContain('"pointer"');
     expect(server.toolInputSchemaJson("http.request")).toBeUndefined();
   });
 
