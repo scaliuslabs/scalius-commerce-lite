@@ -25659,6 +25659,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "id": {
                     "type": "string"
                   },
+                  "eventId": {
+                    "type": "string"
+                  },
                   "eventName": {
                     "type": "string",
                     "nullable": true
@@ -25679,6 +25682,17 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "type": "string",
                     "nullable": true
                   },
+                  "eventTime": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      },
+                      {}
+                    ]
+                  },
                   "createdAt": {
                     "anyOf": [
                       {
@@ -25693,11 +25707,13 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 },
                 "required": [
                   "id",
+                  "eventId",
                   "eventName",
                   "status",
                   "requestPayload",
                   "responsePayload",
                   "errorMessage",
+                  "eventTime",
                   "createdAt"
                 ]
               }

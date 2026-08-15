@@ -36622,11 +36622,13 @@ export type GetApiV1AdminSettingsMetaConversionsLogsResponses = {
         data: {
             logs: Array<{
                 id: string;
+                eventId: string;
                 eventName: string | null;
                 status: string | null;
                 requestPayload: string | null;
                 responsePayload: string | null;
                 errorMessage: string | null;
+                eventTime: string | number | unknown;
                 createdAt: string | number | unknown;
             }>;
             pagination: {
