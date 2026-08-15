@@ -10,6 +10,7 @@ interface OrderShipment {
   id: string;
   orderId: string;
   status?: unknown;
+  providerId?: unknown;
   providerType?: unknown;
   trackingId?: unknown;
   lastChecked?: unknown;
@@ -46,6 +47,7 @@ import { useCurrency } from "@/hooks/use-currency";
 import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
 import { formatRelativeDate } from "@scalius/shared/timestamps";
 import type { OrderActionPermissions } from "@/lib/order-action-permissions";
+import { canRefreshShipment } from "@/lib/shipment-action-policy";
 
 interface OrderMobileCardProps {
   order: OrderListItem;
@@ -266,7 +268,20 @@ export const OrderMobileCard = React.memo(function OrderMobileCard({
                         : undefined,
                 }}
                 onStatusUpdated={onShipmentStatusUpdated}
-                canRefresh={orderActions.canManageOrderShipments && !shipmentLocked}
+                canRefresh={
+                  orderActions.canManageOrderShipments &&
+                  canRefreshShipment({
+                    providerId:
+                      typeof shipment.providerId === "string"
+                        ? shipment.providerId
+                        : null,
+                    providerType:
+                      typeof shipment.providerType === "string"
+                        ? shipment.providerType
+                        : null,
+                  }) &&
+                  !shipmentLocked
+                }
                 refreshDisabledReason={
                   shipmentLocked
                     ? order.shipmentRecovery?.message ?? "Resolve shipment recovery before refreshing status."

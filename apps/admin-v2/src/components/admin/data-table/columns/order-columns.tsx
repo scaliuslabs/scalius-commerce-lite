@@ -42,12 +42,14 @@ import { LazyFraudCheckIndicator } from "~/components/admin/order-list/LazyFraud
 import { DataTableColumnHeader } from "../DataTableColumnHeader";
 import { createSelectColumn } from "./column-factories";
 import type { OrderActionPermissions } from "~/lib/order-action-permissions";
+import { canRefreshShipment } from "~/lib/shipment-action-policy";
 
 /** Minimal shipment shape used in the order list */
 interface OrderShipment {
   id: string;
   orderId: string;
   status?: unknown;
+  providerId?: unknown;
   providerType?: unknown;
   trackingId?: unknown;
   lastChecked?: unknown;
@@ -303,6 +305,16 @@ export function getOrderColumns(
               onStatusUpdated={opts.onShipmentStatusUpdated}
               canRefresh={
                 opts.orderActions.canManageOrderShipments &&
+                canRefreshShipment({
+                  providerId:
+                    typeof shipment.providerId === "string"
+                      ? shipment.providerId
+                      : null,
+                  providerType:
+                    typeof shipment.providerType === "string"
+                      ? shipment.providerType
+                      : null,
+                }) &&
                 order.shipmentRecovery?.activeLock !== true
               }
               refreshDisabledReason={

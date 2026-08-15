@@ -349,6 +349,8 @@ describe("order list interactions", () => {
     expect(columnsSource).toContain("recovery={order.shipmentRecovery}");
     expect(columnsSource).toContain("order.activeRefundOperation?.active !== true");
     expect(columnsSource).toContain("order.shipmentRecovery?.activeLock !== true");
+    expect(columnsSource).toContain("canRefreshShipment({");
+    expect(columnsSource).toContain('typeof shipment.providerId === "string"');
     expect(columnsSource).toContain("Complete or reconcile the refund before changing this order.");
     expect(columnsSource).toContain("Resolve refund recovery before archiving");
     expect(columnsSource).toContain("Resolve shipment recovery before archiving");
@@ -360,6 +362,8 @@ describe("order list interactions", () => {
     expect(mobileSource).toContain("orderActions.canChangeOrderStatus &&");
     expect(mobileSource).toContain("!hasActiveRefundOperation &&");
     expect(mobileSource).toContain("!shipmentLocked");
+    expect(mobileSource).toContain("canRefreshShipment({");
+    expect(mobileSource).toContain('typeof shipment.providerType === "string"');
     expect(mobileSource).toContain("Resolve refund recovery before archiving");
     expect(mobileSource).toContain("Resolve shipment recovery before archiving");
 
