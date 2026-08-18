@@ -14,6 +14,7 @@ const DAILY_RULES = [
   "activity.paymentRecovery.total is all recoverable hosted-payment work; activity.paymentNeedsAttention.total is the actionable failed/stale subset; both are current non-transactional backlogs, not daily metrics.",
   "Never subtract the recovery totals because their parallel reads can observe different instants.",
   "Fail closed when fulfillment, stock, checkout, payment, delivery, or currency facts cannot be read.",
+  "Any requested field absent from fixed selectors is unavailable; never infer or claim coverage.",
 ];
 
 const DAILY_RESPONSES: Record<string, unknown> = {

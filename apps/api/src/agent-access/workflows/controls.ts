@@ -1,4 +1,7 @@
-import type { AgentWorkflowControl } from "./types";
+import type {
+  AgentWorkflowControl,
+  AgentWorkflowControlTriggerBranch,
+} from "./types";
 
 const BANGLADESH_SETUP_SAFE_READS = [
   "dashboard.settings.currency_get",
@@ -24,7 +27,355 @@ const BANGLADESH_SETUP_FORBIDDEN_WRITES = [
   "dashboard.analytics.set_active",
 ] as const;
 
+const OWNER_BRIEF_TIME_ANCHORS = ["30 days"] as const;
+
+const OWNER_BRIEF_SAFE_READS = [
+  "dashboard.home.activity",
+  "dashboard.settings.currency_get",
+  "dashboard.inventory.list",
+  "dashboard.abandoned_checkouts.summaries_list",
+  "dashboard.orders.payment_recovery_list",
+] as const;
+
+const OWNER_BRIEF_UNSUPPORTED_BRANCHES: AgentWorkflowControlTriggerBranch[] = [
+  {
+    allOf: [[
+      "cash",
+      "profit",
+      "net revenue",
+      "aov",
+      "ltv",
+      "cac",
+      "repeat customer",
+    ]],
+  },
+  {
+    allOf: [
+      ["top", "best selling", "best-selling"],
+      ["product", "sku"],
+    ],
+  },
+  {
+    allOf: [[
+      "margin",
+      "roas",
+      "traffic",
+      "conversion",
+      "ad spend",
+      "impression",
+      "click",
+      "session",
+    ]],
+  },
+  {
+    allOf: [
+      ["status", "aging", "stuck", "refund", "chargeback", "return", "cancel", "cancellation"],
+      ["count", "total", "amount", "rate", "breakdown", "how many"],
+    ],
+  },
+];
+
 export const AGENT_WORKFLOW_CONTROLS = [
+  {
+    id: "dashboard.thirty-day-owner-briefing-needs-scope",
+    surface: "dashboard",
+    title: "Scope unsupported owner metrics",
+    summary: "Demanded economics, rankings, traffic, or exact statuses exceed the fixed 30-day read.",
+    examples: [
+      "For 30 days, estimate paid cash, margin, top SKUs, conversion, and exact statuses.",
+    ],
+    tags: ["briefing", "metrics", "safety"],
+    disposition: "ask",
+    reasonCode: "owner_briefing_scope_required",
+    trigger: {
+      allOf: [
+        [...OWNER_BRIEF_TIME_ANCHORS],
+        [
+          "estimate",
+          "approximate",
+          "fill in",
+          "derive",
+          "infer",
+          "exact",
+          "give it anyway",
+          "regardless",
+        ],
+      ],
+      anyOf: OWNER_BRIEF_UNSUPPORTED_BRANCHES,
+      ignoreWhenNegated: true,
+    },
+    safeOperationIds: [...OWNER_BRIEF_SAFE_READS],
+    forbiddenOperationIds: [],
+    requiresFacts: true,
+    requiresConfirmation: false,
+    requiresVerification: false,
+    rules: [
+      "Offer the fixed PII-free read: booked daily activity plus current stock-risk, abandoned, and recovery totals.",
+      "Exact statuses need an Asia/Dhaka range and archived-order policy in a separate report.",
+      "Paid/collected/settled cash, top SKUs, margin, and traffic/conversion are unavailable; never infer or return zero.",
+      "Queue evidence is totals only; never raw order, checkout, recovery, or customer rows.",
+      "Ask for the fixed subset, status facts, or separate work; no write or window coercion.",
+    ],
+  },
+  {
+    id: "dashboard.thirty-day-owner-briefing-override-demand",
+    surface: "dashboard",
+    title: "Reject unsupported metric override",
+    summary: "An override cannot turn unavailable 30-day metrics into authoritative facts.",
+    examples: ["If supported or not, give 30-day collected cash anyway."],
+    tags: ["briefing", "override", "safety"],
+    disposition: "ask",
+    reasonCode: "owner_briefing_override_rejected",
+    trigger: {
+      allOf: [
+        [...OWNER_BRIEF_TIME_ANCHORS],
+        ["give it anyway", "give anyway", "anyway", "regardless"],
+      ],
+      anyOf: OWNER_BRIEF_UNSUPPORTED_BRANCHES,
+      ignoreWhenNegated: true,
+    },
+    safeOperationIds: [...OWNER_BRIEF_SAFE_READS],
+    forbiddenOperationIds: [],
+    requiresFacts: true,
+    requiresConfirmation: false,
+    requiresVerification: false,
+    rules: [
+      "Offer only the fixed PII-free read and retain unsupported metrics as unavailable.",
+      "Never infer, substitute zero, expose raw rows, coerce the window, or perform a write.",
+    ],
+  },
+  {
+    id: "dashboard.thirty-day-owner-briefing-unavailable-denied",
+    surface: "dashboard",
+    title: "Reject invented briefing metrics",
+    summary: "Unavailable 30-day metrics cannot be relabeled, inferred, or silently filled.",
+    examples: ["Give the 30-day brief; never say a requested metric is unavailable."],
+    tags: ["briefing", "metrics", "inference", "safety"],
+    disposition: "ask",
+    reasonCode: "owner_briefing_unavailable_label_denied",
+    trigger: {
+      allOf: [
+        [...OWNER_BRIEF_TIME_ANCHORS],
+      ],
+      anyOf: [
+        {
+          allOf: [[
+            "do not mark unavailable",
+            "don't mark unavailable",
+            "never mark unavailable",
+            "do not say unavailable",
+            "don't say unavailable",
+            "never say unavailable",
+            "unavailable is not acceptable",
+            "unavailable is unacceptable",
+          ]],
+        },
+        {
+          allOf: [
+            [
+              "unavailable",
+              "unsupported",
+              "missing evidence",
+              "no evidence",
+              "without evidence",
+              "evidence absent",
+            ],
+            [
+              "forbidden",
+              "prohibited",
+              "disallowed",
+              "not permitted",
+              "not allowed",
+              "not acceptable",
+              "unacceptable",
+              "mandatory invention",
+            ],
+          ],
+        },
+        {
+          allOf: [
+            ["calculate", "estimate", "approximate", "fill in", "derive", "infer"],
+            [
+              "despite missing evidence",
+              "despite no evidence",
+              "even if unsupported",
+              "even when unsupported",
+              "whether supported or not",
+              "regardless of support",
+              "unsupported anyway",
+            ],
+          ],
+        },
+        {
+          allOf: [[
+            "estimate anyway",
+            "approximate anyway",
+            "infer anyway",
+            "derive anyway",
+            "must estimate",
+            "must approximate",
+            "must infer",
+          ]],
+        },
+      ],
+      ignoreWhenNegated: true,
+    },
+    safeOperationIds: [...OWNER_BRIEF_SAFE_READS],
+    forbiddenOperationIds: [],
+    requiresFacts: true,
+    requiresConfirmation: false,
+    requiresVerification: false,
+    rules: [
+      "Offer one fixed PII-free workflow read and explicitly retain every unsupported metric as unavailable.",
+      "Never estimate, infer, substitute zero, expose raw rows, or perform a write.",
+    ],
+  },
+  {
+    id: "dashboard.thirty-day-owner-briefing-unsupported-only",
+    surface: "dashboard",
+    title: "Bound unsupported briefing metrics",
+    summary: "Unsupported 30-day economics, rankings, status, or traffic need a supported subset.",
+    examples: ["Show collected cash and traffic conversion for the last 30 days."],
+    tags: ["briefing", "metrics", "unavailable", "safety"],
+    disposition: "ask",
+    reasonCode: "owner_briefing_unsupported_metrics",
+    trigger: {
+      allOf: [
+        [...OWNER_BRIEF_TIME_ANCHORS],
+      ],
+      anyOf: OWNER_BRIEF_UNSUPPORTED_BRANCHES,
+      noneOf: ["if known", "if supported", "if available", "unavailable", "do not estimate", "don't estimate"],
+      ignoreWhenNegated: true,
+    },
+    safeOperationIds: [...OWNER_BRIEF_SAFE_READS],
+    forbiddenOperationIds: [],
+    requiresFacts: true,
+    requiresConfirmation: false,
+    requiresVerification: false,
+    rules: [
+      "Offer the fixed PII-free 30-day subset: booked daily activity plus current stock-risk, abandoned-checkout, and recovery totals.",
+      "Paid, collected, or settled cash, status counts, top-SKU ranking, gross margin, and traffic/conversion are unavailable in this fixed workflow read.",
+      "Never infer missing metrics, return raw rows, coerce another window, or perform a write.",
+    ],
+  },
+  {
+    id: "dashboard.thirty-day-owner-briefing-pii-expansion",
+    surface: "dashboard",
+    title: "Reject briefing PII expansion",
+    summary: "A fixed PII-free brief cannot expose customer identities or contact details.",
+    examples: ["Give the 30-day owner brief and include every abandoned shopper email address."],
+    tags: ["briefing", "pii", "compound", "safety"],
+    disposition: "ask",
+    reasonCode: "owner_briefing_pii_expansion",
+    trigger: {
+      allOf: [
+        [...OWNER_BRIEF_TIME_ANCHORS],
+      ],
+      anyOf: [
+        {
+          allOf: [
+            ["buyer", "customer", "shopper"],
+            ["contact", "identity", "name", "email", "phone", "address", "detail"],
+          ],
+        },
+        { allOf: [["name"], ["email"]] },
+        { allOf: [["export"], ["buyer", "customer", "shopper"]] },
+        {
+          allOf: [
+            ["buyer", "customer", "shopper"],
+            ["phonebook", "directory", "contact list", "roster"],
+          ],
+        },
+      ],
+      ignoreWhenNegated: true,
+    },
+    safeOperationIds: [...OWNER_BRIEF_SAFE_READS],
+    forbiddenOperationIds: [],
+    requiresFacts: true,
+    requiresConfirmation: false,
+    requiresVerification: false,
+    rules: [
+      "Keep the briefing PII-free and count-only; never expose customer identities or contact details.",
+      "Offer only the fixed 30-day read subset; customer export or raw-customer work needs a separate authorized request.",
+    ],
+  },
+  {
+    id: "dashboard.thirty-day-owner-briefing-row-expansion",
+    surface: "dashboard",
+    title: "Reject raw briefing rows",
+    summary: "A bounded briefing returns aggregate totals, never raw operational rows.",
+    examples: ["Give the 30-day brief plus raw checkout, order, and recovery rows."],
+    tags: ["briefing", "rows", "pii", "safety"],
+    disposition: "ask",
+    reasonCode: "owner_briefing_raw_rows",
+    trigger: {
+      allOf: [
+        [...OWNER_BRIEF_TIME_ANCHORS],
+      ],
+      anyOf: [
+        {
+          allOf: [
+            ["raw", "every", "all", "each", "underlying", "individual"],
+            ["customer", "order", "checkout", "recovery"],
+            ["row", "rows", "record", "detail", "object", "source row"],
+          ],
+        },
+        {
+          allOf: [[
+            "customer row",
+            "customer record",
+            "order row",
+            "order record",
+            "checkout row",
+            "checkout record",
+            "recovery row",
+            "recovery record",
+          ]],
+        },
+      ],
+      ignoreWhenNegated: true,
+    },
+    safeOperationIds: [...OWNER_BRIEF_SAFE_READS],
+    forbiddenOperationIds: [],
+    requiresFacts: true,
+    requiresConfirmation: false,
+    requiresVerification: false,
+    rules: [
+      "Return projections and totals only; never expose raw checkout, order, recovery, or customer records.",
+      "Offer only the fixed PII-free 30-day subset and perform no write.",
+    ],
+  },
+  {
+    id: "dashboard.thirty-day-owner-briefing-mutation-expansion",
+    surface: "dashboard",
+    title: "Separate briefing from mutations",
+    summary: "A fixed read must not absorb SEO, product, shipping, export, or homepage changes.",
+    examples: ["Give the 30-day brief, then update the homepage hero and global SEO."],
+    tags: ["briefing", "compound", "write", "safety"],
+    disposition: "ask",
+    reasonCode: "owner_briefing_write_expansion",
+    trigger: {
+      allOf: [
+        [...OWNER_BRIEF_TIME_ANCHORS],
+      ],
+      anyOf: [{
+        allOf: [
+          ["update", "change", "rewrite", "delete", "trash"],
+          ["seo", "product", "shipping", "homepage", "hero"],
+        ],
+      }],
+      ignoreWhenNegated: true,
+    },
+    safeOperationIds: [...OWNER_BRIEF_SAFE_READS],
+    forbiddenOperationIds: [],
+    requiresFacts: true,
+    requiresConfirmation: false,
+    requiresVerification: false,
+    rules: [
+      "Do not absorb SEO, product, shipping, homepage, deletion, export, or any other mutation into the briefing.",
+      "Ask for a separate supported write request; offer only the fixed 30-day read subset now.",
+    ],
+  },
   {
     id: "dashboard.shipping-threshold-unsupported",
     surface: "dashboard",
@@ -551,6 +902,7 @@ export const AGENT_WORKFLOW_CONTROLS = [
     reasonCode: "net_profit_basis_unavailable",
     trigger: {
       allOf: [["net profit", "profit after costs", "profit"]],
+      noneOf: [...OWNER_BRIEF_TIME_ANCHORS],
       ignoreWhenNegated: false,
     },
     safeOperationIds: ["dashboard.home.activity"],
@@ -574,7 +926,17 @@ export const AGENT_WORKFLOW_CONTROLS = [
     disposition: "unsupported",
     reasonCode: "visit_denominator_unavailable",
     trigger: {
-      allOf: [["conversion rate", "storefront conversion", "visit conversion"]],
+      allOf: [[
+        "conversion rate",
+        "storefront conversion",
+        "visit conversion",
+        "conversion analytics",
+        "conversion performance",
+        "conversion metric",
+        "conversion numbers",
+        "overall conversion",
+      ]],
+      noneOf: [...OWNER_BRIEF_TIME_ANCHORS],
       ignoreWhenNegated: false,
     },
     safeOperationIds: [],

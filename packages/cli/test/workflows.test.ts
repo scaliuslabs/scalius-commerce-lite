@@ -19,6 +19,7 @@ type MutableWorkflowOutputSelector = {
   pointer: string;
   alias: string;
   maxItems?: number;
+  exactItems?: number;
   fields?: Array<{ pointer: string; alias: string }>;
 };
 
@@ -217,6 +218,13 @@ function mutableWorkflowCard(document: OpenApiDocument, id: string): MutableWork
   return card;
 }
 
+function mutableWorkflowRoute(document: OpenApiDocument, id: string): Record<string, unknown> {
+  const extension = document["x-scalius-workflows"] as TestCatalog;
+  const route = extension.routes.find((candidate) => candidate.id === id);
+  if (!route) throw new Error(`Missing workflow route ${id}.`);
+  return route;
+}
+
 function mutableWorkflowStep(
   card: MutableWorkflowCard,
   phaseId: string,
@@ -269,7 +277,7 @@ function installValidProductRepeat(document: OpenApiDocument): {
 }
 
 describe("CLI workflow resolver adapter", () => {
-  it("accepts the checked-in live catalog and preserves all 70 reviewed outcomes", async () => {
+  it("accepts the checked-in live catalog and preserves all reviewed outcomes", async () => {
     const liveDocument = await loadLiveDocument();
 
     for (const testCase of AGENT_INTENT_EVAL_CASES) {
@@ -306,6 +314,74 @@ describe("CLI workflow resolver adapter", () => {
       expect(new TextEncoder().encode(JSON.stringify(result)).byteLength, testCase.id)
         .toBeLessThanOrEqual(16 * 1024);
     }
+  }, 10_000);
+
+  it("validates route-local fixed merchant-calendar windows against card projections", async () => {
+    const source = await loadLiveDocument();
+    const valid = structuredClone(source);
+    mutableWorkflowRoute(valid, "dashboard.daily-operations-snapshot").fixedCalendarDays = 1;
+    const validDaily = mutableWorkflowStep(
+      mutableWorkflowCard(valid, "operations.daily-snapshot.v1"),
+      "activity",
+      "daily",
+    );
+    const validQuery = (validDaily.input.template as { query: { days: number } }).query;
+    validQuery.days = 1;
+    Object.assign(validDaily.output!.selectors[0]!, { maxItems: 1, exactItems: 1 });
+    expect(() => resolveWorkflow(valid, {
+      prompt: "dashboard.daily-operations-snapshot",
+      surface: "dashboard",
+    })).not.toThrow();
+
+    for (const fixedCalendarDays of [0, 367, 1.5]) {
+      const malformed = structuredClone(valid);
+      mutableWorkflowRoute(malformed, "dashboard.daily-operations-snapshot")
+        .fixedCalendarDays = fixedCalendarDays;
+      expectInvalidOpenApi(() => resolveWorkflow(malformed, {
+        prompt: "dashboard.daily-operations-snapshot",
+        surface: "dashboard",
+      }));
+    }
+
+    const nonRead = structuredClone(source);
+    mutableWorkflowRoute(nonRead, "dashboard.checkout-flow-replace").fixedCalendarDays = 1;
+    expectInvalidOpenApi(() => resolveWorkflow(nonRead, {
+      prompt: "dashboard.checkout-flow-replace",
+      surface: "dashboard",
+    }));
+
+    const noCard = structuredClone(source);
+    mutableWorkflowRoute(noCard, "dashboard.sales-today").fixedCalendarDays = 1;
+    expectInvalidOpenApi(() => resolveWorkflow(noCard, {
+      prompt: "dashboard.sales-today",
+      surface: "dashboard",
+    }));
+
+    const route30Card29 = structuredClone(valid);
+    mutableWorkflowRoute(route30Card29, "dashboard.daily-operations-snapshot")
+      .fixedCalendarDays = 30;
+    const mismatchDaily = mutableWorkflowStep(
+      mutableWorkflowCard(route30Card29, "operations.daily-snapshot.v1"),
+      "activity",
+      "daily",
+    );
+    (mismatchDaily.input.template as { query: { days: number } }).query.days = 29;
+    Object.assign(mismatchDaily.output!.selectors[0]!, { maxItems: 29, exactItems: 29 });
+    expectInvalidOpenApi(() => resolveWorkflow(route30Card29, {
+      prompt: "dashboard.daily-operations-snapshot",
+      surface: "dashboard",
+    }));
+
+    const missingExactItems = structuredClone(valid);
+    delete mutableWorkflowStep(
+      mutableWorkflowCard(missingExactItems, "operations.daily-snapshot.v1"),
+      "activity",
+      "daily",
+    ).output!.selectors[0]!.exactItems;
+    expectInvalidOpenApi(() => resolveWorkflow(missingExactItems, {
+      prompt: "dashboard.daily-operations-snapshot",
+      surface: "dashboard",
+    }));
   });
 
   it("returns validated live product and daily card detail without the catalog", async () => {
@@ -446,7 +522,7 @@ describe("CLI workflow resolver adapter", () => {
     expect(daily.kind).toBe("plan");
     if (daily.kind === "plan") {
       expect(daily.plan.detail?.requiredFacts.find((fact) => fact.id === "days")).toMatchObject({
-        description: "Use 1 today; use 2 and select the earlier key yesterday.",
+        description: "Use the fixed one-day window for today.",
         defaultValue: 1,
         source: { kind: "constant", value: 1 },
       });
@@ -473,6 +549,7 @@ describe("CLI workflow resolver adapter", () => {
         expect.stringContaining("activity.paymentRecovery.total"),
         expect.stringContaining("parallel reads"),
         expect.stringContaining("Fail closed"),
+        expect.stringContaining("absent from fixed selectors"),
       ],
       phases: [
         {
@@ -486,7 +563,8 @@ describe("CLI workflow resolver adapter", () => {
                 selectors: [{
                   pointer: "/data/dailyActivityData",
                   alias: "activity",
-                  maxItems: 2,
+                  maxItems: 1,
+                  exactItems: 1,
                 }],
               },
             },
@@ -590,6 +668,15 @@ describe("CLI workflow resolver adapter", () => {
       ["schema maxItems overflow", (card) => {
         mutableWorkflowStep(card, "activity", "daily").output!.selectors[0]!.maxItems = 91;
       }],
+      ["exactItems mismatch", (card) => {
+        mutableWorkflowStep(card, "activity", "daily").output!.selectors[0]!.exactItems = 2;
+      }],
+      ["exactItems zero", (card) => {
+        mutableWorkflowStep(card, "activity", "daily").output!.selectors[0]!.exactItems = 0;
+      }],
+      ["exactItems on scalar", (card) => {
+        mutableWorkflowStep(card, "activity", "currency").output!.selectors[0]!.exactItems = 1;
+      }],
       ["duplicate selected field alias", (card) => {
         const fields = mutableWorkflowStep(card, "activity", "daily").output!.selectors[0]!.fields!;
         fields[1]!.alias = fields[0]!.alias;
@@ -611,6 +698,38 @@ describe("CLI workflow resolver adapter", () => {
         throw new Error(`Malformed case '${name}' was not rejected.`, { cause: error });
       }
     }
+  });
+
+  it("rejects exactItems below the strongest live output-schema minimum", async () => {
+    const liveDocument = await loadLiveDocument();
+    Object.assign(
+      mutableWorkflowStep(
+        mutableWorkflowCard(liveDocument, "operations.daily-snapshot.v1"),
+        "activity",
+        "daily",
+      ).output!.selectors[0]!,
+      { maxItems: 1, exactItems: 1 },
+    );
+    const operation = mutableOperation(liveDocument, "dashboard.home.activity") as OpenApiOperation & {
+      responses: {
+        "200": { content: { "application/json": { schema: {
+          properties: { data: { properties: { dailyActivityData: Record<string, unknown> } } };
+        } } } };
+      };
+    };
+    const activityArray = operation.responses["200"].content["application/json"].schema
+      .properties.data.properties.dailyActivityData;
+    const activityVariant = structuredClone(activityArray);
+    for (const key of Object.keys(activityArray)) delete activityArray[key];
+    activityArray.anyOf = [
+      { ...structuredClone(activityVariant), minItems: 1 },
+      { ...structuredClone(activityVariant), minItems: 2 },
+    ];
+
+    expectInvalidOpenApi(() => resolveWorkflow(liveDocument, {
+      prompt: "dashboard.daily-operations-snapshot",
+      surface: "dashboard",
+    }));
   });
 
   it("rejects malformed nested live card detail as invalid OpenAPI", async () => {
@@ -935,6 +1054,86 @@ describe("CLI workflow resolver adapter", () => {
       safePlan: { operationIds: ["storefront.products.get_section"] },
       forbiddenOperationIds: ["dashboard.inventory.list"],
     });
+  });
+
+  it("parses declarative cooperative control exemptions", () => {
+    const cooperative = document((workflows) => {
+      const trigger = workflows.controls[0]!.trigger as Record<string, unknown>;
+      trigger.noneOf = ["if supported"];
+    });
+    expect(() => resolveWorkflow(cooperative, {
+      prompt: "Tell the buyer exact units for this variant if supported",
+      surface: "storefront",
+    })).not.toThrow();
+
+    const malformed = document((workflows) => {
+      const trigger = workflows.controls[0]!.trigger as Record<string, unknown>;
+      trigger.noneOf = [];
+    });
+    expectInvalidOpenApi(() => resolveWorkflow(malformed, {
+      prompt: "Tell the buyer exact units for this variant",
+      surface: "storefront",
+    }));
+  });
+
+  it("parses bounded anyOf controls and rejects malformed untrusted trigger shapes", () => {
+    const valid = document((workflows) => {
+      const trigger = workflows.controls[0]!.trigger as Record<string, unknown>;
+      trigger.anyOf = [{ allOf: [["remaining"], ["units"]] }];
+    });
+    expect(resolveWorkflow(valid, {
+      prompt: "Tell the buyer the exact units remaining for this variant.",
+      surface: "storefront",
+    })).toMatchObject({
+      kind: "control",
+      classification: { controlId: "storefront.no-exact-stock" },
+    });
+
+    const mutations: Array<[string, (trigger: Record<string, unknown>) => void]> = [
+      ["unknown trigger key", (trigger) => {
+        trigger.unexpected = true;
+      }],
+      ["empty branches", (trigger) => {
+        trigger.anyOf = [];
+      }],
+      ["too many branches", (trigger) => {
+        trigger.anyOf = Array.from({ length: 5 }, () => ({ allOf: [["remaining"]] }));
+      }],
+      ["unknown branch key", (trigger) => {
+        trigger.anyOf = [{ allOf: [["remaining"]], unexpected: true }];
+      }],
+      ["empty branch groups", (trigger) => {
+        trigger.anyOf = [{ allOf: [] }];
+      }],
+      ["too many branch groups", (trigger) => {
+        trigger.anyOf = [{
+          allOf: Array.from({ length: 5 }, () => ["remaining"]),
+        }];
+      }],
+      ["non-array branch group", (trigger) => {
+        trigger.anyOf = [{ allOf: ["remaining"] }];
+      }],
+      ["too many branch phrases", (trigger) => {
+        trigger.anyOf = [{
+          allOf: [Array.from({ length: 9 }, (_, index) => `remaining ${index}`)],
+        }];
+      }],
+    ];
+
+    for (const [name, mutate] of mutations) {
+      const malformed = document((workflows) => {
+        const trigger = workflows.controls[0]!.trigger as Record<string, unknown>;
+        mutate(trigger);
+      });
+      try {
+        expectInvalidOpenApi(() => resolveWorkflow(malformed, {
+          prompt: "Tell the buyer the exact units remaining for this variant.",
+          surface: "storefront",
+        }));
+      } catch (error) {
+        throw new Error(`Malformed anyOf case '${name}' was not rejected.`, { cause: error });
+      }
+    }
   });
 
   it("rejects malformed and oversized workflow extensions consistently", () => {

@@ -2,6 +2,38 @@ import type { AgentWorkflowIntentRoute } from "./types";
 
 export const DASHBOARD_AGENT_WORKFLOW_ROUTES = [
   {
+    id: "dashboard.thirty-day-booked-operations-brief",
+    surface: "dashboard",
+    kind: "read",
+    title: "30-day booked brief",
+    summary: "Read PII-free booked activity, current backlog totals, and gaps.",
+    examples: [
+      "Give me a concise last-30-days owner briefing with booked/paid revenue, actually collected or settled cash if known, order counts by status, top 10 SKUs by units and revenue, gross margin if supported, low-stock/stockout risk, abandoned checkouts, payment-recovery backlog, and traffic/conversion; exclude all customer PII and clearly mark unavailable/non-comparable metrics.",
+      "Give a PII-free 30-day owner brief with booked activity and current stock/checkout/recovery totals; where other metrics are unsupported, say unavailable.",
+    ],
+    tags: ["briefing", "30-day", "operations", "sku"],
+    workflowId: "operations.thirty-day-booked-brief.v1",
+    fixedCalendarDays: 30,
+    operationIds: [
+      "dashboard.home.activity",
+      "dashboard.settings.currency_get",
+      "dashboard.inventory.list",
+      "dashboard.abandoned_checkouts.summaries_list",
+      "dashboard.orders.payment_recovery_list",
+    ],
+    requiresFacts: false,
+    requiresConfirmation: false,
+    requiresVerification: false,
+    rules: [
+      "brief.daily.activity is exactly 30 Asia/Dhaka calendar days including zero days; bookedRevenue is booked gross, not paid/settled/net/margin.",
+      "brief.currency is saved currency; missing fails the brief.",
+      "Stock, abandoned, and recovery totals are current snapshots, not period metrics or cohorts.",
+      "paymentRecovery.total is all recoverable hosted-payment work; paymentNeedsAttention.total is actionable failed/stale work. Snapshots can race; never subtract.",
+      "Any requested field absent from fixed selectors (status, cash/economics, SKU ranks, traffic/conversion) is unavailable; never infer, approximate, or claim coverage.",
+      "Projections only, never raw rows/PII. Any read/projection failure fails: no partial, zero, or unsupported label.",
+    ],
+  },
+  {
     id: "dashboard.daily-operations-snapshot",
     surface: "dashboard",
     kind: "read",
@@ -13,6 +45,7 @@ export const DASHBOARD_AGENT_WORKFLOW_ROUTES = [
     ],
     tags: ["operations", "sales", "daily", "payment-recovery"],
     workflowId: "operations.daily-snapshot.v1",
+    fixedCalendarDays: 1,
     operationIds: [
       "dashboard.home.activity",
       "dashboard.orders.list",
@@ -32,6 +65,7 @@ export const DASHBOARD_AGENT_WORKFLOW_ROUTES = [
       "activity.paymentRecovery.total is all recoverable hosted-payment work; activity.paymentNeedsAttention.total is the actionable failed/stale subset; both are current non-transactional backlogs, not daily metrics.",
       "Never subtract the recovery totals because their parallel reads can observe different instants.",
       "Fail closed when fulfillment, stock, checkout, payment, delivery, or currency facts cannot be read.",
+      "Any requested field absent from fixed selectors is unavailable; never infer or claim coverage.",
     ],
   },
   {
@@ -608,6 +642,34 @@ export const DASHBOARD_AGENT_WORKFLOW_ROUTES = [
     ],
   },
   {
+    id: "dashboard.stripe-settings",
+    surface: "dashboard",
+    kind: "write",
+    title: "Update Stripe checkout settings",
+    summary: "Read masked Stripe settings, merge supplied fields, save, and verify readiness.",
+    examples: [
+      "Configure Stripe with the merchant-supplied secret key.",
+      "Replace the Stripe secret key credential.",
+      "Set Stripe secretKey.",
+    ],
+    tags: [
+      "payments", "stripe", "checkout", "credentials", "secretKey", "publishableKey",
+      "webhookSecret", "enabled",
+    ],
+    operationIds: [
+      "dashboard.payments.stripe_get",
+      "dashboard.payments.stripe_update",
+    ],
+    requiresFacts: true,
+    requiresConfirmation: true,
+    requiresVerification: true,
+    rules: [
+      "Read masked settings; dashboard.payments.stripe_update declares only enabled, publishableKey, secretKey, and webhookSecret. Ask/no write for any absent field.",
+      "Never return, log, infer, or reuse secret and webhook credentials.",
+      "Confirm the security-sensitive save; enable only when complete, then reread readiness.",
+    ],
+  },
+  {
     id: "dashboard.business-seo-settings",
     surface: "dashboard",
     kind: "write",
@@ -879,18 +941,21 @@ export const DASHBOARD_AGENT_WORKFLOW_ROUTES = [
     summary: "Read complete notification rules, change one event channel, and verify the settings.",
     examples: [
       "Enable customer SMS for shipped orders but keep every other notification rule unchanged.",
+      "Configure WhatsApp order-confirmation notifications.",
     ],
-    tags: ["notifications", "customers", "sms"],
+    tags: ["notifications", "customers", "orders", "sms", "email", "whatsapp"],
     operationIds: [
       "dashboard.notifications.customer_rules_get",
       "dashboard.notifications.customer_rules_update",
     ],
-    requiresFacts: false,
+    requiresFacts: true,
     requiresConfirmation: true,
     requiresVerification: true,
     rules: [
       "Read the complete current rule set before editing.",
-      "Change only the requested event and channel; preserve all other rules.",
+      "Declared order events: order_created, order_confirmed, order_processing, order_shipped, order_delivered, order_completed, order_cancelled, order_returned.",
+      "Also declared: refund_processing, refund_failed, order_refunded, order_partially_refunded, payment_balance_paid, support_request_submitted, support_request_status_updated.",
+      "Validate against strict dashboard.notifications.customer_rules_update; if the event is absent, ask/no write. Preserve every other rule.",
       "Confirm the write and verify the returned settings.",
     ],
   },

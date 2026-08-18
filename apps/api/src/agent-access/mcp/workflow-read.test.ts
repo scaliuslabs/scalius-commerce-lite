@@ -13,19 +13,38 @@ vi.mock("../dispatch", () => ({
   dispatchAgentOperation: mocks.dispatchAgentOperation,
 }));
 
+vi.mock("../../generated/agent-operations.gen", async (importOriginal) => {
+  const generated = await importOriginal<
+    typeof import("../../generated/agent-operations.gen")
+  >();
+  const { buildAgentWorkflowCatalog } = await import("../workflows/catalog");
+  return {
+    ...generated,
+    AGENT_WORKFLOW_CATALOG: buildAgentWorkflowCatalog(generated.AGENT_OPERATIONS, {
+      requireCuratedCards: true,
+    }),
+  };
+});
+
 import { AGENT_OPERATIONS_BY_ID } from "../../generated/agent-operations.gen";
 import type { AgentOperationManifestEntry } from "../../openapi/agent-operation-manifest";
 import type { AgentPrincipal } from "../types";
+import { DASHBOARD_AGENT_WORKFLOW_ROUTES } from "../workflows/routes-dashboard";
 import { executeAuthorizedWorkflowRead } from "./workflow-read";
 
 const DAILY_PROMPT = "dashboard.daily-operations-snapshot";
+const THIRTY_DAY_PROMPT = "dashboard.thirty-day-booked-operations-brief";
 const DAILY_RULES = [
   "Interpret activity.daily.bookedRevenue as Asia/Dhaka order-day booked gross, not collected cash, profit, or net settlement.",
   "No authoritative merchant-day collected-cash or net-settlement aggregate exists; report it unavailable, never zero or inferred.",
   "activity.paymentRecovery.total is all recoverable hosted-payment work; activity.paymentNeedsAttention.total is the actionable failed/stale subset; both are current non-transactional backlogs, not daily metrics.",
   "Never subtract the recovery totals because their parallel reads can observe different instants.",
   "Fail closed when fulfillment, stock, checkout, payment, delivery, or currency facts cannot be read.",
+  "Any requested field absent from fixed selectors is unavailable; never infer or claim coverage.",
 ];
+const THIRTY_DAY_RULES = DASHBOARD_AGENT_WORKFLOW_ROUTES.find((route) =>
+  route.id === THIRTY_DAY_PROMPT
+)!.rules;
 const UNAVAILABLE = {
   kind: "unavailable",
   disposition: "unavailable",
@@ -177,6 +196,42 @@ function dailyData(): Record<string, unknown> {
           },
         ],
         pagination: { page: 1, limit: 100, total: 1, totalPages: 1 },
+      },
+    },
+  };
+}
+
+function thirtyDayData(): Record<string, unknown> {
+  return {
+    "dashboard.home.activity": {
+      data: {
+        dailyActivityData: Array.from({ length: 30 }, (_, index) => ({
+          date: new Date(Date.UTC(2026, 6, 20 + index)).toISOString().slice(0, 10),
+          orders: index === 4 ? 0 : index,
+          revenue: index === 4 ? 0 : index * 100,
+          customerEmail: `private-${index}@example.com`,
+        })),
+      },
+    },
+    "dashboard.settings.currency_get": {
+      data: { currencyCode: "BDT", currencySymbol: "৳", providerSecret: "hidden" },
+    },
+    "dashboard.inventory.list": {
+      data: {
+        stats: { lowStockCount: 6, outOfStockCount: 3 },
+        variants: [{ sku: "PRIVATE-SKU", customerPhone: "+8801700000000" }],
+      },
+    },
+    "dashboard.abandoned_checkouts.summaries_list": {
+      data: {
+        pagination: { page: 1, limit: 1, total: 11, totalPages: 11 },
+        checkouts: [{ email: "abandoned@example.com", phone: "+8801800000000" }],
+      },
+    },
+    "dashboard.orders.payment_recovery_list": {
+      data: {
+        pagination: { page: 1, limit: 1, total: 8, totalPages: 8 },
+        orders: [{ customerName: "Recovery Buyer", customerEmail: "recovery@example.com" }],
       },
     },
   };
@@ -415,6 +470,213 @@ describe("executeAuthorizedWorkflowRead", () => {
       { query: { page: 1, limit: 1, state: "needs_attention" } },
     ]);
   });
+
+  it("executes the fixed 30-day brief in three two-lane waves with count-only outputs", async () => {
+    const responses = thirtyDayData();
+    const authorized: string[] = [];
+    let active = 0;
+    let maxActive = 0;
+    let wave = 0;
+    const startedWaves: number[] = [];
+    mocks.getAuthorizedOperation.mockImplementation(async (operationId: string) => {
+      authorized.push(operationId);
+      return AGENT_OPERATIONS_BY_ID[operationId] ?? null;
+    });
+    mocks.dispatchAgentOperation.mockImplementation(async ({
+      operation,
+      input,
+    }: {
+      operation: AgentOperationManifestEntry;
+      input: { query?: { state?: string } };
+    }) => {
+      expect(authorized).toHaveLength(5);
+      if (active === 0) wave += 1;
+      startedWaves.push(wave);
+      active += 1;
+      maxActive = Math.max(maxActive, active);
+      await new Promise((resolve) => setTimeout(resolve, 2));
+      active -= 1;
+      if (
+        operation.operationId === "dashboard.orders.payment_recovery_list" &&
+        input.query?.state === "needs_attention"
+      ) {
+        return operationResult(operation.operationId, {
+          data: {
+            pagination: { page: 1, limit: 1, total: 3, totalPages: 3 },
+            orders: [{ customerPhone: "+8801900000000" }],
+          },
+        });
+      }
+      return operationResult(operation.operationId, responses[operation.operationId]);
+    });
+
+    const result = await execute(THIRTY_DAY_PROMPT);
+
+    expect(authorized).toEqual([
+      "dashboard.home.activity",
+      "dashboard.settings.currency_get",
+      "dashboard.inventory.list",
+      "dashboard.abandoned_checkouts.summaries_list",
+      "dashboard.orders.payment_recovery_list",
+    ]);
+    expect(maxActive).toBe(2);
+    expect(startedWaves).toEqual([1, 1, 2, 2, 3, 3]);
+    expect(mocks.dispatchAgentOperation).toHaveBeenCalledTimes(6);
+    expect(result).toMatchObject({
+      kind: "result",
+      disposition: "execute",
+      workflowId: "operations.thirty-day-booked-brief.v1",
+      rules: THIRTY_DAY_RULES,
+      outputs: {
+        "brief.currency": { currencyCode: "BDT", currencySymbol: "৳" },
+        "brief.stock": { lowStockCount: 6, outOfStockCount: 3 },
+        "brief.abandoned": { total: 11 },
+        "brief.paymentRecovery": { total: 8 },
+        "brief.paymentNeedsAttention": { total: 3 },
+      },
+    });
+    if (result.kind !== "result") return;
+    expect(Object.keys(result.outputs)).toEqual([
+      "brief.daily",
+      "brief.currency",
+      "brief.stock",
+      "brief.abandoned",
+      "brief.paymentRecovery",
+      "brief.paymentNeedsAttention",
+    ]);
+    expect(result.outputs["brief.daily"]?.activity).toHaveLength(30);
+    const activity = result.outputs["brief.daily"]?.activity as Array<Record<string, unknown>>;
+    expect(activity[0]?.date).toBe("2026-07-20");
+    expect(activity.at(-1)?.date).toBe("2026-08-18");
+    expect(activity[4])
+      .toEqual({ date: "2026-07-24", orders: 0, bookedRevenue: 0 });
+    const serialized = JSON.stringify(result);
+    expect(new TextEncoder().encode(serialized).byteLength).toBeLessThanOrEqual(8 * 1024);
+    for (const forbidden of [
+      "private-",
+      "PRIVATE-SKU",
+      "+8801700000000",
+      "abandoned@example.com",
+      "Recovery Buyer",
+      "recovery@example.com",
+      "+8801900000000",
+      "providerSecret",
+      '"orders":[',
+      '"checkouts":[',
+    ]) expect(serialized).not.toContain(forbidden);
+
+    expect(mocks.dispatchAgentOperation.mock.calls.map(([options]) => options.input)).toEqual([
+      { query: { days: 30 } },
+      {},
+      {
+        query: {
+          section: "variants",
+          page: 1,
+          limit: 1,
+          search: "",
+          status: "all",
+          sort: "available",
+          order: "asc",
+        },
+      },
+      { query: { page: 1, limit: 1, search: "", order: "desc" } },
+      { query: { page: 1, limit: 1, state: "recoverable", order: "desc" } },
+      { query: { page: 1, limit: 1, state: "needs_attention", order: "desc" } },
+    ]);
+  });
+
+  it.each([
+    ["dispatch failure", 2],
+    ["missing currency projection", 2],
+    ["29 activity rows", 2],
+    ["31 activity rows", 2],
+    ["missing abandoned total", 4],
+    ["later recovery failure", 6],
+    ["PII-bearing operation error", 6],
+  ] as const)(
+    "fails the whole 30-day brief without partial outputs or zeros on %s",
+    async (failure, expectedCalls) => {
+      const responses = thirtyDayData();
+      mocks.dispatchAgentOperation.mockImplementation(async ({
+        operation,
+        input,
+      }: {
+        operation: AgentOperationManifestEntry;
+        input: { query?: { state?: string } };
+      }) => {
+        if (failure === "dispatch failure" && operation.operationId === "dashboard.home.activity") {
+          throw new Error("read failed");
+        }
+        if (
+          failure === "missing currency projection" &&
+          operation.operationId === "dashboard.settings.currency_get"
+        ) {
+          return operationResult(operation.operationId, { data: { currencyCode: "BDT" } });
+        }
+        if (
+          (failure === "29 activity rows" || failure === "31 activity rows") &&
+          operation.operationId === "dashboard.home.activity"
+        ) {
+          const dailyActivityData = (responses[operation.operationId] as {
+            data: { dailyActivityData: Array<Record<string, unknown>> };
+          }).data.dailyActivityData;
+          return operationResult(operation.operationId, {
+            data: {
+              dailyActivityData: failure === "29 activity rows"
+                ? dailyActivityData.slice(0, 29)
+                : [
+                    ...dailyActivityData,
+                    { ...dailyActivityData.at(-1)!, date: "2026-08-19" },
+                  ],
+            },
+          });
+        }
+        if (
+          failure === "missing abandoned total" &&
+          operation.operationId === "dashboard.abandoned_checkouts.summaries_list"
+        ) {
+          return operationResult(operation.operationId, {
+            data: {
+              pagination: { page: 1, limit: 1, totalPages: 1 },
+              checkouts: [{ email: "must-not-leak@example.com" }],
+            },
+          });
+        }
+        if (
+          failure === "later recovery failure" &&
+          operation.operationId === "dashboard.orders.payment_recovery_list" &&
+          input.query?.state === "needs_attention"
+        ) {
+          throw new Error("late read failed");
+        }
+        if (
+          failure === "PII-bearing operation error" &&
+          operation.operationId === "dashboard.orders.payment_recovery_list" &&
+          input.query?.state === "needs_attention"
+        ) {
+          return {
+            operationId: operation.operationId,
+            status: 500,
+            ok: false,
+            requestId: "private-request-buyer@example.com",
+            contentType: "application/json",
+            data: { customerEmail: "must-not-leak@example.com" },
+          };
+        }
+        return operationResult(operation.operationId, responses[operation.operationId]);
+      });
+
+      const result = await execute(THIRTY_DAY_PROMPT);
+
+      expect(result).toEqual(UNAVAILABLE);
+      expect(JSON.stringify(result)).not.toContain('"outputs"');
+      expect(JSON.stringify(result)).not.toContain('"total":0');
+      expect(JSON.stringify(result)).not.toContain('"disposition":"unsupported"');
+      expect(JSON.stringify(result)).not.toContain("must-not-leak");
+      expect(JSON.stringify(result)).not.toContain("private-request");
+      expect(mocks.dispatchAgentOperation).toHaveBeenCalledTimes(expectedCalls);
+    },
+  );
 
   it("authorizes every unique operation before dispatch and returns no grant details on denial", async () => {
     mocks.getAuthorizedOperation.mockImplementation(async (operationId: string) =>

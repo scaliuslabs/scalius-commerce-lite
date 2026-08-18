@@ -588,7 +588,7 @@ export const DAILY_OPERATING_SNAPSHOT_WORKFLOW: AgentWorkflowCard = {
     {
       id: "days",
       title: "Merchant-day window",
-      description: "Use 1 today; use 2 and select the earlier key yesterday.",
+      description: "Use the fixed one-day window for today.",
       required: true,
       defaultValue: 1,
       source: { kind: "constant", value: 1 },
@@ -626,7 +626,8 @@ export const DAILY_OPERATING_SNAPSHOT_WORKFLOW: AgentWorkflowCard = {
             selectors: [{
               pointer: "/data/dailyActivityData",
               alias: "activity",
-              maxItems: 2,
+              maxItems: 1,
+              exactItems: 1,
               fields: [
                 { pointer: "/date", alias: "date" },
                 { pointer: "/orders", alias: "orders" },
@@ -891,7 +892,7 @@ export const DAILY_OPERATING_SNAPSHOT_WORKFLOW: AgentWorkflowCard = {
       operationId: "dashboard.home.activity",
       responsePointers: ["/data"],
       proves: ["Merchant-day booked gross; no collected cash or settlement."],
-      bounds: { maxCalls: 1, maxItems: 2, maxResponseBytes: 32_768 },
+      bounds: { maxCalls: 1, maxItems: 1, maxResponseBytes: 32_768 },
     },
     {
       id: "fulfillment",
@@ -936,7 +937,178 @@ export const DAILY_OPERATING_SNAPSHOT_WORKFLOW: AgentWorkflowCard = {
   ],
 };
 
+export const THIRTY_DAY_BOOKED_OPERATIONS_BRIEF_WORKFLOW: AgentWorkflowCard = {
+  id: "operations.thirty-day-booked-brief.v1",
+  surface: "dashboard",
+  title: "30-day booked operations brief",
+  summary: "Read bounded booked activity and current operational backlog counts.",
+  examples: ["Read the accepted PII-free 30-day booked-operations subset."],
+  tags: ["briefing", "booked-revenue", "inventory", "backlogs", "sku"],
+  requiredFacts: [],
+  phases: [{
+    id: "brief",
+    surface: "dashboard",
+    title: "Booked activity and current backlogs",
+    summary: "Six fixed count-safe reads in three bounded waves.",
+    dependsOn: [],
+    stopConditions: ["Stop on any read or projection failure; return no partial brief."],
+    steps: [
+      {
+        id: "daily",
+        title: "30-day booked activity",
+        operationId: "dashboard.home.activity",
+        mutation: "read",
+        input: { template: { query: { days: 30 } }, dependencies: [], defaults: [] },
+        output: {
+          selectors: [{
+            pointer: "/data/dailyActivityData",
+            alias: "activity",
+            maxItems: 30,
+            exactItems: 30,
+            fields: [
+              { pointer: "/date", alias: "date" },
+              { pointer: "/orders", alias: "orders" },
+              { pointer: "/revenue", alias: "bookedRevenue" },
+            ],
+          }],
+        },
+        policies: dailyReadPolicies,
+      },
+      {
+        id: "currency",
+        title: "Currency",
+        operationId: "dashboard.settings.currency_get",
+        mutation: "read",
+        input: { template: {}, dependencies: [], defaults: [] },
+        output: {
+          selectors: [
+            { pointer: "/data/currencyCode", alias: "currencyCode" },
+            { pointer: "/data/currencySymbol", alias: "currencySymbol" },
+          ],
+        },
+        policies: dailyReadPolicies,
+      },
+      {
+        id: "stock",
+        title: "Stock-risk counts",
+        operationId: "dashboard.inventory.list",
+        mutation: "read",
+        input: {
+          template: {
+            query: {
+              section: "variants",
+              page: 1,
+              limit: 1,
+              search: "",
+              status: "all",
+              sort: "available",
+              order: "asc",
+            },
+          },
+          dependencies: [],
+          defaults: [],
+        },
+        output: {
+          selectors: [
+            { pointer: "/data/stats/lowStockCount", alias: "lowStockCount" },
+            { pointer: "/data/stats/outOfStockCount", alias: "outOfStockCount" },
+          ],
+        },
+        policies: dailyReadPolicies,
+      },
+      {
+        id: "abandoned",
+        title: "Abandoned-checkout total",
+        operationId: "dashboard.abandoned_checkouts.summaries_list",
+        mutation: "read",
+        input: {
+          template: { query: { page: 1, limit: 1, search: "", order: "desc" } },
+          dependencies: [],
+          defaults: [],
+        },
+        output: {
+          selectors: [{ pointer: "/data/pagination/total", alias: "total" }],
+        },
+        policies: dailyReadPolicies,
+      },
+      {
+        id: "paymentRecovery",
+        title: "Recoverable-payment total",
+        operationId: "dashboard.orders.payment_recovery_list",
+        mutation: "read",
+        input: {
+          template: { query: { page: 1, limit: 1, state: "recoverable", order: "desc" } },
+          dependencies: [],
+          defaults: [],
+        },
+        output: {
+          selectors: [{ pointer: "/data/pagination/total", alias: "total" }],
+        },
+        policies: dailyReadPolicies,
+      },
+      {
+        id: "paymentNeedsAttention",
+        title: "Actionable-payment total",
+        operationId: "dashboard.orders.payment_recovery_list",
+        mutation: "read",
+        input: {
+          template: { query: { page: 1, limit: 1, state: "needs_attention", order: "desc" } },
+          dependencies: [],
+          defaults: [],
+        },
+        output: {
+          selectors: [{ pointer: "/data/pagination/total", alias: "total" }],
+        },
+        policies: dailyReadPolicies,
+      },
+    ],
+  }],
+  verification: [
+    {
+      id: "activity",
+      surface: "dashboard",
+      operationId: "dashboard.home.activity",
+      responsePointers: ["/data/dailyActivityData"],
+      proves: ["Exactly 30 Asia/Dhaka calendar-day rows including zero days; booked, not paid or settled."],
+      bounds: { maxCalls: 1, maxItems: 30, maxResponseBytes: 32_768 },
+    },
+    {
+      id: "currency",
+      surface: "dashboard",
+      operationId: "dashboard.settings.currency_get",
+      responsePointers: ["/data/currencyCode", "/data/currencySymbol"],
+      proves: ["Saved display currency only."],
+      bounds: { maxCalls: 1, maxItems: 2, maxResponseBytes: 8_192 },
+    },
+    {
+      id: "stock",
+      surface: "dashboard",
+      operationId: "dashboard.inventory.list",
+      responsePointers: ["/data/stats/lowStockCount", "/data/stats/outOfStockCount"],
+      proves: ["Current aggregate stock-risk counts only."],
+      bounds: { maxCalls: 1, maxItems: 2, maxResponseBytes: 65_536 },
+    },
+    {
+      id: "abandoned",
+      surface: "dashboard",
+      operationId: "dashboard.abandoned_checkouts.summaries_list",
+      responsePointers: ["/data/pagination/total"],
+      proves: ["Current abandoned-checkout total only; no rows or PII."],
+      bounds: { maxCalls: 1, maxItems: 1, maxResponseBytes: 65_536 },
+    },
+    {
+      id: "recovery",
+      surface: "dashboard",
+      operationId: "dashboard.orders.payment_recovery_list",
+      responsePointers: ["/data/pagination/total"],
+      proves: ["Two current recovery totals only; no order rows or PII."],
+      bounds: { maxCalls: 2, maxItems: 1, maxResponseBytes: 65_536 },
+    },
+  ],
+};
+
 export const CURATED_AGENT_WORKFLOW_CARDS: readonly AgentWorkflowCard[] = [
   OPTIONED_PRODUCT_WORKFLOW,
   DAILY_OPERATING_SNAPSHOT_WORKFLOW,
+  THIRTY_DAY_BOOKED_OPERATIONS_BRIEF_WORKFLOW,
 ];

@@ -280,6 +280,7 @@ describe("MCP split operation execution", () => {
             expect.stringContaining("activity.paymentRecovery.total"),
             expect.stringContaining("parallel reads"),
             expect.stringContaining("Fail closed"),
+            expect.stringContaining("absent from fixed selectors"),
           ],
           outputs: {
             "activity.daily": {

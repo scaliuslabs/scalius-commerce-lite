@@ -74,7 +74,10 @@ const MAX_INPUT_PICKS = 8;
 const MAX_INPUT_PICK_KEYS = 32;
 const MAX_INPUT_MATERIALIZATIONS = 8;
 const MAX_INPUT_MATERIALIZATION_KEYS = 16;
-const FIXED_READ_WORKFLOW_IDS = new Set(["operations.daily-snapshot.v1"]);
+const FIXED_READ_WORKFLOW_IDS = new Set([
+  "operations.daily-snapshot.v1",
+  "operations.thirty-day-booked-brief.v1",
+]);
 const MAX_VERIFICATION_RESPONSE_BYTES = 1024 * 1024;
 
 type JsonRecord = Record<string, unknown>;
@@ -941,7 +944,7 @@ function parseProjectionSelector(
   label: string,
 ): { selector: WorkflowResolverOutputSelector; fieldCount: number } {
   const rawSelector = record(value, label);
-  exactKeys(rawSelector, ["pointer", "alias", "maxItems", "fields"], label);
+  exactKeys(rawSelector, ["pointer", "alias", "maxItems", "exactItems", "fields"], label);
   const pointer = projectionPointer(rawSelector.pointer, `${label} pointer`);
   const alias = projectionAlias(rawSelector.alias, `${label} alias`);
   const selected = schemaNodesAtPointer([outputSchema], pointer);
@@ -952,10 +955,16 @@ function parseProjectionSelector(
   const maxItems = rawSelector.maxItems === undefined
     ? undefined
     : positiveInteger(rawSelector.maxItems, `${label} maxItems`, MAX_PROJECTION_ITEMS);
+  const exactItems = rawSelector.exactItems === undefined
+    ? undefined
+    : positiveInteger(rawSelector.exactItems, `${label} exactItems`, MAX_PROJECTION_ITEMS);
 
   if (shape === "array") {
     if (maxItems === undefined) {
       invalidOpenApi(`${label} array requires bounded maxItems.`);
+    }
+    if (exactItems !== undefined && exactItems !== maxItems) {
+      invalidOpenApi(`${label} exactItems must equal maxItems.`);
     }
     const schemaLimits = selected.flatMap((node) => schemaVariants(node)).flatMap((node) =>
       typeof node.maxItems === "number" && Number.isFinite(node.maxItems) ? [node.maxItems] : []
@@ -963,21 +972,52 @@ function parseProjectionSelector(
     if (schemaLimits.length > 0 && maxItems > Math.min(...schemaLimits)) {
       invalidOpenApi(`${label} maxItems exceeds the operation output schema.`);
     }
+    const schemaMinimums = selected.flatMap((node) => schemaVariants(node)).flatMap((node) =>
+      typeof node.minItems === "number" && Number.isFinite(node.minItems)
+        ? [node.minItems]
+        : []
+    );
+    if (
+      exactItems !== undefined &&
+      schemaMinimums.length > 0 &&
+      exactItems < Math.max(...schemaMinimums)
+    ) {
+      invalidOpenApi(`${label} exactItems is below the operation output schema minimum.`);
+    }
     const itemSchemas = arrayItemSchemas(selected);
     if (itemSchemas.length === 0) invalidOpenApi(`${label} array has no declared item schema.`);
     const itemShape = schemaShape(itemSchemas);
     if (itemShape === "object") {
       const fields = parseProjectionFields(rawSelector.fields, itemSchemas, label);
-      return { selector: { pointer, alias, maxItems, fields }, fieldCount: fields.length };
+      return {
+        selector: {
+          pointer,
+          alias,
+          maxItems,
+          ...(exactItems !== undefined ? { exactItems } : {}),
+          fields,
+        },
+        fieldCount: fields.length,
+      };
     }
     if (itemShape !== "scalar" || rawSelector.fields !== undefined) {
       invalidOpenApi(`${label} has invalid fields for its array item schema.`);
     }
-    return { selector: { pointer, alias, maxItems }, fieldCount: 0 };
+    return {
+      selector: {
+        pointer,
+        alias,
+        maxItems,
+        ...(exactItems !== undefined ? { exactItems } : {}),
+      },
+      fieldCount: 0,
+    };
   }
 
   if (shape === "object") {
-    if (maxItems !== undefined) invalidOpenApi(`${label} has maxItems for a non-array field.`);
+    if (maxItems !== undefined || exactItems !== undefined) {
+      invalidOpenApi(`${label} has array bounds for a non-array field.`);
+    }
     const fields = parseProjectionFields(rawSelector.fields, selected, label);
     return { selector: { pointer, alias, fields }, fieldCount: fields.length };
   }
@@ -985,8 +1025,8 @@ function parseProjectionSelector(
   if (shape !== "scalar") {
     invalidOpenApi(`${label} has an unknown or ambiguous output schema.`);
   }
-  if (maxItems !== undefined || rawSelector.fields !== undefined) {
-    invalidOpenApi(`${label} scalar output cannot declare maxItems or fields.`);
+  if (maxItems !== undefined || exactItems !== undefined || rawSelector.fields !== undefined) {
+    invalidOpenApi(`${label} scalar output cannot declare array bounds or fields.`);
   }
   return { selector: { pointer, alias }, fieldCount: 0 };
 }
@@ -1361,7 +1401,7 @@ function parseRoute(
   rawRoute: unknown,
   index: number,
   operations: ReadonlyMap<string, ResolverOperation>,
-  cardIds: ReadonlySet<string>,
+  cardsById: ReadonlyMap<string, WorkflowResolverCard>,
   ids: Set<string>,
 ): WorkflowResolverRoute {
   const label = `Workflow route[${index}]`;
@@ -1390,8 +1430,37 @@ function parseRoute(
   const workflowId = route.workflowId === undefined
     ? undefined
     : text(route.workflowId, `${label} workflowId`, 160, STABLE_ID);
-  if (workflowId && !cardIds.has(workflowId)) {
+  if (workflowId && !cardsById.has(workflowId)) {
     invalidOpenApi(`${label} references unknown workflow card '${workflowId}'.`);
+  }
+  const fixedCalendarDays = route.fixedCalendarDays === undefined
+    ? undefined
+    : positiveInteger(route.fixedCalendarDays, `${label} fixedCalendarDays`, 366);
+  if (fixedCalendarDays !== undefined && kind !== "read") {
+    invalidOpenApi(`${label} fixedCalendarDays requires a read route.`);
+  }
+  if (fixedCalendarDays !== undefined) {
+    const card = workflowId ? cardsById.get(workflowId) : undefined;
+    if (!card) invalidOpenApi(`${label} fixedCalendarDays requires a card-backed read route.`);
+    const calendarSteps = card.phases.flatMap((phase) => phase.steps).filter((step) => {
+      if (!isRecord(step.input.template)) return false;
+      const query = step.input.template.query;
+      return isRecord(query) && Object.hasOwn(query, "days");
+    });
+    if (calendarSteps.length !== 1) {
+      invalidOpenApi(`${label} fixedCalendarDays requires exactly one fixed card query.days input.`);
+    }
+    const calendarStep = calendarSteps[0]!;
+    const query = (calendarStep.input.template as { query: Record<string, unknown> }).query;
+    if (query.days !== fixedCalendarDays) {
+      invalidOpenApi(`${label} fixedCalendarDays does not match its card query.days input.`);
+    }
+    if (!calendarStep.output?.selectors.some((selector) =>
+      (selector as WorkflowResolverOutputSelector & { exactItems?: number }).exactItems ===
+        fixedCalendarDays
+    )) {
+      invalidOpenApi(`${label} fixedCalendarDays requires a matching exactItems projection.`);
+    }
   }
   const parsed: WorkflowResolverRoute = {
     id,
@@ -1406,6 +1475,7 @@ function parseRoute(
     }),
     tags: textArray(route.tags, `${label} tags`, { maximum: 12, itemMaximum: 60 }),
     ...(workflowId ? { workflowId } : {}),
+    ...(fixedCalendarDays !== undefined ? { fixedCalendarDays } : {}),
     operationIds,
     requiresFacts: boolean(route.requiresFacts, `${label} requiresFacts`),
     requiresConfirmation,
@@ -1433,6 +1503,7 @@ function parseControl(
     "any",
   ] as const);
   const trigger = record(control.trigger, `${label} trigger`);
+  exactKeys(trigger, ["allOf", "anyOf", "noneOf", "ignoreWhenNegated"], `${label} trigger`);
   const allOf = array(trigger.allOf, `${label} trigger allOf`, 8, 1).map((rawGroup, groupIndex) =>
     textArray(rawGroup, `${label} trigger allOf[${groupIndex}]`, {
       maximum: 8,
@@ -1440,6 +1511,29 @@ function parseControl(
       minimum: 1,
     })
   );
+  const anyOf = trigger.anyOf === undefined
+    ? undefined
+    : array(trigger.anyOf, `${label} trigger anyOf`, 4, 1).map((rawBranch, branchIndex) => {
+        const branchLabel = `${label} trigger anyOf[${branchIndex}]`;
+        const branch = record(rawBranch, branchLabel);
+        exactKeys(branch, ["allOf"], branchLabel);
+        return {
+          allOf: array(branch.allOf, `${branchLabel} allOf`, 4, 1).map(
+            (rawGroup, groupIndex) => textArray(
+              rawGroup,
+              `${branchLabel} allOf[${groupIndex}]`,
+              { maximum: 8, itemMaximum: 80, minimum: 1 },
+            ),
+          ),
+        };
+      });
+  const noneOf = trigger.noneOf === undefined
+    ? undefined
+    : textArray(trigger.noneOf, `${label} trigger noneOf`, {
+        maximum: 8,
+        itemMaximum: 80,
+        minimum: 1,
+      });
   const safeOperationIds = textArray(control.safeOperationIds, `${label} safeOperationIds`, {
     maximum: 20,
     itemMaximum: 160,
@@ -1481,7 +1575,9 @@ function parseControl(
     reasonCode: text(control.reasonCode, `${label} reasonCode`, 80, REASON_CODE),
     trigger: {
       allOf,
+      ...(anyOf ? { anyOf } : {}),
       ignoreWhenNegated: boolean(trigger.ignoreWhenNegated, `${label} trigger ignoreWhenNegated`),
+      ...(noneOf ? { noneOf } : {}),
     },
     safeOperationIds,
     forbiddenOperationIds,
@@ -1539,9 +1635,9 @@ function parseCatalog(
   const operationsById = new Map(operations.map((operation) => [operation.operationId, operation] as const));
   const ids = new Set<string>();
   const cards = parseCards(catalog.cards, operationsById, ids);
-  const cardIds = new Set(cards.map((card) => card.id));
+  const cardsById = new Map(cards.map((card) => [card.id, card] as const));
   const routes = array(catalog.routes, "Workflow catalog routes", MAX_ROUTES)
-    .map((route, index) => parseRoute(route, index, operationsById, cardIds, ids));
+    .map((route, index) => parseRoute(route, index, operationsById, cardsById, ids));
   const controls = array(catalog.controls, "Workflow catalog controls", MAX_CONTROLS)
     .map((control, index) => parseControl(control, index, operationsById, ids));
   inspectCoverage(catalog.coverage, operationsById);

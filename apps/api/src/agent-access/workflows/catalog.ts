@@ -53,8 +53,10 @@ const MAX_INPUT_PICKS = 8;
 const MAX_INPUT_PICK_KEYS = 32;
 const MAX_INPUT_MATERIALIZATIONS = 8;
 const MAX_INPUT_MATERIALIZATION_KEYS = 16;
-const DAILY_WORKFLOW_ID = "operations.daily-snapshot.v1";
-const DAILY_WORKFLOW_HARD_MAX_BYTES = 12 * 1024;
+const PROJECTED_READ_WORKFLOW_MAX_BYTES = new Map<string, number>([
+  ["operations.daily-snapshot.v1", 12 * 1024],
+  ["operations.thirty-day-booked-brief.v1", 8 * 1024],
+]);
 const RUNNABLE_EXPOSURES = new Set(["execute", "continuation"]);
 const WORKFLOW_SURFACES = new Set<AgentWorkflowSurface>([
   "dashboard",
@@ -254,7 +256,7 @@ function assertProjectionSelector(
 ): number {
   assertExactKeys(
     selector,
-    new Set(["pointer", "alias", "maxItems", "fields"]),
+    new Set(["pointer", "alias", "maxItems", "exactItems", "fields"]),
     label,
   );
   assertProjectionPointer(selector.pointer, label);
@@ -272,6 +274,16 @@ function assertProjectionSelector(
     ) {
       throw new Error(`${label} array requires bounded maxItems of 1-${MAX_PROJECTION_ITEMS}.`);
     }
+    if (
+      selector.exactItems !== undefined &&
+      (
+        !Number.isSafeInteger(selector.exactItems) ||
+        selector.exactItems < 1 ||
+        selector.exactItems !== selector.maxItems
+      )
+    ) {
+      throw new Error(`${label} exactItems must equal its bounded maxItems.`);
+    }
     const schemaLimits = selected.flatMap(schemaVariants).flatMap((schema) =>
       typeof schema.maxItems === "number" ? [schema.maxItems] : []
     );
@@ -280,6 +292,16 @@ function assertProjectionSelector(
       selector.maxItems! > Math.min(...schemaLimits)
     ) {
       throw new Error(`${label} maxItems exceeds the operation output schema.`);
+    }
+    const schemaMinimums = selected.flatMap(schemaVariants).flatMap((schema) =>
+      typeof schema.minItems === "number" ? [schema.minItems] : []
+    );
+    if (
+      selector.exactItems !== undefined &&
+      schemaMinimums.length > 0 &&
+      selector.exactItems < Math.max(...schemaMinimums)
+    ) {
+      throw new Error(`${label} exactItems is below the operation output schema minimum.`);
     }
     const items = arrayItemSchemas(selected);
     if (items.length === 0) throw new Error(`${label} array has no declared item schema.`);
@@ -293,16 +315,20 @@ function assertProjectionSelector(
     return 0;
   }
   if (shape === "object") {
-    if (selector.maxItems !== undefined) {
-      throw new Error(`${label} has maxItems for a non-array output field.`);
+    if (selector.maxItems !== undefined || selector.exactItems !== undefined) {
+      throw new Error(`${label} has array bounds for a non-array output field.`);
     }
     return assertProjectionFields(selector.fields, selected, label);
   }
   if (shape !== "scalar") {
     throw new Error(`${label} has an unknown or ambiguous output schema.`);
   }
-  if (selector.maxItems !== undefined || selector.fields !== undefined) {
-    throw new Error(`${label} scalar output cannot declare maxItems or selected fields.`);
+  if (
+    selector.maxItems !== undefined ||
+    selector.exactItems !== undefined ||
+    selector.fields !== undefined
+  ) {
+    throw new Error(`${label} scalar output cannot declare array bounds or selected fields.`);
   }
   return 0;
 }
@@ -939,7 +965,7 @@ export function validateAgentWorkflowCards(
           );
         }
         assertMutationPolicy(operation, step.mutation, label);
-        if (card.id === DAILY_WORKFLOW_ID && step.output === undefined) {
+        if (PROJECTED_READ_WORKFLOW_MAX_BYTES.has(card.id) && step.output === undefined) {
           throw new Error(`${label} requires a reviewed output projection.`);
         }
         if (step.output !== undefined) {
@@ -1078,11 +1104,14 @@ export function validateAgentWorkflowCards(
       }
       evidence.responsePointers.forEach((pointer) => assertJsonPointer(pointer, label));
     }
+    const projectedReadMaxBytes = PROJECTED_READ_WORKFLOW_MAX_BYTES.get(card.id);
     if (
-      card.id === DAILY_WORKFLOW_ID &&
-      new TextEncoder().encode(JSON.stringify(card)).byteLength > DAILY_WORKFLOW_HARD_MAX_BYTES
+      projectedReadMaxBytes !== undefined &&
+      new TextEncoder().encode(JSON.stringify(card)).byteLength > projectedReadMaxBytes
     ) {
-      throw new Error(`Workflow ${card.id} exceeds the 12 KiB card limit.`);
+      throw new Error(
+        `Workflow ${card.id} exceeds the ${projectedReadMaxBytes / 1024} KiB card limit.`,
+      );
     }
   }
 }
@@ -1147,6 +1176,23 @@ export function validateAgentWorkflowRoutes(
     if (route.requiresConfirmation !== hasMutation) {
       throw new Error(`Workflow route ${route.id} confirmation does not match its operation risks.`);
     }
+    if (route.fixedCalendarDays !== undefined) {
+      if (route.kind !== "read") {
+        throw new Error(`Workflow route ${route.id} fixedCalendarDays requires a read route.`);
+      }
+      if (route.workflowId === undefined) {
+        throw new Error(`Workflow route ${route.id} fixedCalendarDays requires a card-backed read route.`);
+      }
+      if (
+        !Number.isSafeInteger(route.fixedCalendarDays) ||
+        route.fixedCalendarDays < 1 ||
+        route.fixedCalendarDays > 366
+      ) {
+        throw new Error(
+          `Workflow route ${route.id} fixedCalendarDays requires an integer from 1 to 366.`,
+        );
+      }
+    }
 
     if (route.workflowId) {
       const card = cardsById.get(route.workflowId);
@@ -1161,6 +1207,32 @@ export function validateAgentWorkflowRoutes(
         if (!cardOperations.has(operationId)) {
           throw new Error(
             `Workflow route ${route.id} operation ${operationId} is absent from card ${route.workflowId}.`,
+          );
+        }
+      }
+      if (route.fixedCalendarDays !== undefined) {
+        const calendarSteps = card.phases.flatMap((phase) => phase.steps).filter((step) => {
+          if (!isRecord(step.input.template)) return false;
+          const query = step.input.template.query;
+          return isRecord(query) && Object.hasOwn(query, "days");
+        });
+        if (calendarSteps.length !== 1) {
+          throw new Error(
+            `Workflow route ${route.id} fixedCalendarDays requires exactly one fixed card query.days input.`,
+          );
+        }
+        const calendarStep = calendarSteps[0]!;
+        const query = (calendarStep.input.template as { query: Record<string, unknown> }).query;
+        if (query.days !== route.fixedCalendarDays) {
+          throw new Error(
+            `Workflow route ${route.id} fixedCalendarDays does not match its card query.days input.`,
+          );
+        }
+        if (!calendarStep.output?.selectors.some((selector) =>
+          selector.exactItems === route.fixedCalendarDays
+        )) {
+          throw new Error(
+            `Workflow route ${route.id} fixedCalendarDays requires a matching exactItems projection.`,
           );
         }
       }
@@ -1184,6 +1256,27 @@ export function validateAgentWorkflowControls(
     }
     if (controlIds.has(control.id)) throw new Error(`Duplicate workflow control ID ${control.id}.`);
     controlIds.add(control.id);
+    assertExactKeys(
+      control,
+      new Set([
+        "id",
+        "surface",
+        "title",
+        "summary",
+        "examples",
+        "tags",
+        "disposition",
+        "reasonCode",
+        "trigger",
+        "safeOperationIds",
+        "forbiddenOperationIds",
+        "requiresFacts",
+        "requiresConfirmation",
+        "requiresVerification",
+        "rules",
+      ]),
+      `Workflow control ${control.id}`,
+    );
     if (control.surface !== "any" && !WORKFLOW_SURFACES.has(control.surface)) {
       throw new Error(`Workflow control ${control.id} has invalid surface ${control.surface}.`);
     }
@@ -1204,6 +1297,11 @@ export function validateAgentWorkflowControls(
     if (!/^[a-z][a-z0-9_]{2,79}$/.test(control.reasonCode)) {
       throw new Error(`Workflow control ${control.id} has invalid reasonCode.`);
     }
+    assertExactKeys(
+      control.trigger,
+      new Set(["allOf", "anyOf", "noneOf", "ignoreWhenNegated"]),
+      `Workflow control ${control.id} trigger`,
+    );
     if (control.trigger.allOf.length < 1 || control.trigger.allOf.length > 8) {
       throw new Error(`Workflow control ${control.id} has invalid trigger groups.`);
     }
@@ -1212,6 +1310,44 @@ export function validateAgentWorkflowControls(
         max: 8,
         itemMax: 80,
       });
+    }
+    if (control.trigger.anyOf !== undefined) {
+      if (
+        !Array.isArray(control.trigger.anyOf) ||
+        control.trigger.anyOf.length < 1 ||
+        control.trigger.anyOf.length > 4
+      ) {
+        throw new Error(`Workflow control ${control.id} has invalid trigger anyOf branches.`);
+      }
+      for (const [branchIndex, rawBranch] of control.trigger.anyOf.entries()) {
+        const branchLabel = `Workflow control ${control.id} trigger anyOf[${branchIndex}]`;
+        if (!isRecord(rawBranch)) throw new Error(`${branchLabel} must be an object.`);
+        assertExactKeys(rawBranch, new Set(["allOf"]), branchLabel);
+        const branch = rawBranch as { allOf?: unknown };
+        if (
+          !Array.isArray(branch.allOf) ||
+          branch.allOf.length < 1 ||
+          branch.allOf.length > 4
+        ) {
+          throw new Error(`${branchLabel} has invalid allOf groups.`);
+        }
+        for (const [groupIndex, group] of branch.allOf.entries()) {
+          if (!Array.isArray(group)) {
+            throw new Error(`${branchLabel} allOf[${groupIndex}] must be an array.`);
+          }
+          assertCompactTextList(group as string[], `${branchLabel} allOf[${groupIndex}]`, {
+            max: 8,
+            itemMax: 80,
+          });
+        }
+      }
+    }
+    if (control.trigger.noneOf !== undefined) {
+      assertCompactTextList(
+        control.trigger.noneOf,
+        `Workflow control ${control.id} trigger noneOf`,
+        { max: 8, itemMax: 80 },
+      );
     }
     for (const [label, operationIds] of [
       ["safe", control.safeOperationIds],
