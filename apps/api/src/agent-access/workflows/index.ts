@@ -6,6 +6,7 @@ export {
   type AgentWorkflowCatalog,
   type AgentWorkflowControl,
   type AgentWorkflowControlTrigger,
+  type AgentWorkflowControlTriggerBranch,
   type AgentWorkflowCoverageEntry,
   type AgentWorkflowDisposition,
   type AgentWorkflowIntentKind,
@@ -16,6 +17,7 @@ export {
   CURATED_AGENT_WORKFLOW_CARDS,
   DAILY_OPERATING_SNAPSHOT_WORKFLOW,
   OPTIONED_PRODUCT_WORKFLOW,
+  THIRTY_DAY_BOOKED_OPERATIONS_BRIEF_WORKFLOW,
 } from "./cards";
 export { AGENT_WORKFLOW_CONTROLS } from "./controls";
 export { DASHBOARD_AGENT_WORKFLOW_ROUTES } from "./routes-dashboard";

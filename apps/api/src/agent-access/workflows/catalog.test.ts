@@ -10,6 +10,7 @@ import {
   CURATED_AGENT_WORKFLOW_CARDS,
   DAILY_OPERATING_SNAPSHOT_WORKFLOW,
   OPTIONED_PRODUCT_WORKFLOW,
+  THIRTY_DAY_BOOKED_OPERATIONS_BRIEF_WORKFLOW,
   buildAgentWorkflowCatalog,
   validateAgentWorkflowCards,
   validateAgentWorkflowControls,
@@ -64,17 +65,67 @@ describe("agent workflow catalog", () => {
     expect(catalog.cards.map((card) => card.id)).toEqual([
       "catalog.optioned-product.v1",
       "operations.daily-snapshot.v1",
+      "operations.thirty-day-booked-brief.v1",
     ]);
-    expect(catalog.routes).toHaveLength(60);
-    expect(catalog.controls).toHaveLength(25);
+    expect(catalog.routes).toHaveLength(62);
+    expect(catalog.controls).toHaveLength(32);
     for (const route of catalog.routes) {
       expect(Buffer.byteLength(JSON.stringify(route)), route.id).toBeLessThanOrEqual(2 * 1024);
     }
     for (const control of catalog.controls) {
       expect(Buffer.byteLength(JSON.stringify(control)), control.id).toBeLessThanOrEqual(2 * 1024);
     }
+    const ownerBriefRoute = catalog.routes.find((route) =>
+      route.id === "dashboard.thirty-day-booked-operations-brief"
+    )!;
+    expect(Buffer.byteLength(JSON.stringify(ownerBriefRoute))).toBeLessThanOrEqual(2 * 1024 - 64);
+    expect(ownerBriefRoute.rules.join(" ")).toMatch(
+      /absent from fixed selectors.*unavailable.*never infer.*claim coverage/i,
+    );
+    const stripeRoute = catalog.routes.find((route) =>
+      route.id === "dashboard.stripe-settings"
+    )!;
+    expect(stripeRoute.rules.join(" ")).toMatch(
+      /stripe_update declares only enabled, publishableKey, secretKey, and webhookSecret.*Ask\/no write/i,
+    );
+    const notificationRoute = catalog.routes.find((route) =>
+      route.id === "dashboard.notification-rules"
+    )!;
+    expect(notificationRoute.requiresFacts).toBe(true);
+    expect(notificationRoute.rules.join(" ")).toMatch(
+      /payment_balance_paid.*customer_rules_update.*event is absent, ask\/no write/i,
+    );
+    const notificationUpdate = manifest.find((operation) =>
+      operation.operationId === "dashboard.notifications.customer_rules_update"
+    )!;
+    const notificationInput = notificationUpdate.inputSchema as {
+      requestBody?: {
+        content?: Record<string, {
+          schema?: {
+            properties?: {
+              channels?: { properties?: Record<string, unknown> };
+            };
+          };
+        }>;
+      };
+    };
+    const declaredEvents = Object.keys(
+      notificationInput.requestBody?.content?.["application/json"]
+        ?.schema?.properties?.channels?.properties ?? {},
+    ).sort();
+    const documentedEvents = [...notificationRoute.rules.slice(1, 3).join(" ")
+      .matchAll(/\b[a-z]+(?:_[a-z]+)+\b/g)]
+      .map((match) => match[0]!)
+      .sort();
+    expect(documentedEvents).toEqual(declaredEvents);
+    const ownerBriefScopeControl = catalog.controls.find((control) =>
+      control.id === "dashboard.thirty-day-owner-briefing-needs-scope"
+    )!;
+    expect(Buffer.byteLength(JSON.stringify(ownerBriefScopeControl))).toBeLessThanOrEqual(1_900);
     expect(Buffer.byteLength(JSON.stringify(OPTIONED_PRODUCT_WORKFLOW))).toBeLessThanOrEqual(15_360);
     expect(Buffer.byteLength(JSON.stringify(DAILY_OPERATING_SNAPSHOT_WORKFLOW))).toBeLessThanOrEqual(10 * 1024);
+    expect(Buffer.byteLength(JSON.stringify(THIRTY_DAY_BOOKED_OPERATIONS_BRIEF_WORKFLOW)))
+      .toBeLessThanOrEqual(8 * 1024);
     const generatedSource = generateAgentOperationManifestSource(document);
     expect(generatedSource).toContain("export const AGENT_WORKFLOW_CATALOG");
     expect(generatedSource).toContain(JSON.stringify(catalog, null, 2));
@@ -295,7 +346,8 @@ describe("agent workflow catalog", () => {
     expect(activity).toMatchObject({
       pointer: "/data/dailyActivityData",
       alias: "activity",
-      maxItems: 2,
+      maxItems: 1,
+      exactItems: 1,
     });
     expect(activity.fields?.map((field) => field.pointer)).toEqual([
       "/date",
@@ -429,6 +481,80 @@ describe("agent workflow catalog", () => {
     ).toEqual(["/page", "/limit", "/total", "/totalPages"]);
   });
 
+  it("keeps the 30-day brief fixed, count-only, and PII-free", () => {
+    const brief = THIRTY_DAY_BOOKED_OPERATIONS_BRIEF_WORKFLOW;
+    expect(() => validateAgentWorkflowCards([mutableCard(brief)], manifest)).not.toThrow();
+    const steps = brief.phases[0]!.steps;
+    expect(steps.map((step) => step.operationId)).toEqual([
+      "dashboard.home.activity",
+      "dashboard.settings.currency_get",
+      "dashboard.inventory.list",
+      "dashboard.abandoned_checkouts.summaries_list",
+      "dashboard.orders.payment_recovery_list",
+      "dashboard.orders.payment_recovery_list",
+    ]);
+    expect(steps.map((step) => step.input.template)).toEqual([
+      { query: { days: 30 } },
+      {},
+      {
+        query: {
+          section: "variants",
+          page: 1,
+          limit: 1,
+          search: "",
+          status: "all",
+          sort: "available",
+          order: "asc",
+        },
+      },
+      { query: { page: 1, limit: 1, search: "", order: "desc" } },
+      { query: { page: 1, limit: 1, state: "recoverable", order: "desc" } },
+      { query: { page: 1, limit: 1, state: "needs_attention", order: "desc" } },
+    ]);
+    expect(steps.every((step) => step.output !== undefined)).toBe(true);
+    expect(steps[0]!.output!.selectors).toEqual([{
+      pointer: "/data/dailyActivityData",
+      alias: "activity",
+      maxItems: 30,
+      exactItems: 30,
+      fields: [
+        { pointer: "/date", alias: "date" },
+        { pointer: "/orders", alias: "orders" },
+        { pointer: "/revenue", alias: "bookedRevenue" },
+      ],
+    }]);
+    expect(steps[2]!.output!.selectors).toEqual([
+      { pointer: "/data/stats/lowStockCount", alias: "lowStockCount" },
+      { pointer: "/data/stats/outOfStockCount", alias: "outOfStockCount" },
+    ]);
+    for (const step of steps.slice(3)) {
+      expect(step.output!.selectors).toEqual([
+        { pointer: "/data/pagination/total", alias: "total" },
+      ]);
+    }
+    const serialized = JSON.stringify(brief);
+    for (const unsafe of [
+      "/data/orders",
+      "/data/checkouts",
+      "customerName",
+      "customerEmail",
+      "customerPhone",
+      "shippingAddress",
+    ]) {
+      expect(serialized).not.toContain(unsafe);
+    }
+    expect(brief.verification.find((item) => item.id === "activity")?.proves[0])
+      .toContain("Exactly 30 Asia/Dhaka calendar-day rows including zero days");
+    expect(brief.verification.find((item) => item.id === "currency"))
+      .toMatchObject({ responsePointers: ["/data/currencyCode", "/data/currencySymbol"] });
+
+    const missingProjection = mutableCard(brief);
+    delete missingProjection.phases[0]!.steps[0]!.output;
+    expect(() => validateAgentWorkflowCards([missingProjection], manifest)).toThrowError(
+      /requires a reviewed output projection/,
+    );
+  });
+
   it("rejects unsafe or non-declarative output projection shapes", () => {
     for (const pointer of [
       "/data/*",
@@ -466,9 +592,46 @@ describe("agent workflow catalog", () => {
     );
 
     const schemaOverflow = mutableCard(DAILY_OPERATING_SNAPSHOT_WORKFLOW);
-    workflowStep(schemaOverflow, "activity", "daily").output!.selectors[0]!.maxItems = 91;
+    Object.assign(workflowStep(schemaOverflow, "activity", "daily").output!.selectors[0]!, {
+      maxItems: 91,
+      exactItems: 91,
+    });
     expect(() => validateAgentWorkflowCards([schemaOverflow], manifest)).toThrowError(
       /maxItems exceeds the operation output schema/,
+    );
+
+    const mismatchedExactItems = mutableCard(DAILY_OPERATING_SNAPSHOT_WORKFLOW);
+    workflowStep(mismatchedExactItems, "activity", "daily")
+      .output!.selectors[0]!.exactItems = 2;
+    expect(() => validateAgentWorkflowCards([mismatchedExactItems], manifest)).toThrowError(
+      /exactItems must equal its bounded maxItems/,
+    );
+
+    const strongerOutputMinimum = structuredClone(manifest);
+    const activityOperation = strongerOutputMinimum.find((operation) =>
+      operation.operationId === "dashboard.home.activity"
+    )!;
+    const outputSchema = activityOperation.outputSchema as {
+      properties: { data: { properties: { dailyActivityData: Record<string, unknown> } } };
+    };
+    const activityArray = outputSchema.properties.data.properties.dailyActivityData;
+    const activityVariant = structuredClone(activityArray);
+    for (const key of Object.keys(activityArray)) delete activityArray[key];
+    activityArray.anyOf = [
+      { ...structuredClone(activityVariant), minItems: 1 },
+      { ...structuredClone(activityVariant), minItems: 2 },
+    ];
+    expect(() => validateAgentWorkflowCards([
+      mutableCard(DAILY_OPERATING_SNAPSHOT_WORKFLOW),
+    ], strongerOutputMinimum)).toThrowError(
+      /exactItems is below the operation output schema minimum/,
+    );
+
+    const scalarExactItems = mutableCard(DAILY_OPERATING_SNAPSHOT_WORKFLOW);
+    workflowStep(scalarExactItems, "activity", "currency")
+      .output!.selectors[0]!.exactItems = 1;
+    expect(() => validateAgentWorkflowCards([scalarExactItems], manifest)).toThrowError(
+      /scalar output cannot declare array bounds/,
     );
 
     const tooManySelectors = mutableCard(DAILY_OPERATING_SNAPSHOT_WORKFLOW);
@@ -978,10 +1141,104 @@ describe("agent workflow catalog", () => {
     );
   });
 
-  it("keeps only the two reviewed curated cards", () => {
+  it("validates bounded anyOf control branches and exact trigger keys", () => {
+    const source = catalog.controls.find((control) =>
+      control.id === "dashboard.thirty-day-owner-briefing-needs-scope"
+    )!;
+    expect(() => validateAgentWorkflowControls([mutableControl(source)], manifest)).not.toThrow();
+
+    const mutations: Array<[string, (control: AgentWorkflowControl) => void]> = [
+      ["unknown trigger key", (control) => {
+        (control.trigger as unknown as Record<string, unknown>).unexpected = true;
+      }],
+      ["empty branches", (control) => {
+        control.trigger.anyOf = [];
+      }],
+      ["too many branches", (control) => {
+        control.trigger.anyOf = Array.from({ length: 5 }, () => ({ allOf: [["cash"]] }));
+      }],
+      ["unknown branch key", (control) => {
+        (control.trigger.anyOf![0] as unknown as Record<string, unknown>).unexpected = true;
+      }],
+      ["empty branch groups", (control) => {
+        control.trigger.anyOf![0]!.allOf = [];
+      }],
+      ["too many branch groups", (control) => {
+        control.trigger.anyOf![0]!.allOf = Array.from({ length: 5 }, () => ["cash"]);
+      }],
+      ["non-array branch group", (control) => {
+        (control.trigger.anyOf![0] as unknown as { allOf: unknown }).allOf = ["cash"];
+      }],
+      ["too many branch phrases", (control) => {
+        control.trigger.anyOf![0]!.allOf[0] = Array.from(
+          { length: 9 },
+          (_, index) => `cash phrase ${index}`,
+        );
+      }],
+    ];
+
+    for (const [name, mutate] of mutations) {
+      const malformed = mutableControl(source);
+      mutate(malformed);
+      expect(() => validateAgentWorkflowControls([malformed], manifest), name).toThrow();
+    }
+  });
+
+  it("validates fixed merchant-calendar route windows", () => {
+    const source = mutableRoute(catalog.routes.find((route) =>
+      route.id === "dashboard.thirty-day-booked-operations-brief"
+    )!);
+    expect(source.fixedCalendarDays).toBe(30);
+
+    for (const fixedCalendarDays of [0, 367, 1.5]) {
+      const malformed = mutableRoute(source);
+      malformed.fixedCalendarDays = fixedCalendarDays;
+      expect(() => validateAgentWorkflowRoutes([malformed], catalog.cards, manifest))
+        .toThrowError(/fixedCalendarDays requires an integer from 1 to 366/);
+    }
+
+    const writeRoute = mutableRoute(catalog.routes.find((route) =>
+      route.id === "dashboard.checkout-flow-replace"
+    )!);
+    writeRoute.fixedCalendarDays = 30;
+    expect(() => validateAgentWorkflowRoutes([writeRoute], catalog.cards, manifest))
+      .toThrowError(/fixedCalendarDays requires a read route/);
+
+    const noCard = mutableRoute(source);
+    delete noCard.workflowId;
+    expect(() => validateAgentWorkflowRoutes([noCard], catalog.cards, manifest))
+      .toThrowError(/fixedCalendarDays requires a card-backed read route/);
+
+    const routeMismatch = mutableRoute(source);
+    routeMismatch.fixedCalendarDays = 29;
+    expect(() => validateAgentWorkflowRoutes([routeMismatch], catalog.cards, manifest))
+      .toThrowError(/fixedCalendarDays does not match its card query\.days input/);
+
+    const cardMismatch = catalog.cards.map(mutableCard);
+    const brief = cardMismatch.find((card) =>
+      card.id === "operations.thirty-day-booked-brief.v1"
+    )!;
+    (workflowStep(brief, "brief", "daily").input.template as {
+      query: { days: number };
+    }).query.days = 29;
+    expect(() => validateAgentWorkflowRoutes([source], cardMismatch, manifest))
+      .toThrowError(/fixedCalendarDays does not match its card query\.days input/);
+
+    const missingExact = catalog.cards.map(mutableCard);
+    delete workflowStep(
+      missingExact.find((card) => card.id === "operations.thirty-day-booked-brief.v1")!,
+      "brief",
+      "daily",
+    ).output!.selectors[0]!.exactItems;
+    expect(() => validateAgentWorkflowRoutes([source], missingExact, manifest))
+      .toThrowError(/fixedCalendarDays requires a matching exactItems projection/);
+  });
+
+  it("keeps only the reviewed curated cards", () => {
     expect(CURATED_AGENT_WORKFLOW_CARDS).toEqual([
       OPTIONED_PRODUCT_WORKFLOW,
       DAILY_OPERATING_SNAPSHOT_WORKFLOW,
+      THIRTY_DAY_BOOKED_OPERATIONS_BRIEF_WORKFLOW,
     ]);
   });
 });

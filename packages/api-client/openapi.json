@@ -201180,7 +201180,7 @@
           {
             "id": "days",
             "title": "Merchant-day window",
-            "description": "Use 1 today; use 2 and select the earlier key yesterday.",
+            "description": "Use the fixed one-day window for today.",
             "required": true,
             "defaultValue": 1,
             "source": {
@@ -201240,7 +201240,8 @@
                     {
                       "pointer": "/data/dailyActivityData",
                       "alias": "activity",
-                      "maxItems": 2,
+                      "maxItems": 1,
+                      "exactItems": 1,
                       "fields": [
                         {
                           "pointer": "/date",
@@ -201810,7 +201811,7 @@
             ],
             "bounds": {
               "maxCalls": 1,
-              "maxItems": 2,
+              "maxItems": 1,
               "maxResponseBytes": 32768
             }
           },
@@ -201894,6 +201895,360 @@
             "bounds": {
               "maxCalls": 1,
               "maxItems": 100,
+              "maxResponseBytes": 65536
+            }
+          }
+        ]
+      },
+      {
+        "id": "operations.thirty-day-booked-brief.v1",
+        "surface": "dashboard",
+        "title": "30-day booked operations brief",
+        "summary": "Read bounded booked activity and current operational backlog counts.",
+        "examples": [
+          "Read the accepted PII-free 30-day booked-operations subset."
+        ],
+        "tags": [
+          "briefing",
+          "booked-revenue",
+          "inventory",
+          "backlogs",
+          "sku"
+        ],
+        "requiredFacts": [],
+        "phases": [
+          {
+            "id": "brief",
+            "surface": "dashboard",
+            "title": "Booked activity and current backlogs",
+            "summary": "Six fixed count-safe reads in three bounded waves.",
+            "dependsOn": [],
+            "stopConditions": [
+              "Stop on any read or projection failure; return no partial brief."
+            ],
+            "steps": [
+              {
+                "id": "daily",
+                "title": "30-day booked activity",
+                "operationId": "dashboard.home.activity",
+                "mutation": "read",
+                "input": {
+                  "template": {
+                    "query": {
+                      "days": 30
+                    }
+                  },
+                  "dependencies": [],
+                  "defaults": []
+                },
+                "output": {
+                  "selectors": [
+                    {
+                      "pointer": "/data/dailyActivityData",
+                      "alias": "activity",
+                      "maxItems": 30,
+                      "exactItems": 30,
+                      "fields": [
+                        {
+                          "pointer": "/date",
+                          "alias": "date"
+                        },
+                        {
+                          "pointer": "/orders",
+                          "alias": "orders"
+                        },
+                        {
+                          "pointer": "/revenue",
+                          "alias": "bookedRevenue"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "policies": {
+                  "revision": "none",
+                  "idempotency": "none",
+                  "confirmation": "none",
+                  "stopConditions": [
+                    "Stop on read failure."
+                  ],
+                  "nonInferenceRules": [
+                    "Missing is unknown."
+                  ]
+                }
+              },
+              {
+                "id": "currency",
+                "title": "Currency",
+                "operationId": "dashboard.settings.currency_get",
+                "mutation": "read",
+                "input": {
+                  "template": {},
+                  "dependencies": [],
+                  "defaults": []
+                },
+                "output": {
+                  "selectors": [
+                    {
+                      "pointer": "/data/currencyCode",
+                      "alias": "currencyCode"
+                    },
+                    {
+                      "pointer": "/data/currencySymbol",
+                      "alias": "currencySymbol"
+                    }
+                  ]
+                },
+                "policies": {
+                  "revision": "none",
+                  "idempotency": "none",
+                  "confirmation": "none",
+                  "stopConditions": [
+                    "Stop on read failure."
+                  ],
+                  "nonInferenceRules": [
+                    "Missing is unknown."
+                  ]
+                }
+              },
+              {
+                "id": "stock",
+                "title": "Stock-risk counts",
+                "operationId": "dashboard.inventory.list",
+                "mutation": "read",
+                "input": {
+                  "template": {
+                    "query": {
+                      "section": "variants",
+                      "page": 1,
+                      "limit": 1,
+                      "search": "",
+                      "status": "all",
+                      "sort": "available",
+                      "order": "asc"
+                    }
+                  },
+                  "dependencies": [],
+                  "defaults": []
+                },
+                "output": {
+                  "selectors": [
+                    {
+                      "pointer": "/data/stats/lowStockCount",
+                      "alias": "lowStockCount"
+                    },
+                    {
+                      "pointer": "/data/stats/outOfStockCount",
+                      "alias": "outOfStockCount"
+                    }
+                  ]
+                },
+                "policies": {
+                  "revision": "none",
+                  "idempotency": "none",
+                  "confirmation": "none",
+                  "stopConditions": [
+                    "Stop on read failure."
+                  ],
+                  "nonInferenceRules": [
+                    "Missing is unknown."
+                  ]
+                }
+              },
+              {
+                "id": "abandoned",
+                "title": "Abandoned-checkout total",
+                "operationId": "dashboard.abandoned_checkouts.summaries_list",
+                "mutation": "read",
+                "input": {
+                  "template": {
+                    "query": {
+                      "page": 1,
+                      "limit": 1,
+                      "search": "",
+                      "order": "desc"
+                    }
+                  },
+                  "dependencies": [],
+                  "defaults": []
+                },
+                "output": {
+                  "selectors": [
+                    {
+                      "pointer": "/data/pagination/total",
+                      "alias": "total"
+                    }
+                  ]
+                },
+                "policies": {
+                  "revision": "none",
+                  "idempotency": "none",
+                  "confirmation": "none",
+                  "stopConditions": [
+                    "Stop on read failure."
+                  ],
+                  "nonInferenceRules": [
+                    "Missing is unknown."
+                  ]
+                }
+              },
+              {
+                "id": "paymentRecovery",
+                "title": "Recoverable-payment total",
+                "operationId": "dashboard.orders.payment_recovery_list",
+                "mutation": "read",
+                "input": {
+                  "template": {
+                    "query": {
+                      "page": 1,
+                      "limit": 1,
+                      "state": "recoverable",
+                      "order": "desc"
+                    }
+                  },
+                  "dependencies": [],
+                  "defaults": []
+                },
+                "output": {
+                  "selectors": [
+                    {
+                      "pointer": "/data/pagination/total",
+                      "alias": "total"
+                    }
+                  ]
+                },
+                "policies": {
+                  "revision": "none",
+                  "idempotency": "none",
+                  "confirmation": "none",
+                  "stopConditions": [
+                    "Stop on read failure."
+                  ],
+                  "nonInferenceRules": [
+                    "Missing is unknown."
+                  ]
+                }
+              },
+              {
+                "id": "paymentNeedsAttention",
+                "title": "Actionable-payment total",
+                "operationId": "dashboard.orders.payment_recovery_list",
+                "mutation": "read",
+                "input": {
+                  "template": {
+                    "query": {
+                      "page": 1,
+                      "limit": 1,
+                      "state": "needs_attention",
+                      "order": "desc"
+                    }
+                  },
+                  "dependencies": [],
+                  "defaults": []
+                },
+                "output": {
+                  "selectors": [
+                    {
+                      "pointer": "/data/pagination/total",
+                      "alias": "total"
+                    }
+                  ]
+                },
+                "policies": {
+                  "revision": "none",
+                  "idempotency": "none",
+                  "confirmation": "none",
+                  "stopConditions": [
+                    "Stop on read failure."
+                  ],
+                  "nonInferenceRules": [
+                    "Missing is unknown."
+                  ]
+                }
+              }
+            ]
+          }
+        ],
+        "verification": [
+          {
+            "id": "activity",
+            "surface": "dashboard",
+            "operationId": "dashboard.home.activity",
+            "responsePointers": [
+              "/data/dailyActivityData"
+            ],
+            "proves": [
+              "Exactly 30 Asia/Dhaka calendar-day rows including zero days; booked, not paid or settled."
+            ],
+            "bounds": {
+              "maxCalls": 1,
+              "maxItems": 30,
+              "maxResponseBytes": 32768
+            }
+          },
+          {
+            "id": "currency",
+            "surface": "dashboard",
+            "operationId": "dashboard.settings.currency_get",
+            "responsePointers": [
+              "/data/currencyCode",
+              "/data/currencySymbol"
+            ],
+            "proves": [
+              "Saved display currency only."
+            ],
+            "bounds": {
+              "maxCalls": 1,
+              "maxItems": 2,
+              "maxResponseBytes": 8192
+            }
+          },
+          {
+            "id": "stock",
+            "surface": "dashboard",
+            "operationId": "dashboard.inventory.list",
+            "responsePointers": [
+              "/data/stats/lowStockCount",
+              "/data/stats/outOfStockCount"
+            ],
+            "proves": [
+              "Current aggregate stock-risk counts only."
+            ],
+            "bounds": {
+              "maxCalls": 1,
+              "maxItems": 2,
+              "maxResponseBytes": 65536
+            }
+          },
+          {
+            "id": "abandoned",
+            "surface": "dashboard",
+            "operationId": "dashboard.abandoned_checkouts.summaries_list",
+            "responsePointers": [
+              "/data/pagination/total"
+            ],
+            "proves": [
+              "Current abandoned-checkout total only; no rows or PII."
+            ],
+            "bounds": {
+              "maxCalls": 1,
+              "maxItems": 1,
+              "maxResponseBytes": 65536
+            }
+          },
+          {
+            "id": "recovery",
+            "surface": "dashboard",
+            "operationId": "dashboard.orders.payment_recovery_list",
+            "responsePointers": [
+              "/data/pagination/total"
+            ],
+            "proves": [
+              "Two current recovery totals only; no order rows or PII."
+            ],
+            "bounds": {
+              "maxCalls": 2,
+              "maxItems": 1,
               "maxResponseBytes": 65536
             }
           }
@@ -202359,6 +202714,7 @@
           "payment-recovery"
         ],
         "workflowId": "operations.daily-snapshot.v1",
+        "fixedCalendarDays": 1,
         "operationIds": [
           "dashboard.home.activity",
           "dashboard.orders.list",
@@ -202377,7 +202733,8 @@
           "No authoritative merchant-day collected-cash or net-settlement aggregate exists; report it unavailable, never zero or inferred.",
           "activity.paymentRecovery.total is all recoverable hosted-payment work; activity.paymentNeedsAttention.total is the actionable failed/stale subset; both are current non-transactional backlogs, not daily metrics.",
           "Never subtract the recovery totals because their parallel reads can observe different instants.",
-          "Fail closed when fulfillment, stock, checkout, payment, delivery, or currency facts cannot be read."
+          "Fail closed when fulfillment, stock, checkout, payment, delivery, or currency facts cannot be read.",
+          "Any requested field absent from fixed selectors is unavailable; never infer or claim coverage."
         ]
       },
       {
@@ -202761,23 +203118,29 @@
         "title": "Update customer notification rules",
         "summary": "Read complete notification rules, change one event channel, and verify the settings.",
         "examples": [
-          "Enable customer SMS for shipped orders but keep every other notification rule unchanged."
+          "Enable customer SMS for shipped orders but keep every other notification rule unchanged.",
+          "Configure WhatsApp order-confirmation notifications."
         ],
         "tags": [
           "notifications",
           "customers",
-          "sms"
+          "orders",
+          "sms",
+          "email",
+          "whatsapp"
         ],
         "operationIds": [
           "dashboard.notifications.customer_rules_get",
           "dashboard.notifications.customer_rules_update"
         ],
-        "requiresFacts": false,
+        "requiresFacts": true,
         "requiresConfirmation": true,
         "requiresVerification": true,
         "rules": [
           "Read the complete current rule set before editing.",
-          "Change only the requested event and channel; preserve all other rules.",
+          "Declared order events: order_created, order_confirmed, order_processing, order_shipped, order_delivered, order_completed, order_cancelled, order_returned.",
+          "Also declared: refund_processing, refund_failed, order_refunded, order_partially_refunded, payment_balance_paid, support_request_submitted, support_request_status_updated.",
+          "Validate against strict dashboard.notifications.customer_rules_update; if the event is absent, ask/no write. Preserve every other rule.",
           "Confirm the write and verify the returned settings."
         ]
       },
@@ -203139,6 +203502,40 @@
         ]
       },
       {
+        "id": "dashboard.stripe-settings",
+        "surface": "dashboard",
+        "kind": "write",
+        "title": "Update Stripe checkout settings",
+        "summary": "Read masked Stripe settings, merge supplied fields, save, and verify readiness.",
+        "examples": [
+          "Configure Stripe with the merchant-supplied secret key.",
+          "Replace the Stripe secret key credential.",
+          "Set Stripe secretKey."
+        ],
+        "tags": [
+          "payments",
+          "stripe",
+          "checkout",
+          "credentials",
+          "secretKey",
+          "publishableKey",
+          "webhookSecret",
+          "enabled"
+        ],
+        "operationIds": [
+          "dashboard.payments.stripe_get",
+          "dashboard.payments.stripe_update"
+        ],
+        "requiresFacts": true,
+        "requiresConfirmation": true,
+        "requiresVerification": true,
+        "rules": [
+          "Read masked settings; dashboard.payments.stripe_update declares only enabled, publishableKey, secretKey, and webhookSecret. Ask/no write for any absent field.",
+          "Never return, log, infer, or reuse secret and webhook credentials.",
+          "Confirm the security-sensitive save; enable only when complete, then reread readiness."
+        ]
+      },
+      {
         "id": "dashboard.tax-configuration",
         "surface": "dashboard",
         "kind": "mixed",
@@ -203227,6 +203624,43 @@
           "Read the current workspace and revision before saving a durable draft.",
           "Preview the exact saved draft before publication.",
           "Confirm publication and verify the resulting storefront layout."
+        ]
+      },
+      {
+        "id": "dashboard.thirty-day-booked-operations-brief",
+        "surface": "dashboard",
+        "kind": "read",
+        "title": "30-day booked brief",
+        "summary": "Read PII-free booked activity, current backlog totals, and gaps.",
+        "examples": [
+          "Give me a concise last-30-days owner briefing with booked/paid revenue, actually collected or settled cash if known, order counts by status, top 10 SKUs by units and revenue, gross margin if supported, low-stock/stockout risk, abandoned checkouts, payment-recovery backlog, and traffic/conversion; exclude all customer PII and clearly mark unavailable/non-comparable metrics.",
+          "Give a PII-free 30-day owner brief with booked activity and current stock/checkout/recovery totals; where other metrics are unsupported, say unavailable."
+        ],
+        "tags": [
+          "briefing",
+          "30-day",
+          "operations",
+          "sku"
+        ],
+        "workflowId": "operations.thirty-day-booked-brief.v1",
+        "fixedCalendarDays": 30,
+        "operationIds": [
+          "dashboard.home.activity",
+          "dashboard.settings.currency_get",
+          "dashboard.inventory.list",
+          "dashboard.abandoned_checkouts.summaries_list",
+          "dashboard.orders.payment_recovery_list"
+        ],
+        "requiresFacts": false,
+        "requiresConfirmation": false,
+        "requiresVerification": false,
+        "rules": [
+          "brief.daily.activity is exactly 30 Asia/Dhaka calendar days including zero days; bookedRevenue is booked gross, not paid/settled/net/margin.",
+          "brief.currency is saved currency; missing fails the brief.",
+          "Stock, abandoned, and recovery totals are current snapshots, not period metrics or cohorts.",
+          "paymentRecovery.total is all recoverable hosted-payment work; paymentNeedsAttention.total is actionable failed/stale work. Snapshots can race; never subtract.",
+          "Any requested field absent from fixed selectors (status, cash/economics, SKU ranks, traffic/conversion) is unavailable; never infer, approximate, or claim coverage.",
+          "Projections only, never raw rows/PII. Any read/projection failure fails: no partial, zero, or unsupported label."
         ]
       },
       {
@@ -204747,6 +205181,695 @@
         ]
       },
       {
+        "id": "dashboard.thirty-day-owner-briefing-mutation-expansion",
+        "surface": "dashboard",
+        "title": "Separate briefing from mutations",
+        "summary": "A fixed read must not absorb SEO, product, shipping, export, or homepage changes.",
+        "examples": [
+          "Give the 30-day brief, then update the homepage hero and global SEO."
+        ],
+        "tags": [
+          "briefing",
+          "compound",
+          "write",
+          "safety"
+        ],
+        "disposition": "ask",
+        "reasonCode": "owner_briefing_write_expansion",
+        "trigger": {
+          "allOf": [
+            [
+              "30 days"
+            ]
+          ],
+          "anyOf": [
+            {
+              "allOf": [
+                [
+                  "update",
+                  "change",
+                  "rewrite",
+                  "delete",
+                  "trash"
+                ],
+                [
+                  "seo",
+                  "product",
+                  "shipping",
+                  "homepage",
+                  "hero"
+                ]
+              ]
+            }
+          ],
+          "ignoreWhenNegated": true
+        },
+        "safeOperationIds": [
+          "dashboard.home.activity",
+          "dashboard.settings.currency_get",
+          "dashboard.inventory.list",
+          "dashboard.abandoned_checkouts.summaries_list",
+          "dashboard.orders.payment_recovery_list"
+        ],
+        "forbiddenOperationIds": [],
+        "requiresFacts": true,
+        "requiresConfirmation": false,
+        "requiresVerification": false,
+        "rules": [
+          "Do not absorb SEO, product, shipping, homepage, deletion, export, or any other mutation into the briefing.",
+          "Ask for a separate supported write request; offer only the fixed 30-day read subset now."
+        ]
+      },
+      {
+        "id": "dashboard.thirty-day-owner-briefing-needs-scope",
+        "surface": "dashboard",
+        "title": "Scope unsupported owner metrics",
+        "summary": "Demanded economics, rankings, traffic, or exact statuses exceed the fixed 30-day read.",
+        "examples": [
+          "For 30 days, estimate paid cash, margin, top SKUs, conversion, and exact statuses."
+        ],
+        "tags": [
+          "briefing",
+          "metrics",
+          "safety"
+        ],
+        "disposition": "ask",
+        "reasonCode": "owner_briefing_scope_required",
+        "trigger": {
+          "allOf": [
+            [
+              "30 days"
+            ],
+            [
+              "estimate",
+              "approximate",
+              "fill in",
+              "derive",
+              "infer",
+              "exact",
+              "give it anyway",
+              "regardless"
+            ]
+          ],
+          "anyOf": [
+            {
+              "allOf": [
+                [
+                  "cash",
+                  "profit",
+                  "net revenue",
+                  "aov",
+                  "ltv",
+                  "cac",
+                  "repeat customer"
+                ]
+              ]
+            },
+            {
+              "allOf": [
+                [
+                  "top",
+                  "best selling",
+                  "best-selling"
+                ],
+                [
+                  "product",
+                  "sku"
+                ]
+              ]
+            },
+            {
+              "allOf": [
+                [
+                  "margin",
+                  "roas",
+                  "traffic",
+                  "conversion",
+                  "ad spend",
+                  "impression",
+                  "click",
+                  "session"
+                ]
+              ]
+            },
+            {
+              "allOf": [
+                [
+                  "status",
+                  "aging",
+                  "stuck",
+                  "refund",
+                  "chargeback",
+                  "return",
+                  "cancel",
+                  "cancellation"
+                ],
+                [
+                  "count",
+                  "total",
+                  "amount",
+                  "rate",
+                  "breakdown",
+                  "how many"
+                ]
+              ]
+            }
+          ],
+          "ignoreWhenNegated": true
+        },
+        "safeOperationIds": [
+          "dashboard.home.activity",
+          "dashboard.settings.currency_get",
+          "dashboard.inventory.list",
+          "dashboard.abandoned_checkouts.summaries_list",
+          "dashboard.orders.payment_recovery_list"
+        ],
+        "forbiddenOperationIds": [],
+        "requiresFacts": true,
+        "requiresConfirmation": false,
+        "requiresVerification": false,
+        "rules": [
+          "Offer the fixed PII-free read: booked daily activity plus current stock-risk, abandoned, and recovery totals.",
+          "Exact statuses need an Asia/Dhaka range and archived-order policy in a separate report.",
+          "Paid/collected/settled cash, top SKUs, margin, and traffic/conversion are unavailable; never infer or return zero.",
+          "Queue evidence is totals only; never raw order, checkout, recovery, or customer rows.",
+          "Ask for the fixed subset, status facts, or separate work; no write or window coercion."
+        ]
+      },
+      {
+        "id": "dashboard.thirty-day-owner-briefing-override-demand",
+        "surface": "dashboard",
+        "title": "Reject unsupported metric override",
+        "summary": "An override cannot turn unavailable 30-day metrics into authoritative facts.",
+        "examples": [
+          "If supported or not, give 30-day collected cash anyway."
+        ],
+        "tags": [
+          "briefing",
+          "override",
+          "safety"
+        ],
+        "disposition": "ask",
+        "reasonCode": "owner_briefing_override_rejected",
+        "trigger": {
+          "allOf": [
+            [
+              "30 days"
+            ],
+            [
+              "give it anyway",
+              "give anyway",
+              "anyway",
+              "regardless"
+            ]
+          ],
+          "anyOf": [
+            {
+              "allOf": [
+                [
+                  "cash",
+                  "profit",
+                  "net revenue",
+                  "aov",
+                  "ltv",
+                  "cac",
+                  "repeat customer"
+                ]
+              ]
+            },
+            {
+              "allOf": [
+                [
+                  "top",
+                  "best selling",
+                  "best-selling"
+                ],
+                [
+                  "product",
+                  "sku"
+                ]
+              ]
+            },
+            {
+              "allOf": [
+                [
+                  "margin",
+                  "roas",
+                  "traffic",
+                  "conversion",
+                  "ad spend",
+                  "impression",
+                  "click",
+                  "session"
+                ]
+              ]
+            },
+            {
+              "allOf": [
+                [
+                  "status",
+                  "aging",
+                  "stuck",
+                  "refund",
+                  "chargeback",
+                  "return",
+                  "cancel",
+                  "cancellation"
+                ],
+                [
+                  "count",
+                  "total",
+                  "amount",
+                  "rate",
+                  "breakdown",
+                  "how many"
+                ]
+              ]
+            }
+          ],
+          "ignoreWhenNegated": true
+        },
+        "safeOperationIds": [
+          "dashboard.home.activity",
+          "dashboard.settings.currency_get",
+          "dashboard.inventory.list",
+          "dashboard.abandoned_checkouts.summaries_list",
+          "dashboard.orders.payment_recovery_list"
+        ],
+        "forbiddenOperationIds": [],
+        "requiresFacts": true,
+        "requiresConfirmation": false,
+        "requiresVerification": false,
+        "rules": [
+          "Offer only the fixed PII-free read and retain unsupported metrics as unavailable.",
+          "Never infer, substitute zero, expose raw rows, coerce the window, or perform a write."
+        ]
+      },
+      {
+        "id": "dashboard.thirty-day-owner-briefing-pii-expansion",
+        "surface": "dashboard",
+        "title": "Reject briefing PII expansion",
+        "summary": "A fixed PII-free brief cannot expose customer identities or contact details.",
+        "examples": [
+          "Give the 30-day owner brief and include every abandoned shopper email address."
+        ],
+        "tags": [
+          "briefing",
+          "pii",
+          "compound",
+          "safety"
+        ],
+        "disposition": "ask",
+        "reasonCode": "owner_briefing_pii_expansion",
+        "trigger": {
+          "allOf": [
+            [
+              "30 days"
+            ]
+          ],
+          "anyOf": [
+            {
+              "allOf": [
+                [
+                  "buyer",
+                  "customer",
+                  "shopper"
+                ],
+                [
+                  "contact",
+                  "identity",
+                  "name",
+                  "email",
+                  "phone",
+                  "address",
+                  "detail"
+                ]
+              ]
+            },
+            {
+              "allOf": [
+                [
+                  "name"
+                ],
+                [
+                  "email"
+                ]
+              ]
+            },
+            {
+              "allOf": [
+                [
+                  "export"
+                ],
+                [
+                  "buyer",
+                  "customer",
+                  "shopper"
+                ]
+              ]
+            },
+            {
+              "allOf": [
+                [
+                  "buyer",
+                  "customer",
+                  "shopper"
+                ],
+                [
+                  "phonebook",
+                  "directory",
+                  "contact list",
+                  "roster"
+                ]
+              ]
+            }
+          ],
+          "ignoreWhenNegated": true
+        },
+        "safeOperationIds": [
+          "dashboard.home.activity",
+          "dashboard.settings.currency_get",
+          "dashboard.inventory.list",
+          "dashboard.abandoned_checkouts.summaries_list",
+          "dashboard.orders.payment_recovery_list"
+        ],
+        "forbiddenOperationIds": [],
+        "requiresFacts": true,
+        "requiresConfirmation": false,
+        "requiresVerification": false,
+        "rules": [
+          "Keep the briefing PII-free and count-only; never expose customer identities or contact details.",
+          "Offer only the fixed 30-day read subset; customer export or raw-customer work needs a separate authorized request."
+        ]
+      },
+      {
+        "id": "dashboard.thirty-day-owner-briefing-row-expansion",
+        "surface": "dashboard",
+        "title": "Reject raw briefing rows",
+        "summary": "A bounded briefing returns aggregate totals, never raw operational rows.",
+        "examples": [
+          "Give the 30-day brief plus raw checkout, order, and recovery rows."
+        ],
+        "tags": [
+          "briefing",
+          "rows",
+          "pii",
+          "safety"
+        ],
+        "disposition": "ask",
+        "reasonCode": "owner_briefing_raw_rows",
+        "trigger": {
+          "allOf": [
+            [
+              "30 days"
+            ]
+          ],
+          "anyOf": [
+            {
+              "allOf": [
+                [
+                  "raw",
+                  "every",
+                  "all",
+                  "each",
+                  "underlying",
+                  "individual"
+                ],
+                [
+                  "customer",
+                  "order",
+                  "checkout",
+                  "recovery"
+                ],
+                [
+                  "row",
+                  "rows",
+                  "record",
+                  "detail",
+                  "object",
+                  "source row"
+                ]
+              ]
+            },
+            {
+              "allOf": [
+                [
+                  "customer row",
+                  "customer record",
+                  "order row",
+                  "order record",
+                  "checkout row",
+                  "checkout record",
+                  "recovery row",
+                  "recovery record"
+                ]
+              ]
+            }
+          ],
+          "ignoreWhenNegated": true
+        },
+        "safeOperationIds": [
+          "dashboard.home.activity",
+          "dashboard.settings.currency_get",
+          "dashboard.inventory.list",
+          "dashboard.abandoned_checkouts.summaries_list",
+          "dashboard.orders.payment_recovery_list"
+        ],
+        "forbiddenOperationIds": [],
+        "requiresFacts": true,
+        "requiresConfirmation": false,
+        "requiresVerification": false,
+        "rules": [
+          "Return projections and totals only; never expose raw checkout, order, recovery, or customer records.",
+          "Offer only the fixed PII-free 30-day subset and perform no write."
+        ]
+      },
+      {
+        "id": "dashboard.thirty-day-owner-briefing-unavailable-denied",
+        "surface": "dashboard",
+        "title": "Reject invented briefing metrics",
+        "summary": "Unavailable 30-day metrics cannot be relabeled, inferred, or silently filled.",
+        "examples": [
+          "Give the 30-day brief; never say a requested metric is unavailable."
+        ],
+        "tags": [
+          "briefing",
+          "metrics",
+          "inference",
+          "safety"
+        ],
+        "disposition": "ask",
+        "reasonCode": "owner_briefing_unavailable_label_denied",
+        "trigger": {
+          "allOf": [
+            [
+              "30 days"
+            ]
+          ],
+          "anyOf": [
+            {
+              "allOf": [
+                [
+                  "do not mark unavailable",
+                  "don't mark unavailable",
+                  "never mark unavailable",
+                  "do not say unavailable",
+                  "don't say unavailable",
+                  "never say unavailable",
+                  "unavailable is not acceptable",
+                  "unavailable is unacceptable"
+                ]
+              ]
+            },
+            {
+              "allOf": [
+                [
+                  "unavailable",
+                  "unsupported",
+                  "missing evidence",
+                  "no evidence",
+                  "without evidence",
+                  "evidence absent"
+                ],
+                [
+                  "forbidden",
+                  "prohibited",
+                  "disallowed",
+                  "not permitted",
+                  "not allowed",
+                  "not acceptable",
+                  "unacceptable",
+                  "mandatory invention"
+                ]
+              ]
+            },
+            {
+              "allOf": [
+                [
+                  "calculate",
+                  "estimate",
+                  "approximate",
+                  "fill in",
+                  "derive",
+                  "infer"
+                ],
+                [
+                  "despite missing evidence",
+                  "despite no evidence",
+                  "even if unsupported",
+                  "even when unsupported",
+                  "whether supported or not",
+                  "regardless of support",
+                  "unsupported anyway"
+                ]
+              ]
+            },
+            {
+              "allOf": [
+                [
+                  "estimate anyway",
+                  "approximate anyway",
+                  "infer anyway",
+                  "derive anyway",
+                  "must estimate",
+                  "must approximate",
+                  "must infer"
+                ]
+              ]
+            }
+          ],
+          "ignoreWhenNegated": true
+        },
+        "safeOperationIds": [
+          "dashboard.home.activity",
+          "dashboard.settings.currency_get",
+          "dashboard.inventory.list",
+          "dashboard.abandoned_checkouts.summaries_list",
+          "dashboard.orders.payment_recovery_list"
+        ],
+        "forbiddenOperationIds": [],
+        "requiresFacts": true,
+        "requiresConfirmation": false,
+        "requiresVerification": false,
+        "rules": [
+          "Offer one fixed PII-free workflow read and explicitly retain every unsupported metric as unavailable.",
+          "Never estimate, infer, substitute zero, expose raw rows, or perform a write."
+        ]
+      },
+      {
+        "id": "dashboard.thirty-day-owner-briefing-unsupported-only",
+        "surface": "dashboard",
+        "title": "Bound unsupported briefing metrics",
+        "summary": "Unsupported 30-day economics, rankings, status, or traffic need a supported subset.",
+        "examples": [
+          "Show collected cash and traffic conversion for the last 30 days."
+        ],
+        "tags": [
+          "briefing",
+          "metrics",
+          "unavailable",
+          "safety"
+        ],
+        "disposition": "ask",
+        "reasonCode": "owner_briefing_unsupported_metrics",
+        "trigger": {
+          "allOf": [
+            [
+              "30 days"
+            ]
+          ],
+          "anyOf": [
+            {
+              "allOf": [
+                [
+                  "cash",
+                  "profit",
+                  "net revenue",
+                  "aov",
+                  "ltv",
+                  "cac",
+                  "repeat customer"
+                ]
+              ]
+            },
+            {
+              "allOf": [
+                [
+                  "top",
+                  "best selling",
+                  "best-selling"
+                ],
+                [
+                  "product",
+                  "sku"
+                ]
+              ]
+            },
+            {
+              "allOf": [
+                [
+                  "margin",
+                  "roas",
+                  "traffic",
+                  "conversion",
+                  "ad spend",
+                  "impression",
+                  "click",
+                  "session"
+                ]
+              ]
+            },
+            {
+              "allOf": [
+                [
+                  "status",
+                  "aging",
+                  "stuck",
+                  "refund",
+                  "chargeback",
+                  "return",
+                  "cancel",
+                  "cancellation"
+                ],
+                [
+                  "count",
+                  "total",
+                  "amount",
+                  "rate",
+                  "breakdown",
+                  "how many"
+                ]
+              ]
+            }
+          ],
+          "noneOf": [
+            "if known",
+            "if supported",
+            "if available",
+            "unavailable",
+            "do not estimate",
+            "don't estimate"
+          ],
+          "ignoreWhenNegated": true
+        },
+        "safeOperationIds": [
+          "dashboard.home.activity",
+          "dashboard.settings.currency_get",
+          "dashboard.inventory.list",
+          "dashboard.abandoned_checkouts.summaries_list",
+          "dashboard.orders.payment_recovery_list"
+        ],
+        "forbiddenOperationIds": [],
+        "requiresFacts": true,
+        "requiresConfirmation": false,
+        "requiresVerification": false,
+        "rules": [
+          "Offer the fixed PII-free 30-day subset: booked daily activity plus current stock-risk, abandoned-checkout, and recovery totals.",
+          "Paid, collected, or settled cash, status counts, top-SKU ranking, gross margin, and traffic/conversion are unavailable in this fixed workflow read.",
+          "Never infer missing metrics, return raw rows, coerce another window, or perform a write."
+        ]
+      },
+      {
         "id": "dashboard.timezone-fixed-invariant",
         "surface": "dashboard",
         "title": "Do not invent a timezone setting",
@@ -204941,8 +206064,16 @@
             [
               "conversion rate",
               "storefront conversion",
-              "visit conversion"
+              "visit conversion",
+              "conversion analytics",
+              "conversion performance",
+              "conversion metric",
+              "conversion numbers",
+              "overall conversion"
             ]
+          ],
+          "noneOf": [
+            "30 days"
           ],
           "ignoreWhenNegated": false
         },
@@ -204978,6 +206109,9 @@
               "profit after costs",
               "profit"
             ]
+          ],
+          "noneOf": [
+            "30 days"
           ],
           "ignoreWhenNegated": false
         },
@@ -205116,9 +206250,10 @@
         {
           "operationId": "dashboard.abandoned_checkouts.summaries_list",
           "surface": "dashboard",
-          "mode": "operation-fallback",
+          "mode": "curated",
           "workflowIds": [
-            "operation.dashboard.abandoned_checkouts.summaries_list"
+            "dashboard.thirty-day-booked-operations-brief",
+            "operations.thirty-day-booked-brief.v1"
           ]
         },
         {
@@ -206244,7 +207379,9 @@
           "workflowIds": [
             "dashboard.daily-operations-snapshot",
             "dashboard.sales-today",
-            "operations.daily-snapshot.v1"
+            "dashboard.thirty-day-booked-operations-brief",
+            "operations.daily-snapshot.v1",
+            "operations.thirty-day-booked-brief.v1"
           ]
         },
         {
@@ -206326,7 +207463,9 @@
           "surface": "dashboard",
           "mode": "curated",
           "workflowIds": [
-            "dashboard.inventory-cycle-count"
+            "dashboard.inventory-cycle-count",
+            "dashboard.thirty-day-booked-operations-brief",
+            "operations.thirty-day-booked-brief.v1"
           ]
         },
         {
@@ -206934,7 +208073,9 @@
           "mode": "curated",
           "workflowIds": [
             "dashboard.daily-operations-snapshot",
-            "operations.daily-snapshot.v1"
+            "dashboard.thirty-day-booked-operations-brief",
+            "operations.daily-snapshot.v1",
+            "operations.thirty-day-booked-brief.v1"
           ]
         },
         {
@@ -207154,17 +208295,17 @@
         {
           "operationId": "dashboard.payments.stripe_get",
           "surface": "dashboard",
-          "mode": "operation-fallback",
+          "mode": "curated",
           "workflowIds": [
-            "operation.dashboard.payments.stripe_get"
+            "dashboard.stripe-settings"
           ]
         },
         {
           "operationId": "dashboard.payments.stripe_update",
           "surface": "dashboard",
-          "mode": "operation-fallback",
+          "mode": "curated",
           "workflowIds": [
-            "operation.dashboard.payments.stripe_update"
+            "dashboard.stripe-settings"
           ]
         },
         {
@@ -207534,7 +208675,9 @@
             "dashboard.bangladesh-checkout-supported-setup",
             "dashboard.complex-product-create",
             "dashboard.daily-operations-snapshot",
-            "operations.daily-snapshot.v1"
+            "dashboard.thirty-day-booked-operations-brief",
+            "operations.daily-snapshot.v1",
+            "operations.thirty-day-booked-brief.v1"
           ]
         },
         {

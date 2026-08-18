@@ -17,14 +17,13 @@ export {
   type WorkflowResolverSources,
 } from "./resolver-core";
 
-let defaultResolver: ReturnType<typeof createWorkflowResolver> | undefined;
+const defaultResolver = createWorkflowResolver({
+  catalog: AGENT_WORKFLOW_CATALOG,
+  operations: AGENT_OPERATIONS,
+});
 
 export function resolveAgentWorkflow(
   input: WorkflowResolverInput,
 ): WorkflowResolution {
-  defaultResolver ??= createWorkflowResolver({
-    catalog: AGENT_WORKFLOW_CATALOG,
-    operations: AGENT_OPERATIONS,
-  });
   return defaultResolver(input);
 }

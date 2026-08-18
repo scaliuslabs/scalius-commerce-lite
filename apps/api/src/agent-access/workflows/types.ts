@@ -149,6 +149,8 @@ export type AgentWorkflowOutputSelector = {
   alias: string;
   /** Required for arrays and forbidden for non-arrays. */
   maxItems?: number;
+  /** Optional exact raw array cardinality; must equal maxItems. */
+  exactItems?: number;
   /** Required for object values/items and forbidden for scalar values/items. */
   fields?: AgentWorkflowOutputField[];
 };
@@ -225,6 +227,8 @@ export type AgentWorkflowIntentRoute = {
   examples: string[];
   tags: string[];
   workflowId?: string;
+  /** Fixed merchant-calendar window; explicit N-day mismatches must not execute this route. */
+  fixedCalendarDays?: number;
   operationIds: string[];
   requiresFacts: boolean;
   requiresConfirmation: boolean;
@@ -232,10 +236,18 @@ export type AgentWorkflowIntentRoute = {
   rules: string[];
 };
 
-/** Every allOf group requires at least one listed phrase. */
+export type AgentWorkflowControlTriggerBranch = {
+  /** Every group requires at least one listed phrase. */
+  allOf: string[][];
+};
+
+/** Base allOf groups are required; when present, at least one anyOf branch must also match. */
 export type AgentWorkflowControlTrigger = {
   allOf: string[][];
+  anyOf?: AgentWorkflowControlTriggerBranch[];
   ignoreWhenNegated: boolean;
+  /** Cooperative phrases that exempt an otherwise unsupported-only request. */
+  noneOf?: string[];
 };
 
 export type AgentWorkflowControl = {
