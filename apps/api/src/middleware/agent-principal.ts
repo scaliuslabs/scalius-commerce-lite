@@ -2,7 +2,6 @@ import type { MiddlewareHandler } from "hono";
 import { resolveAgentPrincipalFromBearer, resolveAgentPrincipalFromGrant } from "../agent-access/principal";
 import { getBearerToken, parseAgentCredential } from "../agent-access/pat";
 import { ForbiddenError, UnauthorizedError } from "../utils/api-error";
-import { resolveDirectAgentOperation } from "../agent-access/direct-operation";
 import { isAgentRiskAllowed } from "../agent-access/types";
 import {
   enforceAgentRateLimit,
@@ -50,6 +49,7 @@ export const agentPrincipalMiddleware: MiddlewareHandler = async (c, next) => {
   }
 
   const startedAt = Date.now();
+  const { resolveDirectAgentOperation } = await import("../agent-access/direct-operation");
   const operation = resolveDirectAgentOperation(c.req.method, new URL(c.req.url).pathname);
   if (!dispatchPrincipal) await enforceAgentRateLimit(c, principal);
   try {
