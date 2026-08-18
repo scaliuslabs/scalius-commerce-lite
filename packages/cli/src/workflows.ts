@@ -10,6 +10,8 @@ import {
   type WorkflowResolverDependencySource,
   type WorkflowResolverFactSource,
   type WorkflowResolverInput,
+  type WorkflowResolverInputFactPick,
+  type WorkflowResolverInputMaterialization,
   type WorkflowResolverOperation,
   type WorkflowResolverOutputField,
   type WorkflowResolverOutputProjection,
@@ -68,6 +70,10 @@ const MAX_PROJECTION_SELECTORS = 12;
 const MAX_PROJECTION_FIELDS = 16;
 const MAX_PROJECTION_TOTAL_FIELDS = 24;
 const MAX_PROJECTION_ITEMS = 100;
+const MAX_INPUT_PICKS = 8;
+const MAX_INPUT_PICK_KEYS = 32;
+const MAX_INPUT_MATERIALIZATIONS = 8;
+const MAX_INPUT_MATERIALIZATION_KEYS = 16;
 const FIXED_READ_WORKFLOW_IDS = new Set(["operations.daily-snapshot.v1"]);
 const MAX_VERIFICATION_RESPONSE_BYTES = 1024 * 1024;
 
@@ -213,6 +219,43 @@ function templateHasPointer(template: unknown, pointer: string): boolean {
   return true;
 }
 
+function templateValueAtPointer(template: unknown, pointer: string): unknown {
+  let current = template;
+  for (const rawSegment of pointer.slice(1).split("/")) {
+    const segment = decodeJsonPointerSegment(rawSegment);
+    current = Array.isArray(current)
+      ? current[Number(segment)]
+      : (current as JsonRecord)[segment];
+  }
+  return current;
+}
+
+function encodeJsonPointerSegment(value: string): string {
+  return value.replace(/~/g, "~0").replace(/\//g, "~1");
+}
+
+function inputKey(value: unknown, label: string): string {
+  const key = text(value, label, 64, LOCAL_ID);
+  if (FORBIDDEN_PROJECTION_SEGMENTS.has(key)) {
+    invalidOpenApi(`${label} has an invalid or prototype property key.`);
+  }
+  return key;
+}
+
+function pointersConflict(left: string, right: string): boolean {
+  return left === right || left.startsWith(`${right}/`) || right.startsWith(`${left}/`);
+}
+
+function registerTemplateWriter(
+  pointers: Set<string>,
+  pointer: string,
+  label: string,
+): void {
+  const conflict = [...pointers].find((existing) => pointersConflict(existing, pointer));
+  if (conflict) invalidOpenApi(`${label} conflicts with input writer '${conflict}'.`);
+  pointers.add(pointer);
+}
+
 function serializedBytes(value: unknown, label: string): number {
   let serialized: string;
   try {
@@ -338,9 +381,9 @@ function resolverOperations(document: OpenApiDocument): ResolverOperation[] {
       ...(description ? { description } : {}),
       tags,
       inputSchema: {
-        parameters: indexed.pathParameters.map((parameter) => ({ required: parameter.required === true })),
+        parameters: indexed.pathParameters,
         ...(indexed.operation.requestBody
-          ? { requestBody: { required: indexed.operation.requestBody.required === true } }
+          ? { requestBody: indexed.operation.requestBody }
           : {}),
       },
       outputSchema: successOutputSchema(indexed.operation.responses),
@@ -456,7 +499,7 @@ function parseRepeat(
   facts: ReadonlyMap<string, WorkflowResolverCard["requiredFacts"][number]>,
   operation: ResolverOperation,
   template: unknown,
-  occupiedTemplatePointers: ReadonlySet<string>,
+  occupiedTemplatePointers: Set<string>,
 ): WorkflowResolverRepeat {
   const repeat = record(value, `${label} repeat`);
   exactKeys(repeat, [
@@ -479,7 +522,7 @@ function parseRepeat(
     repeat.itemMapPointer,
     `${label} repeat itemMapPointer`,
   );
-  if (orderPointer === itemMapPointer) {
+  if (pointersConflict(orderPointer, itemMapPointer)) {
     invalidOpenApi(`${label} repeat order and item-map pointers must differ.`);
   }
   const minItems = positiveInteger(repeat.minItems, `${label} repeat minItems`, 250);
@@ -502,12 +545,13 @@ function parseRepeat(
       if (!templateHasPointer(template, templatePointer)) {
         invalidOpenApi(`${bindingLabel} points outside the input template.`);
       }
-      if (templatePointers.has(templatePointer) || itemPointers.has(itemPointer)) {
+      if (
+        [...templatePointers].some((pointer) => pointersConflict(pointer, templatePointer)) ||
+        [...itemPointers].some((pointer) => pointersConflict(pointer, itemPointer))
+      ) {
         invalidOpenApi(`${label} repeat bindings must use unique pointers.`);
       }
-      if (occupiedTemplatePointers.has(templatePointer)) {
-        invalidOpenApi(`${bindingLabel} conflicts with a dependency or default pointer.`);
-      }
+      registerTemplateWriter(occupiedTemplatePointers, templatePointer, bindingLabel);
       templatePointers.add(templatePointer);
       itemPointers.add(itemPointer);
       return { templatePointer, itemPointer };
@@ -524,7 +568,7 @@ function parseRepeat(
     capture.itemPointer,
     `${captureLabel} itemPointer`,
   );
-  if (itemPointers.has(captureItemPointer)) {
+  if ([...itemPointers].some((pointer) => pointersConflict(pointer, captureItemPointer))) {
     invalidOpenApi(`${captureLabel} conflicts with a binding item pointer.`);
   }
   if (!isRecord(operation.outputSchema)) {
@@ -618,6 +662,249 @@ function arrayItemSchemas(nodes: readonly JsonRecord[]): JsonRecord[] {
   return nodes.flatMap((node) => schemaVariants(node)).flatMap((node) =>
     isRecord(node.items) ? schemaVariants(node.items) : []
   );
+}
+
+function operationInputSchemaRoot(
+  operation: ResolverOperation,
+  label: string,
+): JsonRecord {
+  if (!isRecord(operation.inputSchema)) {
+    invalidOpenApi(`${label} operation has no object input schema.`);
+  }
+  const properties: JsonRecord = {};
+  const parameterGroups = new Map<string, JsonRecord>();
+  if (Array.isArray(operation.inputSchema.parameters)) {
+    for (const parameter of operation.inputSchema.parameters) {
+      if (
+        !isRecord(parameter) ||
+        typeof parameter.name !== "string" ||
+        !["path", "query"].includes(String(parameter.in)) ||
+        !isRecord(parameter.schema)
+      ) continue;
+      const groupName = parameter.in === "path" ? "path" : "query";
+      const group = parameterGroups.get(groupName) ?? {};
+      group[parameter.name] = parameter.schema;
+      parameterGroups.set(groupName, group);
+    }
+  }
+  for (const [groupName, groupProperties] of parameterGroups) {
+    properties[groupName] = { type: "object", properties: groupProperties };
+  }
+  const requestBody = operation.inputSchema.requestBody;
+  if (isRecord(requestBody) && isRecord(requestBody.content)) {
+    const json = requestBody.content["application/json"];
+    if (isRecord(json) && isRecord(json.schema)) properties.body = json.schema;
+  }
+  return { type: "object", properties };
+}
+
+function inputSchemaPointer(
+  operation: ResolverOperation,
+  pointer: string,
+  expectedShape: ProjectionSchemaShape,
+  label: string,
+): JsonRecord[] {
+  const selected = schemaNodesAtPointer(
+    [operationInputSchemaRoot(operation, label)],
+    pointer,
+  );
+  if (selected.length === 0) {
+    invalidOpenApi(`${label} references unknown operation input field '${pointer}'.`);
+  }
+  if (schemaShape(selected) !== expectedShape) {
+    invalidOpenApi(`${label} input field '${pointer}' must be ${expectedShape}.`);
+  }
+  return selected;
+}
+
+function inputKeys(
+  value: unknown,
+  label: string,
+  maximum: number,
+): string[] {
+  const keys = array(value, `${label} keys`, maximum, 1).map((key, index) =>
+    inputKey(key, `${label} keys[${index}]`)
+  );
+  if (new Set(keys).size !== keys.length) {
+    invalidOpenApi(`${label} has duplicate property keys.`);
+  }
+  return keys;
+}
+
+function parseInputFactPicks(
+  value: unknown,
+  label: string,
+  facts: ReadonlyMap<string, WorkflowResolverCard["requiredFacts"][number]>,
+  operation: ResolverOperation,
+  template: unknown,
+  occupiedTemplatePointers: Set<string>,
+): WorkflowResolverInputFactPick[] | undefined {
+  if (value === undefined) return undefined;
+  return array(value, `${label} input picks`, MAX_INPUT_PICKS, 1).map((rawPick, index) => {
+    const pickLabel = `${label} input picks[${index}]`;
+    const pick = record(rawPick, pickLabel);
+    exactKeys(pick, ["factId", "templatePointer", "keys"], pickLabel);
+    const factId = text(pick.factId, `${pickLabel} factId`, 64, LOCAL_ID);
+    const fact = facts.get(factId);
+    if (!fact) invalidOpenApi(`${pickLabel} references unknown fact '${factId}'.`);
+    if (fact.source.kind !== "merchant") {
+      invalidOpenApi(`${pickLabel} fact '${factId}' must be merchant-authoritative.`);
+    }
+    const templatePointer = projectionPointer(
+      pick.templatePointer,
+      `${pickLabel} templatePointer`,
+    );
+    if (
+      !templateHasPointer(template, templatePointer) ||
+      !isRecord(templateValueAtPointer(template, templatePointer))
+    ) {
+      invalidOpenApi(`${pickLabel} must target an input template object.`);
+    }
+    inputSchemaPointer(operation, templatePointer, "object", pickLabel);
+    const keys = inputKeys(pick.keys, pickLabel, MAX_INPUT_PICK_KEYS);
+    for (const key of keys) {
+      const pointer = `${templatePointer}/${encodeJsonPointerSegment(key)}`;
+      if (!templateHasPointer(template, pointer)) {
+        invalidOpenApi(`${pickLabel} property '${key}' is absent from its template.`);
+      }
+      const selected = schemaNodesAtPointer(
+        [operationInputSchemaRoot(operation, pickLabel)],
+        pointer,
+      );
+      if (selected.length === 0 || schemaShape(selected) === "unknown") {
+        invalidOpenApi(`${pickLabel} references unknown operation input property '${key}'.`);
+      }
+      registerTemplateWriter(occupiedTemplatePointers, pointer, pickLabel);
+    }
+    return { factId, templatePointer, keys };
+  });
+}
+
+function parseInputMaterializations(
+  value: unknown,
+  label: string,
+  facts: ReadonlyMap<string, WorkflowResolverCard["requiredFacts"][number]>,
+  operation: ResolverOperation,
+  template: unknown,
+  occupiedTemplatePointers: Set<string>,
+): WorkflowResolverInputMaterialization[] | undefined {
+  if (value === undefined) return undefined;
+  return array(
+    value,
+    `${label} input materializations`,
+    MAX_INPUT_MATERIALIZATIONS,
+    1,
+  ).map((rawMaterialization, index) => {
+    const itemLabel = `${label} input materializations[${index}]`;
+    const materialization = record(rawMaterialization, itemLabel);
+    exactKeys(materialization, [
+      "factId",
+      "templatePointer",
+      "orderPointer",
+      "itemMapPointer",
+      "minItems",
+      "maxItems",
+      "keyField",
+      "keys",
+    ], itemLabel);
+    const factId = text(materialization.factId, `${itemLabel} factId`, 64, LOCAL_ID);
+    const fact = facts.get(factId);
+    if (!fact) invalidOpenApi(`${itemLabel} references unknown fact '${factId}'.`);
+    if (fact.source.kind !== "merchant") {
+      invalidOpenApi(`${itemLabel} fact '${factId}' must be merchant-authoritative.`);
+    }
+    const templatePointer = projectionPointer(
+      materialization.templatePointer,
+      `${itemLabel} templatePointer`,
+    );
+    const orderPointer = projectionPointer(
+      materialization.orderPointer,
+      `${itemLabel} orderPointer`,
+    );
+    const itemMapPointer = projectionPointer(
+      materialization.itemMapPointer,
+      `${itemLabel} itemMapPointer`,
+    );
+    if (pointersConflict(orderPointer, itemMapPointer)) {
+      invalidOpenApi(`${itemLabel} order and item-map pointers must differ.`);
+    }
+    const minItems = positiveInteger(materialization.minItems, `${itemLabel} minItems`, 250);
+    const maxItems = positiveInteger(materialization.maxItems, `${itemLabel} maxItems`, 250);
+    if (minItems > maxItems) {
+      invalidOpenApi(`${itemLabel} minItems cannot exceed maxItems.`);
+    }
+    if (
+      !templateHasPointer(template, templatePointer) ||
+      !Array.isArray(templateValueAtPointer(template, templatePointer)) ||
+      (templateValueAtPointer(template, templatePointer) as unknown[]).length !== 0
+    ) {
+      invalidOpenApi(`${itemLabel} must target an empty input template array.`);
+    }
+    const arrays = inputSchemaPointer(operation, templatePointer, "array", itemLabel);
+    const schemaLimits = arrays.flatMap((schema) => schemaVariants(schema)).flatMap((schema) =>
+      typeof schema.maxItems === "number" && Number.isFinite(schema.maxItems)
+        ? [schema.maxItems]
+        : []
+    );
+    if (schemaLimits.length > 0 && maxItems > Math.min(...schemaLimits)) {
+      invalidOpenApi(`${itemLabel} maxItems exceeds the operation input schema.`);
+    }
+    const schemaMinimums = arrays.flatMap((schema) => schemaVariants(schema)).flatMap((schema) =>
+      typeof schema.minItems === "number" && Number.isFinite(schema.minItems)
+        ? [schema.minItems]
+        : []
+    );
+    if (schemaMinimums.length > 0 && minItems < Math.max(...schemaMinimums)) {
+      invalidOpenApi(`${itemLabel} minItems is below the operation input schema.`);
+    }
+    const itemSchemas = arrayItemSchemas(arrays);
+    if (itemSchemas.length === 0 || schemaShape(itemSchemas) !== "object") {
+      invalidOpenApi(`${itemLabel} destination must declare object array items.`);
+    }
+    const keys = inputKeys(
+      materialization.keys,
+      itemLabel,
+      MAX_INPUT_MATERIALIZATION_KEYS,
+    );
+    const keyField = materialization.keyField === undefined
+      ? undefined
+      : inputKey(materialization.keyField, `${itemLabel} keyField`);
+    if (keyField !== undefined && keys.includes(keyField)) {
+      invalidOpenApi(`${itemLabel} keyField conflicts with a copied property key.`);
+    }
+    const outputKeys = keyField === undefined ? keys : [keyField, ...keys];
+    for (const key of outputKeys) {
+      const selected = schemaNodesAtPointer(
+        itemSchemas,
+        `/${encodeJsonPointerSegment(key)}`,
+      );
+      if (selected.length === 0 || schemaShape(selected) === "unknown") {
+        invalidOpenApi(`${itemLabel} references unknown destination item property '${key}'.`);
+      }
+    }
+    const requiredProperties = new Set(
+      itemSchemas.flatMap((schema) => schemaVariants(schema)).flatMap((schema) =>
+      Array.isArray(schema.required)
+        ? schema.required.filter((key): key is string => typeof key === "string")
+        : []
+      ),
+    );
+    const missingRequired = [...requiredProperties].find((key) => !outputKeys.includes(key));
+    if (missingRequired) {
+      invalidOpenApi(`${itemLabel} omits required destination item property '${missingRequired}'.`);
+    }
+    registerTemplateWriter(occupiedTemplatePointers, templatePointer, itemLabel);
+    return {
+      factId,
+      templatePointer,
+      orderPointer,
+      itemMapPointer,
+      minItems,
+      maxItems,
+      ...(keyField !== undefined ? { keyField } : {}),
+      keys,
+    };
+  });
 }
 
 function parseProjectionFields(
@@ -870,8 +1157,14 @@ function parseCards(
           ? undefined
           : parseOutputProjection(step.output, operation, stepLabel);
         const input = record(step.input, `${stepLabel} input`);
+        exactKeys(
+          input,
+          ["template", "dependencies", "defaults", "picks", "materializations"],
+          `${stepLabel} input`,
+        );
         if (!Object.hasOwn(input, "template")) invalidOpenApi(`${stepLabel} input requires template.`);
         const template = cloneJson(record(input.template, `${stepLabel} input template`), `${stepLabel} input template`);
+        const occupiedTemplatePointers = new Set<string>();
         const dependencyPointers = new Set<string>();
         const dependencies = array(
           input.dependencies,
@@ -891,6 +1184,7 @@ function parseCards(
             invalidOpenApi(`${stepLabel} duplicates dependency pointer '${templatePointer}'.`);
           }
           dependencyPointers.add(templatePointer);
+          registerTemplateWriter(occupiedTemplatePointers, templatePointer, dependencyLabel);
           return {
             templatePointer,
             source: parseDependencySource(
@@ -920,11 +1214,28 @@ function parseCards(
               invalidOpenApi(`${defaultLabel} requires value.`);
             }
             defaultPointers.add(templatePointer);
+            registerTemplateWriter(occupiedTemplatePointers, templatePointer, defaultLabel);
             return {
               templatePointer,
               value: cloneJson(inputDefault.value, `${defaultLabel} value`),
             };
           },
+        );
+        const picks = parseInputFactPicks(
+          input.picks,
+          stepLabel,
+          factsById,
+          operation,
+          template,
+          occupiedTemplatePointers,
+        );
+        const materializations = parseInputMaterializations(
+          input.materializations,
+          stepLabel,
+          factsById,
+          operation,
+          template,
+          occupiedTemplatePointers,
         );
         const repeat = step.repeat === undefined
           ? undefined
@@ -934,10 +1245,7 @@ function parseCards(
               factsById,
               operation,
               template,
-              new Set([
-                ...dependencies.map((dependency) => dependency.templatePointer),
-                ...defaults.map((inputDefault) => inputDefault.templatePointer),
-              ]),
+              occupiedTemplatePointers,
             );
         const policies = record(step.policies, `${stepLabel} policies`);
         const confirmation = enumValue(policies.confirmation, `${stepLabel} confirmation`, [
@@ -954,7 +1262,13 @@ function parseCards(
           ...(step.condition !== undefined
             ? { condition: text(step.condition, `${stepLabel} condition`, 500) }
             : {}),
-          input: { template, dependencies, defaults },
+          input: {
+            template,
+            dependencies,
+            defaults,
+            ...(picks ? { picks } : {}),
+            ...(materializations ? { materializations } : {}),
+          },
           ...(repeat ? { repeat } : {}),
           ...(output ? { output } : {}),
           policies: {

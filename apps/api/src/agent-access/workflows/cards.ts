@@ -8,8 +8,8 @@ const readPolicies: AgentWorkflowStepPolicies = {
   revision: "none",
   idempotency: "none",
   confirmation: "none",
-  stopConditions: ["Stop on auth/read failure."],
-  nonInferenceRules: ["Treat missing data as unknown."],
+  stopConditions: ["Read failure: stop."],
+  nonInferenceRules: ["Missing stays unknown."],
 };
 
 const dailyReadPolicies: AgentWorkflowStepPolicies = {
@@ -24,32 +24,45 @@ const createPolicies: AgentWorkflowStepPolicies = {
   revision: "none",
   idempotency: "none",
   confirmation: "required",
-  stopConditions: ["On conflict or uncertain write, stop and reread."],
-  nonInferenceRules: ["Use resolved or merchant facts."],
+  stopConditions: ["Conflict: stop; uncertainty: reread first."],
+  nonInferenceRules: ["Use exact facts."],
 };
 
 export const OPTIONED_PRODUCT_WORKFLOW: AgentWorkflowCard = {
   id: "catalog.optioned-product.v1",
   surface: "dashboard",
   title: "Create an optioned product",
-  summary: "Resolve, atomically create, publish, and verify exact SKU truth.",
+  summary: "Create and verify an optioned product.",
   examples: [
-    "Create a two-axis product and verify exact SKU, media, stock, and discovery truth.",
+    "Create and verify a two-axis product.",
   ],
   tags: ["catalog", "media", "variants"],
   constructionRules: AGENT_PRODUCT_CONSTRUCTION_RULES,
   requiredFacts: [
     {
       id: "productSpec",
-      title: "Product",
-      description: "Name/slug, rich text, price, SEO, condition, visibility.",
+      title: "Product spec",
+      description:
+        "Exact name/description/price/slug, active/free-delivery flags, SEO title/description, canonicalPath, noIndex, sitemap/feed exclusions, and condition.",
       required: true,
       source: { kind: "merchant" },
-      nonInferenceRule: "Never invent claims, brand, price, condition, or copy.",
+      nonInferenceRule: "Do not invent copy, price, brand, condition, or flags.",
+    },
+    {
+      id: "currency",
+      title: "Currency",
+      description: "Saved currency for all prices.",
+      required: true,
+      source: {
+        kind: "operation",
+        operationId: "dashboard.settings.currency_get",
+        responsePointer: "/data/currencyCode",
+      },
+      nonInferenceRule: "Use saved currency; never convert.",
     },
     {
       id: "categoryId",
-      title: "Category ID",
+      title: "Category",
       description: "Existing category ID or conditional-create result.",
       required: true,
       source: {
@@ -60,53 +73,60 @@ export const OPTIONED_PRODUCT_WORKFLOW: AgentWorkflowCard = {
           { operationId: "dashboard.categories.create", responsePointer: "/data/id" },
         ],
       },
-      nonInferenceRule: "Resolve by name; never guess or substitute an ID.",
+      nonInferenceRule: "Resolve exact ID; never guess.",
     },
     {
-      id: "attributeAssignments",
-      title: "Attributes",
-      description: "Active IDs and truthful merchant values.",
-      required: true,
-      source: {
-        kind: "operation",
-        operationId: "dashboard.attributes.list_summaries",
-        responsePointer: "/data/attributes",
-      },
-      nonInferenceRule: "Never duplicate or fabricate attributes.",
-    },
-    {
-      id: "mediaSet",
-      title: "Media set",
+      id: "categoryCreateSpec",
+      title: "Category spec",
       description:
-        "{order:[pmed...],byId:{pmed:{mediaId|sourceUrl,altText,isPrimary}}}; 1-250 unique assets, one primary.",
+        "Only if missing: exact name/slug/copy/SEO/canonical/discovery/image fields.",
+      required: false,
+      source: { kind: "merchant" },
+      nonInferenceRule: "No spec means no category create.",
+    },
+    {
+      id: "attributeSet",
+      title: "Attributes",
+      description:
+        "{order,createOrder,byId}; items hold value, create spec, and active-read or same-key captured attributeId.",
       required: true,
       source: { kind: "merchant" },
       nonInferenceRule:
-        "Use exact keys/sources; never infer count, order, role, or position.",
+        "Only an active read or same-key create capture may set attributeId.",
+    },
+    {
+      id: "mediaSet",
+      title: "Media",
+      description:
+        "{order,importOrder,byId}; order=all pmed keys; importOrder=URL keys; byId holds resolved mediaId, altText, isPrimary; 1-250 unique, one primary.",
+      required: true,
+      source: { kind: "merchant" },
+      nonInferenceRule:
+        "Never infer asset keys, count, order, role, or position.",
     },
     {
       id: "optionMatrix",
-      title: "Option matrix",
+      title: "Matrix",
       description:
         "Ordered axes/values; complete SKU price/stock/mediaSet imageId rows.",
       required: true,
       source: { kind: "merchant" },
       nonInferenceRule:
-        "Never add, omit, collapse, or reorder combinations, or infer imageId by label/position.",
+        "Keep all rows/order; never infer imageId by label/position.",
     },
   ],
   phases: [
     {
       id: "resolve",
       surface: "dashboard",
-      title: "Resolve identities and policy",
-      summary: "Use bounded reads once before constructing any mutation.",
+      title: "Resolve",
+      summary: "Read identities and policy.",
       dependsOn: [],
       stopConditions: ["Stop on ambiguity, collision, missing facts, or grants."],
       steps: [
         {
           id: "categories",
-          title: "Resolve category options",
+          title: "Categories",
           operationId: "dashboard.categories.form_options",
           mutation: "read",
           input: { template: {}, dependencies: [], defaults: [] },
@@ -114,23 +134,28 @@ export const OPTIONED_PRODUCT_WORKFLOW: AgentWorkflowCard = {
         },
         {
           id: "attributes",
-          title: "Resolve attribute summaries",
+          title: "Attributes",
           operationId: "dashboard.attributes.list_summaries",
           mutation: "read",
-          condition: "Repeat only for requested attribute names.",
+          condition: "Only requested attribute names.",
           input: {
             template: { query: { page: 1, limit: 20, search: null } },
             dependencies: [],
-            defaults: [
-              { templatePointer: "/query/page", value: 1 },
-              { templatePointer: "/query/limit", value: 20 },
-            ],
+            defaults: [],
           },
           policies: readPolicies,
         },
         {
+          id: "currency",
+          title: "Currency",
+          operationId: "dashboard.settings.currency_get",
+          mutation: "read",
+          input: { template: {}, dependencies: [], defaults: [] },
+          policies: readPolicies,
+        },
+        {
           id: "seo",
-          title: "Read discovery settings",
+          title: "Discovery",
           operationId: "dashboard.seo.settings_get",
           mutation: "read",
           input: { template: {}, dependencies: [], defaults: [] },
@@ -138,7 +163,7 @@ export const OPTIONED_PRODUCT_WORKFLOW: AgentWorkflowCard = {
         },
         {
           id: "productCollision",
-          title: "Check product slug and name",
+          title: "Product collision",
           operationId: "dashboard.products.list_summaries",
           mutation: "read",
           input: {
@@ -149,30 +174,7 @@ export const OPTIONED_PRODUCT_WORKFLOW: AgentWorkflowCard = {
                 source: { kind: "fact", factId: "productSpec", factPointer: "/name" },
               },
             ],
-            defaults: [
-              { templatePointer: "/query/page", value: 1 },
-              { templatePointer: "/query/limit", value: 10 },
-            ],
-          },
-          policies: readPolicies,
-        },
-        {
-          id: "skuCollision",
-          title: "Check active SKU namespace",
-          operationId: "dashboard.inventory.list",
-          mutation: "read",
-          input: {
-            template: { query: { section: "variants", search: null, status: "all", page: 1, limit: 100 } },
-            dependencies: [
-              {
-                templatePointer: "/query/search",
-                source: { kind: "fact", factId: "optionMatrix", factPointer: "/skuPrefix" },
-              },
-            ],
-            defaults: [
-              { templatePointer: "/query/page", value: 1 },
-              { templatePointer: "/query/limit", value: 100 },
-            ],
+            defaults: [],
           },
           policies: readPolicies,
         },
@@ -181,43 +183,84 @@ export const OPTIONED_PRODUCT_WORKFLOW: AgentWorkflowCard = {
     {
       id: "prepare",
       surface: "dashboard",
-      title: "Create missing prerequisites",
-      summary: "Create missing prerequisites and only approved discovery fields.",
+      title: "Prepare",
+      summary: "Create approved prerequisites.",
       dependsOn: ["resolve"],
-      stopConditions: ["On concurrent create, reread; never duplicate."],
+      stopConditions: ["Concurrent create: reread; never duplicate."],
       steps: [
         {
           id: "categoryCreate",
-          title: "Create draft category",
+          title: "Category",
           operationId: "dashboard.categories.create",
           mutation: "create",
-          condition: "Only when no unambiguous reusable category exists.",
+          condition: "Only when no exact reusable category exists.",
           input: {
-            template: { body: { name: null, slug: null, description: null, metaTitle: null, metaDescription: null, image: null } },
+            template: {
+              body: {
+                name: null,
+                description: null,
+                slug: null,
+                metaTitle: null,
+                metaDescription: null,
+                canonicalPath: null,
+                noIndex: null,
+                excludeFromSitemap: null,
+                image: null,
+              },
+            },
             dependencies: [],
             defaults: [],
+            picks: [{
+              factId: "categoryCreateSpec",
+              templatePointer: "/body",
+              keys: [
+                "name",
+                "description",
+                "slug",
+                "metaTitle",
+                "metaDescription",
+                "canonicalPath",
+                "noIndex",
+                "excludeFromSitemap",
+                "image",
+              ],
+            }],
           },
           policies: createPolicies,
         },
         {
           id: "attributeCreate",
-          title: "Create missing attribute",
+          title: "Attribute",
           operationId: "dashboard.attributes.create",
           mutation: "create",
-          condition: "Repeat for each approved missing attribute.",
+          condition: "Skip when createOrder is empty; otherwise use its approved keys.",
           input: {
-            template: { body: { name: null, slug: null, filterable: true, options: [] } },
+            template: { body: { name: null, slug: null, filterable: null, options: null } },
             dependencies: [],
-            defaults: [{ templatePointer: "/body/filterable", value: true }],
+            defaults: [],
+          },
+          repeat: {
+            factId: "attributeSet",
+            orderPointer: "/createOrder",
+            itemMapPointer: "/byId",
+            minItems: 1,
+            maxItems: 90,
+            bindings: [
+              { templatePointer: "/body/name", itemPointer: "/name" },
+              { templatePointer: "/body/slug", itemPointer: "/slug" },
+              { templatePointer: "/body/filterable", itemPointer: "/filterable" },
+              { templatePointer: "/body/options", itemPointer: "/options" },
+            ],
+            capture: { responsePointer: "/data/attribute/id", itemPointer: "/attributeId" },
           },
           policies: createPolicies,
         },
         {
           id: "discoveryUpdate",
-          title: "Enable requested discovery fields",
+          title: "Discovery",
           operationId: "dashboard.seo.settings_update",
           mutation: "partial",
-          condition: "Only after explicit store-wide approval.",
+          condition: "Only with store-wide approval.",
           input: { template: { body: { discovery: {} } }, dependencies: [], defaults: [] },
           policies: createPolicies,
         },
@@ -226,20 +269,20 @@ export const OPTIONED_PRODUCT_WORKFLOW: AgentWorkflowCard = {
     {
       id: "media",
       surface: "dashboard",
-      title: "Commit media",
-      summary: "Commit assets with keyed IDs.",
+      title: "Media",
+      summary: "Commit keyed assets.",
       dependsOn: ["resolve"],
       stopConditions: [
-        "Stop on invalid, inaccessible, oversized, duplicate, or ambiguous media.",
+        "Stop on invalid, duplicate, inaccessible, or oversized media.",
       ],
       steps: [
         {
           id: "asset",
-          title: "Commit one declared asset",
+          title: "Asset",
           operationId: "dashboard.media.import_url",
           mutation: "create",
           condition:
-            "Skip ready mediaId; local files must complete dashboard.media-upload and re-enter as ready.",
+            "Skip empty importOrder. Ready mediaId skips import; local files complete dashboard.media-upload and re-enter with mediaId.",
           input: {
             template: { body: { sourceUrl: null } },
             dependencies: [],
@@ -247,7 +290,7 @@ export const OPTIONED_PRODUCT_WORKFLOW: AgentWorkflowCard = {
           },
           repeat: {
             factId: "mediaSet",
-            orderPointer: "/order",
+            orderPointer: "/importOrder",
             itemMapPointer: "/byId",
             minItems: 1,
             maxItems: 250,
@@ -257,8 +300,8 @@ export const OPTIONED_PRODUCT_WORKFLOW: AgentWorkflowCard = {
           policies: {
             ...createPolicies,
             nonInferenceRules: [
-              "Use resolved or merchant facts.",
-              "Never cross-assign captured media IDs.",
+              "Use exact facts.",
+              "Capture mediaId only to the same key.",
             ],
           },
         },
@@ -267,18 +310,18 @@ export const OPTIONED_PRODUCT_WORKFLOW: AgentWorkflowCard = {
     {
       id: "create",
       surface: "dashboard",
-      title: "Create atomically",
-      summary: "Submit media, attributes, axes, and all SKUs atomically.",
+      title: "Create",
+      summary: "Submit one atomic product.",
       dependsOn: ["prepare", "media"],
       stopConditions: ["Stop on conflict; never fall back to per-SKU creation."],
       steps: [
         {
           id: "product",
-          title: "Create atomic optioned product",
+          title: "Product",
           operationId: "dashboard.products.create",
           mutation: "create",
           condition:
-            "Materialize body.media from every ordered mediaSet item using exact pmed key/mediaId; require 1-250 unique assets, one primary.",
+            "Require every product field, active attribute ID, media association, axis, and SKU row.",
           input: {
             template: {
               body: {
@@ -296,30 +339,62 @@ export const OPTIONED_PRODUCT_WORKFLOW: AgentWorkflowCard = {
                 excludeFromProductFeed: false,
                 productCondition: null,
                 slug: null,
-                media: null,
-                attributes: null,
+                media: [],
+                attributes: [],
                 optionMatrix: null,
               },
             },
             dependencies: [
-              { templatePointer: "/body/name", source: { kind: "fact", factId: "productSpec", factPointer: "/name" } },
-              { templatePointer: "/body/slug", source: { kind: "fact", factId: "productSpec", factPointer: "/slug" } },
               { templatePointer: "/body/categoryId", source: { kind: "fact", factId: "categoryId" } },
-              { templatePointer: "/body/attributes", source: { kind: "fact", factId: "attributeAssignments" } },
               { templatePointer: "/body/optionMatrix", source: { kind: "fact", factId: "optionMatrix" } },
             ],
-            defaults: [
-              { templatePointer: "/body/isActive", value: true },
-              { templatePointer: "/body/noIndex", value: false },
-              { templatePointer: "/body/excludeFromSitemap", value: false },
-              { templatePointer: "/body/excludeFromProductFeed", value: false },
+            defaults: [],
+            picks: [{
+              factId: "productSpec",
+              templatePointer: "/body",
+              keys: [
+                "name",
+                "description",
+                "price",
+                "slug",
+                "isActive",
+                "freeDelivery",
+                "metaTitle",
+                "metaDescription",
+                "canonicalPath",
+                "noIndex",
+                "excludeFromSitemap",
+                "excludeFromProductFeed",
+                "productCondition",
+              ],
+            }],
+            materializations: [
+              {
+                factId: "mediaSet",
+                templatePointer: "/body/media",
+                orderPointer: "/order",
+                itemMapPointer: "/byId",
+                minItems: 1,
+                maxItems: 250,
+                keyField: "id",
+                keys: ["mediaId", "altText", "isPrimary"],
+              },
+              {
+                factId: "attributeSet",
+                templatePointer: "/body/attributes",
+                orderPointer: "/order",
+                itemMapPointer: "/byId",
+                minItems: 1,
+                maxItems: 90,
+                keys: ["attributeId", "value"],
+              },
             ],
           },
           policies: {
             ...createPolicies,
             nonInferenceRules: [
-              "Use resolved or merchant facts.",
-              "Every variant imageId must equal a mediaSet pmed key; never map by position.",
+              "Use exact facts.",
+              "Variant imageId must equal a mediaSet pmed key; never use position.",
             ],
           },
         },
@@ -328,26 +403,26 @@ export const OPTIONED_PRODUCT_WORKFLOW: AgentWorkflowCard = {
     {
       id: "publish",
       surface: "dashboard",
-      title: "Publish eligible category",
-      summary: "Prove readiness, then publish with current revision.",
+      title: "Publish",
+      summary: "Read readiness and revision, then publish.",
       dependsOn: ["create"],
-      stopConditions: ["Stop on readiness blocker or revision conflict."],
+      stopConditions: ["Readiness/revision failure: stop."],
       steps: [
         {
           id: "category",
-          title: "Read fresh category revision",
+          title: "Category",
           operationId: "dashboard.categories.get_section",
           mutation: "read",
           input: {
             template: { path: { id: null, section: "summary" } },
             dependencies: [{ templatePointer: "/path/id", source: { kind: "fact", factId: "categoryId" } }],
-            defaults: [{ templatePointer: "/path/section", value: "summary" }],
+            defaults: [],
           },
           policies: readPolicies,
         },
         {
           id: "readiness",
-          title: "Read category publish readiness",
+          title: "Readiness",
           operationId: "dashboard.categories.publish_readiness",
           mutation: "read",
           input: {
@@ -359,10 +434,10 @@ export const OPTIONED_PRODUCT_WORKFLOW: AgentWorkflowCard = {
         },
         {
           id: "status",
-          title: "Publish category with CAS",
+          title: "Status",
           operationId: "dashboard.categories.set_status",
           mutation: "lifecycle",
-          condition: "Only if not published and ready.",
+          condition: "Only if ready and not published.",
           input: {
             template: { path: { id: null }, body: { expectedRevision: null, status: "published" } },
             dependencies: [
@@ -372,12 +447,12 @@ export const OPTIONED_PRODUCT_WORKFLOW: AgentWorkflowCard = {
                 source: { kind: "step", phaseId: "publish", stepId: "category", responsePointer: "/data/category/revision" },
               },
             ],
-            defaults: [{ templatePointer: "/body/status", value: "published" }],
+            defaults: [],
           },
           policies: {
             ...createPolicies,
             revision: "required",
-            stopConditions: ["On conflict, reread summary/readiness; never retry stale."],
+            stopConditions: ["Conflict: reread summary/readiness; no stale retry."],
           },
         },
       ],
@@ -385,20 +460,20 @@ export const OPTIONED_PRODUCT_WORKFLOW: AgentWorkflowCard = {
     {
       id: "dashboardVerify",
       surface: "dashboard",
-      title: "Verify dashboard truth",
-      summary: "Read composition and bounded discovery evidence.",
+      title: "Admin verify",
+      summary: "Read admin evidence.",
       dependsOn: ["create", "publish"],
       stopConditions: [
         "Stop on SKU/image/stock drift or discovery failure.",
-        "No bounded product/SKU feed-row read exists; do not claim emitted price/image/availability.",
+        "No bounded exact product sitemap/feed-row read exists; do not claim sitemap membership or emitted feed price/image/availability.",
       ],
       steps: [
         {
           id: "sections",
-          title: "Read bounded product sections",
+          title: "Sections",
           operationId: "dashboard.products.get_section",
           mutation: "read",
-          condition: "Read base, text, media, attributes, info, options, and variants.",
+          condition: "Read base, text, media, attributes, info, options, variants.",
           input: {
             template: { path: { id: null, section: null }, query: { offset: 0, limit: 10 } },
             dependencies: [
@@ -407,24 +482,21 @@ export const OPTIONED_PRODUCT_WORKFLOW: AgentWorkflowCard = {
                 source: { kind: "step", phaseId: "create", stepId: "product", responsePointer: "/data/id" },
               },
             ],
-            defaults: [
-              { templatePointer: "/query/offset", value: 0 },
-              { templatePointer: "/query/limit", value: 10 },
-            ],
+            defaults: [],
           },
           policies: readPolicies,
         },
         {
           id: "feed",
-          title: "Read bounded feed diagnostics",
+          title: "Feed",
           operationId: "dashboard.seo.feed_diagnostics",
           mutation: "read",
-          input: { template: { query: { scanLimit: 500, sampleLimit: 10 } }, dependencies: [], defaults: [{ templatePointer: "/query/scanLimit", value: 500 }, { templatePointer: "/query/sampleLimit", value: 10 }] },
+          input: { template: { query: { scanLimit: 500, sampleLimit: 10 } }, dependencies: [], defaults: [] },
           policies: readPolicies,
         },
         {
           id: "probe",
-          title: "Probe public discovery resources",
+          title: "Probe",
           operationId: "dashboard.seo.live_probe",
           mutation: "read",
           input: { template: {}, dependencies: [], defaults: [] },
@@ -435,26 +507,23 @@ export const OPTIONED_PRODUCT_WORKFLOW: AgentWorkflowCard = {
     {
       id: "storefrontVerify",
       surface: "storefront",
-      title: "Verify buyer SKU truth",
-      summary: "Compare buyer options, prices, images, and availability.",
+      title: "Buyer verify",
+      summary: "Compare buyer SKU truth.",
       dependsOn: ["dashboardVerify"],
-      stopConditions: ["Stop on missing or mismatched buyer-visible facts."],
+      stopConditions: ["Buyer-visible mismatch: stop."],
       steps: [
         {
           id: "sections",
-          title: "Read storefront product sections",
+          title: "Sections",
           operationId: "storefront.products.get_section",
           mutation: "read",
-          condition: "Read summary, media, options, values, and bounded variants.",
+          condition: "Read summary, media, options, values, bounded variants.",
           input: {
             template: { path: { slug: null, section: null }, query: { offset: 0, limit: 10 } },
             dependencies: [
               { templatePointer: "/path/slug", source: { kind: "fact", factId: "productSpec", factPointer: "/slug" } },
             ],
-            defaults: [
-              { templatePointer: "/query/offset", value: 0 },
-              { templatePointer: "/query/limit", value: 10 },
-            ],
+            defaults: [],
           },
           policies: readPolicies,
         },
@@ -491,7 +560,7 @@ export const OPTIONED_PRODUCT_WORKFLOW: AgentWorkflowCard = {
       surface: "storefront",
       operationId: "storefront.products.get_section",
       responsePointers: ["/data/product", "/data/items"],
-      proves: ["Buyer SKU price, exact image, and availability band; excludes feed rows."],
+      proves: ["Buyer SKU price, exact image, availability; excludes sitemap/feed membership."],
       bounds: { maxCalls: 20, maxItems: 150, maxResponseBytes: 61_440 },
     },
   ],
@@ -542,7 +611,7 @@ export const DAILY_OPERATING_SNAPSHOT_WORKFLOW: AgentWorkflowCard = {
           input: {
             template: { query: { days: 1 } },
             dependencies: [{ templatePointer: "/query/days", source: { kind: "fact", factId: "days" } }],
-            defaults: [{ templatePointer: "/query/days", value: 1 }],
+            defaults: [],
           },
           output: {
             selectors: [{

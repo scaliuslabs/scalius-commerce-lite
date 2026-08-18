@@ -75855,9 +75855,9 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
       "id": "catalog.optioned-product.v1",
       "surface": "dashboard",
       "title": "Create an optioned product",
-      "summary": "Resolve, atomically create, publish, and verify exact SKU truth.",
+      "summary": "Create and verify an optioned product.",
       "examples": [
-        "Create a two-axis product and verify exact SKU, media, stock, and discovery truth."
+        "Create and verify a two-axis product."
       ],
       "tags": [
         "catalog",
@@ -75877,17 +75877,29 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
       "requiredFacts": [
         {
           "id": "productSpec",
-          "title": "Product",
-          "description": "Name/slug, rich text, price, SEO, condition, visibility.",
+          "title": "Product spec",
+          "description": "Exact name/description/price/slug, active/free-delivery flags, SEO title/description, canonicalPath, noIndex, sitemap/feed exclusions, and condition.",
           "required": true,
           "source": {
             "kind": "merchant"
           },
-          "nonInferenceRule": "Never invent claims, brand, price, condition, or copy."
+          "nonInferenceRule": "Do not invent copy, price, brand, condition, or flags."
+        },
+        {
+          "id": "currency",
+          "title": "Currency",
+          "description": "Saved currency for all prices.",
+          "required": true,
+          "source": {
+            "kind": "operation",
+            "operationId": "dashboard.settings.currency_get",
+            "responsePointer": "/data/currencyCode"
+          },
+          "nonInferenceRule": "Use saved currency; never convert."
         },
         {
           "id": "categoryId",
-          "title": "Category ID",
+          "title": "Category",
           "description": "Existing category ID or conditional-create result.",
           "required": true,
           "source": {
@@ -75901,47 +75913,55 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
               }
             ]
           },
-          "nonInferenceRule": "Resolve by name; never guess or substitute an ID."
+          "nonInferenceRule": "Resolve exact ID; never guess."
         },
         {
-          "id": "attributeAssignments",
-          "title": "Attributes",
-          "description": "Active IDs and truthful merchant values.",
-          "required": true,
+          "id": "categoryCreateSpec",
+          "title": "Category spec",
+          "description": "Only if missing: exact name/slug/copy/SEO/canonical/discovery/image fields.",
+          "required": false,
           "source": {
-            "kind": "operation",
-            "operationId": "dashboard.attributes.list_summaries",
-            "responsePointer": "/data/attributes"
+            "kind": "merchant"
           },
-          "nonInferenceRule": "Never duplicate or fabricate attributes."
+          "nonInferenceRule": "No spec means no category create."
         },
         {
-          "id": "mediaSet",
-          "title": "Media set",
-          "description": "{order:[pmed...],byId:{pmed:{mediaId|sourceUrl,altText,isPrimary}}}; 1-250 unique assets, one primary.",
+          "id": "attributeSet",
+          "title": "Attributes",
+          "description": "{order,createOrder,byId}; items hold value, create spec, and active-read or same-key captured attributeId.",
           "required": true,
           "source": {
             "kind": "merchant"
           },
-          "nonInferenceRule": "Use exact keys/sources; never infer count, order, role, or position."
+          "nonInferenceRule": "Only an active read or same-key create capture may set attributeId."
+        },
+        {
+          "id": "mediaSet",
+          "title": "Media",
+          "description": "{order,importOrder,byId}; order=all pmed keys; importOrder=URL keys; byId holds resolved mediaId, altText, isPrimary; 1-250 unique, one primary.",
+          "required": true,
+          "source": {
+            "kind": "merchant"
+          },
+          "nonInferenceRule": "Never infer asset keys, count, order, role, or position."
         },
         {
           "id": "optionMatrix",
-          "title": "Option matrix",
+          "title": "Matrix",
           "description": "Ordered axes/values; complete SKU price/stock/mediaSet imageId rows.",
           "required": true,
           "source": {
             "kind": "merchant"
           },
-          "nonInferenceRule": "Never add, omit, collapse, or reorder combinations, or infer imageId by label/position."
+          "nonInferenceRule": "Keep all rows/order; never infer imageId by label/position."
         }
       ],
       "phases": [
         {
           "id": "resolve",
           "surface": "dashboard",
-          "title": "Resolve identities and policy",
-          "summary": "Use bounded reads once before constructing any mutation.",
+          "title": "Resolve",
+          "summary": "Read identities and policy.",
           "dependsOn": [],
           "stopConditions": [
             "Stop on ambiguity, collision, missing facts, or grants."
@@ -75949,7 +75969,7 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
           "steps": [
             {
               "id": "categories",
-              "title": "Resolve category options",
+              "title": "Categories",
               "operationId": "dashboard.categories.form_options",
               "mutation": "read",
               "input": {
@@ -75962,19 +75982,19 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
                 "idempotency": "none",
                 "confirmation": "none",
                 "stopConditions": [
-                  "Stop on auth/read failure."
+                  "Read failure: stop."
                 ],
                 "nonInferenceRules": [
-                  "Treat missing data as unknown."
+                  "Missing stays unknown."
                 ]
               }
             },
             {
               "id": "attributes",
-              "title": "Resolve attribute summaries",
+              "title": "Attributes",
               "operationId": "dashboard.attributes.list_summaries",
               "mutation": "read",
-              "condition": "Repeat only for requested attribute names.",
+              "condition": "Only requested attribute names.",
               "input": {
                 "template": {
                   "query": {
@@ -75984,32 +76004,45 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
                   }
                 },
                 "dependencies": [],
-                "defaults": [
-                  {
-                    "templatePointer": "/query/page",
-                    "value": 1
-                  },
-                  {
-                    "templatePointer": "/query/limit",
-                    "value": 20
-                  }
-                ]
+                "defaults": []
               },
               "policies": {
                 "revision": "none",
                 "idempotency": "none",
                 "confirmation": "none",
                 "stopConditions": [
-                  "Stop on auth/read failure."
+                  "Read failure: stop."
                 ],
                 "nonInferenceRules": [
-                  "Treat missing data as unknown."
+                  "Missing stays unknown."
+                ]
+              }
+            },
+            {
+              "id": "currency",
+              "title": "Currency",
+              "operationId": "dashboard.settings.currency_get",
+              "mutation": "read",
+              "input": {
+                "template": {},
+                "dependencies": [],
+                "defaults": []
+              },
+              "policies": {
+                "revision": "none",
+                "idempotency": "none",
+                "confirmation": "none",
+                "stopConditions": [
+                  "Read failure: stop."
+                ],
+                "nonInferenceRules": [
+                  "Missing stays unknown."
                 ]
               }
             },
             {
               "id": "seo",
-              "title": "Read discovery settings",
+              "title": "Discovery",
               "operationId": "dashboard.seo.settings_get",
               "mutation": "read",
               "input": {
@@ -76022,16 +76055,16 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
                 "idempotency": "none",
                 "confirmation": "none",
                 "stopConditions": [
-                  "Stop on auth/read failure."
+                  "Read failure: stop."
                 ],
                 "nonInferenceRules": [
-                  "Treat missing data as unknown."
+                  "Missing stays unknown."
                 ]
               }
             },
             {
               "id": "productCollision",
-              "title": "Check product slug and name",
+              "title": "Product collision",
               "operationId": "dashboard.products.list_summaries",
               "mutation": "read",
               "input": {
@@ -76052,74 +76085,17 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
                     }
                   }
                 ],
-                "defaults": [
-                  {
-                    "templatePointer": "/query/page",
-                    "value": 1
-                  },
-                  {
-                    "templatePointer": "/query/limit",
-                    "value": 10
-                  }
-                ]
+                "defaults": []
               },
               "policies": {
                 "revision": "none",
                 "idempotency": "none",
                 "confirmation": "none",
                 "stopConditions": [
-                  "Stop on auth/read failure."
+                  "Read failure: stop."
                 ],
                 "nonInferenceRules": [
-                  "Treat missing data as unknown."
-                ]
-              }
-            },
-            {
-              "id": "skuCollision",
-              "title": "Check active SKU namespace",
-              "operationId": "dashboard.inventory.list",
-              "mutation": "read",
-              "input": {
-                "template": {
-                  "query": {
-                    "section": "variants",
-                    "search": null,
-                    "status": "all",
-                    "page": 1,
-                    "limit": 100
-                  }
-                },
-                "dependencies": [
-                  {
-                    "templatePointer": "/query/search",
-                    "source": {
-                      "kind": "fact",
-                      "factId": "optionMatrix",
-                      "factPointer": "/skuPrefix"
-                    }
-                  }
-                ],
-                "defaults": [
-                  {
-                    "templatePointer": "/query/page",
-                    "value": 1
-                  },
-                  {
-                    "templatePointer": "/query/limit",
-                    "value": 100
-                  }
-                ]
-              },
-              "policies": {
-                "revision": "none",
-                "idempotency": "none",
-                "confirmation": "none",
-                "stopConditions": [
-                  "Stop on auth/read failure."
-                ],
-                "nonInferenceRules": [
-                  "Treat missing data as unknown."
+                  "Missing stays unknown."
                 ]
               }
             }
@@ -76128,88 +76104,132 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         {
           "id": "prepare",
           "surface": "dashboard",
-          "title": "Create missing prerequisites",
-          "summary": "Create missing prerequisites and only approved discovery fields.",
+          "title": "Prepare",
+          "summary": "Create approved prerequisites.",
           "dependsOn": [
             "resolve"
           ],
           "stopConditions": [
-            "On concurrent create, reread; never duplicate."
+            "Concurrent create: reread; never duplicate."
           ],
           "steps": [
             {
               "id": "categoryCreate",
-              "title": "Create draft category",
+              "title": "Category",
               "operationId": "dashboard.categories.create",
               "mutation": "create",
-              "condition": "Only when no unambiguous reusable category exists.",
+              "condition": "Only when no exact reusable category exists.",
               "input": {
                 "template": {
                   "body": {
                     "name": null,
-                    "slug": null,
                     "description": null,
+                    "slug": null,
                     "metaTitle": null,
                     "metaDescription": null,
+                    "canonicalPath": null,
+                    "noIndex": null,
+                    "excludeFromSitemap": null,
                     "image": null
                   }
                 },
                 "dependencies": [],
-                "defaults": []
+                "defaults": [],
+                "picks": [
+                  {
+                    "factId": "categoryCreateSpec",
+                    "templatePointer": "/body",
+                    "keys": [
+                      "name",
+                      "description",
+                      "slug",
+                      "metaTitle",
+                      "metaDescription",
+                      "canonicalPath",
+                      "noIndex",
+                      "excludeFromSitemap",
+                      "image"
+                    ]
+                  }
+                ]
               },
               "policies": {
                 "revision": "none",
                 "idempotency": "none",
                 "confirmation": "required",
                 "stopConditions": [
-                  "On conflict or uncertain write, stop and reread."
+                  "Conflict: stop; uncertainty: reread first."
                 ],
                 "nonInferenceRules": [
-                  "Use resolved or merchant facts."
+                  "Use exact facts."
                 ]
               }
             },
             {
               "id": "attributeCreate",
-              "title": "Create missing attribute",
+              "title": "Attribute",
               "operationId": "dashboard.attributes.create",
               "mutation": "create",
-              "condition": "Repeat for each approved missing attribute.",
+              "condition": "Skip when createOrder is empty; otherwise use its approved keys.",
               "input": {
                 "template": {
                   "body": {
                     "name": null,
                     "slug": null,
-                    "filterable": true,
-                    "options": []
+                    "filterable": null,
+                    "options": null
                   }
                 },
                 "dependencies": [],
-                "defaults": [
+                "defaults": []
+              },
+              "repeat": {
+                "factId": "attributeSet",
+                "orderPointer": "/createOrder",
+                "itemMapPointer": "/byId",
+                "minItems": 1,
+                "maxItems": 90,
+                "bindings": [
+                  {
+                    "templatePointer": "/body/name",
+                    "itemPointer": "/name"
+                  },
+                  {
+                    "templatePointer": "/body/slug",
+                    "itemPointer": "/slug"
+                  },
                   {
                     "templatePointer": "/body/filterable",
-                    "value": true
+                    "itemPointer": "/filterable"
+                  },
+                  {
+                    "templatePointer": "/body/options",
+                    "itemPointer": "/options"
                   }
-                ]
+                ],
+                "capture": {
+                  "responsePointer": "/data/attribute/id",
+                  "itemPointer": "/attributeId"
+                }
               },
               "policies": {
                 "revision": "none",
                 "idempotency": "none",
                 "confirmation": "required",
                 "stopConditions": [
-                  "On conflict or uncertain write, stop and reread."
+                  "Conflict: stop; uncertainty: reread first."
                 ],
                 "nonInferenceRules": [
-                  "Use resolved or merchant facts."
+                  "Use exact facts."
                 ]
               }
             },
             {
               "id": "discoveryUpdate",
-              "title": "Enable requested discovery fields",
+              "title": "Discovery",
               "operationId": "dashboard.seo.settings_update",
               "mutation": "partial",
-              "condition": "Only after explicit store-wide approval.",
+              "condition": "Only with store-wide approval.",
               "input": {
                 "template": {
                   "body": {
@@ -76224,10 +76244,10 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
                 "idempotency": "none",
                 "confirmation": "required",
                 "stopConditions": [
-                  "On conflict or uncertain write, stop and reread."
+                  "Conflict: stop; uncertainty: reread first."
                 ],
                 "nonInferenceRules": [
-                  "Use resolved or merchant facts."
+                  "Use exact facts."
                 ]
               }
             }
@@ -76236,21 +76256,21 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         {
           "id": "media",
           "surface": "dashboard",
-          "title": "Commit media",
-          "summary": "Commit assets with keyed IDs.",
+          "title": "Media",
+          "summary": "Commit keyed assets.",
           "dependsOn": [
             "resolve"
           ],
           "stopConditions": [
-            "Stop on invalid, inaccessible, oversized, duplicate, or ambiguous media."
+            "Stop on invalid, duplicate, inaccessible, or oversized media."
           ],
           "steps": [
             {
               "id": "asset",
-              "title": "Commit one declared asset",
+              "title": "Asset",
               "operationId": "dashboard.media.import_url",
               "mutation": "create",
-              "condition": "Skip ready mediaId; local files must complete dashboard.media-upload and re-enter as ready.",
+              "condition": "Skip empty importOrder. Ready mediaId skips import; local files complete dashboard.media-upload and re-enter with mediaId.",
               "input": {
                 "template": {
                   "body": {
@@ -76262,7 +76282,7 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
               },
               "repeat": {
                 "factId": "mediaSet",
-                "orderPointer": "/order",
+                "orderPointer": "/importOrder",
                 "itemMapPointer": "/byId",
                 "minItems": 1,
                 "maxItems": 250,
@@ -76282,11 +76302,11 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
                 "idempotency": "none",
                 "confirmation": "required",
                 "stopConditions": [
-                  "On conflict or uncertain write, stop and reread."
+                  "Conflict: stop; uncertainty: reread first."
                 ],
                 "nonInferenceRules": [
-                  "Use resolved or merchant facts.",
-                  "Never cross-assign captured media IDs."
+                  "Use exact facts.",
+                  "Capture mediaId only to the same key."
                 ]
               }
             }
@@ -76295,8 +76315,8 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         {
           "id": "create",
           "surface": "dashboard",
-          "title": "Create atomically",
-          "summary": "Submit media, attributes, axes, and all SKUs atomically.",
+          "title": "Create",
+          "summary": "Submit one atomic product.",
           "dependsOn": [
             "prepare",
             "media"
@@ -76307,10 +76327,10 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
           "steps": [
             {
               "id": "product",
-              "title": "Create atomic optioned product",
+              "title": "Product",
               "operationId": "dashboard.products.create",
               "mutation": "create",
-              "condition": "Materialize body.media from every ordered mediaSet item using exact pmed key/mediaId; require 1-250 unique assets, one primary.",
+              "condition": "Require every product field, active attribute ID, media association, axis, and SKU row.",
               "input": {
                 "template": {
                   "body": {
@@ -76328,40 +76348,17 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
                     "excludeFromProductFeed": false,
                     "productCondition": null,
                     "slug": null,
-                    "media": null,
-                    "attributes": null,
+                    "media": [],
+                    "attributes": [],
                     "optionMatrix": null
                   }
                 },
                 "dependencies": [
                   {
-                    "templatePointer": "/body/name",
-                    "source": {
-                      "kind": "fact",
-                      "factId": "productSpec",
-                      "factPointer": "/name"
-                    }
-                  },
-                  {
-                    "templatePointer": "/body/slug",
-                    "source": {
-                      "kind": "fact",
-                      "factId": "productSpec",
-                      "factPointer": "/slug"
-                    }
-                  },
-                  {
                     "templatePointer": "/body/categoryId",
                     "source": {
                       "kind": "fact",
                       "factId": "categoryId"
-                    }
-                  },
-                  {
-                    "templatePointer": "/body/attributes",
-                    "source": {
-                      "kind": "fact",
-                      "factId": "attributeAssignments"
                     }
                   },
                   {
@@ -76372,22 +76369,54 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
                     }
                   }
                 ],
-                "defaults": [
+                "defaults": [],
+                "picks": [
                   {
-                    "templatePointer": "/body/isActive",
-                    "value": true
+                    "factId": "productSpec",
+                    "templatePointer": "/body",
+                    "keys": [
+                      "name",
+                      "description",
+                      "price",
+                      "slug",
+                      "isActive",
+                      "freeDelivery",
+                      "metaTitle",
+                      "metaDescription",
+                      "canonicalPath",
+                      "noIndex",
+                      "excludeFromSitemap",
+                      "excludeFromProductFeed",
+                      "productCondition"
+                    ]
+                  }
+                ],
+                "materializations": [
+                  {
+                    "factId": "mediaSet",
+                    "templatePointer": "/body/media",
+                    "orderPointer": "/order",
+                    "itemMapPointer": "/byId",
+                    "minItems": 1,
+                    "maxItems": 250,
+                    "keyField": "id",
+                    "keys": [
+                      "mediaId",
+                      "altText",
+                      "isPrimary"
+                    ]
                   },
                   {
-                    "templatePointer": "/body/noIndex",
-                    "value": false
-                  },
-                  {
-                    "templatePointer": "/body/excludeFromSitemap",
-                    "value": false
-                  },
-                  {
-                    "templatePointer": "/body/excludeFromProductFeed",
-                    "value": false
+                    "factId": "attributeSet",
+                    "templatePointer": "/body/attributes",
+                    "orderPointer": "/order",
+                    "itemMapPointer": "/byId",
+                    "minItems": 1,
+                    "maxItems": 90,
+                    "keys": [
+                      "attributeId",
+                      "value"
+                    ]
                   }
                 ]
               },
@@ -76396,11 +76425,11 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
                 "idempotency": "none",
                 "confirmation": "required",
                 "stopConditions": [
-                  "On conflict or uncertain write, stop and reread."
+                  "Conflict: stop; uncertainty: reread first."
                 ],
                 "nonInferenceRules": [
-                  "Use resolved or merchant facts.",
-                  "Every variant imageId must equal a mediaSet pmed key; never map by position."
+                  "Use exact facts.",
+                  "Variant imageId must equal a mediaSet pmed key; never use position."
                 ]
               }
             }
@@ -76409,18 +76438,18 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         {
           "id": "publish",
           "surface": "dashboard",
-          "title": "Publish eligible category",
-          "summary": "Prove readiness, then publish with current revision.",
+          "title": "Publish",
+          "summary": "Read readiness and revision, then publish.",
           "dependsOn": [
             "create"
           ],
           "stopConditions": [
-            "Stop on readiness blocker or revision conflict."
+            "Readiness/revision failure: stop."
           ],
           "steps": [
             {
               "id": "category",
-              "title": "Read fresh category revision",
+              "title": "Category",
               "operationId": "dashboard.categories.get_section",
               "mutation": "read",
               "input": {
@@ -76439,28 +76468,23 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
                     }
                   }
                 ],
-                "defaults": [
-                  {
-                    "templatePointer": "/path/section",
-                    "value": "summary"
-                  }
-                ]
+                "defaults": []
               },
               "policies": {
                 "revision": "none",
                 "idempotency": "none",
                 "confirmation": "none",
                 "stopConditions": [
-                  "Stop on auth/read failure."
+                  "Read failure: stop."
                 ],
                 "nonInferenceRules": [
-                  "Treat missing data as unknown."
+                  "Missing stays unknown."
                 ]
               }
             },
             {
               "id": "readiness",
-              "title": "Read category publish readiness",
+              "title": "Readiness",
               "operationId": "dashboard.categories.publish_readiness",
               "mutation": "read",
               "input": {
@@ -76485,19 +76509,19 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
                 "idempotency": "none",
                 "confirmation": "none",
                 "stopConditions": [
-                  "Stop on auth/read failure."
+                  "Read failure: stop."
                 ],
                 "nonInferenceRules": [
-                  "Treat missing data as unknown."
+                  "Missing stays unknown."
                 ]
               }
             },
             {
               "id": "status",
-              "title": "Publish category with CAS",
+              "title": "Status",
               "operationId": "dashboard.categories.set_status",
               "mutation": "lifecycle",
-              "condition": "Only if not published and ready.",
+              "condition": "Only if ready and not published.",
               "input": {
                 "template": {
                   "path": {
@@ -76526,22 +76550,17 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
                     }
                   }
                 ],
-                "defaults": [
-                  {
-                    "templatePointer": "/body/status",
-                    "value": "published"
-                  }
-                ]
+                "defaults": []
               },
               "policies": {
                 "revision": "required",
                 "idempotency": "none",
                 "confirmation": "required",
                 "stopConditions": [
-                  "On conflict, reread summary/readiness; never retry stale."
+                  "Conflict: reread summary/readiness; no stale retry."
                 ],
                 "nonInferenceRules": [
-                  "Use resolved or merchant facts."
+                  "Use exact facts."
                 ]
               }
             }
@@ -76550,23 +76569,23 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         {
           "id": "dashboardVerify",
           "surface": "dashboard",
-          "title": "Verify dashboard truth",
-          "summary": "Read composition and bounded discovery evidence.",
+          "title": "Admin verify",
+          "summary": "Read admin evidence.",
           "dependsOn": [
             "create",
             "publish"
           ],
           "stopConditions": [
             "Stop on SKU/image/stock drift or discovery failure.",
-            "No bounded product/SKU feed-row read exists; do not claim emitted price/image/availability."
+            "No bounded exact product sitemap/feed-row read exists; do not claim sitemap membership or emitted feed price/image/availability."
           ],
           "steps": [
             {
               "id": "sections",
-              "title": "Read bounded product sections",
+              "title": "Sections",
               "operationId": "dashboard.products.get_section",
               "mutation": "read",
-              "condition": "Read base, text, media, attributes, info, options, and variants.",
+              "condition": "Read base, text, media, attributes, info, options, variants.",
               "input": {
                 "template": {
                   "path": {
@@ -76589,32 +76608,23 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
                     }
                   }
                 ],
-                "defaults": [
-                  {
-                    "templatePointer": "/query/offset",
-                    "value": 0
-                  },
-                  {
-                    "templatePointer": "/query/limit",
-                    "value": 10
-                  }
-                ]
+                "defaults": []
               },
               "policies": {
                 "revision": "none",
                 "idempotency": "none",
                 "confirmation": "none",
                 "stopConditions": [
-                  "Stop on auth/read failure."
+                  "Read failure: stop."
                 ],
                 "nonInferenceRules": [
-                  "Treat missing data as unknown."
+                  "Missing stays unknown."
                 ]
               }
             },
             {
               "id": "feed",
-              "title": "Read bounded feed diagnostics",
+              "title": "Feed",
               "operationId": "dashboard.seo.feed_diagnostics",
               "mutation": "read",
               "input": {
@@ -76625,32 +76635,23 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
                   }
                 },
                 "dependencies": [],
-                "defaults": [
-                  {
-                    "templatePointer": "/query/scanLimit",
-                    "value": 500
-                  },
-                  {
-                    "templatePointer": "/query/sampleLimit",
-                    "value": 10
-                  }
-                ]
+                "defaults": []
               },
               "policies": {
                 "revision": "none",
                 "idempotency": "none",
                 "confirmation": "none",
                 "stopConditions": [
-                  "Stop on auth/read failure."
+                  "Read failure: stop."
                 ],
                 "nonInferenceRules": [
-                  "Treat missing data as unknown."
+                  "Missing stays unknown."
                 ]
               }
             },
             {
               "id": "probe",
-              "title": "Probe public discovery resources",
+              "title": "Probe",
               "operationId": "dashboard.seo.live_probe",
               "mutation": "read",
               "input": {
@@ -76663,10 +76664,10 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
                 "idempotency": "none",
                 "confirmation": "none",
                 "stopConditions": [
-                  "Stop on auth/read failure."
+                  "Read failure: stop."
                 ],
                 "nonInferenceRules": [
-                  "Treat missing data as unknown."
+                  "Missing stays unknown."
                 ]
               }
             }
@@ -76675,21 +76676,21 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         {
           "id": "storefrontVerify",
           "surface": "storefront",
-          "title": "Verify buyer SKU truth",
-          "summary": "Compare buyer options, prices, images, and availability.",
+          "title": "Buyer verify",
+          "summary": "Compare buyer SKU truth.",
           "dependsOn": [
             "dashboardVerify"
           ],
           "stopConditions": [
-            "Stop on missing or mismatched buyer-visible facts."
+            "Buyer-visible mismatch: stop."
           ],
           "steps": [
             {
               "id": "sections",
-              "title": "Read storefront product sections",
+              "title": "Sections",
               "operationId": "storefront.products.get_section",
               "mutation": "read",
-              "condition": "Read summary, media, options, values, and bounded variants.",
+              "condition": "Read summary, media, options, values, bounded variants.",
               "input": {
                 "template": {
                   "path": {
@@ -76711,26 +76712,17 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
                     }
                   }
                 ],
-                "defaults": [
-                  {
-                    "templatePointer": "/query/offset",
-                    "value": 0
-                  },
-                  {
-                    "templatePointer": "/query/limit",
-                    "value": 10
-                  }
-                ]
+                "defaults": []
               },
               "policies": {
                 "revision": "none",
                 "idempotency": "none",
                 "confirmation": "none",
                 "stopConditions": [
-                  "Stop on auth/read failure."
+                  "Read failure: stop."
                 ],
                 "nonInferenceRules": [
-                  "Treat missing data as unknown."
+                  "Missing stays unknown."
                 ]
               }
             }
@@ -76800,7 +76792,7 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
             "/data/items"
           ],
           "proves": [
-            "Buyer SKU price, exact image, and availability band; excludes feed rows."
+            "Buyer SKU price, exact image, availability; excludes sitemap/feed membership."
           ],
           "bounds": {
             "maxCalls": 20,
@@ -76880,12 +76872,7 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
                     }
                   }
                 ],
-                "defaults": [
-                  {
-                    "templatePointer": "/query/days",
-                    "value": 1
-                  }
-                ]
+                "defaults": []
               },
               "output": {
                 "selectors": [
@@ -77854,10 +77841,10 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
       "workflowId": "catalog.optioned-product.v1",
       "operationIds": [
         "dashboard.seo.settings_get",
+        "dashboard.settings.currency_get",
         "dashboard.categories.form_options",
         "dashboard.attributes.list_summaries",
         "dashboard.products.list_summaries",
-        "dashboard.inventory.list",
         "dashboard.categories.create",
         "dashboard.attributes.create",
         "dashboard.seo.settings_update",
@@ -77876,7 +77863,7 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
       "requiresVerification": true,
       "rules": [
         "Require the merchant's exact option axes, SKU matrix, prices, and stock facts.",
-        "Resolve category, attribute, media, and SKU collisions before creation.",
+        "Resolve category, attribute, media, and product collisions; product creation owns SKU uniqueness.",
         "Create the product once and publish the category only when readiness passes.",
         "Confirm writes, then verify bounded admin, feed, discovery, and storefront evidence."
       ]
@@ -80778,8 +80765,6 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "surface": "dashboard",
         "mode": "curated",
         "workflowIds": [
-          "catalog.optioned-product.v1",
-          "dashboard.complex-product-create",
           "dashboard.inventory-cycle-count"
         ]
       },
@@ -81969,6 +81954,8 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "surface": "dashboard",
         "mode": "curated",
         "workflowIds": [
+          "catalog.optioned-product.v1",
+          "dashboard.complex-product-create",
           "dashboard.daily-operations-snapshot",
           "operations.daily-snapshot.v1"
         ]

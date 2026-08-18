@@ -112,10 +112,10 @@ export const DASHBOARD_AGENT_WORKFLOW_ROUTES = [
     workflowId: "catalog.optioned-product.v1",
     operationIds: [
       "dashboard.seo.settings_get",
+      "dashboard.settings.currency_get",
       "dashboard.categories.form_options",
       "dashboard.attributes.list_summaries",
       "dashboard.products.list_summaries",
-      "dashboard.inventory.list",
       "dashboard.categories.create",
       "dashboard.attributes.create",
       "dashboard.seo.settings_update",
@@ -134,7 +134,7 @@ export const DASHBOARD_AGENT_WORKFLOW_ROUTES = [
     requiresVerification: true,
     rules: [
       "Require the merchant's exact option axes, SKU matrix, prices, and stock facts.",
-      "Resolve category, attribute, media, and SKU collisions before creation.",
+      "Resolve category, attribute, media, and product collisions; product creation owns SKU uniqueness.",
       "Create the product once and publish the category only when readiness passes.",
       "Confirm writes, then verify bounded admin, feed, discovery, and storefront evidence.",
     ],

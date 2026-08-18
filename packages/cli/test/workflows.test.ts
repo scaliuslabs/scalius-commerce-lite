@@ -33,6 +33,25 @@ type MutableWorkflowRepeat = {
   [key: string]: unknown;
 };
 
+type MutableWorkflowInputPick = {
+  factId: string;
+  templatePointer: string;
+  keys: string[];
+  [key: string]: unknown;
+};
+
+type MutableWorkflowInputMaterialization = {
+  factId: string;
+  templatePointer: string;
+  orderPointer: string;
+  itemMapPointer: string;
+  minItems: number;
+  maxItems: number;
+  keyField?: string;
+  keys: string[];
+  [key: string]: unknown;
+};
+
 type MutableWorkflowCard = {
   id: string;
   requiredFacts: Array<{ id: string; source: { kind: string } }>;
@@ -45,6 +64,8 @@ type MutableWorkflowCard = {
         template: unknown;
         dependencies: Array<Record<string, unknown>>;
         defaults: Array<Record<string, unknown>>;
+        picks?: MutableWorkflowInputPick[];
+        materializations?: MutableWorkflowInputMaterialization[];
       };
       repeat?: MutableWorkflowRepeat;
       output?: { selectors: MutableWorkflowOutputSelector[] };
@@ -207,6 +228,21 @@ function mutableWorkflowStep(
   return step;
 }
 
+function mutableOperation(document: OpenApiDocument, operationId: string): OpenApiOperation {
+  for (const pathItem of Object.values(document.paths ?? {})) {
+    if (!pathItem || typeof pathItem !== "object" || Array.isArray(pathItem)) continue;
+    for (const candidate of Object.values(pathItem)) {
+      if (
+        candidate &&
+        typeof candidate === "object" &&
+        !Array.isArray(candidate) &&
+        (candidate as OpenApiOperation).operationId === operationId
+      ) return candidate as OpenApiOperation;
+    }
+  }
+  throw new Error(`Missing operation ${operationId}.`);
+}
+
 function installValidProductRepeat(document: OpenApiDocument): {
   card: MutableWorkflowCard;
   step: MutableWorkflowCard["phases"][number]["steps"][number];
@@ -222,7 +258,7 @@ function installValidProductRepeat(document: OpenApiDocument): {
   step.input.dependencies = [];
   step.repeat = {
     factId,
-    orderPointer: "/order",
+    orderPointer: "/importOrder",
     itemMapPointer: "/byId",
     minItems: 1,
     maxItems: 250,
@@ -280,7 +316,7 @@ describe("CLI workflow resolver adapter", () => {
       description: "Ordered axes/values; complete SKU price/stock/mediaSet imageId rows.",
       required: true,
       source: { kind: "merchant" },
-      nonInferenceRule: "Never add, omit, collapse, or reorder combinations, or infer imageId by label/position.",
+      nonInferenceRule: "Keep all rows/order; never infer imageId by label/position.",
     });
     const create = detail.steps.find((step) =>
       step.operationId === "dashboard.products.create"
@@ -292,7 +328,8 @@ describe("CLI workflow resolver adapter", () => {
       input: {
         template: {
           body: {
-            media: null,
+            media: [],
+            attributes: [],
             optionMatrix: null,
           },
         },
@@ -301,9 +338,66 @@ describe("CLI workflow resolver adapter", () => {
         idempotency: "none",
         confirmation: "required",
         nonInferenceRules: [
-          "Use resolved or merchant facts.",
-          "Every variant imageId must equal a mediaSet pmed key; never map by position.",
+          "Use exact facts.",
+          "Variant imageId must equal a mediaSet pmed key; never use position.",
         ],
+      },
+    });
+    expect(create?.input.picks).toEqual([expect.objectContaining({
+      factId: "productSpec",
+      templatePointer: "/body",
+      keys: expect.arrayContaining([
+        "name",
+        "description",
+        "price",
+        "slug",
+        "isActive",
+        "freeDelivery",
+        "metaTitle",
+        "metaDescription",
+        "canonicalPath",
+        "noIndex",
+        "excludeFromSitemap",
+        "excludeFromProductFeed",
+        "productCondition",
+      ]),
+    })]);
+    expect(create?.input.materializations).toEqual([
+      {
+        factId: "mediaSet",
+        templatePointer: "/body/media",
+        orderPointer: "/order",
+        itemMapPointer: "/byId",
+        minItems: 1,
+        maxItems: 250,
+        keyField: "id",
+        keys: ["mediaId", "altText", "isPrimary"],
+      },
+      {
+        factId: "attributeSet",
+        templatePointer: "/body/attributes",
+        orderPointer: "/order",
+        itemMapPointer: "/byId",
+        minItems: 1,
+        maxItems: 90,
+        keys: ["attributeId", "value"],
+      },
+    ]);
+    const mediaImport = detail.steps.find((step) =>
+      step.operationId === "dashboard.media.import_url"
+    );
+    expect(mediaImport).toMatchObject({
+      condition: expect.stringContaining("Skip empty importOrder"),
+      repeat: { orderPointer: "/importOrder" },
+    });
+    const attributeCreate = detail.steps.find((step) =>
+      step.operationId === "dashboard.attributes.create"
+    );
+    expect(attributeCreate).toMatchObject({
+      condition: expect.stringContaining("Skip when createOrder is empty"),
+      repeat: {
+        orderPointer: "/createOrder",
+        capture: { responsePointer: "/data/attribute/id", itemPointer: "/attributeId" },
       },
     });
     expect(detail.steps.filter((step) => step.operationId === "dashboard.products.create"))
@@ -316,12 +410,12 @@ describe("CLI workflow resolver adapter", () => {
       }),
       expect.objectContaining({
         operationId: "storefront.products.get_section",
-        proves: ["Buyer SKU price, exact image, and availability band; excludes feed rows."],
+        proves: ["Buyer SKU price, exact image, availability; excludes sitemap/feed membership."],
         bounds: { maxCalls: 20, maxItems: 150, maxResponseBytes: 61_440 },
       }),
     ]));
     expect(new TextEncoder().encode(JSON.stringify({ ok: true, result: product })).byteLength)
-      .toBeLessThanOrEqual(16 * 1024);
+      .toBeLessThanOrEqual(15_872);
 
     const dailyCase = AGENT_INTENT_EVAL_CASES.find((testCase) =>
       testCase.id === "dashboard.daily-operations-snapshot"
@@ -552,6 +646,9 @@ describe("CLI workflow resolver adapter", () => {
       ["pseudo repeat pointer", (_card, step) => {
         step.repeat!.itemMapPointer = "/byId/{associationId}";
       }],
+      ["overlapping repeat roots", (_card, step) => {
+        step.repeat!.orderPointer = "/byId/order";
+      }],
       ["unknown fact", (_card, step) => {
         step.repeat!.factId = "missingFact";
       }],
@@ -566,6 +663,9 @@ describe("CLI workflow resolver adapter", () => {
       }],
       ["duplicate binding", (_card, step) => {
         step.repeat!.bindings.push({ ...step.repeat!.bindings[0]! });
+      }],
+      ["capture overlaps binding", (_card, step) => {
+        step.repeat!.capture.itemPointer = "/sourceUrl/result";
       }],
       ["missing binding target", (_card, step) => {
         step.repeat!.bindings[0]!.templatePointer = "/body/missing";
@@ -594,6 +694,152 @@ describe("CLI workflow resolver adapter", () => {
         throw new Error(`Malformed repeat case '${name}' was not rejected.`, { cause: error });
       }
     }
+  });
+
+  it("rejects malformed or schema-unsafe input picks and materializations", async () => {
+    const source = await loadLiveDocument();
+    const cases: Array<[
+      string,
+      (step: MutableWorkflowCard["phases"][number]["steps"][number]) => void,
+    ]> = [
+      ["empty pick keys", (step) => {
+        step.input.picks![0]!.keys = [];
+      }],
+      ["prototype pick key", (step) => {
+        step.input.picks![0]!.keys = ["__proto__"];
+      }],
+      ["duplicate pick key", (step) => {
+        step.input.picks![0]!.keys = ["name", "name"];
+      }],
+      ["pseudo pick pointer", (step) => {
+        step.input.picks![0]!.templatePointer = "/body/{field}";
+      }],
+      ["unknown pick fact", (step) => {
+        step.input.picks![0]!.factId = "missing";
+      }],
+      ["non-merchant pick fact", (step) => {
+        step.input.picks![0]!.factId = "categoryId";
+      }],
+      ["non-object pick target", (step) => {
+        step.input.picks![0]!.templatePointer = "/body/name";
+      }],
+      ["unknown pick schema property", (step) => {
+        (step.input.template as { body: Record<string, unknown> }).body.missing = null;
+        step.input.picks![0]!.keys = ["missing"];
+      }],
+      ["pick writer conflict", (step) => {
+        step.input.dependencies.push({
+          templatePointer: "/body/name",
+          source: { kind: "fact", factId: "productSpec", factPointer: "/name" },
+        });
+      }],
+      ["dependency ancestor conflict", (step) => {
+        step.input.dependencies.push({
+          templatePointer: "/body",
+          source: { kind: "fact", factId: "productSpec" },
+        });
+      }],
+      ["dependency-default ancestor conflict", (step) => {
+        step.input.dependencies = [{
+          templatePointer: "/body",
+          source: { kind: "fact", factId: "productSpec" },
+        }];
+        step.input.defaults = [{ templatePointer: "/body/noIndex", value: false }];
+      }],
+      ["extra pick key", (step) => {
+        step.input.picks![0]!.filter = "unsafe";
+      }],
+      ["materialization pseudo pointer", (step) => {
+        step.input.materializations![0]!.orderPointer = "/{key}";
+      }],
+      ["materialization bad bound", (step) => {
+        step.input.materializations![0]!.minItems = 0;
+      }],
+      ["materialization duplicate key", (step) => {
+        step.input.materializations![0]!.keys = ["mediaId", "mediaId"];
+      }],
+      ["materialization key-field conflict", (step) => {
+        step.input.materializations![0]!.keyField = "mediaId";
+      }],
+      ["materialization unknown fact", (step) => {
+        step.input.materializations![0]!.factId = "missing";
+      }],
+      ["materialization non-merchant fact", (step) => {
+        step.input.materializations![0]!.factId = "categoryId";
+      }],
+      ["materialization unknown item property", (step) => {
+        step.input.materializations![0]!.keys = ["missing"];
+      }],
+      ["materialization missing required item property", (step) => {
+        step.input.materializations![0]!.keys = ["mediaId", "isPrimary"];
+      }],
+      ["materialization non-array target", (step) => {
+        step.input.materializations![0]!.templatePointer = "/body/optionMatrix";
+      }],
+      ["materialization writer conflict", (step) => {
+        step.input.dependencies.push({
+          templatePointer: "/body/media",
+          source: { kind: "fact", factId: "mediaSet" },
+        });
+      }],
+      ["extra materialization key", (step) => {
+        step.input.materializations![0]!.filter = "unsafe";
+      }],
+    ];
+
+    for (const [name, mutate] of cases) {
+      const liveDocument = structuredClone(source);
+      const card = mutableWorkflowCard(liveDocument, "catalog.optioned-product.v1");
+      const step = mutableWorkflowStep(card, "create", "product");
+      mutate(step);
+      try {
+        expectInvalidOpenApi(() => resolveWorkflow(liveDocument, {
+          prompt: "dashboard.complex-product-create",
+          surface: "dashboard",
+        }));
+      } catch (error) {
+        throw new Error(`Malformed input primitive case '${name}' was not rejected.`, {
+          cause: error,
+        });
+      }
+    }
+
+    const scalarItems = structuredClone(source);
+    const attributeCard = mutableWorkflowCard(scalarItems, "catalog.optioned-product.v1");
+    const attributeStep = mutableWorkflowStep(attributeCard, "prepare", "attributeCreate");
+    attributeStep.repeat!.bindings = attributeStep.repeat!.bindings.filter((binding) =>
+      binding.templatePointer !== "/body/options"
+    );
+    attributeStep.input.template = {
+      body: { name: null, slug: null, filterable: null, options: [] },
+    };
+    attributeStep.input.materializations = [{
+      factId: "attributeSet",
+      templatePointer: "/body/options",
+      orderPointer: "/order",
+      itemMapPointer: "/byId",
+      minItems: 1,
+      maxItems: 90,
+      keys: ["value"],
+    }];
+    expectInvalidOpenApi(() => resolveWorkflow(scalarItems, {
+      prompt: "dashboard.complex-product-create",
+      surface: "dashboard",
+    }));
+
+    const stricterMinimum = structuredClone(source);
+    const productOperation = mutableOperation(
+      stricterMinimum,
+      "dashboard.products.create",
+    );
+    const bodySchema = productOperation.requestBody!.content!["application/json"]!.schema as {
+      properties: { media: { minItems?: number } };
+    };
+    bodySchema.properties.media.minItems = 2;
+    expectInvalidOpenApi(() => resolveWorkflow(stricterMinimum, {
+      prompt: "dashboard.complex-product-create",
+      surface: "dashboard",
+    }));
   });
 
   it("resolves an exact route without returning the catalog", () => {

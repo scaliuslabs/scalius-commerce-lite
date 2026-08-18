@@ -15,6 +15,8 @@ import {
   type AgentWorkflowOutputField,
   type AgentWorkflowOutputProjection,
   type AgentWorkflowOutputSelector,
+  type AgentWorkflowInputFactPick,
+  type AgentWorkflowInputMaterialization,
   type AgentWorkflowRepeat,
   type AgentWorkflowRequiredFact,
   type AgentWorkflowSurface,
@@ -47,6 +49,10 @@ const MAX_PROJECTION_SELECTORS = 12;
 const MAX_PROJECTION_FIELDS = 16;
 const MAX_PROJECTION_TOTAL_FIELDS = 24;
 const MAX_PROJECTION_ITEMS = 100;
+const MAX_INPUT_PICKS = 8;
+const MAX_INPUT_PICK_KEYS = 32;
+const MAX_INPUT_MATERIALIZATIONS = 8;
+const MAX_INPUT_MATERIALIZATION_KEYS = 16;
 const DAILY_WORKFLOW_ID = "operations.daily-snapshot.v1";
 const DAILY_WORKFLOW_HARD_MAX_BYTES = 12 * 1024;
 const RUNNABLE_EXPOSURES = new Set(["execute", "continuation"]);
@@ -371,10 +377,279 @@ function templateValueAtPointer(template: unknown, pointer: string): unknown {
   return value;
 }
 
+function encodePointerSegment(value: string): string {
+  return value.replace(/~/g, "~0").replace(/\//g, "~1");
+}
+
+function assertInputKey(value: string, label: string): void {
+  if (
+    !LOCAL_ID_PATTERN.test(value) ||
+    FORBIDDEN_PROJECTION_SEGMENTS.has(value)
+  ) {
+    throw new Error(`${label} has an invalid or prototype property key.`);
+  }
+}
+
+function pointersConflict(left: string, right: string): boolean {
+  return left === right || left.startsWith(`${right}/`) || right.startsWith(`${left}/`);
+}
+
+function registerTemplateWriter(
+  pointers: Set<string>,
+  pointer: string,
+  label: string,
+): void {
+  const conflict = [...pointers].find((existing) => pointersConflict(existing, pointer));
+  if (conflict) {
+    throw new Error(`${label} conflicts with input writer ${conflict}.`);
+  }
+  pointers.add(pointer);
+}
+
+function operationInputSchemaRoot(
+  operation: AgentOperationManifestEntry,
+  label: string,
+): Record<string, unknown> {
+  if (!isRecord(operation.inputSchema)) {
+    throw new Error(`${label} operation has no object input schema.`);
+  }
+  const properties: Record<string, unknown> = {};
+  const parameterGroups = new Map<string, Record<string, unknown>>();
+  if (Array.isArray(operation.inputSchema.parameters)) {
+    for (const parameter of operation.inputSchema.parameters) {
+      if (
+        !isRecord(parameter) ||
+        typeof parameter.name !== "string" ||
+        !["path", "query"].includes(String(parameter.in)) ||
+        !isRecord(parameter.schema)
+      ) continue;
+      const groupName = parameter.in === "path" ? "path" : "query";
+      const group = parameterGroups.get(groupName) ?? {};
+      group[parameter.name] = parameter.schema;
+      parameterGroups.set(groupName, group);
+    }
+  }
+  for (const [groupName, groupProperties] of parameterGroups) {
+    properties[groupName] = { type: "object", properties: groupProperties };
+  }
+  const requestBody = operation.inputSchema.requestBody;
+  if (isRecord(requestBody) && isRecord(requestBody.content)) {
+    const json = requestBody.content["application/json"];
+    if (isRecord(json) && isRecord(json.schema)) properties.body = json.schema;
+  }
+  return { type: "object", properties };
+}
+
+function assertInputSchemaPointer(
+  operation: AgentOperationManifestEntry,
+  pointer: string,
+  expectedShape: ProjectionSchemaShape,
+  label: string,
+): Record<string, unknown>[] {
+  const selected = schemaNodesAtPointer(
+    [operationInputSchemaRoot(operation, label)],
+    pointer,
+  );
+  if (selected.length === 0) {
+    throw new Error(`${label} references unknown operation input field ${pointer}.`);
+  }
+  if (schemaShape(selected) !== expectedShape) {
+    throw new Error(`${label} input field ${pointer} must be ${expectedShape}.`);
+  }
+  return selected;
+}
+
+function assertInputKeys(
+  keys: readonly string[],
+  maximum: number,
+  label: string,
+): void {
+  if (!Array.isArray(keys) || keys.length < 1 || keys.length > maximum) {
+    throw new Error(`${label} requires 1-${maximum} property keys.`);
+  }
+  const seen = new Set<string>();
+  for (const key of keys) {
+    assertInputKey(key, label);
+    if (seen.has(key)) throw new Error(`${label} has duplicate property key ${key}.`);
+    seen.add(key);
+  }
+}
+
+function assertInputFactPicks(
+  picks: readonly AgentWorkflowInputFactPick[] | undefined,
+  template: unknown,
+  occupiedTemplatePointers: Set<string>,
+  facts: ReadonlyMap<string, AgentWorkflowRequiredFact>,
+  operation: AgentOperationManifestEntry,
+  label: string,
+): void {
+  if (picks === undefined) return;
+  if (!Array.isArray(picks) || picks.length < 1 || picks.length > MAX_INPUT_PICKS) {
+    throw new Error(`${label} requires 1-${MAX_INPUT_PICKS} input fact picks.`);
+  }
+  for (const [index, pick] of picks.entries()) {
+    const pickLabel = `${label} input pick[${index}]`;
+    if (!isRecord(pick)) throw new Error(`${pickLabel} must be an object.`);
+    assertExactKeys(pick, new Set(["factId", "templatePointer", "keys"]), pickLabel);
+    const factPick = pick as unknown as AgentWorkflowInputFactPick;
+    const fact = facts.get(factPick.factId);
+    if (!fact) throw new Error(`${pickLabel} references unknown fact ${factPick.factId}.`);
+    if (fact.source.kind !== "merchant") {
+      throw new Error(`${pickLabel} fact ${factPick.factId} must be merchant-authoritative.`);
+    }
+    assertProjectionPointer(factPick.templatePointer, `${pickLabel} templatePointer`);
+    if (!templateHasPointer(template, factPick.templatePointer) ||
+      !isRecord(templateValueAtPointer(template, factPick.templatePointer))) {
+      throw new Error(`${pickLabel} must target an input template object.`);
+    }
+    assertInputSchemaPointer(operation, factPick.templatePointer, "object", pickLabel);
+    assertInputKeys(factPick.keys, MAX_INPUT_PICK_KEYS, pickLabel);
+    for (const key of factPick.keys) {
+      const pointer = `${factPick.templatePointer}/${encodePointerSegment(key)}`;
+      if (!templateHasPointer(template, pointer)) {
+        throw new Error(`${pickLabel} property ${key} is absent from its template.`);
+      }
+      const selected = schemaNodesAtPointer(
+        [operationInputSchemaRoot(operation, pickLabel)],
+        pointer,
+      );
+      if (selected.length === 0 || schemaShape(selected) === "unknown") {
+        throw new Error(`${pickLabel} references unknown operation input property ${key}.`);
+      }
+      registerTemplateWriter(occupiedTemplatePointers, pointer, pickLabel);
+    }
+  }
+}
+
+function assertInputMaterializations(
+  materializations: readonly AgentWorkflowInputMaterialization[] | undefined,
+  template: unknown,
+  occupiedTemplatePointers: Set<string>,
+  facts: ReadonlyMap<string, AgentWorkflowRequiredFact>,
+  operation: AgentOperationManifestEntry,
+  label: string,
+): void {
+  if (materializations === undefined) return;
+  if (
+    !Array.isArray(materializations) ||
+    materializations.length < 1 ||
+    materializations.length > MAX_INPUT_MATERIALIZATIONS
+  ) {
+    throw new Error(
+      `${label} requires 1-${MAX_INPUT_MATERIALIZATIONS} input materializations.`,
+    );
+  }
+  for (const [index, materialization] of materializations.entries()) {
+    const itemLabel = `${label} input materialization[${index}]`;
+    if (!isRecord(materialization)) throw new Error(`${itemLabel} must be an object.`);
+    assertExactKeys(
+      materialization,
+      new Set([
+        "factId",
+        "templatePointer",
+        "orderPointer",
+        "itemMapPointer",
+        "minItems",
+        "maxItems",
+        "keyField",
+        "keys",
+      ]),
+      itemLabel,
+    );
+    const inputMaterialization = materialization as unknown as AgentWorkflowInputMaterialization;
+    const fact = facts.get(inputMaterialization.factId);
+    if (!fact) {
+      throw new Error(`${itemLabel} references unknown fact ${inputMaterialization.factId}.`);
+    }
+    if (fact.source.kind !== "merchant") {
+      throw new Error(`${itemLabel} fact ${inputMaterialization.factId} must be merchant-authoritative.`);
+    }
+    assertProjectionPointer(inputMaterialization.templatePointer, `${itemLabel} templatePointer`);
+    assertProjectionPointer(inputMaterialization.orderPointer, `${itemLabel} orderPointer`);
+    assertProjectionPointer(inputMaterialization.itemMapPointer, `${itemLabel} itemMapPointer`);
+    if (pointersConflict(inputMaterialization.orderPointer, inputMaterialization.itemMapPointer)) {
+      throw new Error(`${itemLabel} order and item-map pointers must differ.`);
+    }
+    if (
+      !Number.isSafeInteger(inputMaterialization.minItems) ||
+      !Number.isSafeInteger(inputMaterialization.maxItems) ||
+      inputMaterialization.minItems < 1 ||
+      inputMaterialization.minItems > inputMaterialization.maxItems ||
+      inputMaterialization.maxItems > 250
+    ) {
+      throw new Error(`${itemLabel} bounds must satisfy 1 <= minItems <= maxItems <= 250.`);
+    }
+    if (
+      !templateHasPointer(template, inputMaterialization.templatePointer) ||
+      !Array.isArray(templateValueAtPointer(template, inputMaterialization.templatePointer)) ||
+      (templateValueAtPointer(template, inputMaterialization.templatePointer) as unknown[]).length !== 0
+    ) {
+      throw new Error(`${itemLabel} must target an empty input template array.`);
+    }
+    const arrays = assertInputSchemaPointer(
+      operation,
+      inputMaterialization.templatePointer,
+      "array",
+      itemLabel,
+    );
+    const schemaLimits = arrays.flatMap(schemaVariants).flatMap((schema) =>
+      typeof schema.maxItems === "number" ? [schema.maxItems] : []
+    );
+    if (
+      schemaLimits.length > 0 &&
+      inputMaterialization.maxItems > Math.min(...schemaLimits)
+    ) {
+      throw new Error(`${itemLabel} maxItems exceeds the operation input schema.`);
+    }
+    const schemaMinimums = arrays.flatMap(schemaVariants).flatMap((schema) =>
+      typeof schema.minItems === "number" ? [schema.minItems] : []
+    );
+    if (
+      schemaMinimums.length > 0 &&
+      inputMaterialization.minItems < Math.max(...schemaMinimums)
+    ) {
+      throw new Error(`${itemLabel} minItems is below the operation input schema.`);
+    }
+    const itemSchemas = arrayItemSchemas(arrays);
+    if (itemSchemas.length === 0 || schemaShape(itemSchemas) !== "object") {
+      throw new Error(`${itemLabel} destination must declare object array items.`);
+    }
+    assertInputKeys(inputMaterialization.keys, MAX_INPUT_MATERIALIZATION_KEYS, itemLabel);
+    const outputKeys = [...inputMaterialization.keys];
+    if (inputMaterialization.keyField !== undefined) {
+      assertInputKey(inputMaterialization.keyField, `${itemLabel} keyField`);
+      if (outputKeys.includes(inputMaterialization.keyField)) {
+        throw new Error(`${itemLabel} keyField conflicts with a copied property key.`);
+      }
+      outputKeys.unshift(inputMaterialization.keyField);
+    }
+    for (const key of outputKeys) {
+      const selected = schemaNodesAtPointer(itemSchemas, `/${encodePointerSegment(key)}`);
+      if (selected.length === 0 || schemaShape(selected) === "unknown") {
+        throw new Error(`${itemLabel} references unknown destination item property ${key}.`);
+      }
+    }
+    const requiredProperties = new Set(itemSchemas.flatMap(schemaVariants).flatMap((schema) =>
+      Array.isArray(schema.required)
+        ? schema.required.filter((key): key is string => typeof key === "string")
+        : []
+    ));
+    const missingRequired = [...requiredProperties].find((key) => !outputKeys.includes(key));
+    if (missingRequired) {
+      throw new Error(`${itemLabel} omits required destination item property ${missingRequired}.`);
+    }
+    registerTemplateWriter(
+      occupiedTemplatePointers,
+      inputMaterialization.templatePointer,
+      itemLabel,
+    );
+  }
+}
+
 function assertStepRepeat(
   repeat: AgentWorkflowRepeat,
   template: unknown,
-  occupiedTemplatePointers: ReadonlySet<string>,
+  occupiedTemplatePointers: Set<string>,
   facts: ReadonlyMap<string, AgentWorkflowRequiredFact>,
   operation: AgentOperationManifestEntry,
   label: string,
@@ -400,7 +675,7 @@ function assertStepRepeat(
   }
   assertProjectionPointer(repeat.orderPointer, `${label} repeat orderPointer`);
   assertProjectionPointer(repeat.itemMapPointer, `${label} repeat itemMapPointer`);
-  if (repeat.orderPointer === repeat.itemMapPointer) {
+  if (pointersConflict(repeat.orderPointer, repeat.itemMapPointer)) {
     throw new Error(`${label} repeat order and item-map pointers must differ.`);
   }
   if (
@@ -427,14 +702,14 @@ function assertStepRepeat(
       throw new Error(`${bindingLabel} pointer ${binding.templatePointer} is absent from its template.`);
     }
     if (
-      templatePointers.has(binding.templatePointer) ||
-      itemPointers.has(binding.itemPointer)
+      [...templatePointers].some((pointer) =>
+        pointersConflict(pointer, binding.templatePointer)
+      ) ||
+      [...itemPointers].some((pointer) => pointersConflict(pointer, binding.itemPointer))
     ) {
       throw new Error(`${label} repeat has duplicate binding pointers.`);
     }
-    if (occupiedTemplatePointers.has(binding.templatePointer)) {
-      throw new Error(`${bindingLabel} conflicts with a dependency or default pointer.`);
-    }
+    registerTemplateWriter(occupiedTemplatePointers, binding.templatePointer, bindingLabel);
     templatePointers.add(binding.templatePointer);
     itemPointers.add(binding.itemPointer);
   }
@@ -446,7 +721,9 @@ function assertStepRepeat(
   );
   assertProjectionPointer(repeat.capture.responsePointer, `${label} repeat capture responsePointer`);
   assertProjectionPointer(repeat.capture.itemPointer, `${label} repeat capture itemPointer`);
-  if (itemPointers.has(repeat.capture.itemPointer)) {
+  if ([...itemPointers].some((pointer) =>
+    pointersConflict(pointer, repeat.capture.itemPointer)
+  )) {
     throw new Error(`${label} repeat capture conflicts with a binding item pointer.`);
   }
   if (!isRecord(operation.outputSchema)) {
@@ -685,14 +962,20 @@ export function validateAgentWorkflowCards(
           throw new Error(`${label} requires stop and non-inference rules.`);
         }
         const occupiedTemplatePointers = new Set<string>();
+        const dependencyTemplatePointers = new Set<string>();
         for (const dependency of step.input.dependencies) {
           if (!templateHasPointer(step.input.template, dependency.templatePointer)) {
             throw new Error(`${label} dependency pointer ${dependency.templatePointer} is absent from its template.`);
           }
-          if (occupiedTemplatePointers.has(dependency.templatePointer)) {
+          if (dependencyTemplatePointers.has(dependency.templatePointer)) {
             throw new Error(`${label} has duplicate dependency pointer ${dependency.templatePointer}.`);
           }
-          occupiedTemplatePointers.add(dependency.templatePointer);
+          dependencyTemplatePointers.add(dependency.templatePointer);
+          registerTemplateWriter(
+            occupiedTemplatePointers,
+            dependency.templatePointer,
+            `${label} dependency`,
+          );
           if (dependency.source.kind === "fact") {
             if (!factIds.has(dependency.source.factId)) {
               throw new Error(`${label} references unknown fact ${dependency.source.factId}.`);
@@ -716,6 +999,7 @@ export function validateAgentWorkflowCards(
             assertJsonPointer(dependency.source.responsePointer, label);
           }
         }
+        const defaultTemplatePointers = new Set<string>();
         for (const defaultValue of step.input.defaults) {
           if (!templateHasPointer(step.input.template, defaultValue.templatePointer)) {
             throw new Error(`${label} default pointer ${defaultValue.templatePointer} is absent from its template.`);
@@ -726,8 +1010,32 @@ export function validateAgentWorkflowCards(
           )) {
             throw new Error(`${label} default does not match its template value.`);
           }
-          occupiedTemplatePointers.add(defaultValue.templatePointer);
+          if (defaultTemplatePointers.has(defaultValue.templatePointer)) {
+            throw new Error(`${label} has duplicate default pointer ${defaultValue.templatePointer}.`);
+          }
+          defaultTemplatePointers.add(defaultValue.templatePointer);
+          registerTemplateWriter(
+            occupiedTemplatePointers,
+            defaultValue.templatePointer,
+            `${label} default`,
+          );
         }
+        assertInputFactPicks(
+          step.input.picks,
+          step.input.template,
+          occupiedTemplatePointers,
+          factsById,
+          operation,
+          label,
+        );
+        assertInputMaterializations(
+          step.input.materializations,
+          step.input.template,
+          occupiedTemplatePointers,
+          factsById,
+          operation,
+          label,
+        );
         if (step.repeat !== undefined) {
           assertStepRepeat(
             step.repeat,

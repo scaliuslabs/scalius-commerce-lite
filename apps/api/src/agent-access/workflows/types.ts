@@ -78,6 +78,32 @@ export type AgentWorkflowInputDefault = {
   value: unknown;
 };
 
+export type AgentWorkflowInputFactPick = {
+  /** Merchant-authoritative object fact whose root properties are selected. */
+  factId: string;
+  /** Fixed pointer to an operation-input object. */
+  templatePointer: string;
+  /** Exact property names copied fact[key] -> input object[key]. */
+  keys: string[];
+};
+
+export type AgentWorkflowInputMaterialization = {
+  /** Merchant-authoritative fact containing ordered keys and keyed items. */
+  factId: string;
+  /** Fixed pointer to an empty operation-input array. */
+  templatePointer: string;
+  /** Fixed pointer to the array of scalar item keys. */
+  orderPointer: string;
+  /** Fixed pointer to the object indexed by each ordered key. */
+  itemMapPointer: string;
+  minItems: number;
+  maxItems: number;
+  /** Optional output property receiving the current ordered key. */
+  keyField?: string;
+  /** Exact property names copied keyedItem[key] -> output item[key]. */
+  keys: string[];
+};
+
 export type AgentWorkflowRepeatBinding = {
   /** Fixed pointer to one operation-input template value. */
   templatePointer: string;
@@ -141,6 +167,8 @@ export type AgentWorkflowStep = {
     template: unknown;
     dependencies: AgentWorkflowInputDependency[];
     defaults: AgentWorkflowInputDefault[];
+    picks?: AgentWorkflowInputFactPick[];
+    materializations?: AgentWorkflowInputMaterialization[];
   };
   repeat?: AgentWorkflowRepeat;
   output?: AgentWorkflowOutputProjection;

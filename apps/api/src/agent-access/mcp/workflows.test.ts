@@ -259,7 +259,7 @@ describe("authorized MCP workflow resolution", () => {
           requiredFacts: expect.arrayContaining([
             expect.objectContaining({
               id: "mediaSet",
-              description: expect.stringContaining("1-250 unique assets"),
+              description: expect.stringContaining("1-250 unique, one primary"),
             }),
             expect.objectContaining({
               id: "optionMatrix",
@@ -270,6 +270,15 @@ describe("authorized MCP workflow resolution", () => {
             expect.objectContaining({
               operationId: "dashboard.products.create",
               mutation: "create",
+              input: expect.objectContaining({
+                picks: expect.arrayContaining([
+                  expect.objectContaining({ factId: "productSpec" }),
+                ]),
+                materializations: expect.arrayContaining([
+                  expect.objectContaining({ factId: "mediaSet", keyField: "id" }),
+                  expect.objectContaining({ factId: "attributeSet" }),
+                ]),
+              }),
               policies: expect.objectContaining({ confirmation: "required" }),
             }),
           ]),
