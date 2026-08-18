@@ -254,12 +254,12 @@ describe("reviewed agent workflow resolver", () => {
       required: true,
       source: { kind: "merchant" },
       nonInferenceRule:
-        "Never add, omit, collapse, or reorder combinations, or infer imageId by label/position.",
+        "Keep all rows/order; never infer imageId by label/position.",
     });
     expect(detail.requiredFacts.find((fact) => fact.id === "mediaSet")).toMatchObject({
-      description: expect.stringContaining("byId:{pmed:"),
+      description: expect.stringContaining("order,importOrder,byId"),
       source: { kind: "merchant" },
-      nonInferenceRule: expect.stringContaining("never infer count, order, role, or position"),
+      nonInferenceRule: expect.stringMatching(/Never infer .*count, order, role, or position/),
     });
     expect(detail.requiredFacts.find((fact) => fact.id === "categoryId")?.source).toMatchObject({
       kind: "operation",
@@ -279,7 +279,8 @@ describe("reviewed agent workflow resolver", () => {
       input: {
         template: {
           body: {
-            media: null,
+            media: [],
+            attributes: [],
             optionMatrix: null,
           },
         },
@@ -288,10 +289,10 @@ describe("reviewed agent workflow resolver", () => {
         revision: "none",
         idempotency: "none",
         confirmation: "required",
-        stopConditions: ["On conflict or uncertain write, stop and reread."],
+        stopConditions: ["Conflict: stop; uncertainty: reread first."],
         nonInferenceRules: [
-          "Use resolved or merchant facts.",
-          "Every variant imageId must equal a mediaSet pmed key; never map by position.",
+          "Use exact facts.",
+          "Variant imageId must equal a mediaSet pmed key; never use position.",
         ],
       },
     });
@@ -301,10 +302,46 @@ describe("reviewed agent workflow resolver", () => {
         source: { kind: "fact", factId: "optionMatrix" },
       },
     ]));
-    expect(create.input.dependencies.some((dependency) =>
-      dependency.templatePointer.startsWith("/body/media/")
-    )).toBe(false);
-    expect(create.condition).toContain("exact pmed key/mediaId");
+    expect(create.input.picks).toEqual([expect.objectContaining({
+      factId: "productSpec",
+      templatePointer: "/body",
+      keys: expect.arrayContaining([
+        "name",
+        "description",
+        "price",
+        "slug",
+        "isActive",
+        "freeDelivery",
+        "metaTitle",
+        "metaDescription",
+        "canonicalPath",
+        "noIndex",
+        "excludeFromSitemap",
+        "excludeFromProductFeed",
+        "productCondition",
+      ]),
+    })]);
+    expect(create.input.materializations).toEqual([
+      {
+        factId: "mediaSet",
+        templatePointer: "/body/media",
+        orderPointer: "/order",
+        itemMapPointer: "/byId",
+        minItems: 1,
+        maxItems: 250,
+        keyField: "id",
+        keys: ["mediaId", "altText", "isPrimary"],
+      },
+      {
+        factId: "attributeSet",
+        templatePointer: "/body/attributes",
+        orderPointer: "/order",
+        itemMapPointer: "/byId",
+        minItems: 1,
+        maxItems: 90,
+        keys: ["attributeId", "value"],
+      },
+    ]);
     expect(detail.steps.filter((step) => step.phaseId === "media")).toEqual([
       expect.objectContaining({
         stepId: "asset",
@@ -315,7 +352,7 @@ describe("reviewed agent workflow resolver", () => {
         }),
         repeat: {
           factId: "mediaSet",
-          orderPointer: "/order",
+          orderPointer: "/importOrder",
           itemMapPointer: "/byId",
           minItems: 1,
           maxItems: 250,
@@ -324,16 +361,12 @@ describe("reviewed agent workflow resolver", () => {
         },
       }),
     ]);
-    expect(create.input.defaults).toEqual(expect.arrayContaining([
-      { templatePointer: "/body/isActive", value: true },
-      { templatePointer: "/body/excludeFromSitemap", value: false },
-      { templatePointer: "/body/excludeFromProductFeed", value: false },
-    ]));
+    expect(create.input.defaults).toEqual([]);
     expect(detail.steps.find((step) => step.stepId === "status")).toMatchObject({
       phaseId: "publish",
       operationId: "dashboard.categories.set_status",
       mutation: "lifecycle",
-      condition: "Only if not published and ready.",
+      condition: "Only if ready and not published.",
       policies: { revision: "required", confirmation: "required" },
     });
     expect(detail.phaseStopConditions.create).toEqual([
@@ -348,7 +381,7 @@ describe("reviewed agent workflow resolver", () => {
       }),
       expect.objectContaining({
         operationId: "storefront.products.get_section",
-        proves: ["Buyer SKU price, exact image, and availability band; excludes feed rows."],
+        proves: ["Buyer SKU price, exact image, availability; excludes sitemap/feed membership."],
         bounds: { maxCalls: 20, maxItems: 150, maxResponseBytes: 61_440 },
       }),
       expect.objectContaining({
@@ -359,7 +392,7 @@ describe("reviewed agent workflow resolver", () => {
       }),
     ]));
     expect(detail.phaseStopConditions.dashboardVerify).toContain(
-      "No bounded product/SKU feed-row read exists; do not claim emitted price/image/availability.",
+      "No bounded exact product sitemap/feed-row read exists; do not claim sitemap membership or emitted feed price/image/availability.",
     );
 
     expect(Object.keys(detail)).toEqual([
@@ -627,6 +660,39 @@ describe("reviewed agent workflow resolver", () => {
       operations,
     })(dailyInput)).toBeNull();
 
+    for (const inputPrimitive of [
+      {
+        picks: [{ factId: "days", templatePointer: "/query", keys: ["days"] }],
+      },
+      {
+        materializations: [{
+          factId: "days",
+          templatePointer: "/query/days",
+          orderPointer: "/order",
+          itemMapPointer: "/byId",
+          minItems: 1,
+          maxItems: 1,
+          keys: ["value"],
+        }],
+      },
+    ]) {
+      const dynamicInputStep = {
+        ...dailyCard,
+        phases: dailyCard.phases.map((phase, phaseIndex) => ({
+          ...phase,
+          steps: phase.steps.map((step, stepIndex) =>
+            phaseIndex === 0 && stepIndex === 0
+              ? { ...step, input: { ...step.input, ...inputPrimitive } }
+              : step
+          ),
+        })),
+      } satisfies WorkflowResolverCard;
+      expect(createWorkflowReadCompiler({
+        catalog: replaceDaily(dynamicInputStep),
+        operations,
+      })(dailyInput)).toBeNull();
+    }
+
     const openWorldOperations = operations.map((operation) =>
       operation.operationId === "dashboard.orders.list"
         ? { ...operation, openWorld: true }
@@ -755,10 +821,70 @@ describe("reviewed agent workflow resolver", () => {
     });
     expect(Buffer.byteLength(JSON.stringify({ ok: true, result: daily }))).toBeLessThanOrEqual(12 * 1024);
     expect(Buffer.byteLength(JSON.stringify({ ok: true, result: product }))).toBeLessThanOrEqual(
-      16 * 1024,
+      15_872,
     );
     expect(Buffer.byteLength(JSON.stringify({ ok: true, result: ordinary }))).toBeLessThanOrEqual(
       4 * 1024,
+    );
+  });
+
+  it("keeps the realistic rich product plan detailed and below the hard cap", () => {
+    const product = resolveWorkflow({
+      prompt:
+        "Create a published shirt with rich copy, slug, canonical path, SEO, saved condition, and base price; Size S/M/L by Color Navy/White with six exact SKUs, prices, and stocks; three distinct assets for shared primary, Navy, and White with exact alt text and roles; Cotton attribute and conditional category creation; sitemap and feed inclusion; bounded admin and storefront verification.",
+      surface: "dashboard",
+    });
+    expect(product).toMatchObject({
+      kind: "plan",
+      plan: {
+        source: "route",
+        routeIds: ["dashboard.complex-product-create"],
+        operationIds: expect.arrayContaining(["dashboard.settings.currency_get"]),
+        detail: expect.any(Object),
+      },
+    });
+    if (product.kind !== "plan" || !product.plan.detail) return;
+    expect(product.plan.operationIds).not.toContain("dashboard.inventory.list");
+    const create = product.plan.detail.steps.find((step) =>
+      step.operationId === "dashboard.products.create"
+    )!;
+    expect(create.input.picks?.[0]?.keys).toEqual(expect.arrayContaining([
+      "name",
+      "description",
+      "price",
+      "slug",
+      "isActive",
+      "freeDelivery",
+      "metaTitle",
+      "metaDescription",
+      "canonicalPath",
+      "noIndex",
+      "excludeFromSitemap",
+      "excludeFromProductFeed",
+      "productCondition",
+    ]));
+    expect(create.input.materializations).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        factId: "mediaSet",
+        orderPointer: "/order",
+        keyField: "id",
+        keys: ["mediaId", "altText", "isPrimary"],
+      }),
+      expect.objectContaining({
+        factId: "attributeSet",
+        orderPointer: "/order",
+        keys: ["attributeId", "value"],
+      }),
+    ]));
+    expect(product.plan.detail.steps.find((step) =>
+      step.operationId === "dashboard.media.import_url"
+    )?.repeat?.orderPointer).toBe("/importOrder");
+    expect(product.plan.detail.phaseStopConditions.dashboardVerify).toContain(
+      "No bounded exact product sitemap/feed-row read exists; do not claim sitemap membership or emitted feed price/image/availability.",
+    );
+    expect(Buffer.byteLength(JSON.stringify({ ok: true, result: product }))).toBe(15_914);
+    expect(Buffer.byteLength(JSON.stringify({ ok: true, result: product }))).toBeLessThanOrEqual(
+      16 * 1024,
     );
   });
 

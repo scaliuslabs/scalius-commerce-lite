@@ -73,7 +73,7 @@ describe("agent workflow catalog", () => {
     for (const control of catalog.controls) {
       expect(Buffer.byteLength(JSON.stringify(control)), control.id).toBeLessThanOrEqual(2 * 1024);
     }
-    expect(Buffer.byteLength(JSON.stringify(OPTIONED_PRODUCT_WORKFLOW))).toBeLessThanOrEqual(16 * 1024);
+    expect(Buffer.byteLength(JSON.stringify(OPTIONED_PRODUCT_WORKFLOW))).toBeLessThanOrEqual(15_360);
     expect(Buffer.byteLength(JSON.stringify(DAILY_OPERATING_SNAPSHOT_WORKFLOW))).toBeLessThanOrEqual(10 * 1024);
     const generatedSource = generateAgentOperationManifestSource(document);
     expect(generatedSource).toContain("export const AGENT_WORKFLOW_CATALOG");
@@ -215,7 +215,10 @@ describe("agent workflow catalog", () => {
     );
 
     const templateMismatch = mutableCard(DAILY_OPERATING_SNAPSHOT_WORKFLOW);
-    templateMismatch.phases[0]!.steps[0]!.input.defaults[0]!.value = 2;
+    templateMismatch.phases[0]!.steps[0]!.input.defaults = [{
+      templatePointer: "/query/days",
+      value: 2,
+    }];
     expect(() => validateAgentWorkflowCards([templateMismatch], manifest)).toThrowError(
       /default does not match its template value/,
     );
@@ -527,7 +530,7 @@ describe("agent workflow catalog", () => {
       input: { dependencies: [] },
       repeat: {
         factId: "mediaSet",
-        orderPointer: "/order",
+        orderPointer: "/importOrder",
         itemMapPointer: "/byId",
         minItems: 1,
         maxItems: 250,
@@ -537,10 +540,63 @@ describe("agent workflow catalog", () => {
     });
     const product = OPTIONED_PRODUCT_WORKFLOW.phases.find((phase) => phase.id === "create")!
       .steps[0]!;
-    expect((product.input.template as { body: { media: unknown } }).body.media).toBeNull();
-    expect(product.input.dependencies.some((dependency) =>
-      dependency.templatePointer.startsWith("/body/media/")
-    )).toBe(false);
+    expect((product.input.template as { body: { media: unknown } }).body.media).toEqual([]);
+    expect(product.input.picks).toEqual([expect.objectContaining({
+      factId: "productSpec",
+      templatePointer: "/body",
+      keys: expect.arrayContaining([
+        "name",
+        "description",
+        "price",
+        "slug",
+        "isActive",
+        "freeDelivery",
+        "metaTitle",
+        "metaDescription",
+        "canonicalPath",
+        "noIndex",
+        "excludeFromSitemap",
+        "excludeFromProductFeed",
+        "productCondition",
+      ]),
+    })]);
+    expect(product.input.materializations).toEqual([
+      {
+        factId: "mediaSet",
+        templatePointer: "/body/media",
+        orderPointer: "/order",
+        itemMapPointer: "/byId",
+        minItems: 1,
+        maxItems: 250,
+        keyField: "id",
+        keys: ["mediaId", "altText", "isPrimary"],
+      },
+      {
+        factId: "attributeSet",
+        templatePointer: "/body/attributes",
+        orderPointer: "/order",
+        itemMapPointer: "/byId",
+        minItems: 1,
+        maxItems: 90,
+        keys: ["attributeId", "value"],
+      },
+    ]);
+    expect(OPTIONED_PRODUCT_WORKFLOW.phases[0]!.steps.map((step) => step.operationId))
+      .toContain("dashboard.settings.currency_get");
+    expect(JSON.stringify(OPTIONED_PRODUCT_WORKFLOW)).not.toContain(
+      "dashboard.inventory.list",
+    );
+    const categoryCreate = workflowStep(OPTIONED_PRODUCT_WORKFLOW, "prepare", "categoryCreate");
+    expect(categoryCreate.input.picks?.[0]).toMatchObject({
+      factId: "categoryCreateSpec",
+      templatePointer: "/body",
+    });
+    const attributeCreate = workflowStep(OPTIONED_PRODUCT_WORKFLOW, "prepare", "attributeCreate");
+    expect(attributeCreate.repeat).toMatchObject({
+      factId: "attributeSet",
+      orderPointer: "/createOrder",
+      capture: { responsePointer: "/data/attribute/id", itemPointer: "/attributeId" },
+    });
     const publish = OPTIONED_PRODUCT_WORKFLOW.phases.find((phase) => phase.id === "publish")!;
     expect(publish.steps.map((step) => step.id)).toEqual(["category", "readiness", "status"]);
   });
@@ -548,10 +604,11 @@ describe("agent workflow catalog", () => {
   it("models shared, Navy, and White media by exact associations without positional inference", () => {
     const mediaSet = {
       order: ["pmed_shared_primary", "pmed_navy", "pmed_white"],
+      importOrder: ["pmed_navy", "pmed_white"],
       byId: {
         pmed_shared_primary: { mediaId: "media_shared", isPrimary: true },
-        pmed_navy: { mediaId: "media_navy", isPrimary: false },
-        pmed_white: { mediaId: "media_white", isPrimary: false },
+        pmed_navy: { sourceUrl: "https://example.test/navy.jpg", mediaId: "media_navy", isPrimary: false },
+        pmed_white: { sourceUrl: "https://example.test/white.jpg", mediaId: "media_white", isPrimary: false },
       },
     } as const;
     const variantRows = [
@@ -578,22 +635,65 @@ describe("agent workflow catalog", () => {
     const mediaFact = OPTIONED_PRODUCT_WORKFLOW.requiredFacts.find(
       (fact) => fact.id === "mediaSet",
     )!;
-    expect(mediaFact.description).toContain("byId:{pmed:");
-    expect(mediaFact.description).toContain("1-250 unique assets");
+    expect(mediaFact.description).toContain("order,importOrder,byId");
+    expect(mediaFact.description).toContain("1-250 unique");
     expect(mediaFact.description).not.toContain("localFile");
-    expect(mediaFact.nonInferenceRule).toContain("never infer count, order, role, or position");
+    expect(mediaFact.nonInferenceRule).toMatch(/Never infer .*count, order, role, or position/);
     const mediaStep = OPTIONED_PRODUCT_WORKFLOW.phases.find((phase) => phase.id === "media")!
       .steps[0]!;
+    expect(mediaStep.repeat?.orderPointer).toBe("/importOrder");
+    expect(mediaSet.importOrder).not.toContain("pmed_shared_primary");
+    expect(mediaStep.condition).toContain("Skip empty importOrder");
     expect(mediaStep.condition).toContain(
-      "local files must complete dashboard.media-upload and re-enter as ready.",
+      "local files complete dashboard.media-upload and re-enter with mediaId.",
     );
     const product = OPTIONED_PRODUCT_WORKFLOW.phases.find((phase) => phase.id === "create")!
       .steps[0]!;
-    expect(product.condition).toContain("exact pmed key/mediaId");
+    expect(product.input.materializations?.[0]).toMatchObject({
+      factId: "mediaSet",
+      orderPointer: "/order",
+      keyField: "id",
+      keys: ["mediaId", "altText", "isPrimary"],
+    });
     expect(product.policies.nonInferenceRules).toContain(
-      "Every variant imageId must equal a mediaSet pmed key; never map by position.",
+      "Variant imageId must equal a mediaSet pmed key; never use position.",
     );
     expect(JSON.stringify(product)).not.toMatch(/pmed_(?:primary|secondary)|\/body\/media\/\d/u);
+  });
+
+  it("skips empty import/create repeats while retaining full-order materialization", () => {
+    const media = workflowStep(OPTIONED_PRODUCT_WORKFLOW, "media", "asset");
+    const attribute = workflowStep(OPTIONED_PRODUCT_WORKFLOW, "prepare", "attributeCreate");
+    const product = workflowStep(OPTIONED_PRODUCT_WORKFLOW, "create", "product");
+    const allReadyMedia = {
+      order: ["pmed_shared", "pmed_navy", "pmed_white"],
+      importOrder: [],
+      byId: {
+        pmed_shared: { mediaId: "media_shared" },
+        pmed_navy: { mediaId: "media_navy" },
+        pmed_white: { mediaId: "media_white" },
+      },
+    };
+    const activeAttributes = {
+      order: ["material"],
+      createOrder: [],
+      byId: { material: { attributeId: "attr_material", value: "Cotton" } },
+    };
+
+    expect(allReadyMedia.importOrder).toHaveLength(0);
+    expect(activeAttributes.createOrder).toHaveLength(0);
+    expect(media.condition).toContain("Skip empty importOrder");
+    expect(attribute.condition).toContain("Skip when createOrder is empty");
+    expect(media.repeat?.minItems).toBe(1);
+    expect(attribute.repeat?.minItems).toBe(1);
+    expect(product.input.materializations?.map((item) => [
+      item.factId,
+      item.orderPointer,
+      item.minItems,
+    ])).toEqual([
+      ["mediaSet", "/order", 1],
+      ["attributeSet", "/order", 1],
+    ]);
   });
 
   it("rejects malformed, ambiguous, or schema-unsafe repeat contracts", () => {
@@ -611,6 +711,9 @@ describe("agent workflow catalog", () => {
       ["pseudo repeat pointer", (card) => {
         workflowStep(card, "media", "asset").repeat!.orderPointer = "/{associationId}";
       }, /wildcard, pseudo, or prototype JSON pointer segment|invalid JSON pointer/],
+      ["overlapping repeat roots", (card) => {
+        workflowStep(card, "media", "asset").repeat!.orderPointer = "/byId/order";
+      }, /order and item-map pointers must differ/],
       ["unknown fact", (card) => {
         workflowStep(card, "media", "asset").repeat!.factId = "missingFact";
       }, /repeat references unknown fact/],
@@ -627,6 +730,10 @@ describe("agent workflow catalog", () => {
         const repeat = workflowStep(card, "media", "asset").repeat!;
         repeat.bindings.push({ ...repeat.bindings[0]! });
       }, /duplicate binding pointers/],
+      ["capture overlaps binding", (card) => {
+        workflowStep(card, "media", "asset").repeat!.capture.itemPointer =
+          "/sourceUrl/result";
+      }, /capture conflicts with a binding item pointer/],
       ["missing binding target", (card) => {
         workflowStep(card, "media", "asset").repeat!.bindings[0]!.templatePointer =
           "/body/missing";
@@ -653,12 +760,134 @@ describe("agent workflow catalog", () => {
     }
   });
 
+  it("rejects unsafe fact picks and keyed input materializations", () => {
+    const cases: Array<[string, (card: AgentWorkflowCard) => void, RegExp]> = [
+      ["empty pick keys", (card) => {
+        workflowStep(card, "create", "product").input.picks![0]!.keys = [];
+      }, /requires 1-32 property keys/],
+      ["prototype pick key", (card) => {
+        workflowStep(card, "create", "product").input.picks![0]!.keys = ["__proto__"];
+      }, /invalid or prototype property key/],
+      ["duplicate pick key", (card) => {
+        workflowStep(card, "create", "product").input.picks![0]!.keys = ["name", "name"];
+      }, /duplicate property key/],
+      ["unknown pick fact", (card) => {
+        workflowStep(card, "create", "product").input.picks![0]!.factId = "missing";
+      }, /references unknown fact/],
+      ["non-merchant pick fact", (card) => {
+        workflowStep(card, "create", "product").input.picks![0]!.factId = "categoryId";
+      }, /must be merchant-authoritative/],
+      ["non-object pick target", (card) => {
+        workflowStep(card, "create", "product").input.picks![0]!.templatePointer = "/body/name";
+      }, /must target an input template object/],
+      ["unknown pick property", (card) => {
+        const input = workflowStep(card, "create", "product").input;
+        (input.template as { body: Record<string, unknown> }).body.unknown = null;
+        input.picks![0]!.keys = ["unknown"];
+      }, /unknown operation input property/],
+      ["pick writer conflict", (card) => {
+        workflowStep(card, "create", "product").input.picks![0]!.keys.push("categoryId");
+      }, /conflicts with input writer/],
+      ["dependency ancestor conflict", (card) => {
+        workflowStep(card, "create", "product").input.dependencies.push({
+          templatePointer: "/body",
+          source: { kind: "fact", factId: "productSpec" },
+        });
+      }, /conflicts with input writer/],
+      ["dependency-default ancestor conflict", (card) => {
+        const input = workflowStep(card, "create", "product").input;
+        input.dependencies = [{
+          templatePointer: "/body",
+          source: { kind: "fact", factId: "productSpec" },
+        }];
+        input.defaults = [{ templatePointer: "/body/noIndex", value: false }];
+      }, /conflicts with input writer/],
+      ["materialization pseudo pointer", (card) => {
+        workflowStep(card, "create", "product").input.materializations![0]!.orderPointer =
+          "/{key}";
+      }, /invalid JSON pointer|wildcard, pseudo, or prototype/],
+      ["materialization bad bounds", (card) => {
+        workflowStep(card, "create", "product").input.materializations![0]!.minItems = 0;
+      }, /bounds must satisfy/],
+      ["materialization duplicate key", (card) => {
+        workflowStep(card, "create", "product").input.materializations![0]!.keys = [
+          "mediaId",
+          "mediaId",
+        ];
+      }, /duplicate property key/],
+      ["materialization key conflict", (card) => {
+        workflowStep(card, "create", "product").input.materializations![0]!.keyField =
+          "mediaId";
+      }, /keyField conflicts/],
+      ["materialization unknown destination", (card) => {
+        workflowStep(card, "create", "product").input.materializations![0]!.keys = [
+          "missing",
+        ];
+      }, /unknown destination item property/],
+      ["materialization missing required destination", (card) => {
+        workflowStep(card, "create", "product").input.materializations![0]!.keys = [
+          "mediaId",
+          "isPrimary",
+        ];
+      }, /omits required destination item property altText/],
+      ["materialization non-array target", (card) => {
+        workflowStep(card, "create", "product").input.materializations![0]!
+          .templatePointer = "/body/optionMatrix";
+      }, /must target an empty input template array/],
+      ["materialization writer conflict", (card) => {
+        workflowStep(card, "create", "product").input.dependencies.push({
+          templatePointer: "/body/media",
+          source: { kind: "fact", factId: "mediaSet" },
+        });
+      }, /conflicts with input writer/],
+    ];
+
+    for (const [name, mutate, error] of cases) {
+      const card = mutableCard(OPTIONED_PRODUCT_WORKFLOW);
+      mutate(card);
+      expect(() => validateAgentWorkflowCards([card], manifest), name).toThrowError(error);
+    }
+
+    const scalarItems = mutableCard(OPTIONED_PRODUCT_WORKFLOW);
+    const attribute = workflowStep(scalarItems, "prepare", "attributeCreate");
+    attribute.repeat!.bindings = attribute.repeat!.bindings.filter((binding) =>
+      binding.templatePointer !== "/body/options"
+    );
+    attribute.input.template = { body: { name: null, slug: null, filterable: null, options: [] } };
+    attribute.input.materializations = [{
+      factId: "attributeSet",
+      templatePointer: "/body/options",
+      orderPointer: "/order",
+      itemMapPointer: "/byId",
+      minItems: 1,
+      maxItems: 90,
+      keys: ["value"],
+    }];
+    expect(() => validateAgentWorkflowCards([scalarItems], manifest)).toThrowError(
+      /destination must declare object array items/,
+    );
+
+    const stricterManifest = structuredClone(manifest);
+    const createProduct = stricterManifest.find((operation) =>
+      operation.operationId === "dashboard.products.create"
+    )!;
+    const inputSchema = createProduct.inputSchema as {
+      requestBody: { content: { "application/json": { schema: {
+        properties: { media: { minItems?: number } };
+      } } } };
+    };
+    inputSchema.requestBody.content["application/json"].schema.properties.media.minItems = 2;
+    expect(() => validateAgentWorkflowCards([
+      mutableCard(OPTIONED_PRODUCT_WORKFLOW),
+    ], stricterManifest)).toThrowError(/minItems is below the operation input schema/);
+  });
+
   it("scopes feed verification to evidence the bounded operations actually expose", () => {
     const dashboard = OPTIONED_PRODUCT_WORKFLOW.phases.find(
       (phase) => phase.id === "dashboardVerify",
     )!;
     expect(dashboard.stopConditions).toContain(
-      "No bounded product/SKU feed-row read exists; do not claim emitted price/image/availability.",
+      "No bounded exact product sitemap/feed-row read exists; do not claim sitemap membership or emitted feed price/image/availability.",
     );
     expect(OPTIONED_PRODUCT_WORKFLOW.verification.find((item) => item.id === "feed")?.proves)
       .toEqual([
@@ -666,7 +895,7 @@ describe("agent workflow catalog", () => {
       ]);
     expect(OPTIONED_PRODUCT_WORKFLOW.verification.find((item) => item.id === "buyer")?.proves)
       .toEqual([
-        "Buyer SKU price, exact image, and availability band; excludes feed rows.",
+        "Buyer SKU price, exact image, availability; excludes sitemap/feed membership.",
       ]);
   });
 

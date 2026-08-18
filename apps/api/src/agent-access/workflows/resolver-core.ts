@@ -96,6 +96,23 @@ export type WorkflowResolverRepeat = {
   capture: { responsePointer: string; itemPointer: string };
 };
 
+export type WorkflowResolverInputFactPick = {
+  factId: string;
+  templatePointer: string;
+  keys: readonly string[];
+};
+
+export type WorkflowResolverInputMaterialization = {
+  factId: string;
+  templatePointer: string;
+  orderPointer: string;
+  itemMapPointer: string;
+  minItems: number;
+  maxItems: number;
+  keyField?: string;
+  keys: readonly string[];
+};
+
 export type WorkflowResolverCard = {
   id: string;
   constructionRules?: Readonly<Record<string, string>>;
@@ -124,6 +141,8 @@ export type WorkflowResolverCard = {
           source: WorkflowResolverDependencySource;
         }[];
         defaults: readonly { templatePointer: string; value: unknown }[];
+        picks?: readonly WorkflowResolverInputFactPick[];
+        materializations?: readonly WorkflowResolverInputMaterialization[];
       };
       repeat?: WorkflowResolverRepeat;
       output?: WorkflowResolverOutputProjection;
@@ -170,6 +189,8 @@ export type WorkflowExecutionDetail = {
         source: WorkflowResolverDependencySource;
       }>;
       defaults: Array<{ templatePointer: string; value: unknown }>;
+      picks?: WorkflowResolverInputFactPick[];
+      materializations?: WorkflowResolverInputMaterialization[];
     };
     repeat?: WorkflowResolverRepeat;
     policies: {
@@ -440,6 +461,33 @@ function projectRepeat(repeat: WorkflowResolverRepeat): WorkflowResolverRepeat {
   };
 }
 
+function projectInputFactPick(
+  pick: WorkflowResolverInputFactPick,
+): WorkflowResolverInputFactPick {
+  return {
+    factId: pick.factId,
+    templatePointer: pick.templatePointer,
+    keys: [...pick.keys],
+  };
+}
+
+function projectInputMaterialization(
+  materialization: WorkflowResolverInputMaterialization,
+): WorkflowResolverInputMaterialization {
+  return {
+    factId: materialization.factId,
+    templatePointer: materialization.templatePointer,
+    orderPointer: materialization.orderPointer,
+    itemMapPointer: materialization.itemMapPointer,
+    minItems: materialization.minItems,
+    maxItems: materialization.maxItems,
+    ...(materialization.keyField !== undefined
+      ? { keyField: materialization.keyField }
+      : {}),
+    keys: [...materialization.keys],
+  };
+}
+
 function projectWorkflowDetail(card: WorkflowResolverCard): WorkflowExecutionDetail {
   const constructionRules = card.constructionRules
     ? Object.fromEntries(
@@ -477,6 +525,16 @@ function projectWorkflowDetail(card: WorkflowResolverCard): WorkflowExecutionDet
           templatePointer: inputDefault.templatePointer,
           value: inputDefault.value,
         })),
+        ...(step.input.picks !== undefined
+          ? { picks: step.input.picks.map(projectInputFactPick) }
+          : {}),
+        ...(step.input.materializations !== undefined
+          ? {
+              materializations: step.input.materializations.map(
+                projectInputMaterialization,
+              ),
+            }
+          : {}),
       },
       ...(step.repeat !== undefined ? { repeat: projectRepeat(step.repeat) } : {}),
       policies: {
@@ -1490,7 +1548,9 @@ export function createWorkflowReadCompiler(
           !WORKFLOW_READ_LOCAL_ID.test(step.id) ||
           namespaces.has(namespace) ||
           step.mutation !== "read" ||
-          step.repeat !== undefined
+          step.repeat !== undefined ||
+          step.input.picks !== undefined ||
+          step.input.materializations !== undefined
         ) return null;
         const operation = operations.get(step.operationId);
         if (

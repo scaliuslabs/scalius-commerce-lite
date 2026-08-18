@@ -69,10 +69,10 @@ export const AGENT_INTENT_EVAL_CASES: readonly AgentIntentEvalCase[] = [
     prompt: "Create a two-axis T-shirt with Size S/M/L and Color Black/White, exact SKUs, different stock and prices, color-specific images, category, Brand and Material attributes, rich description, SEO, sitemap and feed visibility, then verify buyer truth.",
     expectedOperationIds: [
       "dashboard.seo.settings_get",
+      "dashboard.settings.currency_get",
       "dashboard.categories.form_options",
       "dashboard.attributes.list_summaries",
       "dashboard.products.list_summaries",
-      "dashboard.inventory.list",
       "dashboard.categories.create",
       "dashboard.attributes.create",
       "dashboard.seo.settings_update",
