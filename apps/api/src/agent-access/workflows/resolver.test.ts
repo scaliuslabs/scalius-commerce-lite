@@ -251,6 +251,152 @@ describe("reviewed agent workflow resolver", () => {
     ]));
   });
 
+  it("keeps the accepted campaign subset guidance-only and closed to overreach", () => {
+    const expectedRouteId = "dashboard.campaign-content-supported-setup";
+    for (const caseId of [expectedRouteId, `${expectedRouteId}-paraphrase`]) {
+      const testCase = AGENT_INTENT_EVAL_CASES.find((candidate) => candidate.id === caseId)!;
+      const resolution = resolveWorkflow({ prompt: testCase.prompt, surface: testCase.surface });
+      expect(resolution, caseId).toMatchObject({
+        kind: "plan",
+        disposition: "execute",
+        plan: {
+          source: "route",
+          routeIds: [expectedRouteId],
+          workflowIds: [],
+          operationIds: testCase.expectedOperationIds,
+          requiresFacts: true,
+          requiresConfirmation: true,
+          requiresVerification: true,
+        },
+      });
+      if (resolution.kind !== "plan") continue;
+      expect(Object.hasOwn(resolution.plan, "detail"), caseId).toBe(false);
+      const operationIds = resolution.plan.operationIds;
+      expect(operationIds.indexOf("dashboard.content.create"), caseId).toBeLessThan(
+        operationIds.indexOf("dashboard.content.get"),
+      );
+      expect(operationIds.indexOf("dashboard.content.get"), caseId).toBeLessThan(
+        operationIds.indexOf("dashboard.content.bulk_publish"),
+      );
+      expect(operationIds.indexOf("dashboard.media.list"), caseId).toBeLessThan(
+        operationIds.indexOf("dashboard.media.import_url"),
+      );
+      expect(operationIds.indexOf("dashboard.media.import_url"), caseId).toBeLessThan(
+        operationIds.indexOf("dashboard.content.create"),
+      );
+      expect(operationIds.indexOf("dashboard.navigation.items_search"), caseId).toBeLessThan(
+        operationIds.indexOf("dashboard.navigation.items_create"),
+      );
+      expect(operationIds.indexOf("dashboard.settings_header.get_header"), caseId).toBeLessThan(
+        operationIds.indexOf("dashboard.settings_header.header"),
+      );
+      expect(operationIds.indexOf("dashboard.hero_sliders.list"), caseId).toBeLessThan(
+        operationIds.indexOf("dashboard.hero_sliders.create"),
+      );
+      for (const forbidden of [
+        "dashboard.content.update",
+        "dashboard.navigation.items_update",
+        "dashboard.navigation.items_move",
+        "dashboard.navigation.placements_save",
+        "dashboard.seo.settings_update",
+      ]) expect(operationIds, caseId).not.toContain(forbidden);
+      expect(operationIds.join(" "), caseId).not.toMatch(
+        /products|categories|attributes|inventory|theme/,
+      );
+      const rules = resolution.plan.rules.join(" ");
+      expect(rules, caseId).toContain("staged non-atomic acceptance");
+      expect(rules, caseId).toContain("accept sanitized reread");
+      expect(rules, caseId).toContain("any slug match stops");
+      expect(rules, caseId).toContain("publish its revision");
+      expect(rules, caseId).toContain("no page-target match anywhere");
+      expect(rules, caseId).toContain("append top-level");
+      expect(rules, caseId).toContain("publish returned revision");
+      expect(rules, caseId).toContain("never update/move/reorder");
+      expect(rules, caseId).toContain("topBar text/enabled only");
+      expect(rules, caseId).toContain("Max 3 HTTPS imports");
+      expect(rules, caseId).toContain("preflight unique filename/folder");
+      expect(rules, caseId).toContain("one unambiguous new exact match");
+      expect(rules, caseId).toContain("never re-import blindly");
+      expect(rules, caseId).toContain("Local/base64: upload/re-enter");
+      expect(rules, caseId).toContain("distinct desktop/mobile assets or approved reuse");
+      expect(rules, caseId).toContain("no schedule");
+      expect(rules, caseId).toContain("same-store route path");
+      expect(rules, caseId).toContain("absolute/query/fragment stops");
+      expect(rules, caseId).toContain("Non-atomic/no rollback");
+      expect(rules, caseId).toContain("Never catalog/global SEO");
+      expect(rules, caseId).toContain("no retry; stop/report partial");
+      expect(rules, caseId).toContain("certify pixels, remote images/links, UI/head, sitemap XML");
+    }
+  });
+
+  it("does not turn scheduled campaign activation into the active-now plan", () => {
+    const route = catalog.routes.find((candidate) =>
+      candidate.id === "dashboard.campaign-content-supported-setup"
+    )!;
+    const withoutControls = createWorkflowResolver({
+      catalog: { ...catalog, controls: [] },
+      operations,
+    });
+    expect(withoutControls({
+      prompt: `${route.examples[0]} Then schedule hero activation next Friday.`,
+      surface: "dashboard",
+    })).toMatchObject({ disposition: "ask" });
+  });
+
+  it.each([
+    ["bypass sanitization", "Then bypass sanitization."],
+    ["delete and move menu items", "Then delete and move existing menu items."],
+  ])("hard-asks for unsupported campaign mutation: %s", (_label, suffix) => {
+    const route = catalog.routes.find((candidate) =>
+      candidate.id === "dashboard.campaign-content-supported-setup"
+    )!;
+    const withoutControls = createWorkflowResolver({
+      catalog: { ...catalog, controls: [] },
+      operations,
+    });
+    expect(withoutControls({
+      prompt: `${route.examples[0]} ${suffix}`,
+      surface: "dashboard",
+    })).toMatchObject({ kind: "choices", disposition: "ask" });
+  });
+
+  it.each([
+    ["absolute canonical", "Use https://other.example/eid?x=1#hero as canonical.", "absolute/query/fragment stops"],
+    ["clickable topBar", "Add a clickable URL to topBar.", "no link"],
+    ["automatic mobile fallback", "Reuse the desktop slide on mobile without approval.", "distinct desktop/mobile assets or approved reuse"],
+    ["local or base64 media", "Import /tmp/hero.png and data:image/png;base64 directly.", "Local/base64: upload/re-enter"],
+    ["atomic rollback", "Guarantee atomic rollback for every write.", "Non-atomic/no rollback"],
+    ["verification certification", "Certify pixels, remote images and links, UI/head, and sitemap XML.", "certify pixels, remote images/links, UI/head, sitemap XML"],
+  ])("guards campaign boundary: %s", (_label, suffix, requiredRule) => {
+    const route = catalog.routes.find((candidate) =>
+      candidate.id === "dashboard.campaign-content-supported-setup"
+    )!;
+    const resolution = resolveWorkflow({
+      prompt: `${route.examples[0]} ${suffix}`,
+      surface: "dashboard",
+    });
+    const forbidden = [
+      "dashboard.seo.settings_update",
+      "dashboard.products.create",
+      "dashboard.categories.create",
+      "dashboard.attributes.create",
+      "dashboard.inventory.adjust_stock",
+      "dashboard.theme.publish",
+      "dashboard.navigation.items_update",
+      "dashboard.navigation.items_move",
+    ];
+    for (const operationId of forbidden) {
+      expect(operationIds(resolution)).not.toContain(operationId);
+    }
+    if (resolution.kind === "plan") {
+      expect(resolution.plan.routeIds).toEqual([route.id]);
+      expect(resolution.plan.rules.join(" ")).toContain(requiredRule);
+      return;
+    }
+    expect(resolution.disposition).toBe("ask");
+    expect(["choices", "control"]).toContain(resolution.kind);
+  });
+
   it("keeps the accepted Bangladesh setup guidance-only and closed to unrelated writes", () => {
     const expectedRouteId = "dashboard.bangladesh-checkout-supported-setup";
     for (const caseId of [
@@ -429,6 +575,10 @@ describe("reviewed agent workflow resolver", () => {
     [
       "dashboard.campaign-layout-needs-review-paraphrase",
       "dashboard.complex-product-create",
+    ],
+    [
+      "dashboard.campaign-global-seo-overreach",
+      "dashboard.campaign-content-supported-setup",
     ],
   ] as const)("keeps compound safety control %s read-only", (caseId, forbiddenRouteId) => {
     const testCase = AGENT_INTENT_EVAL_CASES.find((candidate) => candidate.id === caseId)!;
@@ -1314,7 +1464,7 @@ describe("reviewed agent workflow resolver", () => {
     expect(product.plan.detail.phaseStopConditions.dashboardVerify).toContain(
       "No bounded exact product sitemap/feed-row read exists; do not claim sitemap membership or emitted feed price/image/availability.",
     );
-    expect(Buffer.byteLength(JSON.stringify({ ok: true, result: product }))).toBe(15_914);
+    expect(Buffer.byteLength(JSON.stringify({ ok: true, result: product }))).toBe(15_912);
     expect(Buffer.byteLength(JSON.stringify({ ok: true, result: product }))).toBeLessThanOrEqual(
       16 * 1024,
     );
