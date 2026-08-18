@@ -12,8 +12,12 @@ import {
   OPTIONED_PRODUCT_WORKFLOW,
   buildAgentWorkflowCatalog,
   validateAgentWorkflowCards,
+  validateAgentWorkflowControls,
   validateAgentWorkflowCoverage,
+  validateAgentWorkflowRoutes,
   type AgentWorkflowCard,
+  type AgentWorkflowControl,
+  type AgentWorkflowIntentRoute,
 } from ".";
 
 function finalizedDocument(): OpenApiDocument {
@@ -27,6 +31,14 @@ function finalizedDocument(): OpenApiDocument {
 
 function mutableCard(card: AgentWorkflowCard): AgentWorkflowCard {
   return structuredClone(card);
+}
+
+function mutableRoute(route: AgentWorkflowIntentRoute): AgentWorkflowIntentRoute {
+  return structuredClone(route);
+}
+
+function mutableControl(control: AgentWorkflowControl): AgentWorkflowControl {
+  return structuredClone(control);
 }
 
 describe("agent workflow catalog", () => {
@@ -43,6 +55,14 @@ describe("agent workflow catalog", () => {
       "catalog.optioned-product.v1",
       "operations.daily-snapshot.v1",
     ]);
+    expect(catalog.routes).toHaveLength(57);
+    expect(catalog.controls).toHaveLength(8);
+    for (const route of catalog.routes) {
+      expect(Buffer.byteLength(JSON.stringify(route)), route.id).toBeLessThanOrEqual(2 * 1024);
+    }
+    for (const control of catalog.controls) {
+      expect(Buffer.byteLength(JSON.stringify(control)), control.id).toBeLessThanOrEqual(2 * 1024);
+    }
     expect(Buffer.byteLength(JSON.stringify(OPTIONED_PRODUCT_WORKFLOW))).toBeLessThanOrEqual(16 * 1024);
     expect(Buffer.byteLength(JSON.stringify(DAILY_OPERATING_SNAPSHOT_WORKFLOW))).toBeLessThanOrEqual(8 * 1024);
     const generatedSource = generateAgentOperationManifestSource(document);
@@ -74,16 +94,18 @@ describe("agent workflow catalog", () => {
       ),
     ).toMatchObject({
       mode: "curated",
-      workflowIds: ["catalog.optioned-product.v1"],
+      workflowIds: [
+        "catalog.optioned-product.v1",
+        "dashboard.complex-product-create",
+      ],
     });
-    expect(
-      catalog.coverage.operations.find(
-        (entry) => entry.operationId === "dashboard.products.stats",
-      ),
-    ).toMatchObject({
+    const fallback = catalog.coverage.operations.find(
+      (entry) => entry.mode === "operation-fallback",
+    );
+    expect(fallback).toMatchObject({
       mode: "operation-fallback",
-      workflowIds: ["operation.dashboard.products.stats"],
     });
+    expect(fallback?.workflowIds).toEqual([`operation.${fallback?.operationId}`]);
     expect(
       buildAgentWorkflowCatalog([...manifest].reverse(), {
         requireCuratedCards: true,
@@ -94,6 +116,7 @@ describe("agent workflow catalog", () => {
       validateAgentWorkflowCoverage(
         [...catalog.coverage.operations].reverse(),
         catalog.cards,
+        catalog.routes,
         manifest,
       )
     ).toThrowError(/exactly and deterministically represent/);
@@ -257,6 +280,68 @@ describe("agent workflow catalog", () => {
       Object.assign(card.phases[0]!.steps[0]!.policies, { [policy]: value });
       expect(() => validateAgentWorkflowCards([card], manifest)).toThrowError(error);
     }
+  });
+
+  it("rejects unsafe, ambiguous, and stale compact routes", () => {
+    const source = catalog.routes.find((route) => route.id === "dashboard.sales-today")!;
+
+    const unknown = mutableRoute(source);
+    unknown.operationIds[0] = "dashboard.unknown.read";
+    expect(() => validateAgentWorkflowRoutes([unknown], catalog.cards, manifest)).toThrowError(
+      /unknown operation dashboard\.unknown\.read/,
+    );
+
+    const wrongSurface = mutableRoute(source);
+    wrongSurface.surface = "storefront";
+    expect(() => validateAgentWorkflowRoutes([wrongSurface], catalog.cards, manifest)).toThrowError(
+      /wrong-surface operation/,
+    );
+
+    const badKind = mutableRoute(source);
+    badKind.kind = "write";
+    expect(() => validateAgentWorkflowRoutes([badKind], catalog.cards, manifest)).toThrowError(
+      /kind does not match/,
+    );
+
+    const staleCard = mutableRoute(
+      catalog.routes.find((route) => route.id === "dashboard.complex-product-create")!,
+    );
+    staleCard.workflowId = "catalog.missing.v1";
+    expect(() => validateAgentWorkflowRoutes([staleCard], catalog.cards, manifest)).toThrowError(
+      /unknown card catalog\.missing\.v1/,
+    );
+
+    expect(() => validateAgentWorkflowRoutes([source, source], catalog.cards, manifest)).toThrowError(
+      /Duplicate workflow route ID/,
+    );
+  });
+
+  it("rejects malformed or cross-surface safety controls", () => {
+    const source = catalog.controls.find((control) =>
+      control.id === "storefront.no-exact-stock"
+    )!;
+
+    const missingTrigger = mutableControl(source);
+    missingTrigger.trigger.allOf = [];
+    expect(() => validateAgentWorkflowControls([missingTrigger], manifest)).toThrowError(
+      /invalid trigger groups/,
+    );
+
+    const wrongSurface = mutableControl(source);
+    wrongSurface.safeOperationIds = ["dashboard.products.stats"];
+    expect(() => validateAgentWorkflowControls([wrongSurface], manifest)).toThrowError(
+      /wrong-surface safe operation/,
+    );
+
+    const overlap = mutableControl(source);
+    overlap.forbiddenOperationIds = [...overlap.safeOperationIds];
+    expect(() => validateAgentWorkflowControls([overlap], manifest)).toThrowError(
+      /overlapping safe and forbidden operations/,
+    );
+
+    expect(() => validateAgentWorkflowControls([source, source], manifest)).toThrowError(
+      /Duplicate workflow control ID/,
+    );
   });
 
   it("keeps only the two reviewed curated cards", () => {

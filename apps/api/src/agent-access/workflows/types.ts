@@ -3,7 +3,7 @@ import type {
   AgentOperationRevision,
 } from "../../openapi/agent-operation-manifest";
 
-export const AGENT_WORKFLOW_CATALOG_VERSION = "1.0.0" as const;
+export const AGENT_WORKFLOW_CATALOG_VERSION = "2.0.0" as const;
 
 export const AGENT_PRODUCT_CONSTRUCTION_RULES = {
   mediaAssociationIds: "caller-local-pmed",
@@ -20,6 +20,8 @@ export type AgentProductConstructionRules =
   typeof AGENT_PRODUCT_CONSTRUCTION_RULES;
 
 export type AgentWorkflowSurface = "dashboard" | "storefront";
+export type AgentWorkflowIntentKind = "read" | "write" | "mixed";
+export type AgentWorkflowDisposition = "execute" | "ask" | "unsupported" | "refuse";
 export type AgentWorkflowMutationSemantics =
   | "read"
   | "create"
@@ -134,6 +136,51 @@ export type AgentWorkflowCard = {
   verification: AgentWorkflowVerificationEvidence[];
 };
 
+/**
+ * Compact reviewed routing metadata. Routes choose the smallest known
+ * operation sequence; detailed cards remain the authority for executable
+ * templates, dependencies, and projections.
+ */
+export type AgentWorkflowIntentRoute = {
+  id: string;
+  surface: AgentWorkflowSurface;
+  kind: AgentWorkflowIntentKind;
+  title: string;
+  summary: string;
+  examples: string[];
+  tags: string[];
+  workflowId?: string;
+  operationIds: string[];
+  requiresFacts: boolean;
+  requiresConfirmation: boolean;
+  requiresVerification: boolean;
+  rules: string[];
+};
+
+/** Every allOf group requires at least one listed phrase. */
+export type AgentWorkflowControlTrigger = {
+  allOf: string[][];
+  ignoreWhenNegated: boolean;
+};
+
+export type AgentWorkflowControl = {
+  id: string;
+  surface: AgentWorkflowSurface | "any";
+  title: string;
+  summary: string;
+  examples: string[];
+  tags: string[];
+  disposition: Exclude<AgentWorkflowDisposition, "execute">;
+  reasonCode: string;
+  trigger: AgentWorkflowControlTrigger;
+  safeOperationIds: string[];
+  forbiddenOperationIds: string[];
+  requiresFacts: boolean;
+  requiresConfirmation: boolean;
+  requiresVerification: boolean;
+  rules: string[];
+};
+
 export type AgentWorkflowCoverageEntry = {
   operationId: string;
   surface: AgentWorkflowSurface;
@@ -163,6 +210,8 @@ export type AgentWorkflowFallbackContract = {
 export type AgentWorkflowCatalog = {
   version: typeof AGENT_WORKFLOW_CATALOG_VERSION;
   cards: AgentWorkflowCard[];
+  routes: AgentWorkflowIntentRoute[];
+  controls: AgentWorkflowControl[];
   coverage: {
     policy: "curated-first-operation-fallback";
     fallback: AgentWorkflowFallbackContract;

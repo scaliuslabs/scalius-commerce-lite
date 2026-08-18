@@ -1,11 +1,16 @@
 import type { AgentOperationManifestEntry } from "../../openapi/agent-operation-manifest";
 import { CURATED_AGENT_WORKFLOW_CARDS } from "./cards";
+import { AGENT_WORKFLOW_CONTROLS } from "./controls";
+import { DASHBOARD_AGENT_WORKFLOW_ROUTES } from "./routes-dashboard";
+import { AGENT_STOREFRONT_INTENT_ROUTES } from "./routes-storefront";
 import {
   AGENT_PRODUCT_CONSTRUCTION_RULES,
   AGENT_WORKFLOW_CATALOG_VERSION,
   type AgentWorkflowCard,
   type AgentWorkflowCatalog,
+  type AgentWorkflowControl,
   type AgentWorkflowCoverageEntry,
+  type AgentWorkflowIntentRoute,
   type AgentWorkflowMutationSemantics,
   type AgentWorkflowSurface,
 } from "./types";
@@ -30,6 +35,8 @@ const MUTATION_METHODS: Readonly<
 
 export type BuildAgentWorkflowCatalogOptions = {
   cards?: readonly AgentWorkflowCard[];
+  routes?: readonly AgentWorkflowIntentRoute[];
+  controls?: readonly AgentWorkflowControl[];
   requireCuratedCards?: boolean;
 };
 
@@ -132,6 +139,34 @@ function requireRunnableOperation(
     throw new Error(`${label} references unsupported workflow surface ${operation.surface}.`);
   }
   return operation;
+}
+
+function assertCompactText(value: string, label: string, maxLength = 500): void {
+  if (!value.trim() || value.length > maxLength) {
+    throw new Error(`${label} must be non-empty and at most ${maxLength} characters.`);
+  }
+}
+
+function assertCompactTextList(
+  values: readonly string[],
+  label: string,
+  options: { min?: number; max?: number; itemMax?: number } = {},
+): void {
+  const min = options.min ?? 1;
+  const max = options.max ?? 20;
+  const itemMax = options.itemMax ?? 500;
+  if (values.length < min || values.length > max || new Set(values).size !== values.length) {
+    throw new Error(`${label} must contain ${min}-${max} unique entries.`);
+  }
+  values.forEach((value, index) => assertCompactText(value, `${label}[${index}]`, itemMax));
+}
+
+function operationAllowedForRoute(
+  surface: AgentWorkflowSurface,
+  operation: AgentOperationManifestEntry,
+): boolean {
+  return operation.surface === surface ||
+    (surface === "dashboard" && operation.surface === "storefront" && operation.risk === "read");
 }
 
 function assertMutationPolicy(
@@ -336,8 +371,170 @@ export function validateAgentWorkflowCards(
   }
 }
 
+export function validateAgentWorkflowRoutes(
+  routes: readonly AgentWorkflowIntentRoute[],
+  cards: readonly AgentWorkflowCard[],
+  manifest: readonly AgentOperationManifestEntry[],
+): void {
+  const operations = operationMap(manifest);
+  const cardsById = new Map(cards.map((card) => [card.id, card] as const));
+  const routeIds = new Set<string>();
+
+  for (const route of routes) {
+    if (!WORKFLOW_ID_PATTERN.test(route.id)) {
+      throw new Error(`Workflow route ${route.id} has an invalid stable ID.`);
+    }
+    if (routeIds.has(route.id)) throw new Error(`Duplicate workflow route ID ${route.id}.`);
+    routeIds.add(route.id);
+    if (!WORKFLOW_SURFACES.has(route.surface)) {
+      throw new Error(`Workflow route ${route.id} has invalid surface ${route.surface}.`);
+    }
+    assertCompactText(route.title, `Workflow route ${route.id} title`, 120);
+    assertCompactText(route.summary, `Workflow route ${route.id} summary`, 500);
+    assertCompactTextList(route.examples, `Workflow route ${route.id} examples`, {
+      max: 5,
+      itemMax: 500,
+    });
+    assertCompactTextList(route.tags, `Workflow route ${route.id} tags`, {
+      max: 12,
+      itemMax: 60,
+    });
+    assertCompactTextList(route.rules, `Workflow route ${route.id} rules`, {
+      max: 6,
+      itemMax: 300,
+    });
+    if (
+      route.operationIds.length < 1 ||
+      route.operationIds.length > 20 ||
+      new Set(route.operationIds).size !== route.operationIds.length
+    ) {
+      throw new Error(`Workflow route ${route.id} requires 1-20 unique operations.`);
+    }
+
+    const referenced = route.operationIds.map((operationId) => {
+      const operation = requireRunnableOperation(
+        operations,
+        operationId,
+        `Workflow route ${route.id}`,
+      );
+      if (!operationAllowedForRoute(route.surface, operation)) {
+        throw new Error(
+          `Workflow route ${route.id} has wrong-surface operation ${operationId}.`,
+        );
+      }
+      return operation;
+    });
+    const hasMutation = referenced.some((operation) => operation.risk !== "read");
+    if ((route.kind === "read") === hasMutation) {
+      throw new Error(`Workflow route ${route.id} kind does not match its operation risks.`);
+    }
+    if (route.requiresConfirmation !== hasMutation) {
+      throw new Error(`Workflow route ${route.id} confirmation does not match its operation risks.`);
+    }
+
+    if (route.workflowId) {
+      const card = cardsById.get(route.workflowId);
+      if (!card) {
+        throw new Error(`Workflow route ${route.id} references unknown card ${route.workflowId}.`);
+      }
+      if (card.surface !== route.surface) {
+        throw new Error(`Workflow route ${route.id} references wrong-surface card ${route.workflowId}.`);
+      }
+      const cardOperations = new Set(referencedOperationIds(card));
+      for (const operationId of route.operationIds) {
+        if (!cardOperations.has(operationId)) {
+          throw new Error(
+            `Workflow route ${route.id} operation ${operationId} is absent from card ${route.workflowId}.`,
+          );
+        }
+      }
+    }
+    if (new TextEncoder().encode(JSON.stringify(route)).byteLength > 2 * 1024) {
+      throw new Error(`Workflow route ${route.id} exceeds the 2 KiB compact-route limit.`);
+    }
+  }
+}
+
+export function validateAgentWorkflowControls(
+  controls: readonly AgentWorkflowControl[],
+  manifest: readonly AgentOperationManifestEntry[],
+): void {
+  const operations = operationMap(manifest);
+  const controlIds = new Set<string>();
+
+  for (const control of controls) {
+    if (!WORKFLOW_ID_PATTERN.test(control.id)) {
+      throw new Error(`Workflow control ${control.id} has an invalid stable ID.`);
+    }
+    if (controlIds.has(control.id)) throw new Error(`Duplicate workflow control ID ${control.id}.`);
+    controlIds.add(control.id);
+    if (control.surface !== "any" && !WORKFLOW_SURFACES.has(control.surface)) {
+      throw new Error(`Workflow control ${control.id} has invalid surface ${control.surface}.`);
+    }
+    assertCompactText(control.title, `Workflow control ${control.id} title`, 120);
+    assertCompactText(control.summary, `Workflow control ${control.id} summary`, 500);
+    assertCompactTextList(control.examples, `Workflow control ${control.id} examples`, {
+      max: 5,
+      itemMax: 500,
+    });
+    assertCompactTextList(control.tags, `Workflow control ${control.id} tags`, {
+      max: 12,
+      itemMax: 60,
+    });
+    assertCompactTextList(control.rules, `Workflow control ${control.id} rules`, {
+      max: 8,
+      itemMax: 300,
+    });
+    if (!/^[a-z][a-z0-9_]{2,79}$/.test(control.reasonCode)) {
+      throw new Error(`Workflow control ${control.id} has invalid reasonCode.`);
+    }
+    if (control.trigger.allOf.length < 1 || control.trigger.allOf.length > 8) {
+      throw new Error(`Workflow control ${control.id} has invalid trigger groups.`);
+    }
+    for (const [groupIndex, group] of control.trigger.allOf.entries()) {
+      assertCompactTextList(group, `Workflow control ${control.id} trigger[${groupIndex}]`, {
+        max: 8,
+        itemMax: 80,
+      });
+    }
+    for (const [label, operationIds] of [
+      ["safe", control.safeOperationIds],
+      ["forbidden", control.forbiddenOperationIds],
+    ] as const) {
+      if (operationIds.length > 20 || new Set(operationIds).size !== operationIds.length) {
+        throw new Error(`Workflow control ${control.id} has invalid ${label} operations.`);
+      }
+      for (const operationId of operationIds) {
+        const operation = requireRunnableOperation(
+          operations,
+          operationId,
+          `Workflow control ${control.id}`,
+        );
+        if (
+          label === "safe" &&
+          control.surface !== "any" &&
+          !operationAllowedForRoute(control.surface, operation)
+        ) {
+          throw new Error(
+            `Workflow control ${control.id} has wrong-surface safe operation ${operationId}.`,
+          );
+        }
+      }
+    }
+    if (control.safeOperationIds.some((operationId) =>
+      control.forbiddenOperationIds.includes(operationId)
+    )) {
+      throw new Error(`Workflow control ${control.id} has overlapping safe and forbidden operations.`);
+    }
+    if (new TextEncoder().encode(JSON.stringify(control)).byteLength > 2 * 1024) {
+      throw new Error(`Workflow control ${control.id} exceeds the 2 KiB compact-control limit.`);
+    }
+  }
+}
+
 function buildCoverage(
   cards: readonly AgentWorkflowCard[],
+  routes: readonly AgentWorkflowIntentRoute[],
   manifest: readonly AgentOperationManifestEntry[],
 ): AgentWorkflowCoverageEntry[] {
   const workflowsByOperation = new Map<string, string[]>();
@@ -345,6 +542,13 @@ function buildCoverage(
     for (const operationId of referencedOperationIds(card)) {
       const workflowIds = workflowsByOperation.get(operationId) ?? [];
       workflowIds.push(card.id);
+      workflowsByOperation.set(operationId, workflowIds);
+    }
+  }
+  for (const route of routes) {
+    for (const operationId of route.operationIds) {
+      const workflowIds = workflowsByOperation.get(operationId) ?? [];
+      workflowIds.push(route.id);
       workflowsByOperation.set(operationId, workflowIds);
     }
   }
@@ -371,9 +575,10 @@ function buildCoverage(
 export function validateAgentWorkflowCoverage(
   coverage: readonly AgentWorkflowCoverageEntry[],
   cards: readonly AgentWorkflowCard[],
+  routes: readonly AgentWorkflowIntentRoute[],
   manifest: readonly AgentOperationManifestEntry[],
 ): void {
-  const expected = buildCoverage(cards, manifest);
+  const expected = buildCoverage(cards, routes, manifest);
   if (JSON.stringify(coverage) !== JSON.stringify(expected)) {
     throw new Error("Workflow coverage must exactly and deterministically represent every runnable dashboard/storefront operation.");
   }
@@ -388,6 +593,33 @@ function availableCuratedCards(
   );
 }
 
+const CURATED_AGENT_WORKFLOW_ROUTES: readonly AgentWorkflowIntentRoute[] = [
+  ...DASHBOARD_AGENT_WORKFLOW_ROUTES,
+  ...AGENT_STOREFRONT_INTENT_ROUTES,
+];
+
+function availableCuratedRoutes(
+  manifest: readonly AgentOperationManifestEntry[],
+  cards: readonly AgentWorkflowCard[],
+): AgentWorkflowIntentRoute[] {
+  const availableOperations = new Set(manifest.map((operation) => operation.operationId));
+  const availableCards = new Set(cards.map((card) => card.id));
+  return CURATED_AGENT_WORKFLOW_ROUTES.filter((route) =>
+    route.operationIds.every((operationId) => availableOperations.has(operationId)) &&
+    (!route.workflowId || availableCards.has(route.workflowId))
+  );
+}
+
+function availableWorkflowControls(
+  manifest: readonly AgentOperationManifestEntry[],
+): AgentWorkflowControl[] {
+  const available = new Set(manifest.map((operation) => operation.operationId));
+  return AGENT_WORKFLOW_CONTROLS.filter((control) =>
+    [...control.safeOperationIds, ...control.forbiddenOperationIds]
+      .every((operationId) => available.has(operationId))
+  );
+}
+
 export function buildAgentWorkflowCatalog(
   manifest: readonly AgentOperationManifestEntry[],
   options: BuildAgentWorkflowCatalogOptions = {},
@@ -399,12 +631,28 @@ export function buildAgentWorkflowCatalog(
       : availableCuratedCards(manifest))
   )].sort((left, right) => left.id.localeCompare(right.id));
   validateAgentWorkflowCards(cards, manifest);
-  const coverage = buildCoverage(cards, manifest);
-  validateAgentWorkflowCoverage(coverage, cards, manifest);
+  const routes = [...(
+    options.routes ??
+    (options.requireCuratedCards
+      ? CURATED_AGENT_WORKFLOW_ROUTES
+      : availableCuratedRoutes(manifest, cards))
+  )].sort((left, right) => left.id.localeCompare(right.id));
+  const controls = [...(
+    options.controls ??
+    (options.requireCuratedCards
+      ? AGENT_WORKFLOW_CONTROLS
+      : availableWorkflowControls(manifest))
+  )].sort((left, right) => left.id.localeCompare(right.id));
+  validateAgentWorkflowRoutes(routes, cards, manifest);
+  validateAgentWorkflowControls(controls, manifest);
+  const coverage = buildCoverage(cards, routes, manifest);
+  validateAgentWorkflowCoverage(coverage, cards, routes, manifest);
 
   return {
     version: AGENT_WORKFLOW_CATALOG_VERSION,
     cards,
+    routes,
+    controls,
     coverage: {
       policy: "curated-first-operation-fallback",
       fallback: {
