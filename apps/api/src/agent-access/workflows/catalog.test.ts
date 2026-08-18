@@ -887,11 +887,14 @@ describe("agent workflow catalog", () => {
       (phase) => phase.id === "dashboardVerify",
     )!;
     expect(dashboard.stopConditions).toContain(
-      "No bounded exact product sitemap/feed-row read exists; do not claim sitemap membership or emitted feed price/image/availability.",
+      "Preview proves rows only; not sitemap membership, cache propagation, or provider acceptance.",
+    );
+    expect(dashboard.stopConditions).toContain(
+      "Oversize preview: report row unverified; do not claim feed parity.",
     );
     expect(OPTIONED_PRODUCT_WORKFLOW.verification.find((item) => item.id === "feed")?.proves)
       .toEqual([
-        "Feed policy, eligibility totals, and sampled exclusions only.",
+        "Exact emitted row or omission reason; oversize is unverified.",
       ]);
     expect(OPTIONED_PRODUCT_WORKFLOW.verification.find((item) => item.id === "buyer")?.proves)
       .toEqual([

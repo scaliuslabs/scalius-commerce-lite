@@ -104,7 +104,7 @@ export const DASHBOARD_AGENT_WORKFLOW_ROUTES = [
     kind: "mixed",
     title: "Create and publish an optioned product",
     summary:
-      "Resolve catalog facts, create one optioned product, publish its category when ready, and verify admin and buyer-facing discovery.",
+      "Create an optioned product, publish its ready category, and verify admin and buyer discovery.",
     examples: [
       "Create a two-axis T-shirt with Size S/M/L and Color Black/White, exact SKUs, different stock and prices, color-specific images, category, Brand and Material attributes, rich description, SEO, sitemap and feed visibility, then verify buyer truth.",
     ],
@@ -125,7 +125,7 @@ export const DASHBOARD_AGENT_WORKFLOW_ROUTES = [
       "dashboard.categories.set_status",
       "dashboard.products.get_section",
       "dashboard.categories.get_section",
-      "dashboard.seo.feed_diagnostics",
+      "dashboard.seo.feed_row_preview",
       "dashboard.seo.live_probe",
       "storefront.products.get_section",
     ],
@@ -136,7 +136,7 @@ export const DASHBOARD_AGENT_WORKFLOW_ROUTES = [
       "Require the merchant's exact option axes, SKU matrix, prices, and stock facts.",
       "Resolve category, attribute, media, and product collisions; product creation owns SKU uniqueness.",
       "Create the product once and publish the category only when readiness passes.",
-      "Confirm writes, then verify bounded admin, feed, discovery, and storefront evidence.",
+      "Confirm writes; verify bounded admin, feed, discovery, and storefront evidence.",
     ],
   },
   {

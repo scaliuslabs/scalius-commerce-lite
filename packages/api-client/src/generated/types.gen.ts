@@ -31539,6 +31539,190 @@ export type PutApiV1AdminSettingsAllowedCountriesResponses = {
 
 export type PutApiV1AdminSettingsAllowedCountriesResponse = PutApiV1AdminSettingsAllowedCountriesResponses[keyof PutApiV1AdminSettingsAllowedCountriesResponses];
 
+export type GetApiV1AdminSettingsSeoFeedRowPreviewByProductIdData = {
+    body?: never;
+    path: {
+        productId: string;
+    };
+    query?: {
+        sku?: string;
+        cursor?: string;
+        limit?: number;
+    };
+    url: '/api/v1/admin/settings/seo/feed-row-preview/{productId}';
+};
+
+export type GetApiV1AdminSettingsSeoFeedRowPreviewByProductIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsSeoFeedRowPreviewByProductIdError = GetApiV1AdminSettingsSeoFeedRowPreviewByProductIdErrors[keyof GetApiV1AdminSettingsSeoFeedRowPreviewByProductIdErrors];
+
+export type GetApiV1AdminSettingsSeoFeedRowPreviewByProductIdResponses = {
+    /**
+     * Bounded current-state emitted, omitted, or oversize outcomes in stable candidate order
+     */
+    200: {
+        success: true;
+        data: {
+            productId: string;
+            requestedSku: string | null;
+            policy: {
+                productCatalogEnabled: boolean;
+                includeUnavailableProducts: boolean;
+                variantStrategy: 'products' | 'variants';
+            };
+            entries: Array<{
+                productId: string;
+                variantId: string | null;
+                sku: string | null;
+                status: 'emitted';
+                row: {
+                    kind: 'product' | 'variant';
+                    productId: string;
+                    variantId: string | null;
+                    id: string;
+                    title: string;
+                    description: string;
+                    link: string;
+                    imageLink: string;
+                    availability: {
+                        canonical: 'in_stock' | 'out_of_stock';
+                        google: 'in_stock' | 'out_of_stock';
+                        meta: 'in stock' | 'out of stock';
+                    };
+                    condition: 'new' | 'refurbished' | 'used' | null;
+                    pricing: {
+                        currencyCode: string;
+                        originalAmount: number;
+                        currentAmount: number;
+                        price: string;
+                        salePrice: string | null;
+                        currentPrice: string;
+                    };
+                    brand: string | null;
+                    gtin: string | null;
+                    identifierExists: 'no';
+                    itemGroupId: string | null;
+                    itemGroupTitle: string | null;
+                    variantOptions: Array<{
+                        name: string;
+                        value: string;
+                    }>;
+                    googleProductCategory: string | null;
+                    facebookProductCategory: string | null;
+                    productType: string | null;
+                    standardAttributes: Array<{
+                        name: 'size' | 'color' | 'material' | 'pattern' | 'gender' | 'age_group';
+                        value: string;
+                    }>;
+                    shipping: {
+                        country: 'BD';
+                        service: 'Standard';
+                        price: string;
+                    } | null;
+                };
+            } | {
+                productId: string;
+                variantId: string | null;
+                sku: string | null;
+                status: 'omitted';
+                reason: 'excluded_from_product_feed' | 'inactive_product' | 'unavailable_product' | 'unavailable_variant' | 'unresolved_variant_shape' | 'missing_image' | 'non_positive_price' | 'input_bounds_exceeded' | 'product_not_found' | 'sku_not_found' | 'sku_ambiguous' | 'feed_disabled' | 'storefront_url_unavailable';
+            } | {
+                productId: string;
+                variantId: string | null;
+                sku: string | null;
+                status: 'preview_entry_too_large';
+                requiredBytes: number;
+            }>;
+            pagination: {
+                limit: number;
+                returned: number;
+                totalOutcomes: number;
+                hasNextPage: boolean;
+                nextCursor: string | null;
+                responseTruncated: boolean;
+            };
+            semantics: {
+                basis: 'current_saved_state';
+                emittedRowsAreExact: true;
+                entryFieldsTruncated: false;
+                cachedFeedPropagationVerified: false;
+                providerAcceptanceVerified: false;
+                pagesMayRaceWithWrites: true;
+                responseBudgetBytes: 47104;
+            };
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsSeoFeedRowPreviewByProductIdResponse = GetApiV1AdminSettingsSeoFeedRowPreviewByProductIdResponses[keyof GetApiV1AdminSettingsSeoFeedRowPreviewByProductIdResponses];
+
 export type GetApiV1AdminSettingsBusinessData = {
     body?: never;
     path?: never;

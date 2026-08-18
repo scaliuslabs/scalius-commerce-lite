@@ -43,7 +43,7 @@ export const OPTIONED_PRODUCT_WORKFLOW: AgentWorkflowCard = {
       id: "productSpec",
       title: "Product spec",
       description:
-        "Exact name/description/price/slug, active/free-delivery flags, SEO title/description, canonicalPath, noIndex, sitemap/feed exclusions, and condition.",
+        "Exact name/description/price/slug, flags, SEO/canonicalPath/noIndex, sitemap/feed exclusions, condition.",
       required: true,
       source: { kind: "merchant" },
       nonInferenceRule: "Do not invent copy, price, brand, condition, or flags.",
@@ -88,7 +88,7 @@ export const OPTIONED_PRODUCT_WORKFLOW: AgentWorkflowCard = {
       id: "attributeSet",
       title: "Attributes",
       description:
-        "{order,createOrder,byId}; items hold value, create spec, and active-read or same-key captured attributeId.",
+        "{order,createOrder,byId}; values/create specs plus read or same-key captured IDs.",
       required: true,
       source: { kind: "merchant" },
       nonInferenceRule:
@@ -98,7 +98,7 @@ export const OPTIONED_PRODUCT_WORKFLOW: AgentWorkflowCard = {
       id: "mediaSet",
       title: "Media",
       description:
-        "{order,importOrder,byId}; order=all pmed keys; importOrder=URL keys; byId holds resolved mediaId, altText, isPrimary; 1-250 unique, one primary.",
+        "{order,importOrder,byId}: all keys, URL keys, resolved mediaId/alt/primary; 1-250 unique, one primary.",
       required: true,
       source: { kind: "merchant" },
       nonInferenceRule:
@@ -464,8 +464,9 @@ export const OPTIONED_PRODUCT_WORKFLOW: AgentWorkflowCard = {
       summary: "Read admin evidence.",
       dependsOn: ["create", "publish"],
       stopConditions: [
-        "Stop on SKU/image/stock drift or discovery failure.",
-        "No bounded exact product sitemap/feed-row read exists; do not claim sitemap membership or emitted feed price/image/availability.",
+        "Stop on product/discovery drift.",
+        "Preview proves rows only; not sitemap membership, cache propagation, or provider acceptance.",
+        "Oversize preview: report row unverified; do not claim feed parity.",
       ],
       steps: [
         {
@@ -489,9 +490,17 @@ export const OPTIONED_PRODUCT_WORKFLOW: AgentWorkflowCard = {
         {
           id: "feed",
           title: "Feed",
-          operationId: "dashboard.seo.feed_diagnostics",
+          operationId: "dashboard.seo.feed_row_preview",
           mutation: "read",
-          input: { template: { query: { scanLimit: 500, sampleLimit: 10 } }, dependencies: [], defaults: [] },
+          condition: "Page cursor to end.",
+          input: {
+            template: { path: { productId: null }, query: { limit: 10 } },
+            dependencies: [{
+              templatePointer: "/path/productId",
+              source: { kind: "step", phaseId: "create", stepId: "product", responsePointer: "/data/id" },
+            }],
+            defaults: [],
+          },
           policies: readPolicies,
         },
         {
@@ -542,10 +551,10 @@ export const OPTIONED_PRODUCT_WORKFLOW: AgentWorkflowCard = {
     {
       id: "feed",
       surface: "dashboard",
-      operationId: "dashboard.seo.feed_diagnostics",
-      responsePointers: ["/data/policy", "/data/totals", "/data/reasons"],
-      proves: ["Feed policy, eligibility totals, and sampled exclusions only."],
-      bounds: { maxCalls: 1, maxItems: 500, maxResponseBytes: 65_536 },
+      operationId: "dashboard.seo.feed_row_preview",
+      responsePointers: ["/data/entries", "/data/pagination", "/data/semantics"],
+      proves: ["Exact emitted row or omission reason; oversize is unverified."],
+      bounds: { maxCalls: 25, maxItems: 250, maxResponseBytes: 47_104 },
     },
     {
       id: "discovery",
