@@ -27,7 +27,9 @@ describe("agent intent evaluation corpus", () => {
   it("references only runnable live-contract operations", async () => {
     const operationIds = new Set((await checkedInOperations()).map((operation) => operation.id));
     for (const testCase of AGENT_INTENT_EVAL_CASES) {
-      expect(testCase.expectedOperationIds, testCase.id).not.toHaveLength(0);
+      if (testCase.expectedOperationIds.length === 0) {
+        expect(testCase.expectedDisposition, testCase.id).toBe("unsupported");
+      }
       expect(new Set(testCase.expectedOperationIds).size, testCase.id).toBe(
         testCase.expectedOperationIds.length,
       );
@@ -45,6 +47,16 @@ describe("agent intent evaluation corpus", () => {
     for (const testCase of AGENT_INTENT_EVAL_CASES) {
       if (testCase.kind === "read") continue;
       expect(testCase.requiresConfirmation, testCase.id).toBe(true);
+    }
+  });
+
+  it("makes every negative control explicit and testable", () => {
+    const negativeControls = AGENT_INTENT_EVAL_CASES.filter(
+      (testCase) => testCase.expectedDisposition && testCase.expectedDisposition !== "execute",
+    );
+    expect(negativeControls.length).toBeGreaterThanOrEqual(8);
+    for (const testCase of negativeControls) {
+      expect(testCase.safetyAssertions?.length, testCase.id).toBeGreaterThan(0);
     }
   });
 
