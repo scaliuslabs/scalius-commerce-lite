@@ -63,6 +63,11 @@ finalized OpenAPI contract—not a model-specific prompt—is authoritative for
 fields, RBAC, risk, revisions, idempotency, byte limits, artifacts, uploads,
 and continuations.
 
+`workflow resolve` may read the intentionally public finalized contract before
+pairing, so local planning works with `SCALIUS_SERVER=<origin>` and no execution
+credential. `workflow read`, operation descriptions, and every execution remain
+bound to the correctly authenticated dashboard or storefront profile.
+
 `workflow resolve` accepts normal merchant phrasing such as “today's sales”,
 “orders needing fulfillment”, “low stock issues”, or “is my store healthy?”.
 `operations search` remains the low-level exact-ID or contract-keyword escape
@@ -92,6 +97,6 @@ For agents without shell or local-file access, `dashboard.media.import_url` comm
 
 Reviewed hosted continuations open a fixed same-origin browser relay and keep one-time fields in ephemeral memory. They are never placed in a URL, command argument, stdout, stderr, the OpenAPI cache, or the credentials file. Device operations and concrete exclusions remain intentionally unavailable through generic `operations run`.
 
-`--output json` writes one JSON document to stdout. Diagnostics and progress use stderr. Exit codes are `0` success, `2` usage or local confirmation, `3` authentication, `4` authorization, `5` validation, `6` conflict, `7` temporary failure, `8` server or contract failure, and `130` interruption.
+`--output json` writes one compact JSON document to stdout; human output remains readable. Diagnostics and progress use stderr. Exit codes are `0` success, `2` usage or local confirmation, `3` authentication, `4` authorization, `5` validation, `6` conflict, `7` temporary failure, `8` server or contract failure, and `130` interruption.
 
 Run `scalius --help` for the complete command reference.

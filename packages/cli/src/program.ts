@@ -214,7 +214,7 @@ export function createProgram(runtime: Runtime): Command {
     .argument("<request>", "merchant or buyer goal")
     .addOption(new Option("--surface <audience>", "workflow audience").choices(["dashboard", "storefront"]).default("dashboard"))
     .action(async (request: string, options: { surface: "dashboard" | "storefront" }, command) => {
-      const profile = await resolveForResource(runtime, command, options.surface);
+      const profile = await resolve(runtime, command, false);
       const document = await loadOpenApi(runtime, profile);
       const result = resolveWorkflow(document, { prompt: request, surface: options.surface });
       writeResult(runtime, globalOptions(command).output, result, JSON.stringify(result, null, 2));

@@ -186,9 +186,17 @@ describe("CLI program", () => {
     expect(runtime.stderrText()).toBe("");
   });
 
-  it("resolves a natural-language goal from the live workflow catalog in one command", async () => {
-    const fetch = vi.fn(async () => Response.json(workflowSpec(), { headers: { ETag: '"workflow-v1"' } }));
-    const runtime = await authenticatedRuntime(fetch as typeof globalThis.fetch);
+  it("resolves a natural-language goal from the public workflow catalog without an execution credential", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "scalius-cli-public-workflow-"));
+    const fetch = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+      expect(new Headers(init?.headers).has("Authorization")).toBe(false);
+      return Response.json(workflowSpec(), { headers: { ETag: '"workflow-v1"' } });
+    });
+    const runtime = createTestRuntime({
+      directory,
+      env: { SCALIUS_SERVER: "https://api.example.com" },
+      fetch: fetch as typeof globalThis.fetch,
+    });
     const exit = await runProgram(runtime, [
       "--output", "json", "workflow", "resolve", "Please create a new catalog product.",
     ]);
@@ -204,6 +212,7 @@ describe("CLI program", () => {
       },
     });
     expect(fetch).toHaveBeenCalledTimes(1);
+    expect(runtime.stdoutText().trim()).not.toContain("\n");
     expect(runtime.stderrText()).toBe("");
   });
 
@@ -217,9 +226,12 @@ describe("CLI program", () => {
     expect(await runProgram(runtime, ["--output", "json", "operations", "search", "product"])).toBe(0);
     expect(await runProgram(runtime, ["--output", "json", "operations", "refresh", "--surface", "dashboard"])).toBe(0);
     expect(fetch).toHaveBeenCalledTimes(2);
-    expect(runtime.stdoutText()).toContain('"status": "refreshed"');
-    expect(runtime.stdoutText()).toContain('"surface": "dashboard"');
-    expect(runtime.stdoutText()).toContain('"operationCount": 6');
+    const outputs = runtime.stdoutText().trim().split("\n").map((line) => JSON.parse(line) as Record<string, unknown>);
+    expect(outputs.at(-1)).toMatchObject({
+      status: "refreshed",
+      surface: "dashboard",
+      operationCount: 6,
+    });
     const secondRequest = fetch.mock.calls[1]?.[1] as RequestInit | undefined;
     expect(new Headers(secondRequest?.headers).has("If-None-Match")).toBe(false);
   });
