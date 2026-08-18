@@ -46,7 +46,7 @@ scalius setup --harness <agents|codex|claude|opencode|pi> [--server <origin>] [-
 scalius skill install [--harness <name>] [--force]
 ```
 
-Run `scalius setup` before operating a store. The bundled `scalius-commerce` skill follows the open Agent Skills format and installs to the native user location for Codex, Claude Code, OpenCode, Pi, or the cross-client `.agents/skills` convention. Setup prints exact credential-free instructions for both audience-specific MCP servers; it never writes tokens into harness configuration. Pi supports the skill and full CLI natively; because Pi's core has no MCP client, setup prints the separately installed `pi-mcp-adapter` package from Pi's catalog and shared MCP configuration but never silently installs executable third-party code.
+Run `scalius setup` before operating a store. The bundled `scalius-commerce` skill follows the open Agent Skills format and installs to the native user location for Codex, Claude, OpenCode, Pi, or the cross-client `.agents/skills` convention. Setup prints exact credential-free instructions for both audience-specific MCP servers; it never writes tokens into harness configuration. Pi supports the skill and full CLI natively; because Pi's core has no MCP client, setup prints the separately installed `pi-mcp-adapter` package from Pi's catalog and shared MCP configuration but never silently installs executable third-party code.
 
 The workflow is deliberately harness-neutral: search, compactly describe one
 operation, request `--full` only while building its input, execute, and verify
