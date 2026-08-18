@@ -9,8 +9,16 @@ afterEach(() => {
 describe("generated runtime payload boundaries", () => {
   const routeLoaders = {
     probe: () => import("./probe-app"),
-    public: () => import("./public-app"),
-    admin: () => import("./admin-app"),
+    publicConfig: () => import("./public-config-app"),
+    publicCatalog: () => import("./public-catalog-app"),
+    publicContent: () => import("./public-content-app"),
+    publicBuyer: () => import("./public-buyer-app"),
+    publicProxy: () => import("./public-proxy-app"),
+    adminDashboard: () => import("./admin-dashboard-app"),
+    adminCatalog: () => import("./admin-catalog-app"),
+    adminSales: () => import("./admin-sales-app"),
+    adminContent: () => import("./admin-content-app"),
+    adminAccess: () => import("./admin-access-app"),
     system: () => import("./system-app"),
   } as const;
 
