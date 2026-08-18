@@ -284,6 +284,14 @@ describe("CLI workflow resolver adapter", () => {
           : [];
       expect(result.disposition, testCase.id).toBe(testCase.expectedDisposition ?? "execute");
       expect(operationIds, testCase.id).toEqual(testCase.expectedOperationIds);
+      if (!testCase.expectedDisposition) {
+        expect(result.kind, testCase.id).toBe("plan");
+        if (result.kind === "plan") {
+          expect(result.plan.routeIds, testCase.id).toEqual([
+            testCase.expectedRouteId ?? testCase.id,
+          ]);
+        }
+      }
       if (testCase.expectedDisposition) {
         expect(result.kind, testCase.id).toBe("control");
         if (result.kind === "control") {

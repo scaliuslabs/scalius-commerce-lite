@@ -17,6 +17,7 @@ Use the dashboard audience for administration. Use a separately authenticated st
 ## Preserve configuration truth
 
 - Change only requested fields and preserve unrelated values. On revision conflict, reread and reconcile rather than overwriting newer state.
+- For compound setup, preflight every document before writing. Preserve full method arrays/defaults, require complete currency facts, choose delivery update versus create by exact label, and stop for reread after partial or uncertain writes.
 - Use an idempotency key only when declared, and reuse it only for an exact replay.
 - Run reviewed readiness, preview, or health checks before enabling checkout, guest/customer access, taxes, shipping, payment, messaging, analytics, or provider behavior. Do not infer readiness from a saved row alone.
 - Treat business identity, currency, contact details, checkout rules, and active tax, shipping, or payment availability as public commerce facts. Verify buyer-visible output with the separate storefront audience when the plan asks for it.
