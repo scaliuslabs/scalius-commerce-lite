@@ -1,0 +1,4 @@
+interface:
+  display_name: "Scalius Insights"
+  short_description: "Store metrics, queues, readiness, and reports"
+  default_prompt: "Use $scalius-insights to answer this merchant data question with bounded reviewed evidence."

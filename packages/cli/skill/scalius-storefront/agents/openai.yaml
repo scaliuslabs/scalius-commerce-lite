@@ -1,0 +1,4 @@
+interface:
+  display_name: "Scalius Storefront"
+  short_description: "Buyer catalog, cart, checkout, and account flows"
+  default_prompt: "Use $scalius-storefront to complete and verify this buyer journey safely."
