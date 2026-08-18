@@ -6,8 +6,11 @@ import { finalizeOpenApiContract } from "../../openapi-contract";
 import { buildAgentOperationManifest } from "../../openapi/agent-operation-manifest";
 import { buildAgentWorkflowCatalog } from "./catalog";
 import {
+  createWorkflowReadCompiler,
   createWorkflowResolver,
+  projectWorkflowReadResponse,
   type WorkflowResolution,
+  type WorkflowResolverCard,
 } from "./resolver-core";
 
 const document = finalizeOpenApiContract(
@@ -21,6 +24,7 @@ const catalog = buildAgentWorkflowCatalog(operations, {
   requireCuratedCards: true,
 });
 const resolveWorkflow = createWorkflowResolver({ catalog, operations });
+const compileWorkflowRead = createWorkflowReadCompiler({ catalog, operations });
 
 function operationIds(resolution: WorkflowResolution): string[] {
   if (resolution.kind === "plan") return resolution.plan.operationIds;
@@ -395,6 +399,183 @@ describe("reviewed agent workflow resolver", () => {
       ]);
       expect(composed.plan.detail).toBeUndefined();
     }
+  });
+
+  it("compiles only one exact closed detailed read card into ordered fixed steps", () => {
+    const compiled = compileWorkflowRead({
+      prompt: "dashboard.daily-operations-snapshot",
+      surface: "dashboard",
+    });
+    expect(compiled).not.toBeNull();
+    if (!compiled) return;
+    expect(compiled).toMatchObject({
+      version: "3.0.0",
+      workflowId: "operations.daily-snapshot.v1",
+      phases: [{ id: "activity" }, { id: "readiness" }],
+    });
+    expect(compiled.phases.flatMap((phase) => phase.steps.map((step) => ({
+      namespace: step.namespace,
+      operationId: step.operationId,
+      input: step.input,
+    })))).toEqual([
+      {
+        namespace: "activity.daily",
+        operationId: "dashboard.home.activity",
+        input: { query: { days: 1 } },
+      },
+      {
+        namespace: "activity.currency",
+        operationId: "dashboard.settings.currency_get",
+        input: {},
+      },
+      {
+        namespace: "activity.fulfillment",
+        operationId: "dashboard.orders.list",
+        input: {
+          query: {
+            page: 1,
+            limit: 10,
+            statusGroup: "open",
+            fulfillmentStatus: "pending",
+            sort: "createdAt",
+            order: "desc",
+          },
+        },
+      },
+      {
+        namespace: "readiness.alerts",
+        operationId: "dashboard.inventory_alerts.list",
+        input: { query: { status: "active" } },
+      },
+      {
+        namespace: "readiness.checkout",
+        operationId: "dashboard.checkout.readiness_get",
+        input: {},
+      },
+      {
+        namespace: "readiness.payments",
+        operationId: "dashboard.payments.methods_get",
+        input: {},
+      },
+      {
+        namespace: "readiness.delivery",
+        operationId: "dashboard.shipping_methods.list",
+        input: { query: { page: 1, limit: 100, sort: "sortOrder", order: "asc" } },
+      },
+    ]);
+    expect(compiled.phases[0]!.steps[2]!.output.selectors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ pointer: "/data/orders", alias: "orderQueue", maxItems: 10 }),
+      ]),
+    );
+
+    expect(compileWorkflowRead({
+      prompt: "dashboard.complex-product-create",
+      surface: "dashboard",
+    })).toBeNull();
+    expect(compileWorkflowRead({
+      prompt: "dashboard.sales-today",
+      surface: "dashboard",
+    })).toBeNull();
+  });
+
+  it("rejects absent projections, phase metadata, and non-closed read operations", () => {
+    const dailyCard = catalog.cards.find((card) => card.id === "operations.daily-snapshot.v1")!;
+    const dailyInput = {
+      prompt: "dashboard.daily-operations-snapshot",
+      surface: "dashboard" as const,
+    };
+    const replaceDaily = (replacement: WorkflowResolverCard) => ({
+      ...catalog,
+      cards: catalog.cards.map((card) => card.id === replacement.id ? replacement : card),
+    });
+    const missingOutput = {
+      ...dailyCard,
+      phases: dailyCard.phases.map((phase, phaseIndex) => ({
+        ...phase,
+        steps: phase.steps.map((step, stepIndex) =>
+          phaseIndex === 0 && stepIndex === 0 ? { ...step, output: undefined } : step
+        ),
+      })),
+    };
+    expect(createWorkflowReadCompiler({
+      catalog: replaceDaily(missingOutput),
+      operations,
+    })(dailyInput)).toBeNull();
+
+    const missingDependencies = {
+      ...dailyCard,
+      phases: dailyCard.phases.map((phase, phaseIndex) =>
+        phaseIndex === 0 ? { ...phase, dependsOn: undefined } : phase
+      ),
+    };
+    expect(createWorkflowReadCompiler({
+      catalog: replaceDaily(missingDependencies),
+      operations,
+    })(dailyInput)).toBeNull();
+
+    const openWorldOperations = operations.map((operation) =>
+      operation.operationId === "dashboard.orders.list"
+        ? { ...operation, openWorld: true }
+        : operation
+    );
+    expect(createWorkflowReadCompiler({
+      catalog,
+      operations: openWorldOperations,
+    })(dailyInput)).toBeNull();
+  });
+
+  it("projects bounded scalar allowlists without carrying raw PII", () => {
+    const compiled = compileWorkflowRead({
+      prompt: "dashboard.daily-operations-snapshot",
+      surface: "dashboard",
+    })!;
+    const projection = compiled.phases[0]!.steps.find((step) =>
+      step.namespace === "activity.fulfillment"
+    )!.output;
+    const rawOrders = Array.from({ length: 12 }, (_, index) => ({
+      id: `ord_${index}`,
+      totalAmount: 100 + index,
+      status: "processing",
+      paymentStatus: "paid",
+      paymentMethod: "cod",
+      fulfillmentStatus: "pending",
+      createdAt: "2026-08-18T00:00:00.000Z",
+      itemCount: 1,
+      totalQuantity: 1,
+      customerName: "Private Buyer",
+      email: "buyer@example.com",
+      phone: "+8801700000000",
+      shippingAddress: { line1: "Private address" },
+    }));
+    const projected = projectWorkflowReadResponse({
+      data: {
+        orders: rawOrders,
+        pagination: { page: 1, limit: 10, total: 12, totalPages: 2 },
+      },
+    }, projection);
+    const orderQueue = projected?.orderQueue;
+    expect(Array.isArray(orderQueue)).toBe(true);
+    if (!Array.isArray(orderQueue)) return;
+    expect(orderQueue).toHaveLength(10);
+    expect(orderQueue[0]).toEqual({
+      id: "ord_0",
+      totalAmount: 100,
+      status: "processing",
+      paymentStatus: "paid",
+      paymentMethod: "cod",
+      fulfillmentStatus: "pending",
+      createdAt: "2026-08-18T00:00:00.000Z",
+      itemCount: 1,
+      totalQuantity: 1,
+    });
+    expect(JSON.stringify(projected)).not.toMatch(
+      /Private Buyer|buyer@example\.com|\+8801700000000|Private address/,
+    );
+    expect(projectWorkflowReadResponse({ data: {} }, projection)).toBeNull();
+    expect(projectWorkflowReadResponse({ data: { orders: [] } }, {
+      selectors: [{ pointer: "/data/__proto__/secret", alias: "unsafe" }],
+    })).toBeNull();
   });
 
   it("keeps compact plans below their context budgets", () => {

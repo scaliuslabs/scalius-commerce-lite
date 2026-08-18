@@ -1,6 +1,8 @@
 import { CliError } from "./errors.js";
 import {
+  createWorkflowReadCompiler,
   createWorkflowResolver,
+  type CompiledWorkflowRead,
   type WorkflowResolution,
   type WorkflowResolverCard,
   type WorkflowResolverCatalog,
@@ -9,13 +11,20 @@ import {
   type WorkflowResolverFactSource,
   type WorkflowResolverInput,
   type WorkflowResolverOperation,
+  type WorkflowResolverOutputField,
+  type WorkflowResolverOutputProjection,
+  type WorkflowResolverOutputSelector,
   type WorkflowResolverRoute,
   type WorkflowResolverSurface,
 } from "./generated/workflow-resolver-core.gen.js";
 import { indexOperations } from "./openapi.js";
 import type { OpenApiDocument } from "./types.js";
 
-export type { WorkflowResolution, WorkflowResolverInput } from "./generated/workflow-resolver-core.gen.js";
+export type {
+  CompiledWorkflowRead,
+  WorkflowResolution,
+  WorkflowResolverInput,
+} from "./generated/workflow-resolver-core.gen.js";
 
 const MAX_CATALOG_BYTES = 512 * 1024;
 const MAX_RESOLUTION_BYTES = 16 * 1024;
@@ -34,9 +43,35 @@ const REASON_CODE = /^[a-z][a-z0-9_]{2,79}$/;
 const VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 const LOCAL_ID = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/;
 const JSON_POINTER = /^(?:\/(?:[^~/]|~[01])*)+$/;
+const PROJECTION_ALIAS = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
+const FORBIDDEN_PROJECTION_SEGMENTS = new Set([
+  "",
+  "-",
+  ".",
+  "..",
+  "__proto__",
+  "__defineGetter__",
+  "__defineSetter__",
+  "__lookupGetter__",
+  "__lookupSetter__",
+  "hasOwnProperty",
+  "isPrototypeOf",
+  "propertyIsEnumerable",
+  "prototype",
+  "constructor",
+  "toLocaleString",
+  "toString",
+  "valueOf",
+]);
+const MAX_PROJECTION_SELECTORS = 12;
+const MAX_PROJECTION_FIELDS = 16;
+const MAX_PROJECTION_TOTAL_FIELDS = 24;
+const MAX_PROJECTION_ITEMS = 100;
+const FIXED_READ_WORKFLOW_IDS = new Set(["operations.daily-snapshot.v1"]);
 const MAX_VERIFICATION_RESPONSE_BYTES = 1024 * 1024;
 
 type JsonRecord = Record<string, unknown>;
+type ResolverOperation = WorkflowResolverOperation & { outputSchema?: unknown };
 
 function invalidOpenApi(message: string): never {
   throw new CliError(8, "invalid_openapi", message);
@@ -49,6 +84,12 @@ function isRecord(value: unknown): value is JsonRecord {
 function record(value: unknown, label: string): JsonRecord {
   if (!isRecord(value)) invalidOpenApi(`${label} must be an object.`);
   return value;
+}
+
+function exactKeys(value: JsonRecord, allowed: readonly string[], label: string): void {
+  const allowedKeys = new Set(allowed);
+  const unknown = Object.keys(value).find((key) => !allowedKeys.has(key));
+  if (unknown) invalidOpenApi(`${label} has unsupported key '${unknown}'.`);
 }
 
 function array(value: unknown, label: string, maximum: number, minimum = 0): unknown[] {
@@ -110,6 +151,36 @@ function jsonPointer(value: unknown, label: string): string {
     invalidOpenApi(`${label} cannot contain a wildcard segment.`);
   }
   return pointer;
+}
+
+function decodeJsonPointerSegment(value: string): string {
+  return value.replace(/~1/g, "/").replace(/~0/g, "~");
+}
+
+function projectionPointer(value: unknown, label: string): string {
+  const pointer = jsonPointer(value, label);
+  const invalidSegment = pointer
+    .slice(1)
+    .split("/")
+    .map(decodeJsonPointerSegment)
+    .find((segment) =>
+      FORBIDDEN_PROJECTION_SEGMENTS.has(segment) ||
+      segment.includes("*") ||
+      segment.startsWith("$") ||
+      segment.startsWith("@")
+    );
+  if (invalidSegment !== undefined) {
+    invalidOpenApi(`${label} has a wildcard, pseudo, or prototype JSON pointer segment.`);
+  }
+  return pointer;
+}
+
+function projectionAlias(value: unknown, label: string): string {
+  const alias = text(value, label, 64, PROJECTION_ALIAS);
+  if (FORBIDDEN_PROJECTION_SEGMENTS.has(alias)) {
+    invalidOpenApi(`${label} has an invalid or prototype projection alias.`);
+  }
+  return alias;
 }
 
 function templateHasPointer(template: unknown, pointer: string): boolean {
@@ -183,8 +254,8 @@ function registerStableId(value: unknown, label: string, ids: Set<string>): stri
 function requireLiveOperation(
   value: unknown,
   label: string,
-  operations: ReadonlyMap<string, WorkflowResolverOperation>,
-): WorkflowResolverOperation {
+  operations: ReadonlyMap<string, ResolverOperation>,
+): ResolverOperation {
   const operationId = text(value, label, 160, OPERATION_ID);
   const operation = operations.get(operationId);
   if (!operation || !["execute", "continuation"].includes(operation.exposure)) {
@@ -201,8 +272,21 @@ function operationAllowedForSurface(
     (surface === "dashboard" && operation.surface === "storefront" && operation.risk === "read");
 }
 
-function resolverOperations(document: OpenApiDocument): WorkflowResolverOperation[] {
-  return indexOperations(document).map((indexed): WorkflowResolverOperation => {
+function successOutputSchema(responses: unknown): unknown {
+  if (!isRecord(responses)) return undefined;
+  for (const status of Object.keys(responses).sort()) {
+    if (!/^2\d\d$/.test(status)) continue;
+    const response = responses[status];
+    if (!isRecord(response) || !isRecord(response.content)) return undefined;
+    const jsonContent = response.content["application/json"];
+    if (!isRecord(jsonContent)) return undefined;
+    return jsonContent.schema;
+  }
+  return undefined;
+}
+
+function resolverOperations(document: OpenApiDocument): ResolverOperation[] {
+  return indexOperations(document).map((indexed): ResolverOperation => {
     const summary = indexed.operation.summary === undefined
       ? indexed.id
       : text(indexed.operation.summary, `Operation '${indexed.id}' summary`, 300);
@@ -236,6 +320,7 @@ function resolverOperations(document: OpenApiDocument): WorkflowResolverOperatio
       surface,
       exposure,
       risk,
+      openWorld: boolean(indexed.agent.openWorld, `Operation '${indexed.id}' openWorld`),
       summary,
       ...(description ? { description } : {}),
       tags,
@@ -245,6 +330,7 @@ function resolverOperations(document: OpenApiDocument): WorkflowResolverOperatio
           ? { requestBody: { required: indexed.operation.requestBody.required === true } }
           : {}),
       },
+      outputSchema: successOutputSchema(indexed.operation.responses),
     };
   });
 }
@@ -271,7 +357,7 @@ function parseFactSource(
   value: unknown,
   label: string,
   surface: WorkflowResolverSurface,
-  operations: ReadonlyMap<string, WorkflowResolverOperation>,
+  operations: ReadonlyMap<string, ResolverOperation>,
 ): WorkflowResolverFactSource {
   const source = record(value, `${label} source`);
   const kind = enumValue(source.kind, `${label} source kind`, [
@@ -351,9 +437,206 @@ function parseDependencySource(
   };
 }
 
+function schemaVariants(
+  schema: unknown,
+  depth = 0,
+  state: { nodes: number } = { nodes: 0 },
+): JsonRecord[] {
+  if (!isRecord(schema)) return [];
+  state.nodes += 1;
+  if (depth > 16 || state.nodes > 1_000) {
+    invalidOpenApi("Workflow output schema exceeds structural bounds.");
+  }
+  const variants = [schema.oneOf, schema.anyOf, schema.allOf]
+    .flatMap((value) => Array.isArray(value) ? value : [])
+    .filter(isRecord);
+  return variants.length > 0
+    ? variants.flatMap((variant) => schemaVariants(variant, depth + 1, state))
+    : [schema];
+}
+
+function schemaNodesAtPointer(roots: readonly JsonRecord[], pointer: string): JsonRecord[] {
+  let nodes = roots.flatMap((root) => schemaVariants(root));
+  for (const rawSegment of pointer.slice(1).split("/")) {
+    const segment = decodeJsonPointerSegment(rawSegment);
+    nodes = nodes.flatMap((node) =>
+      schemaVariants(node).flatMap((variant) => {
+        const properties = isRecord(variant.properties) ? variant.properties : undefined;
+        const property = properties && Object.hasOwn(properties, segment)
+          ? properties[segment]
+          : undefined;
+        return isRecord(property) ? schemaVariants(property) : [];
+      })
+    );
+    if (nodes.length === 0) return [];
+    if (nodes.length > 1_000) invalidOpenApi("Workflow output schema exceeds structural bounds.");
+  }
+  const variants = nodes.flatMap((node) => schemaVariants(node));
+  if (variants.length > 1_000) invalidOpenApi("Workflow output schema exceeds structural bounds.");
+  return variants;
+}
+
+type ProjectionSchemaShape = "scalar" | "object" | "array" | "ambiguous" | "unknown";
+
+function schemaShape(nodes: readonly JsonRecord[]): ProjectionSchemaShape {
+  const shapes = new Set<Exclude<ProjectionSchemaShape, "ambiguous" | "unknown">>();
+  for (const node of nodes.flatMap((item) => schemaVariants(item))) {
+    const types = typeof node.type === "string"
+      ? [node.type]
+      : Array.isArray(node.type)
+        ? node.type.filter((value): value is string => typeof value === "string")
+        : [];
+    if (types.length === 0) {
+      if (isRecord(node.properties)) shapes.add("object");
+      else if (isRecord(node.items)) shapes.add("array");
+      else if (node.enum !== undefined || node.const !== undefined) shapes.add("scalar");
+      continue;
+    }
+    for (const type of types) {
+      if (type === "object") shapes.add("object");
+      else if (type === "array") shapes.add("array");
+      else if (type !== "null") shapes.add("scalar");
+    }
+  }
+  if (shapes.size === 0) return "unknown";
+  if (shapes.size > 1) return "ambiguous";
+  return [...shapes][0]!;
+}
+
+function arrayItemSchemas(nodes: readonly JsonRecord[]): JsonRecord[] {
+  return nodes.flatMap((node) => schemaVariants(node)).flatMap((node) =>
+    isRecord(node.items) ? schemaVariants(node.items) : []
+  );
+}
+
+function parseProjectionFields(
+  value: unknown,
+  schemaNodes: readonly JsonRecord[],
+  label: string,
+): WorkflowResolverOutputField[] {
+  const aliases = new Set<string>();
+  const pointers = new Set<string>();
+  return array(value, `${label} fields`, MAX_PROJECTION_FIELDS, 1).map((rawField, index) => {
+    const fieldLabel = `${label} fields[${index}]`;
+    const field = record(rawField, fieldLabel);
+    exactKeys(field, ["pointer", "alias"], fieldLabel);
+    const pointer = projectionPointer(field.pointer, `${fieldLabel} pointer`);
+    const alias = projectionAlias(field.alias, `${fieldLabel} alias`);
+    if (aliases.has(alias)) invalidOpenApi(`${label} has duplicate field alias '${alias}'.`);
+    if (pointers.has(pointer)) invalidOpenApi(`${label} has duplicate field pointer '${pointer}'.`);
+    aliases.add(alias);
+    pointers.add(pointer);
+    const selected = schemaNodesAtPointer(schemaNodes, pointer);
+    if (selected.length === 0) {
+      invalidOpenApi(`${fieldLabel} references unknown output field '${pointer}'.`);
+    }
+    if (schemaShape(selected) !== "scalar") {
+      invalidOpenApi(`${fieldLabel} must select one scalar output field.`);
+    }
+    return { pointer, alias };
+  });
+}
+
+function parseProjectionSelector(
+  value: unknown,
+  outputSchema: JsonRecord,
+  label: string,
+): { selector: WorkflowResolverOutputSelector; fieldCount: number } {
+  const rawSelector = record(value, label);
+  exactKeys(rawSelector, ["pointer", "alias", "maxItems", "fields"], label);
+  const pointer = projectionPointer(rawSelector.pointer, `${label} pointer`);
+  const alias = projectionAlias(rawSelector.alias, `${label} alias`);
+  const selected = schemaNodesAtPointer([outputSchema], pointer);
+  if (selected.length === 0) {
+    invalidOpenApi(`${label} references unknown output field '${pointer}'.`);
+  }
+  const shape = schemaShape(selected);
+  const maxItems = rawSelector.maxItems === undefined
+    ? undefined
+    : positiveInteger(rawSelector.maxItems, `${label} maxItems`, MAX_PROJECTION_ITEMS);
+
+  if (shape === "array") {
+    if (maxItems === undefined) {
+      invalidOpenApi(`${label} array requires bounded maxItems.`);
+    }
+    const schemaLimits = selected.flatMap((node) => schemaVariants(node)).flatMap((node) =>
+      typeof node.maxItems === "number" && Number.isFinite(node.maxItems) ? [node.maxItems] : []
+    );
+    if (schemaLimits.length > 0 && maxItems > Math.min(...schemaLimits)) {
+      invalidOpenApi(`${label} maxItems exceeds the operation output schema.`);
+    }
+    const itemSchemas = arrayItemSchemas(selected);
+    if (itemSchemas.length === 0) invalidOpenApi(`${label} array has no declared item schema.`);
+    const itemShape = schemaShape(itemSchemas);
+    if (itemShape === "object") {
+      const fields = parseProjectionFields(rawSelector.fields, itemSchemas, label);
+      return { selector: { pointer, alias, maxItems, fields }, fieldCount: fields.length };
+    }
+    if (itemShape !== "scalar" || rawSelector.fields !== undefined) {
+      invalidOpenApi(`${label} has invalid fields for its array item schema.`);
+    }
+    return { selector: { pointer, alias, maxItems }, fieldCount: 0 };
+  }
+
+  if (shape === "object") {
+    if (maxItems !== undefined) invalidOpenApi(`${label} has maxItems for a non-array field.`);
+    const fields = parseProjectionFields(rawSelector.fields, selected, label);
+    return { selector: { pointer, alias, fields }, fieldCount: fields.length };
+  }
+
+  if (shape !== "scalar") {
+    invalidOpenApi(`${label} has an unknown or ambiguous output schema.`);
+  }
+  if (maxItems !== undefined || rawSelector.fields !== undefined) {
+    invalidOpenApi(`${label} scalar output cannot declare maxItems or fields.`);
+  }
+  return { selector: { pointer, alias }, fieldCount: 0 };
+}
+
+function parseOutputProjection(
+  value: unknown,
+  operation: ResolverOperation,
+  label: string,
+): WorkflowResolverOutputProjection {
+  const projection = record(value, `${label} output`);
+  exactKeys(projection, ["selectors"], `${label} output`);
+  if (!isRecord(operation.outputSchema)) {
+    invalidOpenApi(`${label} has no object output schema for projection validation.`);
+  }
+  const aliases = new Set<string>();
+  const pointers = new Set<string>();
+  let totalFields = 0;
+  const selectors = array(
+    projection.selectors,
+    `${label} output selectors`,
+    MAX_PROJECTION_SELECTORS,
+    1,
+  ).map((rawSelector, index) => {
+    const parsed = parseProjectionSelector(
+      rawSelector,
+      operation.outputSchema as JsonRecord,
+      `${label} output selectors[${index}]`,
+    );
+    if (aliases.has(parsed.selector.alias)) {
+      invalidOpenApi(`${label} has duplicate output alias '${parsed.selector.alias}'.`);
+    }
+    if (pointers.has(parsed.selector.pointer)) {
+      invalidOpenApi(`${label} has duplicate output pointer '${parsed.selector.pointer}'.`);
+    }
+    aliases.add(parsed.selector.alias);
+    pointers.add(parsed.selector.pointer);
+    totalFields += parsed.fieldCount;
+    return parsed.selector;
+  });
+  if (totalFields > MAX_PROJECTION_TOTAL_FIELDS) {
+    invalidOpenApi(`${label} has too many selected fields across its output projection.`);
+  }
+  return { selectors };
+}
+
 function parseCards(
   value: unknown,
-  operations: ReadonlyMap<string, WorkflowResolverOperation>,
+  operations: ReadonlyMap<string, ResolverOperation>,
   ids: Set<string>,
 ): WorkflowResolverCard[] {
   if (value === undefined) return [];
@@ -401,6 +684,11 @@ function parseCards(
         const phaseId = text(phase.id, `${phaseLabel} id`, 64, LOCAL_ID);
         if (phaseIds.has(phaseId)) invalidOpenApi(`${label} duplicates phase '${phaseId}'.`);
         phaseIds.add(phaseId);
+        const dependsOn = textArray(phase.dependsOn, `${phaseLabel} dependsOn`, {
+          maximum: 50,
+          itemMaximum: 64,
+          pattern: LOCAL_ID,
+        });
         const stepIds = new Set<string>();
         const rawSteps = array(phase.steps, `${phaseLabel} steps`, 50, 1).map(
           (rawStep, stepIndex) => {
@@ -421,20 +709,30 @@ function parseCards(
             "dashboard",
             "storefront",
           ] as const),
+          dependsOn,
           rawSteps,
         };
       },
     );
 
-    const phases: WorkflowResolverCard["phases"] = rawPhases.map((phaseEntry) => ({
-      id: phaseEntry.phaseId,
-      surface: phaseEntry.surface,
-      stopConditions: textArray(
-        phaseEntry.phase.stopConditions,
-        `${phaseEntry.phaseLabel} stopConditions`,
-        { maximum: 8, itemMaximum: 300, minimum: 1 },
-      ),
-      steps: phaseEntry.rawSteps.map(({ step, stepId, stepLabel }) => {
+    const completedPhaseIds = new Set<string>();
+    const phases: WorkflowResolverCard["phases"] = rawPhases.map((phaseEntry) => {
+      for (const dependency of phaseEntry.dependsOn) {
+        if (!completedPhaseIds.has(dependency)) {
+          invalidOpenApi(`${phaseEntry.phaseLabel} has invalid dependency '${dependency}'.`);
+        }
+      }
+      completedPhaseIds.add(phaseEntry.phaseId);
+      return {
+        id: phaseEntry.phaseId,
+        surface: phaseEntry.surface,
+        dependsOn: phaseEntry.dependsOn,
+        stopConditions: textArray(
+          phaseEntry.phase.stopConditions,
+          `${phaseEntry.phaseLabel} stopConditions`,
+          { maximum: 8, itemMaximum: 300, minimum: 1 },
+        ),
+        steps: phaseEntry.rawSteps.map(({ step, stepId, stepLabel }) => {
         const operation = requireLiveOperation(step.operationId, stepLabel, operations);
         if (operation.surface !== phaseEntry.surface) {
           invalidOpenApi(`${stepLabel} has a wrong-surface operation.`);
@@ -450,6 +748,15 @@ function parseCards(
         if ((mutation === "read") !== (operation.risk === "read")) {
           invalidOpenApi(`${stepLabel} mutation does not match its live operation risk.`);
         }
+        if (step.output !== undefined && mutation !== "read") {
+          invalidOpenApi(`${stepLabel} only read steps may declare an output projection.`);
+        }
+        if (FIXED_READ_WORKFLOW_IDS.has(id) && step.output === undefined) {
+          invalidOpenApi(`${stepLabel} requires a reviewed output projection.`);
+        }
+        const output = step.output === undefined
+          ? undefined
+          : parseOutputProjection(step.output, operation, stepLabel);
         const input = record(step.input, `${stepLabel} input`);
         if (!Object.hasOwn(input, "template")) invalidOpenApi(`${stepLabel} input requires template.`);
         const template = cloneJson(record(input.template, `${stepLabel} input template`), `${stepLabel} input template`);
@@ -523,6 +830,7 @@ function parseCards(
             ? { condition: text(step.condition, `${stepLabel} condition`, 500) }
             : {}),
           input: { template, dependencies, defaults },
+          ...(output ? { output } : {}),
           policies: {
             revision: enumValue(policies.revision, `${stepLabel} revision`, [
               "none",
@@ -547,8 +855,9 @@ function parseCards(
             ),
           },
         };
-      }),
-    }));
+        }),
+      };
+    });
 
     const evidenceIds = new Set<string>();
     const verification = array(card.verification, `${label} verification`, 50, 1).map(
@@ -611,7 +920,7 @@ function parseCards(
 function parseRoute(
   rawRoute: unknown,
   index: number,
-  operations: ReadonlyMap<string, WorkflowResolverOperation>,
+  operations: ReadonlyMap<string, ResolverOperation>,
   cardIds: ReadonlySet<string>,
   ids: Set<string>,
 ): WorkflowResolverRoute {
@@ -672,7 +981,7 @@ function parseRoute(
 function parseControl(
   rawControl: unknown,
   index: number,
-  operations: ReadonlyMap<string, WorkflowResolverOperation>,
+  operations: ReadonlyMap<string, ResolverOperation>,
   ids: Set<string>,
 ): WorkflowResolverControl {
   const label = `Workflow control[${index}]`;
@@ -749,7 +1058,7 @@ function parseControl(
 
 function inspectCoverage(
   value: unknown,
-  operations: ReadonlyMap<string, WorkflowResolverOperation>,
+  operations: ReadonlyMap<string, ResolverOperation>,
 ): void {
   if (value === undefined) return;
   const coverage = record(value, "Workflow catalog coverage");
@@ -778,7 +1087,7 @@ function inspectCoverage(
 
 function parseCatalog(
   document: OpenApiDocument,
-  operations: readonly WorkflowResolverOperation[],
+  operations: readonly ResolverOperation[],
 ): WorkflowResolverCatalog {
   const extension = document["x-scalius-workflows"];
   if (extension === undefined) invalidOpenApi("Server contract has no x-scalius-workflows extension.");
@@ -799,17 +1108,30 @@ function parseCatalog(
   return { version, cards, routes, controls };
 }
 
+function workflowResolverSources(document: OpenApiDocument): {
+  catalog: WorkflowResolverCatalog;
+  operations: ResolverOperation[];
+} {
+  const operations = resolverOperations(document);
+  return { catalog: parseCatalog(document, operations), operations };
+}
+
 export function resolveWorkflow(
   document: OpenApiDocument,
   input: WorkflowResolverInput,
 ): WorkflowResolution {
-  const operations = resolverOperations(document);
-  const catalog = parseCatalog(document, operations);
-  const resolution = createWorkflowResolver({ catalog, operations })(input);
+  const resolution = createWorkflowResolver(workflowResolverSources(document))(input);
   if (serializedBytes(resolution, "Workflow resolution") > MAX_RESOLUTION_BYTES) {
     invalidOpenApi("Workflow resolution exceeds the 16 KiB compact-output limit.");
   }
   return resolution;
+}
+
+export function prepareWorkflowRead(
+  document: OpenApiDocument,
+  input: WorkflowResolverInput,
+): CompiledWorkflowRead | null {
+  return createWorkflowReadCompiler(workflowResolverSources(document))(input);
 }
 
 export default resolveWorkflow;

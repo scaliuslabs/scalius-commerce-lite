@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { CliError } from "../src/errors.js";
 import type { OpenApiDocument, OpenApiOperation } from "../src/types.js";
-import resolveWorkflow from "../src/workflows.js";
+import resolveWorkflow, { prepareWorkflowRead } from "../src/workflows.js";
 import { AGENT_INTENT_EVAL_CASES } from "./fixtures/agent-intents.js";
 
 type TestCatalog = {
@@ -13,6 +13,25 @@ type TestCatalog = {
   controls: Array<Record<string, unknown>>;
   coverage: { operations: Array<Record<string, unknown>> };
   [key: string]: unknown;
+};
+
+type MutableWorkflowOutputSelector = {
+  pointer: string;
+  alias: string;
+  maxItems?: number;
+  fields?: Array<{ pointer: string; alias: string }>;
+};
+
+type MutableWorkflowCard = {
+  id: string;
+  phases: Array<{
+    id: string;
+    dependsOn: string[];
+    steps: Array<{
+      id: string;
+      output?: { selectors: MutableWorkflowOutputSelector[] };
+    }>;
+  }>;
 };
 
 async function loadLiveDocument(): Promise<OpenApiDocument> {
@@ -152,6 +171,24 @@ function expectInvalidOpenApi(run: () => unknown): void {
   }
 }
 
+function mutableWorkflowCard(document: OpenApiDocument, id: string): MutableWorkflowCard {
+  const extension = document["x-scalius-workflows"] as { cards: MutableWorkflowCard[] };
+  const card = extension.cards.find((candidate) => candidate.id === id);
+  if (!card) throw new Error(`Missing workflow card ${id}.`);
+  return card;
+}
+
+function mutableWorkflowStep(
+  card: MutableWorkflowCard,
+  phaseId: string,
+  stepId: string,
+): MutableWorkflowCard["phases"][number]["steps"][number] {
+  const phase = card.phases.find((candidate) => candidate.id === phaseId);
+  const step = phase?.steps.find((candidate) => candidate.id === stepId);
+  if (!step) throw new Error(`Missing workflow step ${phaseId}.${stepId}.`);
+  return step;
+}
+
 describe("CLI workflow resolver adapter", () => {
   it("accepts the checked-in live catalog and preserves all 65 reviewed outcomes", async () => {
     const liveDocument = await loadLiveDocument();
@@ -262,6 +299,104 @@ describe("CLI workflow resolver adapter", () => {
     const serialized = JSON.stringify(product);
     for (const wholesaleKey of ["cards", "routes", "controls", "coverage", "examples", "tags"]) {
       expect(serialized).not.toContain(`"${wholesaleKey}":`);
+    }
+  });
+
+  it("prepares the exact fixed daily read with bounded inputs and output projections", async () => {
+    const prepared = prepareWorkflowRead(await loadLiveDocument(), {
+      prompt: "dashboard.daily-operations-snapshot",
+      surface: "dashboard",
+    });
+
+    expect(prepared).toMatchObject({
+      version: "3.0.0",
+      workflowId: "operations.daily-snapshot.v1",
+      phases: [
+        {
+          id: "activity",
+          steps: [
+            {
+              namespace: "activity.daily",
+              operationId: "dashboard.home.activity",
+              input: { query: { days: 1 } },
+              output: {
+                selectors: [{
+                  pointer: "/data/dailyActivityData",
+                  alias: "activity",
+                  maxItems: 2,
+                }],
+              },
+            },
+            {
+              namespace: "activity.currency",
+              operationId: "dashboard.settings.currency_get",
+            },
+            {
+              namespace: "activity.fulfillment",
+              operationId: "dashboard.orders.list",
+              input: {
+                query: {
+                  page: 1,
+                  limit: 10,
+                  statusGroup: "open",
+                  fulfillmentStatus: "pending",
+                  sort: "createdAt",
+                  order: "desc",
+                },
+              },
+            },
+          ],
+        },
+        {
+          id: "readiness",
+          steps: [
+            { namespace: "readiness.alerts", operationId: "dashboard.inventory_alerts.list" },
+            { namespace: "readiness.checkout", operationId: "dashboard.checkout.readiness_get" },
+            { namespace: "readiness.payments", operationId: "dashboard.payments.methods_get" },
+            { namespace: "readiness.delivery", operationId: "dashboard.shipping_methods.list" },
+          ],
+        },
+      ],
+    });
+    expect(prepared?.phases.flatMap((phase) => phase.steps)).toHaveLength(7);
+    expect(JSON.stringify(prepared)).not.toContain('"cards"');
+    expect(new TextEncoder().encode(JSON.stringify(prepared)).byteLength).toBeLessThan(8 * 1024);
+  });
+
+  it("rejects malformed reviewed output projections and phase dependencies", async () => {
+    const mutations: Array<[string, (card: MutableWorkflowCard) => void]> = [
+      ["prototype selector alias", (card) => {
+        mutableWorkflowStep(card, "activity", "daily").output!.selectors[0]!.alias = "__proto__";
+      }],
+      ["wildcard pointer", (card) => {
+        mutableWorkflowStep(card, "activity", "daily").output!.selectors[0]!.pointer = "/data/*";
+      }],
+      ["unknown response field", (card) => {
+        mutableWorkflowStep(card, "activity", "daily").output!.selectors[0]!.pointer = "/data/missing";
+      }],
+      ["schema maxItems overflow", (card) => {
+        mutableWorkflowStep(card, "activity", "daily").output!.selectors[0]!.maxItems = 91;
+      }],
+      ["duplicate selected field alias", (card) => {
+        const fields = mutableWorkflowStep(card, "activity", "daily").output!.selectors[0]!.fields!;
+        fields[1]!.alias = fields[0]!.alias;
+      }],
+      ["forward phase dependency", (card) => {
+        card.phases[0]!.dependsOn = ["readiness"];
+      }],
+    ];
+
+    for (const [name, mutate] of mutations) {
+      const liveDocument = await loadLiveDocument();
+      mutate(mutableWorkflowCard(liveDocument, "operations.daily-snapshot.v1"));
+      try {
+        expectInvalidOpenApi(() => resolveWorkflow(liveDocument, {
+          prompt: "dashboard.daily-operations-snapshot",
+          surface: "dashboard",
+        }));
+      } catch (error) {
+        throw new Error(`Malformed case '${name}' was not rejected.`, { cause: error });
+      }
     }
   });
 
