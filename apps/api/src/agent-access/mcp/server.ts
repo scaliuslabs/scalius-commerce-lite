@@ -120,6 +120,7 @@ const workflowReadResultSchema = z.union([
     disposition: z.literal("execute"),
     version: z.string().max(64),
     workflowId: z.string().max(160),
+    rules: z.array(z.string().min(1).max(300)).min(1).max(6),
     outputs: z.record(z.string().max(129), projectedStepSchema)
       .refine((value) => Object.keys(value).length <= 50, "At most 50 workflow steps are allowed"),
   }).strict(),

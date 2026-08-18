@@ -33,6 +33,7 @@ export type AuthorizedWorkflowReadResult =
       disposition: "execute";
       version: string;
       workflowId: string;
+      rules: string[];
       outputs: Record<string, ProjectedWorkflowReadStep>;
     }
   | {
@@ -175,6 +176,7 @@ export async function executeAuthorizedWorkflowRead(
       disposition: "execute",
       version: compiled.version,
       workflowId: compiled.workflowId,
+      rules: [...compiled.rules],
       outputs,
     };
     return utf8ByteLength(JSON.stringify(result)) < AGENT_MAX_RESULT_BYTES

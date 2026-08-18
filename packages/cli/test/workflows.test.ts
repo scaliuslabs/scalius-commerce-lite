@@ -22,13 +22,31 @@ type MutableWorkflowOutputSelector = {
   fields?: Array<{ pointer: string; alias: string }>;
 };
 
+type MutableWorkflowRepeat = {
+  factId: string;
+  orderPointer: string;
+  itemMapPointer: string;
+  minItems: number;
+  maxItems: number;
+  bindings: Array<{ templatePointer: string; itemPointer: string }>;
+  capture: { responsePointer: string; itemPointer: string };
+  [key: string]: unknown;
+};
+
 type MutableWorkflowCard = {
   id: string;
+  requiredFacts: Array<{ id: string; source: { kind: string } }>;
   phases: Array<{
     id: string;
     dependsOn: string[];
     steps: Array<{
       id: string;
+      input: {
+        template: unknown;
+        dependencies: Array<Record<string, unknown>>;
+        defaults: Array<Record<string, unknown>>;
+      };
+      repeat?: MutableWorkflowRepeat;
       output?: { selectors: MutableWorkflowOutputSelector[] };
     }>;
   }>;
@@ -189,8 +207,33 @@ function mutableWorkflowStep(
   return step;
 }
 
+function installValidProductRepeat(document: OpenApiDocument): {
+  card: MutableWorkflowCard;
+  step: MutableWorkflowCard["phases"][number]["steps"][number];
+} {
+  const card = mutableWorkflowCard(document, "catalog.optioned-product.v1");
+  const mediaPhase = card.phases.find((phase) => phase.id === "media");
+  const step = mediaPhase?.steps.find((candidate) => candidate.id === "asset") ??
+    mediaPhase?.steps.find((candidate) => candidate.id === "primary");
+  if (!mediaPhase || !step) throw new Error("Missing product media import step.");
+  const factId = card.requiredFacts.find((fact) => fact.id === "mediaSet")?.id ??
+    card.requiredFacts.find((fact) => fact.id === "mediaSources")?.id;
+  if (!factId) throw new Error("Missing merchant media fact.");
+  step.input.dependencies = [];
+  step.repeat = {
+    factId,
+    orderPointer: "/order",
+    itemMapPointer: "/byId",
+    minItems: 1,
+    maxItems: 250,
+    bindings: [{ templatePointer: "/body/sourceUrl", itemPointer: "/sourceUrl" }],
+    capture: { responsePointer: "/data/file/id", itemPointer: "/mediaId" },
+  };
+  return { card, step };
+}
+
 describe("CLI workflow resolver adapter", () => {
-  it("accepts the checked-in live catalog and preserves all 65 reviewed outcomes", async () => {
+  it("accepts the checked-in live catalog and preserves all 66 reviewed outcomes", async () => {
     const liveDocument = await loadLiveDocument();
 
     for (const testCase of AGENT_INTENT_EVAL_CASES) {
@@ -234,10 +277,10 @@ describe("CLI workflow resolver adapter", () => {
       createMode: "single-atomic-products.create",
     });
     expect(detail.requiredFacts.find((fact) => fact.id === "optionMatrix")).toMatchObject({
-      description: "Ordered axes/values and complete SKU price, stock, and pmed image rows.",
+      description: "Ordered axes/values; complete SKU price/stock/mediaSet imageId rows.",
       required: true,
       source: { kind: "merchant" },
-      nonInferenceRule: "Never add, omit, collapse, or reorder combinations.",
+      nonInferenceRule: "Never add, omit, collapse, or reorder combinations, or infer imageId by label/position.",
     });
     const create = detail.steps.find((step) =>
       step.operationId === "dashboard.products.create"
@@ -249,10 +292,7 @@ describe("CLI workflow resolver adapter", () => {
       input: {
         template: {
           body: {
-            media: [
-              { id: "pmed_primary", mediaId: null, isPrimary: true },
-              { id: "pmed_secondary", mediaId: null, isPrimary: false },
-            ],
+            media: null,
             optionMatrix: null,
           },
         },
@@ -260,7 +300,10 @@ describe("CLI workflow resolver adapter", () => {
       policies: {
         idempotency: "none",
         confirmation: "required",
-        nonInferenceRules: ["Use resolved or merchant facts only."],
+        nonInferenceRules: [
+          "Use resolved or merchant facts.",
+          "Every variant imageId must equal a mediaSet pmed key; never map by position.",
+        ],
       },
     });
     expect(detail.steps.filter((step) => step.operationId === "dashboard.products.create"))
@@ -269,12 +312,12 @@ describe("CLI workflow resolver adapter", () => {
       expect.objectContaining({
         operationId: "dashboard.products.get_section",
         responsePointers: ["/data/aggregateRevision", "/data/items", "/data/total"],
-        bounds: { maxCalls: 12, maxItems: 150, maxResponseBytes: 65_536 },
+        bounds: { maxCalls: 50, maxItems: 500, maxResponseBytes: 65_536 },
       }),
       expect.objectContaining({
         operationId: "storefront.products.get_section",
-        proves: ["Buyer SKU price, variant image, and availability band."],
-        bounds: { maxCalls: 10, maxItems: 150, maxResponseBytes: 61_440 },
+        proves: ["Buyer SKU price, exact image, and availability band; excludes feed rows."],
+        bounds: { maxCalls: 20, maxItems: 150, maxResponseBytes: 61_440 },
       }),
     ]));
     expect(new TextEncoder().encode(JSON.stringify({ ok: true, result: product })).byteLength)
@@ -311,6 +354,13 @@ describe("CLI workflow resolver adapter", () => {
     expect(prepared).toMatchObject({
       version: "3.0.0",
       workflowId: "operations.daily-snapshot.v1",
+      rules: [
+        expect.stringContaining("activity.daily.bookedRevenue"),
+        expect.stringContaining("collected-cash"),
+        expect.stringContaining("activity.paymentRecovery.total"),
+        expect.stringContaining("parallel reads"),
+        expect.stringContaining("Fail closed"),
+      ],
       phases: [
         {
           id: "activity",
@@ -345,6 +395,22 @@ describe("CLI workflow resolver adapter", () => {
                 },
               },
             },
+            {
+              namespace: "activity.paymentRecovery",
+              operationId: "dashboard.orders.payment_recovery_list",
+              input: { query: { page: 1, limit: 1, state: "recoverable" } },
+              output: {
+                selectors: [{ pointer: "/data/pagination/total", alias: "total" }],
+              },
+            },
+            {
+              namespace: "activity.paymentNeedsAttention",
+              operationId: "dashboard.orders.payment_recovery_list",
+              input: { query: { page: 1, limit: 1, state: "needs_attention" } },
+              output: {
+                selectors: [{ pointer: "/data/pagination/total", alias: "total" }],
+              },
+            },
           ],
         },
         {
@@ -358,9 +424,43 @@ describe("CLI workflow resolver adapter", () => {
         },
       ],
     });
-    expect(prepared?.phases.flatMap((phase) => phase.steps)).toHaveLength(7);
+    expect(prepared?.phases.flatMap((phase) => phase.steps)).toHaveLength(9);
+    expect(prepared?.phases[0]!.steps[0]!.output.selectors[0]!.fields).toEqual(
+      expect.arrayContaining([
+        { pointer: "/revenue", alias: "bookedRevenue" },
+      ]),
+    );
     expect(JSON.stringify(prepared)).not.toContain('"cards"');
-    expect(new TextEncoder().encode(JSON.stringify(prepared)).byteLength).toBeLessThan(8 * 1024);
+    expect(JSON.stringify(prepared)).not.toContain("collectedCash");
+    expect(new TextEncoder().encode(JSON.stringify(prepared)).byteLength).toBeLessThan(10 * 1024);
+  });
+
+  it("fails closed on malformed daily one-call rules", async () => {
+    const ruleCases = [
+      [],
+      ["duplicate", "duplicate"],
+      [" padded"],
+      ["x".repeat(301)],
+      Array.from({ length: 7 }, (_, index) => `rule ${index}`),
+    ];
+    for (const rules of ruleCases) {
+      const liveDocument = await loadLiveDocument();
+      const extension = liveDocument["x-scalius-workflows"] as {
+        routes: Array<{ id: string; rules: string[] }>;
+      };
+      extension.routes.find((route) =>
+        route.id === "dashboard.daily-operations-snapshot"
+      )!.rules = rules;
+      try {
+        expect(prepareWorkflowRead(liveDocument, {
+          prompt: "dashboard.daily-operations-snapshot",
+          surface: "dashboard",
+        })).toBeNull();
+      } catch (error) {
+        expect(error).toBeInstanceOf(CliError);
+        expect(error).toMatchObject({ errorCode: "invalid_openapi" });
+      }
+    }
   });
 
   it("rejects malformed reviewed output projections and phase dependencies", async () => {
@@ -411,6 +511,89 @@ describe("CLI workflow resolver adapter", () => {
       prompt: "dashboard.complex-product-create",
       surface: "dashboard",
     }));
+  });
+
+  it("validates and preserves a fixed-pointer keyed product repeat", async () => {
+    const liveDocument = await loadLiveDocument();
+    const { step } = installValidProductRepeat(liveDocument);
+    const result = resolveWorkflow(liveDocument, {
+      prompt: "dashboard.complex-product-create",
+      surface: "dashboard",
+    });
+    expect(result.kind).toBe("plan");
+    if (result.kind !== "plan") return;
+    expect(result.plan.detail?.steps.find((candidate) =>
+      candidate.operationId === "dashboard.media.import_url"
+    )?.repeat).toEqual(step.repeat);
+    expect(JSON.stringify(result)).not.toContain("{associationId}");
+    expect(new TextEncoder().encode(JSON.stringify({ ok: true, result })).byteLength)
+      .toBeLessThanOrEqual(16 * 1024);
+  });
+
+  it("rejects malformed or unsafe keyed repeats as invalid OpenAPI", async () => {
+    const source = await loadLiveDocument();
+    const cases: Array<[
+      string,
+      (
+        card: MutableWorkflowCard,
+        step: MutableWorkflowCard["phases"][number]["steps"][number],
+      ) => void,
+    ]> = [
+      ["pseudo dependency", (_card, step) => {
+        step.input.dependencies = [{
+          templatePointer: "/body/sourceUrl",
+          source: {
+            kind: "fact",
+            factId: step.repeat!.factId,
+            factPointer: "/byId/{associationId}/sourceUrl",
+          },
+        }];
+      }],
+      ["pseudo repeat pointer", (_card, step) => {
+        step.repeat!.itemMapPointer = "/byId/{associationId}";
+      }],
+      ["unknown fact", (_card, step) => {
+        step.repeat!.factId = "missingFact";
+      }],
+      ["non-merchant fact", (_card, step) => {
+        step.repeat!.factId = "categoryId";
+      }],
+      ["bad lower bound", (_card, step) => {
+        step.repeat!.minItems = 0;
+      }],
+      ["bad upper bound", (_card, step) => {
+        step.repeat!.maxItems = 251;
+      }],
+      ["duplicate binding", (_card, step) => {
+        step.repeat!.bindings.push({ ...step.repeat!.bindings[0]! });
+      }],
+      ["missing binding target", (_card, step) => {
+        step.repeat!.bindings[0]!.templatePointer = "/body/missing";
+      }],
+      ["unknown capture", (_card, step) => {
+        step.repeat!.capture.responsePointer = "/data/file/missing";
+      }],
+      ["non-scalar capture", (_card, step) => {
+        step.repeat!.capture.responsePointer = "/data/file";
+      }],
+      ["extra declarative key", (_card, step) => {
+        step.repeat!.filter = "/ready";
+      }],
+    ];
+
+    for (const [name, mutate] of cases) {
+      const liveDocument = structuredClone(source);
+      const { card, step } = installValidProductRepeat(liveDocument);
+      mutate(card, step);
+      try {
+        expectInvalidOpenApi(() => resolveWorkflow(liveDocument, {
+          prompt: "dashboard.complex-product-create",
+          surface: "dashboard",
+        }));
+      } catch (error) {
+        throw new Error(`Malformed repeat case '${name}' was not rejected.`, { cause: error });
+      }
+    }
   });
 
   it("resolves an exact route without returning the catalog", () => {

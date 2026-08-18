@@ -12,36 +12,44 @@ const readPolicies: AgentWorkflowStepPolicies = {
   nonInferenceRules: ["Treat missing data as unknown."],
 };
 
+const dailyReadPolicies: AgentWorkflowStepPolicies = {
+  revision: "none",
+  idempotency: "none",
+  confirmation: "none",
+  stopConditions: ["Stop on read failure."],
+  nonInferenceRules: ["Missing is unknown."],
+};
+
 const createPolicies: AgentWorkflowStepPolicies = {
   revision: "none",
   idempotency: "none",
   confirmation: "required",
-  stopConditions: ["Stop on conflict or uncertain write; reread."],
-  nonInferenceRules: ["Use resolved or merchant facts only."],
+  stopConditions: ["On conflict or uncertain write, stop and reread."],
+  nonInferenceRules: ["Use resolved or merchant facts."],
 };
 
 export const OPTIONED_PRODUCT_WORKFLOW: AgentWorkflowCard = {
   id: "catalog.optioned-product.v1",
   surface: "dashboard",
-  title: "Create a configurable product",
-  summary: "Resolve, atomically create, publish, and verify an exact option/SKU matrix.",
+  title: "Create an optioned product",
+  summary: "Resolve, atomically create, publish, and verify exact SKU truth.",
   examples: [
-    "Create a Size × Color T-shirt and verify SKU, image, stock, and discovery truth.",
+    "Create a two-axis product and verify exact SKU, media, stock, and discovery truth.",
   ],
   tags: ["catalog", "media", "variants"],
   constructionRules: AGENT_PRODUCT_CONSTRUCTION_RULES,
   requiredFacts: [
     {
       id: "productSpec",
-      title: "Product facts",
-      description: "Name, slug, rich text, price, SEO, condition, visibility.",
+      title: "Product",
+      description: "Name/slug, rich text, price, SEO, condition, visibility.",
       required: true,
       source: { kind: "merchant" },
       nonInferenceRule: "Never invent claims, brand, price, condition, or copy.",
     },
     {
       id: "categoryId",
-      title: "Resolved category",
+      title: "Category ID",
       description: "Existing category ID or conditional-create result.",
       required: true,
       source: {
@@ -67,20 +75,24 @@ export const OPTIONED_PRODUCT_WORKFLOW: AgentWorkflowCard = {
       nonInferenceRule: "Never duplicate or fabricate attributes.",
     },
     {
-      id: "mediaSources",
-      title: "Usable media sources",
-      description: "Primary and secondary public URLs or client-readable files.",
+      id: "mediaSet",
+      title: "Media set",
+      description:
+        "{order:[pmed...],byId:{pmed:{mediaId|sourceUrl,altText,isPrimary}}}; 1-250 unique assets, one primary.",
       required: true,
       source: { kind: "merchant" },
-      nonInferenceRule: "Only committed assets are media authority.",
+      nonInferenceRule:
+        "Use exact keys/sources; never infer count, order, role, or position.",
     },
     {
       id: "optionMatrix",
-      title: "Exact option matrix",
-      description: "Ordered axes/values and complete SKU price, stock, and pmed image rows.",
+      title: "Option matrix",
+      description:
+        "Ordered axes/values; complete SKU price/stock/mediaSet imageId rows.",
       required: true,
       source: { kind: "merchant" },
-      nonInferenceRule: "Never add, omit, collapse, or reorder combinations.",
+      nonInferenceRule:
+        "Never add, omit, collapse, or reorder combinations, or infer imageId by label/position.",
     },
   ],
   phases: [
@@ -214,46 +226,41 @@ export const OPTIONED_PRODUCT_WORKFLOW: AgentWorkflowCard = {
     {
       id: "media",
       surface: "dashboard",
-      title: "Commit product media",
-      summary: "Import each source and retain its committed media ID.",
+      title: "Commit media",
+      summary: "Commit assets with keyed IDs.",
       dependsOn: ["resolve"],
-      stopConditions: ["Stop on inaccessible, invalid, or oversized media."],
+      stopConditions: [
+        "Stop on invalid, inaccessible, oversized, duplicate, or ambiguous media.",
+      ],
       steps: [
         {
-          id: "primary",
-          title: "Import primary media",
+          id: "asset",
+          title: "Commit one declared asset",
           operationId: "dashboard.media.import_url",
           mutation: "create",
-          condition: "Use the reviewed direct-upload client action for a local file.",
+          condition:
+            "Skip ready mediaId; local files must complete dashboard.media-upload and re-enter as ready.",
           input: {
             template: { body: { sourceUrl: null } },
-            dependencies: [
-              {
-                templatePointer: "/body/sourceUrl",
-                source: { kind: "fact", factId: "mediaSources", factPointer: "/primary/sourceUrl" },
-              },
-            ],
+            dependencies: [],
             defaults: [],
           },
-          policies: createPolicies,
-        },
-        {
-          id: "secondary",
-          title: "Import secondary media",
-          operationId: "dashboard.media.import_url",
-          mutation: "create",
-          condition: "Use the reviewed direct-upload client action for a local file.",
-          input: {
-            template: { body: { sourceUrl: null } },
-            dependencies: [
-              {
-                templatePointer: "/body/sourceUrl",
-                source: { kind: "fact", factId: "mediaSources", factPointer: "/secondary/sourceUrl" },
-              },
-            ],
-            defaults: [],
+          repeat: {
+            factId: "mediaSet",
+            orderPointer: "/order",
+            itemMapPointer: "/byId",
+            minItems: 1,
+            maxItems: 250,
+            bindings: [{ templatePointer: "/body/sourceUrl", itemPointer: "/sourceUrl" }],
+            capture: { responsePointer: "/data/file/id", itemPointer: "/mediaId" },
           },
-          policies: createPolicies,
+          policies: {
+            ...createPolicies,
+            nonInferenceRules: [
+              "Use resolved or merchant facts.",
+              "Never cross-assign captured media IDs.",
+            ],
+          },
         },
       ],
     },
@@ -270,6 +277,8 @@ export const OPTIONED_PRODUCT_WORKFLOW: AgentWorkflowCard = {
           title: "Create atomic optioned product",
           operationId: "dashboard.products.create",
           mutation: "create",
+          condition:
+            "Materialize body.media from every ordered mediaSet item using exact pmed key/mediaId; require 1-250 unique assets, one primary.",
           input: {
             template: {
               body: {
@@ -287,10 +296,7 @@ export const OPTIONED_PRODUCT_WORKFLOW: AgentWorkflowCard = {
                 excludeFromProductFeed: false,
                 productCondition: null,
                 slug: null,
-                media: [
-                  { id: "pmed_primary", mediaId: null, altText: null, isPrimary: true },
-                  { id: "pmed_secondary", mediaId: null, altText: null, isPrimary: false },
-                ],
+                media: null,
                 attributes: null,
                 optionMatrix: null,
               },
@@ -301,14 +307,6 @@ export const OPTIONED_PRODUCT_WORKFLOW: AgentWorkflowCard = {
               { templatePointer: "/body/categoryId", source: { kind: "fact", factId: "categoryId" } },
               { templatePointer: "/body/attributes", source: { kind: "fact", factId: "attributeAssignments" } },
               { templatePointer: "/body/optionMatrix", source: { kind: "fact", factId: "optionMatrix" } },
-              {
-                templatePointer: "/body/media/0/mediaId",
-                source: { kind: "step", phaseId: "media", stepId: "primary", responsePointer: "/data/file/id" },
-              },
-              {
-                templatePointer: "/body/media/1/mediaId",
-                source: { kind: "step", phaseId: "media", stepId: "secondary", responsePointer: "/data/file/id" },
-              },
             ],
             defaults: [
               { templatePointer: "/body/isActive", value: true },
@@ -317,7 +315,13 @@ export const OPTIONED_PRODUCT_WORKFLOW: AgentWorkflowCard = {
               { templatePointer: "/body/excludeFromProductFeed", value: false },
             ],
           },
-          policies: createPolicies,
+          policies: {
+            ...createPolicies,
+            nonInferenceRules: [
+              "Use resolved or merchant facts.",
+              "Every variant imageId must equal a mediaSet pmed key; never map by position.",
+            ],
+          },
         },
       ],
     },
@@ -382,9 +386,12 @@ export const OPTIONED_PRODUCT_WORKFLOW: AgentWorkflowCard = {
       id: "dashboardVerify",
       surface: "dashboard",
       title: "Verify dashboard truth",
-      summary: "Read composition, feed, and discovery health.",
+      summary: "Read composition and bounded discovery evidence.",
       dependsOn: ["create", "publish"],
-      stopConditions: ["Stop on SKU/image/stock drift or discovery failure."],
+      stopConditions: [
+        "Stop on SKU/image/stock drift or discovery failure.",
+        "No bounded product/SKU feed-row read exists; do not claim emitted price/image/availability.",
+      ],
       steps: [
         {
           id: "sections",
@@ -429,7 +436,7 @@ export const OPTIONED_PRODUCT_WORKFLOW: AgentWorkflowCard = {
       id: "storefrontVerify",
       surface: "storefront",
       title: "Verify buyer SKU truth",
-      summary: "Compare public options, prices, images, and availability bands.",
+      summary: "Compare buyer options, prices, images, and availability.",
       dependsOn: ["dashboardVerify"],
       stopConditions: ["Stop on missing or mismatched buyer-visible facts."],
       steps: [
@@ -461,14 +468,14 @@ export const OPTIONED_PRODUCT_WORKFLOW: AgentWorkflowCard = {
       operationId: "dashboard.products.get_section",
       responsePointers: ["/data/aggregateRevision", "/data/items", "/data/total"],
       proves: ["Exact media, attributes, axes, SKUs, prices, and stock."],
-      bounds: { maxCalls: 12, maxItems: 150, maxResponseBytes: 65_536 },
+      bounds: { maxCalls: 50, maxItems: 500, maxResponseBytes: 65_536 },
     },
     {
       id: "feed",
       surface: "dashboard",
       operationId: "dashboard.seo.feed_diagnostics",
       responsePointers: ["/data/policy", "/data/totals", "/data/reasons"],
-      proves: ["Feed eligibility and explicit exclusion reasons."],
+      proves: ["Feed policy, eligibility totals, and sampled exclusions only."],
       bounds: { maxCalls: 1, maxItems: 500, maxResponseBytes: 65_536 },
     },
     {
@@ -476,7 +483,7 @@ export const OPTIONED_PRODUCT_WORKFLOW: AgentWorkflowCard = {
       surface: "dashboard",
       operationId: "dashboard.seo.live_probe",
       responsePointers: ["/data/ok", "/data/resources"],
-      proves: ["Sitemap/feed health and absolute-link evidence."],
+      proves: ["Sitemap/feed health, bounded counts, and absolute links only."],
       bounds: { maxCalls: 1, maxItems: 12, maxResponseBytes: 65_536 },
     },
     {
@@ -484,8 +491,8 @@ export const OPTIONED_PRODUCT_WORKFLOW: AgentWorkflowCard = {
       surface: "storefront",
       operationId: "storefront.products.get_section",
       responsePointers: ["/data/product", "/data/items"],
-      proves: ["Buyer SKU price, variant image, and availability band."],
-      bounds: { maxCalls: 10, maxItems: 150, maxResponseBytes: 61_440 },
+      proves: ["Buyer SKU price, exact image, and availability band; excludes feed rows."],
+      bounds: { maxCalls: 20, maxItems: 150, maxResponseBytes: 61_440 },
     },
   ],
 };
@@ -493,10 +500,10 @@ export const OPTIONED_PRODUCT_WORKFLOW: AgentWorkflowCard = {
 export const DAILY_OPERATING_SNAPSHOT_WORKFLOW: AgentWorkflowCard = {
   id: "operations.daily-snapshot.v1",
   surface: "dashboard",
-  title: "Daily merchant snapshot",
-  summary: "Report booked-gross activity, open fulfillment, alerts, and payment/delivery readiness.",
+  title: "Daily snapshot",
+  summary: "Report booked activity, backlogs, and checkout readiness.",
   examples: [
-    "Show today's booked sales, orders to fulfill, stock alerts, and checkout readiness.",
+    "Read booked revenue, orders, fulfillment, stock/recovery work, and checkout readiness.",
   ],
   tags: ["daily", "operations", "readiness"],
   requiredFacts: [
@@ -507,29 +514,29 @@ export const DAILY_OPERATING_SNAPSHOT_WORKFLOW: AgentWorkflowCard = {
       required: true,
       defaultValue: 1,
       source: { kind: "constant", value: 1 },
-      nonInferenceRule: "Keep Asia/Dhaka date keys; ignore host timezone.",
+      nonInferenceRule: "Keep Asia/Dhaka keys; ignore host timezone.",
     },
     {
       id: "currency",
       title: "Currency",
-      description: "Currency returned by store currency settings.",
+      description: "Use saved currency settings.",
       required: true,
       source: { kind: "operation", operationId: "dashboard.settings.currency_get", responsePointer: "/data/currencyCode" },
-      nonInferenceRule: "Never guess or mix currency labels.",
+      nonInferenceRule: "Never guess currency.",
     },
   ],
   phases: [
     {
       id: "activity",
       surface: "dashboard",
-      title: "Activity and work queue",
-      summary: "Read the merchant-day aggregate, currency, and bounded fulfillment queue.",
+      title: "Activity and queues",
+      summary: "Merchant-day activity, currency, and queues.",
       dependsOn: [],
-      stopConditions: ["Never total partial pages or use host-local dates."],
+      stopConditions: ["Use pagination and Asia/Dhaka dates."],
       steps: [
         {
           id: "daily",
-          title: "Read booked-gross activity",
+          title: "Activity",
           operationId: "dashboard.home.activity",
           mutation: "read",
           input: {
@@ -545,16 +552,16 @@ export const DAILY_OPERATING_SNAPSHOT_WORKFLOW: AgentWorkflowCard = {
               fields: [
                 { pointer: "/date", alias: "date" },
                 { pointer: "/orders", alias: "orders" },
-                { pointer: "/revenue", alias: "revenue" },
+                { pointer: "/revenue", alias: "bookedRevenue" },
                 { pointer: "/newCustomers", alias: "newCustomers" },
               ],
             }],
           },
-          policies: readPolicies,
+          policies: dailyReadPolicies,
         },
         {
           id: "currency",
-          title: "Read store currency",
+          title: "Currency",
           operationId: "dashboard.settings.currency_get",
           mutation: "read",
           input: { template: {}, dependencies: [], defaults: [] },
@@ -564,11 +571,11 @@ export const DAILY_OPERATING_SNAPSHOT_WORKFLOW: AgentWorkflowCard = {
               { pointer: "/data/currencySymbol", alias: "currencySymbol" },
             ],
           },
-          policies: readPolicies,
+          policies: dailyReadPolicies,
         },
         {
           id: "fulfillment",
-          title: "Read orders awaiting fulfillment",
+          title: "Fulfillment",
           operationId: "dashboard.orders.list",
           mutation: "read",
           input: {
@@ -583,14 +590,7 @@ export const DAILY_OPERATING_SNAPSHOT_WORKFLOW: AgentWorkflowCard = {
               },
             },
             dependencies: [],
-            defaults: [
-              { templatePointer: "/query/page", value: 1 },
-              { templatePointer: "/query/limit", value: 10 },
-              { templatePointer: "/query/statusGroup", value: "open" },
-              { templatePointer: "/query/fulfillmentStatus", value: "pending" },
-              { templatePointer: "/query/sort", value: "createdAt" },
-              { templatePointer: "/query/order", value: "desc" },
-            ],
+            defaults: [],
           },
           output: {
             selectors: [
@@ -622,24 +622,58 @@ export const DAILY_OPERATING_SNAPSHOT_WORKFLOW: AgentWorkflowCard = {
               },
             ],
           },
-          policies: readPolicies,
+          policies: dailyReadPolicies,
+        },
+        {
+          id: "paymentRecovery",
+          title: "Recovery",
+          operationId: "dashboard.orders.payment_recovery_list",
+          mutation: "read",
+          input: {
+            template: { query: { page: 1, limit: 1, state: "recoverable" } },
+            dependencies: [],
+            defaults: [],
+          },
+          output: {
+            selectors: [
+              { pointer: "/data/pagination/total", alias: "total" },
+            ],
+          },
+          policies: dailyReadPolicies,
+        },
+        {
+          id: "paymentNeedsAttention",
+          title: "Attention total",
+          operationId: "dashboard.orders.payment_recovery_list",
+          mutation: "read",
+          input: {
+            template: { query: { page: 1, limit: 1, state: "needs_attention" } },
+            dependencies: [],
+            defaults: [],
+          },
+          output: {
+            selectors: [
+              { pointer: "/data/pagination/total", alias: "total" },
+            ],
+          },
+          policies: dailyReadPolicies,
         },
       ],
     },
     {
       id: "readiness",
       surface: "dashboard",
-      title: "Operating readiness",
-      summary: "Distinguish saved settings, active rows, and buyer-usable readiness.",
+      title: "Readiness",
+      summary: "Read saved, active, and buyer-usable checkout facts.",
       dependsOn: ["activity"],
-      stopConditions: ["Report unavailable projections; never guess providers."],
+      stopConditions: ["Missing readiness is unknown."],
       steps: [
         {
           id: "alerts",
-          title: "Read inventory alerts",
+          title: "Alerts",
           operationId: "dashboard.inventory_alerts.list",
           mutation: "read",
-          input: { template: { query: { status: "active" } }, dependencies: [], defaults: [{ templatePointer: "/query/status", value: "active" }] },
+          input: { template: { query: { status: "active" } }, dependencies: [], defaults: [] },
           output: {
             selectors: [{
               pointer: "/data/alerts",
@@ -657,14 +691,13 @@ export const DAILY_OPERATING_SNAPSHOT_WORKFLOW: AgentWorkflowCard = {
               ],
             }],
           },
-          policies: readPolicies,
+          policies: dailyReadPolicies,
         },
         {
           id: "checkout",
-          title: "Read checkout readiness",
+          title: "Checkout",
           operationId: "dashboard.checkout.readiness_get",
           mutation: "read",
-          condition: "Use this first-class projection for blockers; never assume COD, gateway, or delivery fallback.",
           input: { template: {}, dependencies: [], defaults: [] },
           output: {
             selectors: [
@@ -688,14 +721,13 @@ export const DAILY_OPERATING_SNAPSHOT_WORKFLOW: AgentWorkflowCard = {
               { pointer: "/data/issues", alias: "issues", maxItems: 20 },
             ],
           },
-          policies: readPolicies,
+          policies: dailyReadPolicies,
         },
         {
           id: "payments",
-          title: "Read payment configuration",
+          title: "Payments",
           operationId: "dashboard.payments.methods_get",
           mutation: "read",
-          condition: "Enabled/configured is not usable; report gatewayStatus usability and checkout visibility.",
           input: { template: {}, dependencies: [], defaults: [] },
           output: {
             selectors: [
@@ -731,23 +763,17 @@ export const DAILY_OPERATING_SNAPSHOT_WORKFLOW: AgentWorkflowCard = {
               },
             ],
           },
-          policies: readPolicies,
+          policies: dailyReadPolicies,
         },
         {
           id: "delivery",
-          title: "Read saved shipping methods",
+          title: "Shipping",
           operationId: "dashboard.shipping_methods.list",
           mutation: "read",
-          condition: "Rows are saved definitions; only isActive rows are active, and readiness owns buyer usability.",
           input: {
             template: { query: { page: 1, limit: 100, sort: "sortOrder", order: "asc" } },
             dependencies: [],
-            defaults: [
-              { templatePointer: "/query/page", value: 1 },
-              { templatePointer: "/query/limit", value: 100 },
-              { templatePointer: "/query/sort", value: "sortOrder" },
-              { templatePointer: "/query/order", value: "asc" },
-            ],
+            defaults: [],
           },
           output: {
             selectors: [
@@ -775,7 +801,7 @@ export const DAILY_OPERATING_SNAPSHOT_WORKFLOW: AgentWorkflowCard = {
               },
             ],
           },
-          policies: readPolicies,
+          policies: dailyReadPolicies,
         },
       ],
     },
@@ -786,7 +812,7 @@ export const DAILY_OPERATING_SNAPSHOT_WORKFLOW: AgentWorkflowCard = {
       surface: "dashboard",
       operationId: "dashboard.home.activity",
       responsePointers: ["/data"],
-      proves: ["Booked gross uses merchant-day keys; it is not collected cash or net settlement."],
+      proves: ["Merchant-day booked gross; no collected cash or settlement."],
       bounds: { maxCalls: 1, maxItems: 2, maxResponseBytes: 32_768 },
     },
     {
@@ -794,15 +820,23 @@ export const DAILY_OPERATING_SNAPSHOT_WORKFLOW: AgentWorkflowCard = {
       surface: "dashboard",
       operationId: "dashboard.orders.list",
       responsePointers: ["/data/orders", "/data/pagination"],
-      proves: ["A bounded open/pending fulfillment queue; never a total of a partial page."],
+      proves: ["Bounded open/pending queue with pagination."],
       bounds: { maxCalls: 1, maxItems: 10, maxResponseBytes: 65_536 },
+    },
+    {
+      id: "paymentRecovery",
+      surface: "dashboard",
+      operationId: "dashboard.orders.payment_recovery_list",
+      responsePointers: ["/data/pagination/total"],
+      proves: ["Two current count-only recovery snapshots; no order rows or PII."],
+      bounds: { maxCalls: 2, maxItems: 1, maxResponseBytes: 65_536 },
     },
     {
       id: "readiness",
       surface: "dashboard",
       operationId: "dashboard.checkout.readiness_get",
       responsePointers: ["/data"],
-      proves: ["First-class payment and delivery blockers."],
+      proves: ["Checkout payment and delivery blockers."],
       bounds: { maxCalls: 1, maxItems: 20, maxResponseBytes: 65_536 },
     },
     {
@@ -810,7 +844,7 @@ export const DAILY_OPERATING_SNAPSHOT_WORKFLOW: AgentWorkflowCard = {
       surface: "dashboard",
       operationId: "dashboard.payments.methods_get",
       responsePointers: ["/data/enabledMethods", "/data/gatewayStatus"],
-      proves: ["Saved selection versus configured, usable, and checkout-visible status."],
+      proves: ["Saved versus usable and checkout-visible methods."],
       bounds: { maxCalls: 1, maxItems: 4, maxResponseBytes: 65_536 },
     },
     {
@@ -818,7 +852,7 @@ export const DAILY_OPERATING_SNAPSHOT_WORKFLOW: AgentWorkflowCard = {
       surface: "dashboard",
       operationId: "dashboard.shipping_methods.list",
       responsePointers: ["/data/shippingMethods", "/data/pagination"],
-      proves: ["Bounded saved methods with explicit active flags."],
+      proves: ["Bounded saved methods with active flags."],
       bounds: { maxCalls: 1, maxItems: 100, maxResponseBytes: 65_536 },
     },
   ],

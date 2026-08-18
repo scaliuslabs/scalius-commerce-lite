@@ -19,6 +19,13 @@ import type { AgentPrincipal } from "../types";
 import { executeAuthorizedWorkflowRead } from "./workflow-read";
 
 const DAILY_PROMPT = "dashboard.daily-operations-snapshot";
+const DAILY_RULES = [
+  "Interpret activity.daily.bookedRevenue as Asia/Dhaka order-day booked gross, not collected cash, profit, or net settlement.",
+  "No authoritative merchant-day collected-cash or net-settlement aggregate exists; report it unavailable, never zero or inferred.",
+  "activity.paymentRecovery.total is all recoverable hosted-payment work; activity.paymentNeedsAttention.total is the actionable failed/stale subset; both are current non-transactional backlogs, not daily metrics.",
+  "Never subtract the recovery totals because their parallel reads can observe different instants.",
+  "Fail closed when fulfillment, stock, checkout, payment, delivery, or currency facts cannot be read.",
+];
 const UNAVAILABLE = {
   kind: "unavailable",
   disposition: "unavailable",
@@ -92,6 +99,17 @@ function dailyData(): Record<string, unknown> {
           },
         ],
         pagination: { page: 1, limit: 10, total: 1, totalPages: 1 },
+      },
+    },
+    "dashboard.orders.payment_recovery_list": {
+      data: {
+        orders: [{
+          id: "rec_private",
+          customerName: "Recovery Buyer",
+          customerPhone: "+8801900000000",
+          shippingAddress: "Hidden recovery address",
+        }],
+        pagination: { page: 1, limit: 1, total: 7, totalPages: 7 },
       },
     },
     "dashboard.inventory_alerts.list": {
@@ -205,10 +223,12 @@ describe("executeAuthorizedWorkflowRead", () => {
     });
     mocks.dispatchAgentOperation.mockImplementation(async ({
       operation,
+      input,
     }: {
       operation: AgentOperationManifestEntry;
+      input: { query?: { state?: string } };
     }) => {
-      expect(authorizedIds).toHaveLength(7);
+      expect(authorizedIds).toHaveLength(8);
       active += 1;
       maxActive = Math.max(maxActive, active);
       const slow = [
@@ -219,6 +239,17 @@ describe("executeAuthorizedWorkflowRead", () => {
       await new Promise((resolve) => setTimeout(resolve, slow ? 4 : 1));
       active -= 1;
       completionOrder.push(operation.operationId);
+      if (
+        operation.operationId === "dashboard.orders.payment_recovery_list" &&
+        input.query?.state === "needs_attention"
+      ) {
+        return operationResult(operation.operationId, {
+          data: {
+            orders: [{ customerEmail: "attention-private@example.com" }],
+            pagination: { page: 1, limit: 1, total: 2, totalPages: 2 },
+          },
+        });
+      }
       return operationResult(operation.operationId, responses[operation.operationId]);
     });
 
@@ -226,28 +257,30 @@ describe("executeAuthorizedWorkflowRead", () => {
 
     expect(maxActive).toBe(2);
     expect(completionOrder[0]).toBe("dashboard.settings.currency_get");
-    expect(mocks.getAuthorizedOperation).toHaveBeenCalledTimes(7);
+    expect(mocks.getAuthorizedOperation).toHaveBeenCalledTimes(8);
     expect(mocks.getAuthorizedOperation.mock.calls.map(([operationId]) => operationId)).toEqual([
       "dashboard.home.activity",
       "dashboard.settings.currency_get",
       "dashboard.orders.list",
+      "dashboard.orders.payment_recovery_list",
       "dashboard.inventory_alerts.list",
       "dashboard.checkout.readiness_get",
       "dashboard.payments.methods_get",
       "dashboard.shipping_methods.list",
     ]);
-    expect(mocks.dispatchAgentOperation).toHaveBeenCalledTimes(7);
+    expect(mocks.dispatchAgentOperation).toHaveBeenCalledTimes(9);
     expect(result).toEqual({
       kind: "result",
       disposition: "execute",
       version: "3.0.0",
       workflowId: "operations.daily-snapshot.v1",
+      rules: DAILY_RULES,
       outputs: {
         "activity.daily": {
           activity: [{
             date: "2026-08-18",
             orders: 4,
-            revenue: 9200,
+            bookedRevenue: 9200,
             newCustomers: 2,
           }],
         },
@@ -266,6 +299,8 @@ describe("executeAuthorizedWorkflowRead", () => {
           }],
           pagination: { page: 1, limit: 10, total: 1, totalPages: 1 },
         },
+        "activity.paymentRecovery": { total: 7 },
+        "activity.paymentNeedsAttention": { total: 2 },
         "readiness.alerts": {
           inventoryAlerts: [{
             productId: "prod_1",
@@ -322,6 +357,8 @@ describe("executeAuthorizedWorkflowRead", () => {
       "activity.daily",
       "activity.currency",
       "activity.fulfillment",
+      "activity.paymentRecovery",
+      "activity.paymentNeedsAttention",
       "readiness.alerts",
       "readiness.checkout",
       "readiness.payments",
@@ -334,6 +371,10 @@ describe("executeAuthorizedWorkflowRead", () => {
       "buyer@example.com",
       "+8801700000000",
       "Private address",
+      "Recovery Buyer",
+      "+8801900000000",
+      "Hidden recovery address",
+      "attention-private@example.com",
       "hidden-password",
       "hidden-shipping-token",
       "request-dashboard",
@@ -357,6 +398,9 @@ describe("executeAuthorizedWorkflowRead", () => {
           order: "desc",
         },
       },
+      "dashboard.orders.payment_recovery_list": {
+        query: { page: 1, limit: 1, state: "needs_attention" },
+      },
       "dashboard.inventory_alerts.list": { query: { status: "active" } },
       "dashboard.checkout.readiness_get": {},
       "dashboard.payments.methods_get": {},
@@ -364,6 +408,12 @@ describe("executeAuthorizedWorkflowRead", () => {
         query: { page: 1, limit: 100, sort: "sortOrder", order: "asc" },
       },
     });
+    expect(mocks.dispatchAgentOperation.mock.calls.filter(([options]) =>
+      options.operation.operationId === "dashboard.orders.payment_recovery_list"
+    ).map(([options]) => options.input)).toEqual([
+      { query: { page: 1, limit: 1, state: "recoverable" } },
+      { query: { page: 1, limit: 1, state: "needs_attention" } },
+    ]);
   });
 
   it("authorizes every unique operation before dispatch and returns no grant details on denial", async () => {
@@ -376,7 +426,7 @@ describe("executeAuthorizedWorkflowRead", () => {
     const result = await execute();
 
     expect(result).toEqual(UNAVAILABLE);
-    expect(mocks.getAuthorizedOperation).toHaveBeenCalledTimes(7);
+    expect(mocks.getAuthorizedOperation).toHaveBeenCalledTimes(8);
     expect(mocks.dispatchAgentOperation).not.toHaveBeenCalled();
     expect(JSON.stringify(result)).not.toContain("shipping_methods");
     expect(JSON.stringify(result)).not.toContain("grant_read");
@@ -455,6 +505,6 @@ describe("executeAuthorizedWorkflowRead", () => {
     }) => operationResult(operation.operationId, responses[operation.operationId]));
 
     expect(await execute()).toEqual(UNAVAILABLE);
-    expect(mocks.dispatchAgentOperation).toHaveBeenCalledTimes(7);
+    expect(mocks.dispatchAgentOperation).toHaveBeenCalledTimes(9);
   });
 });

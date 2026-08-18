@@ -7,15 +7,16 @@ export const DASHBOARD_AGENT_WORKFLOW_ROUTES = [
     kind: "read",
     title: "Daily operations snapshot",
     summary:
-      "Read today's booked sales, open fulfillment, stock alerts, checkout readiness, enabled methods, and currency.",
+      "Read today's booked revenue and orders plus current fulfillment, low-stock, payment-recovery, and checkout readiness; collected cash and net settlement remain unavailable.",
     examples: [
-      "How is my store doing today? Include booked sales, open fulfillment, low stock, checkout readiness, active payment and delivery options, and the currency.",
+      "How did my store do today—orders, booked revenue, collected cash, low stock, fulfillment backlog, failed-payment recovery work, and checkout readiness?",
     ],
-    tags: ["operations", "sales", "readiness"],
+    tags: ["operations", "sales", "daily", "payment-recovery"],
     workflowId: "operations.daily-snapshot.v1",
     operationIds: [
       "dashboard.home.activity",
       "dashboard.orders.list",
+      "dashboard.orders.payment_recovery_list",
       "dashboard.inventory_alerts.list",
       "dashboard.checkout.readiness_get",
       "dashboard.payments.methods_get",
@@ -26,9 +27,11 @@ export const DASHBOARD_AGENT_WORKFLOW_ROUTES = [
     requiresConfirmation: false,
     requiresVerification: false,
     rules: [
-      "Treat dashboard activity as booked sales, not net profit.",
-      "Use open fulfillment filters and bounded stock-alert reads.",
-      "Fail closed when checkout or method settings cannot be read.",
+      "Interpret activity.daily.bookedRevenue as Asia/Dhaka order-day booked gross, not collected cash, profit, or net settlement.",
+      "No authoritative merchant-day collected-cash or net-settlement aggregate exists; report it unavailable, never zero or inferred.",
+      "activity.paymentRecovery.total is all recoverable hosted-payment work; activity.paymentNeedsAttention.total is the actionable failed/stale subset; both are current non-transactional backlogs, not daily metrics.",
+      "Never subtract the recovery totals because their parallel reads can observe different instants.",
+      "Fail closed when fulfillment, stock, checkout, payment, delivery, or currency facts cannot be read.",
     ],
   },
   {
@@ -443,6 +446,36 @@ export const DASHBOARD_AGENT_WORKFLOW_ROUTES = [
       "Fail closed when any authoritative checkout setting cannot be read.",
       "Distinguish saved flow, admin readiness, and buyer-visible configuration.",
       "Never guess a payment or delivery method.",
+    ],
+  },
+  {
+    id: "dashboard.guest-checkout-conditional-enable",
+    surface: "dashboard",
+    kind: "write",
+    title: "Conditionally enable guest access",
+    summary:
+      "Validate prerequisites, merge only the guest-access switch into the versioned flow, and verify buyer config.",
+    examples: [
+      "Turn on guest checkout only if payment and shipping are genuinely usable, without changing any other checkout setting.",
+    ],
+    tags: ["guest-access", "conditional-enable", "only-if", "preserve-settings"],
+    operationIds: [
+      "dashboard.checkout.flow_get",
+      "dashboard.checkout.readiness_get",
+      "dashboard.payments.methods_get",
+      "dashboard.shipping_methods.list",
+      "dashboard.checkout.flow_update",
+      "storefront.checkout.get_config",
+    ],
+    requiresFacts: true,
+    requiresConfirmation: true,
+    requiresVerification: true,
+    rules: [
+      "Read the complete versioned checkout flow and authoritative readiness before editing.",
+      "Require at least one active buyer-usable payment method plus active shipping and delivery hierarchy.",
+      "Fail closed without a change when readiness or method evidence is missing or contradictory.",
+      "Merge only the guest-checkout field and preserve every unrelated flow setting.",
+      "Confirm the exact diff, then reread saved flow and verify the separate buyer-facing checkout config.",
     ],
   },
   {

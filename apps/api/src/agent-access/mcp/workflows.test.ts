@@ -82,7 +82,7 @@ describe("authorized MCP workflow resolution", () => {
     expect(result.kind).toBe("plan");
     if (result.kind !== "plan") return;
     expect(result.plan.routeIds).toEqual(["dashboard.daily-operations-snapshot"]);
-    expect(result.plan.detail?.steps).toHaveLength(7);
+    expect(result.plan.detail?.steps).toHaveLength(9);
     expect(mocks.getAuthorizedOperation).toHaveBeenCalledTimes(
       new Set(result.plan.operationIds).size,
     );
@@ -115,7 +115,7 @@ describe("authorized MCP workflow resolution", () => {
         reason: "The requested workflow is unavailable.",
       },
     });
-    expect(mocks.getAuthorizedOperation).toHaveBeenCalledTimes(7);
+    expect(mocks.getAuthorizedOperation).toHaveBeenCalledTimes(8);
     const serialized = JSON.stringify(result);
     expect(serialized).not.toContain("dashboard.home.activity");
     expect(serialized).not.toContain("dashboard.checkout.readiness_get");
@@ -258,8 +258,12 @@ describe("authorized MCP workflow resolution", () => {
           },
           requiredFacts: expect.arrayContaining([
             expect.objectContaining({
+              id: "mediaSet",
+              description: expect.stringContaining("1-250 unique assets"),
+            }),
+            expect.objectContaining({
               id: "optionMatrix",
-              description: expect.stringContaining("complete SKU price, stock"),
+              description: expect.stringContaining("complete SKU price/stock/mediaSet imageId rows"),
             }),
           ]),
           steps: expect.arrayContaining([

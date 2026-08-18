@@ -205,6 +205,12 @@ describe("MCP split operation execution", () => {
           pagination: { page: 1, limit: 10, total: 0, totalPages: 0 },
         },
       },
+      "dashboard.orders.payment_recovery_list": {
+        data: {
+          orders: [{ customerEmail: "recovery-must-not-escape@example.com" }],
+          pagination: { page: 1, limit: 1, total: 3, totalPages: 3 },
+        },
+      },
       "dashboard.inventory_alerts.list": { data: { alerts: [] } },
       "dashboard.checkout.readiness_get": {
         data: {
@@ -237,14 +243,23 @@ describe("MCP split operation execution", () => {
         },
       },
     };
-    mocks.dispatchAgentOperation.mockImplementation(async ({ operation }) =>
-      operationResult(
+    mocks.dispatchAgentOperation.mockImplementation(async ({ operation, input }) => {
+      const data = operation.operationId === "dashboard.orders.payment_recovery_list" &&
+          input.query?.state === "needs_attention"
+        ? {
+            data: {
+              orders: [{ customerPhone: "+8801900000000" }],
+              pagination: { page: 1, limit: 1, total: 1, totalPages: 1 },
+            },
+          }
+        : responses[operation.operationId];
+      return operationResult(
         operation.operationId,
         `request-${operation.operationId}`,
         true,
-        responses[operation.operationId],
-      )
-    );
+        data,
+      );
+    });
 
     const connection = await connectInMemory();
     try {
@@ -259,17 +274,33 @@ describe("MCP split operation execution", () => {
           kind: "result",
           disposition: "execute",
           workflowId: "operations.daily-snapshot.v1",
+          rules: [
+            expect.stringContaining("activity.daily.bookedRevenue"),
+            expect.stringContaining("collected-cash"),
+            expect.stringContaining("activity.paymentRecovery.total"),
+            expect.stringContaining("parallel reads"),
+            expect.stringContaining("Fail closed"),
+          ],
           outputs: {
             "activity.daily": {
-              activity: [{ date: "2026-08-18", orders: 4, revenue: 9_200, newCustomers: 2 }],
+              activity: [{ date: "2026-08-18", orders: 4, bookedRevenue: 9_200, newCustomers: 2 }],
             },
             "activity.currency": { currencyCode: "BDT", currencySymbol: "৳" },
+            "activity.paymentRecovery": { total: 3 },
+            "activity.paymentNeedsAttention": { total: 1 },
           },
         },
       });
       expect(JSON.stringify(output)).not.toContain("must-not-escape");
-      expect(mocks.authorizeOperation).toHaveBeenCalledTimes(7);
-      expect(mocks.dispatchAgentOperation).toHaveBeenCalledTimes(7);
+      expect(JSON.stringify(output)).not.toContain("+8801900000000");
+      expect(mocks.authorizeOperation).toHaveBeenCalledTimes(8);
+      expect(mocks.dispatchAgentOperation).toHaveBeenCalledTimes(9);
+      expect(mocks.dispatchAgentOperation.mock.calls.filter(([options]) =>
+        options.operation.operationId === "dashboard.orders.payment_recovery_list"
+      ).map(([options]) => options.input.query.state)).toEqual([
+        "recoverable",
+        "needs_attention",
+      ]);
     } finally {
       await connection.close();
     }

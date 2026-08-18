@@ -46,7 +46,7 @@ function resolutionFlags(resolution: WorkflowResolution) {
 }
 
 describe("reviewed agent workflow resolver", () => {
-  it("returns the exact smallest reviewed outcome for all 65 unchanged cases", () => {
+  it("returns the exact smallest reviewed outcome for all 66 reviewed cases", () => {
     for (const testCase of AGENT_INTENT_EVAL_CASES) {
       const resolution = resolveWorkflow({
         prompt: testCase.prompt,
@@ -149,6 +149,34 @@ describe("reviewed agent workflow resolver", () => {
     if (resolution.kind === "plan") expect(resolution.plan.routeIds).toEqual([routeId]);
   });
 
+  it("fails conditional guest checkout closed on authoritative payment or delivery gaps", () => {
+    const resolution = resolveWorkflow({
+      surface: "dashboard",
+      prompt: "Enable guest checkout only if payment and shipping really work, preserving everything else.",
+    });
+    expect(resolution.kind).toBe("plan");
+    if (resolution.kind !== "plan") return;
+    expect(resolution.plan).toMatchObject({
+      routeIds: ["dashboard.guest-checkout-conditional-enable"],
+      requiresFacts: true,
+      requiresConfirmation: true,
+      requiresVerification: true,
+    });
+    expect(resolution.plan.operationIds).toEqual([
+      "dashboard.checkout.flow_get",
+      "dashboard.checkout.readiness_get",
+      "dashboard.payments.methods_get",
+      "dashboard.shipping_methods.list",
+      "dashboard.checkout.flow_update",
+      "storefront.checkout.get_config",
+    ]);
+    expect(resolution.plan.rules).toEqual(expect.arrayContaining([
+      expect.stringContaining("active buyer-usable payment method"),
+      expect.stringContaining("Fail closed without a change"),
+      expect.stringContaining("Merge only the guest-checkout field"),
+    ]));
+  });
+
   it("does not turn safely negated policy language into a refusal", () => {
     for (const id of ["storefront.product-research", "storefront.payment-recovery"]) {
       const route = catalog.routes.find((candidate) => candidate.id === id)!;
@@ -221,10 +249,17 @@ describe("reviewed agent workflow resolver", () => {
       uncertainCreateRecovery: "reread-before-retry",
     });
     expect(detail.requiredFacts.find((fact) => fact.id === "optionMatrix")).toMatchObject({
-      description: "Ordered axes/values and complete SKU price, stock, and pmed image rows.",
+      description:
+        "Ordered axes/values; complete SKU price/stock/mediaSet imageId rows.",
       required: true,
       source: { kind: "merchant" },
-      nonInferenceRule: "Never add, omit, collapse, or reorder combinations.",
+      nonInferenceRule:
+        "Never add, omit, collapse, or reorder combinations, or infer imageId by label/position.",
+    });
+    expect(detail.requiredFacts.find((fact) => fact.id === "mediaSet")).toMatchObject({
+      description: expect.stringContaining("byId:{pmed:"),
+      source: { kind: "merchant" },
+      nonInferenceRule: expect.stringContaining("never infer count, order, role, or position"),
     });
     expect(detail.requiredFacts.find((fact) => fact.id === "categoryId")?.source).toMatchObject({
       kind: "operation",
@@ -244,10 +279,7 @@ describe("reviewed agent workflow resolver", () => {
       input: {
         template: {
           body: {
-            media: [
-              { id: "pmed_primary", mediaId: null, isPrimary: true },
-              { id: "pmed_secondary", mediaId: null, isPrimary: false },
-            ],
+            media: null,
             optionMatrix: null,
           },
         },
@@ -256,8 +288,11 @@ describe("reviewed agent workflow resolver", () => {
         revision: "none",
         idempotency: "none",
         confirmation: "required",
-        stopConditions: ["Stop on conflict or uncertain write; reread."],
-        nonInferenceRules: ["Use resolved or merchant facts only."],
+        stopConditions: ["On conflict or uncertain write, stop and reread."],
+        nonInferenceRules: [
+          "Use resolved or merchant facts.",
+          "Every variant imageId must equal a mediaSet pmed key; never map by position.",
+        ],
       },
     });
     expect(create.input.dependencies).toEqual(expect.arrayContaining([
@@ -265,16 +300,30 @@ describe("reviewed agent workflow resolver", () => {
         templatePointer: "/body/optionMatrix",
         source: { kind: "fact", factId: "optionMatrix" },
       },
-      {
-        templatePointer: "/body/media/0/mediaId",
-        source: {
-          kind: "step",
-          phaseId: "media",
-          stepId: "primary",
-          responsePointer: "/data/file/id",
-        },
-      },
     ]));
+    expect(create.input.dependencies.some((dependency) =>
+      dependency.templatePointer.startsWith("/body/media/")
+    )).toBe(false);
+    expect(create.condition).toContain("exact pmed key/mediaId");
+    expect(detail.steps.filter((step) => step.phaseId === "media")).toEqual([
+      expect.objectContaining({
+        stepId: "asset",
+        operationId: "dashboard.media.import_url",
+        condition: expect.stringContaining("dashboard.media-upload"),
+        input: expect.objectContaining({
+          dependencies: [],
+        }),
+        repeat: {
+          factId: "mediaSet",
+          orderPointer: "/order",
+          itemMapPointer: "/byId",
+          minItems: 1,
+          maxItems: 250,
+          bindings: [{ templatePointer: "/body/sourceUrl", itemPointer: "/sourceUrl" }],
+          capture: { responsePointer: "/data/file/id", itemPointer: "/mediaId" },
+        },
+      }),
+    ]);
     expect(create.input.defaults).toEqual(expect.arrayContaining([
       { templatePointer: "/body/isActive", value: true },
       { templatePointer: "/body/excludeFromSitemap", value: false },
@@ -295,14 +344,23 @@ describe("reviewed agent workflow resolver", () => {
       expect.objectContaining({
         operationId: "dashboard.products.get_section",
         responsePointers: ["/data/aggregateRevision", "/data/items", "/data/total"],
-        bounds: { maxCalls: 12, maxItems: 150, maxResponseBytes: 65_536 },
+        bounds: { maxCalls: 50, maxItems: 500, maxResponseBytes: 65_536 },
       }),
       expect.objectContaining({
         operationId: "storefront.products.get_section",
-        proves: ["Buyer SKU price, variant image, and availability band."],
-        bounds: { maxCalls: 10, maxItems: 150, maxResponseBytes: 61_440 },
+        proves: ["Buyer SKU price, exact image, and availability band; excludes feed rows."],
+        bounds: { maxCalls: 20, maxItems: 150, maxResponseBytes: 61_440 },
+      }),
+      expect.objectContaining({
+        operationId: "dashboard.seo.feed_diagnostics",
+        proves: [
+          "Feed policy, eligibility totals, and sampled exclusions only.",
+        ],
       }),
     ]));
+    expect(detail.phaseStopConditions.dashboardVerify).toContain(
+      "No bounded product/SKU feed-row read exists; do not claim emitted price/image/availability.",
+    );
 
     expect(Object.keys(detail)).toEqual([
       "constructionRules",
@@ -312,6 +370,7 @@ describe("reviewed agent workflow resolver", () => {
       "verification",
     ]);
     const serialized = JSON.stringify(resolution);
+    expect(serialized).not.toContain("{associationId}");
     for (const wholesaleKey of ["cards", "routes", "controls", "coverage", "examples", "tags"]) {
       expect(serialized).not.toContain(`"${wholesaleKey}":`);
     }
@@ -411,6 +470,9 @@ describe("reviewed agent workflow resolver", () => {
     expect(compiled).toMatchObject({
       version: "3.0.0",
       workflowId: "operations.daily-snapshot.v1",
+      rules: catalog.routes.find((route) =>
+        route.id === "dashboard.daily-operations-snapshot"
+      )!.rules,
       phases: [{ id: "activity" }, { id: "readiness" }],
     });
     expect(compiled.phases.flatMap((phase) => phase.steps.map((step) => ({
@@ -443,6 +505,16 @@ describe("reviewed agent workflow resolver", () => {
         },
       },
       {
+        namespace: "activity.paymentRecovery",
+        operationId: "dashboard.orders.payment_recovery_list",
+        input: { query: { page: 1, limit: 1, state: "recoverable" } },
+      },
+      {
+        namespace: "activity.paymentNeedsAttention",
+        operationId: "dashboard.orders.payment_recovery_list",
+        input: { query: { page: 1, limit: 1, state: "needs_attention" } },
+      },
+      {
         namespace: "readiness.alerts",
         operationId: "dashboard.inventory_alerts.list",
         input: { query: { status: "active" } },
@@ -468,6 +540,20 @@ describe("reviewed agent workflow resolver", () => {
         expect.objectContaining({ pointer: "/data/orders", alias: "orderQueue", maxItems: 10 }),
       ]),
     );
+    for (const namespace of [
+      "activity.paymentRecovery",
+      "activity.paymentNeedsAttention",
+    ]) {
+      expect(compiled.phases[0]!.steps.find((step) =>
+        step.namespace === namespace
+      )!.output.selectors).toEqual([
+        { pointer: "/data/pagination/total", alias: "total" },
+      ]);
+    }
+    expect(JSON.stringify(compiled)).not.toContain("collectedCash");
+    expect(JSON.stringify(compiled.phases[0]!.steps.filter((step) =>
+      step.namespace.startsWith("activity.payment")
+    ))).not.toContain('"pointer":"/data/orders"');
 
     expect(compileWorkflowRead({
       prompt: "dashboard.complex-product-create",
@@ -514,6 +600,33 @@ describe("reviewed agent workflow resolver", () => {
       operations,
     })(dailyInput)).toBeNull();
 
+    const repeatedStep = {
+      ...dailyCard,
+      phases: dailyCard.phases.map((phase, phaseIndex) => ({
+        ...phase,
+        steps: phase.steps.map((step, stepIndex) =>
+          phaseIndex === 0 && stepIndex === 0
+            ? {
+                ...step,
+                repeat: {
+                  factId: "days",
+                  orderPointer: "/order",
+                  itemMapPointer: "/byId",
+                  minItems: 1,
+                  maxItems: 1,
+                  bindings: [{ templatePointer: "/query/days", itemPointer: "/days" }],
+                  capture: { responsePointer: "/data/count", itemPointer: "/result" },
+                },
+              }
+            : step
+        ),
+      })),
+    } satisfies WorkflowResolverCard;
+    expect(createWorkflowReadCompiler({
+      catalog: replaceDaily(repeatedStep),
+      operations,
+    })(dailyInput)).toBeNull();
+
     const openWorldOperations = operations.map((operation) =>
       operation.operationId === "dashboard.orders.list"
         ? { ...operation, openWorld: true }
@@ -523,6 +636,39 @@ describe("reviewed agent workflow resolver", () => {
       catalog,
       operations: openWorldOperations,
     })(dailyInput)).toBeNull();
+  });
+
+  it("strictly validates and copies bounded rules for one-call reads", () => {
+    const dailyRoute = catalog.routes.find((route) =>
+      route.id === "dashboard.daily-operations-snapshot"
+    )!;
+    const dailyInput = {
+      prompt: "dashboard.daily-operations-snapshot",
+      surface: "dashboard" as const,
+    };
+    const replaceRules = (rules: string[]) => ({
+      ...catalog,
+      routes: catalog.routes.map((route) =>
+        route.id === dailyRoute.id ? { ...route, rules } : route
+      ),
+    });
+
+    const compiled = createWorkflowReadCompiler({ catalog, operations })(dailyInput)!;
+    expect(compiled.rules).toEqual(dailyRoute.rules);
+    expect(compiled.rules).not.toBe(dailyRoute.rules);
+
+    for (const rules of [
+      [],
+      ["duplicate", "duplicate"],
+      [" padded"],
+      ["x".repeat(301)],
+      Array.from({ length: 7 }, (_, index) => `rule ${index}`),
+    ]) {
+      expect(createWorkflowReadCompiler({
+        catalog: replaceRules(rules),
+        operations,
+      })(dailyInput)).toBeNull();
+    }
   });
 
   it("projects bounded scalar allowlists without carrying raw PII", () => {
@@ -576,6 +722,18 @@ describe("reviewed agent workflow resolver", () => {
     expect(projectWorkflowReadResponse({ data: { orders: [] } }, {
       selectors: [{ pointer: "/data/__proto__/secret", alias: "unsafe" }],
     })).toBeNull();
+
+    const recoveryProjection = compiled.phases[0]!.steps.find((step) =>
+      step.namespace === "activity.paymentRecovery"
+    )!.output;
+    const recovery = projectWorkflowReadResponse({
+      data: {
+        orders: [{ customerName: "Private Buyer", phone: "+8801700000000" }],
+        pagination: { page: 1, limit: 1, total: 12, totalPages: 12 },
+      },
+    }, recoveryProjection);
+    expect(recovery).toEqual({ total: 12 });
+    expect(JSON.stringify(recovery)).not.toMatch(/Private Buyer|8801700000000|orders/);
   });
 
   it("keeps compact plans below their context budgets", () => {
