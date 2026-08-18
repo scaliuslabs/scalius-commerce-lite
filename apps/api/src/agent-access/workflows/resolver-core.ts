@@ -47,8 +47,121 @@ export type WorkflowResolverControl = {
   rules: string[];
 };
 
+export type WorkflowResolverMutation =
+  | "read"
+  | "create"
+  | "partial"
+  | "replace"
+  | "command"
+  | "lifecycle";
+
+export type WorkflowResolverFactSource =
+  | { kind: "merchant" }
+  | {
+      kind: "operation";
+      operationId: string;
+      responsePointer: string;
+      alternatives?: readonly { operationId: string; responsePointer: string }[];
+    }
+  | { kind: "constant"; value: unknown };
+
+export type WorkflowResolverDependencySource =
+  | { kind: "fact"; factId: string; factPointer?: string }
+  | { kind: "step"; phaseId: string; stepId: string; responsePointer: string };
+
+export type WorkflowResolverCard = {
+  id: string;
+  constructionRules?: Readonly<Record<string, string>>;
+  requiredFacts: readonly {
+    id: string;
+    description: string;
+    required: boolean;
+    defaultValue?: unknown;
+    source: WorkflowResolverFactSource;
+    nonInferenceRule: string;
+  }[];
+  phases: readonly {
+    id: string;
+    surface: WorkflowResolverSurface;
+    stopConditions: readonly string[];
+    steps: readonly {
+      id: string;
+      operationId: string;
+      mutation: WorkflowResolverMutation;
+      condition?: string;
+      input: {
+        template: unknown;
+        dependencies: readonly {
+          templatePointer: string;
+          source: WorkflowResolverDependencySource;
+        }[];
+        defaults: readonly { templatePointer: string; value: unknown }[];
+      };
+      policies: {
+        revision: "none" | "optional" | "required";
+        idempotency: "none" | "supported" | "required";
+        confirmation: "none" | "required";
+        stopConditions: readonly string[];
+        nonInferenceRules: readonly string[];
+      };
+    }[];
+  }[];
+  verification: readonly {
+    id: string;
+    surface: WorkflowResolverSurface;
+    operationId: string;
+    responsePointers: readonly string[];
+    proves: readonly string[];
+    bounds: { maxCalls: number; maxItems?: number; maxResponseBytes: number };
+  }[];
+};
+
+export type WorkflowExecutionDetail = {
+  constructionRules?: Record<string, string>;
+  requiredFacts: Array<{
+    id: string;
+    description: string;
+    required: boolean;
+    defaultValue?: unknown;
+    source: WorkflowResolverFactSource;
+    nonInferenceRule: string;
+  }>;
+  phaseStopConditions: Record<string, string[]>;
+  steps: Array<{
+    phaseId: string;
+    stepId: string;
+    operationId: string;
+    mutation: WorkflowResolverMutation;
+    condition?: string;
+    input: {
+      template: unknown;
+      dependencies: Array<{
+        templatePointer: string;
+        source: WorkflowResolverDependencySource;
+      }>;
+      defaults: Array<{ templatePointer: string; value: unknown }>;
+    };
+    policies: {
+      revision: "none" | "optional" | "required";
+      idempotency: "none" | "supported" | "required";
+      confirmation: "none" | "required";
+      stopConditions: string[];
+      nonInferenceRules: string[];
+    };
+  }>;
+  verification: Array<{
+    id: string;
+    surface: WorkflowResolverSurface;
+    operationId: string;
+    responsePointers: string[];
+    proves: string[];
+    bounds: { maxCalls: number; maxItems?: number; maxResponseBytes: number };
+  }>;
+};
+
 export type WorkflowResolverCatalog = {
   version: string;
+  cards?: readonly WorkflowResolverCard[];
   routes: WorkflowResolverRoute[];
   controls: WorkflowResolverControl[];
 };
@@ -78,6 +191,7 @@ export type ResolvedWorkflowPlan = {
   requiresConfirmation: boolean;
   requiresVerification: boolean;
   rules: string[];
+  detail?: WorkflowExecutionDetail;
 };
 
 export type WorkflowResolverChoice = {
@@ -130,6 +244,8 @@ const MAX_PROMPT_CHARS = 4_000;
 const MAX_CHOICES = 3;
 const MAX_COMPOSED_ROUTES = 4;
 const MAX_PLAN_OPERATIONS = 20;
+const MAX_DETAILED_RESOLUTION_BYTES = 16 * 1024 - 64;
+const MAX_STANDARD_DETAIL_RESOLUTION_BYTES = 12 * 1024 - 64;
 const BM25_K1 = 1.25;
 const BM25_B = 0.65;
 
@@ -238,6 +354,122 @@ function normalizedPhrase(value: string): string {
 
 function unique<T>(values: readonly T[]): T[] {
   return [...new Set(values)];
+}
+
+function projectFactSource(source: WorkflowResolverFactSource): WorkflowResolverFactSource {
+  if (source.kind === "merchant") return { kind: "merchant" };
+  if (source.kind === "constant") return { kind: "constant", value: source.value };
+  return {
+    kind: "operation",
+    operationId: source.operationId,
+    responsePointer: source.responsePointer,
+    ...(source.alternatives
+      ? {
+          alternatives: source.alternatives.map((alternative) => ({
+            operationId: alternative.operationId,
+            responsePointer: alternative.responsePointer,
+          })),
+        }
+      : {}),
+  };
+}
+
+function projectDependencySource(
+  source: WorkflowResolverDependencySource,
+): WorkflowResolverDependencySource {
+  return source.kind === "fact"
+    ? {
+        kind: "fact",
+        factId: source.factId,
+        ...(source.factPointer !== undefined ? { factPointer: source.factPointer } : {}),
+      }
+    : {
+        kind: "step",
+        phaseId: source.phaseId,
+        stepId: source.stepId,
+        responsePointer: source.responsePointer,
+      };
+}
+
+function projectWorkflowDetail(card: WorkflowResolverCard): WorkflowExecutionDetail {
+  const constructionRules = card.constructionRules
+    ? Object.fromEntries(
+        Object.entries(card.constructionRules)
+          .sort(([left], [right]) => left.localeCompare(right)),
+      )
+    : undefined;
+  return {
+    ...(constructionRules ? { constructionRules } : {}),
+    requiredFacts: card.requiredFacts.map((fact) => ({
+      id: fact.id,
+      description: fact.description,
+      required: fact.required,
+      ...(Object.hasOwn(fact, "defaultValue") ? { defaultValue: fact.defaultValue } : {}),
+      source: projectFactSource(fact.source),
+      nonInferenceRule: fact.nonInferenceRule,
+    })),
+    phaseStopConditions: Object.fromEntries(card.phases.map((phase) => [
+      phase.id,
+      [...phase.stopConditions],
+    ])),
+    steps: card.phases.flatMap((phase) => phase.steps.map((step) => ({
+      phaseId: phase.id,
+      stepId: step.id,
+      operationId: step.operationId,
+      mutation: step.mutation,
+      ...(step.condition !== undefined ? { condition: step.condition } : {}),
+      input: {
+        template: step.input.template,
+        dependencies: step.input.dependencies.map((dependency) => ({
+          templatePointer: dependency.templatePointer,
+          source: projectDependencySource(dependency.source),
+        })),
+        defaults: step.input.defaults.map((inputDefault) => ({
+          templatePointer: inputDefault.templatePointer,
+          value: inputDefault.value,
+        })),
+      },
+      policies: {
+        revision: step.policies.revision,
+        idempotency: step.policies.idempotency,
+        confirmation: step.policies.confirmation,
+        stopConditions: [...step.policies.stopConditions],
+        nonInferenceRules: [...step.policies.nonInferenceRules],
+      },
+    }))),
+    verification: card.verification.map((evidence) => ({
+      id: evidence.id,
+      surface: evidence.surface,
+      operationId: evidence.operationId,
+      responsePointers: [...evidence.responsePointers],
+      proves: [...evidence.proves],
+      bounds: {
+        maxCalls: evidence.bounds.maxCalls,
+        ...(evidence.bounds.maxItems !== undefined
+          ? { maxItems: evidence.bounds.maxItems }
+          : {}),
+        maxResponseBytes: evidence.bounds.maxResponseBytes,
+      },
+    })),
+  };
+}
+
+function buildWorkflowDetails(
+  cards: readonly WorkflowResolverCard[] | undefined,
+): ReadonlyMap<string, WorkflowExecutionDetail> {
+  const details = new Map<string, WorkflowExecutionDetail>();
+  for (const card of [...(cards ?? [])].sort((left, right) => left.id.localeCompare(right.id))) {
+    details.set(card.id, projectWorkflowDetail(card));
+  }
+  return details;
+}
+
+function jsonBytes(value: unknown): number {
+  try {
+    return new TextEncoder().encode(JSON.stringify(value)).byteLength;
+  } catch {
+    return Number.POSITIVE_INFINITY;
+  }
 }
 
 function round(value: number): number {
@@ -494,6 +726,48 @@ function planFromRoutes(
   };
 }
 
+function resolvedRoutePlan(
+  version: string,
+  plan: ResolvedWorkflowPlan,
+  details: ReadonlyMap<string, WorkflowExecutionDetail>,
+): WorkflowResolution {
+  const base: WorkflowResolution = {
+    kind: "plan",
+    disposition: "execute",
+    version,
+    plan,
+    safetyNotes: [],
+  };
+  if (
+    !["route", "composed-route"].includes(plan.source) ||
+    plan.workflowIds.length !== 1
+  ) return base;
+  const workflowId = plan.workflowIds[0]!;
+  const detail = details.get(workflowId);
+  if (!detail) return base;
+  const detailOperationIds = new Set([
+    ...detail.steps.map((step) => step.operationId),
+    ...detail.verification.map((evidence) => evidence.operationId),
+    ...detail.requiredFacts.flatMap((fact) => fact.source.kind === "operation"
+      ? [
+          fact.source.operationId,
+          ...(fact.source.alternatives ?? []).map((alternative) => alternative.operationId),
+        ]
+      : []),
+  ]);
+  if ([...detailOperationIds].some((operationId) => !plan.operationIds.includes(operationId))) {
+    return base;
+  }
+  const detailed: WorkflowResolution = {
+    ...base,
+    plan: { ...plan, detail },
+  };
+  const budget = detail.constructionRules
+    ? MAX_DETAILED_RESOLUTION_BYTES
+    : MAX_STANDARD_DETAIL_RESOLUTION_BYTES;
+  return jsonBytes(detailed) <= budget ? detailed : base;
+}
+
 function planFromFallback(
   match: ScoredCandidate,
   index: SearchIndex,
@@ -573,6 +847,7 @@ export function createWorkflowResolver(
   sources: WorkflowResolverSources,
 ): (input: WorkflowResolverInput) => WorkflowResolution {
   const index = buildIndex(sources);
+  const details = buildWorkflowDetails(sources.catalog.cards);
   const controls = [...sources.catalog.controls].sort((left, right) =>
     right.trigger.allOf.length - left.trigger.allOf.length || left.id.localeCompare(right.id)
   );
@@ -621,13 +896,7 @@ export function createWorkflowResolver(
         queryTerms: 1,
         exactPhrase: true,
       }], [boundedPrompt])!;
-      return {
-        kind: "plan",
-        disposition: "execute",
-        version: sources.catalog.version,
-        plan,
-        safetyNotes: [],
-      };
+      return resolvedRoutePlan(sources.catalog.version, plan, details);
     }
 
     const exactOperation = index.operationsById.get(boundedPrompt);
@@ -662,13 +931,7 @@ export function createWorkflowResolver(
     if (routes[0] && strongRouteMatch(routes[0], routes[1])) {
       const plan = planFromRoutes([routes[0]], [boundedPrompt]);
       if (plan) {
-        return {
-          kind: "plan",
-          disposition: "execute",
-          version: sources.catalog.version,
-          plan,
-          safetyNotes: [],
-        };
+        return resolvedRoutePlan(sources.catalog.version, plan, details);
       }
     }
 
@@ -689,13 +952,7 @@ export function createWorkflowResolver(
       if (complete && uniqueMatches.length > 1) {
         const plan = planFromRoutes(uniqueMatches, clauses);
         if (plan) {
-          return {
-            kind: "plan",
-            disposition: "execute",
-            version: sources.catalog.version,
-            plan,
-            safetyNotes: [],
-          };
+          return resolvedRoutePlan(sources.catalog.version, plan, details);
         }
       }
     }

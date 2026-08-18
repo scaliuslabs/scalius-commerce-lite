@@ -10,6 +10,7 @@ import {
 } from "./agent-operation-manifest";
 import {
   AGENT_OPERATION_MANIFEST_PATH,
+  assertCliWorkflowResolverCoreFresh,
   assertOpenApiContractModuleFresh,
   generateAgentOperationManifestSource,
 } from "./generate-agent-operation-manifest";
@@ -583,5 +584,9 @@ describe("agent operation contract", () => {
 
   it("keeps the runtime OpenAPI response byte-for-byte deploy generated", () => {
     expect(() => assertOpenApiContractModuleFresh(document)).not.toThrow();
+  });
+
+  it("keeps the dependency-free CLI workflow resolver byte-for-byte generated", () => {
+    expect(() => assertCliWorkflowResolverCoreFresh()).not.toThrow();
   });
 });

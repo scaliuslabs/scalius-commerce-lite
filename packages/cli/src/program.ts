@@ -5,11 +5,13 @@ import { ConfigStore } from "./config.js";
 import { asCliError, CliError } from "./errors.js";
 import { collectFile, readBatchInput, readInput } from "./input.js";
 import { uploadMediaFiles } from "./media.js";
+import { loadOpenApi } from "./openapi.js";
 import { operationsBatch, operationsDescribe, operationsRefresh, operationsRun, operationsSearch } from "./operations.js";
 import { writeError, writeResult } from "./output.js";
 import { listProfiles, showProfile, useProfile } from "./profiles.js";
 import { AGENT_HARNESSES, installSkill, setupHarness, type AgentHarness } from "./skill.js";
 import type { OutputMode, Runtime, StructuredInput } from "./types.js";
+import { resolveWorkflow } from "./workflows.js";
 
 interface GlobalOptions {
   output: OutputMode;
@@ -203,6 +205,18 @@ export function createProgram(runtime: Runtime): Command {
     .action(async (name: string | undefined, _options, command) => {
       const result = await showProfile(runtime, name ?? globalOptions(command).profile);
       writeResult(runtime, globalOptions(command).output, result);
+    });
+
+  const workflow = program.command("workflow").description("resolve merchant and buyer goals");
+  workflow.command("resolve")
+    .description("resolve one natural-language goal into the smallest reviewed operation plan")
+    .argument("<request>", "merchant or buyer goal")
+    .addOption(new Option("--surface <audience>", "workflow audience").choices(["dashboard", "storefront"]).default("dashboard"))
+    .action(async (request: string, options: { surface: "dashboard" | "storefront" }, command) => {
+      const profile = await resolveForResource(runtime, command, options.surface);
+      const document = await loadOpenApi(runtime, profile);
+      const result = resolveWorkflow(document, { prompt: request, surface: options.surface });
+      writeResult(runtime, globalOptions(command).output, result, JSON.stringify(result, null, 2));
     });
 
   const operations = program.command("operations").alias("ops").description("discover and execute operations");

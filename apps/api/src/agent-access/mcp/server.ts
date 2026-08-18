@@ -12,10 +12,8 @@ import {
   type AgentOperationResult,
 } from "../dispatch";
 import {
-  AGENT_DEFAULT_SEARCH_RESULTS,
   AGENT_MAX_BATCH_STEPS,
   AGENT_MAX_PARALLEL_READS,
-  AGENT_MAX_SEARCH_RESULTS,
   checkAgentRateLimit,
   utf8ByteLength,
   AGENT_MAX_RESULT_BYTES,
@@ -26,8 +24,6 @@ import { createAgentBrowserHandoff } from "../browser-handoffs";
 import {
   describeOperation,
   getAuthorizedOperation,
-  listAuthorizedOperations,
-  summarizeOperation,
 } from "./operations";
 import {
   AGENT_STEP_ID_PATTERN,
@@ -35,7 +31,8 @@ import {
   containsStepReference,
   resolveStepReferences,
 } from "./references";
-import { merchantOperationQueryScore, prefersReadOnlyMerchantResults } from "./merchant-search";
+import { resolveAuthorizedWorkflow } from "./workflows";
+import { executeAuthorizedWorkflowRead } from "./workflow-read";
 
 const pathValueSchema = z.union([z.string(), z.number(), z.boolean()]);
 const queryValueSchema = z.union([
@@ -92,12 +89,53 @@ const agentToolOutputSchema = z.object({
   ok: z.boolean(),
   result: z.unknown().optional(),
   results: z.array(batchStepResultSchema).max(AGENT_MAX_BATCH_STEPS).optional(),
-  operations: z.array(z.unknown()).max(AGENT_MAX_SEARCH_RESULTS).optional(),
-  count: z.number().int().min(0).max(AGENT_MAX_SEARCH_RESULTS).optional(),
   operation: z.unknown().optional(),
   error: toolErrorSchema.optional(),
   truncated: z.boolean().optional(),
   summary: z.string().max(240).optional(),
+}).strict();
+const projectedScalarSchema = z.union([
+  z.string(),
+  z.number().finite(),
+  z.boolean(),
+  z.null(),
+]);
+const projectedRecordSchema = z.record(
+  z.string().regex(/^[A-Za-z][A-Za-z0-9_]{0,63}$/),
+  projectedScalarSchema,
+).refine((value) => Object.keys(value).length <= 32, "At most 32 projected fields are allowed");
+const projectedValueSchema = z.union([
+  projectedScalarSchema,
+  z.array(projectedScalarSchema).max(100),
+  projectedRecordSchema,
+  z.array(projectedRecordSchema).max(100),
+]);
+const projectedStepSchema = z.record(
+  z.string().regex(/^[A-Za-z][A-Za-z0-9_]{0,63}$/),
+  projectedValueSchema,
+).refine((value) => Object.keys(value).length <= 24, "At most 24 projected selectors are allowed");
+const workflowReadResultSchema = z.union([
+  z.object({
+    kind: z.literal("result"),
+    disposition: z.literal("execute"),
+    version: z.string().max(64),
+    workflowId: z.string().max(160),
+    outputs: z.record(z.string().max(129), projectedStepSchema)
+      .refine((value) => Object.keys(value).length <= 50, "At most 50 workflow steps are allowed"),
+  }).strict(),
+  z.object({
+    kind: z.literal("unavailable"),
+    disposition: z.literal("unavailable"),
+    classification: z.object({
+      code: z.literal("workflow_read_unavailable"),
+      reason: z.literal("The requested workflow read is unavailable."),
+    }).strict(),
+  }).strict(),
+]);
+const workflowReadToolOutputSchema = z.object({
+  ok: z.boolean(),
+  result: workflowReadResultSchema.optional(),
+  error: toolErrorSchema.optional(),
 }).strict();
 const MCP_TEXT_COMPATIBILITY_BYTES = 4 * 1024;
 const MCP_TOOL_ERROR_CODE_CHARS = 120;
@@ -109,7 +147,7 @@ interface McpServerDependencies {
   ctx: ExecutionContext;
 }
 
-export const AGENT_MCP_INSTRUCTIONS = "Resolve known IDs directly; search/describe only as needed. Use operations.read/read_batch for reads and operations.write/write_batch for mutations; verify writes with a bounded read. Tools run registered operations only—never arbitrary code, HTTP, or SQL. Never invent IDs, revisions, money, stock, or secrets.";
+export const AGENT_MCP_INSTRUCTIONS = "For data questions try workflows.read; on unavailable, or for changes, use workflows.resolve. Describe only selected IDs, then use operations.read/read_batch or operations.write/write_batch; confirm and verify writes. Fixed reviewed operations only—never arbitrary code, HTTP, or SQL. Never invent IDs, revisions, money, stock, or secrets.";
 
 export function formatAgentToolResult(value: Record<string, unknown>) {
   const oneTimeResult = typeof value.result === "object" && value.result !== null
@@ -324,16 +362,6 @@ async function requireToolPrincipal(deps: McpServerDependencies): Promise<AgentP
     throw new AgentDispatchError("rate_limited", "Agent request rate limit exceeded", 429);
   }
   return principal;
-}
-
-function operationQueryScore(operation: AgentOperationManifestEntry, query: string): number | null {
-  const haystack = [
-    operation.operationId,
-    operation.summary,
-    operation.description,
-    ...operation.tags,
-  ].filter(Boolean).join(" ").toLowerCase();
-  return merchantOperationQueryScore(haystack, query);
 }
 
 type AgentOperationToolMode = "read" | "write";
@@ -596,14 +624,12 @@ export function createAgentMcpServer(deps: McpServerDependencies): McpServer {
   });
 
   server.registerTool(
-    "operations.search",
+    "workflows.resolve",
     {
-      title: "Search operations",
-      description: "Search operations allowed for this exact resource and live grant.",
+      title: "Resolve workflow",
+      description: "Resolve a natural-language merchant or buyer goal into one compact reviewed plan, up to three choices, a safety control, or an explicit unsupported result.",
       inputSchema: z.object({
-        query: z.string().max(240).default(""),
-        limit: z.number().int().min(1).max(AGENT_MAX_SEARCH_RESULTS)
-          .default(AGENT_DEFAULT_SEARCH_RESULTS),
+        request: z.string().trim().min(1).max(4_000),
       }).strict(),
       outputSchema: agentToolOutputSchema,
       annotations: {
@@ -613,25 +639,48 @@ export function createAgentMcpServer(deps: McpServerDependencies): McpServer {
         openWorldHint: false,
       },
     },
-    async ({ query, limit }) => {
+    async ({ request }) => {
       try {
         const principal = await requireToolPrincipal(deps);
-        const rankedOperations = (await listAuthorizedOperations(deps.surface, principal))
-          .map((operation, index) => {
-            const matchScore = operationQueryScore(operation, query);
-            return { operation, index, score: matchScore === null ? null : matchScore + (operation.risk === "read" ? 25 : 0) };
-          })
-          .filter(({ score }) => score !== null)
-          .sort((left, right) => right.score! - left.score! || left.index - right.index);
-        const hasReadMatch = rankedOperations.some(({ operation }) => operation.risk === "read");
-        const preferReadMatches = query.trim().split(/\s+/).length > 1
-          && hasReadMatch
-          && prefersReadOnlyMerchantResults(query);
-        const operations = rankedOperations
-          .filter(({ operation }) => !preferReadMatches || operation.risk === "read")
-          .slice(0, limit)
-          .map(({ operation }) => summarizeOperation(operation));
-        return formatAgentToolResult({ ok: true, operations, count: operations.length });
+        const resolution = await resolveAuthorizedWorkflow({
+          prompt: request,
+          surface: deps.surface,
+          principal,
+        });
+        return formatAgentToolResult({ ok: true, result: resolution });
+      } catch (error) {
+        return safeToolError(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "workflows.read",
+    {
+      title: "Read workflow",
+      description: "Answer a supported natural-language store-data question in one call using only fixed reviewed inputs and bounded output projections. If unavailable, use workflows.resolve.",
+      inputSchema: z.object({
+        request: z.string().trim().min(1).max(4_000),
+      }).strict(),
+      outputSchema: workflowReadToolOutputSchema,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ request }) => {
+      try {
+        const principal = await requireToolPrincipal(deps);
+        const result = await executeAuthorizedWorkflowRead({
+          prompt: request,
+          surface: deps.surface,
+          principal,
+          env: deps.env,
+          ctx: deps.ctx,
+        });
+        return formatAgentToolResult({ ok: true, result });
       } catch (error) {
         return safeToolError(error);
       }

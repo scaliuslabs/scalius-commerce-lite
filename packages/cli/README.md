@@ -11,6 +11,7 @@ npm install --global scalius
 
 scalius auth login --server https://api.example.com
 scalius auth login --server https://api.example.com --resource storefront --profile-name my-store-storefront
+scalius --output json workflow resolve "Create a product with size/color variants and exact images" --surface dashboard
 scalius operations search "what are today's sales?" --surface dashboard
 scalius operations describe dashboard.products.create
 scalius operations run dashboard.products.create --input @product.json --yes
@@ -37,6 +38,7 @@ scalius auth revoke
 scalius profile list
 scalius profile use <name>
 scalius profile show [name]
+scalius workflow resolve <request> [--surface dashboard|storefront]
 scalius operations search [query] [--surface dashboard|storefront] [--limit <1-100>]
 scalius operations describe <operationId> [--full]
 scalius operations run <operationId> --input <json|@file|->
@@ -48,17 +50,23 @@ scalius skill install [--harness <name>] [--force]
 
 Run `scalius setup` before operating a store. The bundled `scalius-commerce` skill follows the open Agent Skills format and installs to the native user location for Codex, Claude Code, OpenCode, Pi, or the cross-client `.agents/skills` convention. Setup prints exact credential-free instructions for both audience-specific MCP servers; it never writes tokens into harness configuration. Pi supports the skill and full CLI natively; because Pi's core has no MCP client, setup prints the separately installed `pi-mcp-adapter` package from Pi's catalog and shared MCP configuration but never silently installs executable third-party code.
 
-The workflow is deliberately harness-neutral: search, compactly describe one
-operation, request `--full` only while building its input, execute, and verify
-with a bounded read. The live finalized OpenAPI contract—not a model-specific
-prompt—is authoritative for fields, RBAC, risk, revisions, idempotency, byte
-limits, artifacts, uploads, and continuations.
+The workflow is deliberately harness-neutral: resolve a natural-language goal,
+compactly describe only the selected operations, request `--full` only while
+building an exact input, execute, and verify with a bounded read. The resolver
+uses the versioned workflow catalog embedded in the same live contract, returns
+one reviewed plan, at most three choices, a safety control, or an explicit
+unsupported result, and never sends the full catalog to the model. The live
+finalized OpenAPI contract—not a model-specific prompt—is authoritative for
+fields, RBAC, risk, revisions, idempotency, byte limits, artifacts, uploads,
+and continuations.
 
-Search accepts normal merchant phrasing such as “today's sales”, “orders
-needing fulfillment”, “low stock issues”, or “is my store healthy?”. Without
-an explicit profile or surface, merchant search defaults to dashboard. An
-operation ID automatically selects the authenticated dashboard or storefront
-profile for the active store origin; it never crosses to a different store.
+`workflow resolve` accepts normal merchant phrasing such as “today's sales”,
+“orders needing fulfillment”, “low stock issues”, or “is my store healthy?”.
+`operations search` remains the low-level exact-ID or contract-keyword escape
+hatch; it does not reconstruct multi-step goals. Without an explicit profile or
+surface, operation search defaults to dashboard. An operation ID automatically
+selects the authenticated dashboard or storefront profile for the active store
+origin; it never crosses to a different store.
 
 Dashboard MCP, storefront MCP, and CLI are outcome-equivalent surfaces over
 that contract. MCP does not require a shell: it imports public media by URL and

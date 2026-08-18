@@ -158,6 +158,123 @@ describe("MCP split operation execution", () => {
     vi.restoreAllMocks();
   });
 
+  it("resolves one authorized natural-language workflow without dispatching", async () => {
+    const connection = await connectInMemory();
+    try {
+      const response = await connection.request("tools/call", {
+        name: "workflows.resolve",
+        arguments: { request: "What are today's booked sales and order count?" },
+      });
+      expect(structuredContent(response)).toMatchObject({
+        ok: true,
+        result: {
+          kind: "plan",
+          disposition: "execute",
+          plan: {
+            routeIds: ["dashboard.sales-today"],
+            operationIds: ["dashboard.home.activity"],
+          },
+        },
+      });
+      expect(mocks.authorizeOperation).toHaveBeenCalledTimes(1);
+      expect(mocks.dispatchAgentOperation).not.toHaveBeenCalled();
+    } finally {
+      await connection.close();
+    }
+  });
+
+  it("answers a reviewed daily data workflow in one projected call", async () => {
+    const responses: Record<string, unknown> = {
+      "dashboard.home.activity": {
+        data: {
+          dailyActivityData: [{
+            date: "2026-08-18",
+            orders: 4,
+            revenue: 9_200,
+            newCustomers: 2,
+            buyerEmail: "must-not-escape@example.com",
+          }],
+        },
+      },
+      "dashboard.settings.currency_get": {
+        data: { currencyCode: "BDT", currencySymbol: "৳", secret: "must-not-escape" },
+      },
+      "dashboard.orders.list": {
+        data: {
+          orders: [],
+          pagination: { page: 1, limit: 10, total: 0, totalPages: 0 },
+        },
+      },
+      "dashboard.inventory_alerts.list": { data: { alerts: [] } },
+      "dashboard.checkout.readiness_get": {
+        data: {
+          ready: true,
+          hasActiveShippingMethod: true,
+          hasActiveDeliveryHierarchy: true,
+          customerSignInRequired: false,
+          hasUsableCustomerSignIn: true,
+          issues: [],
+        },
+      },
+      "dashboard.payments.methods_get": {
+        data: {
+          enabledMethods: ["cod"],
+          activeMethods: ["cod"],
+          defaultMethod: "cod",
+          activeDefaultMethod: "cod",
+          gatewayStatus: {
+            stripe: { configured: false, usable: false, checkoutVisible: false },
+            sslcommerz: { configured: false, usable: false, checkoutVisible: false },
+            polar: { configured: false, usable: false, checkoutVisible: false },
+            cod: { configured: true, usable: true, checkoutVisible: true },
+          },
+        },
+      },
+      "dashboard.shipping_methods.list": {
+        data: {
+          shippingMethods: [],
+          pagination: { page: 1, limit: 100, total: 0, totalPages: 0 },
+        },
+      },
+    };
+    mocks.dispatchAgentOperation.mockImplementation(async ({ operation }) =>
+      operationResult(
+        operation.operationId,
+        `request-${operation.operationId}`,
+        true,
+        responses[operation.operationId],
+      )
+    );
+
+    const connection = await connectInMemory();
+    try {
+      const response = await connection.request("tools/call", {
+        name: "workflows.read",
+        arguments: { request: "dashboard.daily-operations-snapshot" },
+      });
+      const output = structuredContent(response);
+      expect(output).toMatchObject({
+        ok: true,
+        result: {
+          kind: "result",
+          disposition: "execute",
+          workflowId: "operations.daily-snapshot.v1",
+          outputs: {
+            "activity.daily": {
+              activity: [{ date: "2026-08-18", orders: 4, revenue: 9_200, newCustomers: 2 }],
+            },
+            "activity.currency": { currencyCode: "BDT", currencySymbol: "৳" },
+          },
+        },
+      });
+      expect(JSON.stringify(output)).not.toContain("must-not-escape");
+      expect(mocks.authorizeOperation).toHaveBeenCalledTimes(7);
+      expect(mocks.dispatchAgentOperation).toHaveBeenCalledTimes(7);
+    } finally {
+      await connection.close();
+    }
+  });
+
   it("rejects cross-risk single operations before dispatch", async () => {
     const connection = await connectInMemory();
     try {

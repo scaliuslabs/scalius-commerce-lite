@@ -12,12 +12,41 @@ import {
   type AgentWorkflowCoverageEntry,
   type AgentWorkflowIntentRoute,
   type AgentWorkflowMutationSemantics,
+  type AgentWorkflowOutputField,
+  type AgentWorkflowOutputProjection,
+  type AgentWorkflowOutputSelector,
   type AgentWorkflowSurface,
 } from "./types";
 
 const WORKFLOW_ID_PATTERN = /^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$/;
 const LOCAL_ID_PATTERN = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/;
 const JSON_POINTER_PATTERN = /^(?:\/(?:[^~/]|~[01])*)+$/;
+const PROJECTION_ALIAS_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
+const FORBIDDEN_PROJECTION_SEGMENTS = new Set([
+  "",
+  "-",
+  ".",
+  "..",
+  "__proto__",
+  "__defineGetter__",
+  "__defineSetter__",
+  "__lookupGetter__",
+  "__lookupSetter__",
+  "hasOwnProperty",
+  "isPrototypeOf",
+  "propertyIsEnumerable",
+  "prototype",
+  "constructor",
+  "toLocaleString",
+  "toString",
+  "valueOf",
+]);
+const MAX_PROJECTION_SELECTORS = 12;
+const MAX_PROJECTION_FIELDS = 16;
+const MAX_PROJECTION_TOTAL_FIELDS = 24;
+const MAX_PROJECTION_ITEMS = 100;
+const DAILY_WORKFLOW_ID = "operations.daily-snapshot.v1";
+const DAILY_WORKFLOW_HARD_MAX_BYTES = 12 * 1024;
 const RUNNABLE_EXPOSURES = new Set(["execute", "continuation"]);
 const WORKFLOW_SURFACES = new Set<AgentWorkflowSurface>([
   "dashboard",
@@ -58,6 +87,247 @@ function assertJsonPointer(value: string, label: string): void {
 
 function decodePointerSegment(value: string): string {
   return value.replace(/~1/g, "/").replace(/~0/g, "~");
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function assertExactKeys(
+  value: object,
+  allowed: ReadonlySet<string>,
+  label: string,
+): void {
+  const unknown = Object.keys(value).find((key) => !allowed.has(key));
+  if (unknown) throw new Error(`${label} has unsupported declarative key ${unknown}.`);
+}
+
+function assertProjectionPointer(value: string, label: string): void {
+  assertJsonPointer(value, label);
+  const invalidSegment = value
+    .slice(1)
+    .split("/")
+    .map(decodePointerSegment)
+    .find((segment) =>
+      FORBIDDEN_PROJECTION_SEGMENTS.has(segment) ||
+      segment.includes("*") ||
+      segment.startsWith("$") ||
+      segment.startsWith("@")
+    );
+  if (invalidSegment !== undefined) {
+    throw new Error(`${label} has a wildcard, pseudo, or prototype JSON pointer segment.`);
+  }
+}
+
+function assertProjectionAlias(value: string, label: string): void {
+  if (
+    !PROJECTION_ALIAS_PATTERN.test(value) ||
+    FORBIDDEN_PROJECTION_SEGMENTS.has(value)
+  ) {
+    throw new Error(`${label} has an invalid or prototype projection alias.`);
+  }
+}
+
+function schemaVariants(schema: unknown): Record<string, unknown>[] {
+  if (!isRecord(schema)) return [];
+  const variants = [schema.oneOf, schema.anyOf, schema.allOf]
+    .flatMap((value) => Array.isArray(value) ? value : [])
+    .filter(isRecord);
+  return variants.length > 0 ? variants.flatMap(schemaVariants) : [schema];
+}
+
+function schemaNodesAtPointer(
+  roots: readonly Record<string, unknown>[],
+  pointer: string,
+): Record<string, unknown>[] {
+  let nodes = roots.flatMap(schemaVariants);
+  for (const rawSegment of pointer.slice(1).split("/")) {
+    const segment = decodePointerSegment(rawSegment);
+    nodes = nodes.flatMap((node) =>
+      schemaVariants(node).flatMap((variant) => {
+        const properties = isRecord(variant.properties) ? variant.properties : null;
+        const property = properties && Object.hasOwn(properties, segment)
+          ? properties[segment]
+          : null;
+        return isRecord(property) ? schemaVariants(property) : [];
+      })
+    );
+    if (nodes.length === 0) return [];
+  }
+  return nodes.flatMap(schemaVariants);
+}
+
+type ProjectionSchemaShape = "scalar" | "object" | "array" | "ambiguous" | "unknown";
+
+function schemaShape(nodes: readonly Record<string, unknown>[]): ProjectionSchemaShape {
+  const shapes = new Set<Exclude<ProjectionSchemaShape, "ambiguous" | "unknown">>();
+  for (const node of nodes.flatMap(schemaVariants)) {
+    const types = typeof node.type === "string"
+      ? [node.type]
+      : Array.isArray(node.type)
+        ? node.type.filter((value): value is string => typeof value === "string")
+        : [];
+    if (types.length === 0) {
+      if (isRecord(node.properties)) shapes.add("object");
+      else if (isRecord(node.items)) shapes.add("array");
+      else if (node.enum !== undefined || node.const !== undefined) shapes.add("scalar");
+      continue;
+    }
+    for (const type of types) {
+      if (type === "object") shapes.add("object");
+      else if (type === "array") shapes.add("array");
+      else if (type !== "null") shapes.add("scalar");
+    }
+  }
+  if (shapes.size === 0) return "unknown";
+  if (shapes.size > 1) return "ambiguous";
+  return [...shapes][0]!;
+}
+
+function arrayItemSchemas(nodes: readonly Record<string, unknown>[]): Record<string, unknown>[] {
+  return nodes.flatMap(schemaVariants).flatMap((node) =>
+    isRecord(node.items) ? schemaVariants(node.items) : []
+  );
+}
+
+function assertProjectionFields(
+  fields: readonly AgentWorkflowOutputField[] | undefined,
+  schemaNodes: readonly Record<string, unknown>[],
+  label: string,
+): number {
+  if (!fields || fields.length < 1) {
+    throw new Error(`${label} requires selected scalar fields.`);
+  }
+  if (fields.length > MAX_PROJECTION_FIELDS) {
+    throw new Error(`${label} has too many selected fields.`);
+  }
+  const aliases = new Set<string>();
+  const pointers = new Set<string>();
+  for (const [index, field] of fields.entries()) {
+    const fieldLabel = `${label} field[${index}]`;
+    assertExactKeys(
+      field,
+      new Set(["pointer", "alias"]),
+      fieldLabel,
+    );
+    assertProjectionPointer(field.pointer, fieldLabel);
+    assertProjectionAlias(field.alias, fieldLabel);
+    if (aliases.has(field.alias)) {
+      throw new Error(`${label} has duplicate projection alias ${field.alias}.`);
+    }
+    if (pointers.has(field.pointer)) {
+      throw new Error(`${label} has duplicate projection pointer ${field.pointer}.`);
+    }
+    aliases.add(field.alias);
+    pointers.add(field.pointer);
+    const selected = schemaNodesAtPointer(schemaNodes, field.pointer);
+    if (selected.length === 0) {
+      throw new Error(`${fieldLabel} references unknown output field ${field.pointer}.`);
+    }
+    if (schemaShape(selected) !== "scalar") {
+      throw new Error(`${fieldLabel} must select one scalar output field.`);
+    }
+  }
+  return fields.length;
+}
+
+function assertProjectionSelector(
+  selector: AgentWorkflowOutputSelector,
+  outputSchema: Record<string, unknown>,
+  label: string,
+): number {
+  assertExactKeys(
+    selector,
+    new Set(["pointer", "alias", "maxItems", "fields"]),
+    label,
+  );
+  assertProjectionPointer(selector.pointer, label);
+  assertProjectionAlias(selector.alias, label);
+  const selected = schemaNodesAtPointer([outputSchema], selector.pointer);
+  if (selected.length === 0) {
+    throw new Error(`${label} references unknown output field ${selector.pointer}.`);
+  }
+  const shape = schemaShape(selected);
+  if (shape === "array") {
+    if (
+      !Number.isSafeInteger(selector.maxItems) ||
+      selector.maxItems! < 1 ||
+      selector.maxItems! > MAX_PROJECTION_ITEMS
+    ) {
+      throw new Error(`${label} array requires bounded maxItems of 1-${MAX_PROJECTION_ITEMS}.`);
+    }
+    const schemaLimits = selected.flatMap(schemaVariants).flatMap((schema) =>
+      typeof schema.maxItems === "number" ? [schema.maxItems] : []
+    );
+    if (
+      schemaLimits.length > 0 &&
+      selector.maxItems! > Math.min(...schemaLimits)
+    ) {
+      throw new Error(`${label} maxItems exceeds the operation output schema.`);
+    }
+    const items = arrayItemSchemas(selected);
+    if (items.length === 0) throw new Error(`${label} array has no declared item schema.`);
+    const itemShape = schemaShape(items);
+    if (itemShape === "object") {
+      return assertProjectionFields(selector.fields, items, label);
+    }
+    if (itemShape !== "scalar" || selector.fields !== undefined) {
+      throw new Error(`${label} has invalid selected fields for its array item schema.`);
+    }
+    return 0;
+  }
+  if (shape === "object") {
+    if (selector.maxItems !== undefined) {
+      throw new Error(`${label} has maxItems for a non-array output field.`);
+    }
+    return assertProjectionFields(selector.fields, selected, label);
+  }
+  if (shape !== "scalar") {
+    throw new Error(`${label} has an unknown or ambiguous output schema.`);
+  }
+  if (selector.maxItems !== undefined || selector.fields !== undefined) {
+    throw new Error(`${label} scalar output cannot declare maxItems or selected fields.`);
+  }
+  return 0;
+}
+
+function assertOutputProjection(
+  projection: AgentWorkflowOutputProjection,
+  operation: AgentOperationManifestEntry,
+  label: string,
+): void {
+  assertExactKeys(
+    projection,
+    new Set(["selectors"]),
+    `${label} output projection`,
+  );
+  if (
+    projection.selectors.length < 1 ||
+    projection.selectors.length > MAX_PROJECTION_SELECTORS
+  ) {
+    throw new Error(`${label} has too many output selectors or no selectors.`);
+  }
+  if (!isRecord(operation.outputSchema)) {
+    throw new Error(`${label} has no object output schema for projection validation.`);
+  }
+  const aliases = new Set<string>();
+  const pointers = new Set<string>();
+  let totalFields = 0;
+  for (const [index, selector] of projection.selectors.entries()) {
+    const selectorLabel = `${label} output selector[${index}]`;
+    if (aliases.has(selector.alias)) {
+      throw new Error(`${label} has duplicate projection alias ${selector.alias}.`);
+    }
+    if (pointers.has(selector.pointer)) {
+      throw new Error(`${label} has duplicate projection pointer ${selector.pointer}.`);
+    }
+    aliases.add(selector.alias);
+    pointers.add(selector.pointer);
+    totalFields += assertProjectionSelector(selector, operation.outputSchema, selectorLabel);
+  }
+  if (totalFields > MAX_PROJECTION_TOTAL_FIELDS) {
+    throw new Error(`${label} has too many selected fields across its output projection.`);
+  }
 }
 
 function templateHasPointer(template: unknown, pointer: string): boolean {
@@ -285,6 +555,15 @@ export function validateAgentWorkflowCards(
           );
         }
         assertMutationPolicy(operation, step.mutation, label);
+        if (card.id === DAILY_WORKFLOW_ID && step.output === undefined) {
+          throw new Error(`${label} requires a reviewed output projection.`);
+        }
+        if (step.output !== undefined) {
+          if (step.mutation !== "read") {
+            throw new Error(`${label} only read steps may declare an output projection.`);
+          }
+          assertOutputProjection(step.output, operation, label);
+        }
         if (step.policies.revision !== operation.revision) {
           throw new Error(`${label} revision policy does not match ${step.operationId}.`);
         }
@@ -367,6 +646,12 @@ export function validateAgentWorkflowCards(
         throw new Error(`${label} requires response pointers and bounded evidence claims.`);
       }
       evidence.responsePointers.forEach((pointer) => assertJsonPointer(pointer, label));
+    }
+    if (
+      card.id === DAILY_WORKFLOW_ID &&
+      new TextEncoder().encode(JSON.stringify(card)).byteLength > DAILY_WORKFLOW_HARD_MAX_BYTES
+    ) {
+      throw new Error(`Workflow ${card.id} exceeds the 12 KiB card limit.`);
     }
   }
 }
