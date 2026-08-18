@@ -5,11 +5,14 @@ import { ConfigStore } from "./config.js";
 import { asCliError, CliError } from "./errors.js";
 import { collectFile, readBatchInput, readInput } from "./input.js";
 import { uploadMediaFiles } from "./media.js";
+import { loadOpenApi } from "./openapi.js";
 import { operationsBatch, operationsDescribe, operationsRefresh, operationsRun, operationsSearch } from "./operations.js";
 import { writeError, writeResult } from "./output.js";
 import { listProfiles, showProfile, useProfile } from "./profiles.js";
 import { AGENT_HARNESSES, installSkill, setupHarness, type AgentHarness } from "./skill.js";
 import type { OutputMode, Runtime, StructuredInput } from "./types.js";
+import { readWorkflow } from "./workflow-read.js";
+import { resolveWorkflow } from "./workflows.js";
 
 interface GlobalOptions {
   output: OutputMode;
@@ -205,6 +208,34 @@ export function createProgram(runtime: Runtime): Command {
       writeResult(runtime, globalOptions(command).output, result);
     });
 
+  const workflow = program.command("workflow").description("resolve merchant and buyer goals");
+  workflow.command("resolve")
+    .description("resolve one natural-language goal into the smallest reviewed operation plan")
+    .argument("<request>", "merchant or buyer goal")
+    .addOption(new Option("--surface <audience>", "workflow audience").choices(["dashboard", "storefront"]).default("dashboard"))
+    .action(async (request: string, options: { surface: "dashboard" | "storefront" }, command) => {
+      const profile = await resolve(runtime, command, false);
+      const document = await loadOpenApi(runtime, profile);
+      const result = resolveWorkflow(document, { prompt: request, surface: options.surface });
+      writeResult(runtime, globalOptions(command).output, result, JSON.stringify(result, null, 2));
+    });
+  workflow.command("read")
+    .description("answer one supported store-data question through fixed reviewed reads")
+    .argument("<request>", "merchant or buyer data question")
+    .addOption(new Option("--surface <audience>", "workflow audience").choices(["dashboard", "storefront"]).default("dashboard"))
+    .action(async (request: string, options: { surface: "dashboard" | "storefront" }, command) => {
+      const profile = await resolveForResource(runtime, command, options.surface);
+      const document = await loadOpenApi(runtime, profile);
+      const result = await readWorkflow(runtime, profile, document, {
+        prompt: request,
+        surface: options.surface,
+      });
+      const human = result.kind === "result"
+        ? `${result.workflowId}\n${JSON.stringify(result.outputs, null, 2)}`
+        : `${result.classification.reason} Use workflow resolve for a reviewed plan.`;
+      writeResult(runtime, globalOptions(command).output, result, human);
+    });
+
   const operations = program.command("operations").alias("ops").description("discover and execute operations");
   operations.command("refresh")
     .description("refresh the cached live operation contract")
@@ -292,7 +323,8 @@ export function createProgram(runtime: Runtime): Command {
         throw new CliError(2, "invalid_harness", `Harness must be one of: ${AGENT_HARNESSES.join(", ")}.`);
       }
       const result = await installSkill(runtime, options.harness as AgentHarness, options.force);
-      writeResult(runtime, globalOptions(command).output, result, `${String(result.status)}: ${String(result.path)}`);
+      const count = Array.isArray(result.skills) ? result.skills.length : 0;
+      writeResult(runtime, globalOptions(command).output, result, `${String(result.status)} ${String(count)} Scalius skills in ${String(result.root)}`);
     });
 
   return program;

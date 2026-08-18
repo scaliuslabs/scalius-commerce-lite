@@ -10,6 +10,7 @@ import {
 } from "./agent-operation-manifest";
 import {
   AGENT_OPERATION_MANIFEST_PATH,
+  assertCliWorkflowResolverCoreFresh,
   assertOpenApiContractModuleFresh,
   generateAgentOperationManifestSource,
 } from "./generate-agent-operation-manifest";
@@ -231,6 +232,27 @@ describe("agent operation contract", () => {
         exclusionReason: expect.any(String),
       });
     }
+  });
+
+  it("exposes feed row preview with its exact transport and all-of read bounds", () => {
+    expect(byId(manifest, "dashboard.seo.feed_row_preview")).toMatchObject({
+      method: "GET",
+      pathTemplate:
+        "/api/v1/admin/settings/seo/feed-row-preview/{productId}",
+      surface: "dashboard",
+      exposure: "execute",
+      risk: "read",
+      openWorld: false,
+      batch: "sequential",
+      transport: "json",
+      maxRequestBytes: 16_384,
+      maxResponseBytes: 47_104,
+      sensitiveOutput: false,
+      rbac: {
+        type: "allOf",
+        permissions: ["products.view", "settings.general.view"],
+      },
+    });
   });
 
   it("keeps device pairing and credential self-revoke separate from general execution", () => {
@@ -583,5 +605,9 @@ describe("agent operation contract", () => {
 
   it("keeps the runtime OpenAPI response byte-for-byte deploy generated", () => {
     expect(() => assertOpenApiContractModuleFresh(document)).not.toThrow();
+  });
+
+  it("keeps the dependency-free CLI workflow resolver byte-for-byte generated", () => {
+    expect(() => assertCliWorkflowResolverCoreFresh()).not.toThrow();
   });
 });

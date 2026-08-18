@@ -225,7 +225,6 @@ export async function loadOpenApi(
   profile: ResolvedProfile,
   forceRefresh = false,
 ): Promise<OpenApiDocument> {
-  if (!profile.token) throw new CliError(3, "not_authenticated", "Authentication is required.");
   const store = new ConfigStore(runtime);
   const path = store.cachePath(profile.name);
   const cached = await readCache(path, profile.server);
@@ -239,7 +238,9 @@ export async function loadOpenApi(
   ) {
     return cached.document;
   }
-  const headers = bearerHeaders(profile.token);
+  // The finalized contract route is deliberately public. Planning may load it
+  // before pairing; authenticated execution callers still attach their grant.
+  const headers = profile.token ? bearerHeaders(profile.token) : new Headers();
   if (!forceRefresh && cached?.etag) headers.set("If-None-Match", cached.etag);
   const url = `${profile.server}/api/v1/openapi.json`;
   try {

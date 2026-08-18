@@ -143,6 +143,9 @@ describe("storefront product query boundaries", () => {
         expect(feedAttributeStart).toBeGreaterThan(-1);
         expect(detailAttributeStart).toBeGreaterThan(-1);
         expect(feedAttributeReader).toContain("isNull(productAttributes.deletedAt)");
+        expect(feedAttributeReader).toContain(
+            ".orderBy(\n                productAttributeValues.productId,\n                productAttributes.id,\n                productAttributeValues.id,\n            )",
+        );
         expect(detailAttributeReader).toContain("isNull(productAttributes.deletedAt)");
         expect(feedAttributeReader).not.toContain("productAttributes.filterable");
         expect(detailAttributeReader).not.toContain("productAttributes.filterable");
@@ -257,6 +260,24 @@ describe("storefront product query boundaries", () => {
         expect(feedBody.indexOf("mediaMapPromise", enrichmentWaveIndex)).toBeGreaterThan(enrichmentWaveIndex);
         expect(feedBody.indexOf("readStorefrontFeedAttributeMap(db, productIds)", enrichmentWaveIndex)).toBeGreaterThan(enrichmentWaveIndex);
         expect(feedBody.indexOf("readStorefrontFeedVariantMap(db, productIds, mediaMapPromise)", enrichmentWaveIndex)).toBeGreaterThan(enrichmentWaveIndex);
+    });
+
+    it("keeps exact feed preview eligibility delegated to every normal feed gate", () => {
+        const source = readFileSync(
+            `${PRODUCTS_MODULE_DIR}/products.storefront.ts`,
+            "utf8",
+        );
+        const exactBody = getFunctionBody(
+            source,
+            "getEligibleStorefrontFeedProductById",
+        );
+
+        expect(exactBody).toContain("getStorefrontFeedProducts(db, {");
+        expect(exactBody).toContain("ids: productId");
+        expect(exactBody).toContain("product.id === productId");
+        expect(exactBody).not.toContain("publicProductBaseConditions()");
+        expect(exactBody).not.toContain("products.excludeFromProductFeed");
+        expect(exactBody).not.toContain("publicProductHasPrimaryDiscoveryImage()");
     });
 
     it("keeps feed variants buyer-safe, normalized, and page-wide instead of N+1", () => {

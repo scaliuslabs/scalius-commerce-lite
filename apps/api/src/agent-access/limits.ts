@@ -2,8 +2,6 @@ export const AGENT_MAX_REQUEST_BODY_BYTES = 1024 * 1024;
 export const AGENT_MAX_RESULT_BYTES = 64 * 1024;
 export const AGENT_MAX_BATCH_STEPS = 20;
 export const AGENT_MAX_PARALLEL_READS = 2;
-export const AGENT_DEFAULT_SEARCH_RESULTS = 20;
-export const AGENT_MAX_SEARCH_RESULTS = 50;
 
 export class AgentPayloadTooLargeError extends Error {
   constructor(readonly maxBytes = AGENT_MAX_REQUEST_BODY_BYTES) {

@@ -6,6 +6,7 @@ import {
   renderAgentOperationManifestModule,
   type AgentOperationMetadata,
 } from "./agent-operation-manifest";
+import { buildAgentWorkflowCatalog } from "../agent-access/workflows";
 import { assertNoGenericPendingAgentOperations } from "./generate-agent-operation-manifest";
 
 const reviewedRead: AgentOperationMetadata = {
@@ -76,8 +77,11 @@ describe("stable manifest identity", () => {
       "dashboard.a.get",
       "dashboard.z.get",
     ]);
-    const first = renderAgentOperationManifestModule(manifest);
-    expect(renderAgentOperationManifestModule(manifest)).toBe(first);
+    const catalog = buildAgentWorkflowCatalog(manifest);
+    const first = renderAgentOperationManifestModule(manifest, catalog);
+    expect(renderAgentOperationManifestModule(manifest, catalog)).toBe(first);
+    expect(first).toContain("export const AGENT_WORKFLOW_CATALOG");
+    expect(first).toContain(JSON.stringify(catalog.version));
     expect(first).not.toMatch(/generatedAt|new Date\(|20\d\d-\d\d-\d\dT/);
   });
 

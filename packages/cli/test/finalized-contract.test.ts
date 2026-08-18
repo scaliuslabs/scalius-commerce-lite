@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { indexOperations, searchOperations } from "../src/openapi.js";
 import type { OpenApiDocument } from "../src/types.js";
+import resolveWorkflow from "../src/workflows.js";
+import { AGENT_INTENT_EVAL_CASES } from "./fixtures/agent-intents.js";
 
 describe("finalized API OpenAPI interop", () => {
   it("indexes every executable and continuation operation from the in-memory finalized application contract", async () => {
@@ -72,50 +74,29 @@ describe("finalized API OpenAPI interop", () => {
     expect(operations.find(({ id }) => id === "dashboard.theme.preview_session_create")?.agent.continuationOutput)
       .toEqual(expect.objectContaining({ sensitiveFields: ["continuationCode"] }));
 
-    const commonMerchantQuestions: Array<[string, string]> = [
-      ["what are today's sales?", "dashboard.home.activity"],
-      ["how much did we sell today?", "dashboard.home.activity"],
-      ["sales this month", "dashboard.home.summary"],
-      ["how many orders today", "dashboard.home.activity"],
-      ["new customers today", "dashboard.home.activity"],
-      ["how many products do I have", "dashboard.products.stats"],
-      ["catalog summary", "dashboard.products.stats"],
-      ["how many customers do we have", "dashboard.home.summary"],
-      ["recent orders", "dashboard.orders.list"],
-      ["orders pending payment", "dashboard.orders.list"],
-      ["orders needing fulfillment", "dashboard.orders.list"],
-      ["what needs fulfillment today", "dashboard.orders.list"],
-      ["orders waiting to ship", "dashboard.orders.list"],
-      ["manually fulfill an order", "dashboard.orders.fulfill"],
-      ["ship an order with Pathao", "dashboard.orders.create_shipment"],
-      ["refunds needing attention", "dashboard.orders.list"],
-      ["returns needing attention", "dashboard.orders.list"],
-      ["low stock issues", "dashboard.inventory_alerts.list"],
-      ["low stock products", "dashboard.inventory_alerts.list"],
-      ["show current inventory status", "dashboard.inventory.list"],
-      ["new customers", "dashboard.customers.list"],
-      ["who are our top customers", "dashboard.customers.list"],
-      ["payment problems", "dashboard.orders.payment_recovery_list"],
-      ["are any payments failing", "dashboard.orders.payment_recovery_list"],
-      ["what payment methods are enabled", "dashboard.payments.methods_get"],
-      ["change store settings", "dashboard.settings.business_get"],
-      ["change shipping settings", "dashboard.shipping_methods.list"],
-      ["show tax configuration", "dashboard.taxes.settings_get"],
-      ["change email settings", "dashboard.settings.email_get"],
-      ["show SMS settings", "dashboard.settings_sms.get_sms"],
-      ["change login settings", "dashboard.settings.customer_auth_get"],
-      ["show discovery configuration", "dashboard.seo.settings_get"],
-      ["change theme settings", "dashboard.theme.workspace_get"],
-      ["is my store healthy?", "dashboard.checkout.readiness_get"],
-      ["is my store ready?", "dashboard.checkout.readiness_get"],
-      ["analytics status", "dashboard.analytics.health"],
-      ["start a cart and checkout with delivery", "storefront.context.create"],
-      ["buy a product", "storefront.products.list"],
-      ["place an order", "storefront.checkout.submit"],
-      ["add a product to my cart", "storefront.cart.add"],
-    ];
-    for (const [question, expectedOperationId] of commonMerchantQuestions) {
-      expect(searchOperations(operations, question)[0]?.id, question).toBe(expectedOperationId);
+    expect(searchOperations(operations, "dashboard.home.activity")[0]?.id)
+      .toBe("dashboard.home.activity");
+    for (const testCase of AGENT_INTENT_EVAL_CASES) {
+      const resolution = resolveWorkflow(document, {
+        prompt: testCase.prompt,
+        surface: testCase.surface,
+      });
+      const operationIds = resolution.kind === "plan"
+        ? resolution.plan.operationIds
+        : resolution.kind === "control"
+          ? resolution.safePlan?.operationIds ?? []
+          : [];
+      expect(resolution.disposition, testCase.id)
+        .toBe(testCase.expectedDisposition ?? "execute");
+      expect(operationIds, testCase.id).toEqual(testCase.expectedOperationIds);
+      if (!testCase.expectedDisposition) {
+        expect(resolution.kind, testCase.id).toBe("plan");
+        if (resolution.kind === "plan") {
+          expect(resolution.plan.routeIds, testCase.id).toEqual([
+            testCase.expectedRouteId ?? testCase.id,
+          ]);
+        }
+      }
     }
-  }, 15_000);
+  }, 45_000);
 });

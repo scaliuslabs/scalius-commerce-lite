@@ -1,0 +1,4 @@
+interface:
+  display_name: "Scalius Catalog"
+  short_description: "Products, variants, media, inventory, and feeds"
+  default_prompt: "Use $scalius-catalog to create and verify a complex optioned product safely."

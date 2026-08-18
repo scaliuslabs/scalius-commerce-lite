@@ -1,0 +1,4 @@
+interface:
+  display_name: "Scalius Settings"
+  short_description: "Store behavior, providers, staff, and security"
+  default_prompt: "Use $scalius-settings to change and verify this store setting without losing unrelated values."

@@ -1,6 +1,7 @@
 // This file is generated from the finalized /api/v1 OpenAPI contract.
 // Do not edit by hand.
 
+import type { AgentWorkflowCatalog } from "../agent-access/workflows/types";
 import type { AgentOperationManifestEntry } from "../openapi/agent-operation-manifest";
 
 export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
@@ -47961,6 +47962,626 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     }
   },
   {
+    "operationId": "dashboard.seo.feed_row_preview",
+    "method": "GET",
+    "pathTemplate": "/api/v1/admin/settings/seo/feed-row-preview/{productId}",
+    "summary": "Preview exact emitted catalog feed rows for one product",
+    "description": "Projects current saved product state through the same Google/Meta row authority. It does not prove cache propagation or provider acceptance.",
+    "tags": [
+      "Admin - Settings"
+    ],
+    "surface": "dashboard",
+    "exposure": "execute",
+    "principals": [
+      "admin"
+    ],
+    "risk": "read",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "sequential",
+    "transport": "json",
+    "maxResponseBytes": 47104,
+    "maxRequestBytes": 16384,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "rbac": {
+      "type": "allOf",
+      "permissions": [
+        "products.view",
+        "settings.general.view"
+      ]
+    },
+    "inputSchema": {
+      "parameters": [
+        {
+          "schema": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "required": true,
+          "name": "productId",
+          "in": "path"
+        },
+        {
+          "schema": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "required": false,
+          "name": "sku",
+          "in": "query"
+        },
+        {
+          "schema": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024
+          },
+          "required": false,
+          "name": "cursor",
+          "in": "query"
+        },
+        {
+          "schema": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10
+          },
+          "required": false,
+          "name": "limit",
+          "in": "query"
+        }
+      ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "productId": {
+              "type": "string",
+              "maxLength": 128
+            },
+            "requestedSku": {
+              "type": "string",
+              "nullable": true,
+              "maxLength": 128
+            },
+            "policy": {
+              "type": "object",
+              "properties": {
+                "productCatalogEnabled": {
+                  "type": "boolean"
+                },
+                "includeUnavailableProducts": {
+                  "type": "boolean"
+                },
+                "variantStrategy": {
+                  "type": "string",
+                  "enum": [
+                    "products",
+                    "variants"
+                  ]
+                }
+              },
+              "required": [
+                "productCatalogEnabled",
+                "includeUnavailableProducts",
+                "variantStrategy"
+              ]
+            },
+            "entries": {
+              "type": "array",
+              "items": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "productId": {
+                        "type": "string",
+                        "maxLength": 128
+                      },
+                      "variantId": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 128
+                      },
+                      "sku": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 128
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": [
+                          "emitted"
+                        ]
+                      },
+                      "row": {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "product",
+                              "variant"
+                            ]
+                          },
+                          "productId": {
+                            "type": "string",
+                            "maxLength": 128
+                          },
+                          "variantId": {
+                            "type": "string",
+                            "nullable": true,
+                            "maxLength": 128
+                          },
+                          "id": {
+                            "type": "string",
+                            "maxLength": 49152
+                          },
+                          "title": {
+                            "type": "string",
+                            "maxLength": 49152
+                          },
+                          "description": {
+                            "type": "string",
+                            "maxLength": 49152
+                          },
+                          "link": {
+                            "type": "string",
+                            "maxLength": 49152
+                          },
+                          "imageLink": {
+                            "type": "string",
+                            "maxLength": 49152
+                          },
+                          "availability": {
+                            "type": "object",
+                            "properties": {
+                              "canonical": {
+                                "type": "string",
+                                "enum": [
+                                  "in_stock",
+                                  "out_of_stock"
+                                ]
+                              },
+                              "google": {
+                                "type": "string",
+                                "enum": [
+                                  "in_stock",
+                                  "out_of_stock"
+                                ]
+                              },
+                              "meta": {
+                                "type": "string",
+                                "enum": [
+                                  "in stock",
+                                  "out of stock"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "canonical",
+                              "google",
+                              "meta"
+                            ]
+                          },
+                          "condition": {
+                            "type": "string",
+                            "nullable": true,
+                            "enum": [
+                              "new",
+                              "refurbished",
+                              "used",
+                              null
+                            ]
+                          },
+                          "pricing": {
+                            "type": "object",
+                            "properties": {
+                              "currencyCode": {
+                                "type": "string",
+                                "maxLength": 3
+                              },
+                              "originalAmount": {
+                                "type": "number"
+                              },
+                              "currentAmount": {
+                                "type": "number"
+                              },
+                              "price": {
+                                "type": "string",
+                                "maxLength": 49152
+                              },
+                              "salePrice": {
+                                "type": "string",
+                                "nullable": true,
+                                "maxLength": 49152
+                              },
+                              "currentPrice": {
+                                "type": "string",
+                                "maxLength": 49152
+                              }
+                            },
+                            "required": [
+                              "currencyCode",
+                              "originalAmount",
+                              "currentAmount",
+                              "price",
+                              "salePrice",
+                              "currentPrice"
+                            ]
+                          },
+                          "brand": {
+                            "type": "string",
+                            "nullable": true,
+                            "maxLength": 49152
+                          },
+                          "gtin": {
+                            "type": "string",
+                            "nullable": true,
+                            "maxLength": 49152
+                          },
+                          "identifierExists": {
+                            "type": "string",
+                            "nullable": true,
+                            "enum": [
+                              "no"
+                            ]
+                          },
+                          "itemGroupId": {
+                            "type": "string",
+                            "nullable": true,
+                            "maxLength": 49152
+                          },
+                          "itemGroupTitle": {
+                            "type": "string",
+                            "nullable": true,
+                            "maxLength": 49152
+                          },
+                          "variantOptions": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "name": {
+                                  "type": "string",
+                                  "maxLength": 250
+                                },
+                                "value": {
+                                  "type": "string",
+                                  "maxLength": 250
+                                }
+                              },
+                              "required": [
+                                "name",
+                                "value"
+                              ]
+                            },
+                            "maxItems": 10
+                          },
+                          "googleProductCategory": {
+                            "type": "string",
+                            "nullable": true,
+                            "maxLength": 49152
+                          },
+                          "facebookProductCategory": {
+                            "type": "string",
+                            "nullable": true,
+                            "maxLength": 49152
+                          },
+                          "productType": {
+                            "type": "string",
+                            "nullable": true,
+                            "maxLength": 49152
+                          },
+                          "standardAttributes": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "name": {
+                                  "type": "string",
+                                  "enum": [
+                                    "size",
+                                    "color",
+                                    "material",
+                                    "pattern",
+                                    "gender",
+                                    "age_group"
+                                  ]
+                                },
+                                "value": {
+                                  "type": "string",
+                                  "maxLength": 49152
+                                }
+                              },
+                              "required": [
+                                "name",
+                                "value"
+                              ]
+                            },
+                            "maxItems": 260
+                          },
+                          "shipping": {
+                            "type": "object",
+                            "nullable": true,
+                            "properties": {
+                              "country": {
+                                "type": "string",
+                                "enum": [
+                                  "BD"
+                                ]
+                              },
+                              "service": {
+                                "type": "string",
+                                "enum": [
+                                  "Standard"
+                                ]
+                              },
+                              "price": {
+                                "type": "string",
+                                "maxLength": 49152
+                              }
+                            },
+                            "required": [
+                              "country",
+                              "service",
+                              "price"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "productId",
+                          "variantId",
+                          "id",
+                          "title",
+                          "description",
+                          "link",
+                          "imageLink",
+                          "availability",
+                          "condition",
+                          "pricing",
+                          "brand",
+                          "gtin",
+                          "identifierExists",
+                          "itemGroupId",
+                          "itemGroupTitle",
+                          "variantOptions",
+                          "googleProductCategory",
+                          "facebookProductCategory",
+                          "productType",
+                          "standardAttributes",
+                          "shipping"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "productId",
+                      "variantId",
+                      "sku",
+                      "status",
+                      "row"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "productId": {
+                        "type": "string",
+                        "maxLength": 128
+                      },
+                      "variantId": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 128
+                      },
+                      "sku": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 128
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": [
+                          "omitted"
+                        ]
+                      },
+                      "reason": {
+                        "type": "string",
+                        "enum": [
+                          "excluded_from_product_feed",
+                          "inactive_product",
+                          "unavailable_product",
+                          "unavailable_variant",
+                          "unresolved_variant_shape",
+                          "missing_image",
+                          "non_positive_price",
+                          "input_bounds_exceeded",
+                          "product_not_found",
+                          "sku_not_found",
+                          "sku_ambiguous",
+                          "feed_disabled",
+                          "storefront_url_unavailable"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "productId",
+                      "variantId",
+                      "sku",
+                      "status",
+                      "reason"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "productId": {
+                        "type": "string",
+                        "maxLength": 128
+                      },
+                      "variantId": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 128
+                      },
+                      "sku": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 128
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": [
+                          "preview_entry_too_large"
+                        ]
+                      },
+                      "requiredBytes": {
+                        "type": "integer",
+                        "minimum": 0
+                      }
+                    },
+                    "required": [
+                      "productId",
+                      "variantId",
+                      "sku",
+                      "status",
+                      "requiredBytes"
+                    ]
+                  }
+                ]
+              },
+              "maxItems": 10
+            },
+            "pagination": {
+              "type": "object",
+              "properties": {
+                "limit": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 10
+                },
+                "returned": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 10
+                },
+                "totalOutcomes": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 250
+                },
+                "hasNextPage": {
+                  "type": "boolean"
+                },
+                "nextCursor": {
+                  "type": "string",
+                  "nullable": true,
+                  "maxLength": 1024
+                },
+                "responseTruncated": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "limit",
+                "returned",
+                "totalOutcomes",
+                "hasNextPage",
+                "nextCursor",
+                "responseTruncated"
+              ]
+            },
+            "semantics": {
+              "type": "object",
+              "properties": {
+                "basis": {
+                  "type": "string",
+                  "enum": [
+                    "current_saved_state"
+                  ]
+                },
+                "emittedRowsAreExact": {
+                  "type": "boolean",
+                  "enum": [
+                    true
+                  ]
+                },
+                "entryFieldsTruncated": {
+                  "type": "boolean",
+                  "enum": [
+                    false
+                  ]
+                },
+                "cachedFeedPropagationVerified": {
+                  "type": "boolean",
+                  "enum": [
+                    false
+                  ]
+                },
+                "providerAcceptanceVerified": {
+                  "type": "boolean",
+                  "enum": [
+                    false
+                  ]
+                },
+                "pagesMayRaceWithWrites": {
+                  "type": "boolean",
+                  "enum": [
+                    true
+                  ]
+                },
+                "responseBudgetBytes": {
+                  "type": "number",
+                  "enum": [
+                    47104
+                  ]
+                }
+              },
+              "required": [
+                "basis",
+                "emittedRowsAreExact",
+                "entryFieldsTruncated",
+                "cachedFeedPropagationVerified",
+                "providerAcceptanceVerified",
+                "pagesMayRaceWithWrites",
+                "responseBudgetBytes"
+              ]
+            }
+          },
+          "required": [
+            "productId",
+            "requestedSku",
+            "policy",
+            "entries",
+            "pagination",
+            "semantics"
+          ]
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    }
+  },
+  {
     "operationId": "dashboard.seo.live_probe",
     "method": "GET",
     "pathTemplate": "/api/v1/admin/settings/seo/live-probe",
@@ -75846,3 +76467,9435 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
 export const AGENT_OPERATIONS_BY_ID: Readonly<Record<string, AgentOperationManifestEntry>> = Object.freeze(
   Object.fromEntries(AGENT_OPERATIONS.map((operation) => [operation.operationId, operation])),
 );
+
+export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
+  "version": "3.0.0",
+  "cards": [
+    {
+      "id": "catalog.optioned-product.v1",
+      "surface": "dashboard",
+      "title": "Create an optioned product",
+      "summary": "Create and verify an optioned product.",
+      "examples": [
+        "Create and verify a two-axis product."
+      ],
+      "tags": [
+        "catalog",
+        "media",
+        "variants"
+      ],
+      "constructionRules": {
+        "mediaAssociationIds": "caller-local-pmed",
+        "variantImageReferences": "pmed-association-id",
+        "selectedOptionValueOrder": "merchant-axis-order",
+        "variantMatrix": "complete",
+        "skuIdentity": "global-lower-trim-unique",
+        "inventoryAuthority": "variant-only-no-product-stock",
+        "createMode": "single-atomic-products.create",
+        "uncertainCreateRecovery": "reread-before-retry"
+      },
+      "requiredFacts": [
+        {
+          "id": "productSpec",
+          "title": "Product spec",
+          "description": "Exact name/description/price/slug, flags, SEO/canonicalPath/noIndex, sitemap/feed exclusions, condition.",
+          "required": true,
+          "source": {
+            "kind": "merchant"
+          },
+          "nonInferenceRule": "Do not invent copy, price, brand, condition, or flags."
+        },
+        {
+          "id": "currency",
+          "title": "Currency",
+          "description": "Saved currency for all prices.",
+          "required": true,
+          "source": {
+            "kind": "operation",
+            "operationId": "dashboard.settings.currency_get",
+            "responsePointer": "/data/currencyCode"
+          },
+          "nonInferenceRule": "Use saved currency; never convert."
+        },
+        {
+          "id": "categoryId",
+          "title": "Category",
+          "description": "Existing category ID or conditional-create result.",
+          "required": true,
+          "source": {
+            "kind": "operation",
+            "operationId": "dashboard.categories.form_options",
+            "responsePointer": "/data/categories",
+            "alternatives": [
+              {
+                "operationId": "dashboard.categories.create",
+                "responsePointer": "/data/id"
+              }
+            ]
+          },
+          "nonInferenceRule": "Resolve exact ID; never guess."
+        },
+        {
+          "id": "categoryCreateSpec",
+          "title": "Category spec",
+          "description": "Only if missing: exact name/slug/copy/SEO/canonical/discovery/image fields.",
+          "required": false,
+          "source": {
+            "kind": "merchant"
+          },
+          "nonInferenceRule": "No spec means no category create."
+        },
+        {
+          "id": "attributeSet",
+          "title": "Attributes",
+          "description": "{order,createOrder,byId}; values/create specs plus read or same-key captured IDs.",
+          "required": true,
+          "source": {
+            "kind": "merchant"
+          },
+          "nonInferenceRule": "Only an active read or same-key create capture may set attributeId."
+        },
+        {
+          "id": "mediaSet",
+          "title": "Media",
+          "description": "{order,importOrder,byId}: all keys, URL keys, resolved mediaId/alt/primary; 1-250 unique, one primary.",
+          "required": true,
+          "source": {
+            "kind": "merchant"
+          },
+          "nonInferenceRule": "Never infer asset keys, count, order, role, or position."
+        },
+        {
+          "id": "optionMatrix",
+          "title": "Matrix",
+          "description": "Ordered axes/values; complete SKU price/stock/mediaSet imageId rows.",
+          "required": true,
+          "source": {
+            "kind": "merchant"
+          },
+          "nonInferenceRule": "Keep all rows/order; never infer imageId by label/position."
+        }
+      ],
+      "phases": [
+        {
+          "id": "resolve",
+          "surface": "dashboard",
+          "title": "Resolve",
+          "summary": "Read identities and policy.",
+          "dependsOn": [],
+          "stopConditions": [
+            "Stop on ambiguity, collision, missing facts, or grants."
+          ],
+          "steps": [
+            {
+              "id": "categories",
+              "title": "Categories",
+              "operationId": "dashboard.categories.form_options",
+              "mutation": "read",
+              "input": {
+                "template": {},
+                "dependencies": [],
+                "defaults": []
+              },
+              "policies": {
+                "revision": "none",
+                "idempotency": "none",
+                "confirmation": "none",
+                "stopConditions": [
+                  "Read failure: stop."
+                ],
+                "nonInferenceRules": [
+                  "Missing stays unknown."
+                ]
+              }
+            },
+            {
+              "id": "attributes",
+              "title": "Attributes",
+              "operationId": "dashboard.attributes.list_summaries",
+              "mutation": "read",
+              "condition": "Only requested attribute names.",
+              "input": {
+                "template": {
+                  "query": {
+                    "page": 1,
+                    "limit": 20,
+                    "search": null
+                  }
+                },
+                "dependencies": [],
+                "defaults": []
+              },
+              "policies": {
+                "revision": "none",
+                "idempotency": "none",
+                "confirmation": "none",
+                "stopConditions": [
+                  "Read failure: stop."
+                ],
+                "nonInferenceRules": [
+                  "Missing stays unknown."
+                ]
+              }
+            },
+            {
+              "id": "currency",
+              "title": "Currency",
+              "operationId": "dashboard.settings.currency_get",
+              "mutation": "read",
+              "input": {
+                "template": {},
+                "dependencies": [],
+                "defaults": []
+              },
+              "policies": {
+                "revision": "none",
+                "idempotency": "none",
+                "confirmation": "none",
+                "stopConditions": [
+                  "Read failure: stop."
+                ],
+                "nonInferenceRules": [
+                  "Missing stays unknown."
+                ]
+              }
+            },
+            {
+              "id": "seo",
+              "title": "Discovery",
+              "operationId": "dashboard.seo.settings_get",
+              "mutation": "read",
+              "input": {
+                "template": {},
+                "dependencies": [],
+                "defaults": []
+              },
+              "policies": {
+                "revision": "none",
+                "idempotency": "none",
+                "confirmation": "none",
+                "stopConditions": [
+                  "Read failure: stop."
+                ],
+                "nonInferenceRules": [
+                  "Missing stays unknown."
+                ]
+              }
+            },
+            {
+              "id": "productCollision",
+              "title": "Product collision",
+              "operationId": "dashboard.products.list_summaries",
+              "mutation": "read",
+              "input": {
+                "template": {
+                  "query": {
+                    "page": 1,
+                    "limit": 10,
+                    "search": null
+                  }
+                },
+                "dependencies": [
+                  {
+                    "templatePointer": "/query/search",
+                    "source": {
+                      "kind": "fact",
+                      "factId": "productSpec",
+                      "factPointer": "/name"
+                    }
+                  }
+                ],
+                "defaults": []
+              },
+              "policies": {
+                "revision": "none",
+                "idempotency": "none",
+                "confirmation": "none",
+                "stopConditions": [
+                  "Read failure: stop."
+                ],
+                "nonInferenceRules": [
+                  "Missing stays unknown."
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "prepare",
+          "surface": "dashboard",
+          "title": "Prepare",
+          "summary": "Create approved prerequisites.",
+          "dependsOn": [
+            "resolve"
+          ],
+          "stopConditions": [
+            "Concurrent create: reread; never duplicate."
+          ],
+          "steps": [
+            {
+              "id": "categoryCreate",
+              "title": "Category",
+              "operationId": "dashboard.categories.create",
+              "mutation": "create",
+              "condition": "Only when no exact reusable category exists.",
+              "input": {
+                "template": {
+                  "body": {
+                    "name": null,
+                    "description": null,
+                    "slug": null,
+                    "metaTitle": null,
+                    "metaDescription": null,
+                    "canonicalPath": null,
+                    "noIndex": null,
+                    "excludeFromSitemap": null,
+                    "image": null
+                  }
+                },
+                "dependencies": [],
+                "defaults": [],
+                "picks": [
+                  {
+                    "factId": "categoryCreateSpec",
+                    "templatePointer": "/body",
+                    "keys": [
+                      "name",
+                      "description",
+                      "slug",
+                      "metaTitle",
+                      "metaDescription",
+                      "canonicalPath",
+                      "noIndex",
+                      "excludeFromSitemap",
+                      "image"
+                    ]
+                  }
+                ]
+              },
+              "policies": {
+                "revision": "none",
+                "idempotency": "none",
+                "confirmation": "required",
+                "stopConditions": [
+                  "Conflict: stop; uncertainty: reread first."
+                ],
+                "nonInferenceRules": [
+                  "Use exact facts."
+                ]
+              }
+            },
+            {
+              "id": "attributeCreate",
+              "title": "Attribute",
+              "operationId": "dashboard.attributes.create",
+              "mutation": "create",
+              "condition": "Skip when createOrder is empty; otherwise use its approved keys.",
+              "input": {
+                "template": {
+                  "body": {
+                    "name": null,
+                    "slug": null,
+                    "filterable": null,
+                    "options": null
+                  }
+                },
+                "dependencies": [],
+                "defaults": []
+              },
+              "repeat": {
+                "factId": "attributeSet",
+                "orderPointer": "/createOrder",
+                "itemMapPointer": "/byId",
+                "minItems": 1,
+                "maxItems": 90,
+                "bindings": [
+                  {
+                    "templatePointer": "/body/name",
+                    "itemPointer": "/name"
+                  },
+                  {
+                    "templatePointer": "/body/slug",
+                    "itemPointer": "/slug"
+                  },
+                  {
+                    "templatePointer": "/body/filterable",
+                    "itemPointer": "/filterable"
+                  },
+                  {
+                    "templatePointer": "/body/options",
+                    "itemPointer": "/options"
+                  }
+                ],
+                "capture": {
+                  "responsePointer": "/data/attribute/id",
+                  "itemPointer": "/attributeId"
+                }
+              },
+              "policies": {
+                "revision": "none",
+                "idempotency": "none",
+                "confirmation": "required",
+                "stopConditions": [
+                  "Conflict: stop; uncertainty: reread first."
+                ],
+                "nonInferenceRules": [
+                  "Use exact facts."
+                ]
+              }
+            },
+            {
+              "id": "discoveryUpdate",
+              "title": "Discovery",
+              "operationId": "dashboard.seo.settings_update",
+              "mutation": "partial",
+              "condition": "Only with store-wide approval.",
+              "input": {
+                "template": {
+                  "body": {
+                    "discovery": {}
+                  }
+                },
+                "dependencies": [],
+                "defaults": []
+              },
+              "policies": {
+                "revision": "none",
+                "idempotency": "none",
+                "confirmation": "required",
+                "stopConditions": [
+                  "Conflict: stop; uncertainty: reread first."
+                ],
+                "nonInferenceRules": [
+                  "Use exact facts."
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "media",
+          "surface": "dashboard",
+          "title": "Media",
+          "summary": "Commit keyed assets.",
+          "dependsOn": [
+            "resolve"
+          ],
+          "stopConditions": [
+            "Stop on invalid, duplicate, inaccessible, or oversized media."
+          ],
+          "steps": [
+            {
+              "id": "asset",
+              "title": "Asset",
+              "operationId": "dashboard.media.import_url",
+              "mutation": "create",
+              "condition": "Skip empty importOrder. Ready mediaId skips import; local files complete dashboard.media-upload and re-enter with mediaId.",
+              "input": {
+                "template": {
+                  "body": {
+                    "sourceUrl": null
+                  }
+                },
+                "dependencies": [],
+                "defaults": []
+              },
+              "repeat": {
+                "factId": "mediaSet",
+                "orderPointer": "/importOrder",
+                "itemMapPointer": "/byId",
+                "minItems": 1,
+                "maxItems": 250,
+                "bindings": [
+                  {
+                    "templatePointer": "/body/sourceUrl",
+                    "itemPointer": "/sourceUrl"
+                  }
+                ],
+                "capture": {
+                  "responsePointer": "/data/file/id",
+                  "itemPointer": "/mediaId"
+                }
+              },
+              "policies": {
+                "revision": "none",
+                "idempotency": "none",
+                "confirmation": "required",
+                "stopConditions": [
+                  "Conflict: stop; uncertainty: reread first."
+                ],
+                "nonInferenceRules": [
+                  "Use exact facts.",
+                  "Capture mediaId only to the same key."
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "create",
+          "surface": "dashboard",
+          "title": "Create",
+          "summary": "Submit one atomic product.",
+          "dependsOn": [
+            "prepare",
+            "media"
+          ],
+          "stopConditions": [
+            "Stop on conflict; never fall back to per-SKU creation."
+          ],
+          "steps": [
+            {
+              "id": "product",
+              "title": "Product",
+              "operationId": "dashboard.products.create",
+              "mutation": "create",
+              "condition": "Require every product field, active attribute ID, media association, axis, and SKU row.",
+              "input": {
+                "template": {
+                  "body": {
+                    "name": null,
+                    "description": null,
+                    "price": null,
+                    "categoryId": null,
+                    "isActive": true,
+                    "freeDelivery": false,
+                    "metaTitle": null,
+                    "metaDescription": null,
+                    "canonicalPath": null,
+                    "noIndex": false,
+                    "excludeFromSitemap": false,
+                    "excludeFromProductFeed": false,
+                    "productCondition": null,
+                    "slug": null,
+                    "media": [],
+                    "attributes": [],
+                    "optionMatrix": null
+                  }
+                },
+                "dependencies": [
+                  {
+                    "templatePointer": "/body/categoryId",
+                    "source": {
+                      "kind": "fact",
+                      "factId": "categoryId"
+                    }
+                  },
+                  {
+                    "templatePointer": "/body/optionMatrix",
+                    "source": {
+                      "kind": "fact",
+                      "factId": "optionMatrix"
+                    }
+                  }
+                ],
+                "defaults": [],
+                "picks": [
+                  {
+                    "factId": "productSpec",
+                    "templatePointer": "/body",
+                    "keys": [
+                      "name",
+                      "description",
+                      "price",
+                      "slug",
+                      "isActive",
+                      "freeDelivery",
+                      "metaTitle",
+                      "metaDescription",
+                      "canonicalPath",
+                      "noIndex",
+                      "excludeFromSitemap",
+                      "excludeFromProductFeed",
+                      "productCondition"
+                    ]
+                  }
+                ],
+                "materializations": [
+                  {
+                    "factId": "mediaSet",
+                    "templatePointer": "/body/media",
+                    "orderPointer": "/order",
+                    "itemMapPointer": "/byId",
+                    "minItems": 1,
+                    "maxItems": 250,
+                    "keyField": "id",
+                    "keys": [
+                      "mediaId",
+                      "altText",
+                      "isPrimary"
+                    ]
+                  },
+                  {
+                    "factId": "attributeSet",
+                    "templatePointer": "/body/attributes",
+                    "orderPointer": "/order",
+                    "itemMapPointer": "/byId",
+                    "minItems": 1,
+                    "maxItems": 90,
+                    "keys": [
+                      "attributeId",
+                      "value"
+                    ]
+                  }
+                ]
+              },
+              "policies": {
+                "revision": "none",
+                "idempotency": "none",
+                "confirmation": "required",
+                "stopConditions": [
+                  "Conflict: stop; uncertainty: reread first."
+                ],
+                "nonInferenceRules": [
+                  "Use exact facts.",
+                  "Variant imageId must equal a mediaSet pmed key; never use position."
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "publish",
+          "surface": "dashboard",
+          "title": "Publish",
+          "summary": "Read readiness and revision, then publish.",
+          "dependsOn": [
+            "create"
+          ],
+          "stopConditions": [
+            "Readiness/revision failure: stop."
+          ],
+          "steps": [
+            {
+              "id": "category",
+              "title": "Category",
+              "operationId": "dashboard.categories.get_section",
+              "mutation": "read",
+              "input": {
+                "template": {
+                  "path": {
+                    "id": null,
+                    "section": "summary"
+                  }
+                },
+                "dependencies": [
+                  {
+                    "templatePointer": "/path/id",
+                    "source": {
+                      "kind": "fact",
+                      "factId": "categoryId"
+                    }
+                  }
+                ],
+                "defaults": []
+              },
+              "policies": {
+                "revision": "none",
+                "idempotency": "none",
+                "confirmation": "none",
+                "stopConditions": [
+                  "Read failure: stop."
+                ],
+                "nonInferenceRules": [
+                  "Missing stays unknown."
+                ]
+              }
+            },
+            {
+              "id": "readiness",
+              "title": "Readiness",
+              "operationId": "dashboard.categories.publish_readiness",
+              "mutation": "read",
+              "input": {
+                "template": {
+                  "path": {
+                    "id": null
+                  }
+                },
+                "dependencies": [
+                  {
+                    "templatePointer": "/path/id",
+                    "source": {
+                      "kind": "fact",
+                      "factId": "categoryId"
+                    }
+                  }
+                ],
+                "defaults": []
+              },
+              "policies": {
+                "revision": "none",
+                "idempotency": "none",
+                "confirmation": "none",
+                "stopConditions": [
+                  "Read failure: stop."
+                ],
+                "nonInferenceRules": [
+                  "Missing stays unknown."
+                ]
+              }
+            },
+            {
+              "id": "status",
+              "title": "Status",
+              "operationId": "dashboard.categories.set_status",
+              "mutation": "lifecycle",
+              "condition": "Only if ready and not published.",
+              "input": {
+                "template": {
+                  "path": {
+                    "id": null
+                  },
+                  "body": {
+                    "expectedRevision": null,
+                    "status": "published"
+                  }
+                },
+                "dependencies": [
+                  {
+                    "templatePointer": "/path/id",
+                    "source": {
+                      "kind": "fact",
+                      "factId": "categoryId"
+                    }
+                  },
+                  {
+                    "templatePointer": "/body/expectedRevision",
+                    "source": {
+                      "kind": "step",
+                      "phaseId": "publish",
+                      "stepId": "category",
+                      "responsePointer": "/data/category/revision"
+                    }
+                  }
+                ],
+                "defaults": []
+              },
+              "policies": {
+                "revision": "required",
+                "idempotency": "none",
+                "confirmation": "required",
+                "stopConditions": [
+                  "Conflict: reread summary/readiness; no stale retry."
+                ],
+                "nonInferenceRules": [
+                  "Use exact facts."
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "dashboardVerify",
+          "surface": "dashboard",
+          "title": "Admin verify",
+          "summary": "Read admin evidence.",
+          "dependsOn": [
+            "create",
+            "publish"
+          ],
+          "stopConditions": [
+            "Stop on product/discovery drift.",
+            "Preview proves rows only; not sitemap membership, cache propagation, or provider acceptance.",
+            "Oversize preview: report row unverified; do not claim feed parity."
+          ],
+          "steps": [
+            {
+              "id": "sections",
+              "title": "Sections",
+              "operationId": "dashboard.products.get_section",
+              "mutation": "read",
+              "condition": "Read base, text, media, attributes, info, options, variants.",
+              "input": {
+                "template": {
+                  "path": {
+                    "id": null,
+                    "section": null
+                  },
+                  "query": {
+                    "offset": 0,
+                    "limit": 10
+                  }
+                },
+                "dependencies": [
+                  {
+                    "templatePointer": "/path/id",
+                    "source": {
+                      "kind": "step",
+                      "phaseId": "create",
+                      "stepId": "product",
+                      "responsePointer": "/data/id"
+                    }
+                  }
+                ],
+                "defaults": []
+              },
+              "policies": {
+                "revision": "none",
+                "idempotency": "none",
+                "confirmation": "none",
+                "stopConditions": [
+                  "Read failure: stop."
+                ],
+                "nonInferenceRules": [
+                  "Missing stays unknown."
+                ]
+              }
+            },
+            {
+              "id": "feed",
+              "title": "Feed",
+              "operationId": "dashboard.seo.feed_row_preview",
+              "mutation": "read",
+              "condition": "Page cursor to end.",
+              "input": {
+                "template": {
+                  "path": {
+                    "productId": null
+                  },
+                  "query": {
+                    "limit": 10
+                  }
+                },
+                "dependencies": [
+                  {
+                    "templatePointer": "/path/productId",
+                    "source": {
+                      "kind": "step",
+                      "phaseId": "create",
+                      "stepId": "product",
+                      "responsePointer": "/data/id"
+                    }
+                  }
+                ],
+                "defaults": []
+              },
+              "policies": {
+                "revision": "none",
+                "idempotency": "none",
+                "confirmation": "none",
+                "stopConditions": [
+                  "Read failure: stop."
+                ],
+                "nonInferenceRules": [
+                  "Missing stays unknown."
+                ]
+              }
+            },
+            {
+              "id": "probe",
+              "title": "Probe",
+              "operationId": "dashboard.seo.live_probe",
+              "mutation": "read",
+              "input": {
+                "template": {},
+                "dependencies": [],
+                "defaults": []
+              },
+              "policies": {
+                "revision": "none",
+                "idempotency": "none",
+                "confirmation": "none",
+                "stopConditions": [
+                  "Read failure: stop."
+                ],
+                "nonInferenceRules": [
+                  "Missing stays unknown."
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "storefrontVerify",
+          "surface": "storefront",
+          "title": "Buyer verify",
+          "summary": "Compare buyer SKU truth.",
+          "dependsOn": [
+            "dashboardVerify"
+          ],
+          "stopConditions": [
+            "Buyer-visible mismatch: stop."
+          ],
+          "steps": [
+            {
+              "id": "sections",
+              "title": "Sections",
+              "operationId": "storefront.products.get_section",
+              "mutation": "read",
+              "condition": "Read summary, media, options, values, bounded variants.",
+              "input": {
+                "template": {
+                  "path": {
+                    "slug": null,
+                    "section": null
+                  },
+                  "query": {
+                    "offset": 0,
+                    "limit": 10
+                  }
+                },
+                "dependencies": [
+                  {
+                    "templatePointer": "/path/slug",
+                    "source": {
+                      "kind": "fact",
+                      "factId": "productSpec",
+                      "factPointer": "/slug"
+                    }
+                  }
+                ],
+                "defaults": []
+              },
+              "policies": {
+                "revision": "none",
+                "idempotency": "none",
+                "confirmation": "none",
+                "stopConditions": [
+                  "Read failure: stop."
+                ],
+                "nonInferenceRules": [
+                  "Missing stays unknown."
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "verification": [
+        {
+          "id": "composition",
+          "surface": "dashboard",
+          "operationId": "dashboard.products.get_section",
+          "responsePointers": [
+            "/data/aggregateRevision",
+            "/data/items",
+            "/data/total"
+          ],
+          "proves": [
+            "Exact media, attributes, axes, SKUs, prices, and stock."
+          ],
+          "bounds": {
+            "maxCalls": 50,
+            "maxItems": 500,
+            "maxResponseBytes": 65536
+          }
+        },
+        {
+          "id": "feed",
+          "surface": "dashboard",
+          "operationId": "dashboard.seo.feed_row_preview",
+          "responsePointers": [
+            "/data/entries",
+            "/data/pagination",
+            "/data/semantics"
+          ],
+          "proves": [
+            "Exact emitted row or omission reason; oversize is unverified."
+          ],
+          "bounds": {
+            "maxCalls": 25,
+            "maxItems": 250,
+            "maxResponseBytes": 47104
+          }
+        },
+        {
+          "id": "discovery",
+          "surface": "dashboard",
+          "operationId": "dashboard.seo.live_probe",
+          "responsePointers": [
+            "/data/ok",
+            "/data/resources"
+          ],
+          "proves": [
+            "Sitemap/feed health, bounded counts, and absolute links only."
+          ],
+          "bounds": {
+            "maxCalls": 1,
+            "maxItems": 12,
+            "maxResponseBytes": 65536
+          }
+        },
+        {
+          "id": "buyer",
+          "surface": "storefront",
+          "operationId": "storefront.products.get_section",
+          "responsePointers": [
+            "/data/product",
+            "/data/items"
+          ],
+          "proves": [
+            "Buyer SKU price, exact image, availability; excludes sitemap/feed membership."
+          ],
+          "bounds": {
+            "maxCalls": 20,
+            "maxItems": 150,
+            "maxResponseBytes": 61440
+          }
+        }
+      ]
+    },
+    {
+      "id": "operations.daily-snapshot.v1",
+      "surface": "dashboard",
+      "title": "Daily snapshot",
+      "summary": "Report booked activity, backlogs, and checkout readiness.",
+      "examples": [
+        "Read booked revenue, orders, fulfillment, stock/recovery work, and checkout readiness."
+      ],
+      "tags": [
+        "daily",
+        "operations",
+        "readiness"
+      ],
+      "requiredFacts": [
+        {
+          "id": "days",
+          "title": "Merchant-day window",
+          "description": "Use the fixed one-day window for today.",
+          "required": true,
+          "defaultValue": 1,
+          "source": {
+            "kind": "constant",
+            "value": 1
+          },
+          "nonInferenceRule": "Keep Asia/Dhaka keys; ignore host timezone."
+        },
+        {
+          "id": "currency",
+          "title": "Currency",
+          "description": "Use saved currency settings.",
+          "required": true,
+          "source": {
+            "kind": "operation",
+            "operationId": "dashboard.settings.currency_get",
+            "responsePointer": "/data/currencyCode"
+          },
+          "nonInferenceRule": "Never guess currency."
+        }
+      ],
+      "phases": [
+        {
+          "id": "activity",
+          "surface": "dashboard",
+          "title": "Activity and queues",
+          "summary": "Merchant-day activity, currency, and queues.",
+          "dependsOn": [],
+          "stopConditions": [
+            "Use pagination and Asia/Dhaka dates."
+          ],
+          "steps": [
+            {
+              "id": "daily",
+              "title": "Activity",
+              "operationId": "dashboard.home.activity",
+              "mutation": "read",
+              "input": {
+                "template": {
+                  "query": {
+                    "days": 1
+                  }
+                },
+                "dependencies": [
+                  {
+                    "templatePointer": "/query/days",
+                    "source": {
+                      "kind": "fact",
+                      "factId": "days"
+                    }
+                  }
+                ],
+                "defaults": []
+              },
+              "output": {
+                "selectors": [
+                  {
+                    "pointer": "/data/dailyActivityData",
+                    "alias": "activity",
+                    "maxItems": 1,
+                    "exactItems": 1,
+                    "fields": [
+                      {
+                        "pointer": "/date",
+                        "alias": "date"
+                      },
+                      {
+                        "pointer": "/orders",
+                        "alias": "orders"
+                      },
+                      {
+                        "pointer": "/revenue",
+                        "alias": "bookedRevenue"
+                      },
+                      {
+                        "pointer": "/newCustomers",
+                        "alias": "newCustomers"
+                      }
+                    ]
+                  }
+                ]
+              },
+              "policies": {
+                "revision": "none",
+                "idempotency": "none",
+                "confirmation": "none",
+                "stopConditions": [
+                  "Stop on read failure."
+                ],
+                "nonInferenceRules": [
+                  "Missing is unknown."
+                ]
+              }
+            },
+            {
+              "id": "currency",
+              "title": "Currency",
+              "operationId": "dashboard.settings.currency_get",
+              "mutation": "read",
+              "input": {
+                "template": {},
+                "dependencies": [],
+                "defaults": []
+              },
+              "output": {
+                "selectors": [
+                  {
+                    "pointer": "/data/currencyCode",
+                    "alias": "currencyCode"
+                  },
+                  {
+                    "pointer": "/data/currencySymbol",
+                    "alias": "currencySymbol"
+                  }
+                ]
+              },
+              "policies": {
+                "revision": "none",
+                "idempotency": "none",
+                "confirmation": "none",
+                "stopConditions": [
+                  "Stop on read failure."
+                ],
+                "nonInferenceRules": [
+                  "Missing is unknown."
+                ]
+              }
+            },
+            {
+              "id": "fulfillment",
+              "title": "Fulfillment",
+              "operationId": "dashboard.orders.list",
+              "mutation": "read",
+              "input": {
+                "template": {
+                  "query": {
+                    "page": 1,
+                    "limit": 10,
+                    "statusGroup": "open",
+                    "fulfillmentStatus": "pending",
+                    "sort": "createdAt",
+                    "order": "desc"
+                  }
+                },
+                "dependencies": [],
+                "defaults": []
+              },
+              "output": {
+                "selectors": [
+                  {
+                    "pointer": "/data/orders",
+                    "alias": "orderQueue",
+                    "maxItems": 10,
+                    "fields": [
+                      {
+                        "pointer": "/id",
+                        "alias": "id"
+                      },
+                      {
+                        "pointer": "/totalAmount",
+                        "alias": "totalAmount"
+                      },
+                      {
+                        "pointer": "/status",
+                        "alias": "status"
+                      },
+                      {
+                        "pointer": "/paymentStatus",
+                        "alias": "paymentStatus"
+                      },
+                      {
+                        "pointer": "/paymentMethod",
+                        "alias": "paymentMethod"
+                      },
+                      {
+                        "pointer": "/fulfillmentStatus",
+                        "alias": "fulfillmentStatus"
+                      },
+                      {
+                        "pointer": "/createdAt",
+                        "alias": "createdAt"
+                      },
+                      {
+                        "pointer": "/itemCount",
+                        "alias": "itemCount"
+                      },
+                      {
+                        "pointer": "/totalQuantity",
+                        "alias": "totalQuantity"
+                      }
+                    ]
+                  },
+                  {
+                    "pointer": "/data/pagination",
+                    "alias": "pagination",
+                    "fields": [
+                      {
+                        "pointer": "/page",
+                        "alias": "page"
+                      },
+                      {
+                        "pointer": "/limit",
+                        "alias": "limit"
+                      },
+                      {
+                        "pointer": "/total",
+                        "alias": "total"
+                      },
+                      {
+                        "pointer": "/totalPages",
+                        "alias": "totalPages"
+                      }
+                    ]
+                  }
+                ]
+              },
+              "policies": {
+                "revision": "none",
+                "idempotency": "none",
+                "confirmation": "none",
+                "stopConditions": [
+                  "Stop on read failure."
+                ],
+                "nonInferenceRules": [
+                  "Missing is unknown."
+                ]
+              }
+            },
+            {
+              "id": "paymentRecovery",
+              "title": "Recovery",
+              "operationId": "dashboard.orders.payment_recovery_list",
+              "mutation": "read",
+              "input": {
+                "template": {
+                  "query": {
+                    "page": 1,
+                    "limit": 1,
+                    "state": "recoverable"
+                  }
+                },
+                "dependencies": [],
+                "defaults": []
+              },
+              "output": {
+                "selectors": [
+                  {
+                    "pointer": "/data/pagination/total",
+                    "alias": "total"
+                  }
+                ]
+              },
+              "policies": {
+                "revision": "none",
+                "idempotency": "none",
+                "confirmation": "none",
+                "stopConditions": [
+                  "Stop on read failure."
+                ],
+                "nonInferenceRules": [
+                  "Missing is unknown."
+                ]
+              }
+            },
+            {
+              "id": "paymentNeedsAttention",
+              "title": "Attention total",
+              "operationId": "dashboard.orders.payment_recovery_list",
+              "mutation": "read",
+              "input": {
+                "template": {
+                  "query": {
+                    "page": 1,
+                    "limit": 1,
+                    "state": "needs_attention"
+                  }
+                },
+                "dependencies": [],
+                "defaults": []
+              },
+              "output": {
+                "selectors": [
+                  {
+                    "pointer": "/data/pagination/total",
+                    "alias": "total"
+                  }
+                ]
+              },
+              "policies": {
+                "revision": "none",
+                "idempotency": "none",
+                "confirmation": "none",
+                "stopConditions": [
+                  "Stop on read failure."
+                ],
+                "nonInferenceRules": [
+                  "Missing is unknown."
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "readiness",
+          "surface": "dashboard",
+          "title": "Readiness",
+          "summary": "Read saved, active, and buyer-usable checkout facts.",
+          "dependsOn": [
+            "activity"
+          ],
+          "stopConditions": [
+            "Missing readiness is unknown."
+          ],
+          "steps": [
+            {
+              "id": "alerts",
+              "title": "Alerts",
+              "operationId": "dashboard.inventory_alerts.list",
+              "mutation": "read",
+              "input": {
+                "template": {
+                  "query": {
+                    "status": "active"
+                  }
+                },
+                "dependencies": [],
+                "defaults": []
+              },
+              "output": {
+                "selectors": [
+                  {
+                    "pointer": "/data/alerts",
+                    "alias": "inventoryAlerts",
+                    "maxItems": 20,
+                    "fields": [
+                      {
+                        "pointer": "/productId",
+                        "alias": "productId"
+                      },
+                      {
+                        "pointer": "/productName",
+                        "alias": "productName"
+                      },
+                      {
+                        "pointer": "/variantId",
+                        "alias": "variantId"
+                      },
+                      {
+                        "pointer": "/variantSku",
+                        "alias": "sku"
+                      },
+                      {
+                        "pointer": "/variantLabel",
+                        "alias": "variant"
+                      },
+                      {
+                        "pointer": "/currentQty",
+                        "alias": "quantity"
+                      },
+                      {
+                        "pointer": "/threshold",
+                        "alias": "threshold"
+                      },
+                      {
+                        "pointer": "/alertStatus",
+                        "alias": "status"
+                      }
+                    ]
+                  }
+                ]
+              },
+              "policies": {
+                "revision": "none",
+                "idempotency": "none",
+                "confirmation": "none",
+                "stopConditions": [
+                  "Stop on read failure."
+                ],
+                "nonInferenceRules": [
+                  "Missing is unknown."
+                ]
+              }
+            },
+            {
+              "id": "checkout",
+              "title": "Checkout",
+              "operationId": "dashboard.checkout.readiness_get",
+              "mutation": "read",
+              "input": {
+                "template": {},
+                "dependencies": [],
+                "defaults": []
+              },
+              "output": {
+                "selectors": [
+                  {
+                    "pointer": "/data/ready",
+                    "alias": "ready"
+                  },
+                  {
+                    "pointer": "/data/hasActiveShippingMethod",
+                    "alias": "hasActiveShippingMethod"
+                  },
+                  {
+                    "pointer": "/data/hasActiveDeliveryHierarchy",
+                    "alias": "hasActiveDeliveryHierarchy"
+                  },
+                  {
+                    "pointer": "/data/customerSignInRequired",
+                    "alias": "customerSignInRequired"
+                  },
+                  {
+                    "pointer": "/data/hasUsableCustomerSignIn",
+                    "alias": "hasUsableCustomerSignIn"
+                  },
+                  {
+                    "pointer": "/data/issues",
+                    "alias": "issues",
+                    "maxItems": 20
+                  }
+                ]
+              },
+              "policies": {
+                "revision": "none",
+                "idempotency": "none",
+                "confirmation": "none",
+                "stopConditions": [
+                  "Stop on read failure."
+                ],
+                "nonInferenceRules": [
+                  "Missing is unknown."
+                ]
+              }
+            },
+            {
+              "id": "payments",
+              "title": "Payments",
+              "operationId": "dashboard.payments.methods_get",
+              "mutation": "read",
+              "input": {
+                "template": {},
+                "dependencies": [],
+                "defaults": []
+              },
+              "output": {
+                "selectors": [
+                  {
+                    "pointer": "/data/enabledMethods",
+                    "alias": "enabledMethods",
+                    "maxItems": 4
+                  },
+                  {
+                    "pointer": "/data/activeMethods",
+                    "alias": "activeMethods",
+                    "maxItems": 4
+                  },
+                  {
+                    "pointer": "/data/defaultMethod",
+                    "alias": "defaultMethod"
+                  },
+                  {
+                    "pointer": "/data/activeDefaultMethod",
+                    "alias": "activeDefaultMethod"
+                  },
+                  {
+                    "pointer": "/data/gatewayStatus",
+                    "alias": "gatewayStatus",
+                    "fields": [
+                      {
+                        "pointer": "/stripe/configured",
+                        "alias": "stripeConfigured"
+                      },
+                      {
+                        "pointer": "/stripe/usable",
+                        "alias": "stripeUsable"
+                      },
+                      {
+                        "pointer": "/stripe/checkoutVisible",
+                        "alias": "stripeVisible"
+                      },
+                      {
+                        "pointer": "/sslcommerz/configured",
+                        "alias": "sslConfigured"
+                      },
+                      {
+                        "pointer": "/sslcommerz/usable",
+                        "alias": "sslUsable"
+                      },
+                      {
+                        "pointer": "/sslcommerz/checkoutVisible",
+                        "alias": "sslVisible"
+                      },
+                      {
+                        "pointer": "/polar/configured",
+                        "alias": "polarConfigured"
+                      },
+                      {
+                        "pointer": "/polar/usable",
+                        "alias": "polarUsable"
+                      },
+                      {
+                        "pointer": "/polar/checkoutVisible",
+                        "alias": "polarVisible"
+                      },
+                      {
+                        "pointer": "/cod/configured",
+                        "alias": "codConfigured"
+                      },
+                      {
+                        "pointer": "/cod/usable",
+                        "alias": "codUsable"
+                      },
+                      {
+                        "pointer": "/cod/checkoutVisible",
+                        "alias": "codVisible"
+                      }
+                    ]
+                  }
+                ]
+              },
+              "policies": {
+                "revision": "none",
+                "idempotency": "none",
+                "confirmation": "none",
+                "stopConditions": [
+                  "Stop on read failure."
+                ],
+                "nonInferenceRules": [
+                  "Missing is unknown."
+                ]
+              }
+            },
+            {
+              "id": "delivery",
+              "title": "Shipping",
+              "operationId": "dashboard.shipping_methods.list",
+              "mutation": "read",
+              "input": {
+                "template": {
+                  "query": {
+                    "page": 1,
+                    "limit": 100,
+                    "sort": "sortOrder",
+                    "order": "asc"
+                  }
+                },
+                "dependencies": [],
+                "defaults": []
+              },
+              "output": {
+                "selectors": [
+                  {
+                    "pointer": "/data/shippingMethods",
+                    "alias": "shippingMethods",
+                    "maxItems": 100,
+                    "fields": [
+                      {
+                        "pointer": "/id",
+                        "alias": "id"
+                      },
+                      {
+                        "pointer": "/name",
+                        "alias": "name"
+                      },
+                      {
+                        "pointer": "/fee",
+                        "alias": "fee"
+                      },
+                      {
+                        "pointer": "/isActive",
+                        "alias": "isActive"
+                      },
+                      {
+                        "pointer": "/sortOrder",
+                        "alias": "sortOrder"
+                      }
+                    ]
+                  },
+                  {
+                    "pointer": "/data/pagination",
+                    "alias": "pagination",
+                    "fields": [
+                      {
+                        "pointer": "/page",
+                        "alias": "page"
+                      },
+                      {
+                        "pointer": "/limit",
+                        "alias": "limit"
+                      },
+                      {
+                        "pointer": "/total",
+                        "alias": "total"
+                      },
+                      {
+                        "pointer": "/totalPages",
+                        "alias": "totalPages"
+                      }
+                    ]
+                  }
+                ]
+              },
+              "policies": {
+                "revision": "none",
+                "idempotency": "none",
+                "confirmation": "none",
+                "stopConditions": [
+                  "Stop on read failure."
+                ],
+                "nonInferenceRules": [
+                  "Missing is unknown."
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "verification": [
+        {
+          "id": "activity",
+          "surface": "dashboard",
+          "operationId": "dashboard.home.activity",
+          "responsePointers": [
+            "/data"
+          ],
+          "proves": [
+            "Merchant-day booked gross; no collected cash or settlement."
+          ],
+          "bounds": {
+            "maxCalls": 1,
+            "maxItems": 1,
+            "maxResponseBytes": 32768
+          }
+        },
+        {
+          "id": "fulfillment",
+          "surface": "dashboard",
+          "operationId": "dashboard.orders.list",
+          "responsePointers": [
+            "/data/orders",
+            "/data/pagination"
+          ],
+          "proves": [
+            "Bounded open/pending queue with pagination."
+          ],
+          "bounds": {
+            "maxCalls": 1,
+            "maxItems": 10,
+            "maxResponseBytes": 65536
+          }
+        },
+        {
+          "id": "paymentRecovery",
+          "surface": "dashboard",
+          "operationId": "dashboard.orders.payment_recovery_list",
+          "responsePointers": [
+            "/data/pagination/total"
+          ],
+          "proves": [
+            "Two current count-only recovery snapshots; no order rows or PII."
+          ],
+          "bounds": {
+            "maxCalls": 2,
+            "maxItems": 1,
+            "maxResponseBytes": 65536
+          }
+        },
+        {
+          "id": "readiness",
+          "surface": "dashboard",
+          "operationId": "dashboard.checkout.readiness_get",
+          "responsePointers": [
+            "/data"
+          ],
+          "proves": [
+            "Checkout payment and delivery blockers."
+          ],
+          "bounds": {
+            "maxCalls": 1,
+            "maxItems": 20,
+            "maxResponseBytes": 65536
+          }
+        },
+        {
+          "id": "payment",
+          "surface": "dashboard",
+          "operationId": "dashboard.payments.methods_get",
+          "responsePointers": [
+            "/data/enabledMethods",
+            "/data/gatewayStatus"
+          ],
+          "proves": [
+            "Saved versus usable and checkout-visible methods."
+          ],
+          "bounds": {
+            "maxCalls": 1,
+            "maxItems": 4,
+            "maxResponseBytes": 65536
+          }
+        },
+        {
+          "id": "delivery",
+          "surface": "dashboard",
+          "operationId": "dashboard.shipping_methods.list",
+          "responsePointers": [
+            "/data/shippingMethods",
+            "/data/pagination"
+          ],
+          "proves": [
+            "Bounded saved methods with active flags."
+          ],
+          "bounds": {
+            "maxCalls": 1,
+            "maxItems": 100,
+            "maxResponseBytes": 65536
+          }
+        }
+      ]
+    },
+    {
+      "id": "operations.thirty-day-booked-brief.v1",
+      "surface": "dashboard",
+      "title": "30-day booked operations brief",
+      "summary": "Read bounded booked activity and current operational backlog counts.",
+      "examples": [
+        "Read the accepted PII-free 30-day booked-operations subset."
+      ],
+      "tags": [
+        "briefing",
+        "booked-revenue",
+        "inventory",
+        "backlogs",
+        "sku"
+      ],
+      "requiredFacts": [],
+      "phases": [
+        {
+          "id": "brief",
+          "surface": "dashboard",
+          "title": "Booked activity and current backlogs",
+          "summary": "Six fixed count-safe reads in three bounded waves.",
+          "dependsOn": [],
+          "stopConditions": [
+            "Stop on any read or projection failure; return no partial brief."
+          ],
+          "steps": [
+            {
+              "id": "daily",
+              "title": "30-day booked activity",
+              "operationId": "dashboard.home.activity",
+              "mutation": "read",
+              "input": {
+                "template": {
+                  "query": {
+                    "days": 30
+                  }
+                },
+                "dependencies": [],
+                "defaults": []
+              },
+              "output": {
+                "selectors": [
+                  {
+                    "pointer": "/data/dailyActivityData",
+                    "alias": "activity",
+                    "maxItems": 30,
+                    "exactItems": 30,
+                    "fields": [
+                      {
+                        "pointer": "/date",
+                        "alias": "date"
+                      },
+                      {
+                        "pointer": "/orders",
+                        "alias": "orders"
+                      },
+                      {
+                        "pointer": "/revenue",
+                        "alias": "bookedRevenue"
+                      }
+                    ]
+                  }
+                ]
+              },
+              "policies": {
+                "revision": "none",
+                "idempotency": "none",
+                "confirmation": "none",
+                "stopConditions": [
+                  "Stop on read failure."
+                ],
+                "nonInferenceRules": [
+                  "Missing is unknown."
+                ]
+              }
+            },
+            {
+              "id": "currency",
+              "title": "Currency",
+              "operationId": "dashboard.settings.currency_get",
+              "mutation": "read",
+              "input": {
+                "template": {},
+                "dependencies": [],
+                "defaults": []
+              },
+              "output": {
+                "selectors": [
+                  {
+                    "pointer": "/data/currencyCode",
+                    "alias": "currencyCode"
+                  },
+                  {
+                    "pointer": "/data/currencySymbol",
+                    "alias": "currencySymbol"
+                  }
+                ]
+              },
+              "policies": {
+                "revision": "none",
+                "idempotency": "none",
+                "confirmation": "none",
+                "stopConditions": [
+                  "Stop on read failure."
+                ],
+                "nonInferenceRules": [
+                  "Missing is unknown."
+                ]
+              }
+            },
+            {
+              "id": "stock",
+              "title": "Stock-risk counts",
+              "operationId": "dashboard.inventory.list",
+              "mutation": "read",
+              "input": {
+                "template": {
+                  "query": {
+                    "section": "variants",
+                    "page": 1,
+                    "limit": 1,
+                    "search": "",
+                    "status": "all",
+                    "sort": "available",
+                    "order": "asc"
+                  }
+                },
+                "dependencies": [],
+                "defaults": []
+              },
+              "output": {
+                "selectors": [
+                  {
+                    "pointer": "/data/stats/lowStockCount",
+                    "alias": "lowStockCount"
+                  },
+                  {
+                    "pointer": "/data/stats/outOfStockCount",
+                    "alias": "outOfStockCount"
+                  }
+                ]
+              },
+              "policies": {
+                "revision": "none",
+                "idempotency": "none",
+                "confirmation": "none",
+                "stopConditions": [
+                  "Stop on read failure."
+                ],
+                "nonInferenceRules": [
+                  "Missing is unknown."
+                ]
+              }
+            },
+            {
+              "id": "abandoned",
+              "title": "Abandoned-checkout total",
+              "operationId": "dashboard.abandoned_checkouts.summaries_list",
+              "mutation": "read",
+              "input": {
+                "template": {
+                  "query": {
+                    "page": 1,
+                    "limit": 1,
+                    "search": "",
+                    "order": "desc"
+                  }
+                },
+                "dependencies": [],
+                "defaults": []
+              },
+              "output": {
+                "selectors": [
+                  {
+                    "pointer": "/data/pagination/total",
+                    "alias": "total"
+                  }
+                ]
+              },
+              "policies": {
+                "revision": "none",
+                "idempotency": "none",
+                "confirmation": "none",
+                "stopConditions": [
+                  "Stop on read failure."
+                ],
+                "nonInferenceRules": [
+                  "Missing is unknown."
+                ]
+              }
+            },
+            {
+              "id": "paymentRecovery",
+              "title": "Recoverable-payment total",
+              "operationId": "dashboard.orders.payment_recovery_list",
+              "mutation": "read",
+              "input": {
+                "template": {
+                  "query": {
+                    "page": 1,
+                    "limit": 1,
+                    "state": "recoverable",
+                    "order": "desc"
+                  }
+                },
+                "dependencies": [],
+                "defaults": []
+              },
+              "output": {
+                "selectors": [
+                  {
+                    "pointer": "/data/pagination/total",
+                    "alias": "total"
+                  }
+                ]
+              },
+              "policies": {
+                "revision": "none",
+                "idempotency": "none",
+                "confirmation": "none",
+                "stopConditions": [
+                  "Stop on read failure."
+                ],
+                "nonInferenceRules": [
+                  "Missing is unknown."
+                ]
+              }
+            },
+            {
+              "id": "paymentNeedsAttention",
+              "title": "Actionable-payment total",
+              "operationId": "dashboard.orders.payment_recovery_list",
+              "mutation": "read",
+              "input": {
+                "template": {
+                  "query": {
+                    "page": 1,
+                    "limit": 1,
+                    "state": "needs_attention",
+                    "order": "desc"
+                  }
+                },
+                "dependencies": [],
+                "defaults": []
+              },
+              "output": {
+                "selectors": [
+                  {
+                    "pointer": "/data/pagination/total",
+                    "alias": "total"
+                  }
+                ]
+              },
+              "policies": {
+                "revision": "none",
+                "idempotency": "none",
+                "confirmation": "none",
+                "stopConditions": [
+                  "Stop on read failure."
+                ],
+                "nonInferenceRules": [
+                  "Missing is unknown."
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "verification": [
+        {
+          "id": "activity",
+          "surface": "dashboard",
+          "operationId": "dashboard.home.activity",
+          "responsePointers": [
+            "/data/dailyActivityData"
+          ],
+          "proves": [
+            "Exactly 30 Asia/Dhaka calendar-day rows including zero days; booked, not paid or settled."
+          ],
+          "bounds": {
+            "maxCalls": 1,
+            "maxItems": 30,
+            "maxResponseBytes": 32768
+          }
+        },
+        {
+          "id": "currency",
+          "surface": "dashboard",
+          "operationId": "dashboard.settings.currency_get",
+          "responsePointers": [
+            "/data/currencyCode",
+            "/data/currencySymbol"
+          ],
+          "proves": [
+            "Saved display currency only."
+          ],
+          "bounds": {
+            "maxCalls": 1,
+            "maxItems": 2,
+            "maxResponseBytes": 8192
+          }
+        },
+        {
+          "id": "stock",
+          "surface": "dashboard",
+          "operationId": "dashboard.inventory.list",
+          "responsePointers": [
+            "/data/stats/lowStockCount",
+            "/data/stats/outOfStockCount"
+          ],
+          "proves": [
+            "Current aggregate stock-risk counts only."
+          ],
+          "bounds": {
+            "maxCalls": 1,
+            "maxItems": 2,
+            "maxResponseBytes": 65536
+          }
+        },
+        {
+          "id": "abandoned",
+          "surface": "dashboard",
+          "operationId": "dashboard.abandoned_checkouts.summaries_list",
+          "responsePointers": [
+            "/data/pagination/total"
+          ],
+          "proves": [
+            "Current abandoned-checkout total only; no rows or PII."
+          ],
+          "bounds": {
+            "maxCalls": 1,
+            "maxItems": 1,
+            "maxResponseBytes": 65536
+          }
+        },
+        {
+          "id": "recovery",
+          "surface": "dashboard",
+          "operationId": "dashboard.orders.payment_recovery_list",
+          "responsePointers": [
+            "/data/pagination/total"
+          ],
+          "proves": [
+            "Two current recovery totals only; no order rows or PII."
+          ],
+          "bounds": {
+            "maxCalls": 2,
+            "maxItems": 1,
+            "maxResponseBytes": 65536
+          }
+        }
+      ]
+    }
+  ],
+  "routes": [
+    {
+      "id": "dashboard.account-sessions",
+      "surface": "dashboard",
+      "kind": "write",
+      "title": "Revoke an account session",
+      "summary": "List account sessions, resolve one non-current session, and revoke it.",
+      "examples": [
+        "List my active sessions and revoke the one I identify, not the current session."
+      ],
+      "tags": [
+        "account",
+        "sessions",
+        "security"
+      ],
+      "operationIds": [
+        "dashboard.account.sessions.list",
+        "dashboard.account.sessions.revoke"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "List sessions and resolve the exact non-current target first.",
+        "Never revoke the current session unless explicitly and safely supported.",
+        "Confirm revocation and verify the operation result."
+      ]
+    },
+    {
+      "id": "dashboard.agent-grant-narrow",
+      "surface": "dashboard",
+      "kind": "write",
+      "title": "Narrow an agent grant",
+      "summary": "Read one agent connection and reduce its granted operation scope.",
+      "examples": [
+        "Show this agent connection and narrow its grant to read-only catalog access."
+      ],
+      "tags": [
+        "agent-access",
+        "grants",
+        "security"
+      ],
+      "operationIds": [
+        "dashboard.agent_access.connections.get",
+        "dashboard.agent_access.grants.update"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Read the exact connection and its current authority first.",
+        "Apply only a narrowing change; never broaden authority through this route.",
+        "Confirm the security write and verify its returned grant state."
+      ]
+    },
+    {
+      "id": "dashboard.analytics-provider",
+      "surface": "dashboard",
+      "kind": "write",
+      "title": "Configure an analytics provider",
+      "summary": "Create an inactive analytics configuration, activate it, and verify provider health.",
+      "examples": [
+        "Create a Cloudflare Web Analytics draft with a real token, activate it with revision protection, and verify readiness."
+      ],
+      "tags": [
+        "analytics",
+        "provider",
+        "activation"
+      ],
+      "operationIds": [
+        "dashboard.analytics.create",
+        "dashboard.analytics.set_active",
+        "dashboard.analytics.health"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Reject placeholder tokens and snippets before creating configuration.",
+        "Create an inactive draft before activation.",
+        "Confirm activation with current revision, then verify bounded health evidence."
+      ]
+    },
+    {
+      "id": "dashboard.bangladesh-checkout-supported-setup",
+      "surface": "dashboard",
+      "kind": "mixed",
+      "title": "Bangladesh checkout setup",
+      "summary": "Apply reviewed Bangladesh payment, flat-fee, and guest setup; verify buyer truth.",
+      "examples": [
+        "Configure accepted Bangladesh setup: supplied BDT symbol/rate; keep Dhaka time/phone fixed; preserve payments/default; add COD/proven SSLCommerz; active global Dhaka Delivery 80, Nationwide 150; accept no geography/threshold enforcement; turn on guests only after readiness; verify buyer checkout."
+      ],
+      "tags": [
+        "bangladesh",
+        "bdt",
+        "checkout",
+        "flat-fee"
+      ],
+      "operationIds": [
+        "dashboard.settings.currency_get",
+        "dashboard.payments.methods_get",
+        "dashboard.shipping_methods.list",
+        "dashboard.checkout.flow_get",
+        "dashboard.settings.currency_update",
+        "dashboard.payments.sslcommerz_update",
+        "dashboard.payments.methods_update",
+        "dashboard.shipping_methods.update",
+        "dashboard.shipping_methods.create",
+        "dashboard.checkout.readiness_get",
+        "dashboard.checkout.flow_update",
+        "storefront.checkout.get_config",
+        "storefront.shipping_methods.list"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Require global labels accepted without geography/threshold; Dhaka time and mandatory phone stay fixed.",
+        "BDT needs unlocked code, explicit symbol, positive USD rate; write/reread all or stop.",
+        "Set only {enabled:true} after configured/no-error SSLCommerz status; no secrets/sandbox. Reread usable; no charge proof.",
+        "Require keep/disable intent per payment and exact default; union COD/usable SSLCommerz into fresh enabledMethods. Never choose.",
+        "Require merchant name/fee/active/optional sort. One active exact match: update; none: create; near/duplicate/trashed: ask; never delete.",
+        "Require readiness + active shipping/delivery hierarchy; revision-merge guest only. Failure: stop/reread/report partial; no rollback/retry. Never touch SEO/analytics; verify both audiences."
+      ]
+    },
+    {
+      "id": "dashboard.barcode-labels",
+      "surface": "dashboard",
+      "kind": "read",
+      "title": "Generate barcode labels",
+      "summary": "Preview selected SKU labels and generate a bounded label artifact.",
+      "examples": [
+        "Preview barcode labels for these exact SKUs and generate a printable PDF only after the facts match."
+      ],
+      "tags": [
+        "inventory",
+        "barcodes",
+        "artifact"
+      ],
+      "operationIds": [
+        "dashboard.inventory_labels.preview",
+        "dashboard.inventory_labels.generate_artifact"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": false,
+      "requiresVerification": false,
+      "rules": [
+        "Preview the exact selected SKUs and label settings first.",
+        "Return the bounded artifact handle rather than inline binary content."
+      ]
+    },
+    {
+      "id": "dashboard.business-seo-settings",
+      "surface": "dashboard",
+      "kind": "write",
+      "title": "Update business identity and SEO",
+      "summary": "Read and safely merge business and SEO settings, then verify public discovery.",
+      "examples": [
+        "Update the legal business name and product-feed title without replacing unrelated business or SEO settings, then verify public schema and feeds."
+      ],
+      "tags": [
+        "business",
+        "seo",
+        "identity",
+        "settings"
+      ],
+      "operationIds": [
+        "dashboard.settings.business_get",
+        "dashboard.seo.settings_get",
+        "dashboard.settings.business_update",
+        "dashboard.seo.settings_update",
+        "dashboard.seo.live_probe",
+        "storefront.seo.get"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Read business and SEO settings as separate current documents.",
+        "Merge only supplied identity and discovery fields; preserve unrelated settings.",
+        "Confirm both writes, then verify public SEO and bounded live-probe evidence."
+      ]
+    },
+    {
+      "id": "dashboard.cache-purge-selected",
+      "surface": "dashboard",
+      "kind": "write",
+      "title": "Purge selected cache groups",
+      "summary": "List valid cache groups and purge only the selected product and feed groups.",
+      "examples": [
+        "List cache domains and purge only product and feed caches, not every public cache."
+      ],
+      "tags": [
+        "cache",
+        "products",
+        "feeds",
+        "operations"
+      ],
+      "operationIds": [
+        "dashboard.cache.groups_list",
+        "dashboard.cache.purge_groups"
+      ],
+      "requiresFacts": false,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Resolve valid cache group names before mutation.",
+        "Select only the requested product and feed groups; never expand to purge-all.",
+        "Confirm the selected purge and verify the bounded operation result."
+      ]
+    },
+    {
+      "id": "dashboard.campaign-content-supported-setup",
+      "surface": "dashboard",
+      "kind": "mixed",
+      "title": "Stage campaign",
+      "summary": "New page",
+      "examples": [
+        "Create Eid page: slug/title/HTML/SEO/canonical/noIndex/excludeFromSitemap/media/alt, menu append, topBar, active-now desktop/mobile slides; accept sanitized draft, preserve all else, verify buyer."
+      ],
+      "tags": [
+        "campaign"
+      ],
+      "operationIds": [
+        "dashboard.content.list",
+        "dashboard.navigation.placements_manifest",
+        "dashboard.navigation.menus_list",
+        "dashboard.navigation.items_search",
+        "dashboard.settings_header.get_header",
+        "dashboard.hero_sliders.list",
+        "dashboard.media.list",
+        "dashboard.media.import_url",
+        "dashboard.content.create",
+        "dashboard.content.get",
+        "dashboard.content.bulk_publish",
+        "dashboard.navigation.items_create",
+        "dashboard.navigation.menus_publish",
+        "dashboard.settings_header.header",
+        "dashboard.hero_sliders.create",
+        "dashboard.hero_sliders.update",
+        "storefront.pages.get_by_slug",
+        "storefront.navigation.get",
+        "storefront.homepage.get",
+        "storefront.layout.get"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Require exact page/SEO/media/menu/topBar/slides; staged non-atomic acceptance. Active now; canonical: same-store route path; absolute/query/fragment stops.",
+        "Scan active/trash; any slug match stops. Create draft, accept sanitized reread, publish its revision.",
+        "Clean published main menu, no page-target match anywhere: append top-level, publish returned revision; never update/move/reorder.",
+        "CAS-merge topBar text/enabled only; no link. Preserve header/theme/shell.",
+        "Max 3 HTTPS imports; preflight unique filename/folder. Uncertain: list and accept one unambiguous new exact match; never re-import blindly. Local/base64: upload/re-enter. Preserve full slider arrays; distinct desktop/mobile assets or approved reuse; no schedule.",
+        "Non-atomic/no rollback. Conflict/uncertain create: reread/reconfirm, no retry; stop/report partial. Never catalog/global SEO or certify pixels, remote images/links, UI/head, sitemap XML."
+      ]
+    },
+    {
+      "id": "dashboard.category-publish",
+      "surface": "dashboard",
+      "kind": "write",
+      "title": "Publish a category",
+      "summary": "Read a category, check publish readiness, and publish with its current revision.",
+      "examples": [
+        "Publish this draft category if it is ready, using its current revision."
+      ],
+      "tags": [
+        "categories",
+        "publishing",
+        "readiness"
+      ],
+      "operationIds": [
+        "dashboard.categories.get_section",
+        "dashboard.categories.publish_readiness",
+        "dashboard.categories.set_status"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Use the exact category and current monotonic revision.",
+        "Stop when publish readiness reports a blocker.",
+        "Confirm publication and verify the status result."
+      ]
+    },
+    {
+      "id": "dashboard.checkout-flow-replace",
+      "surface": "dashboard",
+      "kind": "write",
+      "title": "Update checkout flow",
+      "summary": "Read the versioned checkout flow, merge requested changes, and verify buyer config.",
+      "examples": [
+        "Require email and delivery instructions at checkout while preserving every other flow setting."
+      ],
+      "tags": [
+        "checkout",
+        "guest-checkout",
+        "settings"
+      ],
+      "operationIds": [
+        "dashboard.checkout.flow_get",
+        "dashboard.checkout.flow_update",
+        "storefront.checkout.get_config"
+      ],
+      "requiresFacts": false,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Read the complete versioned checkout flow before editing.",
+        "Merge only requested fields and preserve all unrelated settings.",
+        "Confirm the write and verify the buyer-facing checkout config."
+      ]
+    },
+    {
+      "id": "dashboard.checkout-readiness",
+      "surface": "dashboard",
+      "kind": "read",
+      "title": "Checkout readiness",
+      "summary": "Read saved checkout flow, readiness, active methods, and buyer-facing checkout config.",
+      "examples": [
+        "Why is checkout not ready? Include the saved flow, active gateways, delivery options, and buyer-visible config."
+      ],
+      "tags": [
+        "checkout",
+        "payments",
+        "shipping",
+        "readiness"
+      ],
+      "operationIds": [
+        "dashboard.checkout.flow_get",
+        "dashboard.checkout.readiness_get",
+        "dashboard.payments.methods_get",
+        "dashboard.shipping_methods.list",
+        "storefront.checkout.get_config"
+      ],
+      "requiresFacts": false,
+      "requiresConfirmation": false,
+      "requiresVerification": false,
+      "rules": [
+        "Fail closed when any authoritative checkout setting cannot be read.",
+        "Distinguish saved flow, admin readiness, and buyer-visible configuration.",
+        "Never guess a payment or delivery method."
+      ]
+    },
+    {
+      "id": "dashboard.collection-create",
+      "surface": "dashboard",
+      "kind": "write",
+      "title": "Create a collection",
+      "summary": "Resolve collection form options, create one collection, and verify its saved section.",
+      "examples": [
+        "Create an active collection from these categories and products, including discovery metadata, then verify its bounded sections."
+      ],
+      "tags": [
+        "collections",
+        "catalog",
+        "create"
+      ],
+      "operationIds": [
+        "dashboard.collections.form_options",
+        "dashboard.collections.create",
+        "dashboard.collections.get_section"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Resolve exact category and product identifiers before creation.",
+        "Require the merchant's collection title and membership rules.",
+        "Confirm creation and verify the saved collection section."
+      ]
+    },
+    {
+      "id": "dashboard.complex-product-create",
+      "surface": "dashboard",
+      "kind": "mixed",
+      "title": "Create and publish an optioned product",
+      "summary": "Create an optioned product, publish its ready category, and verify admin and buyer discovery.",
+      "examples": [
+        "Create a two-axis T-shirt with Size S/M/L and Color Black/White, exact SKUs, different stock and prices, color-specific images, category, Brand and Material attributes, rich description, SEO, sitemap and feed visibility, then verify buyer truth."
+      ],
+      "tags": [
+        "catalog",
+        "variants",
+        "publishing",
+        "verification"
+      ],
+      "workflowId": "catalog.optioned-product.v1",
+      "operationIds": [
+        "dashboard.seo.settings_get",
+        "dashboard.settings.currency_get",
+        "dashboard.categories.form_options",
+        "dashboard.attributes.list_summaries",
+        "dashboard.products.list_summaries",
+        "dashboard.categories.create",
+        "dashboard.attributes.create",
+        "dashboard.seo.settings_update",
+        "dashboard.media.import_url",
+        "dashboard.products.create",
+        "dashboard.categories.publish_readiness",
+        "dashboard.categories.set_status",
+        "dashboard.products.get_section",
+        "dashboard.categories.get_section",
+        "dashboard.seo.feed_row_preview",
+        "dashboard.seo.live_probe",
+        "storefront.products.get_section"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Require the merchant's exact option axes, SKU matrix, prices, and stock facts.",
+        "Resolve category, attribute, media, and product collisions; product creation owns SKU uniqueness.",
+        "Create the product once and publish the category only when readiness passes.",
+        "Confirm writes; verify bounded admin, feed, discovery, and storefront evidence."
+      ]
+    },
+    {
+      "id": "dashboard.customer-history",
+      "surface": "dashboard",
+      "kind": "read",
+      "title": "Customer order history",
+      "summary": "Resolve one customer and read that customer's bounded order history.",
+      "examples": [
+        "Find this customer and summarize their order history without exposing unrelated customers."
+      ],
+      "tags": [
+        "customers",
+        "orders",
+        "history"
+      ],
+      "operationIds": [
+        "dashboard.customers.list",
+        "dashboard.customers.history"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": false,
+      "requiresVerification": false,
+      "rules": [
+        "Resolve one exact customer before reading history.",
+        "Do not expose records belonging to unrelated customers."
+      ]
+    },
+    {
+      "id": "dashboard.daily-operations-snapshot",
+      "surface": "dashboard",
+      "kind": "read",
+      "title": "Daily operations snapshot",
+      "summary": "Read today's booked revenue and orders plus current fulfillment, low-stock, payment-recovery, and checkout readiness; collected cash and net settlement remain unavailable.",
+      "examples": [
+        "How did my store do today—orders, booked revenue, collected cash, low stock, fulfillment backlog, failed-payment recovery work, and checkout readiness?"
+      ],
+      "tags": [
+        "operations",
+        "sales",
+        "daily",
+        "payment-recovery"
+      ],
+      "workflowId": "operations.daily-snapshot.v1",
+      "fixedCalendarDays": 1,
+      "operationIds": [
+        "dashboard.home.activity",
+        "dashboard.orders.list",
+        "dashboard.orders.payment_recovery_list",
+        "dashboard.inventory_alerts.list",
+        "dashboard.checkout.readiness_get",
+        "dashboard.payments.methods_get",
+        "dashboard.shipping_methods.list",
+        "dashboard.settings.currency_get"
+      ],
+      "requiresFacts": false,
+      "requiresConfirmation": false,
+      "requiresVerification": false,
+      "rules": [
+        "Interpret activity.daily.bookedRevenue as Asia/Dhaka order-day booked gross, not collected cash, profit, or net settlement.",
+        "No authoritative merchant-day collected-cash or net-settlement aggregate exists; report it unavailable, never zero or inferred.",
+        "activity.paymentRecovery.total is all recoverable hosted-payment work; activity.paymentNeedsAttention.total is the actionable failed/stale subset; both are current non-transactional backlogs, not daily metrics.",
+        "Never subtract the recovery totals because their parallel reads can observe different instants.",
+        "Fail closed when fulfillment, stock, checkout, payment, delivery, or currency facts cannot be read.",
+        "Any requested field absent from fixed selectors is unavailable; never infer or claim coverage."
+      ]
+    },
+    {
+      "id": "dashboard.delivery-location-import",
+      "surface": "dashboard",
+      "kind": "write",
+      "title": "Import delivery locations",
+      "summary": "Read Pathao import status and advance the import by one bounded chunk.",
+      "examples": [
+        "Resume the Pathao location import in bounded chunks and report progress until it reaches a terminal state."
+      ],
+      "tags": [
+        "delivery",
+        "locations",
+        "import"
+      ],
+      "operationIds": [
+        "dashboard.delivery_locations.pathao_import_status",
+        "dashboard.delivery_locations.pathao_import_chunk"
+      ],
+      "requiresFacts": false,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Read import status before dispatching a chunk.",
+        "Process only one bounded chunk at a time.",
+        "Stop on terminal or failed state and verify returned progress."
+      ]
+    },
+    {
+      "id": "dashboard.delivery-provider",
+      "surface": "dashboard",
+      "kind": "write",
+      "title": "Connect a delivery provider",
+      "summary": "Test supplied credentials, create the provider connection, and test the saved connection.",
+      "examples": [
+        "Test these courier credentials before saving a provider, then verify the saved connection without logging credentials."
+      ],
+      "tags": [
+        "delivery",
+        "provider",
+        "credentials"
+      ],
+      "operationIds": [
+        "dashboard.delivery_providers.test_credentials",
+        "dashboard.delivery_providers.create",
+        "dashboard.delivery_providers.test"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Never log or return raw provider credentials.",
+        "Test credentials before saving the connection.",
+        "Confirm creation, then test the saved provider record."
+      ]
+    },
+    {
+      "id": "dashboard.discount-toggle",
+      "surface": "dashboard",
+      "kind": "write",
+      "title": "Toggle a discount code",
+      "summary": "Resolve one discount code, change its active state, and verify the result.",
+      "examples": [
+        "Find the SAVE10 discount and deactivate it without deleting it."
+      ],
+      "tags": [
+        "discounts",
+        "codes",
+        "activation"
+      ],
+      "operationIds": [
+        "dashboard.discounts.list",
+        "dashboard.discounts.set_active",
+        "dashboard.discounts.get"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Resolve exactly one matching discount before mutation.",
+        "Toggle active state without deleting or rewriting the discount.",
+        "Confirm the change and verify the resulting discount record."
+      ]
+    },
+    {
+      "id": "dashboard.fraud-check",
+      "surface": "dashboard",
+      "kind": "read",
+      "title": "Check a phone for fraud signals",
+      "summary": "Run a bounded fraud lookup for one merchant-supplied phone number.",
+      "examples": [
+        "Check this buyer phone against the configured fraud provider and return only the bounded result."
+      ],
+      "tags": [
+        "fraud",
+        "customers",
+        "lookup"
+      ],
+      "operationIds": [
+        "dashboard.fraud_lookup.run"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": false,
+      "requiresVerification": false,
+      "rules": [
+        "Use only the exact phone number supplied for the lookup.",
+        "Return bounded provider evidence without unrelated personal data or inference."
+      ]
+    },
+    {
+      "id": "dashboard.guest-checkout-conditional-enable",
+      "surface": "dashboard",
+      "kind": "write",
+      "title": "Conditionally enable guest access",
+      "summary": "Validate prerequisites, merge only the guest-access switch into the versioned flow, and verify buyer config.",
+      "examples": [
+        "Turn on guest checkout only if payment and shipping are genuinely usable, without changing any other checkout setting."
+      ],
+      "tags": [
+        "guest-access",
+        "conditional-enable",
+        "only-if",
+        "preserve-settings"
+      ],
+      "operationIds": [
+        "dashboard.checkout.flow_get",
+        "dashboard.checkout.readiness_get",
+        "dashboard.payments.methods_get",
+        "dashboard.shipping_methods.list",
+        "dashboard.checkout.flow_update",
+        "storefront.checkout.get_config"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Read the complete versioned checkout flow and authoritative readiness before editing.",
+        "Require at least one active buyer-usable payment method plus active shipping and delivery hierarchy.",
+        "Fail closed without a change when readiness or method evidence is missing or contradictory.",
+        "Merge only the guest-checkout field and preserve every unrelated flow setting.",
+        "Confirm the exact diff, then reread saved flow and verify the separate buyer-facing checkout config."
+      ]
+    },
+    {
+      "id": "dashboard.header-footer-homepage",
+      "surface": "dashboard",
+      "kind": "mixed",
+      "title": "Update storefront presentation settings",
+      "summary": "Read, safely update, and verify header, footer, and homepage presentation settings.",
+      "examples": [
+        "Update the header logo, footer support links, and homepage category order while preserving each current revision, then verify layout and homepage."
+      ],
+      "tags": [
+        "storefront",
+        "header",
+        "footer",
+        "homepage"
+      ],
+      "operationIds": [
+        "dashboard.settings_header.get_header",
+        "dashboard.settings_footer.get_footer",
+        "dashboard.settings_homepage_presentation.get_homepage_presentation",
+        "dashboard.settings_header.header",
+        "dashboard.settings_footer.footer",
+        "dashboard.settings_homepage_presentation.homepage_presentation",
+        "storefront.layout.get",
+        "storefront.homepage.get"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Read each current settings document and revision independently.",
+        "Merge only requested fields and preserve unrelated presentation settings.",
+        "Confirm the writes, then verify storefront layout and homepage projections."
+      ]
+    },
+    {
+      "id": "dashboard.inventory-cycle-count",
+      "surface": "dashboard",
+      "kind": "write",
+      "title": "Set counted stock",
+      "summary": "Resolve a SKU, set its absolute counted stock, and verify inventory state.",
+      "examples": [
+        "Look up SKU ABC-123, set its physical count to 27, and verify the ledger-backed stock result."
+      ],
+      "tags": [
+        "inventory",
+        "cycle-count",
+        "stock"
+      ],
+      "operationIds": [
+        "dashboard.inventory.lookup_sku",
+        "dashboard.inventory.set_stock",
+        "dashboard.inventory.list"
+      ],
+      "requiresFacts": false,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Resolve the exact SKU before changing stock.",
+        "Use an absolute stock write with the required version and ledger reason.",
+        "Confirm the mutation and verify the resulting SKU inventory."
+      ]
+    },
+    {
+      "id": "dashboard.inventory-relative-adjustment",
+      "surface": "dashboard",
+      "kind": "write",
+      "title": "Adjust SKU stock",
+      "summary": "Resolve a SKU and apply a reasoned relative stock adjustment.",
+      "examples": [
+        "Record five damaged units against this SKU rather than replacing its absolute stock."
+      ],
+      "tags": [
+        "inventory",
+        "adjustment",
+        "stock"
+      ],
+      "operationIds": [
+        "dashboard.inventory.lookup_sku",
+        "dashboard.inventory.adjust_stock"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Require an exact SKU, signed quantity delta, and reason.",
+        "Use relative adjustment rather than replacing absolute stock.",
+        "Confirm the mutation and verify its returned ledger-backed result."
+      ]
+    },
+    {
+      "id": "dashboard.invoice-issue",
+      "surface": "dashboard",
+      "kind": "write",
+      "title": "Issue an order invoice",
+      "summary": "Review the draft invoice, issue it once, and return its verified print artifact.",
+      "examples": [
+        "Preview this order's draft invoice, issue its immutable number once, and generate the printable artifact."
+      ],
+      "tags": [
+        "orders",
+        "invoice",
+        "artifact"
+      ],
+      "operationIds": [
+        "dashboard.orders.invoice_get",
+        "dashboard.orders.invoice_issue",
+        "dashboard.orders.invoice_print"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Review the exact draft invoice before issuing it.",
+        "Confirm the one-time issue action against current authority.",
+        "Do not retry uncertain issuance; print only the verified immutable invoice."
+      ]
+    },
+    {
+      "id": "dashboard.low-stock",
+      "surface": "dashboard",
+      "kind": "read",
+      "title": "Low-stock products",
+      "summary": "List bounded inventory alerts for products and SKUs that need attention.",
+      "examples": [
+        "Show me the products that are low or out of stock and still need attention."
+      ],
+      "tags": [
+        "inventory",
+        "low-stock",
+        "alerts"
+      ],
+      "operationIds": [
+        "dashboard.inventory_alerts.list"
+      ],
+      "requiresFacts": false,
+      "requiresConfirmation": false,
+      "requiresVerification": false,
+      "rules": [
+        "Report only returned SKU-level inventory alerts and their supplied thresholds."
+      ]
+    },
+    {
+      "id": "dashboard.media-upload",
+      "surface": "dashboard",
+      "kind": "write",
+      "title": "Upload product media",
+      "summary": "Initiate, transfer, complete, and verify a resumable media upload.",
+      "examples": [
+        "Upload these local product images, wait until each is committed, and return the reusable media IDs."
+      ],
+      "tags": [
+        "media",
+        "upload",
+        "products"
+      ],
+      "operationIds": [
+        "dashboard.media.upload_initiate",
+        "dashboard.media.upload_part",
+        "dashboard.media.upload_complete",
+        "dashboard.media.upload_get"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Follow the resumable upload sequence and supplied part boundaries.",
+        "Do not use media identifiers until completion succeeds.",
+        "Confirm the write and verify the final upload status."
+      ]
+    },
+    {
+      "id": "dashboard.meta-capi",
+      "surface": "dashboard",
+      "kind": "write",
+      "title": "Configure Meta Conversions API",
+      "summary": "Read and update Meta conversion settings, then inspect bounded safe delivery logs.",
+      "examples": [
+        "Configure Meta Conversions API with supplied credentials and verify settings without provider payload logs."
+      ],
+      "tags": [
+        "analytics",
+        "meta",
+        "capi",
+        "credentials"
+      ],
+      "operationIds": [
+        "dashboard.meta_conversions.get",
+        "dashboard.meta_conversions.update",
+        "dashboard.meta_conversions.logs_list"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Never log or return credentials, buyer data, or raw provider payloads.",
+        "Merge only supplied fields into the current settings.",
+        "Confirm the security-sensitive write and verify with bounded safe log metadata."
+      ]
+    },
+    {
+      "id": "dashboard.navigation-publish",
+      "surface": "dashboard",
+      "kind": "mixed",
+      "title": "Create and publish navigation",
+      "summary": "Resolve links, build and publish a menu, place it, and verify storefront navigation.",
+      "examples": [
+        "Add a Shop menu with category and collection links, publish an immutable revision, place it in the header, and verify the storefront projection."
+      ],
+      "tags": [
+        "navigation",
+        "menus",
+        "publishing"
+      ],
+      "operationIds": [
+        "dashboard.navigation.resources_search",
+        "dashboard.navigation.menus_create",
+        "dashboard.navigation.items_create",
+        "dashboard.navigation.menus_publish",
+        "dashboard.navigation.placements_save",
+        "storefront.navigation.placements_list",
+        "storefront.navigation.menu_get_by_id"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Resolve every internal link target before creating items.",
+        "Create the menu and items before producing an immutable published version.",
+        "Save placement with its current revision after confirmation.",
+        "Verify both placement and published menu through storefront reads."
+      ]
+    },
+    {
+      "id": "dashboard.notification-rules",
+      "surface": "dashboard",
+      "kind": "write",
+      "title": "Update customer notification rules",
+      "summary": "Read complete notification rules, change one event channel, and verify the settings.",
+      "examples": [
+        "Enable customer SMS for shipped orders but keep every other notification rule unchanged.",
+        "Configure WhatsApp order-confirmation notifications."
+      ],
+      "tags": [
+        "notifications",
+        "customers",
+        "orders",
+        "sms",
+        "email",
+        "whatsapp"
+      ],
+      "operationIds": [
+        "dashboard.notifications.customer_rules_get",
+        "dashboard.notifications.customer_rules_update"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Read the complete current rule set before editing.",
+        "Declared order events: order_created, order_confirmed, order_processing, order_shipped, order_delivered, order_completed, order_cancelled, order_returned.",
+        "Also declared: refund_processing, refund_failed, order_refunded, order_partially_refunded, payment_balance_paid, support_request_submitted, support_request_status_updated.",
+        "Validate against strict dashboard.notifications.customer_rules_update; if the event is absent, ask/no write. Preserve every other rule.",
+        "Confirm the write and verify the returned settings."
+      ]
+    },
+    {
+      "id": "dashboard.order-export",
+      "surface": "dashboard",
+      "kind": "read",
+      "title": "Export filtered orders",
+      "summary": "Export orders using explicit bounded status and date filters.",
+      "examples": [
+        "Export last month's completed orders as the bounded CSV artifact."
+      ],
+      "tags": [
+        "orders",
+        "export",
+        "artifact"
+      ],
+      "operationIds": [
+        "dashboard.orders.export"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": false,
+      "requiresVerification": false,
+      "rules": [
+        "Require explicit bounded filters and an exact date range.",
+        "Return the artifact handle rather than embedding export bytes."
+      ]
+    },
+    {
+      "id": "dashboard.order-fulfill",
+      "surface": "dashboard",
+      "kind": "write",
+      "title": "Fulfill an order",
+      "summary": "Read an order, record fulfillment with supplied tracking facts, and verify it.",
+      "examples": [
+        "Manually fulfill this paid order with the supplied tracking facts and verify shipment state."
+      ],
+      "tags": [
+        "orders",
+        "fulfillment",
+        "tracking"
+      ],
+      "operationIds": [
+        "dashboard.orders.get",
+        "dashboard.orders.fulfill",
+        "dashboard.orders.fulfillment_get"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Read the exact order and current fulfillment state first.",
+        "Require merchant-supplied shipment and tracking facts.",
+        "Confirm fulfillment and verify the resulting shipment record."
+      ]
+    },
+    {
+      "id": "dashboard.order-provider-shipment",
+      "surface": "dashboard",
+      "kind": "write",
+      "title": "Create a provider shipment",
+      "summary": "Read an order, create its external provider shipment, and verify provider state.",
+      "examples": [
+        "Create a courier shipment for this order using its configured provider and verify the provider tracking record."
+      ],
+      "tags": [
+        "orders",
+        "shipping",
+        "provider"
+      ],
+      "operationIds": [
+        "dashboard.orders.get",
+        "dashboard.orders.create_shipment",
+        "dashboard.orders.shipments"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Read the exact current order and selected provider first.",
+        "Confirm before creating an external shipment side effect.",
+        "Verify the returned provider shipment record without blind retries."
+      ]
+    },
+    {
+      "id": "dashboard.order-refund",
+      "surface": "dashboard",
+      "kind": "write",
+      "title": "Refund an order payment",
+      "summary": "Resolve a captured payment, issue an exact refund, and reconcile provider state.",
+      "examples": [
+        "Refund the exact supplied amount for this captured payment and reconcile any uncertain provider result."
+      ],
+      "tags": [
+        "orders",
+        "payments",
+        "refund"
+      ],
+      "operationIds": [
+        "dashboard.orders.payments",
+        "dashboard.orders.refund",
+        "dashboard.orders.refund_reconcile"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Resolve the exact captured payment and validate the refund amount.",
+        "Require confirmation immediately before the financial action.",
+        "Reconcile uncertain provider results instead of retrying a refund blindly."
+      ]
+    },
+    {
+      "id": "dashboard.order-return",
+      "surface": "dashboard",
+      "kind": "write",
+      "title": "Process an order return",
+      "summary": "Create, approve, receive, and verify an item-level order return.",
+      "examples": [
+        "Create, approve, and receive an item-level return, restoring stock only through the return workflow."
+      ],
+      "tags": [
+        "orders",
+        "returns",
+        "inventory"
+      ],
+      "operationIds": [
+        "dashboard.orders.return_create",
+        "dashboard.orders.return_approve",
+        "dashboard.orders.return_receive",
+        "dashboard.orders.return_get"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Require exact order items, quantities, reason, and disposition.",
+        "Confirm each lifecycle mutation against the current return state.",
+        "Change stock only through receipt, then verify the completed return."
+      ]
+    },
+    {
+      "id": "dashboard.page-publish",
+      "surface": "dashboard",
+      "kind": "write",
+      "title": "Create and publish a page",
+      "summary": "Create a content page, publish its current record, and verify the public slug.",
+      "examples": [
+        "Draft an About page with canonical and sitemap settings, publish it, and verify the public page."
+      ],
+      "tags": [
+        "content",
+        "pages",
+        "publishing"
+      ],
+      "operationIds": [
+        "dashboard.content.create",
+        "dashboard.content.update",
+        "storefront.pages.get_by_slug"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Require merchant-provided copy and discovery metadata.",
+        "Create the draft, then publish only the current saved record.",
+        "Confirm publication and verify the buyer-facing slug."
+      ]
+    },
+    {
+      "id": "dashboard.payment-methods",
+      "surface": "dashboard",
+      "kind": "write",
+      "title": "Configure payment methods",
+      "summary": "Read payment configuration, update enabled and default methods, and verify checkout.",
+      "examples": [
+        "Make COD active and default only if it is actually configured, then verify the buyer sees it."
+      ],
+      "tags": [
+        "payments",
+        "checkout",
+        "configuration"
+      ],
+      "operationIds": [
+        "dashboard.payments.methods_get",
+        "dashboard.payments.methods_update",
+        "storefront.checkout.get_config"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Read the complete payment-method configuration first.",
+        "Activate or default only a method that is truthfully configured.",
+        "Confirm the write, fail closed on missing settings, and verify checkout."
+      ]
+    },
+    {
+      "id": "dashboard.product-counts",
+      "surface": "dashboard",
+      "kind": "read",
+      "title": "Product status counts",
+      "summary": "Read active, draft, and trashed product counts.",
+      "examples": [
+        "How many active, draft, and trashed products do I have?"
+      ],
+      "tags": [
+        "catalog",
+        "products",
+        "counts"
+      ],
+      "operationIds": [
+        "dashboard.products.stats"
+      ],
+      "requiresFacts": false,
+      "requiresConfirmation": false,
+      "requiresVerification": false,
+      "rules": [
+        "Use the authoritative product status aggregates without inferring missing states."
+      ]
+    },
+    {
+      "id": "dashboard.product-section-update",
+      "surface": "dashboard",
+      "kind": "write",
+      "title": "Update one product section",
+      "summary": "Read and update one semantic product section using its current revision.",
+      "examples": [
+        "Change only this product's SEO title and description without overwriting its variants or media."
+      ],
+      "tags": [
+        "catalog",
+        "products",
+        "section-update"
+      ],
+      "operationIds": [
+        "dashboard.products.get_section",
+        "dashboard.products.update_section"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Read the current semantic section and revision first.",
+        "Write only the requested section and preserve unrelated product data.",
+        "Confirm the write and verify the returned section state."
+      ]
+    },
+    {
+      "id": "dashboard.promotion-lifecycle",
+      "surface": "dashboard",
+      "kind": "write",
+      "title": "Create and activate a promotion",
+      "summary": "Create a draft promotion, preview it, activate it when eligible, and verify it.",
+      "examples": [
+        "Create a code promotion, preview the real evaluator result, and activate it only if eligible."
+      ],
+      "tags": [
+        "promotions",
+        "discounts",
+        "activation"
+      ],
+      "operationIds": [
+        "dashboard.promotions.create",
+        "dashboard.promotions.preview",
+        "dashboard.promotions.activate",
+        "dashboard.promotions.get"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Create a draft from complete merchant-supplied promotion facts.",
+        "Use the production preview and stop on eligibility errors.",
+        "Confirm activation with the current revision, then verify the promotion."
+      ]
+    },
+    {
+      "id": "dashboard.sales-today",
+      "surface": "dashboard",
+      "kind": "read",
+      "title": "Today's sales and orders",
+      "summary": "Read today's booked sales total and order count from dashboard activity.",
+      "examples": [
+        "What are today's sales and order count? Be clear about what sales means."
+      ],
+      "tags": [
+        "sales",
+        "orders",
+        "today"
+      ],
+      "operationIds": [
+        "dashboard.home.activity"
+      ],
+      "requiresFacts": false,
+      "requiresConfirmation": false,
+      "requiresVerification": false,
+      "rules": [
+        "Report booked sales rather than profit or settled cash.",
+        "Preserve the returned period and currency context."
+      ]
+    },
+    {
+      "id": "dashboard.shipping-method",
+      "surface": "dashboard",
+      "kind": "write",
+      "title": "Create a shipping method",
+      "summary": "Create a globally offered flat-fee shipping method and verify admin and storefront visibility.",
+      "examples": [
+        "Add a Dhaka delivery method with the merchant-provided price and make sure it appears at checkout."
+      ],
+      "tags": [
+        "shipping",
+        "delivery",
+        "checkout"
+      ],
+      "operationIds": [
+        "dashboard.shipping_methods.create",
+        "dashboard.shipping_methods.list",
+        "storefront.shipping_methods.list"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Require the merchant-supplied label, fee, active state, and sort order.",
+        "Treat the label as display text; flat-fee methods do not enforce a geographic service area.",
+        "Confirm creation before the write.",
+        "Verify the method in bounded admin and buyer-facing lists."
+      ]
+    },
+    {
+      "id": "dashboard.storefront-origin",
+      "surface": "dashboard",
+      "kind": "write",
+      "title": "Update storefront origin",
+      "summary": "Read and update the canonical storefront URL, then probe public discovery.",
+      "examples": [
+        "Change the canonical storefront origin only after validating it is absolute HTTPS, then probe discovery resources."
+      ],
+      "tags": [
+        "storefront",
+        "url",
+        "seo",
+        "origin"
+      ],
+      "operationIds": [
+        "dashboard.settings.storefront_url_get",
+        "dashboard.settings.storefront_url_update",
+        "dashboard.seo.live_probe"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Read the current storefront URL before replacement.",
+        "Require an absolute HTTPS URL for the merchant's intended origin.",
+        "Confirm the write, then probe canonical discovery surfaces."
+      ]
+    },
+    {
+      "id": "dashboard.stripe-settings",
+      "surface": "dashboard",
+      "kind": "write",
+      "title": "Update Stripe checkout settings",
+      "summary": "Read masked Stripe settings, merge supplied fields, save, and verify readiness.",
+      "examples": [
+        "Configure Stripe with the merchant-supplied secret key.",
+        "Replace the Stripe secret key credential.",
+        "Set Stripe secretKey."
+      ],
+      "tags": [
+        "payments",
+        "stripe",
+        "checkout",
+        "credentials",
+        "secretKey",
+        "publishableKey",
+        "webhookSecret",
+        "enabled"
+      ],
+      "operationIds": [
+        "dashboard.payments.stripe_get",
+        "dashboard.payments.stripe_update"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Read masked settings; dashboard.payments.stripe_update declares only enabled, publishableKey, secretKey, and webhookSecret. Ask/no write for any absent field.",
+        "Never return, log, infer, or reuse secret and webhook credentials.",
+        "Confirm the security-sensitive save; enable only when complete, then reread readiness."
+      ]
+    },
+    {
+      "id": "dashboard.tax-configuration",
+      "surface": "dashboard",
+      "kind": "mixed",
+      "title": "Configure a tax rate",
+      "summary": "Read tax references, create a rate, preview a calculation, and verify configured rates.",
+      "examples": [
+        "Configure a VAT rate for the supplied jurisdiction and class, preview a real cart calculation, then verify versioned settings."
+      ],
+      "tags": [
+        "tax",
+        "rates",
+        "jurisdictions",
+        "configuration"
+      ],
+      "operationIds": [
+        "dashboard.taxes.settings_get",
+        "dashboard.taxes.jurisdictions_list",
+        "dashboard.taxes.classes_list",
+        "dashboard.taxes.rates_create",
+        "dashboard.taxes.preview",
+        "dashboard.taxes.rates_list"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Resolve exact jurisdiction and tax-class identifiers.",
+        "Require merchant-supplied rate, scope, and effective facts.",
+        "Confirm the rate write, then preview a real calculation and verify the list."
+      ]
+    },
+    {
+      "id": "dashboard.team-invite",
+      "surface": "dashboard",
+      "kind": "write",
+      "title": "Invite a team member",
+      "summary": "Resolve an existing role, invite one team member, and verify membership state.",
+      "examples": [
+        "Invite a support administrator with the least-privilege existing role and verify the assignment."
+      ],
+      "tags": [
+        "team",
+        "roles",
+        "invite",
+        "security"
+      ],
+      "operationIds": [
+        "dashboard.team.roles.list",
+        "dashboard.team.users.invite",
+        "dashboard.team.users.list"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Resolve an existing least-privilege role for the stated duties.",
+        "Confirm the security-sensitive invite before dispatch.",
+        "Verify the pending member and assigned role in the team list."
+      ]
+    },
+    {
+      "id": "dashboard.theme-publish",
+      "surface": "dashboard",
+      "kind": "write",
+      "title": "Publish a theme draft",
+      "summary": "Read the theme workspace, save a draft, preview it, publish it, and verify layout.",
+      "examples": [
+        "Change the storefront colors in the durable draft, preview the exact draft, and publish that revision."
+      ],
+      "tags": [
+        "theme",
+        "appearance",
+        "publishing"
+      ],
+      "operationIds": [
+        "dashboard.theme.workspace_get",
+        "dashboard.theme.draft_save",
+        "dashboard.theme.preview_session_create",
+        "dashboard.theme.publish",
+        "storefront.layout.get"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Read the current workspace and revision before saving a durable draft.",
+        "Preview the exact saved draft before publication.",
+        "Confirm publication and verify the resulting storefront layout."
+      ]
+    },
+    {
+      "id": "dashboard.thirty-day-booked-operations-brief",
+      "surface": "dashboard",
+      "kind": "read",
+      "title": "30-day booked brief",
+      "summary": "Read PII-free booked activity, current backlog totals, and gaps.",
+      "examples": [
+        "Give me a concise last-30-days owner briefing with booked/paid revenue, actually collected or settled cash if known, order counts by status, top 10 SKUs by units and revenue, gross margin if supported, low-stock/stockout risk, abandoned checkouts, payment-recovery backlog, and traffic/conversion; exclude all customer PII and clearly mark unavailable/non-comparable metrics.",
+        "Give a PII-free 30-day owner brief with booked activity and current stock/checkout/recovery totals; where other metrics are unsupported, say unavailable."
+      ],
+      "tags": [
+        "briefing",
+        "30-day",
+        "operations",
+        "sku"
+      ],
+      "workflowId": "operations.thirty-day-booked-brief.v1",
+      "fixedCalendarDays": 30,
+      "operationIds": [
+        "dashboard.home.activity",
+        "dashboard.settings.currency_get",
+        "dashboard.inventory.list",
+        "dashboard.abandoned_checkouts.summaries_list",
+        "dashboard.orders.payment_recovery_list"
+      ],
+      "requiresFacts": false,
+      "requiresConfirmation": false,
+      "requiresVerification": false,
+      "rules": [
+        "brief.daily.activity is exactly 30 Asia/Dhaka calendar days including zero days; bookedRevenue is booked gross, not paid/settled/net/margin.",
+        "brief.currency is saved currency; missing fails the brief.",
+        "Stock, abandoned, and recovery totals are current snapshots, not period metrics or cohorts.",
+        "paymentRecovery.total is all recoverable hosted-payment work; paymentNeedsAttention.total is actionable failed/stale work. Snapshots can race; never subtract.",
+        "Any requested field absent from fixed selectors (status, cash/economics, SKU ranks, traffic/conversion) is unavailable; never infer, approximate, or claim coverage.",
+        "Projections only, never raw rows/PII. Any read/projection failure fails: no partial, zero, or unsupported label."
+      ]
+    },
+    {
+      "id": "storefront.cart-edit",
+      "surface": "storefront",
+      "kind": "write",
+      "title": "Edit a cart quantity",
+      "summary": "Set one resolved cart variant quantity and return the recalculated cart.",
+      "examples": [
+        "Change the quantity of the identified cart variant to three and return the revalidated cart."
+      ],
+      "tags": [
+        "cart",
+        "quantity"
+      ],
+      "operationIds": [
+        "storefront.cart.set_quantity",
+        "storefront.cart.get"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Use the exact variant and current context revision; never submit a client price or stock value.",
+        "Verify with the returned and reread cart projection."
+      ]
+    },
+    {
+      "id": "storefront.category-filter",
+      "surface": "storefront",
+      "kind": "read",
+      "title": "Browse a filtered category",
+      "summary": "Read a category's declared filters and continue its bounded product listing.",
+      "examples": [
+        "Browse this category and show only its valid filterable attributes and the next product page."
+      ],
+      "tags": [
+        "catalog",
+        "categories",
+        "filters"
+      ],
+      "operationIds": [
+        "storefront.categories.get_section",
+        "storefront.attributes.list_for_category",
+        "storefront.categories.list_product_summaries"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": false,
+      "requiresVerification": false,
+      "rules": [
+        "Use the resolved category ID, returned filter definitions, and declared pagination only.",
+        "Never invent a filter or total a partial page."
+      ]
+    },
+    {
+      "id": "storefront.checkout-journey",
+      "surface": "storefront",
+      "kind": "mixed",
+      "title": "Complete a buyer checkout",
+      "summary": "Create a buyer context, build and validate its cart, submit once, and read a safe receipt.",
+      "examples": [
+        "Start a buyer context, add this exact variant, set delivery, apply the supplied code, quote, validate, place the order idempotently, and return a safe receipt."
+      ],
+      "tags": [
+        "cart",
+        "checkout",
+        "receipt"
+      ],
+      "operationIds": [
+        "storefront.context.create",
+        "storefront.cart.add",
+        "storefront.delivery.set",
+        "storefront.discount.apply",
+        "storefront.checkout.quote",
+        "storefront.checkout.validate",
+        "storefront.checkout.submit",
+        "storefront.receipt.get"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Resolve exact variant and delivery IDs, then thread the current context revision through each write.",
+        "Review the quote and validation result before confirmed checkout submission with one canonical idempotency key.",
+        "Keep receipt proofs, payment secrets, and continuation fields out of model-visible output."
+      ]
+    },
+    {
+      "id": "storefront.checkout-options",
+      "surface": "storefront",
+      "kind": "read",
+      "title": "Read buyer checkout options",
+      "summary": "Read buyer-visible checkout, language, payment, authentication, and delivery configuration.",
+      "examples": [
+        "What payment gateways, customer-auth rules, language, and shipping methods can this buyer actually use?"
+      ],
+      "tags": [
+        "checkout",
+        "payment",
+        "delivery"
+      ],
+      "operationIds": [
+        "storefront.checkout.get_config",
+        "storefront.checkout_language.get_active",
+        "storefront.shipping_methods.list"
+      ],
+      "requiresFacts": false,
+      "requiresConfirmation": false,
+      "requiresVerification": false,
+      "rules": [
+        "Report only active buyer-visible options and fail closed when configuration cannot be read."
+      ]
+    },
+    {
+      "id": "storefront.close-context",
+      "surface": "storefront",
+      "kind": "write",
+      "title": "Close a buyer context",
+      "summary": "Close one identified buyer context and clear its bound cart and session authority.",
+      "examples": [
+        "Close this buyer context and clear its bound cart/session authority."
+      ],
+      "tags": [
+        "context",
+        "cart",
+        "session"
+      ],
+      "operationIds": [
+        "storefront.context.close"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": false,
+      "rules": [
+        "Resolve the exact context ID and confirm closure because its cart/session authority is discarded."
+      ]
+    },
+    {
+      "id": "storefront.content-discovery",
+      "surface": "storefront",
+      "kind": "read",
+      "title": "Discover public content",
+      "summary": "Find and read published pages and articles through bounded public content operations.",
+      "examples": [
+        "Find the returns page and the newest help article, using only published public content."
+      ],
+      "tags": [
+        "content",
+        "pages",
+        "articles"
+      ],
+      "operationIds": [
+        "storefront.pages.list",
+        "storefront.pages.get_by_slug",
+        "storefront.articles.list",
+        "storefront.articles.get_by_slug"
+      ],
+      "requiresFacts": false,
+      "requiresConfirmation": false,
+      "requiresVerification": false,
+      "rules": [
+        "Use only published public results and resolve the exact slug before detail reads."
+      ]
+    },
+    {
+      "id": "storefront.customer-login",
+      "surface": "storefront",
+      "kind": "write",
+      "title": "Authorize a customer",
+      "summary": "Begin the reviewed customer authorization handoff and read only its safe status.",
+      "examples": [
+        "Start secure customer authorization, let the buyer complete the browser step, then report safe status."
+      ],
+      "tags": [
+        "customer",
+        "authentication",
+        "continuation"
+      ],
+      "operationIds": [
+        "storefront.customer_auth.begin",
+        "storefront.customer_auth.status"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Use only the fixed reviewed browser continuation and safe status operation.",
+        "Never expose credentials, OTPs, customer cookies, or continuation fields."
+      ]
+    },
+    {
+      "id": "storefront.customer-profile",
+      "surface": "storefront",
+      "kind": "write",
+      "title": "Update a customer profile",
+      "summary": "Read, update, and verify the current authorized customer's delivery profile.",
+      "examples": [
+        "Update my authorized delivery profile after showing the current values, then verify it."
+      ],
+      "tags": [
+        "customer",
+        "profile",
+        "delivery"
+      ],
+      "operationIds": [
+        "storefront.customer_profile.get",
+        "storefront.customer_profile.update"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Require a live customer-bound context and preserve any current values the buyer did not change.",
+        "Verify only the authorized customer's profile."
+      ]
+    },
+    {
+      "id": "storefront.delivery-search",
+      "surface": "storefront",
+      "kind": "read",
+      "title": "Resolve a delivery location",
+      "summary": "Search city, then zone, then area summaries without selecting a delivery option.",
+      "examples": [
+        "Find the buyer's city, zone, and area with bounded searches before selecting delivery."
+      ],
+      "tags": [
+        "delivery",
+        "locations",
+        "search"
+      ],
+      "operationIds": [
+        "storefront.locations.city_summaries",
+        "storefront.locations.zone_summaries",
+        "storefront.locations.area_summaries"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": false,
+      "requiresVerification": false,
+      "rules": [
+        "Resolve each parent ID before the next bounded search; never infer location IDs."
+      ]
+    },
+    {
+      "id": "storefront.homepage-layout",
+      "surface": "storefront",
+      "kind": "read",
+      "title": "Summarize storefront presentation",
+      "summary": "Read the published homepage and shared buyer-visible layout projection.",
+      "examples": [
+        "Summarize the buyer-visible homepage, header, navigation, currency, theme, and store policies."
+      ],
+      "tags": [
+        "homepage",
+        "layout",
+        "presentation"
+      ],
+      "operationIds": [
+        "storefront.homepage.get",
+        "storefront.layout.get"
+      ],
+      "requiresFacts": false,
+      "requiresConfirmation": false,
+      "requiresVerification": false,
+      "rules": [
+        "Report only values present in the published buyer projection."
+      ]
+    },
+    {
+      "id": "storefront.hosted-payment",
+      "surface": "storefront",
+      "kind": "mixed",
+      "title": "Complete hosted payment",
+      "summary": "Begin payment for an authorized order and poll only its safe status after browser handoff.",
+      "examples": [
+        "Start secure payment for my authorized order and poll only the safe payment status after I finish the browser step."
+      ],
+      "tags": [
+        "orders",
+        "payment",
+        "continuation"
+      ],
+      "operationIds": [
+        "storefront.orders.payment.begin",
+        "storefront.payment.status"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Require customer-bound order authority and use only the fixed reviewed browser continuation.",
+        "Poll only the safe status operation; never expose payment secrets or provider payloads."
+      ]
+    },
+    {
+      "id": "storefront.navigation-tree",
+      "surface": "storefront",
+      "kind": "read",
+      "title": "Read published navigation",
+      "summary": "Read current placements and expand one requested branch of a published menu.",
+      "examples": [
+        "Show the current published header navigation and expand one menu branch without loading the entire tree."
+      ],
+      "tags": [
+        "navigation",
+        "menus",
+        "layout"
+      ],
+      "operationIds": [
+        "storefront.navigation.placements_list",
+        "storefront.navigation.items_list"
+      ],
+      "requiresFacts": false,
+      "requiresConfirmation": false,
+      "requiresVerification": false,
+      "rules": [
+        "Resolve the placed menu and request only the needed bounded branch."
+      ]
+    },
+    {
+      "id": "storefront.order-support",
+      "surface": "storefront",
+      "kind": "write",
+      "title": "Request order support",
+      "summary": "Read one authorized customer order and submit a support request against it.",
+      "examples": [
+        "Show my order, submit this support request against it, and do not expose any other buyer's order."
+      ],
+      "tags": [
+        "orders",
+        "customer",
+        "support"
+      ],
+      "operationIds": [
+        "storefront.orders.get",
+        "storefront.orders.support_request.create"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Require customer-bound authority for the exact order and never expose another buyer's data.",
+        "Treat the created support request result as bounded verification evidence."
+      ]
+    },
+    {
+      "id": "storefront.payment-recovery",
+      "surface": "storefront",
+      "kind": "mixed",
+      "title": "Recover payment access",
+      "summary": "Use buyer verification to recover payment access and report only safe recovery status.",
+      "examples": [
+        "Recover payment access for my order through buyer verification; never put a receipt proof in a URL."
+      ],
+      "tags": [
+        "payment",
+        "recovery",
+        "buyer-verification"
+      ],
+      "operationIds": [
+        "storefront.payment_recovery.begin",
+        "storefront.payment_recovery.status"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Use buyer-verified recovery and its safe status only.",
+        "Never place receipt proof, OTP, or bearer material in a URL or model-visible output."
+      ]
+    },
+    {
+      "id": "storefront.product-research",
+      "surface": "storefront",
+      "kind": "read",
+      "title": "Research a product",
+      "summary": "Find products and inspect exact buyer-visible option, image, price, and availability projections.",
+      "examples": [
+        "Find a black cotton shirt under 1200, show its options, images, price, and availability without claiming exact stock."
+      ],
+      "tags": [
+        "catalog",
+        "search",
+        "availability"
+      ],
+      "operationIds": [
+        "storefront.search.predict",
+        "storefront.products.list",
+        "storefront.products.get_section"
+      ],
+      "requiresFacts": false,
+      "requiresConfirmation": false,
+      "requiresVerification": false,
+      "rules": [
+        "Treat buyer-visible availabilityBand as stock truth; never claim an exact quantity.",
+        "Resolve exact product and variant identities from bounded public results."
+      ]
+    }
+  ],
+  "controls": [
+    {
+      "id": "dashboard.campaign-global-seo-overreach",
+      "surface": "dashboard",
+      "title": "Separate campaign and global SEO writes",
+      "summary": "Page-scoped campaign SEO does not authorize store-wide discovery changes.",
+      "examples": [
+        "Create an Eid campaign page, then rewrite global SEO, robots, and structured-data settings."
+      ],
+      "tags": [
+        "campaign",
+        "content",
+        "seo",
+        "robots",
+        "structured-data",
+        "safety"
+      ],
+      "disposition": "ask",
+      "reasonCode": "campaign_global_seo_requires_separate_intent",
+      "trigger": {
+        "allOf": [
+          [
+            "campaign page",
+            "landing page",
+            "sale page",
+            "cms page",
+            "eid page"
+          ],
+          [
+            "global seo",
+            "store-wide seo",
+            "sitewide seo",
+            "robots",
+            "structured data"
+          ],
+          [
+            "change",
+            "configure",
+            "install",
+            "rewrite",
+            "set",
+            "update"
+          ]
+        ],
+        "ignoreWhenNegated": true
+      },
+      "safeOperationIds": [
+        "dashboard.content.list",
+        "dashboard.seo.settings_get",
+        "storefront.seo.get"
+      ],
+      "forbiddenOperationIds": [
+        "dashboard.seo.settings_update"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Global SEO, robots, and structured-data settings are store-wide and outside this page workflow.",
+        "Keep SEO page-scoped; do bounded reads and ask for a separate explicit global-discovery request.",
+        "Do not perform page, navigation, presentation, catalog, or global SEO writes from this compound request."
+      ]
+    },
+    {
+      "id": "dashboard.campaign-layout-needs-review",
+      "surface": "dashboard",
+      "title": "Clarify campaign page presentation limits",
+      "summary": "Campaign page, navigation, and shared-layout changes need reviewed HTML and homepage fallback choices.",
+      "examples": [
+        "Publish a campaign landing page, add it to navigation and the homepage, and announce it in the header."
+      ],
+      "tags": [
+        "campaign",
+        "content",
+        "navigation",
+        "homepage",
+        "header",
+        "unsupported"
+      ],
+      "disposition": "ask",
+      "reasonCode": "campaign_layout_requires_reviewed_facts",
+      "trigger": {
+        "allOf": [
+          [
+            "campaign page",
+            "landing page",
+            "cms page"
+          ],
+          [
+            "navigation",
+            "main menu",
+            "menu"
+          ],
+          [
+            "homepage",
+            "layout",
+            "announcement",
+            "announce"
+          ],
+          [
+            "create",
+            "build",
+            "publish",
+            "launch"
+          ]
+        ],
+        "ignoreWhenNegated": false
+      },
+      "safeOperationIds": [
+        "dashboard.content.list",
+        "dashboard.navigation.placements_manifest",
+        "dashboard.navigation.menus_list",
+        "dashboard.settings_header.get_header",
+        "dashboard.settings_homepage_presentation.get_homepage_presentation",
+        "dashboard.hero_sliders.list"
+      ],
+      "forbiddenOperationIds": [
+        "dashboard.products.create",
+        "dashboard.products.update_section",
+        "dashboard.categories.create",
+        "dashboard.categories.set_status",
+        "dashboard.attributes.create",
+        "dashboard.inventory.adjust_stock",
+        "dashboard.inventory.set_stock",
+        "dashboard.seo.settings_update"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Do not substitute product, category, attribute, inventory, or global SEO writes for page-scoped campaign work.",
+        "Explain that CMS pages accept sanitized HTML, not semantic hero, collection, or FAQ blocks.",
+        "Ask whether an untyped HTML page and desktop/mobile hero-slide fallback are acceptable.",
+        "Require exact page SEO, media, menu placement, announcement, hero images, order, and publish facts.",
+        "Keep theme and unrelated layout unchanged; perform discovery reads only until the reviewed facts are confirmed."
+      ]
+    },
+    {
+      "id": "dashboard.checkout-prerequisite-bypass",
+      "surface": "dashboard",
+      "title": "Require checkout prerequisites",
+      "summary": "Guest access cannot be enabled when readiness or active delivery hierarchy is absent.",
+      "examples": [
+        "Enable guest checkout even when readiness is false."
+      ],
+      "tags": [
+        "checkout",
+        "readiness",
+        "delivery"
+      ],
+      "disposition": "ask",
+      "reasonCode": "checkout_prerequisites_required",
+      "trigger": {
+        "allOf": [
+          [
+            "guest checkout",
+            "enable guest",
+            "enable guests"
+          ],
+          [
+            "even when",
+            "even if"
+          ],
+          [
+            "readiness is false",
+            "readiness false",
+            "no active city",
+            "no active delivery hierarchy"
+          ]
+        ],
+        "ignoreWhenNegated": false
+      },
+      "safeOperationIds": [
+        "dashboard.settings.currency_get",
+        "dashboard.checkout.flow_get",
+        "dashboard.checkout.readiness_get",
+        "dashboard.payments.methods_get",
+        "dashboard.shipping_methods.list",
+        "storefront.checkout.get_config"
+      ],
+      "forbiddenOperationIds": [
+        "dashboard.settings.currency_update",
+        "dashboard.payments.sslcommerz_update",
+        "dashboard.payments.methods_update",
+        "dashboard.shipping_methods.update",
+        "dashboard.shipping_methods.create",
+        "dashboard.shipping_methods.trash",
+        "dashboard.shipping_methods.delete_permanently",
+        "dashboard.checkout.flow_update",
+        "dashboard.seo.settings_update",
+        "dashboard.analytics.create",
+        "dashboard.analytics.update",
+        "dashboard.analytics.set_active"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Require ready=true, an active shipping method, and active city/zone delivery hierarchy before guest enablement.",
+        "Make no setup write while any prerequisite is false, absent, contradictory, or unreadable."
+      ]
+    },
+    {
+      "id": "dashboard.locked-currency-force",
+      "surface": "dashboard",
+      "title": "Do not bypass the currency lock",
+      "summary": "A locked currency code is authoritative and has no force or bypass operation.",
+      "examples": [
+        "Force BDT even if the currency code is locked."
+      ],
+      "tags": [
+        "currency",
+        "lock",
+        "safety"
+      ],
+      "disposition": "ask",
+      "reasonCode": "locked_currency_requires_supported_choice",
+      "trigger": {
+        "allOf": [
+          [
+            "currency",
+            "currency code",
+            "bdt"
+          ],
+          [
+            "locked",
+            "currency lock"
+          ],
+          [
+            "force",
+            "bypass",
+            "override",
+            "ignore"
+          ]
+        ],
+        "ignoreWhenNegated": false
+      },
+      "safeOperationIds": [
+        "dashboard.settings.currency_get",
+        "dashboard.checkout.flow_get",
+        "dashboard.checkout.readiness_get",
+        "dashboard.payments.methods_get",
+        "dashboard.shipping_methods.list",
+        "storefront.checkout.get_config"
+      ],
+      "forbiddenOperationIds": [
+        "dashboard.settings.currency_update",
+        "dashboard.payments.sslcommerz_update",
+        "dashboard.payments.methods_update",
+        "dashboard.shipping_methods.update",
+        "dashboard.shipping_methods.create",
+        "dashboard.shipping_methods.trash",
+        "dashboard.shipping_methods.delete_permanently",
+        "dashboard.checkout.flow_update",
+        "dashboard.seo.settings_update",
+        "dashboard.analytics.create",
+        "dashboard.analytics.update",
+        "dashboard.analytics.set_active"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": false,
+      "rules": [
+        "Treat currencyCodeLocked as authoritative; never imply a force, override, or bypass path.",
+        "Make no setup write; reread currency and ask whether to retain it or stop this setup."
+      ]
+    },
+    {
+      "id": "dashboard.no-payment-guess",
+      "surface": "dashboard",
+      "title": "Fail closed on payment readiness",
+      "summary": "An active or default payment method cannot be claimed when authoritative settings are unreadable.",
+      "examples": [
+        "Settings failed to load, so just tell me COD is the active checkout default."
+      ],
+      "tags": [
+        "checkout",
+        "payments",
+        "readiness"
+      ],
+      "disposition": "refuse",
+      "reasonCode": "payment_readiness_unavailable",
+      "trigger": {
+        "allOf": [
+          [
+            "settings failed",
+            "failed to load",
+            "cannot read"
+          ],
+          [
+            "cod",
+            "gateway",
+            "payment method"
+          ],
+          [
+            "active",
+            "default",
+            "guess",
+            "assume"
+          ]
+        ],
+        "ignoreWhenNegated": false
+      },
+      "safeOperationIds": [
+        "dashboard.payments.methods_get",
+        "dashboard.checkout.readiness_get",
+        "storefront.checkout.get_config"
+      ],
+      "forbiddenOperationIds": [],
+      "requiresFacts": false,
+      "requiresConfirmation": false,
+      "requiresVerification": false,
+      "rules": [
+        "Fail closed when payment readiness cannot be read.",
+        "Do not guess COD or another gateway."
+      ]
+    },
+    {
+      "id": "dashboard.no-secret-reveal",
+      "surface": "dashboard",
+      "title": "Protect provider credentials",
+      "summary": "Saved provider credentials may be represented only by masked configuration and readiness.",
+      "examples": [
+        "Show me the full saved Stripe secret key."
+      ],
+      "tags": [
+        "payments",
+        "credentials",
+        "secrets"
+      ],
+      "disposition": "refuse",
+      "reasonCode": "secret_material_protected",
+      "trigger": {
+        "allOf": [
+          [
+            "secret key",
+            "api secret",
+            "provider credential"
+          ],
+          [
+            "show",
+            "reveal",
+            "full",
+            "saved"
+          ]
+        ],
+        "ignoreWhenNegated": false
+      },
+      "safeOperationIds": [
+        "dashboard.payments.stripe_get"
+      ],
+      "forbiddenOperationIds": [],
+      "requiresFacts": false,
+      "requiresConfirmation": false,
+      "requiresVerification": false,
+      "rules": [
+        "Never reveal or reconstruct provider credentials.",
+        "Report only masked configuration or readiness."
+      ]
+    },
+    {
+      "id": "dashboard.non-atomic-setup-guarantee",
+      "surface": "dashboard",
+      "title": "Reject atomic rollback and blind retry claims",
+      "summary": "These settings writes are non-atomic and have no cross-operation rollback guarantee.",
+      "examples": [
+        "Guarantee atomic setup, roll back every write, and blindly retry until success."
+      ],
+      "tags": [
+        "settings",
+        "atomicity",
+        "retries",
+        "safety"
+      ],
+      "disposition": "ask",
+      "reasonCode": "atomic_rollback_unavailable",
+      "trigger": {
+        "allOf": [
+          [
+            "atomic",
+            "roll back",
+            "rollback"
+          ],
+          [
+            "blindly retry",
+            "retry uncertain",
+            "until all changes",
+            "until success"
+          ]
+        ],
+        "ignoreWhenNegated": true
+      },
+      "safeOperationIds": [
+        "dashboard.settings.currency_get",
+        "dashboard.checkout.flow_get",
+        "dashboard.checkout.readiness_get",
+        "dashboard.payments.methods_get",
+        "dashboard.shipping_methods.list",
+        "storefront.checkout.get_config"
+      ],
+      "forbiddenOperationIds": [
+        "dashboard.settings.currency_update",
+        "dashboard.payments.sslcommerz_update",
+        "dashboard.payments.methods_update",
+        "dashboard.shipping_methods.update",
+        "dashboard.shipping_methods.create",
+        "dashboard.shipping_methods.trash",
+        "dashboard.shipping_methods.delete_permanently",
+        "dashboard.checkout.flow_update",
+        "dashboard.seo.settings_update",
+        "dashboard.analytics.create",
+        "dashboard.analytics.update",
+        "dashboard.analytics.set_active"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "State that the sequence is non-atomic: no automatic rollback spans currency, payment, shipping, and checkout writes.",
+        "Make no setup write; require stop, reread, partial-state reporting, and no blind retry after uncertainty."
+      ]
+    },
+    {
+      "id": "dashboard.payment-policy-must-be-explicit",
+      "surface": "dashboard",
+      "title": "Require payment preservation and default intent",
+      "summary": "The resolver cannot choose which existing methods to disable or which method becomes default.",
+      "examples": [
+        "Choose for me which payment methods to keep and which should be default."
+      ],
+      "tags": [
+        "payments",
+        "defaults",
+        "preservation"
+      ],
+      "disposition": "ask",
+      "reasonCode": "payment_policy_missing",
+      "trigger": {
+        "allOf": [
+          [
+            "payment method",
+            "payment methods"
+          ],
+          [
+            "decide for me",
+            "choose for me",
+            "choose whichever"
+          ],
+          [
+            "kept or disabled",
+            "keep or disable",
+            "default"
+          ]
+        ],
+        "ignoreWhenNegated": false
+      },
+      "safeOperationIds": [
+        "dashboard.settings.currency_get",
+        "dashboard.checkout.flow_get",
+        "dashboard.checkout.readiness_get",
+        "dashboard.payments.methods_get",
+        "dashboard.shipping_methods.list",
+        "storefront.checkout.get_config"
+      ],
+      "forbiddenOperationIds": [
+        "dashboard.settings.currency_update",
+        "dashboard.payments.sslcommerz_update",
+        "dashboard.payments.methods_update",
+        "dashboard.shipping_methods.update",
+        "dashboard.shipping_methods.create",
+        "dashboard.shipping_methods.trash",
+        "dashboard.shipping_methods.delete_permanently",
+        "dashboard.checkout.flow_update",
+        "dashboard.seo.settings_update",
+        "dashboard.analytics.create",
+        "dashboard.analytics.update",
+        "dashboard.analytics.set_active"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Require explicit keep/disable intent for every current method and an exact default-method policy.",
+        "Never choose a payment policy; make no setup write until the merchant confirms the full replacement array and default."
+      ]
+    },
+    {
+      "id": "dashboard.phone-required-invariant",
+      "surface": "dashboard",
+      "title": "Keep customer phone mandatory",
+      "summary": "Bangladesh checkout has no supported setting that makes customer phone optional.",
+      "examples": [
+        "Make customer phone optional before enabling checkout."
+      ],
+      "tags": [
+        "checkout",
+        "phone",
+        "identity"
+      ],
+      "disposition": "refuse",
+      "reasonCode": "customer_phone_is_mandatory",
+      "trigger": {
+        "allOf": [
+          [
+            "phone",
+            "customer phone"
+          ],
+          [
+            "optional",
+            "not required",
+            "disable phone requirement"
+          ]
+        ],
+        "ignoreWhenNegated": true
+      },
+      "safeOperationIds": [
+        "dashboard.settings.currency_get",
+        "dashboard.checkout.flow_get",
+        "dashboard.checkout.readiness_get",
+        "dashboard.payments.methods_get",
+        "dashboard.shipping_methods.list",
+        "storefront.checkout.get_config"
+      ],
+      "forbiddenOperationIds": [
+        "dashboard.settings.currency_update",
+        "dashboard.payments.sslcommerz_update",
+        "dashboard.payments.methods_update",
+        "dashboard.shipping_methods.update",
+        "dashboard.shipping_methods.create",
+        "dashboard.shipping_methods.trash",
+        "dashboard.shipping_methods.delete_permanently",
+        "dashboard.checkout.flow_update",
+        "dashboard.seo.settings_update",
+        "dashboard.analytics.create",
+        "dashboard.analytics.update",
+        "dashboard.analytics.set_active"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Customer phone is a mandatory platform invariant; do not invent or imply a disabling setting.",
+        "Make no setup write while the request requires optional phone collection."
+      ]
+    },
+    {
+      "id": "dashboard.product-hard-delete-guard",
+      "surface": "dashboard",
+      "title": "Preserve SKU audit history",
+      "summary": "A product with SKU inventory movement history cannot be permanently deleted.",
+      "examples": [
+        "Permanently delete this product even if its SKUs have inventory movement history."
+      ],
+      "tags": [
+        "catalog",
+        "delete",
+        "audit-history"
+      ],
+      "disposition": "refuse",
+      "reasonCode": "sku_audit_history_protected",
+      "trigger": {
+        "allOf": [
+          [
+            "permanently delete",
+            "hard delete"
+          ],
+          [
+            "product"
+          ],
+          [
+            "inventory movement",
+            "movement history",
+            "even if"
+          ]
+        ],
+        "ignoreWhenNegated": false
+      },
+      "safeOperationIds": [
+        "dashboard.products.get_section"
+      ],
+      "forbiddenOperationIds": [
+        "dashboard.products.delete_permanently"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": false,
+      "rules": [
+        "Preserve SKU audit history.",
+        "Keep the product in trash when movements exist."
+      ]
+    },
+    {
+      "id": "dashboard.provider-credentials-must-be-supplied",
+      "surface": "dashboard",
+      "title": "Reject invented provider credentials",
+      "summary": "Payment credentials must come from the merchant through the reviewed secure input.",
+      "examples": [
+        "Invent SSLCommerz provider credentials and enable the gateway."
+      ],
+      "tags": [
+        "payments",
+        "providers",
+        "credentials",
+        "safety"
+      ],
+      "disposition": "refuse",
+      "reasonCode": "provider_credentials_cannot_be_invented",
+      "trigger": {
+        "allOf": [
+          [
+            "invent",
+            "fabricate",
+            "make up",
+            "guess",
+            "generate"
+          ],
+          [
+            "credential",
+            "credentials",
+            "secret",
+            "password",
+            "api key"
+          ],
+          [
+            "provider",
+            "gateway",
+            "sslcommerz",
+            "stripe",
+            "polar"
+          ]
+        ],
+        "ignoreWhenNegated": true
+      },
+      "safeOperationIds": [
+        "dashboard.settings.currency_get",
+        "dashboard.checkout.flow_get",
+        "dashboard.checkout.readiness_get",
+        "dashboard.payments.methods_get",
+        "dashboard.shipping_methods.list",
+        "storefront.checkout.get_config"
+      ],
+      "forbiddenOperationIds": [
+        "dashboard.settings.currency_update",
+        "dashboard.payments.sslcommerz_update",
+        "dashboard.payments.methods_update",
+        "dashboard.shipping_methods.update",
+        "dashboard.shipping_methods.create",
+        "dashboard.shipping_methods.trash",
+        "dashboard.shipping_methods.delete_permanently",
+        "dashboard.checkout.flow_update",
+        "dashboard.seo.settings_update",
+        "dashboard.analytics.create",
+        "dashboard.analytics.update",
+        "dashboard.analytics.set_active"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Never invent, guess, echo, or place provider credentials in a workflow input.",
+        "Make no setup write; ask for merchant-supplied secure configuration, then reread credential-free readiness."
+      ]
+    },
+    {
+      "id": "dashboard.shipping-fees-must-be-supplied",
+      "surface": "dashboard",
+      "title": "Require exact delivery fees",
+      "summary": "Delivery fees are merchant facts and cannot be selected by the resolver.",
+      "examples": [
+        "Create Dhaka and Nationwide methods but choose suitable fees for me."
+      ],
+      "tags": [
+        "shipping",
+        "fees",
+        "facts"
+      ],
+      "disposition": "ask",
+      "reasonCode": "shipping_fees_missing",
+      "trigger": {
+        "allOf": [
+          [
+            "shipping",
+            "delivery",
+            "method",
+            "methods"
+          ],
+          [
+            "choose suitable fee",
+            "choose suitable fees",
+            "choose fees",
+            "set fees for me",
+            "decide fees"
+          ]
+        ],
+        "ignoreWhenNegated": false
+      },
+      "safeOperationIds": [
+        "dashboard.settings.currency_get",
+        "dashboard.checkout.flow_get",
+        "dashboard.checkout.readiness_get",
+        "dashboard.payments.methods_get",
+        "dashboard.shipping_methods.list",
+        "storefront.checkout.get_config"
+      ],
+      "forbiddenOperationIds": [
+        "dashboard.settings.currency_update",
+        "dashboard.payments.sslcommerz_update",
+        "dashboard.payments.methods_update",
+        "dashboard.shipping_methods.update",
+        "dashboard.shipping_methods.create",
+        "dashboard.shipping_methods.trash",
+        "dashboard.shipping_methods.delete_permanently",
+        "dashboard.checkout.flow_update",
+        "dashboard.seo.settings_update",
+        "dashboard.analytics.create",
+        "dashboard.analytics.update",
+        "dashboard.analytics.set_active"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Require an exact merchant-supplied label, fee, active intent, and optional sort order for each method.",
+        "Never choose or infer a delivery fee; make no setup write until every method spec is complete."
+      ]
+    },
+    {
+      "id": "dashboard.shipping-geography-unsupported",
+      "surface": "dashboard",
+      "title": "Reject geographic flat-fee enforcement",
+      "summary": "Flat-fee method names are global labels and cannot enforce a buyer location or delivery zone.",
+      "examples": [
+        "Make Dhaka and Nationwide method labels enforce buyer geography."
+      ],
+      "tags": [
+        "shipping",
+        "geography",
+        "zones",
+        "safety"
+      ],
+      "disposition": "ask",
+      "reasonCode": "shipping_geography_is_not_enforced",
+      "trigger": {
+        "allOf": [
+          [
+            "shipping",
+            "delivery",
+            "flat fee",
+            "flat-fee",
+            "method"
+          ],
+          [
+            "geography",
+            "geographic location",
+            "delivery zone",
+            "zone"
+          ],
+          [
+            "enforce",
+            "act as",
+            "encode",
+            "labels act"
+          ]
+        ],
+        "ignoreWhenNegated": true
+      },
+      "safeOperationIds": [
+        "dashboard.settings.currency_get",
+        "dashboard.checkout.flow_get",
+        "dashboard.checkout.readiness_get",
+        "dashboard.payments.methods_get",
+        "dashboard.shipping_methods.list",
+        "storefront.checkout.get_config"
+      ],
+      "forbiddenOperationIds": [
+        "dashboard.settings.currency_update",
+        "dashboard.payments.sslcommerz_update",
+        "dashboard.payments.methods_update",
+        "dashboard.shipping_methods.update",
+        "dashboard.shipping_methods.create",
+        "dashboard.shipping_methods.trash",
+        "dashboard.shipping_methods.delete_permanently",
+        "dashboard.checkout.flow_update",
+        "dashboard.seo.settings_update",
+        "dashboard.analytics.create",
+        "dashboard.analytics.update",
+        "dashboard.analytics.set_active"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Explain that flat-fee names are display labels, not geographic predicates or delivery zones.",
+        "Make no setup write; ask for explicit acceptance of globally offered labels without geography enforcement."
+      ]
+    },
+    {
+      "id": "dashboard.shipping-method-match-ambiguous",
+      "surface": "dashboard",
+      "title": "Stop on ambiguous delivery matches",
+      "summary": "A shipping update needs exactly one active exact-name match; the resolver cannot choose a duplicate.",
+      "examples": [
+        "If several Dhaka methods exist, choose whichever seems best."
+      ],
+      "tags": [
+        "shipping",
+        "duplicates",
+        "identity"
+      ],
+      "disposition": "ask",
+      "reasonCode": "shipping_method_match_ambiguous",
+      "trigger": {
+        "allOf": [
+          [
+            "multiple existing methods",
+            "duplicate method",
+            "several methods",
+            "more than one method"
+          ],
+          [
+            "choose whichever",
+            "seems best",
+            "pick one"
+          ]
+        ],
+        "ignoreWhenNegated": false
+      },
+      "safeOperationIds": [
+        "dashboard.settings.currency_get",
+        "dashboard.checkout.flow_get",
+        "dashboard.checkout.readiness_get",
+        "dashboard.payments.methods_get",
+        "dashboard.shipping_methods.list",
+        "storefront.checkout.get_config"
+      ],
+      "forbiddenOperationIds": [
+        "dashboard.settings.currency_update",
+        "dashboard.payments.sslcommerz_update",
+        "dashboard.payments.methods_update",
+        "dashboard.shipping_methods.update",
+        "dashboard.shipping_methods.create",
+        "dashboard.shipping_methods.trash",
+        "dashboard.shipping_methods.delete_permanently",
+        "dashboard.checkout.flow_update",
+        "dashboard.seo.settings_update",
+        "dashboard.analytics.create",
+        "dashboard.analytics.update",
+        "dashboard.analytics.set_active"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Require exactly one active exact-name match for update; create only when no active, trashed, near, or duplicate match exists.",
+        "Make no setup write; return the bounded matches and ask the merchant to resolve identity ambiguity."
+      ]
+    },
+    {
+      "id": "dashboard.shipping-threshold-unsupported",
+      "surface": "dashboard",
+      "title": "Clarify unsupported delivery thresholds",
+      "summary": "Flat-fee labels cannot enforce geography, and order-value free-delivery thresholds are unsupported.",
+      "examples": [
+        "Add Dhaka and nationwide delivery with fees and a free-shipping threshold."
+      ],
+      "tags": [
+        "shipping",
+        "delivery",
+        "threshold"
+      ],
+      "disposition": "ask",
+      "reasonCode": "shipping_threshold_or_scope_unsupported",
+      "trigger": {
+        "allOf": [
+          [
+            "shipping",
+            "delivery"
+          ],
+          [
+            "free shipping",
+            "free delivery",
+            "delivery free",
+            "waive shipping fee",
+            "waive delivery fee"
+          ],
+          [
+            "threshold",
+            "minimum spend",
+            "minimum cart",
+            "cart value",
+            "order value"
+          ]
+        ],
+        "ignoreWhenNegated": true
+      },
+      "safeOperationIds": [
+        "dashboard.settings.currency_get",
+        "dashboard.checkout.flow_get",
+        "dashboard.checkout.readiness_get",
+        "dashboard.payments.methods_get",
+        "dashboard.shipping_methods.list",
+        "storefront.checkout.get_config"
+      ],
+      "forbiddenOperationIds": [
+        "dashboard.settings.currency_update",
+        "dashboard.payments.methods_update",
+        "dashboard.payments.stripe_update",
+        "dashboard.payments.sslcommerz_update",
+        "dashboard.payments.polar_update",
+        "dashboard.shipping_methods.create",
+        "dashboard.shipping_methods.update",
+        "dashboard.shipping_methods.trash",
+        "dashboard.shipping_methods.restore",
+        "dashboard.shipping_methods.delete_permanently",
+        "dashboard.checkout.flow_update"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Flat-fee names are global labels; they do not enforce Dhaka, nationwide, zone, or other geography.",
+        "Order-value free-delivery thresholds are unsupported; do not encode them in labels or fees.",
+        "Ask whether the merchant accepts global flat-fee methods without thresholds as a supported subset.",
+        "Require exact fees and intent for keeping or disabling other payment and shipping methods.",
+        "Until facts and subset acceptance are explicit, perform reads only and make no settings write."
+      ]
+    },
+    {
+      "id": "dashboard.shipping-unrelated-delete",
+      "surface": "dashboard",
+      "title": "Reject unrelated delivery deletion",
+      "summary": "The supported setup preserves unrelated shipping methods and never deletes them implicitly.",
+      "examples": [
+        "Create these methods and delete every other shipping method."
+      ],
+      "tags": [
+        "shipping",
+        "deletion",
+        "preservation"
+      ],
+      "disposition": "ask",
+      "reasonCode": "unrelated_shipping_delete_requires_separate_intent",
+      "trigger": {
+        "allOf": [
+          [
+            "delete",
+            "remove",
+            "trash"
+          ],
+          [
+            "every other",
+            "all other",
+            "unrelated"
+          ],
+          [
+            "shipping method",
+            "shipping methods",
+            "delivery method",
+            "delivery methods"
+          ]
+        ],
+        "ignoreWhenNegated": true
+      },
+      "safeOperationIds": [
+        "dashboard.settings.currency_get",
+        "dashboard.checkout.flow_get",
+        "dashboard.checkout.readiness_get",
+        "dashboard.payments.methods_get",
+        "dashboard.shipping_methods.list",
+        "storefront.checkout.get_config"
+      ],
+      "forbiddenOperationIds": [
+        "dashboard.settings.currency_update",
+        "dashboard.payments.sslcommerz_update",
+        "dashboard.payments.methods_update",
+        "dashboard.shipping_methods.update",
+        "dashboard.shipping_methods.create",
+        "dashboard.shipping_methods.trash",
+        "dashboard.shipping_methods.delete_permanently",
+        "dashboard.checkout.flow_update",
+        "dashboard.seo.settings_update",
+        "dashboard.analytics.create",
+        "dashboard.analytics.update",
+        "dashboard.analytics.set_active"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Preserve every unrelated shipping method; deletion is not part of the reviewed setup.",
+        "Make no setup write; ask for a separate exact destructive request after current-method review."
+      ]
+    },
+    {
+      "id": "dashboard.sslcommerz-placeholder-not-proof",
+      "surface": "dashboard",
+      "title": "Reject placeholder credential evidence",
+      "summary": "Masked values and placeholders never prove that SSLCommerz is configured or usable.",
+      "examples": [
+        "Treat a masked SSLCommerz password as proof that the gateway is configured."
+      ],
+      "tags": [
+        "payments",
+        "credentials",
+        "placeholders"
+      ],
+      "disposition": "refuse",
+      "reasonCode": "placeholder_credentials_are_not_evidence",
+      "trigger": {
+        "allOf": [
+          [
+            "sslcommerz",
+            "gateway"
+          ],
+          [
+            "masked",
+            "placeholder",
+            "placeholder text"
+          ],
+          [
+            "proof",
+            "configured"
+          ]
+        ],
+        "ignoreWhenNegated": true
+      },
+      "safeOperationIds": [
+        "dashboard.settings.currency_get",
+        "dashboard.checkout.flow_get",
+        "dashboard.checkout.readiness_get",
+        "dashboard.payments.methods_get",
+        "dashboard.shipping_methods.list",
+        "storefront.checkout.get_config"
+      ],
+      "forbiddenOperationIds": [
+        "dashboard.settings.currency_update",
+        "dashboard.payments.sslcommerz_update",
+        "dashboard.payments.methods_update",
+        "dashboard.shipping_methods.update",
+        "dashboard.shipping_methods.create",
+        "dashboard.shipping_methods.trash",
+        "dashboard.shipping_methods.delete_permanently",
+        "dashboard.checkout.flow_update",
+        "dashboard.seo.settings_update",
+        "dashboard.analytics.create",
+        "dashboard.analytics.update",
+        "dashboard.analytics.set_active"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Treat masked or placeholder credential fields as no evidence; use only credential-free configured/enabled/usable status.",
+        "Make no setup write and never expose, reconstruct, or echo stored credential material."
+      ]
+    },
+    {
+      "id": "dashboard.sslcommerz-readiness-bypass",
+      "surface": "dashboard",
+      "title": "Do not force an unusable gateway",
+      "summary": "SSLCommerz may be selected only after authoritative status is configured, enabled, and usable.",
+      "examples": [
+        "Force SSLCommerz into checkout even if usability is false or unknown."
+      ],
+      "tags": [
+        "payments",
+        "sslcommerz",
+        "readiness"
+      ],
+      "disposition": "ask",
+      "reasonCode": "sslcommerz_readiness_required",
+      "trigger": {
+        "allOf": [
+          [
+            "sslcommerz",
+            "gateway"
+          ],
+          [
+            "force",
+            "bypass",
+            "even if"
+          ],
+          [
+            "usability is false",
+            "usability false",
+            "unusable",
+            "unknown"
+          ]
+        ],
+        "ignoreWhenNegated": false
+      },
+      "safeOperationIds": [
+        "dashboard.settings.currency_get",
+        "dashboard.checkout.flow_get",
+        "dashboard.checkout.readiness_get",
+        "dashboard.payments.methods_get",
+        "dashboard.shipping_methods.list",
+        "storefront.checkout.get_config"
+      ],
+      "forbiddenOperationIds": [
+        "dashboard.settings.currency_update",
+        "dashboard.payments.sslcommerz_update",
+        "dashboard.payments.methods_update",
+        "dashboard.shipping_methods.update",
+        "dashboard.shipping_methods.create",
+        "dashboard.shipping_methods.trash",
+        "dashboard.shipping_methods.delete_permanently",
+        "dashboard.checkout.flow_update",
+        "dashboard.seo.settings_update",
+        "dashboard.analytics.create",
+        "dashboard.analytics.update",
+        "dashboard.analytics.set_active"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Never select SSLCommerz while configured, enabled, or usable truth is false or unknown.",
+        "Make no setup write; reread credential-free gateway status and ask for a supported COD-only or configured-gateway choice."
+      ]
+    },
+    {
+      "id": "dashboard.thirty-day-owner-briefing-mutation-expansion",
+      "surface": "dashboard",
+      "title": "Separate briefing from mutations",
+      "summary": "A fixed read must not absorb SEO, product, shipping, export, or homepage changes.",
+      "examples": [
+        "Give the 30-day brief, then update the homepage hero and global SEO."
+      ],
+      "tags": [
+        "briefing",
+        "compound",
+        "write",
+        "safety"
+      ],
+      "disposition": "ask",
+      "reasonCode": "owner_briefing_write_expansion",
+      "trigger": {
+        "allOf": [
+          [
+            "30 days"
+          ]
+        ],
+        "anyOf": [
+          {
+            "allOf": [
+              [
+                "update",
+                "change",
+                "rewrite",
+                "delete",
+                "trash"
+              ],
+              [
+                "seo",
+                "product",
+                "shipping",
+                "homepage",
+                "hero"
+              ]
+            ]
+          }
+        ],
+        "ignoreWhenNegated": true
+      },
+      "safeOperationIds": [
+        "dashboard.home.activity",
+        "dashboard.settings.currency_get",
+        "dashboard.inventory.list",
+        "dashboard.abandoned_checkouts.summaries_list",
+        "dashboard.orders.payment_recovery_list"
+      ],
+      "forbiddenOperationIds": [],
+      "requiresFacts": true,
+      "requiresConfirmation": false,
+      "requiresVerification": false,
+      "rules": [
+        "Do not absorb SEO, product, shipping, homepage, deletion, export, or any other mutation into the briefing.",
+        "Ask for a separate supported write request; offer only the fixed 30-day read subset now."
+      ]
+    },
+    {
+      "id": "dashboard.thirty-day-owner-briefing-needs-scope",
+      "surface": "dashboard",
+      "title": "Scope unsupported owner metrics",
+      "summary": "Demanded economics, rankings, traffic, or exact statuses exceed the fixed 30-day read.",
+      "examples": [
+        "For 30 days, estimate paid cash, margin, top SKUs, conversion, and exact statuses."
+      ],
+      "tags": [
+        "briefing",
+        "metrics",
+        "safety"
+      ],
+      "disposition": "ask",
+      "reasonCode": "owner_briefing_scope_required",
+      "trigger": {
+        "allOf": [
+          [
+            "30 days"
+          ],
+          [
+            "estimate",
+            "approximate",
+            "fill in",
+            "derive",
+            "infer",
+            "exact",
+            "give it anyway",
+            "regardless"
+          ]
+        ],
+        "anyOf": [
+          {
+            "allOf": [
+              [
+                "cash",
+                "profit",
+                "net revenue",
+                "aov",
+                "ltv",
+                "cac",
+                "repeat customer"
+              ]
+            ]
+          },
+          {
+            "allOf": [
+              [
+                "top",
+                "best selling",
+                "best-selling"
+              ],
+              [
+                "product",
+                "sku"
+              ]
+            ]
+          },
+          {
+            "allOf": [
+              [
+                "margin",
+                "roas",
+                "traffic",
+                "conversion",
+                "ad spend",
+                "impression",
+                "click",
+                "session"
+              ]
+            ]
+          },
+          {
+            "allOf": [
+              [
+                "status",
+                "aging",
+                "stuck",
+                "refund",
+                "chargeback",
+                "return",
+                "cancel",
+                "cancellation"
+              ],
+              [
+                "count",
+                "total",
+                "amount",
+                "rate",
+                "breakdown",
+                "how many"
+              ]
+            ]
+          }
+        ],
+        "ignoreWhenNegated": true
+      },
+      "safeOperationIds": [
+        "dashboard.home.activity",
+        "dashboard.settings.currency_get",
+        "dashboard.inventory.list",
+        "dashboard.abandoned_checkouts.summaries_list",
+        "dashboard.orders.payment_recovery_list"
+      ],
+      "forbiddenOperationIds": [],
+      "requiresFacts": true,
+      "requiresConfirmation": false,
+      "requiresVerification": false,
+      "rules": [
+        "Offer the fixed PII-free read: booked daily activity plus current stock-risk, abandoned, and recovery totals.",
+        "Exact statuses need an Asia/Dhaka range and archived-order policy in a separate report.",
+        "Paid/collected/settled cash, top SKUs, margin, and traffic/conversion are unavailable; never infer or return zero.",
+        "Queue evidence is totals only; never raw order, checkout, recovery, or customer rows.",
+        "Ask for the fixed subset, status facts, or separate work; no write or window coercion."
+      ]
+    },
+    {
+      "id": "dashboard.thirty-day-owner-briefing-override-demand",
+      "surface": "dashboard",
+      "title": "Reject unsupported metric override",
+      "summary": "An override cannot turn unavailable 30-day metrics into authoritative facts.",
+      "examples": [
+        "If supported or not, give 30-day collected cash anyway."
+      ],
+      "tags": [
+        "briefing",
+        "override",
+        "safety"
+      ],
+      "disposition": "ask",
+      "reasonCode": "owner_briefing_override_rejected",
+      "trigger": {
+        "allOf": [
+          [
+            "30 days"
+          ],
+          [
+            "give it anyway",
+            "give anyway",
+            "anyway",
+            "regardless"
+          ]
+        ],
+        "anyOf": [
+          {
+            "allOf": [
+              [
+                "cash",
+                "profit",
+                "net revenue",
+                "aov",
+                "ltv",
+                "cac",
+                "repeat customer"
+              ]
+            ]
+          },
+          {
+            "allOf": [
+              [
+                "top",
+                "best selling",
+                "best-selling"
+              ],
+              [
+                "product",
+                "sku"
+              ]
+            ]
+          },
+          {
+            "allOf": [
+              [
+                "margin",
+                "roas",
+                "traffic",
+                "conversion",
+                "ad spend",
+                "impression",
+                "click",
+                "session"
+              ]
+            ]
+          },
+          {
+            "allOf": [
+              [
+                "status",
+                "aging",
+                "stuck",
+                "refund",
+                "chargeback",
+                "return",
+                "cancel",
+                "cancellation"
+              ],
+              [
+                "count",
+                "total",
+                "amount",
+                "rate",
+                "breakdown",
+                "how many"
+              ]
+            ]
+          }
+        ],
+        "ignoreWhenNegated": true
+      },
+      "safeOperationIds": [
+        "dashboard.home.activity",
+        "dashboard.settings.currency_get",
+        "dashboard.inventory.list",
+        "dashboard.abandoned_checkouts.summaries_list",
+        "dashboard.orders.payment_recovery_list"
+      ],
+      "forbiddenOperationIds": [],
+      "requiresFacts": true,
+      "requiresConfirmation": false,
+      "requiresVerification": false,
+      "rules": [
+        "Offer only the fixed PII-free read and retain unsupported metrics as unavailable.",
+        "Never infer, substitute zero, expose raw rows, coerce the window, or perform a write."
+      ]
+    },
+    {
+      "id": "dashboard.thirty-day-owner-briefing-pii-expansion",
+      "surface": "dashboard",
+      "title": "Reject briefing PII expansion",
+      "summary": "A fixed PII-free brief cannot expose customer identities or contact details.",
+      "examples": [
+        "Give the 30-day owner brief and include every abandoned shopper email address."
+      ],
+      "tags": [
+        "briefing",
+        "pii",
+        "compound",
+        "safety"
+      ],
+      "disposition": "ask",
+      "reasonCode": "owner_briefing_pii_expansion",
+      "trigger": {
+        "allOf": [
+          [
+            "30 days"
+          ]
+        ],
+        "anyOf": [
+          {
+            "allOf": [
+              [
+                "buyer",
+                "customer",
+                "shopper"
+              ],
+              [
+                "contact",
+                "identity",
+                "name",
+                "email",
+                "phone",
+                "address",
+                "detail"
+              ]
+            ]
+          },
+          {
+            "allOf": [
+              [
+                "name"
+              ],
+              [
+                "email"
+              ]
+            ]
+          },
+          {
+            "allOf": [
+              [
+                "export"
+              ],
+              [
+                "buyer",
+                "customer",
+                "shopper"
+              ]
+            ]
+          },
+          {
+            "allOf": [
+              [
+                "buyer",
+                "customer",
+                "shopper"
+              ],
+              [
+                "phonebook",
+                "directory",
+                "contact list",
+                "roster"
+              ]
+            ]
+          }
+        ],
+        "ignoreWhenNegated": true
+      },
+      "safeOperationIds": [
+        "dashboard.home.activity",
+        "dashboard.settings.currency_get",
+        "dashboard.inventory.list",
+        "dashboard.abandoned_checkouts.summaries_list",
+        "dashboard.orders.payment_recovery_list"
+      ],
+      "forbiddenOperationIds": [],
+      "requiresFacts": true,
+      "requiresConfirmation": false,
+      "requiresVerification": false,
+      "rules": [
+        "Keep the briefing PII-free and count-only; never expose customer identities or contact details.",
+        "Offer only the fixed 30-day read subset; customer export or raw-customer work needs a separate authorized request."
+      ]
+    },
+    {
+      "id": "dashboard.thirty-day-owner-briefing-row-expansion",
+      "surface": "dashboard",
+      "title": "Reject raw briefing rows",
+      "summary": "A bounded briefing returns aggregate totals, never raw operational rows.",
+      "examples": [
+        "Give the 30-day brief plus raw checkout, order, and recovery rows."
+      ],
+      "tags": [
+        "briefing",
+        "rows",
+        "pii",
+        "safety"
+      ],
+      "disposition": "ask",
+      "reasonCode": "owner_briefing_raw_rows",
+      "trigger": {
+        "allOf": [
+          [
+            "30 days"
+          ]
+        ],
+        "anyOf": [
+          {
+            "allOf": [
+              [
+                "raw",
+                "every",
+                "all",
+                "each",
+                "underlying",
+                "individual"
+              ],
+              [
+                "customer",
+                "order",
+                "checkout",
+                "recovery"
+              ],
+              [
+                "row",
+                "rows",
+                "record",
+                "detail",
+                "object",
+                "source row"
+              ]
+            ]
+          },
+          {
+            "allOf": [
+              [
+                "customer row",
+                "customer record",
+                "order row",
+                "order record",
+                "checkout row",
+                "checkout record",
+                "recovery row",
+                "recovery record"
+              ]
+            ]
+          }
+        ],
+        "ignoreWhenNegated": true
+      },
+      "safeOperationIds": [
+        "dashboard.home.activity",
+        "dashboard.settings.currency_get",
+        "dashboard.inventory.list",
+        "dashboard.abandoned_checkouts.summaries_list",
+        "dashboard.orders.payment_recovery_list"
+      ],
+      "forbiddenOperationIds": [],
+      "requiresFacts": true,
+      "requiresConfirmation": false,
+      "requiresVerification": false,
+      "rules": [
+        "Return projections and totals only; never expose raw checkout, order, recovery, or customer records.",
+        "Offer only the fixed PII-free 30-day subset and perform no write."
+      ]
+    },
+    {
+      "id": "dashboard.thirty-day-owner-briefing-unavailable-denied",
+      "surface": "dashboard",
+      "title": "Reject invented briefing metrics",
+      "summary": "Unavailable 30-day metrics cannot be relabeled, inferred, or silently filled.",
+      "examples": [
+        "Give the 30-day brief; never say a requested metric is unavailable."
+      ],
+      "tags": [
+        "briefing",
+        "metrics",
+        "inference",
+        "safety"
+      ],
+      "disposition": "ask",
+      "reasonCode": "owner_briefing_unavailable_label_denied",
+      "trigger": {
+        "allOf": [
+          [
+            "30 days"
+          ]
+        ],
+        "anyOf": [
+          {
+            "allOf": [
+              [
+                "do not mark unavailable",
+                "don't mark unavailable",
+                "never mark unavailable",
+                "do not say unavailable",
+                "don't say unavailable",
+                "never say unavailable",
+                "unavailable is not acceptable",
+                "unavailable is unacceptable"
+              ]
+            ]
+          },
+          {
+            "allOf": [
+              [
+                "unavailable",
+                "unsupported",
+                "missing evidence",
+                "no evidence",
+                "without evidence",
+                "evidence absent"
+              ],
+              [
+                "forbidden",
+                "prohibited",
+                "disallowed",
+                "not permitted",
+                "not allowed",
+                "not acceptable",
+                "unacceptable",
+                "mandatory invention"
+              ]
+            ]
+          },
+          {
+            "allOf": [
+              [
+                "calculate",
+                "estimate",
+                "approximate",
+                "fill in",
+                "derive",
+                "infer"
+              ],
+              [
+                "despite missing evidence",
+                "despite no evidence",
+                "even if unsupported",
+                "even when unsupported",
+                "whether supported or not",
+                "regardless of support",
+                "unsupported anyway"
+              ]
+            ]
+          },
+          {
+            "allOf": [
+              [
+                "estimate anyway",
+                "approximate anyway",
+                "infer anyway",
+                "derive anyway",
+                "must estimate",
+                "must approximate",
+                "must infer"
+              ]
+            ]
+          }
+        ],
+        "ignoreWhenNegated": true
+      },
+      "safeOperationIds": [
+        "dashboard.home.activity",
+        "dashboard.settings.currency_get",
+        "dashboard.inventory.list",
+        "dashboard.abandoned_checkouts.summaries_list",
+        "dashboard.orders.payment_recovery_list"
+      ],
+      "forbiddenOperationIds": [],
+      "requiresFacts": true,
+      "requiresConfirmation": false,
+      "requiresVerification": false,
+      "rules": [
+        "Offer one fixed PII-free workflow read and explicitly retain every unsupported metric as unavailable.",
+        "Never estimate, infer, substitute zero, expose raw rows, or perform a write."
+      ]
+    },
+    {
+      "id": "dashboard.thirty-day-owner-briefing-unsupported-only",
+      "surface": "dashboard",
+      "title": "Bound unsupported briefing metrics",
+      "summary": "Unsupported 30-day economics, rankings, status, or traffic need a supported subset.",
+      "examples": [
+        "Show collected cash and traffic conversion for the last 30 days."
+      ],
+      "tags": [
+        "briefing",
+        "metrics",
+        "unavailable",
+        "safety"
+      ],
+      "disposition": "ask",
+      "reasonCode": "owner_briefing_unsupported_metrics",
+      "trigger": {
+        "allOf": [
+          [
+            "30 days"
+          ]
+        ],
+        "anyOf": [
+          {
+            "allOf": [
+              [
+                "cash",
+                "profit",
+                "net revenue",
+                "aov",
+                "ltv",
+                "cac",
+                "repeat customer"
+              ]
+            ]
+          },
+          {
+            "allOf": [
+              [
+                "top",
+                "best selling",
+                "best-selling"
+              ],
+              [
+                "product",
+                "sku"
+              ]
+            ]
+          },
+          {
+            "allOf": [
+              [
+                "margin",
+                "roas",
+                "traffic",
+                "conversion",
+                "ad spend",
+                "impression",
+                "click",
+                "session"
+              ]
+            ]
+          },
+          {
+            "allOf": [
+              [
+                "status",
+                "aging",
+                "stuck",
+                "refund",
+                "chargeback",
+                "return",
+                "cancel",
+                "cancellation"
+              ],
+              [
+                "count",
+                "total",
+                "amount",
+                "rate",
+                "breakdown",
+                "how many"
+              ]
+            ]
+          }
+        ],
+        "noneOf": [
+          "if known",
+          "if supported",
+          "if available",
+          "unavailable",
+          "do not estimate",
+          "don't estimate"
+        ],
+        "ignoreWhenNegated": true
+      },
+      "safeOperationIds": [
+        "dashboard.home.activity",
+        "dashboard.settings.currency_get",
+        "dashboard.inventory.list",
+        "dashboard.abandoned_checkouts.summaries_list",
+        "dashboard.orders.payment_recovery_list"
+      ],
+      "forbiddenOperationIds": [],
+      "requiresFacts": true,
+      "requiresConfirmation": false,
+      "requiresVerification": false,
+      "rules": [
+        "Offer the fixed PII-free 30-day subset: booked daily activity plus current stock-risk, abandoned-checkout, and recovery totals.",
+        "Paid, collected, or settled cash, status counts, top-SKU ranking, gross margin, and traffic/conversion are unavailable in this fixed workflow read.",
+        "Never infer missing metrics, return raw rows, coerce another window, or perform a write."
+      ]
+    },
+    {
+      "id": "dashboard.timezone-fixed-invariant",
+      "surface": "dashboard",
+      "title": "Do not invent a timezone setting",
+      "summary": "Merchant-calendar semantics are fixed to Asia/Dhaka and expose no writable timezone setting.",
+      "examples": [
+        "Change the store timezone setting to Asia/Dhaka."
+      ],
+      "tags": [
+        "settings",
+        "timezone",
+        "calendar"
+      ],
+      "disposition": "ask",
+      "reasonCode": "timezone_setting_unavailable",
+      "trigger": {
+        "allOf": [
+          [
+            "timezone",
+            "timezone setting",
+            "store timezone"
+          ],
+          [
+            "change",
+            "set",
+            "update"
+          ]
+        ],
+        "ignoreWhenNegated": true
+      },
+      "safeOperationIds": [
+        "dashboard.settings.currency_get",
+        "dashboard.checkout.flow_get",
+        "dashboard.checkout.readiness_get",
+        "dashboard.payments.methods_get",
+        "dashboard.shipping_methods.list",
+        "storefront.checkout.get_config"
+      ],
+      "forbiddenOperationIds": [
+        "dashboard.settings.currency_update",
+        "dashboard.payments.sslcommerz_update",
+        "dashboard.payments.methods_update",
+        "dashboard.shipping_methods.update",
+        "dashboard.shipping_methods.create",
+        "dashboard.shipping_methods.trash",
+        "dashboard.shipping_methods.delete_permanently",
+        "dashboard.checkout.flow_update",
+        "dashboard.seo.settings_update",
+        "dashboard.analytics.create",
+        "dashboard.analytics.update",
+        "dashboard.analytics.set_active"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "State that merchant-calendar behavior is fixed to Asia/Dhaka; no writable timezone operation exists.",
+        "Make no setup write until the merchant accepts the fixed invariant without a timezone mutation."
+      ]
+    },
+    {
+      "id": "dashboard.uncertain-create-recovery",
+      "surface": "dashboard",
+      "title": "Recover an uncertain product create",
+      "summary": "A lost non-idempotent create response requires identity rereads before any retry decision.",
+      "examples": [
+        "The product create response was lost. Retry the same product and six SKUs now."
+      ],
+      "tags": [
+        "catalog",
+        "idempotency",
+        "recovery"
+      ],
+      "disposition": "ask",
+      "reasonCode": "create_outcome_uncertain",
+      "trigger": {
+        "allOf": [
+          [
+            "response was lost",
+            "lost response",
+            "uncertain create"
+          ],
+          [
+            "retry",
+            "create again",
+            "same product"
+          ],
+          [
+            "product",
+            "sku"
+          ]
+        ],
+        "ignoreWhenNegated": false
+      },
+      "safeOperationIds": [
+        "dashboard.products.list_summaries",
+        "dashboard.inventory.list"
+      ],
+      "forbiddenOperationIds": [
+        "dashboard.products.create"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": false,
+      "rules": [
+        "Reread name, slug, and every SKU before any retry.",
+        "Do not blindly retry a non-idempotent create."
+      ]
+    },
+    {
+      "id": "dashboard.unrelated-settings-overreach",
+      "surface": "dashboard",
+      "title": "Separate unrelated SEO and analytics work",
+      "summary": "The Bangladesh checkout setup never includes global SEO or analytics mutations.",
+      "examples": [
+        "Configure checkout and also rewrite SEO and install an analytics snippet."
+      ],
+      "tags": [
+        "settings",
+        "seo",
+        "analytics",
+        "scope"
+      ],
+      "disposition": "ask",
+      "reasonCode": "unrelated_settings_require_separate_review",
+      "trigger": {
+        "allOf": [
+          [
+            "seo",
+            "seo discovery",
+            "global seo"
+          ],
+          [
+            "analytics",
+            "analytics snippet"
+          ],
+          [
+            "rewrite",
+            "install",
+            "update",
+            "change"
+          ]
+        ],
+        "ignoreWhenNegated": true
+      },
+      "safeOperationIds": [
+        "dashboard.settings.currency_get",
+        "dashboard.checkout.flow_get",
+        "dashboard.checkout.readiness_get",
+        "dashboard.payments.methods_get",
+        "dashboard.shipping_methods.list",
+        "storefront.checkout.get_config"
+      ],
+      "forbiddenOperationIds": [
+        "dashboard.settings.currency_update",
+        "dashboard.payments.sslcommerz_update",
+        "dashboard.payments.methods_update",
+        "dashboard.shipping_methods.update",
+        "dashboard.shipping_methods.create",
+        "dashboard.shipping_methods.trash",
+        "dashboard.shipping_methods.delete_permanently",
+        "dashboard.checkout.flow_update",
+        "dashboard.seo.settings_update",
+        "dashboard.analytics.create",
+        "dashboard.analytics.update",
+        "dashboard.analytics.set_active"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Do not add, delete, or mutate SEO, analytics, or any unrelated setting in this setup.",
+        "Make no setup write; ask the merchant to keep the accepted subset isolated and resolve unrelated work separately."
+      ]
+    },
+    {
+      "id": "dashboard.unsupported-conversion-rate",
+      "surface": "dashboard",
+      "title": "Do not infer conversion rate",
+      "summary": "Orders alone cannot establish conversion without an authoritative storefront-visit denominator.",
+      "examples": [
+        "What was my storefront conversion rate yesterday?"
+      ],
+      "tags": [
+        "analytics",
+        "conversion",
+        "unsupported"
+      ],
+      "disposition": "unsupported",
+      "reasonCode": "visit_denominator_unavailable",
+      "trigger": {
+        "allOf": [
+          [
+            "conversion rate",
+            "storefront conversion",
+            "visit conversion",
+            "conversion analytics",
+            "conversion performance",
+            "conversion metric",
+            "conversion numbers",
+            "overall conversion"
+          ]
+        ],
+        "noneOf": [
+          "30 days"
+        ],
+        "ignoreWhenNegated": false
+      },
+      "safeOperationIds": [],
+      "forbiddenOperationIds": [],
+      "requiresFacts": false,
+      "requiresConfirmation": false,
+      "requiresVerification": false,
+      "rules": [
+        "State that no authoritative storefront-visit denominator is available.",
+        "Do not infer conversion from orders alone."
+      ]
+    },
+    {
+      "id": "dashboard.unsupported-net-profit",
+      "surface": "dashboard",
+      "title": "Do not infer net profit",
+      "summary": "Booked sales are available, but authoritative cost and expense facts are not.",
+      "examples": [
+        "What was my net profit last month?"
+      ],
+      "tags": [
+        "finance",
+        "profit",
+        "unsupported"
+      ],
+      "disposition": "unsupported",
+      "reasonCode": "net_profit_basis_unavailable",
+      "trigger": {
+        "allOf": [
+          [
+            "net profit",
+            "profit after costs",
+            "profit"
+          ]
+        ],
+        "noneOf": [
+          "30 days"
+        ],
+        "ignoreWhenNegated": false
+      },
+      "safeOperationIds": [
+        "dashboard.home.activity"
+      ],
+      "forbiddenOperationIds": [],
+      "requiresFacts": false,
+      "requiresConfirmation": false,
+      "requiresVerification": false,
+      "rules": [
+        "Define booked sales separately.",
+        "State that Scalius has no authoritative cost or expense basis.",
+        "Do not label revenue as profit."
+      ]
+    },
+    {
+      "id": "storefront.no-exact-stock",
+      "surface": "storefront",
+      "title": "Protect exact inventory",
+      "summary": "Buyer surfaces expose availability bands, not exact stock or reserved quantities.",
+      "examples": [
+        "Tell the buyer the exact units remaining for this variant."
+      ],
+      "tags": [
+        "inventory",
+        "availability",
+        "privacy"
+      ],
+      "disposition": "refuse",
+      "reasonCode": "exact_stock_not_buyer_visible",
+      "trigger": {
+        "allOf": [
+          [
+            "exact units",
+            "exact stock",
+            "units remaining"
+          ],
+          [
+            "buyer",
+            "variant",
+            "product"
+          ]
+        ],
+        "ignoreWhenNegated": true
+      },
+      "safeOperationIds": [
+        "storefront.products.get_section"
+      ],
+      "forbiddenOperationIds": [
+        "dashboard.inventory.list"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": false,
+      "requiresVerification": false,
+      "rules": [
+        "Return only buyer-visible availabilityBand.",
+        "Do not expose dashboard stock or reservedStock."
+      ]
+    },
+    {
+      "id": "storefront.no-receipt-proof-url",
+      "surface": "storefront",
+      "title": "Keep receipt proofs out of URLs",
+      "summary": "Cross-browser recovery must use buyer verification and safe status, never a bearer receipt link.",
+      "examples": [
+        "Put my receipt proof in a payment recovery URL so I can send the link to another browser."
+      ],
+      "tags": [
+        "payment",
+        "recovery",
+        "receipt-proof"
+      ],
+      "disposition": "refuse",
+      "reasonCode": "receipt_proof_url_forbidden",
+      "trigger": {
+        "allOf": [
+          [
+            "receipt proof"
+          ],
+          [
+            "url",
+            "link"
+          ],
+          [
+            "payment recovery",
+            "another browser",
+            "send"
+          ]
+        ],
+        "ignoreWhenNegated": true
+      },
+      "safeOperationIds": [
+        "storefront.payment_recovery.begin",
+        "storefront.payment_recovery.status"
+      ],
+      "forbiddenOperationIds": [],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": false,
+      "rules": [
+        "Never place receipt proof in a URL.",
+        "Use buyer-verified payment recovery and safe status only."
+      ]
+    }
+  ],
+  "coverage": {
+    "policy": "curated-first-operation-fallback",
+    "fallback": {
+      "workflowIdTemplate": "operation.{operationId}",
+      "operationPointerTemplate": "#/paths/{jsonPointerEscapedPathTemplate}/{lowercaseMethod}",
+      "inputSchemaPointerTemplate": "#/paths/{jsonPointerEscapedPathTemplate}/{lowercaseMethod}/requestBody",
+      "policyPointers": {
+        "revision": "#/paths/{jsonPointerEscapedPathTemplate}/{lowercaseMethod}/x-scalius-agent/revision",
+        "idempotency": "#/paths/{jsonPointerEscapedPathTemplate}/{lowercaseMethod}/x-scalius-agent/idempotency",
+        "risk": "#/paths/{jsonPointerEscapedPathTemplate}/{lowercaseMethod}/x-scalius-agent/risk",
+        "confirmation": "#/paths/{jsonPointerEscapedPathTemplate}/{lowercaseMethod}/x-scalius-agent/risk"
+      },
+      "rules": {
+        "confirmEveryMutation": true,
+        "stopOnConflict": true,
+        "stopOnAuthorizationFailure": true,
+        "neverInferRequiredInput": true,
+        "verifyMutationsWithBoundedRead": true
+      }
+    },
+    "operations": [
+      {
+        "operationId": "dashboard.abandoned_checkouts.delete",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.abandoned_checkouts.delete"
+        ]
+      },
+      {
+        "operationId": "dashboard.abandoned_checkouts.summaries_list",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.thirty-day-booked-operations-brief",
+          "operations.thirty-day-booked-brief.v1"
+        ]
+      },
+      {
+        "operationId": "dashboard.account.permissions.get",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.account.permissions.get"
+        ]
+      },
+      {
+        "operationId": "dashboard.account.profile_update",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.account.profile_update"
+        ]
+      },
+      {
+        "operationId": "dashboard.account.security_get",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.account.security_get"
+        ]
+      },
+      {
+        "operationId": "dashboard.account.sessions.list",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.account-sessions"
+        ]
+      },
+      {
+        "operationId": "dashboard.account.sessions.revoke",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.account-sessions"
+        ]
+      },
+      {
+        "operationId": "dashboard.account.sessions.revoke_others",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.account.sessions.revoke_others"
+        ]
+      },
+      {
+        "operationId": "dashboard.account.two_factor.get",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.account.two_factor.get"
+        ]
+      },
+      {
+        "operationId": "dashboard.agent_access.connections.events_list",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.agent_access.connections.events_list"
+        ]
+      },
+      {
+        "operationId": "dashboard.agent_access.connections.get",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.agent-grant-narrow"
+        ]
+      },
+      {
+        "operationId": "dashboard.agent_access.connections.list",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.agent_access.connections.list"
+        ]
+      },
+      {
+        "operationId": "dashboard.agent_access.grants.revoke",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.agent_access.grants.revoke"
+        ]
+      },
+      {
+        "operationId": "dashboard.agent_access.grants.update",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.agent-grant-narrow"
+        ]
+      },
+      {
+        "operationId": "dashboard.agent_access.tokens.create",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.agent_access.tokens.create"
+        ]
+      },
+      {
+        "operationId": "dashboard.agent_access.tokens.rotate",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.agent_access.tokens.rotate"
+        ]
+      },
+      {
+        "operationId": "dashboard.analytics.create",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.analytics-provider"
+        ]
+      },
+      {
+        "operationId": "dashboard.analytics.delete_permanently",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.analytics.delete_permanently"
+        ]
+      },
+      {
+        "operationId": "dashboard.analytics.get",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.analytics.get"
+        ]
+      },
+      {
+        "operationId": "dashboard.analytics.health",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.analytics-provider"
+        ]
+      },
+      {
+        "operationId": "dashboard.analytics.list",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.analytics.list"
+        ]
+      },
+      {
+        "operationId": "dashboard.analytics.restore",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.analytics.restore"
+        ]
+      },
+      {
+        "operationId": "dashboard.analytics.set_active",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.analytics-provider"
+        ]
+      },
+      {
+        "operationId": "dashboard.analytics.trash",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.analytics.trash"
+        ]
+      },
+      {
+        "operationId": "dashboard.analytics.update",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.analytics.update"
+        ]
+      },
+      {
+        "operationId": "dashboard.attribute_values.create",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.attribute_values.create"
+        ]
+      },
+      {
+        "operationId": "dashboard.attribute_values.delete",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.attribute_values.delete"
+        ]
+      },
+      {
+        "operationId": "dashboard.attribute_values.list",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.attribute_values.list"
+        ]
+      },
+      {
+        "operationId": "dashboard.attribute_values.rename",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.attribute_values.rename"
+        ]
+      },
+      {
+        "operationId": "dashboard.attributes.bulk_delete",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.attributes.bulk_delete"
+        ]
+      },
+      {
+        "operationId": "dashboard.attributes.bulk_restore",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.attributes.bulk_restore"
+        ]
+      },
+      {
+        "operationId": "dashboard.attributes.create",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "catalog.optioned-product.v1",
+          "dashboard.complex-product-create"
+        ]
+      },
+      {
+        "operationId": "dashboard.attributes.delete_permanently",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.attributes.delete_permanently"
+        ]
+      },
+      {
+        "operationId": "dashboard.attributes.list_summaries",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "catalog.optioned-product.v1",
+          "dashboard.complex-product-create"
+        ]
+      },
+      {
+        "operationId": "dashboard.attributes.restore",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.attributes.restore"
+        ]
+      },
+      {
+        "operationId": "dashboard.attributes.trash",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.attributes.trash"
+        ]
+      },
+      {
+        "operationId": "dashboard.attributes.update",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.attributes.update"
+        ]
+      },
+      {
+        "operationId": "dashboard.cache.groups_list",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.cache-purge-selected"
+        ]
+      },
+      {
+        "operationId": "dashboard.cache.purge_all",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.cache.purge_all"
+        ]
+      },
+      {
+        "operationId": "dashboard.cache.purge_groups",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.cache-purge-selected"
+        ]
+      },
+      {
+        "operationId": "dashboard.categories.bulk_delete",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.categories.bulk_delete"
+        ]
+      },
+      {
+        "operationId": "dashboard.categories.bulk_restore",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.categories.bulk_restore"
+        ]
+      },
+      {
+        "operationId": "dashboard.categories.create",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "catalog.optioned-product.v1",
+          "dashboard.complex-product-create"
+        ]
+      },
+      {
+        "operationId": "dashboard.categories.delete_permanently",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.categories.delete_permanently"
+        ]
+      },
+      {
+        "operationId": "dashboard.categories.form_options",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "catalog.optioned-product.v1",
+          "dashboard.complex-product-create"
+        ]
+      },
+      {
+        "operationId": "dashboard.categories.get_section",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "catalog.optioned-product.v1",
+          "dashboard.category-publish",
+          "dashboard.complex-product-create"
+        ]
+      },
+      {
+        "operationId": "dashboard.categories.list_summaries",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.categories.list_summaries"
+        ]
+      },
+      {
+        "operationId": "dashboard.categories.publish_readiness",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "catalog.optioned-product.v1",
+          "dashboard.category-publish",
+          "dashboard.complex-product-create"
+        ]
+      },
+      {
+        "operationId": "dashboard.categories.restore",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.categories.restore"
+        ]
+      },
+      {
+        "operationId": "dashboard.categories.set_status",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "catalog.optioned-product.v1",
+          "dashboard.category-publish",
+          "dashboard.complex-product-create"
+        ]
+      },
+      {
+        "operationId": "dashboard.categories.trash",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.categories.trash"
+        ]
+      },
+      {
+        "operationId": "dashboard.categories.update",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.categories.update"
+        ]
+      },
+      {
+        "operationId": "dashboard.checkout_languages.active_get",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.checkout_languages.active_get"
+        ]
+      },
+      {
+        "operationId": "dashboard.checkout_languages.create",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.checkout_languages.create"
+        ]
+      },
+      {
+        "operationId": "dashboard.checkout_languages.delete_permanently",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.checkout_languages.delete_permanently"
+        ]
+      },
+      {
+        "operationId": "dashboard.checkout_languages.get",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.checkout_languages.get"
+        ]
+      },
+      {
+        "operationId": "dashboard.checkout_languages.list",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.checkout_languages.list"
+        ]
+      },
+      {
+        "operationId": "dashboard.checkout_languages.restore",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.checkout_languages.restore"
+        ]
+      },
+      {
+        "operationId": "dashboard.checkout_languages.trash",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.checkout_languages.trash"
+        ]
+      },
+      {
+        "operationId": "dashboard.checkout_languages.update",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.checkout_languages.update"
+        ]
+      },
+      {
+        "operationId": "dashboard.checkout.flow_get",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.bangladesh-checkout-supported-setup",
+          "dashboard.checkout-flow-replace",
+          "dashboard.checkout-readiness",
+          "dashboard.guest-checkout-conditional-enable"
+        ]
+      },
+      {
+        "operationId": "dashboard.checkout.flow_update",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.bangladesh-checkout-supported-setup",
+          "dashboard.checkout-flow-replace",
+          "dashboard.guest-checkout-conditional-enable"
+        ]
+      },
+      {
+        "operationId": "dashboard.checkout.readiness_get",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.bangladesh-checkout-supported-setup",
+          "dashboard.checkout-readiness",
+          "dashboard.daily-operations-snapshot",
+          "dashboard.guest-checkout-conditional-enable",
+          "operations.daily-snapshot.v1"
+        ]
+      },
+      {
+        "operationId": "dashboard.collections.bulk_activate",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.collections.bulk_activate"
+        ]
+      },
+      {
+        "operationId": "dashboard.collections.bulk_deactivate",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.collections.bulk_deactivate"
+        ]
+      },
+      {
+        "operationId": "dashboard.collections.bulk_delete",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.collections.bulk_delete"
+        ]
+      },
+      {
+        "operationId": "dashboard.collections.bulk_restore",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.collections.bulk_restore"
+        ]
+      },
+      {
+        "operationId": "dashboard.collections.category_options",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.collections.category_options"
+        ]
+      },
+      {
+        "operationId": "dashboard.collections.create",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.collection-create"
+        ]
+      },
+      {
+        "operationId": "dashboard.collections.delete_permanently",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.collections.delete_permanently"
+        ]
+      },
+      {
+        "operationId": "dashboard.collections.form_options",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.collection-create"
+        ]
+      },
+      {
+        "operationId": "dashboard.collections.get_by_ids",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.collections.get_by_ids"
+        ]
+      },
+      {
+        "operationId": "dashboard.collections.get_section",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.collection-create"
+        ]
+      },
+      {
+        "operationId": "dashboard.collections.list",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.collections.list"
+        ]
+      },
+      {
+        "operationId": "dashboard.collections.product_options",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.collections.product_options"
+        ]
+      },
+      {
+        "operationId": "dashboard.collections.reorder",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.collections.reorder"
+        ]
+      },
+      {
+        "operationId": "dashboard.collections.restore",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.collections.restore"
+        ]
+      },
+      {
+        "operationId": "dashboard.collections.trash",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.collections.trash"
+        ]
+      },
+      {
+        "operationId": "dashboard.collections.update",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.collections.update"
+        ]
+      },
+      {
+        "operationId": "dashboard.content.bulk_delete",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.content.bulk_delete"
+        ]
+      },
+      {
+        "operationId": "dashboard.content.bulk_publish",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.campaign-content-supported-setup"
+        ]
+      },
+      {
+        "operationId": "dashboard.content.bulk_restore",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.content.bulk_restore"
+        ]
+      },
+      {
+        "operationId": "dashboard.content.bulk_unpublish",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.content.bulk_unpublish"
+        ]
+      },
+      {
+        "operationId": "dashboard.content.create",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.campaign-content-supported-setup",
+          "dashboard.page-publish"
+        ]
+      },
+      {
+        "operationId": "dashboard.content.get",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.campaign-content-supported-setup"
+        ]
+      },
+      {
+        "operationId": "dashboard.content.list",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.campaign-content-supported-setup"
+        ]
+      },
+      {
+        "operationId": "dashboard.content.permanently_delete",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.content.permanently_delete"
+        ]
+      },
+      {
+        "operationId": "dashboard.content.restore",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.content.restore"
+        ]
+      },
+      {
+        "operationId": "dashboard.content.trash",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.content.trash"
+        ]
+      },
+      {
+        "operationId": "dashboard.content.update",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.page-publish"
+        ]
+      },
+      {
+        "operationId": "dashboard.customer_requests.policy_get",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.customer_requests.policy_get"
+        ]
+      },
+      {
+        "operationId": "dashboard.customer_requests.policy_update",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.customer_requests.policy_update"
+        ]
+      },
+      {
+        "operationId": "dashboard.customers.bulk_delete",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.customers.bulk_delete"
+        ]
+      },
+      {
+        "operationId": "dashboard.customers.create",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.customers.create"
+        ]
+      },
+      {
+        "operationId": "dashboard.customers.delete",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.customers.delete"
+        ]
+      },
+      {
+        "operationId": "dashboard.customers.delete_permanently",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.customers.delete_permanently"
+        ]
+      },
+      {
+        "operationId": "dashboard.customers.get",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.customers.get"
+        ]
+      },
+      {
+        "operationId": "dashboard.customers.history",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.customer-history"
+        ]
+      },
+      {
+        "operationId": "dashboard.customers.list",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.customer-history"
+        ]
+      },
+      {
+        "operationId": "dashboard.customers.restore",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.customers.restore"
+        ]
+      },
+      {
+        "operationId": "dashboard.customers.update",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.customers.update"
+        ]
+      },
+      {
+        "operationId": "dashboard.delivery_locations.bulk_delete",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.delivery_locations.bulk_delete"
+        ]
+      },
+      {
+        "operationId": "dashboard.delivery_locations.create",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.delivery_locations.create"
+        ]
+      },
+      {
+        "operationId": "dashboard.delivery_locations.delete_all",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.delivery_locations.delete_all"
+        ]
+      },
+      {
+        "operationId": "dashboard.delivery_locations.get",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.delivery_locations.get"
+        ]
+      },
+      {
+        "operationId": "dashboard.delivery_locations.list",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.delivery_locations.list"
+        ]
+      },
+      {
+        "operationId": "dashboard.delivery_locations.pathao_import_chunk",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.delivery-location-import"
+        ]
+      },
+      {
+        "operationId": "dashboard.delivery_locations.pathao_import_reset",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.delivery_locations.pathao_import_reset"
+        ]
+      },
+      {
+        "operationId": "dashboard.delivery_locations.pathao_import_status",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.delivery-location-import"
+        ]
+      },
+      {
+        "operationId": "dashboard.delivery_locations.trash",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.delivery_locations.trash"
+        ]
+      },
+      {
+        "operationId": "dashboard.delivery_locations.update",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.delivery_locations.update"
+        ]
+      },
+      {
+        "operationId": "dashboard.delivery_providers.create",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.delivery-provider"
+        ]
+      },
+      {
+        "operationId": "dashboard.delivery_providers.delete",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.delivery_providers.delete"
+        ]
+      },
+      {
+        "operationId": "dashboard.delivery_providers.get",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.delivery_providers.get"
+        ]
+      },
+      {
+        "operationId": "dashboard.delivery_providers.list",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.delivery_providers.list"
+        ]
+      },
+      {
+        "operationId": "dashboard.delivery_providers.test",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.delivery-provider"
+        ]
+      },
+      {
+        "operationId": "dashboard.delivery_providers.test_credentials",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.delivery-provider"
+        ]
+      },
+      {
+        "operationId": "dashboard.delivery_providers.update",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.delivery_providers.update"
+        ]
+      },
+      {
+        "operationId": "dashboard.discounts.bulk_delete",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.discounts.bulk_delete"
+        ]
+      },
+      {
+        "operationId": "dashboard.discounts.bulk_restore",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.discounts.bulk_restore"
+        ]
+      },
+      {
+        "operationId": "dashboard.discounts.create",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.discounts.create"
+        ]
+      },
+      {
+        "operationId": "dashboard.discounts.delete",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.discounts.delete"
+        ]
+      },
+      {
+        "operationId": "dashboard.discounts.delete_permanently",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.discounts.delete_permanently"
+        ]
+      },
+      {
+        "operationId": "dashboard.discounts.get",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.discount-toggle"
+        ]
+      },
+      {
+        "operationId": "dashboard.discounts.list",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.discount-toggle"
+        ]
+      },
+      {
+        "operationId": "dashboard.discounts.restore",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.discounts.restore"
+        ]
+      },
+      {
+        "operationId": "dashboard.discounts.set_active",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.discount-toggle"
+        ]
+      },
+      {
+        "operationId": "dashboard.discounts.update",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.discounts.update"
+        ]
+      },
+      {
+        "operationId": "dashboard.fraud_lookup.run",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.fraud-check"
+        ]
+      },
+      {
+        "operationId": "dashboard.fraud_providers.create",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.fraud_providers.create"
+        ]
+      },
+      {
+        "operationId": "dashboard.fraud_providers.delete",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.fraud_providers.delete"
+        ]
+      },
+      {
+        "operationId": "dashboard.fraud_providers.list",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.fraud_providers.list"
+        ]
+      },
+      {
+        "operationId": "dashboard.fraud_providers.test",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.fraud_providers.test"
+        ]
+      },
+      {
+        "operationId": "dashboard.fraud_providers.update",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.fraud_providers.update"
+        ]
+      },
+      {
+        "operationId": "dashboard.hero_sliders.create",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.campaign-content-supported-setup"
+        ]
+      },
+      {
+        "operationId": "dashboard.hero_sliders.get",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.hero_sliders.get"
+        ]
+      },
+      {
+        "operationId": "dashboard.hero_sliders.list",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.campaign-content-supported-setup"
+        ]
+      },
+      {
+        "operationId": "dashboard.hero_sliders.trash",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.hero_sliders.trash"
+        ]
+      },
+      {
+        "operationId": "dashboard.hero_sliders.update",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.campaign-content-supported-setup"
+        ]
+      },
+      {
+        "operationId": "dashboard.home.activity",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.daily-operations-snapshot",
+          "dashboard.sales-today",
+          "dashboard.thirty-day-booked-operations-brief",
+          "operations.daily-snapshot.v1",
+          "operations.thirty-day-booked-brief.v1"
+        ]
+      },
+      {
+        "operationId": "dashboard.home.full_summary",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.home.full_summary"
+        ]
+      },
+      {
+        "operationId": "dashboard.home.metrics",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.home.metrics"
+        ]
+      },
+      {
+        "operationId": "dashboard.home.summary",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.home.summary"
+        ]
+      },
+      {
+        "operationId": "dashboard.inventory_alerts.acknowledge",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.inventory_alerts.acknowledge"
+        ]
+      },
+      {
+        "operationId": "dashboard.inventory_alerts.list",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.daily-operations-snapshot",
+          "dashboard.low-stock",
+          "operations.daily-snapshot.v1"
+        ]
+      },
+      {
+        "operationId": "dashboard.inventory_labels.generate_artifact",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.barcode-labels"
+        ]
+      },
+      {
+        "operationId": "dashboard.inventory_labels.preview",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.barcode-labels"
+        ]
+      },
+      {
+        "operationId": "dashboard.inventory.adjust",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.inventory.adjust"
+        ]
+      },
+      {
+        "operationId": "dashboard.inventory.adjust_stock",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.inventory-relative-adjustment"
+        ]
+      },
+      {
+        "operationId": "dashboard.inventory.list",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.inventory-cycle-count",
+          "dashboard.thirty-day-booked-operations-brief",
+          "operations.thirty-day-booked-brief.v1"
+        ]
+      },
+      {
+        "operationId": "dashboard.inventory.lookup_sku",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.inventory-cycle-count",
+          "dashboard.inventory-relative-adjustment"
+        ]
+      },
+      {
+        "operationId": "dashboard.inventory.movements_export",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.inventory.movements_export"
+        ]
+      },
+      {
+        "operationId": "dashboard.inventory.set_stock",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.inventory-cycle-count"
+        ]
+      },
+      {
+        "operationId": "dashboard.media_folders.create",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.media_folders.create"
+        ]
+      },
+      {
+        "operationId": "dashboard.media_folders.delete",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.media_folders.delete"
+        ]
+      },
+      {
+        "operationId": "dashboard.media_folders.list",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.media_folders.list"
+        ]
+      },
+      {
+        "operationId": "dashboard.media_folders.update",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.media_folders.update"
+        ]
+      },
+      {
+        "operationId": "dashboard.media.import_url",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "catalog.optioned-product.v1",
+          "dashboard.campaign-content-supported-setup",
+          "dashboard.complex-product-create"
+        ]
+      },
+      {
+        "operationId": "dashboard.media.list",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.campaign-content-supported-setup"
+        ]
+      },
+      {
+        "operationId": "dashboard.media.move",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.media.move"
+        ]
+      },
+      {
+        "operationId": "dashboard.media.permanently_delete",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.media.permanently_delete"
+        ]
+      },
+      {
+        "operationId": "dashboard.media.restore",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.media.restore"
+        ]
+      },
+      {
+        "operationId": "dashboard.media.trash",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.media.trash"
+        ]
+      },
+      {
+        "operationId": "dashboard.media.update",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.media.update"
+        ]
+      },
+      {
+        "operationId": "dashboard.media.upload_abort",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.media.upload_abort"
+        ]
+      },
+      {
+        "operationId": "dashboard.media.upload_complete",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.media-upload"
+        ]
+      },
+      {
+        "operationId": "dashboard.media.upload_get",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.media-upload"
+        ]
+      },
+      {
+        "operationId": "dashboard.media.upload_initiate",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.media-upload"
+        ]
+      },
+      {
+        "operationId": "dashboard.media.upload_part",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.media-upload"
+        ]
+      },
+      {
+        "operationId": "dashboard.meta_conversions.get",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.meta-capi"
+        ]
+      },
+      {
+        "operationId": "dashboard.meta_conversions.logs_cleanup",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.meta_conversions.logs_cleanup"
+        ]
+      },
+      {
+        "operationId": "dashboard.meta_conversions.logs_clear",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.meta_conversions.logs_clear"
+        ]
+      },
+      {
+        "operationId": "dashboard.meta_conversions.logs_list",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.meta-capi"
+        ]
+      },
+      {
+        "operationId": "dashboard.meta_conversions.update",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.meta-capi"
+        ]
+      },
+      {
+        "operationId": "dashboard.navigation.items_create",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.campaign-content-supported-setup",
+          "dashboard.navigation-publish"
+        ]
+      },
+      {
+        "operationId": "dashboard.navigation.items_delete",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.navigation.items_delete"
+        ]
+      },
+      {
+        "operationId": "dashboard.navigation.items_get",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.navigation.items_get"
+        ]
+      },
+      {
+        "operationId": "dashboard.navigation.items_list",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.navigation.items_list"
+        ]
+      },
+      {
+        "operationId": "dashboard.navigation.items_move",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.navigation.items_move"
+        ]
+      },
+      {
+        "operationId": "dashboard.navigation.items_move_options",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.navigation.items_move_options"
+        ]
+      },
+      {
+        "operationId": "dashboard.navigation.items_search",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.campaign-content-supported-setup"
+        ]
+      },
+      {
+        "operationId": "dashboard.navigation.items_update",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.navigation.items_update"
+        ]
+      },
+      {
+        "operationId": "dashboard.navigation.menus_create",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.navigation-publish"
+        ]
+      },
+      {
+        "operationId": "dashboard.navigation.menus_get",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.navigation.menus_get"
+        ]
+      },
+      {
+        "operationId": "dashboard.navigation.menus_list",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.campaign-content-supported-setup"
+        ]
+      },
+      {
+        "operationId": "dashboard.navigation.menus_publish",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.campaign-content-supported-setup",
+          "dashboard.navigation-publish"
+        ]
+      },
+      {
+        "operationId": "dashboard.navigation.menus_restore",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.navigation.menus_restore"
+        ]
+      },
+      {
+        "operationId": "dashboard.navigation.menus_rollback",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.navigation.menus_rollback"
+        ]
+      },
+      {
+        "operationId": "dashboard.navigation.menus_trash",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.navigation.menus_trash"
+        ]
+      },
+      {
+        "operationId": "dashboard.navigation.menus_update",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.navigation.menus_update"
+        ]
+      },
+      {
+        "operationId": "dashboard.navigation.placements_list",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.navigation.placements_list"
+        ]
+      },
+      {
+        "operationId": "dashboard.navigation.placements_manifest",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.campaign-content-supported-setup"
+        ]
+      },
+      {
+        "operationId": "dashboard.navigation.placements_save",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.navigation-publish"
+        ]
+      },
+      {
+        "operationId": "dashboard.navigation.products_preview_count",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.navigation.products_preview_count"
+        ]
+      },
+      {
+        "operationId": "dashboard.navigation.publications_list",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.navigation.publications_list"
+        ]
+      },
+      {
+        "operationId": "dashboard.navigation.resources_search",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.navigation-publish"
+        ]
+      },
+      {
+        "operationId": "dashboard.notifications.admin_rules_get",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.notifications.admin_rules_get"
+        ]
+      },
+      {
+        "operationId": "dashboard.notifications.admin_rules_update",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.notifications.admin_rules_update"
+        ]
+      },
+      {
+        "operationId": "dashboard.notifications.customer_rules_get",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.notification-rules"
+        ]
+      },
+      {
+        "operationId": "dashboard.notifications.customer_rules_update",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.notification-rules"
+        ]
+      },
+      {
+        "operationId": "dashboard.notifications.firebase_get",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.notifications.firebase_get"
+        ]
+      },
+      {
+        "operationId": "dashboard.notifications.firebase_update",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.notifications.firebase_update"
+        ]
+      },
+      {
+        "operationId": "dashboard.orders.archive",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.orders.archive"
+        ]
+      },
+      {
+        "operationId": "dashboard.orders.bulk_ship",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.orders.bulk_ship"
+        ]
+      },
+      {
+        "operationId": "dashboard.orders.catalog_products",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.orders.catalog_products"
+        ]
+      },
+      {
+        "operationId": "dashboard.orders.cod_get",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.orders.cod_get"
+        ]
+      },
+      {
+        "operationId": "dashboard.orders.cod_update",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.orders.cod_update"
+        ]
+      },
+      {
+        "operationId": "dashboard.orders.create",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.orders.create"
+        ]
+      },
+      {
+        "operationId": "dashboard.orders.create_shipment",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.order-provider-shipment"
+        ]
+      },
+      {
+        "operationId": "dashboard.orders.export",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.order-export"
+        ]
+      },
+      {
+        "operationId": "dashboard.orders.form_data",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.orders.form_data"
+        ]
+      },
+      {
+        "operationId": "dashboard.orders.fulfill",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.order-fulfill"
+        ]
+      },
+      {
+        "operationId": "dashboard.orders.fulfillment_get",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.order-fulfill"
+        ]
+      },
+      {
+        "operationId": "dashboard.orders.get",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.order-fulfill",
+          "dashboard.order-provider-shipment"
+        ]
+      },
+      {
+        "operationId": "dashboard.orders.invoice_get",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.invoice-issue"
+        ]
+      },
+      {
+        "operationId": "dashboard.orders.invoice_issue",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.invoice-issue"
+        ]
+      },
+      {
+        "operationId": "dashboard.orders.invoice_print",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.invoice-issue"
+        ]
+      },
+      {
+        "operationId": "dashboard.orders.items",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.orders.items"
+        ]
+      },
+      {
+        "operationId": "dashboard.orders.list",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.daily-operations-snapshot",
+          "operations.daily-snapshot.v1"
+        ]
+      },
+      {
+        "operationId": "dashboard.orders.notification_resend",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.orders.notification_resend"
+        ]
+      },
+      {
+        "operationId": "dashboard.orders.notification_retry",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.orders.notification_retry"
+        ]
+      },
+      {
+        "operationId": "dashboard.orders.notifications",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.orders.notifications"
+        ]
+      },
+      {
+        "operationId": "dashboard.orders.payment_recovery_export",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.orders.payment_recovery_export"
+        ]
+      },
+      {
+        "operationId": "dashboard.orders.payment_recovery_link",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.orders.payment_recovery_link"
+        ]
+      },
+      {
+        "operationId": "dashboard.orders.payment_recovery_list",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.daily-operations-snapshot",
+          "dashboard.thirty-day-booked-operations-brief",
+          "operations.daily-snapshot.v1",
+          "operations.thirty-day-booked-brief.v1"
+        ]
+      },
+      {
+        "operationId": "dashboard.orders.payments",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.order-refund"
+        ]
+      },
+      {
+        "operationId": "dashboard.orders.quote",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.orders.quote"
+        ]
+      },
+      {
+        "operationId": "dashboard.orders.refund",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.order-refund"
+        ]
+      },
+      {
+        "operationId": "dashboard.orders.refund_reconcile",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.order-refund"
+        ]
+      },
+      {
+        "operationId": "dashboard.orders.restore",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.orders.restore"
+        ]
+      },
+      {
+        "operationId": "dashboard.orders.return_approve",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.order-return"
+        ]
+      },
+      {
+        "operationId": "dashboard.orders.return_cancel",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.orders.return_cancel"
+        ]
+      },
+      {
+        "operationId": "dashboard.orders.return_create",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.order-return"
+        ]
+      },
+      {
+        "operationId": "dashboard.orders.return_get",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.order-return"
+        ]
+      },
+      {
+        "operationId": "dashboard.orders.return_receive",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.order-return"
+        ]
+      },
+      {
+        "operationId": "dashboard.orders.return_reconcile",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.orders.return_reconcile"
+        ]
+      },
+      {
+        "operationId": "dashboard.orders.returns",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.orders.returns"
+        ]
+      },
+      {
+        "operationId": "dashboard.orders.shipment_delete",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.orders.shipment_delete"
+        ]
+      },
+      {
+        "operationId": "dashboard.orders.shipment_get",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.orders.shipment_get"
+        ]
+      },
+      {
+        "operationId": "dashboard.orders.shipment_reconcile",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.orders.shipment_reconcile"
+        ]
+      },
+      {
+        "operationId": "dashboard.orders.shipment_refresh",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.orders.shipment_refresh"
+        ]
+      },
+      {
+        "operationId": "dashboard.orders.shipments",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.order-provider-shipment"
+        ]
+      },
+      {
+        "operationId": "dashboard.orders.support_request_update",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.orders.support_request_update"
+        ]
+      },
+      {
+        "operationId": "dashboard.orders.update",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.orders.update"
+        ]
+      },
+      {
+        "operationId": "dashboard.orders.update_status",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.orders.update_status"
+        ]
+      },
+      {
+        "operationId": "dashboard.payments.methods_get",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.bangladesh-checkout-supported-setup",
+          "dashboard.checkout-readiness",
+          "dashboard.daily-operations-snapshot",
+          "dashboard.guest-checkout-conditional-enable",
+          "dashboard.payment-methods",
+          "operations.daily-snapshot.v1"
+        ]
+      },
+      {
+        "operationId": "dashboard.payments.methods_update",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.bangladesh-checkout-supported-setup",
+          "dashboard.payment-methods"
+        ]
+      },
+      {
+        "operationId": "dashboard.payments.polar_get",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.payments.polar_get"
+        ]
+      },
+      {
+        "operationId": "dashboard.payments.polar_update",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.payments.polar_update"
+        ]
+      },
+      {
+        "operationId": "dashboard.payments.sslcommerz_get",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.payments.sslcommerz_get"
+        ]
+      },
+      {
+        "operationId": "dashboard.payments.sslcommerz_update",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.bangladesh-checkout-supported-setup"
+        ]
+      },
+      {
+        "operationId": "dashboard.payments.stripe_get",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.stripe-settings"
+        ]
+      },
+      {
+        "operationId": "dashboard.payments.stripe_update",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.stripe-settings"
+        ]
+      },
+      {
+        "operationId": "dashboard.product_options.save_matrix",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.product_options.save_matrix"
+        ]
+      },
+      {
+        "operationId": "dashboard.product_variants.create",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.product_variants.create"
+        ]
+      },
+      {
+        "operationId": "dashboard.product_variants.list",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.product_variants.list"
+        ]
+      },
+      {
+        "operationId": "dashboard.product_variants.retire",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.product_variants.retire"
+        ]
+      },
+      {
+        "operationId": "dashboard.product_variants.update",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.product_variants.update"
+        ]
+      },
+      {
+        "operationId": "dashboard.products.bulk_delete",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.products.bulk_delete"
+        ]
+      },
+      {
+        "operationId": "dashboard.products.create",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "catalog.optioned-product.v1",
+          "dashboard.complex-product-create"
+        ]
+      },
+      {
+        "operationId": "dashboard.products.delete_permanently",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.products.delete_permanently"
+        ]
+      },
+      {
+        "operationId": "dashboard.products.get_by_ids",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.products.get_by_ids"
+        ]
+      },
+      {
+        "operationId": "dashboard.products.get_section",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "catalog.optioned-product.v1",
+          "dashboard.complex-product-create",
+          "dashboard.product-section-update"
+        ]
+      },
+      {
+        "operationId": "dashboard.products.list_summaries",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "catalog.optioned-product.v1",
+          "dashboard.complex-product-create"
+        ]
+      },
+      {
+        "operationId": "dashboard.products.lookup_barcode",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.products.lookup_barcode"
+        ]
+      },
+      {
+        "operationId": "dashboard.products.restore",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.products.restore"
+        ]
+      },
+      {
+        "operationId": "dashboard.products.stats",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.product-counts"
+        ]
+      },
+      {
+        "operationId": "dashboard.products.trash",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.products.trash"
+        ]
+      },
+      {
+        "operationId": "dashboard.products.update",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.products.update"
+        ]
+      },
+      {
+        "operationId": "dashboard.products.update_section",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.product-section-update"
+        ]
+      },
+      {
+        "operationId": "dashboard.promotions.activate",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.promotion-lifecycle"
+        ]
+      },
+      {
+        "operationId": "dashboard.promotions.archive",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.promotions.archive"
+        ]
+      },
+      {
+        "operationId": "dashboard.promotions.create",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.promotion-lifecycle"
+        ]
+      },
+      {
+        "operationId": "dashboard.promotions.get",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.promotion-lifecycle"
+        ]
+      },
+      {
+        "operationId": "dashboard.promotions.list",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.promotions.list"
+        ]
+      },
+      {
+        "operationId": "dashboard.promotions.pause",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.promotions.pause"
+        ]
+      },
+      {
+        "operationId": "dashboard.promotions.preview",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.promotion-lifecycle"
+        ]
+      },
+      {
+        "operationId": "dashboard.promotions.update",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.promotions.update"
+        ]
+      },
+      {
+        "operationId": "dashboard.security.policy_get",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.security.policy_get"
+        ]
+      },
+      {
+        "operationId": "dashboard.security.policy_update",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.security.policy_update"
+        ]
+      },
+      {
+        "operationId": "dashboard.security.runtime_sources",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.security.runtime_sources"
+        ]
+      },
+      {
+        "operationId": "dashboard.seo.feed_diagnostics",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.seo.feed_diagnostics"
+        ]
+      },
+      {
+        "operationId": "dashboard.seo.feed_row_preview",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "catalog.optioned-product.v1",
+          "dashboard.complex-product-create"
+        ]
+      },
+      {
+        "operationId": "dashboard.seo.live_probe",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "catalog.optioned-product.v1",
+          "dashboard.business-seo-settings",
+          "dashboard.complex-product-create",
+          "dashboard.storefront-origin"
+        ]
+      },
+      {
+        "operationId": "dashboard.seo.settings_get",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "catalog.optioned-product.v1",
+          "dashboard.business-seo-settings",
+          "dashboard.complex-product-create"
+        ]
+      },
+      {
+        "operationId": "dashboard.seo.settings_update",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "catalog.optioned-product.v1",
+          "dashboard.business-seo-settings",
+          "dashboard.complex-product-create"
+        ]
+      },
+      {
+        "operationId": "dashboard.settings_footer.footer",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.header-footer-homepage"
+        ]
+      },
+      {
+        "operationId": "dashboard.settings_footer.get_footer",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.header-footer-homepage"
+        ]
+      },
+      {
+        "operationId": "dashboard.settings_header.get_header",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.campaign-content-supported-setup",
+          "dashboard.header-footer-homepage"
+        ]
+      },
+      {
+        "operationId": "dashboard.settings_header.header",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.campaign-content-supported-setup",
+          "dashboard.header-footer-homepage"
+        ]
+      },
+      {
+        "operationId": "dashboard.settings_homepage_presentation.get_homepage_presentation",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.header-footer-homepage"
+        ]
+      },
+      {
+        "operationId": "dashboard.settings_homepage_presentation.homepage_presentation",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.header-footer-homepage"
+        ]
+      },
+      {
+        "operationId": "dashboard.settings_sms.get_sms",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.settings_sms.get_sms"
+        ]
+      },
+      {
+        "operationId": "dashboard.settings_sms.sms",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.settings_sms.sms"
+        ]
+      },
+      {
+        "operationId": "dashboard.settings.business_get",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.business-seo-settings"
+        ]
+      },
+      {
+        "operationId": "dashboard.settings.business_update",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.business-seo-settings"
+        ]
+      },
+      {
+        "operationId": "dashboard.settings.currency_get",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "catalog.optioned-product.v1",
+          "dashboard.bangladesh-checkout-supported-setup",
+          "dashboard.complex-product-create",
+          "dashboard.daily-operations-snapshot",
+          "dashboard.thirty-day-booked-operations-brief",
+          "operations.daily-snapshot.v1",
+          "operations.thirty-day-booked-brief.v1"
+        ]
+      },
+      {
+        "operationId": "dashboard.settings.currency_update",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.bangladesh-checkout-supported-setup"
+        ]
+      },
+      {
+        "operationId": "dashboard.settings.customer_auth_get",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.settings.customer_auth_get"
+        ]
+      },
+      {
+        "operationId": "dashboard.settings.customer_auth_update",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.settings.customer_auth_update"
+        ]
+      },
+      {
+        "operationId": "dashboard.settings.customer_countries_get",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.settings.customer_countries_get"
+        ]
+      },
+      {
+        "operationId": "dashboard.settings.customer_countries_update",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.settings.customer_countries_update"
+        ]
+      },
+      {
+        "operationId": "dashboard.settings.email_get",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.settings.email_get"
+        ]
+      },
+      {
+        "operationId": "dashboard.settings.email_update",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.settings.email_update"
+        ]
+      },
+      {
+        "operationId": "dashboard.settings.media_delivery_get",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.settings.media_delivery_get"
+        ]
+      },
+      {
+        "operationId": "dashboard.settings.media_delivery_update",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.settings.media_delivery_update"
+        ]
+      },
+      {
+        "operationId": "dashboard.settings.storefront_url_get",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.storefront-origin"
+        ]
+      },
+      {
+        "operationId": "dashboard.settings.storefront_url_update",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.storefront-origin"
+        ]
+      },
+      {
+        "operationId": "dashboard.shipping_methods.create",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.bangladesh-checkout-supported-setup",
+          "dashboard.shipping-method"
+        ]
+      },
+      {
+        "operationId": "dashboard.shipping_methods.delete_permanently",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.shipping_methods.delete_permanently"
+        ]
+      },
+      {
+        "operationId": "dashboard.shipping_methods.get",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.shipping_methods.get"
+        ]
+      },
+      {
+        "operationId": "dashboard.shipping_methods.list",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.bangladesh-checkout-supported-setup",
+          "dashboard.checkout-readiness",
+          "dashboard.daily-operations-snapshot",
+          "dashboard.guest-checkout-conditional-enable",
+          "dashboard.shipping-method",
+          "operations.daily-snapshot.v1"
+        ]
+      },
+      {
+        "operationId": "dashboard.shipping_methods.restore",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.shipping_methods.restore"
+        ]
+      },
+      {
+        "operationId": "dashboard.shipping_methods.trash",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.shipping_methods.trash"
+        ]
+      },
+      {
+        "operationId": "dashboard.shipping_methods.update",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.bangladesh-checkout-supported-setup"
+        ]
+      },
+      {
+        "operationId": "dashboard.taxes.classes_create",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.taxes.classes_create"
+        ]
+      },
+      {
+        "operationId": "dashboard.taxes.classes_delete",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.taxes.classes_delete"
+        ]
+      },
+      {
+        "operationId": "dashboard.taxes.classes_list",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.tax-configuration"
+        ]
+      },
+      {
+        "operationId": "dashboard.taxes.classes_update",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.taxes.classes_update"
+        ]
+      },
+      {
+        "operationId": "dashboard.taxes.classifications_list",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.taxes.classifications_list"
+        ]
+      },
+      {
+        "operationId": "dashboard.taxes.classifications_update",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.taxes.classifications_update"
+        ]
+      },
+      {
+        "operationId": "dashboard.taxes.jurisdictions_list",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.tax-configuration"
+        ]
+      },
+      {
+        "operationId": "dashboard.taxes.preview",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.tax-configuration"
+        ]
+      },
+      {
+        "operationId": "dashboard.taxes.rates_create",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.tax-configuration"
+        ]
+      },
+      {
+        "operationId": "dashboard.taxes.rates_delete",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.taxes.rates_delete"
+        ]
+      },
+      {
+        "operationId": "dashboard.taxes.rates_list",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.tax-configuration"
+        ]
+      },
+      {
+        "operationId": "dashboard.taxes.rates_update",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.taxes.rates_update"
+        ]
+      },
+      {
+        "operationId": "dashboard.taxes.settings_get",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.tax-configuration"
+        ]
+      },
+      {
+        "operationId": "dashboard.taxes.settings_update",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.taxes.settings_update"
+        ]
+      },
+      {
+        "operationId": "dashboard.team.permission_overrides.remove",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.team.permission_overrides.remove"
+        ]
+      },
+      {
+        "operationId": "dashboard.team.permission_overrides.set",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.team.permission_overrides.set"
+        ]
+      },
+      {
+        "operationId": "dashboard.team.permissions.list",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.team.permissions.list"
+        ]
+      },
+      {
+        "operationId": "dashboard.team.roles.create",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.team.roles.create"
+        ]
+      },
+      {
+        "operationId": "dashboard.team.roles.delete",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.team.roles.delete"
+        ]
+      },
+      {
+        "operationId": "dashboard.team.roles.get",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.team.roles.get"
+        ]
+      },
+      {
+        "operationId": "dashboard.team.roles.list",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.team-invite"
+        ]
+      },
+      {
+        "operationId": "dashboard.team.roles.update",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.team.roles.update"
+        ]
+      },
+      {
+        "operationId": "dashboard.team.user_roles.assign",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.team.user_roles.assign"
+        ]
+      },
+      {
+        "operationId": "dashboard.team.user_roles.remove",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.team.user_roles.remove"
+        ]
+      },
+      {
+        "operationId": "dashboard.team.users.invite",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.team-invite"
+        ]
+      },
+      {
+        "operationId": "dashboard.team.users.list",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.team-invite"
+        ]
+      },
+      {
+        "operationId": "dashboard.team.users.resend_invitation",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.team.users.resend_invitation"
+        ]
+      },
+      {
+        "operationId": "dashboard.team.users.revoke_invitation",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.team.users.revoke_invitation"
+        ]
+      },
+      {
+        "operationId": "dashboard.team.users.set_suspension",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.team.users.set_suspension"
+        ]
+      },
+      {
+        "operationId": "dashboard.theme.draft_rebase",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.theme.draft_rebase"
+        ]
+      },
+      {
+        "operationId": "dashboard.theme.draft_save",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.theme-publish"
+        ]
+      },
+      {
+        "operationId": "dashboard.theme.get",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.theme.get"
+        ]
+      },
+      {
+        "operationId": "dashboard.theme.preview_session_create",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.theme-publish"
+        ]
+      },
+      {
+        "operationId": "dashboard.theme.publish",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.theme-publish"
+        ]
+      },
+      {
+        "operationId": "dashboard.theme.rollback",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.theme.rollback"
+        ]
+      },
+      {
+        "operationId": "dashboard.theme.versions_list",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.theme.versions_list"
+        ]
+      },
+      {
+        "operationId": "dashboard.theme.workspace_get",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.theme-publish"
+        ]
+      },
+      {
+        "operationId": "storefront.articles.get_by_slug",
+        "surface": "storefront",
+        "mode": "curated",
+        "workflowIds": [
+          "storefront.content-discovery"
+        ]
+      },
+      {
+        "operationId": "storefront.articles.list",
+        "surface": "storefront",
+        "mode": "curated",
+        "workflowIds": [
+          "storefront.content-discovery"
+        ]
+      },
+      {
+        "operationId": "storefront.attributes.list_filterable",
+        "surface": "storefront",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.storefront.attributes.list_filterable"
+        ]
+      },
+      {
+        "operationId": "storefront.attributes.list_for_category",
+        "surface": "storefront",
+        "mode": "curated",
+        "workflowIds": [
+          "storefront.category-filter"
+        ]
+      },
+      {
+        "operationId": "storefront.attributes.list_for_search",
+        "surface": "storefront",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.storefront.attributes.list_for_search"
+        ]
+      },
+      {
+        "operationId": "storefront.cart.add",
+        "surface": "storefront",
+        "mode": "curated",
+        "workflowIds": [
+          "storefront.checkout-journey"
+        ]
+      },
+      {
+        "operationId": "storefront.cart.clear",
+        "surface": "storefront",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.storefront.cart.clear"
+        ]
+      },
+      {
+        "operationId": "storefront.cart.get",
+        "surface": "storefront",
+        "mode": "curated",
+        "workflowIds": [
+          "storefront.cart-edit"
+        ]
+      },
+      {
+        "operationId": "storefront.cart.remove",
+        "surface": "storefront",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.storefront.cart.remove"
+        ]
+      },
+      {
+        "operationId": "storefront.cart.set_quantity",
+        "surface": "storefront",
+        "mode": "curated",
+        "workflowIds": [
+          "storefront.cart-edit"
+        ]
+      },
+      {
+        "operationId": "storefront.categories.get_section",
+        "surface": "storefront",
+        "mode": "curated",
+        "workflowIds": [
+          "storefront.category-filter"
+        ]
+      },
+      {
+        "operationId": "storefront.categories.list_product_summaries",
+        "surface": "storefront",
+        "mode": "curated",
+        "workflowIds": [
+          "storefront.category-filter"
+        ]
+      },
+      {
+        "operationId": "storefront.categories.list_summaries",
+        "surface": "storefront",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.storefront.categories.list_summaries"
+        ]
+      },
+      {
+        "operationId": "storefront.checkout_language.get_active",
+        "surface": "storefront",
+        "mode": "curated",
+        "workflowIds": [
+          "storefront.checkout-options"
+        ]
+      },
+      {
+        "operationId": "storefront.checkout.get_config",
+        "surface": "storefront",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.bangladesh-checkout-supported-setup",
+          "dashboard.checkout-flow-replace",
+          "dashboard.checkout-readiness",
+          "dashboard.guest-checkout-conditional-enable",
+          "dashboard.payment-methods",
+          "storefront.checkout-options"
+        ]
+      },
+      {
+        "operationId": "storefront.checkout.quote",
+        "surface": "storefront",
+        "mode": "curated",
+        "workflowIds": [
+          "storefront.checkout-journey"
+        ]
+      },
+      {
+        "operationId": "storefront.checkout.submit",
+        "surface": "storefront",
+        "mode": "curated",
+        "workflowIds": [
+          "storefront.checkout-journey"
+        ]
+      },
+      {
+        "operationId": "storefront.checkout.validate",
+        "surface": "storefront",
+        "mode": "curated",
+        "workflowIds": [
+          "storefront.checkout-journey"
+        ]
+      },
+      {
+        "operationId": "storefront.collections.get",
+        "surface": "storefront",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.storefront.collections.get"
+        ]
+      },
+      {
+        "operationId": "storefront.collections.list",
+        "surface": "storefront",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.storefront.collections.list"
+        ]
+      },
+      {
+        "operationId": "storefront.context.close",
+        "surface": "storefront",
+        "mode": "curated",
+        "workflowIds": [
+          "storefront.close-context"
+        ]
+      },
+      {
+        "operationId": "storefront.context.create",
+        "surface": "storefront",
+        "mode": "curated",
+        "workflowIds": [
+          "storefront.checkout-journey"
+        ]
+      },
+      {
+        "operationId": "storefront.context.get",
+        "surface": "storefront",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.storefront.context.get"
+        ]
+      },
+      {
+        "operationId": "storefront.continuations.get",
+        "surface": "storefront",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.storefront.continuations.get"
+        ]
+      },
+      {
+        "operationId": "storefront.customer_auth.begin",
+        "surface": "storefront",
+        "mode": "curated",
+        "workflowIds": [
+          "storefront.customer-login"
+        ]
+      },
+      {
+        "operationId": "storefront.customer_auth.logout",
+        "surface": "storefront",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.storefront.customer_auth.logout"
+        ]
+      },
+      {
+        "operationId": "storefront.customer_auth.status",
+        "surface": "storefront",
+        "mode": "curated",
+        "workflowIds": [
+          "storefront.customer-login"
+        ]
+      },
+      {
+        "operationId": "storefront.customer_profile.get",
+        "surface": "storefront",
+        "mode": "curated",
+        "workflowIds": [
+          "storefront.customer-profile"
+        ]
+      },
+      {
+        "operationId": "storefront.customer_profile.update",
+        "surface": "storefront",
+        "mode": "curated",
+        "workflowIds": [
+          "storefront.customer-profile"
+        ]
+      },
+      {
+        "operationId": "storefront.delivery.set",
+        "surface": "storefront",
+        "mode": "curated",
+        "workflowIds": [
+          "storefront.checkout-journey"
+        ]
+      },
+      {
+        "operationId": "storefront.discount.apply",
+        "surface": "storefront",
+        "mode": "curated",
+        "workflowIds": [
+          "storefront.checkout-journey"
+        ]
+      },
+      {
+        "operationId": "storefront.discount.remove",
+        "surface": "storefront",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.storefront.discount.remove"
+        ]
+      },
+      {
+        "operationId": "storefront.hero_sliders.get",
+        "surface": "storefront",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.storefront.hero_sliders.get"
+        ]
+      },
+      {
+        "operationId": "storefront.hero_sliders.list",
+        "surface": "storefront",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.storefront.hero_sliders.list"
+        ]
+      },
+      {
+        "operationId": "storefront.homepage.get",
+        "surface": "storefront",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.campaign-content-supported-setup",
+          "dashboard.header-footer-homepage",
+          "storefront.homepage-layout"
+        ]
+      },
+      {
+        "operationId": "storefront.layout.get",
+        "surface": "storefront",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.campaign-content-supported-setup",
+          "dashboard.header-footer-homepage",
+          "dashboard.theme-publish",
+          "storefront.homepage-layout"
+        ]
+      },
+      {
+        "operationId": "storefront.locations.area_summaries",
+        "surface": "storefront",
+        "mode": "curated",
+        "workflowIds": [
+          "storefront.delivery-search"
+        ]
+      },
+      {
+        "operationId": "storefront.locations.city_summaries",
+        "surface": "storefront",
+        "mode": "curated",
+        "workflowIds": [
+          "storefront.delivery-search"
+        ]
+      },
+      {
+        "operationId": "storefront.locations.zone_summaries",
+        "surface": "storefront",
+        "mode": "curated",
+        "workflowIds": [
+          "storefront.delivery-search"
+        ]
+      },
+      {
+        "operationId": "storefront.navigation.get",
+        "surface": "storefront",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.campaign-content-supported-setup"
+        ]
+      },
+      {
+        "operationId": "storefront.navigation.items_list",
+        "surface": "storefront",
+        "mode": "curated",
+        "workflowIds": [
+          "storefront.navigation-tree"
+        ]
+      },
+      {
+        "operationId": "storefront.navigation.menu_get",
+        "surface": "storefront",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.storefront.navigation.menu_get"
+        ]
+      },
+      {
+        "operationId": "storefront.navigation.menu_get_by_id",
+        "surface": "storefront",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.navigation-publish"
+        ]
+      },
+      {
+        "operationId": "storefront.navigation.placements_list",
+        "surface": "storefront",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.navigation-publish",
+          "storefront.navigation-tree"
+        ]
+      },
+      {
+        "operationId": "storefront.orders.get",
+        "surface": "storefront",
+        "mode": "curated",
+        "workflowIds": [
+          "storefront.order-support"
+        ]
+      },
+      {
+        "operationId": "storefront.orders.list",
+        "surface": "storefront",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.storefront.orders.list"
+        ]
+      },
+      {
+        "operationId": "storefront.orders.payment.begin",
+        "surface": "storefront",
+        "mode": "curated",
+        "workflowIds": [
+          "storefront.hosted-payment"
+        ]
+      },
+      {
+        "operationId": "storefront.orders.support_request.create",
+        "surface": "storefront",
+        "mode": "curated",
+        "workflowIds": [
+          "storefront.order-support"
+        ]
+      },
+      {
+        "operationId": "storefront.pages.get_by_id",
+        "surface": "storefront",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.storefront.pages.get_by_id"
+        ]
+      },
+      {
+        "operationId": "storefront.pages.get_by_slug",
+        "surface": "storefront",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.campaign-content-supported-setup",
+          "dashboard.page-publish",
+          "storefront.content-discovery"
+        ]
+      },
+      {
+        "operationId": "storefront.pages.list",
+        "surface": "storefront",
+        "mode": "curated",
+        "workflowIds": [
+          "storefront.content-discovery"
+        ]
+      },
+      {
+        "operationId": "storefront.payment_recovery.begin",
+        "surface": "storefront",
+        "mode": "curated",
+        "workflowIds": [
+          "storefront.payment-recovery"
+        ]
+      },
+      {
+        "operationId": "storefront.payment_recovery.status",
+        "surface": "storefront",
+        "mode": "curated",
+        "workflowIds": [
+          "storefront.payment-recovery"
+        ]
+      },
+      {
+        "operationId": "storefront.payment.status",
+        "surface": "storefront",
+        "mode": "curated",
+        "workflowIds": [
+          "storefront.hosted-payment"
+        ]
+      },
+      {
+        "operationId": "storefront.products.get_section",
+        "surface": "storefront",
+        "mode": "curated",
+        "workflowIds": [
+          "catalog.optioned-product.v1",
+          "dashboard.complex-product-create",
+          "storefront.product-research"
+        ]
+      },
+      {
+        "operationId": "storefront.products.list",
+        "surface": "storefront",
+        "mode": "curated",
+        "workflowIds": [
+          "storefront.product-research"
+        ]
+      },
+      {
+        "operationId": "storefront.receipt.get",
+        "surface": "storefront",
+        "mode": "curated",
+        "workflowIds": [
+          "storefront.checkout-journey"
+        ]
+      },
+      {
+        "operationId": "storefront.search.predict",
+        "surface": "storefront",
+        "mode": "curated",
+        "workflowIds": [
+          "storefront.product-research"
+        ]
+      },
+      {
+        "operationId": "storefront.seo.get",
+        "surface": "storefront",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.business-seo-settings"
+        ]
+      },
+      {
+        "operationId": "storefront.shipping_methods.list",
+        "surface": "storefront",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.bangladesh-checkout-supported-setup",
+          "dashboard.shipping-method",
+          "storefront.checkout-options"
+        ]
+      }
+    ]
+  }
+};

@@ -11,6 +11,8 @@ npm install --global scalius
 
 scalius auth login --server https://api.example.com
 scalius auth login --server https://api.example.com --resource storefront --profile-name my-store-storefront
+scalius --output json workflow read "How is my store doing today?" --surface dashboard
+scalius --output json workflow resolve "Create a product with size/color variants and exact images" --surface dashboard
 scalius operations search "what are today's sales?" --surface dashboard
 scalius operations describe dashboard.products.create
 scalius operations run dashboard.products.create --input @product.json --yes
@@ -37,6 +39,8 @@ scalius auth revoke
 scalius profile list
 scalius profile use <name>
 scalius profile show [name]
+scalius workflow read <request> [--surface dashboard|storefront]
+scalius workflow resolve <request> [--surface dashboard|storefront]
 scalius operations search [query] [--surface dashboard|storefront] [--limit <1-100>]
 scalius operations describe <operationId> [--full]
 scalius operations run <operationId> --input <json|@file|->
@@ -46,19 +50,31 @@ scalius setup --harness <agents|codex|claude|opencode|pi> [--server <origin>] [-
 scalius skill install [--harness <name>] [--force]
 ```
 
-Run `scalius setup` before operating a store. The bundled `scalius-commerce` skill follows the open Agent Skills format and installs to the native user location for Codex, Claude, OpenCode, Pi, or the cross-client `.agents/skills` convention. Setup prints exact credential-free instructions for both audience-specific MCP servers; it never writes tokens into harness configuration. Pi supports the skill and full CLI natively; because Pi's core has no MCP client, setup prints the separately installed `pi-mcp-adapter` package from Pi's catalog and shared MCP configuration but never silently installs executable third-party code.
+Run `scalius setup` before operating a store. The bundled open Agent Skills suite installs one small setup/router skill plus focused insights, catalog, content, sales, settings, and storefront skills to the native user location for Codex, Claude, OpenCode, Pi, or the cross-client `.agents/skills` convention. A forced update stages and replaces the complete suite so stale guides are not left behind. Setup prints exact credential-free instructions for both audience-specific MCP servers; it never writes tokens into harness configuration. Pi supports the skills and full CLI natively; because Pi's core has no MCP client, setup prints the separately installed `pi-mcp-adapter` package from Pi's catalog and shared MCP configuration but never silently installs executable third-party code.
 
-The workflow is deliberately harness-neutral: search, compactly describe one
-operation, request `--full` only while building its input, execute, and verify
-with a bounded read. The live finalized OpenAPI contract—not a model-specific
-prompt—is authoritative for fields, RBAC, risk, revisions, idempotency, byte
-limits, artifacts, uploads, and continuations.
+The workflow is deliberately harness-neutral: use `workflow read` for a
+supported data question in one projected call; otherwise resolve a natural-language goal,
+compactly describe only the selected operations, request `--full` only while
+building an exact input, execute, and verify with a bounded read. The resolver
+uses the versioned workflow catalog embedded in the same live contract, returns
+one reviewed plan, at most three choices, a safety control, or an explicit
+unsupported result, and never sends the full catalog to the model. The live
+finalized OpenAPI contract—not a model-specific prompt—is authoritative for
+fields, RBAC, risk, revisions, idempotency, byte limits, artifacts, uploads,
+and continuations.
 
-Search accepts normal merchant phrasing such as “today's sales”, “orders
-needing fulfillment”, “low stock issues”, or “is my store healthy?”. Without
-an explicit profile or surface, merchant search defaults to dashboard. An
-operation ID automatically selects the authenticated dashboard or storefront
-profile for the active store origin; it never crosses to a different store.
+`workflow resolve` may read the intentionally public finalized contract before
+pairing, so local planning works with `SCALIUS_SERVER=<origin>` and no execution
+credential. `workflow read`, operation descriptions, and every execution remain
+bound to the correctly authenticated dashboard or storefront profile.
+
+`workflow resolve` accepts normal merchant phrasing such as “today's sales”,
+“orders needing fulfillment”, “low stock issues”, or “is my store healthy?”.
+`operations search` remains the low-level exact-ID or contract-keyword escape
+hatch; it does not reconstruct multi-step goals. Without an explicit profile or
+surface, operation search defaults to dashboard. An operation ID automatically
+selects the authenticated dashboard or storefront profile for the active store
+origin; it never crosses to a different store.
 
 Dashboard MCP, storefront MCP, and CLI are outcome-equivalent surfaces over
 that contract. MCP does not require a shell: it imports public media by URL and
@@ -73,7 +89,7 @@ ceiling on every request. Default descriptions flatten only top-level input
 fields; `operations describe <id> --full` returns the exact nested construction
 schema and responses.
 
-The skill teaches one compact discovery and safety loop, then loads only the relevant domain guide. `media upload` validates signatures, extensions, and byte limits, reuses one live contract in-process, performs the resumable initiate/part/complete sequence, aborts an incomplete session on failure, and returns committed media IDs. Supported images are JPEG, PNG, GIF, WebP, and AVIF up to 20 MiB; supported video is MP4 and WebM up to 100 MiB.
+Skill metadata routes a request directly to one focused body; the setup/router body is not loaded for routine domain work. Every focused skill starts with projected read or workflow resolution and treats returned operation IDs and exact live schemas as authority. `media upload` validates signatures, extensions, and byte limits, reuses one live contract in-process, performs the resumable initiate/part/complete sequence, aborts an incomplete session on failure, and returns committed media IDs. Supported images are JPEG, PNG, GIF, WebP, and AVIF up to 20 MiB; supported video is MP4 and WebM up to 100 MiB.
 
 `operations run` input has three fields: `path`, `query`, and `body`. JSON bodies are measured after serialization as UTF-8 and rejected locally when they exceed the live operation's reviewed request limit; the same check applies to each resolved batch step. Multipart operations accept repeatable `--file field=@path` arguments for binary fields declared by OpenAPI. Reviewed raw upload operations accept exactly one `--file path`; the CLI streams it as `application/octet-stream` with an exact `Content-Length` and enforces matching live schema and operation byte bounds. Raw file input never accepts stdin and never runs in a batch. `--save path` is enabled only for contract-declared artifact output; those downloads enforce the reviewed media type, disposition, filename, declared length, and actual byte limit before atomically publishing the destination. Mutating operations require `--yes`; operations marked as requiring idempotency also require `--idempotency-key`.
 
@@ -81,6 +97,6 @@ For agents without shell or local-file access, `dashboard.media.import_url` comm
 
 Reviewed hosted continuations open a fixed same-origin browser relay and keep one-time fields in ephemeral memory. They are never placed in a URL, command argument, stdout, stderr, the OpenAPI cache, or the credentials file. Device operations and concrete exclusions remain intentionally unavailable through generic `operations run`.
 
-`--output json` writes one JSON document to stdout. Diagnostics and progress use stderr. Exit codes are `0` success, `2` usage or local confirmation, `3` authentication, `4` authorization, `5` validation, `6` conflict, `7` temporary failure, `8` server or contract failure, and `130` interruption.
+`--output json` writes one compact JSON document to stdout; human output remains readable. Diagnostics and progress use stderr. Exit codes are `0` success, `2` usage or local confirmation, `3` authentication, `4` authorization, `5` validation, `6` conflict, `7` temporary failure, `8` server or contract failure, and `130` interruption.
 
 Run `scalius --help` for the complete command reference.

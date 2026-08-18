@@ -9,6 +9,10 @@ import {
   type AgentOperationManifestEntry,
   type AgentOperationOpenApiDocument,
 } from "./agent-operation-manifest";
+import {
+  assertAgentWorkflowExtension,
+  buildAgentWorkflowCatalog,
+} from "../agent-access/workflows";
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 const apiSourceDirectory = resolve(currentDirectory, "..");
@@ -20,6 +24,16 @@ export const OPENAPI_CONTRACT_MODULE_PATH = resolve(
   apiSourceDirectory,
   "generated/openapi-contract.gen.ts",
 );
+export const WORKFLOW_RESOLVER_CORE_SOURCE_PATH = resolve(
+  apiSourceDirectory,
+  "agent-access/workflows/resolver-core.ts",
+);
+export const CLI_WORKFLOW_RESOLVER_CORE_PATH = resolve(
+  apiSourceDirectory,
+  "../../../packages/cli/src/generated/workflow-resolver-core.gen.ts",
+);
+const CLI_WORKFLOW_RESOLVER_HEADER =
+  "// Generated from apps/api/src/agent-access/workflows/resolver-core.ts.\n// Do not edit by hand.\n\n";
 
 const GENERIC_PENDING_REASON_PATTERNS = [
   /\bpending\b.*\b(?:parity|review|classification|authority)\b/i,
@@ -52,7 +66,14 @@ export function generateAgentOperationManifestSource(
 ): string {
   const manifest = buildAgentOperationManifest(document);
   assertNoGenericPendingAgentOperations(manifest);
-  return renderAgentOperationManifestModule(manifest);
+  const workflowCatalog = buildAgentWorkflowCatalog(manifest, {
+    requireCuratedCards: true,
+  });
+  assertAgentWorkflowExtension(
+    document["x-scalius-workflows"],
+    workflowCatalog,
+  );
+  return renderAgentOperationManifestModule(manifest, workflowCatalog);
 }
 
 export function writeAgentOperationManifest(
@@ -61,6 +82,17 @@ export function writeAgentOperationManifest(
   const source = generateAgentOperationManifestSource(document);
   mkdirSync(dirname(AGENT_OPERATION_MANIFEST_PATH), { recursive: true });
   writeFileSync(AGENT_OPERATION_MANIFEST_PATH, source);
+  return source;
+}
+
+export function generateCliWorkflowResolverCoreSource(): string {
+  return `${CLI_WORKFLOW_RESOLVER_HEADER}${readFileSync(WORKFLOW_RESOLVER_CORE_SOURCE_PATH, "utf8")}`;
+}
+
+export function writeCliWorkflowResolverCore(): string {
+  const source = generateCliWorkflowResolverCoreSource();
+  mkdirSync(dirname(CLI_WORKFLOW_RESOLVER_CORE_PATH), { recursive: true });
+  writeFileSync(CLI_WORKFLOW_RESOLVER_CORE_PATH, source);
   return source;
 }
 
@@ -115,6 +147,23 @@ export function assertAgentOperationManifestFresh(
   if (actual !== expected) {
     throw new Error(
       "Generated agent operation manifest is stale. Regenerate it from the finalized OpenAPI contract.",
+    );
+  }
+}
+
+export function assertCliWorkflowResolverCoreFresh(): void {
+  const expected = generateCliWorkflowResolverCoreSource();
+  let actual: string;
+  try {
+    actual = readFileSync(CLI_WORKFLOW_RESOLVER_CORE_PATH, "utf8");
+  } catch {
+    throw new Error(
+      `Generated CLI workflow resolver is missing at ${CLI_WORKFLOW_RESOLVER_CORE_PATH}.`,
+    );
+  }
+  if (actual !== expected) {
+    throw new Error(
+      "Generated CLI workflow resolver is stale. Regenerate the agent contract.",
     );
   }
 }

@@ -134,6 +134,7 @@ export interface StorefrontFeedProductAttribute {
 export interface StorefrontFeedProductVariant {
     id: string;
     productId: string;
+    optionCombinationKey?: string | null;
     imageId: string | null;
     imageMediaId: string | null;
     imageUrl: string | null;
