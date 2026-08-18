@@ -9,6 +9,10 @@ import {
   type AgentOperationManifestEntry,
   type AgentOperationOpenApiDocument,
 } from "./agent-operation-manifest";
+import {
+  assertAgentWorkflowExtension,
+  buildAgentWorkflowCatalog,
+} from "../agent-access/workflows";
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 const apiSourceDirectory = resolve(currentDirectory, "..");
@@ -52,7 +56,14 @@ export function generateAgentOperationManifestSource(
 ): string {
   const manifest = buildAgentOperationManifest(document);
   assertNoGenericPendingAgentOperations(manifest);
-  return renderAgentOperationManifestModule(manifest);
+  const workflowCatalog = buildAgentWorkflowCatalog(manifest, {
+    requireCuratedCards: true,
+  });
+  assertAgentWorkflowExtension(
+    document["x-scalius-workflows"],
+    workflowCatalog,
+  );
+  return renderAgentOperationManifestModule(manifest, workflowCatalog);
 }
 
 export function writeAgentOperationManifest(
