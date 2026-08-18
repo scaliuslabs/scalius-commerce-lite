@@ -580,6 +580,11 @@ async function readStorefrontFeedAttributeMap(
                 ),
             )
             .where(inArray(productAttributeValues.productId, productIdChunk))
+            .orderBy(
+                productAttributeValues.productId,
+                productAttributes.id,
+                productAttributeValues.id,
+            )
             .all());
     }
 
@@ -984,6 +989,77 @@ export async function getStorefrontFeedProducts(
                 : {}),
         },
     };
+}
+
+/**
+ * Reads one exact product ID through the normal public feed eligibility gate.
+ * The exact-ID contract deliberately does not accept slugs, variant IDs, or SKUs.
+ */
+export async function getEligibleStorefrontFeedProductById(
+    db: Database,
+    productId: string,
+): Promise<StorefrontFeedProduct | null> {
+    const result = await getStorefrontFeedProducts(db, {
+        ids: productId,
+        limit: 10,
+    });
+    return (
+        result.products.find((product) => product.id === productId) ?? null
+    );
+}
+
+export interface ProductFeedProjectionDiagnostic {
+    productId: string;
+    isActive: boolean;
+    isDeleted: boolean;
+    excludeFromProductFeed: boolean;
+    hasBuyerResolvableSku: boolean;
+    hasPrimaryDiscoveryImage: boolean;
+    matchingSkuCount: number;
+}
+
+/**
+ * Diagnostic fallback for an exact product ID that public feed eligibility
+ * rejected. It returns evidence only; callers must never use this fallback as
+ * an alternate row source because the public feed intentionally prefilters
+ * buyer SKU topology and the product primary image before projection.
+ */
+export async function getFeedProjectionDiagnosticById(
+    db: Database,
+    productId: string,
+    normalizedSku = "",
+): Promise<ProductFeedProjectionDiagnostic | null> {
+    const product = await db
+        .select({
+            productId: products.id,
+            isActive: products.isActive,
+            excludeFromProductFeed: products.excludeFromProductFeed,
+            isDeleted: sql<boolean>`${products.deletedAt} IS NOT NULL`,
+            hasBuyerResolvableSku: publicProductHasBuyerResolvableSku(),
+            hasPrimaryDiscoveryImage: publicProductHasPrimaryDiscoveryImage(),
+            matchingSkuCount: sql<number>`(
+                SELECT count(*)
+                FROM "product_variants" AS preview_sku
+                WHERE preview_sku.product_id = ${products.id}
+                  AND preview_sku.deleted_at IS NULL
+                  AND lower(trim(preview_sku.sku)) = ${normalizedSku}
+            )`,
+        })
+        .from(products)
+        .where(eq(products.id, productId))
+        .get();
+
+    return product
+        ? {
+            productId: product.productId,
+            isActive: Boolean(product.isActive),
+            isDeleted: Boolean(product.isDeleted),
+            excludeFromProductFeed: Boolean(product.excludeFromProductFeed),
+            hasBuyerResolvableSku: Boolean(product.hasBuyerResolvableSku),
+            hasPrimaryDiscoveryImage: Boolean(product.hasPrimaryDiscoveryImage),
+            matchingSkuCount: Number(product.matchingSkuCount) || 0,
+        }
+        : null;
 }
 
 export async function getStorefrontSitemapProducts(

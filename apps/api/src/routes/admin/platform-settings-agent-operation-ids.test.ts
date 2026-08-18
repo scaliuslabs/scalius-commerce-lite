@@ -11,6 +11,7 @@ import { businessSettingsRoutes } from "./settings/business";
 import { siteSettingsRoutes } from "./settings/site";
 import { systemSettingsRoutes } from "./settings/system";
 import { smsSettingsRoutes } from "./settings/sms";
+import { feedRowPreviewRoutes } from "./settings/feed-row-preview";
 
 type Operation = {
   operationId?: string;
@@ -66,6 +67,11 @@ const EXPECTED_OPERATIONS: readonly ExpectedOperation[] = [
   ["get", "/api/v1/admin/settings/seo", "dashboard.seo.settings_get"],
   ["post", "/api/v1/admin/settings/seo", "dashboard.seo.settings_update"],
   ["get", "/api/v1/admin/settings/seo/feed-diagnostics", "dashboard.seo.feed_diagnostics"],
+  [
+    "get",
+    "/api/v1/admin/settings/seo/feed-row-preview/{productId}",
+    "dashboard.seo.feed_row_preview",
+  ],
   ["get", "/api/v1/admin/settings/seo/live-probe", "dashboard.seo.live_probe"],
   ["get", "/api/v1/admin/settings/security", "dashboard.security.policy_get"],
   ["post", "/api/v1/admin/settings/security", "dashboard.security.policy_update"],
@@ -138,6 +144,7 @@ function buildSpec() {
   app.route("/admin/settings", businessSettingsRoutes);
   app.route("/admin/settings", systemSettingsRoutes);
   app.route("/admin/settings", smsSettingsRoutes);
+  app.route("/admin/settings", feedRowPreviewRoutes);
   return app.getOpenAPIDocument({
     openapi: "3.0.0",
     info: { title: "Platform settings operation contract", version: "test" },
@@ -182,5 +189,17 @@ describe("dashboard platform/settings stable operation IDs", () => {
     for (const [method, path, permission] of EXPECTED_PERMISSIONS) {
       expect(getRoutePermission(path, method)?.permission).toBe(permission);
     }
+  });
+
+  it("requires both settings and products read authority for feed row previews", () => {
+    expect(
+      getRoutePermission(
+        "/api/v1/admin/settings/seo/feed-row-preview/prod_123",
+        "GET",
+      )?.allOf,
+    ).toEqual([
+      PERMISSIONS.SETTINGS_GENERAL_VIEW,
+      PERMISSIONS.PRODUCTS_VIEW,
+    ]);
   });
 });

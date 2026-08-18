@@ -745,6 +745,14 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   "/api/v1/admin/settings/seo/feed-diagnostics": {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
   },
+  "/api/v1/admin/settings/seo/feed-row-preview/*": {
+    GET: {
+      allOf: [
+        PERMISSIONS.SETTINGS_GENERAL_VIEW,
+        PERMISSIONS.PRODUCTS_VIEW,
+      ],
+    },
+  },
   "/api/v1/admin/settings/seo/live-probe": {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
   },

@@ -114658,6 +114658,868 @@
         }
       }
     },
+    "/api/v1/admin/settings/seo/feed-row-preview/{productId}": {
+      "get": {
+        "tags": [
+          "Admin - Settings"
+        ],
+        "summary": "Preview exact emitted catalog feed rows for one product",
+        "description": "Projects current saved product state through the same Google/Meta row authority. It does not prove cache propagation or provider acceptance.",
+        "operationId": "dashboard.seo.feed_row_preview",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "required": true,
+            "name": "productId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "required": false,
+            "name": "sku",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            },
+            "required": false,
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bounded current-state emitted, omitted, or oversize outcomes in stable candidate order",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "productId": {
+                          "type": "string",
+                          "maxLength": 128
+                        },
+                        "requestedSku": {
+                          "type": "string",
+                          "nullable": true,
+                          "maxLength": 128
+                        },
+                        "policy": {
+                          "type": "object",
+                          "properties": {
+                            "productCatalogEnabled": {
+                              "type": "boolean"
+                            },
+                            "includeUnavailableProducts": {
+                              "type": "boolean"
+                            },
+                            "variantStrategy": {
+                              "type": "string",
+                              "enum": [
+                                "products",
+                                "variants"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "productCatalogEnabled",
+                            "includeUnavailableProducts",
+                            "variantStrategy"
+                          ]
+                        },
+                        "entries": {
+                          "type": "array",
+                          "items": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "productId": {
+                                    "type": "string",
+                                    "maxLength": 128
+                                  },
+                                  "variantId": {
+                                    "type": "string",
+                                    "nullable": true,
+                                    "maxLength": 128
+                                  },
+                                  "sku": {
+                                    "type": "string",
+                                    "nullable": true,
+                                    "maxLength": 128
+                                  },
+                                  "status": {
+                                    "type": "string",
+                                    "enum": [
+                                      "emitted"
+                                    ]
+                                  },
+                                  "row": {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "enum": [
+                                          "product",
+                                          "variant"
+                                        ]
+                                      },
+                                      "productId": {
+                                        "type": "string",
+                                        "maxLength": 128
+                                      },
+                                      "variantId": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "maxLength": 128
+                                      },
+                                      "id": {
+                                        "type": "string",
+                                        "maxLength": 49152
+                                      },
+                                      "title": {
+                                        "type": "string",
+                                        "maxLength": 49152
+                                      },
+                                      "description": {
+                                        "type": "string",
+                                        "maxLength": 49152
+                                      },
+                                      "link": {
+                                        "type": "string",
+                                        "maxLength": 49152
+                                      },
+                                      "imageLink": {
+                                        "type": "string",
+                                        "maxLength": 49152
+                                      },
+                                      "availability": {
+                                        "type": "object",
+                                        "properties": {
+                                          "canonical": {
+                                            "type": "string",
+                                            "enum": [
+                                              "in_stock",
+                                              "out_of_stock"
+                                            ]
+                                          },
+                                          "google": {
+                                            "type": "string",
+                                            "enum": [
+                                              "in_stock",
+                                              "out_of_stock"
+                                            ]
+                                          },
+                                          "meta": {
+                                            "type": "string",
+                                            "enum": [
+                                              "in stock",
+                                              "out of stock"
+                                            ]
+                                          }
+                                        },
+                                        "required": [
+                                          "canonical",
+                                          "google",
+                                          "meta"
+                                        ]
+                                      },
+                                      "condition": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "enum": [
+                                          "new",
+                                          "refurbished",
+                                          "used",
+                                          null
+                                        ]
+                                      },
+                                      "pricing": {
+                                        "type": "object",
+                                        "properties": {
+                                          "currencyCode": {
+                                            "type": "string",
+                                            "maxLength": 3
+                                          },
+                                          "originalAmount": {
+                                            "type": "number"
+                                          },
+                                          "currentAmount": {
+                                            "type": "number"
+                                          },
+                                          "price": {
+                                            "type": "string",
+                                            "maxLength": 49152
+                                          },
+                                          "salePrice": {
+                                            "type": "string",
+                                            "nullable": true,
+                                            "maxLength": 49152
+                                          },
+                                          "currentPrice": {
+                                            "type": "string",
+                                            "maxLength": 49152
+                                          }
+                                        },
+                                        "required": [
+                                          "currencyCode",
+                                          "originalAmount",
+                                          "currentAmount",
+                                          "price",
+                                          "salePrice",
+                                          "currentPrice"
+                                        ]
+                                      },
+                                      "brand": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "maxLength": 49152
+                                      },
+                                      "gtin": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "maxLength": 49152
+                                      },
+                                      "identifierExists": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "enum": [
+                                          "no"
+                                        ]
+                                      },
+                                      "itemGroupId": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "maxLength": 49152
+                                      },
+                                      "itemGroupTitle": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "maxLength": 49152
+                                      },
+                                      "variantOptions": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "name": {
+                                              "type": "string",
+                                              "maxLength": 250
+                                            },
+                                            "value": {
+                                              "type": "string",
+                                              "maxLength": 250
+                                            }
+                                          },
+                                          "required": [
+                                            "name",
+                                            "value"
+                                          ]
+                                        },
+                                        "maxItems": 10
+                                      },
+                                      "googleProductCategory": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "maxLength": 49152
+                                      },
+                                      "facebookProductCategory": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "maxLength": 49152
+                                      },
+                                      "productType": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "maxLength": 49152
+                                      },
+                                      "standardAttributes": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "name": {
+                                              "type": "string",
+                                              "enum": [
+                                                "size",
+                                                "color",
+                                                "material",
+                                                "pattern",
+                                                "gender",
+                                                "age_group"
+                                              ]
+                                            },
+                                            "value": {
+                                              "type": "string",
+                                              "maxLength": 49152
+                                            }
+                                          },
+                                          "required": [
+                                            "name",
+                                            "value"
+                                          ]
+                                        },
+                                        "maxItems": 260
+                                      },
+                                      "shipping": {
+                                        "type": "object",
+                                        "nullable": true,
+                                        "properties": {
+                                          "country": {
+                                            "type": "string",
+                                            "enum": [
+                                              "BD"
+                                            ]
+                                          },
+                                          "service": {
+                                            "type": "string",
+                                            "enum": [
+                                              "Standard"
+                                            ]
+                                          },
+                                          "price": {
+                                            "type": "string",
+                                            "maxLength": 49152
+                                          }
+                                        },
+                                        "required": [
+                                          "country",
+                                          "service",
+                                          "price"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "productId",
+                                      "variantId",
+                                      "id",
+                                      "title",
+                                      "description",
+                                      "link",
+                                      "imageLink",
+                                      "availability",
+                                      "condition",
+                                      "pricing",
+                                      "brand",
+                                      "gtin",
+                                      "identifierExists",
+                                      "itemGroupId",
+                                      "itemGroupTitle",
+                                      "variantOptions",
+                                      "googleProductCategory",
+                                      "facebookProductCategory",
+                                      "productType",
+                                      "standardAttributes",
+                                      "shipping"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "productId",
+                                  "variantId",
+                                  "sku",
+                                  "status",
+                                  "row"
+                                ]
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "productId": {
+                                    "type": "string",
+                                    "maxLength": 128
+                                  },
+                                  "variantId": {
+                                    "type": "string",
+                                    "nullable": true,
+                                    "maxLength": 128
+                                  },
+                                  "sku": {
+                                    "type": "string",
+                                    "nullable": true,
+                                    "maxLength": 128
+                                  },
+                                  "status": {
+                                    "type": "string",
+                                    "enum": [
+                                      "omitted"
+                                    ]
+                                  },
+                                  "reason": {
+                                    "type": "string",
+                                    "enum": [
+                                      "excluded_from_product_feed",
+                                      "inactive_product",
+                                      "unavailable_product",
+                                      "unavailable_variant",
+                                      "unresolved_variant_shape",
+                                      "missing_image",
+                                      "non_positive_price",
+                                      "input_bounds_exceeded",
+                                      "product_not_found",
+                                      "sku_not_found",
+                                      "sku_ambiguous",
+                                      "feed_disabled",
+                                      "storefront_url_unavailable"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "productId",
+                                  "variantId",
+                                  "sku",
+                                  "status",
+                                  "reason"
+                                ]
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "productId": {
+                                    "type": "string",
+                                    "maxLength": 128
+                                  },
+                                  "variantId": {
+                                    "type": "string",
+                                    "nullable": true,
+                                    "maxLength": 128
+                                  },
+                                  "sku": {
+                                    "type": "string",
+                                    "nullable": true,
+                                    "maxLength": 128
+                                  },
+                                  "status": {
+                                    "type": "string",
+                                    "enum": [
+                                      "preview_entry_too_large"
+                                    ]
+                                  },
+                                  "requiredBytes": {
+                                    "type": "integer",
+                                    "minimum": 0
+                                  }
+                                },
+                                "required": [
+                                  "productId",
+                                  "variantId",
+                                  "sku",
+                                  "status",
+                                  "requiredBytes"
+                                ]
+                              }
+                            ]
+                          },
+                          "maxItems": 10
+                        },
+                        "pagination": {
+                          "type": "object",
+                          "properties": {
+                            "limit": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 10
+                            },
+                            "returned": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 10
+                            },
+                            "totalOutcomes": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 250
+                            },
+                            "hasNextPage": {
+                              "type": "boolean"
+                            },
+                            "nextCursor": {
+                              "type": "string",
+                              "nullable": true,
+                              "maxLength": 1024
+                            },
+                            "responseTruncated": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "limit",
+                            "returned",
+                            "totalOutcomes",
+                            "hasNextPage",
+                            "nextCursor",
+                            "responseTruncated"
+                          ]
+                        },
+                        "semantics": {
+                          "type": "object",
+                          "properties": {
+                            "basis": {
+                              "type": "string",
+                              "enum": [
+                                "current_saved_state"
+                              ]
+                            },
+                            "emittedRowsAreExact": {
+                              "type": "boolean",
+                              "enum": [
+                                true
+                              ]
+                            },
+                            "entryFieldsTruncated": {
+                              "type": "boolean",
+                              "enum": [
+                                false
+                              ]
+                            },
+                            "cachedFeedPropagationVerified": {
+                              "type": "boolean",
+                              "enum": [
+                                false
+                              ]
+                            },
+                            "providerAcceptanceVerified": {
+                              "type": "boolean",
+                              "enum": [
+                                false
+                              ]
+                            },
+                            "pagesMayRaceWithWrites": {
+                              "type": "boolean",
+                              "enum": [
+                                true
+                              ]
+                            },
+                            "responseBudgetBytes": {
+                              "type": "number",
+                              "enum": [
+                                47104
+                              ]
+                            }
+                          },
+                          "required": [
+                            "basis",
+                            "emittedRowsAreExact",
+                            "entryFieldsTruncated",
+                            "cachedFeedPropagationVerified",
+                            "providerAcceptanceVerified",
+                            "pagesMayRaceWithWrites",
+                            "responseBudgetBytes"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "productId",
+                        "requestedSku",
+                        "policy",
+                        "entries",
+                        "pagination",
+                        "semantics"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "sequential",
+          "transport": "json",
+          "maximumResponseBytes": 47104,
+          "maxRequestBytes": 16384,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "allOf",
+          "permissions": [
+            "products.view",
+            "settings.general.view"
+          ]
+        }
+      }
+    },
     "/api/v1/admin/settings/business": {
       "get": {
         "tags": [
@@ -199363,7 +200225,7 @@
           {
             "id": "productSpec",
             "title": "Product spec",
-            "description": "Exact name/description/price/slug, active/free-delivery flags, SEO title/description, canonicalPath, noIndex, sitemap/feed exclusions, and condition.",
+            "description": "Exact name/description/price/slug, flags, SEO/canonicalPath/noIndex, sitemap/feed exclusions, condition.",
             "required": true,
             "source": {
               "kind": "merchant"
@@ -199413,7 +200275,7 @@
           {
             "id": "attributeSet",
             "title": "Attributes",
-            "description": "{order,createOrder,byId}; items hold value, create spec, and active-read or same-key captured attributeId.",
+            "description": "{order,createOrder,byId}; values/create specs plus read or same-key captured IDs.",
             "required": true,
             "source": {
               "kind": "merchant"
@@ -199423,7 +200285,7 @@
           {
             "id": "mediaSet",
             "title": "Media",
-            "description": "{order,importOrder,byId}; order=all pmed keys; importOrder=URL keys; byId holds resolved mediaId, altText, isPrimary; 1-250 unique, one primary.",
+            "description": "{order,importOrder,byId}: all keys, URL keys, resolved mediaId/alt/primary; 1-250 unique, one primary.",
             "required": true,
             "source": {
               "kind": "merchant"
@@ -200061,8 +200923,9 @@
               "publish"
             ],
             "stopConditions": [
-              "Stop on SKU/image/stock drift or discovery failure.",
-              "No bounded exact product sitemap/feed-row read exists; do not claim sitemap membership or emitted feed price/image/availability."
+              "Stop on product/discovery drift.",
+              "Preview proves rows only; not sitemap membership, cache propagation, or provider acceptance.",
+              "Oversize preview: report row unverified; do not claim feed parity."
             ],
             "steps": [
               {
@@ -200110,16 +200973,29 @@
               {
                 "id": "feed",
                 "title": "Feed",
-                "operationId": "dashboard.seo.feed_diagnostics",
+                "operationId": "dashboard.seo.feed_row_preview",
                 "mutation": "read",
+                "condition": "Page cursor to end.",
                 "input": {
                   "template": {
+                    "path": {
+                      "productId": null
+                    },
                     "query": {
-                      "scanLimit": 500,
-                      "sampleLimit": 10
+                      "limit": 10
                     }
                   },
-                  "dependencies": [],
+                  "dependencies": [
+                    {
+                      "templatePointer": "/path/productId",
+                      "source": {
+                        "kind": "step",
+                        "phaseId": "create",
+                        "stepId": "product",
+                        "responsePointer": "/data/id"
+                      }
+                    }
+                  ],
                   "defaults": []
                 },
                 "policies": {
@@ -200236,19 +201112,19 @@
           {
             "id": "feed",
             "surface": "dashboard",
-            "operationId": "dashboard.seo.feed_diagnostics",
+            "operationId": "dashboard.seo.feed_row_preview",
             "responsePointers": [
-              "/data/policy",
-              "/data/totals",
-              "/data/reasons"
+              "/data/entries",
+              "/data/pagination",
+              "/data/semantics"
             ],
             "proves": [
-              "Feed policy, eligibility totals, and sampled exclusions only."
+              "Exact emitted row or omission reason; oversize is unverified."
             ],
             "bounds": {
-              "maxCalls": 1,
-              "maxItems": 500,
-              "maxResponseBytes": 65536
+              "maxCalls": 25,
+              "maxItems": 250,
+              "maxResponseBytes": 47104
             }
           },
           {
@@ -201401,7 +202277,7 @@
         "surface": "dashboard",
         "kind": "mixed",
         "title": "Create and publish an optioned product",
-        "summary": "Resolve catalog facts, create one optioned product, publish its category when ready, and verify admin and buyer-facing discovery.",
+        "summary": "Create an optioned product, publish its ready category, and verify admin and buyer discovery.",
         "examples": [
           "Create a two-axis T-shirt with Size S/M/L and Color Black/White, exact SKUs, different stock and prices, color-specific images, category, Brand and Material attributes, rich description, SEO, sitemap and feed visibility, then verify buyer truth."
         ],
@@ -201427,7 +202303,7 @@
           "dashboard.categories.set_status",
           "dashboard.products.get_section",
           "dashboard.categories.get_section",
-          "dashboard.seo.feed_diagnostics",
+          "dashboard.seo.feed_row_preview",
           "dashboard.seo.live_probe",
           "storefront.products.get_section"
         ],
@@ -201438,7 +202314,7 @@
           "Require the merchant's exact option axes, SKU matrix, prices, and stock facts.",
           "Resolve category, attribute, media, and product collisions; product creation owns SKU uniqueness.",
           "Create the product once and publish the category only when readiness passes.",
-          "Confirm writes, then verify bounded admin, feed, discovery, and storefront evidence."
+          "Confirm writes; verify bounded admin, feed, discovery, and storefront evidence."
         ]
       },
       {
@@ -206521,6 +207397,14 @@
         },
         {
           "operationId": "dashboard.seo.feed_diagnostics",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.seo.feed_diagnostics"
+          ]
+        },
+        {
+          "operationId": "dashboard.seo.feed_row_preview",
           "surface": "dashboard",
           "mode": "curated",
           "workflowIds": [

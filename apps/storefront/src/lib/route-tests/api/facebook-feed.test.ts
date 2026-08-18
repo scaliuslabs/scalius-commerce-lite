@@ -114,6 +114,8 @@ describe("Facebook product feed route", () => {
     mocks.getLayoutData.mockReset();
     mocks.getSeoSettings.mockReset();
     mocks.setRuntimeImageCdnPolicy.mockReset();
+    mocks.getOptimizedImageUrl.mockReset();
+    mocks.getOptimizedImageUrl.mockImplementation((url: string) => url);
     mocks.getSeoSettings.mockResolvedValue({ discovery: undefined });
     mocks.getRuntimeStorefrontUrl.mockReturnValue("https://storefront.example.test");
     mocks.getLayoutData.mockResolvedValue({
@@ -1613,5 +1615,203 @@ describe("Facebook product feed route", () => {
     expect(response.status).toBe(503);
     expect(response.headers.get("Cache-Control")).toContain("no-store");
     expect(body).toContain("Facebook product feed is temporarily unavailable");
+  });
+
+  it("serializes every projected optional fact identically across feed formats", async () => {
+    mocks.getFeedProducts.mockResolvedValue({
+      data: [{
+        id: "prod_parity",
+        slug: "parity-shirt",
+        canonicalPath: "/products/parity-oxford",
+        name: "Parity Oxford",
+        description: "<p>Exact &amp; complete</p>",
+        price: 1500,
+        discountedPrice: 1350,
+        discountType: "percentage",
+        discountPercentage: 10,
+        discountAmount: null,
+        freeDelivery: true,
+        isActive: true,
+        hasVariants: true,
+        availableForSale: true,
+        productCondition: "refurbished",
+        imageUrl: "https://cdn.example.test/parity-primary.jpg",
+        category: {
+          id: "cat_electronics",
+          slug: "electronics",
+          name: "Electronics",
+        },
+        attributes: [
+          { name: "Brand", slug: "brand", value: "Harbor" },
+          { name: "Material", slug: "material", value: "Cotton" },
+          { name: "Pattern", slug: "pattern", value: "Oxford" },
+          { name: "Gender", slug: "gender", value: "unisex" },
+          { name: "Age Group", slug: "age-group", value: "adult" },
+        ],
+        variants: [optionedVariant({
+          id: "var_parity_navy_m",
+          productId: "prod_parity",
+          options: [
+            { name: "Size", value: "M", standardMapping: "size" },
+            { name: "Color", value: "Navy", standardMapping: "color" },
+          ],
+          imageId: "pmed_parity_navy",
+          imageUrl: "/products/parity-navy.jpg",
+          sku: "PARITY-NAVY-M",
+          barcode: "012345678905",
+          barcodeType: "upc",
+          price: 1200,
+          stock: 4,
+          reservedStock: 1,
+          trackInventory: true,
+          isDefault: false,
+          deletedAt: null,
+          discountType: "flat",
+          discountAmount: 100,
+          discountPercentage: null,
+        })],
+      }],
+      pagination: { page: 1, limit: 100, total: 1, totalPages: 1 },
+    });
+
+    const [metaResponse, googleResponse] = await Promise.all([
+      GET(context()),
+      GOOGLE_FEED_GET(
+        context("https://storefront.example.test/api/product-feed.xml"),
+      ),
+    ]);
+    const metaItem = feedItemById(await metaResponse.text(), "PARITY-NAVY-M");
+    const googleItem = feedItemById(
+      await googleResponse.text(),
+      "PARITY-NAVY-M",
+    );
+
+    const commonGoogleItem = googleItem
+      .replace(/ {4}<g:item_group_title>.*<\/g:item_group_title>\n/, "")
+      .replace(/ {4}<g:variant_option>[\s\S]*? {4}<\/g:variant_option>\n/g, "")
+      .replace("<g:availability>in_stock</g:availability>",
+        "<g:availability>in stock</g:availability>");
+    expect(commonGoogleItem).toBe(metaItem);
+
+    for (const item of [metaItem, googleItem]) {
+      expect(item).toContain("<g:condition>refurbished</g:condition>");
+      expect(item).toContain("<g:price>1200.00 BDT</g:price>");
+      expect(item).toContain("<g:sale_price>1100.00 BDT</g:sale_price>");
+      expect(item).toContain("<g:brand>Harbor</g:brand>");
+      expect(item).toContain("<g:gtin>012345678905</g:gtin>");
+      expect(item).not.toContain("<g:identifier_exists>");
+      expect(item).toContain("<g:item_group_id>prod_parity</g:item_group_id>");
+      expect(item).toContain(
+        "<g:google_product_category>Electronics</g:google_product_category>",
+      );
+      expect(item).toContain(
+        "<g:fb_product_category>Electronics &amp; Accessories</g:fb_product_category>",
+      );
+      expect(item).toContain("<g:product_type>Electronics</g:product_type>");
+      expect(item).toContain("<g:size>M</g:size>");
+      expect(item).toContain("<g:color>Navy</g:color>");
+      expect(item).toContain("<g:material>Cotton</g:material>");
+      expect(item).toContain("<g:pattern>Oxford</g:pattern>");
+      expect(item).toContain("<g:gender>unisex</g:gender>");
+      expect(item).toContain("<g:age_group>adult</g:age_group>");
+      expect(item).toContain("<g:country>BD</g:country>");
+      expect(item).toContain("<g:service>Standard</g:service>");
+      expect(item).toContain("<g:price>0.00 BDT</g:price>");
+    }
+    expect(googleItem).toContain(
+      "<g:item_group_title>Parity Oxford</g:item_group_title>",
+    );
+    expect(googleItem).toContain(
+      "<g:name>Size</g:name>\n      <g:value>M</g:value>",
+    );
+    expect(googleItem.indexOf("<g:name>Size</g:name>")).toBeLessThan(
+      googleItem.indexOf("<g:name>Color</g:name>"),
+    );
+    expect(metaItem).not.toContain("<g:item_group_title>");
+    expect(metaItem).not.toContain("<g:variant_option>");
+  });
+
+  it("keeps Google and Meta omission policy in exact row parity", async () => {
+    mocks.getSeoSettings.mockResolvedValue({
+      discovery: {
+        feeds: { includeUnavailableProducts: false },
+      },
+    });
+    mocks.getFeedProducts.mockResolvedValue({
+      data: [
+        {
+          id: "prod_inactive",
+          slug: "inactive",
+          name: "Inactive",
+          description: "Inactive",
+          price: 100,
+          isActive: false,
+          imageUrl: "https://cdn.example.test/inactive.jpg",
+        },
+        {
+          id: "prod_sold_out",
+          slug: "sold-out",
+          name: "Sold Out",
+          description: "Sold Out",
+          price: 100,
+          availableForSale: false,
+          imageUrl: "https://cdn.example.test/sold-out.jpg",
+        },
+        {
+          id: "prod_missing_image",
+          slug: "missing-image",
+          name: "Missing Image",
+          description: "Missing Image",
+          price: 100,
+          availableForSale: true,
+          imageUrl: null,
+        },
+        {
+          id: "prod_zero",
+          slug: "zero",
+          name: "Zero",
+          description: "Zero",
+          price: 0,
+          availableForSale: true,
+          imageUrl: "https://cdn.example.test/zero.jpg",
+        },
+        {
+          id: "prod_valid",
+          slug: "valid",
+          name: "Valid",
+          description: "Valid",
+          price: 100,
+          availableForSale: true,
+          imageUrl: "https://cdn.example.test/valid.jpg",
+        },
+      ],
+      pagination: { page: 1, limit: 100, total: 5, totalPages: 1 },
+    });
+
+    const [metaResponse, googleResponse] = await Promise.all([
+      GET(context()),
+      GOOGLE_FEED_GET(
+        context("https://storefront.example.test/api/product-feed.xml"),
+      ),
+    ]);
+    const metaBody = await metaResponse.text();
+    const googleBody = await googleResponse.text();
+
+    expect(metaBody.match(/<item>/g)).toHaveLength(1);
+    expect(googleBody.match(/<item>/g)).toHaveLength(1);
+    expect(feedItemById(metaBody, "prod_valid")).toBe(
+      feedItemById(googleBody, "prod_valid")
+        .replace("<g:availability>in_stock</g:availability>",
+          "<g:availability>in stock</g:availability>"),
+    );
+    for (const omittedId of [
+      "prod_inactive",
+      "prod_sold_out",
+      "prod_missing_image",
+      "prod_zero",
+    ]) {
+      expect(metaBody).not.toContain(`<g:id>${omittedId}</g:id>`);
+      expect(googleBody).not.toContain(`<g:id>${omittedId}</g:id>`);
+    }
   });
 });

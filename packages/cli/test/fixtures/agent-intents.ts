@@ -84,7 +84,7 @@ export const AGENT_INTENT_EVAL_CASES: readonly AgentIntentEvalCase[] = [
       "dashboard.categories.set_status",
       "dashboard.products.get_section",
       "dashboard.categories.get_section",
-      "dashboard.seo.feed_diagnostics",
+      "dashboard.seo.feed_row_preview",
       "dashboard.seo.live_probe",
       "storefront.products.get_section",
     ],

@@ -967,15 +967,36 @@ describe("reviewed agent workflow resolver", () => {
         bounds: { maxCalls: 20, maxItems: 150, maxResponseBytes: 61_440 },
       }),
       expect.objectContaining({
-        operationId: "dashboard.seo.feed_diagnostics",
+        operationId: "dashboard.seo.feed_row_preview",
+        responsePointers: ["/data/entries", "/data/pagination", "/data/semantics"],
         proves: [
-          "Feed policy, eligibility totals, and sampled exclusions only.",
+          "Exact emitted row or omission reason; oversize is unverified.",
         ],
+        bounds: { maxCalls: 25, maxItems: 250, maxResponseBytes: 47_104 },
       }),
     ]));
     expect(detail.phaseStopConditions.dashboardVerify).toContain(
-      "No bounded exact product sitemap/feed-row read exists; do not claim sitemap membership or emitted feed price/image/availability.",
+      "Preview proves rows only; not sitemap membership, cache propagation, or provider acceptance.",
     );
+    expect(detail.phaseStopConditions.dashboardVerify).toContain(
+      "Oversize preview: report row unverified; do not claim feed parity.",
+    );
+    expect(detail.steps.find((step) =>
+      step.operationId === "dashboard.seo.feed_row_preview"
+    )).toMatchObject({
+      input: {
+        template: { path: { productId: null }, query: { limit: 10 } },
+        dependencies: [{
+          templatePointer: "/path/productId",
+          source: {
+            kind: "step",
+            phaseId: "create",
+            stepId: "product",
+            responsePointer: "/data/id",
+          },
+        }],
+      },
+    });
 
     expect(Object.keys(detail)).toEqual([
       "constructionRules",
@@ -1462,9 +1483,12 @@ describe("reviewed agent workflow resolver", () => {
       step.operationId === "dashboard.media.import_url"
     )?.repeat?.orderPointer).toBe("/importOrder");
     expect(product.plan.detail.phaseStopConditions.dashboardVerify).toContain(
-      "No bounded exact product sitemap/feed-row read exists; do not claim sitemap membership or emitted feed price/image/availability.",
+      "Preview proves rows only; not sitemap membership, cache propagation, or provider acceptance.",
     );
-    expect(Buffer.byteLength(JSON.stringify({ ok: true, result: product }))).toBe(15_912);
+    expect(product.plan.detail.phaseStopConditions.dashboardVerify).toContain(
+      "Oversize preview: report row unverified; do not claim feed parity.",
+    );
+    expect(Buffer.byteLength(JSON.stringify({ ok: true, result: product }))).toBe(15_948);
     expect(Buffer.byteLength(JSON.stringify({ ok: true, result: product }))).toBeLessThanOrEqual(
       16 * 1024,
     );
