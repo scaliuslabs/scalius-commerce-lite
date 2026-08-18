@@ -952,6 +952,43 @@ describe("reviewed agent workflow resolver", () => {
       .toMatchObject({ workflowId: "operations.thirty-day-booked-brief.v1" });
   });
 
+  it("keeps bounded tab-heavy phrase and window matching linear and deterministic", () => {
+    const tabs = "\t".repeat(384);
+    const supported =
+      `Give the current${tabs}30${tabs}calendar${tabs}days owner booked operations brief ` +
+      `with low${tabs}on${tabs}hand, unfinished${tabs}checkout${tabs}flows, and ` +
+      `hosted${tabs}payment continuations; mark other facts unavailable.`;
+    const concise =
+      `Owner booked commerce during the thirty${tabs}calendar${tabs}days${tabs}just completed.`;
+    const localAge =
+      `Give the current${tabs}30${tabs}day owner operations brief with payments ` +
+      `older than two${tabs}weeks marked unavailable.`;
+    const nearMiss =
+      `Give the owner booked operations brief for current${"\t".repeat(3_500)}30 nights.`;
+    const prompts = [supported, concise, localAge, nearMiss];
+    for (const prompt of prompts) expect(prompt.length).toBeLessThanOrEqual(4_000);
+
+    const startedAt = performance.now();
+    for (const prompt of [supported, concise, localAge]) {
+      expect(resolveWorkflow({ prompt, surface: "dashboard" })).toMatchObject({
+        kind: "plan",
+        disposition: "execute",
+        plan: { routeIds: ["dashboard.thirty-day-booked-operations-brief"] },
+      });
+      expect(compileWorkflowRead({ prompt, surface: "dashboard" }))
+        .toMatchObject({ workflowId: "operations.thirty-day-booked-brief.v1" });
+    }
+    expect(resolveWorkflow({ prompt: nearMiss, surface: "dashboard" })).toMatchObject({
+      kind: "choices",
+      disposition: "ask",
+      choices: [expect.objectContaining({
+        id: "dashboard.thirty-day-booked-operations-brief",
+      })],
+    });
+    expect(compileWorkflowRead({ prompt: nearMiss, surface: "dashboard" })).toBeNull();
+    expect(performance.now() - startedAt).toBeLessThan(1_000);
+  });
+
   it.each([
     "Owner booked commerce during the 30 business days just completed.",
     "Owner booked operations with invoices open for 30 days.",
