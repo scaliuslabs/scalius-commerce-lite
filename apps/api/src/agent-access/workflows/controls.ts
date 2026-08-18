@@ -99,7 +99,7 @@ export const AGENT_WORKFLOW_CONTROLS = [
       allOf: [
         ["campaign page", "landing page", "cms page"],
         ["navigation", "main menu", "menu"],
-        ["homepage", "header", "layout", "announcement"],
+        ["homepage", "layout", "announcement", "announce"],
         ["create", "build", "publish", "launch"],
       ],
       ignoreWhenNegated: false,
@@ -131,6 +131,40 @@ export const AGENT_WORKFLOW_CONTROLS = [
       "Ask whether an untyped HTML page and desktop/mobile hero-slide fallback are acceptable.",
       "Require exact page SEO, media, menu placement, announcement, hero images, order, and publish facts.",
       "Keep theme and unrelated layout unchanged; perform discovery reads only until the reviewed facts are confirmed.",
+    ],
+  },
+  {
+    id: "dashboard.campaign-global-seo-overreach",
+    surface: "dashboard",
+    title: "Separate campaign and global SEO writes",
+    summary: "Page-scoped campaign SEO does not authorize store-wide discovery changes.",
+    examples: [
+      "Create an Eid campaign page, then rewrite global SEO, robots, and structured-data settings.",
+    ],
+    tags: ["campaign", "content", "seo", "robots", "structured-data", "safety"],
+    disposition: "ask",
+    reasonCode: "campaign_global_seo_requires_separate_intent",
+    trigger: {
+      allOf: [
+        ["campaign page", "landing page", "sale page", "cms page", "eid page"],
+        ["global seo", "store-wide seo", "sitewide seo", "robots", "structured data"],
+        ["change", "configure", "install", "rewrite", "set", "update"],
+      ],
+      ignoreWhenNegated: true,
+    },
+    safeOperationIds: [
+      "dashboard.content.list",
+      "dashboard.seo.settings_get",
+      "storefront.seo.get",
+    ],
+    forbiddenOperationIds: ["dashboard.seo.settings_update"],
+    requiresFacts: true,
+    requiresConfirmation: true,
+    requiresVerification: true,
+    rules: [
+      "Global SEO, robots, and structured-data settings are store-wide and outside this page workflow.",
+      "Keep SEO page-scoped; do bounded reads and ask for a separate explicit global-discovery request.",
+      "Do not perform page, navigation, presentation, catalog, or global SEO writes from this compound request.",
     ],
   },
   {

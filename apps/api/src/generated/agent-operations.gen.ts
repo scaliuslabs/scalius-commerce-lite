@@ -77751,6 +77751,52 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
       ]
     },
     {
+      "id": "dashboard.campaign-content-supported-setup",
+      "surface": "dashboard",
+      "kind": "mixed",
+      "title": "Stage campaign",
+      "summary": "New page",
+      "examples": [
+        "Create Eid page: slug/title/HTML/SEO/canonical/noIndex/excludeFromSitemap/media/alt, menu append, topBar, active-now desktop/mobile slides; accept sanitized draft, preserve all else, verify buyer."
+      ],
+      "tags": [
+        "campaign"
+      ],
+      "operationIds": [
+        "dashboard.content.list",
+        "dashboard.navigation.placements_manifest",
+        "dashboard.navigation.menus_list",
+        "dashboard.navigation.items_search",
+        "dashboard.settings_header.get_header",
+        "dashboard.hero_sliders.list",
+        "dashboard.media.list",
+        "dashboard.media.import_url",
+        "dashboard.content.create",
+        "dashboard.content.get",
+        "dashboard.content.bulk_publish",
+        "dashboard.navigation.items_create",
+        "dashboard.navigation.menus_publish",
+        "dashboard.settings_header.header",
+        "dashboard.hero_sliders.create",
+        "dashboard.hero_sliders.update",
+        "storefront.pages.get_by_slug",
+        "storefront.navigation.get",
+        "storefront.homepage.get",
+        "storefront.layout.get"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Require exact page/SEO/media/menu/topBar/slides; staged non-atomic acceptance. Active now; canonical: same-store route path; absolute/query/fragment stops.",
+        "Scan active/trash; any slug match stops. Create draft, accept sanitized reread, publish its revision.",
+        "Clean published main menu, no page-target match anywhere: append top-level, publish returned revision; never update/move/reorder.",
+        "CAS-merge topBar text/enabled only; no link. Preserve header/theme/shell.",
+        "Max 3 HTTPS imports; preflight unique filename/folder. Uncertain: list and accept one unambiguous new exact match; never re-import blindly. Local/base64: upload/re-enter. Preserve full slider arrays; distinct desktop/mobile assets or approved reuse; no schedule.",
+        "Non-atomic/no rollback. Conflict/uncertain create: reread/reconfirm, no retry; stop/report partial. Never catalog/global SEO or certify pixels, remote images/links, UI/head, sitemap XML."
+      ]
+    },
+    {
       "id": "dashboard.category-publish",
       "surface": "dashboard",
       "kind": "write",
@@ -79220,6 +79266,68 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
   ],
   "controls": [
     {
+      "id": "dashboard.campaign-global-seo-overreach",
+      "surface": "dashboard",
+      "title": "Separate campaign and global SEO writes",
+      "summary": "Page-scoped campaign SEO does not authorize store-wide discovery changes.",
+      "examples": [
+        "Create an Eid campaign page, then rewrite global SEO, robots, and structured-data settings."
+      ],
+      "tags": [
+        "campaign",
+        "content",
+        "seo",
+        "robots",
+        "structured-data",
+        "safety"
+      ],
+      "disposition": "ask",
+      "reasonCode": "campaign_global_seo_requires_separate_intent",
+      "trigger": {
+        "allOf": [
+          [
+            "campaign page",
+            "landing page",
+            "sale page",
+            "cms page",
+            "eid page"
+          ],
+          [
+            "global seo",
+            "store-wide seo",
+            "sitewide seo",
+            "robots",
+            "structured data"
+          ],
+          [
+            "change",
+            "configure",
+            "install",
+            "rewrite",
+            "set",
+            "update"
+          ]
+        ],
+        "ignoreWhenNegated": true
+      },
+      "safeOperationIds": [
+        "dashboard.content.list",
+        "dashboard.seo.settings_get",
+        "storefront.seo.get"
+      ],
+      "forbiddenOperationIds": [
+        "dashboard.seo.settings_update"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Global SEO, robots, and structured-data settings are store-wide and outside this page workflow.",
+        "Keep SEO page-scoped; do bounded reads and ask for a separate explicit global-discovery request.",
+        "Do not perform page, navigation, presentation, catalog, or global SEO writes from this compound request."
+      ]
+    },
+    {
       "id": "dashboard.campaign-layout-needs-review",
       "surface": "dashboard",
       "title": "Clarify campaign page presentation limits",
@@ -79251,9 +79359,9 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
           ],
           [
             "homepage",
-            "header",
             "layout",
-            "announcement"
+            "announcement",
+            "announce"
           ],
           [
             "create",
@@ -81298,9 +81406,9 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
       {
         "operationId": "dashboard.content.bulk_publish",
         "surface": "dashboard",
-        "mode": "operation-fallback",
+        "mode": "curated",
         "workflowIds": [
-          "operation.dashboard.content.bulk_publish"
+          "dashboard.campaign-content-supported-setup"
         ]
       },
       {
@@ -81324,23 +81432,24 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "surface": "dashboard",
         "mode": "curated",
         "workflowIds": [
+          "dashboard.campaign-content-supported-setup",
           "dashboard.page-publish"
         ]
       },
       {
         "operationId": "dashboard.content.get",
         "surface": "dashboard",
-        "mode": "operation-fallback",
+        "mode": "curated",
         "workflowIds": [
-          "operation.dashboard.content.get"
+          "dashboard.campaign-content-supported-setup"
         ]
       },
       {
         "operationId": "dashboard.content.list",
         "surface": "dashboard",
-        "mode": "operation-fallback",
+        "mode": "curated",
         "workflowIds": [
-          "operation.dashboard.content.list"
+          "dashboard.campaign-content-supported-setup"
         ]
       },
       {
@@ -81730,9 +81839,9 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
       {
         "operationId": "dashboard.hero_sliders.create",
         "surface": "dashboard",
-        "mode": "operation-fallback",
+        "mode": "curated",
         "workflowIds": [
-          "operation.dashboard.hero_sliders.create"
+          "dashboard.campaign-content-supported-setup"
         ]
       },
       {
@@ -81746,9 +81855,9 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
       {
         "operationId": "dashboard.hero_sliders.list",
         "surface": "dashboard",
-        "mode": "operation-fallback",
+        "mode": "curated",
         "workflowIds": [
-          "operation.dashboard.hero_sliders.list"
+          "dashboard.campaign-content-supported-setup"
         ]
       },
       {
@@ -81762,9 +81871,9 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
       {
         "operationId": "dashboard.hero_sliders.update",
         "surface": "dashboard",
-        "mode": "operation-fallback",
+        "mode": "curated",
         "workflowIds": [
-          "operation.dashboard.hero_sliders.update"
+          "dashboard.campaign-content-supported-setup"
         ]
       },
       {
@@ -81922,15 +82031,16 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "mode": "curated",
         "workflowIds": [
           "catalog.optioned-product.v1",
+          "dashboard.campaign-content-supported-setup",
           "dashboard.complex-product-create"
         ]
       },
       {
         "operationId": "dashboard.media.list",
         "surface": "dashboard",
-        "mode": "operation-fallback",
+        "mode": "curated",
         "workflowIds": [
-          "operation.dashboard.media.list"
+          "dashboard.campaign-content-supported-setup"
         ]
       },
       {
@@ -82058,6 +82168,7 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "surface": "dashboard",
         "mode": "curated",
         "workflowIds": [
+          "dashboard.campaign-content-supported-setup",
           "dashboard.navigation-publish"
         ]
       },
@@ -82104,9 +82215,9 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
       {
         "operationId": "dashboard.navigation.items_search",
         "surface": "dashboard",
-        "mode": "operation-fallback",
+        "mode": "curated",
         "workflowIds": [
-          "operation.dashboard.navigation.items_search"
+          "dashboard.campaign-content-supported-setup"
         ]
       },
       {
@@ -82136,9 +82247,9 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
       {
         "operationId": "dashboard.navigation.menus_list",
         "surface": "dashboard",
-        "mode": "operation-fallback",
+        "mode": "curated",
         "workflowIds": [
-          "operation.dashboard.navigation.menus_list"
+          "dashboard.campaign-content-supported-setup"
         ]
       },
       {
@@ -82146,6 +82257,7 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "surface": "dashboard",
         "mode": "curated",
         "workflowIds": [
+          "dashboard.campaign-content-supported-setup",
           "dashboard.navigation-publish"
         ]
       },
@@ -82192,9 +82304,9 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
       {
         "operationId": "dashboard.navigation.placements_manifest",
         "surface": "dashboard",
-        "mode": "operation-fallback",
+        "mode": "curated",
         "workflowIds": [
-          "operation.dashboard.navigation.placements_manifest"
+          "dashboard.campaign-content-supported-setup"
         ]
       },
       {
@@ -82983,6 +83095,7 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "surface": "dashboard",
         "mode": "curated",
         "workflowIds": [
+          "dashboard.campaign-content-supported-setup",
           "dashboard.header-footer-homepage"
         ]
       },
@@ -82991,6 +83104,7 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "surface": "dashboard",
         "mode": "curated",
         "workflowIds": [
+          "dashboard.campaign-content-supported-setup",
           "dashboard.header-footer-homepage"
         ]
       },
@@ -83782,6 +83896,7 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "surface": "storefront",
         "mode": "curated",
         "workflowIds": [
+          "dashboard.campaign-content-supported-setup",
           "dashboard.header-footer-homepage",
           "storefront.homepage-layout"
         ]
@@ -83791,6 +83906,7 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "surface": "storefront",
         "mode": "curated",
         "workflowIds": [
+          "dashboard.campaign-content-supported-setup",
           "dashboard.header-footer-homepage",
           "dashboard.theme-publish",
           "storefront.homepage-layout"
@@ -83823,9 +83939,9 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
       {
         "operationId": "storefront.navigation.get",
         "surface": "storefront",
-        "mode": "operation-fallback",
+        "mode": "curated",
         "workflowIds": [
-          "operation.storefront.navigation.get"
+          "dashboard.campaign-content-supported-setup"
         ]
       },
       {
@@ -83906,6 +84022,7 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "surface": "storefront",
         "mode": "curated",
         "workflowIds": [
+          "dashboard.campaign-content-supported-setup",
           "dashboard.page-publish",
           "storefront.content-discovery"
         ]

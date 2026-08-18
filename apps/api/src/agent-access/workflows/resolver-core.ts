@@ -804,7 +804,7 @@ function matchControl(
 
 const ACTION_LEMMAS = new Set([
   "accept", "add", "adjust", "analyze", "announce", "apply", "archive",
-  "build", "calculate", "cancel", "change", "check", "compare", "configure",
+  "build", "bypass", "calculate", "cancel", "change", "check", "compare", "configure",
   "choose", "compose", "connect", "create", "decide", "delete", "disable", "edit",
   "enable", "encode", "enroll", "export", "feature", "find", "force", "fulfill",
   "generate", "get", "guarantee", "import", "install", "invent", "keep", "list",
