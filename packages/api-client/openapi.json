@@ -199332,5 +199332,4729 @@
         "security": []
       }
     }
+  },
+  "x-scalius-workflows": {
+    "version": "1.0.0",
+    "cards": [
+      {
+        "id": "catalog.optioned-product.v1",
+        "surface": "dashboard",
+        "title": "Create a configurable product",
+        "summary": "Resolve, atomically create, publish, and verify an exact option/SKU matrix.",
+        "examples": [
+          "Create a Size × Color T-shirt and verify SKU, image, stock, and discovery truth."
+        ],
+        "tags": [
+          "catalog",
+          "media",
+          "variants"
+        ],
+        "constructionRules": {
+          "mediaAssociationIds": "caller-local-pmed",
+          "variantImageReferences": "pmed-association-id",
+          "selectedOptionValueOrder": "merchant-axis-order",
+          "variantMatrix": "complete",
+          "skuIdentity": "global-lower-trim-unique",
+          "inventoryAuthority": "variant-only-no-product-stock",
+          "createMode": "single-atomic-products.create",
+          "uncertainCreateRecovery": "reread-before-retry"
+        },
+        "requiredFacts": [
+          {
+            "id": "productSpec",
+            "title": "Product facts",
+            "description": "Name, slug, rich text, price, SEO, condition, visibility.",
+            "required": true,
+            "source": {
+              "kind": "merchant"
+            },
+            "nonInferenceRule": "Never invent claims, brand, price, condition, or copy."
+          },
+          {
+            "id": "categoryId",
+            "title": "Resolved category",
+            "description": "Existing category ID or conditional-create result.",
+            "required": true,
+            "source": {
+              "kind": "operation",
+              "operationId": "dashboard.categories.form_options",
+              "responsePointer": "/data/categories",
+              "alternatives": [
+                {
+                  "operationId": "dashboard.categories.create",
+                  "responsePointer": "/data/id"
+                }
+              ]
+            },
+            "nonInferenceRule": "Resolve by name; never guess or substitute an ID."
+          },
+          {
+            "id": "attributeAssignments",
+            "title": "Attributes",
+            "description": "Active IDs and truthful merchant values.",
+            "required": true,
+            "source": {
+              "kind": "operation",
+              "operationId": "dashboard.attributes.list_summaries",
+              "responsePointer": "/data/attributes"
+            },
+            "nonInferenceRule": "Never duplicate or fabricate attributes."
+          },
+          {
+            "id": "mediaSources",
+            "title": "Usable media sources",
+            "description": "Primary and secondary public URLs or client-readable files.",
+            "required": true,
+            "source": {
+              "kind": "merchant"
+            },
+            "nonInferenceRule": "Only committed assets are media authority."
+          },
+          {
+            "id": "optionMatrix",
+            "title": "Exact option matrix",
+            "description": "Ordered axes/values and complete SKU price, stock, and pmed image rows.",
+            "required": true,
+            "source": {
+              "kind": "merchant"
+            },
+            "nonInferenceRule": "Never add, omit, collapse, or reorder combinations."
+          }
+        ],
+        "phases": [
+          {
+            "id": "resolve",
+            "surface": "dashboard",
+            "title": "Resolve identities and policy",
+            "summary": "Use bounded reads once before constructing any mutation.",
+            "dependsOn": [],
+            "stopConditions": [
+              "Stop on ambiguity, collision, missing facts, or grants."
+            ],
+            "steps": [
+              {
+                "id": "categories",
+                "title": "Resolve category options",
+                "operationId": "dashboard.categories.form_options",
+                "mutation": "read",
+                "input": {
+                  "template": {},
+                  "dependencies": [],
+                  "defaults": []
+                },
+                "policies": {
+                  "revision": "none",
+                  "idempotency": "none",
+                  "confirmation": "none",
+                  "stopConditions": [
+                    "Stop on auth/read failure."
+                  ],
+                  "nonInferenceRules": [
+                    "Treat missing data as unknown."
+                  ]
+                }
+              },
+              {
+                "id": "attributes",
+                "title": "Resolve attribute summaries",
+                "operationId": "dashboard.attributes.list_summaries",
+                "mutation": "read",
+                "condition": "Repeat only for requested attribute names.",
+                "input": {
+                  "template": {
+                    "query": {
+                      "page": 1,
+                      "limit": 20,
+                      "search": null
+                    }
+                  },
+                  "dependencies": [],
+                  "defaults": [
+                    {
+                      "templatePointer": "/query/page",
+                      "value": 1
+                    },
+                    {
+                      "templatePointer": "/query/limit",
+                      "value": 20
+                    }
+                  ]
+                },
+                "policies": {
+                  "revision": "none",
+                  "idempotency": "none",
+                  "confirmation": "none",
+                  "stopConditions": [
+                    "Stop on auth/read failure."
+                  ],
+                  "nonInferenceRules": [
+                    "Treat missing data as unknown."
+                  ]
+                }
+              },
+              {
+                "id": "seo",
+                "title": "Read discovery settings",
+                "operationId": "dashboard.seo.settings_get",
+                "mutation": "read",
+                "input": {
+                  "template": {},
+                  "dependencies": [],
+                  "defaults": []
+                },
+                "policies": {
+                  "revision": "none",
+                  "idempotency": "none",
+                  "confirmation": "none",
+                  "stopConditions": [
+                    "Stop on auth/read failure."
+                  ],
+                  "nonInferenceRules": [
+                    "Treat missing data as unknown."
+                  ]
+                }
+              },
+              {
+                "id": "productCollision",
+                "title": "Check product slug and name",
+                "operationId": "dashboard.products.list_summaries",
+                "mutation": "read",
+                "input": {
+                  "template": {
+                    "query": {
+                      "page": 1,
+                      "limit": 10,
+                      "search": null
+                    }
+                  },
+                  "dependencies": [
+                    {
+                      "templatePointer": "/query/search",
+                      "source": {
+                        "kind": "fact",
+                        "factId": "productSpec",
+                        "factPointer": "/name"
+                      }
+                    }
+                  ],
+                  "defaults": [
+                    {
+                      "templatePointer": "/query/page",
+                      "value": 1
+                    },
+                    {
+                      "templatePointer": "/query/limit",
+                      "value": 10
+                    }
+                  ]
+                },
+                "policies": {
+                  "revision": "none",
+                  "idempotency": "none",
+                  "confirmation": "none",
+                  "stopConditions": [
+                    "Stop on auth/read failure."
+                  ],
+                  "nonInferenceRules": [
+                    "Treat missing data as unknown."
+                  ]
+                }
+              },
+              {
+                "id": "skuCollision",
+                "title": "Check active SKU namespace",
+                "operationId": "dashboard.inventory.list",
+                "mutation": "read",
+                "input": {
+                  "template": {
+                    "query": {
+                      "section": "variants",
+                      "search": null,
+                      "status": "all",
+                      "page": 1,
+                      "limit": 100
+                    }
+                  },
+                  "dependencies": [
+                    {
+                      "templatePointer": "/query/search",
+                      "source": {
+                        "kind": "fact",
+                        "factId": "optionMatrix",
+                        "factPointer": "/skuPrefix"
+                      }
+                    }
+                  ],
+                  "defaults": [
+                    {
+                      "templatePointer": "/query/page",
+                      "value": 1
+                    },
+                    {
+                      "templatePointer": "/query/limit",
+                      "value": 100
+                    }
+                  ]
+                },
+                "policies": {
+                  "revision": "none",
+                  "idempotency": "none",
+                  "confirmation": "none",
+                  "stopConditions": [
+                    "Stop on auth/read failure."
+                  ],
+                  "nonInferenceRules": [
+                    "Treat missing data as unknown."
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "id": "prepare",
+            "surface": "dashboard",
+            "title": "Create missing prerequisites",
+            "summary": "Create missing prerequisites and only approved discovery fields.",
+            "dependsOn": [
+              "resolve"
+            ],
+            "stopConditions": [
+              "On concurrent create, reread; never duplicate."
+            ],
+            "steps": [
+              {
+                "id": "categoryCreate",
+                "title": "Create draft category",
+                "operationId": "dashboard.categories.create",
+                "mutation": "create",
+                "condition": "Only when no unambiguous reusable category exists.",
+                "input": {
+                  "template": {
+                    "body": {
+                      "name": null,
+                      "slug": null,
+                      "description": null,
+                      "metaTitle": null,
+                      "metaDescription": null,
+                      "image": null
+                    }
+                  },
+                  "dependencies": [],
+                  "defaults": []
+                },
+                "policies": {
+                  "revision": "none",
+                  "idempotency": "none",
+                  "confirmation": "required",
+                  "stopConditions": [
+                    "Stop on conflict or uncertain write; reread."
+                  ],
+                  "nonInferenceRules": [
+                    "Use resolved or merchant facts only."
+                  ]
+                }
+              },
+              {
+                "id": "attributeCreate",
+                "title": "Create missing attribute",
+                "operationId": "dashboard.attributes.create",
+                "mutation": "create",
+                "condition": "Repeat for each approved missing attribute.",
+                "input": {
+                  "template": {
+                    "body": {
+                      "name": null,
+                      "slug": null,
+                      "filterable": true,
+                      "options": []
+                    }
+                  },
+                  "dependencies": [],
+                  "defaults": [
+                    {
+                      "templatePointer": "/body/filterable",
+                      "value": true
+                    }
+                  ]
+                },
+                "policies": {
+                  "revision": "none",
+                  "idempotency": "none",
+                  "confirmation": "required",
+                  "stopConditions": [
+                    "Stop on conflict or uncertain write; reread."
+                  ],
+                  "nonInferenceRules": [
+                    "Use resolved or merchant facts only."
+                  ]
+                }
+              },
+              {
+                "id": "discoveryUpdate",
+                "title": "Enable requested discovery fields",
+                "operationId": "dashboard.seo.settings_update",
+                "mutation": "partial",
+                "condition": "Only after explicit store-wide approval.",
+                "input": {
+                  "template": {
+                    "body": {
+                      "discovery": {}
+                    }
+                  },
+                  "dependencies": [],
+                  "defaults": []
+                },
+                "policies": {
+                  "revision": "none",
+                  "idempotency": "none",
+                  "confirmation": "required",
+                  "stopConditions": [
+                    "Stop on conflict or uncertain write; reread."
+                  ],
+                  "nonInferenceRules": [
+                    "Use resolved or merchant facts only."
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "id": "media",
+            "surface": "dashboard",
+            "title": "Commit product media",
+            "summary": "Import each source and retain its committed media ID.",
+            "dependsOn": [
+              "resolve"
+            ],
+            "stopConditions": [
+              "Stop on inaccessible, invalid, or oversized media."
+            ],
+            "steps": [
+              {
+                "id": "primary",
+                "title": "Import primary media",
+                "operationId": "dashboard.media.import_url",
+                "mutation": "create",
+                "condition": "Use the reviewed direct-upload client action for a local file.",
+                "input": {
+                  "template": {
+                    "body": {
+                      "sourceUrl": null
+                    }
+                  },
+                  "dependencies": [
+                    {
+                      "templatePointer": "/body/sourceUrl",
+                      "source": {
+                        "kind": "fact",
+                        "factId": "mediaSources",
+                        "factPointer": "/primary/sourceUrl"
+                      }
+                    }
+                  ],
+                  "defaults": []
+                },
+                "policies": {
+                  "revision": "none",
+                  "idempotency": "none",
+                  "confirmation": "required",
+                  "stopConditions": [
+                    "Stop on conflict or uncertain write; reread."
+                  ],
+                  "nonInferenceRules": [
+                    "Use resolved or merchant facts only."
+                  ]
+                }
+              },
+              {
+                "id": "secondary",
+                "title": "Import secondary media",
+                "operationId": "dashboard.media.import_url",
+                "mutation": "create",
+                "condition": "Use the reviewed direct-upload client action for a local file.",
+                "input": {
+                  "template": {
+                    "body": {
+                      "sourceUrl": null
+                    }
+                  },
+                  "dependencies": [
+                    {
+                      "templatePointer": "/body/sourceUrl",
+                      "source": {
+                        "kind": "fact",
+                        "factId": "mediaSources",
+                        "factPointer": "/secondary/sourceUrl"
+                      }
+                    }
+                  ],
+                  "defaults": []
+                },
+                "policies": {
+                  "revision": "none",
+                  "idempotency": "none",
+                  "confirmation": "required",
+                  "stopConditions": [
+                    "Stop on conflict or uncertain write; reread."
+                  ],
+                  "nonInferenceRules": [
+                    "Use resolved or merchant facts only."
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "id": "create",
+            "surface": "dashboard",
+            "title": "Create atomically",
+            "summary": "Submit media, attributes, axes, and all SKUs atomically.",
+            "dependsOn": [
+              "prepare",
+              "media"
+            ],
+            "stopConditions": [
+              "Stop on conflict; never fall back to per-SKU creation."
+            ],
+            "steps": [
+              {
+                "id": "product",
+                "title": "Create atomic optioned product",
+                "operationId": "dashboard.products.create",
+                "mutation": "create",
+                "input": {
+                  "template": {
+                    "body": {
+                      "name": null,
+                      "description": null,
+                      "price": null,
+                      "categoryId": null,
+                      "isActive": true,
+                      "freeDelivery": false,
+                      "metaTitle": null,
+                      "metaDescription": null,
+                      "canonicalPath": null,
+                      "noIndex": false,
+                      "excludeFromSitemap": false,
+                      "excludeFromProductFeed": false,
+                      "productCondition": null,
+                      "slug": null,
+                      "media": [
+                        {
+                          "id": "pmed_primary",
+                          "mediaId": null,
+                          "altText": null,
+                          "isPrimary": true
+                        },
+                        {
+                          "id": "pmed_secondary",
+                          "mediaId": null,
+                          "altText": null,
+                          "isPrimary": false
+                        }
+                      ],
+                      "attributes": null,
+                      "optionMatrix": null
+                    }
+                  },
+                  "dependencies": [
+                    {
+                      "templatePointer": "/body/name",
+                      "source": {
+                        "kind": "fact",
+                        "factId": "productSpec",
+                        "factPointer": "/name"
+                      }
+                    },
+                    {
+                      "templatePointer": "/body/slug",
+                      "source": {
+                        "kind": "fact",
+                        "factId": "productSpec",
+                        "factPointer": "/slug"
+                      }
+                    },
+                    {
+                      "templatePointer": "/body/categoryId",
+                      "source": {
+                        "kind": "fact",
+                        "factId": "categoryId"
+                      }
+                    },
+                    {
+                      "templatePointer": "/body/attributes",
+                      "source": {
+                        "kind": "fact",
+                        "factId": "attributeAssignments"
+                      }
+                    },
+                    {
+                      "templatePointer": "/body/optionMatrix",
+                      "source": {
+                        "kind": "fact",
+                        "factId": "optionMatrix"
+                      }
+                    },
+                    {
+                      "templatePointer": "/body/media/0/mediaId",
+                      "source": {
+                        "kind": "step",
+                        "phaseId": "media",
+                        "stepId": "primary",
+                        "responsePointer": "/data/file/id"
+                      }
+                    },
+                    {
+                      "templatePointer": "/body/media/1/mediaId",
+                      "source": {
+                        "kind": "step",
+                        "phaseId": "media",
+                        "stepId": "secondary",
+                        "responsePointer": "/data/file/id"
+                      }
+                    }
+                  ],
+                  "defaults": [
+                    {
+                      "templatePointer": "/body/isActive",
+                      "value": true
+                    },
+                    {
+                      "templatePointer": "/body/noIndex",
+                      "value": false
+                    },
+                    {
+                      "templatePointer": "/body/excludeFromSitemap",
+                      "value": false
+                    },
+                    {
+                      "templatePointer": "/body/excludeFromProductFeed",
+                      "value": false
+                    }
+                  ]
+                },
+                "policies": {
+                  "revision": "none",
+                  "idempotency": "none",
+                  "confirmation": "required",
+                  "stopConditions": [
+                    "Stop on conflict or uncertain write; reread."
+                  ],
+                  "nonInferenceRules": [
+                    "Use resolved or merchant facts only."
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "id": "publish",
+            "surface": "dashboard",
+            "title": "Publish eligible category",
+            "summary": "Prove readiness, then publish with current revision.",
+            "dependsOn": [
+              "create"
+            ],
+            "stopConditions": [
+              "Stop on readiness blocker or revision conflict."
+            ],
+            "steps": [
+              {
+                "id": "category",
+                "title": "Read fresh category revision",
+                "operationId": "dashboard.categories.get_section",
+                "mutation": "read",
+                "input": {
+                  "template": {
+                    "path": {
+                      "id": null,
+                      "section": "summary"
+                    }
+                  },
+                  "dependencies": [
+                    {
+                      "templatePointer": "/path/id",
+                      "source": {
+                        "kind": "fact",
+                        "factId": "categoryId"
+                      }
+                    }
+                  ],
+                  "defaults": [
+                    {
+                      "templatePointer": "/path/section",
+                      "value": "summary"
+                    }
+                  ]
+                },
+                "policies": {
+                  "revision": "none",
+                  "idempotency": "none",
+                  "confirmation": "none",
+                  "stopConditions": [
+                    "Stop on auth/read failure."
+                  ],
+                  "nonInferenceRules": [
+                    "Treat missing data as unknown."
+                  ]
+                }
+              },
+              {
+                "id": "readiness",
+                "title": "Read category publish readiness",
+                "operationId": "dashboard.categories.publish_readiness",
+                "mutation": "read",
+                "input": {
+                  "template": {
+                    "path": {
+                      "id": null
+                    }
+                  },
+                  "dependencies": [
+                    {
+                      "templatePointer": "/path/id",
+                      "source": {
+                        "kind": "fact",
+                        "factId": "categoryId"
+                      }
+                    }
+                  ],
+                  "defaults": []
+                },
+                "policies": {
+                  "revision": "none",
+                  "idempotency": "none",
+                  "confirmation": "none",
+                  "stopConditions": [
+                    "Stop on auth/read failure."
+                  ],
+                  "nonInferenceRules": [
+                    "Treat missing data as unknown."
+                  ]
+                }
+              },
+              {
+                "id": "status",
+                "title": "Publish category with CAS",
+                "operationId": "dashboard.categories.set_status",
+                "mutation": "lifecycle",
+                "condition": "Only if not published and ready.",
+                "input": {
+                  "template": {
+                    "path": {
+                      "id": null
+                    },
+                    "body": {
+                      "expectedRevision": null,
+                      "status": "published"
+                    }
+                  },
+                  "dependencies": [
+                    {
+                      "templatePointer": "/path/id",
+                      "source": {
+                        "kind": "fact",
+                        "factId": "categoryId"
+                      }
+                    },
+                    {
+                      "templatePointer": "/body/expectedRevision",
+                      "source": {
+                        "kind": "step",
+                        "phaseId": "publish",
+                        "stepId": "category",
+                        "responsePointer": "/data/category/revision"
+                      }
+                    }
+                  ],
+                  "defaults": [
+                    {
+                      "templatePointer": "/body/status",
+                      "value": "published"
+                    }
+                  ]
+                },
+                "policies": {
+                  "revision": "required",
+                  "idempotency": "none",
+                  "confirmation": "required",
+                  "stopConditions": [
+                    "On conflict, reread summary/readiness; never retry stale."
+                  ],
+                  "nonInferenceRules": [
+                    "Use resolved or merchant facts only."
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "id": "dashboardVerify",
+            "surface": "dashboard",
+            "title": "Verify dashboard truth",
+            "summary": "Read composition, feed, and discovery health.",
+            "dependsOn": [
+              "create",
+              "publish"
+            ],
+            "stopConditions": [
+              "Stop on SKU/image/stock drift or discovery failure."
+            ],
+            "steps": [
+              {
+                "id": "sections",
+                "title": "Read bounded product sections",
+                "operationId": "dashboard.products.get_section",
+                "mutation": "read",
+                "condition": "Read base, text, media, attributes, info, options, and variants.",
+                "input": {
+                  "template": {
+                    "path": {
+                      "id": null,
+                      "section": null
+                    },
+                    "query": {
+                      "offset": 0,
+                      "limit": 10
+                    }
+                  },
+                  "dependencies": [
+                    {
+                      "templatePointer": "/path/id",
+                      "source": {
+                        "kind": "step",
+                        "phaseId": "create",
+                        "stepId": "product",
+                        "responsePointer": "/data/id"
+                      }
+                    }
+                  ],
+                  "defaults": [
+                    {
+                      "templatePointer": "/query/offset",
+                      "value": 0
+                    },
+                    {
+                      "templatePointer": "/query/limit",
+                      "value": 10
+                    }
+                  ]
+                },
+                "policies": {
+                  "revision": "none",
+                  "idempotency": "none",
+                  "confirmation": "none",
+                  "stopConditions": [
+                    "Stop on auth/read failure."
+                  ],
+                  "nonInferenceRules": [
+                    "Treat missing data as unknown."
+                  ]
+                }
+              },
+              {
+                "id": "feed",
+                "title": "Read bounded feed diagnostics",
+                "operationId": "dashboard.seo.feed_diagnostics",
+                "mutation": "read",
+                "input": {
+                  "template": {
+                    "query": {
+                      "scanLimit": 500,
+                      "sampleLimit": 10
+                    }
+                  },
+                  "dependencies": [],
+                  "defaults": [
+                    {
+                      "templatePointer": "/query/scanLimit",
+                      "value": 500
+                    },
+                    {
+                      "templatePointer": "/query/sampleLimit",
+                      "value": 10
+                    }
+                  ]
+                },
+                "policies": {
+                  "revision": "none",
+                  "idempotency": "none",
+                  "confirmation": "none",
+                  "stopConditions": [
+                    "Stop on auth/read failure."
+                  ],
+                  "nonInferenceRules": [
+                    "Treat missing data as unknown."
+                  ]
+                }
+              },
+              {
+                "id": "probe",
+                "title": "Probe public discovery resources",
+                "operationId": "dashboard.seo.live_probe",
+                "mutation": "read",
+                "input": {
+                  "template": {},
+                  "dependencies": [],
+                  "defaults": []
+                },
+                "policies": {
+                  "revision": "none",
+                  "idempotency": "none",
+                  "confirmation": "none",
+                  "stopConditions": [
+                    "Stop on auth/read failure."
+                  ],
+                  "nonInferenceRules": [
+                    "Treat missing data as unknown."
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "id": "storefrontVerify",
+            "surface": "storefront",
+            "title": "Verify buyer SKU truth",
+            "summary": "Compare public options, prices, images, and availability bands.",
+            "dependsOn": [
+              "dashboardVerify"
+            ],
+            "stopConditions": [
+              "Stop on missing or mismatched buyer-visible facts."
+            ],
+            "steps": [
+              {
+                "id": "sections",
+                "title": "Read storefront product sections",
+                "operationId": "storefront.products.get_section",
+                "mutation": "read",
+                "condition": "Read summary, media, options, values, and bounded variants.",
+                "input": {
+                  "template": {
+                    "path": {
+                      "slug": null,
+                      "section": null
+                    },
+                    "query": {
+                      "offset": 0,
+                      "limit": 10
+                    }
+                  },
+                  "dependencies": [
+                    {
+                      "templatePointer": "/path/slug",
+                      "source": {
+                        "kind": "fact",
+                        "factId": "productSpec",
+                        "factPointer": "/slug"
+                      }
+                    }
+                  ],
+                  "defaults": [
+                    {
+                      "templatePointer": "/query/offset",
+                      "value": 0
+                    },
+                    {
+                      "templatePointer": "/query/limit",
+                      "value": 10
+                    }
+                  ]
+                },
+                "policies": {
+                  "revision": "none",
+                  "idempotency": "none",
+                  "confirmation": "none",
+                  "stopConditions": [
+                    "Stop on auth/read failure."
+                  ],
+                  "nonInferenceRules": [
+                    "Treat missing data as unknown."
+                  ]
+                }
+              }
+            ]
+          }
+        ],
+        "verification": [
+          {
+            "id": "composition",
+            "surface": "dashboard",
+            "operationId": "dashboard.products.get_section",
+            "responsePointers": [
+              "/data/aggregateRevision",
+              "/data/items",
+              "/data/total"
+            ],
+            "proves": [
+              "Exact media, attributes, axes, SKUs, prices, and stock."
+            ],
+            "bounds": {
+              "maxCalls": 12,
+              "maxItems": 150,
+              "maxResponseBytes": 65536
+            }
+          },
+          {
+            "id": "feed",
+            "surface": "dashboard",
+            "operationId": "dashboard.seo.feed_diagnostics",
+            "responsePointers": [
+              "/data/policy",
+              "/data/totals",
+              "/data/reasons"
+            ],
+            "proves": [
+              "Feed eligibility and explicit exclusion reasons."
+            ],
+            "bounds": {
+              "maxCalls": 1,
+              "maxItems": 500,
+              "maxResponseBytes": 65536
+            }
+          },
+          {
+            "id": "discovery",
+            "surface": "dashboard",
+            "operationId": "dashboard.seo.live_probe",
+            "responsePointers": [
+              "/data/ok",
+              "/data/resources"
+            ],
+            "proves": [
+              "Sitemap/feed health and absolute-link evidence."
+            ],
+            "bounds": {
+              "maxCalls": 1,
+              "maxItems": 12,
+              "maxResponseBytes": 65536
+            }
+          },
+          {
+            "id": "buyer",
+            "surface": "storefront",
+            "operationId": "storefront.products.get_section",
+            "responsePointers": [
+              "/data/product",
+              "/data/items"
+            ],
+            "proves": [
+              "Buyer SKU price, variant image, and availability band."
+            ],
+            "bounds": {
+              "maxCalls": 10,
+              "maxItems": 150,
+              "maxResponseBytes": 61440
+            }
+          }
+        ]
+      },
+      {
+        "id": "operations.daily-snapshot.v1",
+        "surface": "dashboard",
+        "title": "Daily merchant snapshot",
+        "summary": "Report booked-gross merchant-day activity, open fulfillment, active alerts, and payment/delivery readiness.",
+        "examples": [
+          "Show today's booked sales, orders to fulfill, stock alerts, and checkout readiness."
+        ],
+        "tags": [
+          "daily",
+          "operations",
+          "readiness"
+        ],
+        "requiredFacts": [
+          {
+            "id": "days",
+            "title": "Merchant-day window",
+            "description": "Use 1 today; use 2 and select the earlier key yesterday.",
+            "required": true,
+            "defaultValue": 1,
+            "source": {
+              "kind": "constant",
+              "value": 1
+            },
+            "nonInferenceRule": "Keep Asia/Dhaka date keys; ignore host timezone."
+          },
+          {
+            "id": "currency",
+            "title": "Currency",
+            "description": "Currency returned by store currency settings.",
+            "required": true,
+            "source": {
+              "kind": "operation",
+              "operationId": "dashboard.settings.currency_get",
+              "responsePointer": "/data/currencyCode"
+            },
+            "nonInferenceRule": "Never guess or mix currency labels."
+          }
+        ],
+        "phases": [
+          {
+            "id": "activity",
+            "surface": "dashboard",
+            "title": "Activity and work queue",
+            "summary": "Read the merchant-day aggregate, currency, and bounded fulfillment queue.",
+            "dependsOn": [],
+            "stopConditions": [
+              "Never total partial pages or use host-local dates."
+            ],
+            "steps": [
+              {
+                "id": "daily",
+                "title": "Read booked-gross activity",
+                "operationId": "dashboard.home.activity",
+                "mutation": "read",
+                "input": {
+                  "template": {
+                    "query": {
+                      "days": 1
+                    }
+                  },
+                  "dependencies": [
+                    {
+                      "templatePointer": "/query/days",
+                      "source": {
+                        "kind": "fact",
+                        "factId": "days"
+                      }
+                    }
+                  ],
+                  "defaults": [
+                    {
+                      "templatePointer": "/query/days",
+                      "value": 1
+                    }
+                  ]
+                },
+                "policies": {
+                  "revision": "none",
+                  "idempotency": "none",
+                  "confirmation": "none",
+                  "stopConditions": [
+                    "Stop on auth/read failure."
+                  ],
+                  "nonInferenceRules": [
+                    "Treat missing data as unknown."
+                  ]
+                }
+              },
+              {
+                "id": "currency",
+                "title": "Read store currency",
+                "operationId": "dashboard.settings.currency_get",
+                "mutation": "read",
+                "input": {
+                  "template": {},
+                  "dependencies": [],
+                  "defaults": []
+                },
+                "policies": {
+                  "revision": "none",
+                  "idempotency": "none",
+                  "confirmation": "none",
+                  "stopConditions": [
+                    "Stop on auth/read failure."
+                  ],
+                  "nonInferenceRules": [
+                    "Treat missing data as unknown."
+                  ]
+                }
+              },
+              {
+                "id": "fulfillment",
+                "title": "Read orders awaiting fulfillment",
+                "operationId": "dashboard.orders.list",
+                "mutation": "read",
+                "input": {
+                  "template": {
+                    "query": {
+                      "page": 1,
+                      "limit": 10,
+                      "statusGroup": "open",
+                      "fulfillmentStatus": "pending",
+                      "sort": "createdAt",
+                      "order": "desc"
+                    }
+                  },
+                  "dependencies": [],
+                  "defaults": [
+                    {
+                      "templatePointer": "/query/page",
+                      "value": 1
+                    },
+                    {
+                      "templatePointer": "/query/limit",
+                      "value": 10
+                    },
+                    {
+                      "templatePointer": "/query/statusGroup",
+                      "value": "open"
+                    },
+                    {
+                      "templatePointer": "/query/fulfillmentStatus",
+                      "value": "pending"
+                    },
+                    {
+                      "templatePointer": "/query/sort",
+                      "value": "createdAt"
+                    },
+                    {
+                      "templatePointer": "/query/order",
+                      "value": "desc"
+                    }
+                  ]
+                },
+                "policies": {
+                  "revision": "none",
+                  "idempotency": "none",
+                  "confirmation": "none",
+                  "stopConditions": [
+                    "Stop on auth/read failure."
+                  ],
+                  "nonInferenceRules": [
+                    "Treat missing data as unknown."
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "id": "readiness",
+            "surface": "dashboard",
+            "title": "Operating readiness",
+            "summary": "Distinguish saved settings, active rows, and buyer-usable readiness.",
+            "dependsOn": [
+              "activity"
+            ],
+            "stopConditions": [
+              "Report unavailable projections; never guess providers."
+            ],
+            "steps": [
+              {
+                "id": "alerts",
+                "title": "Read inventory alerts",
+                "operationId": "dashboard.inventory_alerts.list",
+                "mutation": "read",
+                "input": {
+                  "template": {
+                    "query": {
+                      "status": "active"
+                    }
+                  },
+                  "dependencies": [],
+                  "defaults": [
+                    {
+                      "templatePointer": "/query/status",
+                      "value": "active"
+                    }
+                  ]
+                },
+                "policies": {
+                  "revision": "none",
+                  "idempotency": "none",
+                  "confirmation": "none",
+                  "stopConditions": [
+                    "Stop on auth/read failure."
+                  ],
+                  "nonInferenceRules": [
+                    "Treat missing data as unknown."
+                  ]
+                }
+              },
+              {
+                "id": "checkout",
+                "title": "Read checkout readiness",
+                "operationId": "dashboard.checkout.readiness_get",
+                "mutation": "read",
+                "condition": "Use this first-class projection for blockers; never assume COD, gateway, or delivery fallback.",
+                "input": {
+                  "template": {},
+                  "dependencies": [],
+                  "defaults": []
+                },
+                "policies": {
+                  "revision": "none",
+                  "idempotency": "none",
+                  "confirmation": "none",
+                  "stopConditions": [
+                    "Stop on auth/read failure."
+                  ],
+                  "nonInferenceRules": [
+                    "Treat missing data as unknown."
+                  ]
+                }
+              },
+              {
+                "id": "payments",
+                "title": "Read payment configuration",
+                "operationId": "dashboard.payments.methods_get",
+                "mutation": "read",
+                "condition": "Enabled/configured is not usable; report gatewayStatus usability and checkout visibility.",
+                "input": {
+                  "template": {},
+                  "dependencies": [],
+                  "defaults": []
+                },
+                "policies": {
+                  "revision": "none",
+                  "idempotency": "none",
+                  "confirmation": "none",
+                  "stopConditions": [
+                    "Stop on auth/read failure."
+                  ],
+                  "nonInferenceRules": [
+                    "Treat missing data as unknown."
+                  ]
+                }
+              },
+              {
+                "id": "delivery",
+                "title": "Read saved shipping methods",
+                "operationId": "dashboard.shipping_methods.list",
+                "mutation": "read",
+                "condition": "Rows are saved definitions; only isActive rows are active, and readiness owns buyer usability.",
+                "input": {
+                  "template": {
+                    "query": {
+                      "page": 1,
+                      "limit": 100,
+                      "sort": "sortOrder",
+                      "order": "asc"
+                    }
+                  },
+                  "dependencies": [],
+                  "defaults": [
+                    {
+                      "templatePointer": "/query/page",
+                      "value": 1
+                    },
+                    {
+                      "templatePointer": "/query/limit",
+                      "value": 100
+                    },
+                    {
+                      "templatePointer": "/query/sort",
+                      "value": "sortOrder"
+                    },
+                    {
+                      "templatePointer": "/query/order",
+                      "value": "asc"
+                    }
+                  ]
+                },
+                "policies": {
+                  "revision": "none",
+                  "idempotency": "none",
+                  "confirmation": "none",
+                  "stopConditions": [
+                    "Stop on auth/read failure."
+                  ],
+                  "nonInferenceRules": [
+                    "Treat missing data as unknown."
+                  ]
+                }
+              }
+            ]
+          }
+        ],
+        "verification": [
+          {
+            "id": "activity",
+            "surface": "dashboard",
+            "operationId": "dashboard.home.activity",
+            "responsePointers": [
+              "/data"
+            ],
+            "proves": [
+              "Booked gross uses merchant-day keys; it is not collected cash or net settlement."
+            ],
+            "bounds": {
+              "maxCalls": 1,
+              "maxItems": 2,
+              "maxResponseBytes": 32768
+            }
+          },
+          {
+            "id": "fulfillment",
+            "surface": "dashboard",
+            "operationId": "dashboard.orders.list",
+            "responsePointers": [
+              "/data/orders",
+              "/data/pagination"
+            ],
+            "proves": [
+              "A bounded open/pending fulfillment queue; never a total of a partial page."
+            ],
+            "bounds": {
+              "maxCalls": 1,
+              "maxItems": 10,
+              "maxResponseBytes": 65536
+            }
+          },
+          {
+            "id": "readiness",
+            "surface": "dashboard",
+            "operationId": "dashboard.checkout.readiness_get",
+            "responsePointers": [
+              "/data"
+            ],
+            "proves": [
+              "First-class payment and delivery blockers."
+            ],
+            "bounds": {
+              "maxCalls": 1,
+              "maxItems": 20,
+              "maxResponseBytes": 65536
+            }
+          },
+          {
+            "id": "payment",
+            "surface": "dashboard",
+            "operationId": "dashboard.payments.methods_get",
+            "responsePointers": [
+              "/data/enabledMethods",
+              "/data/gatewayStatus"
+            ],
+            "proves": [
+              "Saved selection versus configured, usable, and checkout-visible status."
+            ],
+            "bounds": {
+              "maxCalls": 1,
+              "maxItems": 4,
+              "maxResponseBytes": 65536
+            }
+          },
+          {
+            "id": "delivery",
+            "surface": "dashboard",
+            "operationId": "dashboard.shipping_methods.list",
+            "responsePointers": [
+              "/data/shippingMethods",
+              "/data/pagination"
+            ],
+            "proves": [
+              "Bounded saved methods with explicit active flags."
+            ],
+            "bounds": {
+              "maxCalls": 1,
+              "maxItems": 100,
+              "maxResponseBytes": 65536
+            }
+          }
+        ]
+      }
+    ],
+    "coverage": {
+      "policy": "curated-first-operation-fallback",
+      "fallback": {
+        "workflowIdTemplate": "operation.{operationId}",
+        "operationPointerTemplate": "#/paths/{jsonPointerEscapedPathTemplate}/{lowercaseMethod}",
+        "inputSchemaPointerTemplate": "#/paths/{jsonPointerEscapedPathTemplate}/{lowercaseMethod}/requestBody",
+        "policyPointers": {
+          "revision": "#/paths/{jsonPointerEscapedPathTemplate}/{lowercaseMethod}/x-scalius-agent/revision",
+          "idempotency": "#/paths/{jsonPointerEscapedPathTemplate}/{lowercaseMethod}/x-scalius-agent/idempotency",
+          "risk": "#/paths/{jsonPointerEscapedPathTemplate}/{lowercaseMethod}/x-scalius-agent/risk",
+          "confirmation": "#/paths/{jsonPointerEscapedPathTemplate}/{lowercaseMethod}/x-scalius-agent/risk"
+        },
+        "rules": {
+          "confirmEveryMutation": true,
+          "stopOnConflict": true,
+          "stopOnAuthorizationFailure": true,
+          "neverInferRequiredInput": true,
+          "verifyMutationsWithBoundedRead": true
+        }
+      },
+      "operations": [
+        {
+          "operationId": "dashboard.abandoned_checkouts.delete",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.abandoned_checkouts.delete"
+          ]
+        },
+        {
+          "operationId": "dashboard.abandoned_checkouts.summaries_list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.abandoned_checkouts.summaries_list"
+          ]
+        },
+        {
+          "operationId": "dashboard.account.permissions.get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.account.permissions.get"
+          ]
+        },
+        {
+          "operationId": "dashboard.account.profile_update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.account.profile_update"
+          ]
+        },
+        {
+          "operationId": "dashboard.account.security_get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.account.security_get"
+          ]
+        },
+        {
+          "operationId": "dashboard.account.sessions.list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.account.sessions.list"
+          ]
+        },
+        {
+          "operationId": "dashboard.account.sessions.revoke",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.account.sessions.revoke"
+          ]
+        },
+        {
+          "operationId": "dashboard.account.sessions.revoke_others",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.account.sessions.revoke_others"
+          ]
+        },
+        {
+          "operationId": "dashboard.account.two_factor.get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.account.two_factor.get"
+          ]
+        },
+        {
+          "operationId": "dashboard.agent_access.connections.events_list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.agent_access.connections.events_list"
+          ]
+        },
+        {
+          "operationId": "dashboard.agent_access.connections.get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.agent_access.connections.get"
+          ]
+        },
+        {
+          "operationId": "dashboard.agent_access.connections.list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.agent_access.connections.list"
+          ]
+        },
+        {
+          "operationId": "dashboard.agent_access.grants.revoke",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.agent_access.grants.revoke"
+          ]
+        },
+        {
+          "operationId": "dashboard.agent_access.grants.update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.agent_access.grants.update"
+          ]
+        },
+        {
+          "operationId": "dashboard.agent_access.tokens.create",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.agent_access.tokens.create"
+          ]
+        },
+        {
+          "operationId": "dashboard.agent_access.tokens.rotate",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.agent_access.tokens.rotate"
+          ]
+        },
+        {
+          "operationId": "dashboard.analytics.create",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.analytics.create"
+          ]
+        },
+        {
+          "operationId": "dashboard.analytics.delete_permanently",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.analytics.delete_permanently"
+          ]
+        },
+        {
+          "operationId": "dashboard.analytics.get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.analytics.get"
+          ]
+        },
+        {
+          "operationId": "dashboard.analytics.health",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.analytics.health"
+          ]
+        },
+        {
+          "operationId": "dashboard.analytics.list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.analytics.list"
+          ]
+        },
+        {
+          "operationId": "dashboard.analytics.restore",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.analytics.restore"
+          ]
+        },
+        {
+          "operationId": "dashboard.analytics.set_active",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.analytics.set_active"
+          ]
+        },
+        {
+          "operationId": "dashboard.analytics.trash",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.analytics.trash"
+          ]
+        },
+        {
+          "operationId": "dashboard.analytics.update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.analytics.update"
+          ]
+        },
+        {
+          "operationId": "dashboard.attribute_values.create",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.attribute_values.create"
+          ]
+        },
+        {
+          "operationId": "dashboard.attribute_values.delete",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.attribute_values.delete"
+          ]
+        },
+        {
+          "operationId": "dashboard.attribute_values.list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.attribute_values.list"
+          ]
+        },
+        {
+          "operationId": "dashboard.attribute_values.rename",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.attribute_values.rename"
+          ]
+        },
+        {
+          "operationId": "dashboard.attributes.bulk_delete",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.attributes.bulk_delete"
+          ]
+        },
+        {
+          "operationId": "dashboard.attributes.bulk_restore",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.attributes.bulk_restore"
+          ]
+        },
+        {
+          "operationId": "dashboard.attributes.create",
+          "surface": "dashboard",
+          "mode": "curated",
+          "workflowIds": [
+            "catalog.optioned-product.v1"
+          ]
+        },
+        {
+          "operationId": "dashboard.attributes.delete_permanently",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.attributes.delete_permanently"
+          ]
+        },
+        {
+          "operationId": "dashboard.attributes.list_summaries",
+          "surface": "dashboard",
+          "mode": "curated",
+          "workflowIds": [
+            "catalog.optioned-product.v1"
+          ]
+        },
+        {
+          "operationId": "dashboard.attributes.restore",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.attributes.restore"
+          ]
+        },
+        {
+          "operationId": "dashboard.attributes.trash",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.attributes.trash"
+          ]
+        },
+        {
+          "operationId": "dashboard.attributes.update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.attributes.update"
+          ]
+        },
+        {
+          "operationId": "dashboard.cache.groups_list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.cache.groups_list"
+          ]
+        },
+        {
+          "operationId": "dashboard.cache.purge_all",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.cache.purge_all"
+          ]
+        },
+        {
+          "operationId": "dashboard.cache.purge_groups",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.cache.purge_groups"
+          ]
+        },
+        {
+          "operationId": "dashboard.categories.bulk_delete",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.categories.bulk_delete"
+          ]
+        },
+        {
+          "operationId": "dashboard.categories.bulk_restore",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.categories.bulk_restore"
+          ]
+        },
+        {
+          "operationId": "dashboard.categories.create",
+          "surface": "dashboard",
+          "mode": "curated",
+          "workflowIds": [
+            "catalog.optioned-product.v1"
+          ]
+        },
+        {
+          "operationId": "dashboard.categories.delete_permanently",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.categories.delete_permanently"
+          ]
+        },
+        {
+          "operationId": "dashboard.categories.form_options",
+          "surface": "dashboard",
+          "mode": "curated",
+          "workflowIds": [
+            "catalog.optioned-product.v1"
+          ]
+        },
+        {
+          "operationId": "dashboard.categories.get_section",
+          "surface": "dashboard",
+          "mode": "curated",
+          "workflowIds": [
+            "catalog.optioned-product.v1"
+          ]
+        },
+        {
+          "operationId": "dashboard.categories.list_summaries",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.categories.list_summaries"
+          ]
+        },
+        {
+          "operationId": "dashboard.categories.publish_readiness",
+          "surface": "dashboard",
+          "mode": "curated",
+          "workflowIds": [
+            "catalog.optioned-product.v1"
+          ]
+        },
+        {
+          "operationId": "dashboard.categories.restore",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.categories.restore"
+          ]
+        },
+        {
+          "operationId": "dashboard.categories.set_status",
+          "surface": "dashboard",
+          "mode": "curated",
+          "workflowIds": [
+            "catalog.optioned-product.v1"
+          ]
+        },
+        {
+          "operationId": "dashboard.categories.trash",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.categories.trash"
+          ]
+        },
+        {
+          "operationId": "dashboard.categories.update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.categories.update"
+          ]
+        },
+        {
+          "operationId": "dashboard.checkout_languages.active_get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.checkout_languages.active_get"
+          ]
+        },
+        {
+          "operationId": "dashboard.checkout_languages.create",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.checkout_languages.create"
+          ]
+        },
+        {
+          "operationId": "dashboard.checkout_languages.delete_permanently",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.checkout_languages.delete_permanently"
+          ]
+        },
+        {
+          "operationId": "dashboard.checkout_languages.get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.checkout_languages.get"
+          ]
+        },
+        {
+          "operationId": "dashboard.checkout_languages.list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.checkout_languages.list"
+          ]
+        },
+        {
+          "operationId": "dashboard.checkout_languages.restore",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.checkout_languages.restore"
+          ]
+        },
+        {
+          "operationId": "dashboard.checkout_languages.trash",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.checkout_languages.trash"
+          ]
+        },
+        {
+          "operationId": "dashboard.checkout_languages.update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.checkout_languages.update"
+          ]
+        },
+        {
+          "operationId": "dashboard.checkout.flow_get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.checkout.flow_get"
+          ]
+        },
+        {
+          "operationId": "dashboard.checkout.flow_update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.checkout.flow_update"
+          ]
+        },
+        {
+          "operationId": "dashboard.checkout.readiness_get",
+          "surface": "dashboard",
+          "mode": "curated",
+          "workflowIds": [
+            "operations.daily-snapshot.v1"
+          ]
+        },
+        {
+          "operationId": "dashboard.collections.bulk_activate",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.collections.bulk_activate"
+          ]
+        },
+        {
+          "operationId": "dashboard.collections.bulk_deactivate",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.collections.bulk_deactivate"
+          ]
+        },
+        {
+          "operationId": "dashboard.collections.bulk_delete",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.collections.bulk_delete"
+          ]
+        },
+        {
+          "operationId": "dashboard.collections.bulk_restore",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.collections.bulk_restore"
+          ]
+        },
+        {
+          "operationId": "dashboard.collections.category_options",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.collections.category_options"
+          ]
+        },
+        {
+          "operationId": "dashboard.collections.create",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.collections.create"
+          ]
+        },
+        {
+          "operationId": "dashboard.collections.delete_permanently",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.collections.delete_permanently"
+          ]
+        },
+        {
+          "operationId": "dashboard.collections.form_options",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.collections.form_options"
+          ]
+        },
+        {
+          "operationId": "dashboard.collections.get_by_ids",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.collections.get_by_ids"
+          ]
+        },
+        {
+          "operationId": "dashboard.collections.get_section",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.collections.get_section"
+          ]
+        },
+        {
+          "operationId": "dashboard.collections.list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.collections.list"
+          ]
+        },
+        {
+          "operationId": "dashboard.collections.product_options",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.collections.product_options"
+          ]
+        },
+        {
+          "operationId": "dashboard.collections.reorder",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.collections.reorder"
+          ]
+        },
+        {
+          "operationId": "dashboard.collections.restore",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.collections.restore"
+          ]
+        },
+        {
+          "operationId": "dashboard.collections.trash",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.collections.trash"
+          ]
+        },
+        {
+          "operationId": "dashboard.collections.update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.collections.update"
+          ]
+        },
+        {
+          "operationId": "dashboard.content.bulk_delete",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.content.bulk_delete"
+          ]
+        },
+        {
+          "operationId": "dashboard.content.bulk_publish",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.content.bulk_publish"
+          ]
+        },
+        {
+          "operationId": "dashboard.content.bulk_restore",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.content.bulk_restore"
+          ]
+        },
+        {
+          "operationId": "dashboard.content.bulk_unpublish",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.content.bulk_unpublish"
+          ]
+        },
+        {
+          "operationId": "dashboard.content.create",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.content.create"
+          ]
+        },
+        {
+          "operationId": "dashboard.content.get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.content.get"
+          ]
+        },
+        {
+          "operationId": "dashboard.content.list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.content.list"
+          ]
+        },
+        {
+          "operationId": "dashboard.content.permanently_delete",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.content.permanently_delete"
+          ]
+        },
+        {
+          "operationId": "dashboard.content.restore",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.content.restore"
+          ]
+        },
+        {
+          "operationId": "dashboard.content.trash",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.content.trash"
+          ]
+        },
+        {
+          "operationId": "dashboard.content.update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.content.update"
+          ]
+        },
+        {
+          "operationId": "dashboard.customer_requests.policy_get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.customer_requests.policy_get"
+          ]
+        },
+        {
+          "operationId": "dashboard.customer_requests.policy_update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.customer_requests.policy_update"
+          ]
+        },
+        {
+          "operationId": "dashboard.customers.bulk_delete",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.customers.bulk_delete"
+          ]
+        },
+        {
+          "operationId": "dashboard.customers.create",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.customers.create"
+          ]
+        },
+        {
+          "operationId": "dashboard.customers.delete",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.customers.delete"
+          ]
+        },
+        {
+          "operationId": "dashboard.customers.delete_permanently",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.customers.delete_permanently"
+          ]
+        },
+        {
+          "operationId": "dashboard.customers.get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.customers.get"
+          ]
+        },
+        {
+          "operationId": "dashboard.customers.history",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.customers.history"
+          ]
+        },
+        {
+          "operationId": "dashboard.customers.list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.customers.list"
+          ]
+        },
+        {
+          "operationId": "dashboard.customers.restore",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.customers.restore"
+          ]
+        },
+        {
+          "operationId": "dashboard.customers.update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.customers.update"
+          ]
+        },
+        {
+          "operationId": "dashboard.delivery_locations.bulk_delete",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.delivery_locations.bulk_delete"
+          ]
+        },
+        {
+          "operationId": "dashboard.delivery_locations.create",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.delivery_locations.create"
+          ]
+        },
+        {
+          "operationId": "dashboard.delivery_locations.delete_all",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.delivery_locations.delete_all"
+          ]
+        },
+        {
+          "operationId": "dashboard.delivery_locations.get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.delivery_locations.get"
+          ]
+        },
+        {
+          "operationId": "dashboard.delivery_locations.list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.delivery_locations.list"
+          ]
+        },
+        {
+          "operationId": "dashboard.delivery_locations.pathao_import_chunk",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.delivery_locations.pathao_import_chunk"
+          ]
+        },
+        {
+          "operationId": "dashboard.delivery_locations.pathao_import_reset",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.delivery_locations.pathao_import_reset"
+          ]
+        },
+        {
+          "operationId": "dashboard.delivery_locations.pathao_import_status",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.delivery_locations.pathao_import_status"
+          ]
+        },
+        {
+          "operationId": "dashboard.delivery_locations.trash",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.delivery_locations.trash"
+          ]
+        },
+        {
+          "operationId": "dashboard.delivery_locations.update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.delivery_locations.update"
+          ]
+        },
+        {
+          "operationId": "dashboard.delivery_providers.create",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.delivery_providers.create"
+          ]
+        },
+        {
+          "operationId": "dashboard.delivery_providers.delete",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.delivery_providers.delete"
+          ]
+        },
+        {
+          "operationId": "dashboard.delivery_providers.get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.delivery_providers.get"
+          ]
+        },
+        {
+          "operationId": "dashboard.delivery_providers.list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.delivery_providers.list"
+          ]
+        },
+        {
+          "operationId": "dashboard.delivery_providers.test",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.delivery_providers.test"
+          ]
+        },
+        {
+          "operationId": "dashboard.delivery_providers.test_credentials",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.delivery_providers.test_credentials"
+          ]
+        },
+        {
+          "operationId": "dashboard.delivery_providers.update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.delivery_providers.update"
+          ]
+        },
+        {
+          "operationId": "dashboard.discounts.bulk_delete",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.discounts.bulk_delete"
+          ]
+        },
+        {
+          "operationId": "dashboard.discounts.bulk_restore",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.discounts.bulk_restore"
+          ]
+        },
+        {
+          "operationId": "dashboard.discounts.create",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.discounts.create"
+          ]
+        },
+        {
+          "operationId": "dashboard.discounts.delete",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.discounts.delete"
+          ]
+        },
+        {
+          "operationId": "dashboard.discounts.delete_permanently",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.discounts.delete_permanently"
+          ]
+        },
+        {
+          "operationId": "dashboard.discounts.get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.discounts.get"
+          ]
+        },
+        {
+          "operationId": "dashboard.discounts.list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.discounts.list"
+          ]
+        },
+        {
+          "operationId": "dashboard.discounts.restore",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.discounts.restore"
+          ]
+        },
+        {
+          "operationId": "dashboard.discounts.set_active",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.discounts.set_active"
+          ]
+        },
+        {
+          "operationId": "dashboard.discounts.update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.discounts.update"
+          ]
+        },
+        {
+          "operationId": "dashboard.fraud_lookup.run",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.fraud_lookup.run"
+          ]
+        },
+        {
+          "operationId": "dashboard.fraud_providers.create",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.fraud_providers.create"
+          ]
+        },
+        {
+          "operationId": "dashboard.fraud_providers.delete",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.fraud_providers.delete"
+          ]
+        },
+        {
+          "operationId": "dashboard.fraud_providers.list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.fraud_providers.list"
+          ]
+        },
+        {
+          "operationId": "dashboard.fraud_providers.test",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.fraud_providers.test"
+          ]
+        },
+        {
+          "operationId": "dashboard.fraud_providers.update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.fraud_providers.update"
+          ]
+        },
+        {
+          "operationId": "dashboard.hero_sliders.create",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.hero_sliders.create"
+          ]
+        },
+        {
+          "operationId": "dashboard.hero_sliders.get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.hero_sliders.get"
+          ]
+        },
+        {
+          "operationId": "dashboard.hero_sliders.list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.hero_sliders.list"
+          ]
+        },
+        {
+          "operationId": "dashboard.hero_sliders.trash",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.hero_sliders.trash"
+          ]
+        },
+        {
+          "operationId": "dashboard.hero_sliders.update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.hero_sliders.update"
+          ]
+        },
+        {
+          "operationId": "dashboard.home.activity",
+          "surface": "dashboard",
+          "mode": "curated",
+          "workflowIds": [
+            "operations.daily-snapshot.v1"
+          ]
+        },
+        {
+          "operationId": "dashboard.home.full_summary",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.home.full_summary"
+          ]
+        },
+        {
+          "operationId": "dashboard.home.metrics",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.home.metrics"
+          ]
+        },
+        {
+          "operationId": "dashboard.home.summary",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.home.summary"
+          ]
+        },
+        {
+          "operationId": "dashboard.inventory_alerts.acknowledge",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.inventory_alerts.acknowledge"
+          ]
+        },
+        {
+          "operationId": "dashboard.inventory_alerts.list",
+          "surface": "dashboard",
+          "mode": "curated",
+          "workflowIds": [
+            "operations.daily-snapshot.v1"
+          ]
+        },
+        {
+          "operationId": "dashboard.inventory_labels.generate_artifact",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.inventory_labels.generate_artifact"
+          ]
+        },
+        {
+          "operationId": "dashboard.inventory_labels.preview",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.inventory_labels.preview"
+          ]
+        },
+        {
+          "operationId": "dashboard.inventory.adjust",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.inventory.adjust"
+          ]
+        },
+        {
+          "operationId": "dashboard.inventory.adjust_stock",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.inventory.adjust_stock"
+          ]
+        },
+        {
+          "operationId": "dashboard.inventory.list",
+          "surface": "dashboard",
+          "mode": "curated",
+          "workflowIds": [
+            "catalog.optioned-product.v1"
+          ]
+        },
+        {
+          "operationId": "dashboard.inventory.lookup_sku",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.inventory.lookup_sku"
+          ]
+        },
+        {
+          "operationId": "dashboard.inventory.movements_export",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.inventory.movements_export"
+          ]
+        },
+        {
+          "operationId": "dashboard.inventory.set_stock",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.inventory.set_stock"
+          ]
+        },
+        {
+          "operationId": "dashboard.media_folders.create",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.media_folders.create"
+          ]
+        },
+        {
+          "operationId": "dashboard.media_folders.delete",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.media_folders.delete"
+          ]
+        },
+        {
+          "operationId": "dashboard.media_folders.list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.media_folders.list"
+          ]
+        },
+        {
+          "operationId": "dashboard.media_folders.update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.media_folders.update"
+          ]
+        },
+        {
+          "operationId": "dashboard.media.import_url",
+          "surface": "dashboard",
+          "mode": "curated",
+          "workflowIds": [
+            "catalog.optioned-product.v1"
+          ]
+        },
+        {
+          "operationId": "dashboard.media.list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.media.list"
+          ]
+        },
+        {
+          "operationId": "dashboard.media.move",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.media.move"
+          ]
+        },
+        {
+          "operationId": "dashboard.media.permanently_delete",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.media.permanently_delete"
+          ]
+        },
+        {
+          "operationId": "dashboard.media.restore",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.media.restore"
+          ]
+        },
+        {
+          "operationId": "dashboard.media.trash",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.media.trash"
+          ]
+        },
+        {
+          "operationId": "dashboard.media.update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.media.update"
+          ]
+        },
+        {
+          "operationId": "dashboard.media.upload_abort",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.media.upload_abort"
+          ]
+        },
+        {
+          "operationId": "dashboard.media.upload_complete",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.media.upload_complete"
+          ]
+        },
+        {
+          "operationId": "dashboard.media.upload_get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.media.upload_get"
+          ]
+        },
+        {
+          "operationId": "dashboard.media.upload_initiate",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.media.upload_initiate"
+          ]
+        },
+        {
+          "operationId": "dashboard.media.upload_part",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.media.upload_part"
+          ]
+        },
+        {
+          "operationId": "dashboard.meta_conversions.get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.meta_conversions.get"
+          ]
+        },
+        {
+          "operationId": "dashboard.meta_conversions.logs_cleanup",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.meta_conversions.logs_cleanup"
+          ]
+        },
+        {
+          "operationId": "dashboard.meta_conversions.logs_clear",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.meta_conversions.logs_clear"
+          ]
+        },
+        {
+          "operationId": "dashboard.meta_conversions.logs_list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.meta_conversions.logs_list"
+          ]
+        },
+        {
+          "operationId": "dashboard.meta_conversions.update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.meta_conversions.update"
+          ]
+        },
+        {
+          "operationId": "dashboard.navigation.items_create",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.navigation.items_create"
+          ]
+        },
+        {
+          "operationId": "dashboard.navigation.items_delete",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.navigation.items_delete"
+          ]
+        },
+        {
+          "operationId": "dashboard.navigation.items_get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.navigation.items_get"
+          ]
+        },
+        {
+          "operationId": "dashboard.navigation.items_list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.navigation.items_list"
+          ]
+        },
+        {
+          "operationId": "dashboard.navigation.items_move",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.navigation.items_move"
+          ]
+        },
+        {
+          "operationId": "dashboard.navigation.items_move_options",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.navigation.items_move_options"
+          ]
+        },
+        {
+          "operationId": "dashboard.navigation.items_search",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.navigation.items_search"
+          ]
+        },
+        {
+          "operationId": "dashboard.navigation.items_update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.navigation.items_update"
+          ]
+        },
+        {
+          "operationId": "dashboard.navigation.menus_create",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.navigation.menus_create"
+          ]
+        },
+        {
+          "operationId": "dashboard.navigation.menus_get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.navigation.menus_get"
+          ]
+        },
+        {
+          "operationId": "dashboard.navigation.menus_list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.navigation.menus_list"
+          ]
+        },
+        {
+          "operationId": "dashboard.navigation.menus_publish",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.navigation.menus_publish"
+          ]
+        },
+        {
+          "operationId": "dashboard.navigation.menus_restore",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.navigation.menus_restore"
+          ]
+        },
+        {
+          "operationId": "dashboard.navigation.menus_rollback",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.navigation.menus_rollback"
+          ]
+        },
+        {
+          "operationId": "dashboard.navigation.menus_trash",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.navigation.menus_trash"
+          ]
+        },
+        {
+          "operationId": "dashboard.navigation.menus_update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.navigation.menus_update"
+          ]
+        },
+        {
+          "operationId": "dashboard.navigation.placements_list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.navigation.placements_list"
+          ]
+        },
+        {
+          "operationId": "dashboard.navigation.placements_manifest",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.navigation.placements_manifest"
+          ]
+        },
+        {
+          "operationId": "dashboard.navigation.placements_save",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.navigation.placements_save"
+          ]
+        },
+        {
+          "operationId": "dashboard.navigation.products_preview_count",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.navigation.products_preview_count"
+          ]
+        },
+        {
+          "operationId": "dashboard.navigation.publications_list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.navigation.publications_list"
+          ]
+        },
+        {
+          "operationId": "dashboard.navigation.resources_search",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.navigation.resources_search"
+          ]
+        },
+        {
+          "operationId": "dashboard.notifications.admin_rules_get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.notifications.admin_rules_get"
+          ]
+        },
+        {
+          "operationId": "dashboard.notifications.admin_rules_update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.notifications.admin_rules_update"
+          ]
+        },
+        {
+          "operationId": "dashboard.notifications.customer_rules_get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.notifications.customer_rules_get"
+          ]
+        },
+        {
+          "operationId": "dashboard.notifications.customer_rules_update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.notifications.customer_rules_update"
+          ]
+        },
+        {
+          "operationId": "dashboard.notifications.firebase_get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.notifications.firebase_get"
+          ]
+        },
+        {
+          "operationId": "dashboard.notifications.firebase_update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.notifications.firebase_update"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.archive",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.archive"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.bulk_ship",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.bulk_ship"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.catalog_products",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.catalog_products"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.cod_get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.cod_get"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.cod_update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.cod_update"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.create",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.create"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.create_shipment",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.create_shipment"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.export",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.export"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.form_data",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.form_data"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.fulfill",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.fulfill"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.fulfillment_get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.fulfillment_get"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.get"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.invoice_get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.invoice_get"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.invoice_issue",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.invoice_issue"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.invoice_print",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.invoice_print"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.items",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.items"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.list",
+          "surface": "dashboard",
+          "mode": "curated",
+          "workflowIds": [
+            "operations.daily-snapshot.v1"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.notification_resend",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.notification_resend"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.notification_retry",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.notification_retry"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.notifications",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.notifications"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.payment_recovery_export",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.payment_recovery_export"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.payment_recovery_link",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.payment_recovery_link"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.payment_recovery_list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.payment_recovery_list"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.payments",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.payments"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.quote",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.quote"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.refund",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.refund"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.refund_reconcile",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.refund_reconcile"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.restore",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.restore"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.return_approve",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.return_approve"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.return_cancel",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.return_cancel"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.return_create",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.return_create"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.return_get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.return_get"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.return_receive",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.return_receive"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.return_reconcile",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.return_reconcile"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.returns",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.returns"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.shipment_delete",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.shipment_delete"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.shipment_get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.shipment_get"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.shipment_reconcile",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.shipment_reconcile"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.shipment_refresh",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.shipment_refresh"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.shipments",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.shipments"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.support_request_update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.support_request_update"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.update"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.update_status",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.update_status"
+          ]
+        },
+        {
+          "operationId": "dashboard.payments.methods_get",
+          "surface": "dashboard",
+          "mode": "curated",
+          "workflowIds": [
+            "operations.daily-snapshot.v1"
+          ]
+        },
+        {
+          "operationId": "dashboard.payments.methods_update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.payments.methods_update"
+          ]
+        },
+        {
+          "operationId": "dashboard.payments.polar_get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.payments.polar_get"
+          ]
+        },
+        {
+          "operationId": "dashboard.payments.polar_update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.payments.polar_update"
+          ]
+        },
+        {
+          "operationId": "dashboard.payments.sslcommerz_get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.payments.sslcommerz_get"
+          ]
+        },
+        {
+          "operationId": "dashboard.payments.sslcommerz_update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.payments.sslcommerz_update"
+          ]
+        },
+        {
+          "operationId": "dashboard.payments.stripe_get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.payments.stripe_get"
+          ]
+        },
+        {
+          "operationId": "dashboard.payments.stripe_update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.payments.stripe_update"
+          ]
+        },
+        {
+          "operationId": "dashboard.product_options.save_matrix",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.product_options.save_matrix"
+          ]
+        },
+        {
+          "operationId": "dashboard.product_variants.create",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.product_variants.create"
+          ]
+        },
+        {
+          "operationId": "dashboard.product_variants.list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.product_variants.list"
+          ]
+        },
+        {
+          "operationId": "dashboard.product_variants.retire",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.product_variants.retire"
+          ]
+        },
+        {
+          "operationId": "dashboard.product_variants.update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.product_variants.update"
+          ]
+        },
+        {
+          "operationId": "dashboard.products.bulk_delete",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.products.bulk_delete"
+          ]
+        },
+        {
+          "operationId": "dashboard.products.create",
+          "surface": "dashboard",
+          "mode": "curated",
+          "workflowIds": [
+            "catalog.optioned-product.v1"
+          ]
+        },
+        {
+          "operationId": "dashboard.products.delete_permanently",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.products.delete_permanently"
+          ]
+        },
+        {
+          "operationId": "dashboard.products.get_by_ids",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.products.get_by_ids"
+          ]
+        },
+        {
+          "operationId": "dashboard.products.get_section",
+          "surface": "dashboard",
+          "mode": "curated",
+          "workflowIds": [
+            "catalog.optioned-product.v1"
+          ]
+        },
+        {
+          "operationId": "dashboard.products.list_summaries",
+          "surface": "dashboard",
+          "mode": "curated",
+          "workflowIds": [
+            "catalog.optioned-product.v1"
+          ]
+        },
+        {
+          "operationId": "dashboard.products.lookup_barcode",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.products.lookup_barcode"
+          ]
+        },
+        {
+          "operationId": "dashboard.products.restore",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.products.restore"
+          ]
+        },
+        {
+          "operationId": "dashboard.products.stats",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.products.stats"
+          ]
+        },
+        {
+          "operationId": "dashboard.products.trash",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.products.trash"
+          ]
+        },
+        {
+          "operationId": "dashboard.products.update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.products.update"
+          ]
+        },
+        {
+          "operationId": "dashboard.products.update_section",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.products.update_section"
+          ]
+        },
+        {
+          "operationId": "dashboard.promotions.activate",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.promotions.activate"
+          ]
+        },
+        {
+          "operationId": "dashboard.promotions.archive",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.promotions.archive"
+          ]
+        },
+        {
+          "operationId": "dashboard.promotions.create",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.promotions.create"
+          ]
+        },
+        {
+          "operationId": "dashboard.promotions.get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.promotions.get"
+          ]
+        },
+        {
+          "operationId": "dashboard.promotions.list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.promotions.list"
+          ]
+        },
+        {
+          "operationId": "dashboard.promotions.pause",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.promotions.pause"
+          ]
+        },
+        {
+          "operationId": "dashboard.promotions.preview",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.promotions.preview"
+          ]
+        },
+        {
+          "operationId": "dashboard.promotions.update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.promotions.update"
+          ]
+        },
+        {
+          "operationId": "dashboard.security.policy_get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.security.policy_get"
+          ]
+        },
+        {
+          "operationId": "dashboard.security.policy_update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.security.policy_update"
+          ]
+        },
+        {
+          "operationId": "dashboard.security.runtime_sources",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.security.runtime_sources"
+          ]
+        },
+        {
+          "operationId": "dashboard.seo.feed_diagnostics",
+          "surface": "dashboard",
+          "mode": "curated",
+          "workflowIds": [
+            "catalog.optioned-product.v1"
+          ]
+        },
+        {
+          "operationId": "dashboard.seo.live_probe",
+          "surface": "dashboard",
+          "mode": "curated",
+          "workflowIds": [
+            "catalog.optioned-product.v1"
+          ]
+        },
+        {
+          "operationId": "dashboard.seo.settings_get",
+          "surface": "dashboard",
+          "mode": "curated",
+          "workflowIds": [
+            "catalog.optioned-product.v1"
+          ]
+        },
+        {
+          "operationId": "dashboard.seo.settings_update",
+          "surface": "dashboard",
+          "mode": "curated",
+          "workflowIds": [
+            "catalog.optioned-product.v1"
+          ]
+        },
+        {
+          "operationId": "dashboard.settings_footer.footer",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.settings_footer.footer"
+          ]
+        },
+        {
+          "operationId": "dashboard.settings_footer.get_footer",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.settings_footer.get_footer"
+          ]
+        },
+        {
+          "operationId": "dashboard.settings_header.get_header",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.settings_header.get_header"
+          ]
+        },
+        {
+          "operationId": "dashboard.settings_header.header",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.settings_header.header"
+          ]
+        },
+        {
+          "operationId": "dashboard.settings_homepage_presentation.get_homepage_presentation",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.settings_homepage_presentation.get_homepage_presentation"
+          ]
+        },
+        {
+          "operationId": "dashboard.settings_homepage_presentation.homepage_presentation",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.settings_homepage_presentation.homepage_presentation"
+          ]
+        },
+        {
+          "operationId": "dashboard.settings_sms.get_sms",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.settings_sms.get_sms"
+          ]
+        },
+        {
+          "operationId": "dashboard.settings_sms.sms",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.settings_sms.sms"
+          ]
+        },
+        {
+          "operationId": "dashboard.settings.business_get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.settings.business_get"
+          ]
+        },
+        {
+          "operationId": "dashboard.settings.business_update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.settings.business_update"
+          ]
+        },
+        {
+          "operationId": "dashboard.settings.currency_get",
+          "surface": "dashboard",
+          "mode": "curated",
+          "workflowIds": [
+            "operations.daily-snapshot.v1"
+          ]
+        },
+        {
+          "operationId": "dashboard.settings.currency_update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.settings.currency_update"
+          ]
+        },
+        {
+          "operationId": "dashboard.settings.customer_auth_get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.settings.customer_auth_get"
+          ]
+        },
+        {
+          "operationId": "dashboard.settings.customer_auth_update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.settings.customer_auth_update"
+          ]
+        },
+        {
+          "operationId": "dashboard.settings.customer_countries_get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.settings.customer_countries_get"
+          ]
+        },
+        {
+          "operationId": "dashboard.settings.customer_countries_update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.settings.customer_countries_update"
+          ]
+        },
+        {
+          "operationId": "dashboard.settings.email_get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.settings.email_get"
+          ]
+        },
+        {
+          "operationId": "dashboard.settings.email_update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.settings.email_update"
+          ]
+        },
+        {
+          "operationId": "dashboard.settings.media_delivery_get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.settings.media_delivery_get"
+          ]
+        },
+        {
+          "operationId": "dashboard.settings.media_delivery_update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.settings.media_delivery_update"
+          ]
+        },
+        {
+          "operationId": "dashboard.settings.storefront_url_get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.settings.storefront_url_get"
+          ]
+        },
+        {
+          "operationId": "dashboard.settings.storefront_url_update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.settings.storefront_url_update"
+          ]
+        },
+        {
+          "operationId": "dashboard.shipping_methods.create",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.shipping_methods.create"
+          ]
+        },
+        {
+          "operationId": "dashboard.shipping_methods.delete_permanently",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.shipping_methods.delete_permanently"
+          ]
+        },
+        {
+          "operationId": "dashboard.shipping_methods.get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.shipping_methods.get"
+          ]
+        },
+        {
+          "operationId": "dashboard.shipping_methods.list",
+          "surface": "dashboard",
+          "mode": "curated",
+          "workflowIds": [
+            "operations.daily-snapshot.v1"
+          ]
+        },
+        {
+          "operationId": "dashboard.shipping_methods.restore",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.shipping_methods.restore"
+          ]
+        },
+        {
+          "operationId": "dashboard.shipping_methods.trash",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.shipping_methods.trash"
+          ]
+        },
+        {
+          "operationId": "dashboard.shipping_methods.update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.shipping_methods.update"
+          ]
+        },
+        {
+          "operationId": "dashboard.taxes.classes_create",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.taxes.classes_create"
+          ]
+        },
+        {
+          "operationId": "dashboard.taxes.classes_delete",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.taxes.classes_delete"
+          ]
+        },
+        {
+          "operationId": "dashboard.taxes.classes_list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.taxes.classes_list"
+          ]
+        },
+        {
+          "operationId": "dashboard.taxes.classes_update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.taxes.classes_update"
+          ]
+        },
+        {
+          "operationId": "dashboard.taxes.classifications_list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.taxes.classifications_list"
+          ]
+        },
+        {
+          "operationId": "dashboard.taxes.classifications_update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.taxes.classifications_update"
+          ]
+        },
+        {
+          "operationId": "dashboard.taxes.jurisdictions_list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.taxes.jurisdictions_list"
+          ]
+        },
+        {
+          "operationId": "dashboard.taxes.preview",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.taxes.preview"
+          ]
+        },
+        {
+          "operationId": "dashboard.taxes.rates_create",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.taxes.rates_create"
+          ]
+        },
+        {
+          "operationId": "dashboard.taxes.rates_delete",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.taxes.rates_delete"
+          ]
+        },
+        {
+          "operationId": "dashboard.taxes.rates_list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.taxes.rates_list"
+          ]
+        },
+        {
+          "operationId": "dashboard.taxes.rates_update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.taxes.rates_update"
+          ]
+        },
+        {
+          "operationId": "dashboard.taxes.settings_get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.taxes.settings_get"
+          ]
+        },
+        {
+          "operationId": "dashboard.taxes.settings_update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.taxes.settings_update"
+          ]
+        },
+        {
+          "operationId": "dashboard.team.permission_overrides.remove",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.team.permission_overrides.remove"
+          ]
+        },
+        {
+          "operationId": "dashboard.team.permission_overrides.set",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.team.permission_overrides.set"
+          ]
+        },
+        {
+          "operationId": "dashboard.team.permissions.list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.team.permissions.list"
+          ]
+        },
+        {
+          "operationId": "dashboard.team.roles.create",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.team.roles.create"
+          ]
+        },
+        {
+          "operationId": "dashboard.team.roles.delete",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.team.roles.delete"
+          ]
+        },
+        {
+          "operationId": "dashboard.team.roles.get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.team.roles.get"
+          ]
+        },
+        {
+          "operationId": "dashboard.team.roles.list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.team.roles.list"
+          ]
+        },
+        {
+          "operationId": "dashboard.team.roles.update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.team.roles.update"
+          ]
+        },
+        {
+          "operationId": "dashboard.team.user_roles.assign",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.team.user_roles.assign"
+          ]
+        },
+        {
+          "operationId": "dashboard.team.user_roles.remove",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.team.user_roles.remove"
+          ]
+        },
+        {
+          "operationId": "dashboard.team.users.invite",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.team.users.invite"
+          ]
+        },
+        {
+          "operationId": "dashboard.team.users.list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.team.users.list"
+          ]
+        },
+        {
+          "operationId": "dashboard.team.users.resend_invitation",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.team.users.resend_invitation"
+          ]
+        },
+        {
+          "operationId": "dashboard.team.users.revoke_invitation",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.team.users.revoke_invitation"
+          ]
+        },
+        {
+          "operationId": "dashboard.team.users.set_suspension",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.team.users.set_suspension"
+          ]
+        },
+        {
+          "operationId": "dashboard.theme.draft_rebase",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.theme.draft_rebase"
+          ]
+        },
+        {
+          "operationId": "dashboard.theme.draft_save",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.theme.draft_save"
+          ]
+        },
+        {
+          "operationId": "dashboard.theme.get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.theme.get"
+          ]
+        },
+        {
+          "operationId": "dashboard.theme.preview_session_create",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.theme.preview_session_create"
+          ]
+        },
+        {
+          "operationId": "dashboard.theme.publish",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.theme.publish"
+          ]
+        },
+        {
+          "operationId": "dashboard.theme.rollback",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.theme.rollback"
+          ]
+        },
+        {
+          "operationId": "dashboard.theme.versions_list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.theme.versions_list"
+          ]
+        },
+        {
+          "operationId": "dashboard.theme.workspace_get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.theme.workspace_get"
+          ]
+        },
+        {
+          "operationId": "storefront.articles.get_by_slug",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.articles.get_by_slug"
+          ]
+        },
+        {
+          "operationId": "storefront.articles.list",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.articles.list"
+          ]
+        },
+        {
+          "operationId": "storefront.attributes.list_filterable",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.attributes.list_filterable"
+          ]
+        },
+        {
+          "operationId": "storefront.attributes.list_for_category",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.attributes.list_for_category"
+          ]
+        },
+        {
+          "operationId": "storefront.attributes.list_for_search",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.attributes.list_for_search"
+          ]
+        },
+        {
+          "operationId": "storefront.cart.add",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.cart.add"
+          ]
+        },
+        {
+          "operationId": "storefront.cart.clear",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.cart.clear"
+          ]
+        },
+        {
+          "operationId": "storefront.cart.get",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.cart.get"
+          ]
+        },
+        {
+          "operationId": "storefront.cart.remove",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.cart.remove"
+          ]
+        },
+        {
+          "operationId": "storefront.cart.set_quantity",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.cart.set_quantity"
+          ]
+        },
+        {
+          "operationId": "storefront.categories.get_section",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.categories.get_section"
+          ]
+        },
+        {
+          "operationId": "storefront.categories.list_product_summaries",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.categories.list_product_summaries"
+          ]
+        },
+        {
+          "operationId": "storefront.categories.list_summaries",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.categories.list_summaries"
+          ]
+        },
+        {
+          "operationId": "storefront.checkout_language.get_active",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.checkout_language.get_active"
+          ]
+        },
+        {
+          "operationId": "storefront.checkout.get_config",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.checkout.get_config"
+          ]
+        },
+        {
+          "operationId": "storefront.checkout.quote",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.checkout.quote"
+          ]
+        },
+        {
+          "operationId": "storefront.checkout.submit",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.checkout.submit"
+          ]
+        },
+        {
+          "operationId": "storefront.checkout.validate",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.checkout.validate"
+          ]
+        },
+        {
+          "operationId": "storefront.collections.get",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.collections.get"
+          ]
+        },
+        {
+          "operationId": "storefront.collections.list",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.collections.list"
+          ]
+        },
+        {
+          "operationId": "storefront.context.close",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.context.close"
+          ]
+        },
+        {
+          "operationId": "storefront.context.create",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.context.create"
+          ]
+        },
+        {
+          "operationId": "storefront.context.get",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.context.get"
+          ]
+        },
+        {
+          "operationId": "storefront.continuations.get",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.continuations.get"
+          ]
+        },
+        {
+          "operationId": "storefront.customer_auth.begin",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.customer_auth.begin"
+          ]
+        },
+        {
+          "operationId": "storefront.customer_auth.logout",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.customer_auth.logout"
+          ]
+        },
+        {
+          "operationId": "storefront.customer_auth.status",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.customer_auth.status"
+          ]
+        },
+        {
+          "operationId": "storefront.customer_profile.get",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.customer_profile.get"
+          ]
+        },
+        {
+          "operationId": "storefront.customer_profile.update",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.customer_profile.update"
+          ]
+        },
+        {
+          "operationId": "storefront.delivery.set",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.delivery.set"
+          ]
+        },
+        {
+          "operationId": "storefront.discount.apply",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.discount.apply"
+          ]
+        },
+        {
+          "operationId": "storefront.discount.remove",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.discount.remove"
+          ]
+        },
+        {
+          "operationId": "storefront.hero_sliders.get",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.hero_sliders.get"
+          ]
+        },
+        {
+          "operationId": "storefront.hero_sliders.list",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.hero_sliders.list"
+          ]
+        },
+        {
+          "operationId": "storefront.homepage.get",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.homepage.get"
+          ]
+        },
+        {
+          "operationId": "storefront.layout.get",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.layout.get"
+          ]
+        },
+        {
+          "operationId": "storefront.locations.area_summaries",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.locations.area_summaries"
+          ]
+        },
+        {
+          "operationId": "storefront.locations.city_summaries",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.locations.city_summaries"
+          ]
+        },
+        {
+          "operationId": "storefront.locations.zone_summaries",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.locations.zone_summaries"
+          ]
+        },
+        {
+          "operationId": "storefront.navigation.get",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.navigation.get"
+          ]
+        },
+        {
+          "operationId": "storefront.navigation.items_list",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.navigation.items_list"
+          ]
+        },
+        {
+          "operationId": "storefront.navigation.menu_get",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.navigation.menu_get"
+          ]
+        },
+        {
+          "operationId": "storefront.navigation.menu_get_by_id",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.navigation.menu_get_by_id"
+          ]
+        },
+        {
+          "operationId": "storefront.navigation.placements_list",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.navigation.placements_list"
+          ]
+        },
+        {
+          "operationId": "storefront.orders.get",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.orders.get"
+          ]
+        },
+        {
+          "operationId": "storefront.orders.list",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.orders.list"
+          ]
+        },
+        {
+          "operationId": "storefront.orders.payment.begin",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.orders.payment.begin"
+          ]
+        },
+        {
+          "operationId": "storefront.orders.support_request.create",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.orders.support_request.create"
+          ]
+        },
+        {
+          "operationId": "storefront.pages.get_by_id",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.pages.get_by_id"
+          ]
+        },
+        {
+          "operationId": "storefront.pages.get_by_slug",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.pages.get_by_slug"
+          ]
+        },
+        {
+          "operationId": "storefront.pages.list",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.pages.list"
+          ]
+        },
+        {
+          "operationId": "storefront.payment_recovery.begin",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.payment_recovery.begin"
+          ]
+        },
+        {
+          "operationId": "storefront.payment_recovery.status",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.payment_recovery.status"
+          ]
+        },
+        {
+          "operationId": "storefront.payment.status",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.payment.status"
+          ]
+        },
+        {
+          "operationId": "storefront.products.get_section",
+          "surface": "storefront",
+          "mode": "curated",
+          "workflowIds": [
+            "catalog.optioned-product.v1"
+          ]
+        },
+        {
+          "operationId": "storefront.products.list",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.products.list"
+          ]
+        },
+        {
+          "operationId": "storefront.receipt.get",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.receipt.get"
+          ]
+        },
+        {
+          "operationId": "storefront.search.predict",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.search.predict"
+          ]
+        },
+        {
+          "operationId": "storefront.seo.get",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.seo.get"
+          ]
+        },
+        {
+          "operationId": "storefront.shipping_methods.list",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.shipping_methods.list"
+          ]
+        }
+      ]
+    }
   }
 }

@@ -1,5 +1,9 @@
 import { getRoutePermission } from "@scalius/core/auth/rbac/route-permissions";
 import {
+  buildAgentWorkflowCatalog,
+  type AgentWorkflowCatalog,
+} from "./agent-access/workflows";
+import {
   AGENT_OPERATION_ID_PATTERN,
   buildAgentOperationManifest,
   type AgentOperationMetadata,
@@ -27,6 +31,7 @@ export type OpenApiDocument = {
     [key: string]: unknown;
   };
   paths?: Record<string, OpenApiPathItem | unknown>;
+  "x-scalius-workflows"?: AgentWorkflowCatalog;
   [key: string]: unknown;
 };
 
@@ -2823,5 +2828,8 @@ export function finalizeOpenApiContract<T extends { components?: unknown; paths?
   applySecuritySchemes(document);
   applyOperationContract(document);
   normalizeUnconstrainedOpenApiSchemas(document);
+  document["x-scalius-workflows"] = buildAgentWorkflowCatalog(
+    buildAgentOperationManifest(document),
+  );
   return spec;
 }
