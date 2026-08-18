@@ -8,7 +8,6 @@ import {
   verifyAgentArtifactBytes,
 } from "../agent-access/artifacts";
 import { loadAgentAccessBackend } from "../agent-access/backend";
-import { resolveAgentOperationById } from "../agent-access/direct-operation";
 import { getAgentDispatchPrincipal } from "../agent-access/dispatch-context";
 import { getBearerToken, parseAgentCredential } from "../agent-access/pat";
 import { resolveAgentPrincipalFromBearer, resolveAgentPrincipalFromGrant } from "../agent-access/principal";
@@ -142,6 +141,7 @@ app.openapi(downloadRoute, async (c) => {
     });
     throw new NotFoundError("Agent artifact is unavailable, expired, or already consumed");
   }
+  const { resolveAgentOperationById } = await import("../agent-access/direct-operation");
   const sourceOperation = resolveAgentOperationById(handle.operationId);
   if (
     !sourceOperation ||

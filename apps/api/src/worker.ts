@@ -15,6 +15,7 @@ import {
   normalizePublicApiCacheTags,
 } from "./public-cache-policy";
 import { isAgentAccessPath } from "./agent-access/paths";
+import { fetchRuntimeApiApp } from "./runtime/fetch-runtime-app";
 
 export type { AppType } from "./app";
 export { CheckoutCoordinator } from "./checkout-coordinator";
@@ -24,8 +25,7 @@ async function fetchApiApp(
   env: Env,
   ctx: ExecutionContext,
 ): Promise<Response> {
-  const { default: app } = await import("./app");
-  const response = await app.fetch(request, env, ctx);
+  const response = await fetchRuntimeApiApp(request, env, ctx);
   return applyBaselineSecurityHeaders(request, response, {
     frameProtection: "deny",
   });
