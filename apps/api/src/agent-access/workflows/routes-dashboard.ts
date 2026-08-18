@@ -558,7 +558,7 @@ export const DASHBOARD_AGENT_WORKFLOW_ROUTES = [
     surface: "dashboard",
     kind: "write",
     title: "Create a shipping method",
-    summary: "Create a merchant-defined shipping method and verify admin and storefront visibility.",
+    summary: "Create a globally offered flat-fee shipping method and verify admin and storefront visibility.",
     examples: [
       "Add a Dhaka delivery method with the merchant-provided price and make sure it appears at checkout.",
     ],
@@ -572,7 +572,8 @@ export const DASHBOARD_AGENT_WORKFLOW_ROUTES = [
     requiresConfirmation: true,
     requiresVerification: true,
     rules: [
-      "Require merchant-supplied name, service area, price, and eligibility facts.",
+      "Require the merchant-supplied label, fee, active state, and sort order.",
+      "Treat the label as display text; flat-fee methods do not enforce a geographic service area.",
       "Confirm creation before the write.",
       "Verify the method in bounded admin and buyer-facing lists.",
     ],

@@ -269,7 +269,7 @@ function installValidProductRepeat(document: OpenApiDocument): {
 }
 
 describe("CLI workflow resolver adapter", () => {
-  it("accepts the checked-in live catalog and preserves all 66 reviewed outcomes", async () => {
+  it("accepts the checked-in live catalog and preserves all 70 reviewed outcomes", async () => {
     const liveDocument = await loadLiveDocument();
 
     for (const testCase of AGENT_INTENT_EVAL_CASES) {
@@ -284,6 +284,17 @@ describe("CLI workflow resolver adapter", () => {
           : [];
       expect(result.disposition, testCase.id).toBe(testCase.expectedDisposition ?? "execute");
       expect(operationIds, testCase.id).toEqual(testCase.expectedOperationIds);
+      if (testCase.expectedDisposition) {
+        expect(result.kind, testCase.id).toBe("control");
+        if (result.kind === "control") {
+          expect(result.classification.controlId, testCase.id).toBe(
+            testCase.expectedControlId ?? testCase.id,
+          );
+          expect(result.forbiddenOperationIds, testCase.id).toEqual(
+            testCase.forbiddenOperationIds ?? [],
+          );
+        }
+      }
       expect(new TextEncoder().encode(JSON.stringify(result)).byteLength, testCase.id)
         .toBeLessThanOrEqual(16 * 1024);
     }
