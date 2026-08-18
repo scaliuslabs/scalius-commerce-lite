@@ -86,6 +86,16 @@ export type WorkflowResolverOutputProjection = {
   selectors: readonly WorkflowResolverOutputSelector[];
 };
 
+export type WorkflowResolverRepeat = {
+  factId: string;
+  orderPointer: string;
+  itemMapPointer: string;
+  minItems: number;
+  maxItems: number;
+  bindings: readonly { templatePointer: string; itemPointer: string }[];
+  capture: { responsePointer: string; itemPointer: string };
+};
+
 export type WorkflowResolverCard = {
   id: string;
   constructionRules?: Readonly<Record<string, string>>;
@@ -115,6 +125,7 @@ export type WorkflowResolverCard = {
         }[];
         defaults: readonly { templatePointer: string; value: unknown }[];
       };
+      repeat?: WorkflowResolverRepeat;
       output?: WorkflowResolverOutputProjection;
       policies: {
         revision: "none" | "optional" | "required";
@@ -160,6 +171,7 @@ export type WorkflowExecutionDetail = {
       }>;
       defaults: Array<{ templatePointer: string; value: unknown }>;
     };
+    repeat?: WorkflowResolverRepeat;
     policies: {
       revision: "none" | "optional" | "required";
       idempotency: "none" | "supported" | "required";
@@ -410,6 +422,24 @@ function projectDependencySource(
       };
 }
 
+function projectRepeat(repeat: WorkflowResolverRepeat): WorkflowResolverRepeat {
+  return {
+    factId: repeat.factId,
+    orderPointer: repeat.orderPointer,
+    itemMapPointer: repeat.itemMapPointer,
+    minItems: repeat.minItems,
+    maxItems: repeat.maxItems,
+    bindings: repeat.bindings.map((binding) => ({
+      templatePointer: binding.templatePointer,
+      itemPointer: binding.itemPointer,
+    })),
+    capture: {
+      responsePointer: repeat.capture.responsePointer,
+      itemPointer: repeat.capture.itemPointer,
+    },
+  };
+}
+
 function projectWorkflowDetail(card: WorkflowResolverCard): WorkflowExecutionDetail {
   const constructionRules = card.constructionRules
     ? Object.fromEntries(
@@ -448,6 +478,7 @@ function projectWorkflowDetail(card: WorkflowResolverCard): WorkflowExecutionDet
           value: inputDefault.value,
         })),
       },
+      ...(step.repeat !== undefined ? { repeat: projectRepeat(step.repeat) } : {}),
       policies: {
         revision: step.policies.revision,
         idempotency: step.policies.idempotency,
@@ -1034,6 +1065,7 @@ export type CompiledWorkflowReadPhase = {
 export type CompiledWorkflowRead = {
   version: string;
   workflowId: string;
+  rules: string[];
   phases: CompiledWorkflowReadPhase[];
 };
 
@@ -1052,6 +1084,8 @@ const WORKFLOW_READ_MAX_SELECTORS = 24;
 const WORKFLOW_READ_MAX_FIELDS = 32;
 const WORKFLOW_READ_MAX_ITEMS = 100;
 const WORKFLOW_READ_MAX_ALIAS_LENGTH = 64;
+const WORKFLOW_READ_MAX_RULES = 6;
+const WORKFLOW_READ_MAX_RULE_LENGTH = 300;
 const WORKFLOW_READ_LOCAL_ID = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/;
 const WORKFLOW_READ_ALIAS = /^[A-Za-z][A-Za-z0-9_]*$/;
 const WORKFLOW_READ_FORBIDDEN_SEGMENTS = new Set([
@@ -1078,6 +1112,30 @@ function workflowReadScalar(value: unknown): value is ProjectedWorkflowReadScala
 function workflowReadAlias(value: string): boolean {
   return value.length <= WORKFLOW_READ_MAX_ALIAS_LENGTH && WORKFLOW_READ_ALIAS.test(value) &&
     !WORKFLOW_READ_FORBIDDEN_SEGMENTS.has(value);
+}
+
+function copyWorkflowReadRules(rules: readonly string[]): string[] | null {
+  if (!Array.isArray(rules) || rules.length < 1 || rules.length > WORKFLOW_READ_MAX_RULES) {
+    return null;
+  }
+  const copied: string[] = [];
+  const seen = new Set<string>();
+  for (const rule of rules) {
+    if (
+      typeof rule !== "string" ||
+      rule.length > WORKFLOW_READ_MAX_RULE_LENGTH ||
+      rule.trim() !== rule ||
+      rule.length === 0 ||
+      seen.has(rule)
+    ) return null;
+    seen.add(rule);
+    copied.push(rule);
+  }
+  return copied;
+}
+
+function workflowReadRulesEqual(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((rule, index) => rule === right[index]);
 }
 
 function workflowReadPointer(pointer: string): string[] | null {
@@ -1380,6 +1438,8 @@ export function createWorkflowReadCompiler(
     if (routes.length !== 1 || cards.length !== 1) return null;
     const route = routes[0]!;
     const card = cards[0]!;
+    const routeRules = copyWorkflowReadRules(route.rules);
+    const resolvedRules = copyWorkflowReadRules(resolution.plan.rules);
     const cardSteps = card.phases.flatMap((phase) => phase.steps);
     const cardOperationIds = unique(cardSteps.map((step) => step.operationId));
     if (
@@ -1390,6 +1450,9 @@ export function createWorkflowReadCompiler(
       card.phases.length > WORKFLOW_READ_MAX_PHASES ||
       cardSteps.length === 0 ||
       cardSteps.length > WORKFLOW_READ_MAX_STEPS ||
+      !routeRules ||
+      !resolvedRules ||
+      !workflowReadRulesEqual(routeRules, resolvedRules) ||
       !workflowReadOperationSet(route.operationIds, resolution.plan.operationIds) ||
       !workflowReadOperationSet(route.operationIds, cardOperationIds)
     ) return null;
@@ -1426,7 +1489,8 @@ export function createWorkflowReadCompiler(
         if (
           !WORKFLOW_READ_LOCAL_ID.test(step.id) ||
           namespaces.has(namespace) ||
-          step.mutation !== "read"
+          step.mutation !== "read" ||
+          step.repeat !== undefined
         ) return null;
         const operation = operations.get(step.operationId);
         if (
@@ -1445,7 +1509,7 @@ export function createWorkflowReadCompiler(
       if (steps.length === 0) return null;
       phases.push({ id: phase.id, steps });
     }
-    return { version: resolution.version, workflowId, phases };
+    return { version: resolution.version, workflowId, rules: resolvedRules, phases };
   };
 }
 

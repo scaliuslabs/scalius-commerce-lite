@@ -78,6 +78,31 @@ export type AgentWorkflowInputDefault = {
   value: unknown;
 };
 
+export type AgentWorkflowRepeatBinding = {
+  /** Fixed pointer to one operation-input template value. */
+  templatePointer: string;
+  /** Fixed pointer relative to the item selected by the current ordered key. */
+  itemPointer: string;
+};
+
+export type AgentWorkflowRepeat = {
+  /** Merchant-authoritative fact containing the ordered keys and keyed items. */
+  factId: string;
+  /** Fixed pointer to the array of scalar item keys. */
+  orderPointer: string;
+  /** Fixed pointer to the object indexed by each ordered key. */
+  itemMapPointer: string;
+  minItems: number;
+  maxItems: number;
+  bindings: AgentWorkflowRepeatBinding[];
+  capture: {
+    /** Fixed pointer to one scalar operation-response value. */
+    responsePointer: string;
+    /** Fixed pointer written into the same selected fact item. */
+    itemPointer: string;
+  };
+};
+
 export type AgentWorkflowStepPolicies = {
   revision: AgentOperationRevision;
   idempotency: AgentOperationIdempotency;
@@ -117,6 +142,7 @@ export type AgentWorkflowStep = {
     dependencies: AgentWorkflowInputDependency[];
     defaults: AgentWorkflowInputDefault[];
   };
+  repeat?: AgentWorkflowRepeat;
   output?: AgentWorkflowOutputProjection;
   policies: AgentWorkflowStepPolicies;
 };

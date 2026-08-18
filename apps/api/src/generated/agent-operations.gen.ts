@@ -75854,10 +75854,10 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
     {
       "id": "catalog.optioned-product.v1",
       "surface": "dashboard",
-      "title": "Create a configurable product",
-      "summary": "Resolve, atomically create, publish, and verify an exact option/SKU matrix.",
+      "title": "Create an optioned product",
+      "summary": "Resolve, atomically create, publish, and verify exact SKU truth.",
       "examples": [
-        "Create a Size × Color T-shirt and verify SKU, image, stock, and discovery truth."
+        "Create a two-axis product and verify exact SKU, media, stock, and discovery truth."
       ],
       "tags": [
         "catalog",
@@ -75877,8 +75877,8 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
       "requiredFacts": [
         {
           "id": "productSpec",
-          "title": "Product facts",
-          "description": "Name, slug, rich text, price, SEO, condition, visibility.",
+          "title": "Product",
+          "description": "Name/slug, rich text, price, SEO, condition, visibility.",
           "required": true,
           "source": {
             "kind": "merchant"
@@ -75887,7 +75887,7 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         },
         {
           "id": "categoryId",
-          "title": "Resolved category",
+          "title": "Category ID",
           "description": "Existing category ID or conditional-create result.",
           "required": true,
           "source": {
@@ -75916,24 +75916,24 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
           "nonInferenceRule": "Never duplicate or fabricate attributes."
         },
         {
-          "id": "mediaSources",
-          "title": "Usable media sources",
-          "description": "Primary and secondary public URLs or client-readable files.",
+          "id": "mediaSet",
+          "title": "Media set",
+          "description": "{order:[pmed...],byId:{pmed:{mediaId|sourceUrl,altText,isPrimary}}}; 1-250 unique assets, one primary.",
           "required": true,
           "source": {
             "kind": "merchant"
           },
-          "nonInferenceRule": "Only committed assets are media authority."
+          "nonInferenceRule": "Use exact keys/sources; never infer count, order, role, or position."
         },
         {
           "id": "optionMatrix",
-          "title": "Exact option matrix",
-          "description": "Ordered axes/values and complete SKU price, stock, and pmed image rows.",
+          "title": "Option matrix",
+          "description": "Ordered axes/values; complete SKU price/stock/mediaSet imageId rows.",
           "required": true,
           "source": {
             "kind": "merchant"
           },
-          "nonInferenceRule": "Never add, omit, collapse, or reorder combinations."
+          "nonInferenceRule": "Never add, omit, collapse, or reorder combinations, or infer imageId by label/position."
         }
       ],
       "phases": [
@@ -76162,10 +76162,10 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
                 "idempotency": "none",
                 "confirmation": "required",
                 "stopConditions": [
-                  "Stop on conflict or uncertain write; reread."
+                  "On conflict or uncertain write, stop and reread."
                 ],
                 "nonInferenceRules": [
-                  "Use resolved or merchant facts only."
+                  "Use resolved or merchant facts."
                 ]
               }
             },
@@ -76197,10 +76197,10 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
                 "idempotency": "none",
                 "confirmation": "required",
                 "stopConditions": [
-                  "Stop on conflict or uncertain write; reread."
+                  "On conflict or uncertain write, stop and reread."
                 ],
                 "nonInferenceRules": [
-                  "Use resolved or merchant facts only."
+                  "Use resolved or merchant facts."
                 ]
               }
             },
@@ -76224,10 +76224,10 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
                 "idempotency": "none",
                 "confirmation": "required",
                 "stopConditions": [
-                  "Stop on conflict or uncertain write; reread."
+                  "On conflict or uncertain write, stop and reread."
                 ],
                 "nonInferenceRules": [
-                  "Use resolved or merchant facts only."
+                  "Use resolved or merchant facts."
                 ]
               }
             }
@@ -76236,84 +76236,57 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         {
           "id": "media",
           "surface": "dashboard",
-          "title": "Commit product media",
-          "summary": "Import each source and retain its committed media ID.",
+          "title": "Commit media",
+          "summary": "Commit assets with keyed IDs.",
           "dependsOn": [
             "resolve"
           ],
           "stopConditions": [
-            "Stop on inaccessible, invalid, or oversized media."
+            "Stop on invalid, inaccessible, oversized, duplicate, or ambiguous media."
           ],
           "steps": [
             {
-              "id": "primary",
-              "title": "Import primary media",
+              "id": "asset",
+              "title": "Commit one declared asset",
               "operationId": "dashboard.media.import_url",
               "mutation": "create",
-              "condition": "Use the reviewed direct-upload client action for a local file.",
+              "condition": "Skip ready mediaId; local files must complete dashboard.media-upload and re-enter as ready.",
               "input": {
                 "template": {
                   "body": {
                     "sourceUrl": null
                   }
                 },
-                "dependencies": [
+                "dependencies": [],
+                "defaults": []
+              },
+              "repeat": {
+                "factId": "mediaSet",
+                "orderPointer": "/order",
+                "itemMapPointer": "/byId",
+                "minItems": 1,
+                "maxItems": 250,
+                "bindings": [
                   {
                     "templatePointer": "/body/sourceUrl",
-                    "source": {
-                      "kind": "fact",
-                      "factId": "mediaSources",
-                      "factPointer": "/primary/sourceUrl"
-                    }
+                    "itemPointer": "/sourceUrl"
                   }
                 ],
-                "defaults": []
+                "capture": {
+                  "responsePointer": "/data/file/id",
+                  "itemPointer": "/mediaId"
+                }
               },
               "policies": {
                 "revision": "none",
                 "idempotency": "none",
                 "confirmation": "required",
                 "stopConditions": [
-                  "Stop on conflict or uncertain write; reread."
+                  "On conflict or uncertain write, stop and reread."
                 ],
                 "nonInferenceRules": [
-                  "Use resolved or merchant facts only."
-                ]
-              }
-            },
-            {
-              "id": "secondary",
-              "title": "Import secondary media",
-              "operationId": "dashboard.media.import_url",
-              "mutation": "create",
-              "condition": "Use the reviewed direct-upload client action for a local file.",
-              "input": {
-                "template": {
-                  "body": {
-                    "sourceUrl": null
-                  }
-                },
-                "dependencies": [
-                  {
-                    "templatePointer": "/body/sourceUrl",
-                    "source": {
-                      "kind": "fact",
-                      "factId": "mediaSources",
-                      "factPointer": "/secondary/sourceUrl"
-                    }
-                  }
-                ],
-                "defaults": []
-              },
-              "policies": {
-                "revision": "none",
-                "idempotency": "none",
-                "confirmation": "required",
-                "stopConditions": [
-                  "Stop on conflict or uncertain write; reread."
-                ],
-                "nonInferenceRules": [
-                  "Use resolved or merchant facts only."
+                  "Use resolved or merchant facts.",
+                  "Never cross-assign captured media IDs."
                 ]
               }
             }
@@ -76337,6 +76310,7 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
               "title": "Create atomic optioned product",
               "operationId": "dashboard.products.create",
               "mutation": "create",
+              "condition": "Materialize body.media from every ordered mediaSet item using exact pmed key/mediaId; require 1-250 unique assets, one primary.",
               "input": {
                 "template": {
                   "body": {
@@ -76354,20 +76328,7 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
                     "excludeFromProductFeed": false,
                     "productCondition": null,
                     "slug": null,
-                    "media": [
-                      {
-                        "id": "pmed_primary",
-                        "mediaId": null,
-                        "altText": null,
-                        "isPrimary": true
-                      },
-                      {
-                        "id": "pmed_secondary",
-                        "mediaId": null,
-                        "altText": null,
-                        "isPrimary": false
-                      }
-                    ],
+                    "media": null,
                     "attributes": null,
                     "optionMatrix": null
                   }
@@ -76409,24 +76370,6 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
                       "kind": "fact",
                       "factId": "optionMatrix"
                     }
-                  },
-                  {
-                    "templatePointer": "/body/media/0/mediaId",
-                    "source": {
-                      "kind": "step",
-                      "phaseId": "media",
-                      "stepId": "primary",
-                      "responsePointer": "/data/file/id"
-                    }
-                  },
-                  {
-                    "templatePointer": "/body/media/1/mediaId",
-                    "source": {
-                      "kind": "step",
-                      "phaseId": "media",
-                      "stepId": "secondary",
-                      "responsePointer": "/data/file/id"
-                    }
                   }
                 ],
                 "defaults": [
@@ -76453,10 +76396,11 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
                 "idempotency": "none",
                 "confirmation": "required",
                 "stopConditions": [
-                  "Stop on conflict or uncertain write; reread."
+                  "On conflict or uncertain write, stop and reread."
                 ],
                 "nonInferenceRules": [
-                  "Use resolved or merchant facts only."
+                  "Use resolved or merchant facts.",
+                  "Every variant imageId must equal a mediaSet pmed key; never map by position."
                 ]
               }
             }
@@ -76597,7 +76541,7 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
                   "On conflict, reread summary/readiness; never retry stale."
                 ],
                 "nonInferenceRules": [
-                  "Use resolved or merchant facts only."
+                  "Use resolved or merchant facts."
                 ]
               }
             }
@@ -76607,13 +76551,14 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
           "id": "dashboardVerify",
           "surface": "dashboard",
           "title": "Verify dashboard truth",
-          "summary": "Read composition, feed, and discovery health.",
+          "summary": "Read composition and bounded discovery evidence.",
           "dependsOn": [
             "create",
             "publish"
           ],
           "stopConditions": [
-            "Stop on SKU/image/stock drift or discovery failure."
+            "Stop on SKU/image/stock drift or discovery failure.",
+            "No bounded product/SKU feed-row read exists; do not claim emitted price/image/availability."
           ],
           "steps": [
             {
@@ -76731,7 +76676,7 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
           "id": "storefrontVerify",
           "surface": "storefront",
           "title": "Verify buyer SKU truth",
-          "summary": "Compare public options, prices, images, and availability bands.",
+          "summary": "Compare buyer options, prices, images, and availability.",
           "dependsOn": [
             "dashboardVerify"
           ],
@@ -76806,8 +76751,8 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
             "Exact media, attributes, axes, SKUs, prices, and stock."
           ],
           "bounds": {
-            "maxCalls": 12,
-            "maxItems": 150,
+            "maxCalls": 50,
+            "maxItems": 500,
             "maxResponseBytes": 65536
           }
         },
@@ -76821,7 +76766,7 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
             "/data/reasons"
           ],
           "proves": [
-            "Feed eligibility and explicit exclusion reasons."
+            "Feed policy, eligibility totals, and sampled exclusions only."
           ],
           "bounds": {
             "maxCalls": 1,
@@ -76838,7 +76783,7 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
             "/data/resources"
           ],
           "proves": [
-            "Sitemap/feed health and absolute-link evidence."
+            "Sitemap/feed health, bounded counts, and absolute links only."
           ],
           "bounds": {
             "maxCalls": 1,
@@ -76855,10 +76800,10 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
             "/data/items"
           ],
           "proves": [
-            "Buyer SKU price, variant image, and availability band."
+            "Buyer SKU price, exact image, and availability band; excludes feed rows."
           ],
           "bounds": {
-            "maxCalls": 10,
+            "maxCalls": 20,
             "maxItems": 150,
             "maxResponseBytes": 61440
           }
@@ -76868,10 +76813,10 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
     {
       "id": "operations.daily-snapshot.v1",
       "surface": "dashboard",
-      "title": "Daily merchant snapshot",
-      "summary": "Report booked-gross activity, open fulfillment, alerts, and payment/delivery readiness.",
+      "title": "Daily snapshot",
+      "summary": "Report booked activity, backlogs, and checkout readiness.",
       "examples": [
-        "Show today's booked sales, orders to fulfill, stock alerts, and checkout readiness."
+        "Read booked revenue, orders, fulfillment, stock/recovery work, and checkout readiness."
       ],
       "tags": [
         "daily",
@@ -76889,35 +76834,35 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
             "kind": "constant",
             "value": 1
           },
-          "nonInferenceRule": "Keep Asia/Dhaka date keys; ignore host timezone."
+          "nonInferenceRule": "Keep Asia/Dhaka keys; ignore host timezone."
         },
         {
           "id": "currency",
           "title": "Currency",
-          "description": "Currency returned by store currency settings.",
+          "description": "Use saved currency settings.",
           "required": true,
           "source": {
             "kind": "operation",
             "operationId": "dashboard.settings.currency_get",
             "responsePointer": "/data/currencyCode"
           },
-          "nonInferenceRule": "Never guess or mix currency labels."
+          "nonInferenceRule": "Never guess currency."
         }
       ],
       "phases": [
         {
           "id": "activity",
           "surface": "dashboard",
-          "title": "Activity and work queue",
-          "summary": "Read the merchant-day aggregate, currency, and bounded fulfillment queue.",
+          "title": "Activity and queues",
+          "summary": "Merchant-day activity, currency, and queues.",
           "dependsOn": [],
           "stopConditions": [
-            "Never total partial pages or use host-local dates."
+            "Use pagination and Asia/Dhaka dates."
           ],
           "steps": [
             {
               "id": "daily",
-              "title": "Read booked-gross activity",
+              "title": "Activity",
               "operationId": "dashboard.home.activity",
               "mutation": "read",
               "input": {
@@ -76959,7 +76904,7 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
                       },
                       {
                         "pointer": "/revenue",
-                        "alias": "revenue"
+                        "alias": "bookedRevenue"
                       },
                       {
                         "pointer": "/newCustomers",
@@ -76974,16 +76919,16 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
                 "idempotency": "none",
                 "confirmation": "none",
                 "stopConditions": [
-                  "Stop on auth/read failure."
+                  "Stop on read failure."
                 ],
                 "nonInferenceRules": [
-                  "Treat missing data as unknown."
+                  "Missing is unknown."
                 ]
               }
             },
             {
               "id": "currency",
-              "title": "Read store currency",
+              "title": "Currency",
               "operationId": "dashboard.settings.currency_get",
               "mutation": "read",
               "input": {
@@ -77008,16 +76953,16 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
                 "idempotency": "none",
                 "confirmation": "none",
                 "stopConditions": [
-                  "Stop on auth/read failure."
+                  "Stop on read failure."
                 ],
                 "nonInferenceRules": [
-                  "Treat missing data as unknown."
+                  "Missing is unknown."
                 ]
               }
             },
             {
               "id": "fulfillment",
-              "title": "Read orders awaiting fulfillment",
+              "title": "Fulfillment",
               "operationId": "dashboard.orders.list",
               "mutation": "read",
               "input": {
@@ -77032,32 +76977,7 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
                   }
                 },
                 "dependencies": [],
-                "defaults": [
-                  {
-                    "templatePointer": "/query/page",
-                    "value": 1
-                  },
-                  {
-                    "templatePointer": "/query/limit",
-                    "value": 10
-                  },
-                  {
-                    "templatePointer": "/query/statusGroup",
-                    "value": "open"
-                  },
-                  {
-                    "templatePointer": "/query/fulfillmentStatus",
-                    "value": "pending"
-                  },
-                  {
-                    "templatePointer": "/query/sort",
-                    "value": "createdAt"
-                  },
-                  {
-                    "templatePointer": "/query/order",
-                    "value": "desc"
-                  }
-                ]
+                "defaults": []
               },
               "output": {
                 "selectors": [
@@ -77133,10 +77053,82 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
                 "idempotency": "none",
                 "confirmation": "none",
                 "stopConditions": [
-                  "Stop on auth/read failure."
+                  "Stop on read failure."
                 ],
                 "nonInferenceRules": [
-                  "Treat missing data as unknown."
+                  "Missing is unknown."
+                ]
+              }
+            },
+            {
+              "id": "paymentRecovery",
+              "title": "Recovery",
+              "operationId": "dashboard.orders.payment_recovery_list",
+              "mutation": "read",
+              "input": {
+                "template": {
+                  "query": {
+                    "page": 1,
+                    "limit": 1,
+                    "state": "recoverable"
+                  }
+                },
+                "dependencies": [],
+                "defaults": []
+              },
+              "output": {
+                "selectors": [
+                  {
+                    "pointer": "/data/pagination/total",
+                    "alias": "total"
+                  }
+                ]
+              },
+              "policies": {
+                "revision": "none",
+                "idempotency": "none",
+                "confirmation": "none",
+                "stopConditions": [
+                  "Stop on read failure."
+                ],
+                "nonInferenceRules": [
+                  "Missing is unknown."
+                ]
+              }
+            },
+            {
+              "id": "paymentNeedsAttention",
+              "title": "Attention total",
+              "operationId": "dashboard.orders.payment_recovery_list",
+              "mutation": "read",
+              "input": {
+                "template": {
+                  "query": {
+                    "page": 1,
+                    "limit": 1,
+                    "state": "needs_attention"
+                  }
+                },
+                "dependencies": [],
+                "defaults": []
+              },
+              "output": {
+                "selectors": [
+                  {
+                    "pointer": "/data/pagination/total",
+                    "alias": "total"
+                  }
+                ]
+              },
+              "policies": {
+                "revision": "none",
+                "idempotency": "none",
+                "confirmation": "none",
+                "stopConditions": [
+                  "Stop on read failure."
+                ],
+                "nonInferenceRules": [
+                  "Missing is unknown."
                 ]
               }
             }
@@ -77145,18 +77137,18 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         {
           "id": "readiness",
           "surface": "dashboard",
-          "title": "Operating readiness",
-          "summary": "Distinguish saved settings, active rows, and buyer-usable readiness.",
+          "title": "Readiness",
+          "summary": "Read saved, active, and buyer-usable checkout facts.",
           "dependsOn": [
             "activity"
           ],
           "stopConditions": [
-            "Report unavailable projections; never guess providers."
+            "Missing readiness is unknown."
           ],
           "steps": [
             {
               "id": "alerts",
-              "title": "Read inventory alerts",
+              "title": "Alerts",
               "operationId": "dashboard.inventory_alerts.list",
               "mutation": "read",
               "input": {
@@ -77166,12 +77158,7 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
                   }
                 },
                 "dependencies": [],
-                "defaults": [
-                  {
-                    "templatePointer": "/query/status",
-                    "value": "active"
-                  }
-                ]
+                "defaults": []
               },
               "output": {
                 "selectors": [
@@ -77221,19 +77208,18 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
                 "idempotency": "none",
                 "confirmation": "none",
                 "stopConditions": [
-                  "Stop on auth/read failure."
+                  "Stop on read failure."
                 ],
                 "nonInferenceRules": [
-                  "Treat missing data as unknown."
+                  "Missing is unknown."
                 ]
               }
             },
             {
               "id": "checkout",
-              "title": "Read checkout readiness",
+              "title": "Checkout",
               "operationId": "dashboard.checkout.readiness_get",
               "mutation": "read",
-              "condition": "Use this first-class projection for blockers; never assume COD, gateway, or delivery fallback.",
               "input": {
                 "template": {},
                 "dependencies": [],
@@ -77273,19 +77259,18 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
                 "idempotency": "none",
                 "confirmation": "none",
                 "stopConditions": [
-                  "Stop on auth/read failure."
+                  "Stop on read failure."
                 ],
                 "nonInferenceRules": [
-                  "Treat missing data as unknown."
+                  "Missing is unknown."
                 ]
               }
             },
             {
               "id": "payments",
-              "title": "Read payment configuration",
+              "title": "Payments",
               "operationId": "dashboard.payments.methods_get",
               "mutation": "read",
-              "condition": "Enabled/configured is not usable; report gatewayStatus usability and checkout visibility.",
               "input": {
                 "template": {},
                 "dependencies": [],
@@ -77372,19 +77357,18 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
                 "idempotency": "none",
                 "confirmation": "none",
                 "stopConditions": [
-                  "Stop on auth/read failure."
+                  "Stop on read failure."
                 ],
                 "nonInferenceRules": [
-                  "Treat missing data as unknown."
+                  "Missing is unknown."
                 ]
               }
             },
             {
               "id": "delivery",
-              "title": "Read saved shipping methods",
+              "title": "Shipping",
               "operationId": "dashboard.shipping_methods.list",
               "mutation": "read",
-              "condition": "Rows are saved definitions; only isActive rows are active, and readiness owns buyer usability.",
               "input": {
                 "template": {
                   "query": {
@@ -77395,24 +77379,7 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
                   }
                 },
                 "dependencies": [],
-                "defaults": [
-                  {
-                    "templatePointer": "/query/page",
-                    "value": 1
-                  },
-                  {
-                    "templatePointer": "/query/limit",
-                    "value": 100
-                  },
-                  {
-                    "templatePointer": "/query/sort",
-                    "value": "sortOrder"
-                  },
-                  {
-                    "templatePointer": "/query/order",
-                    "value": "asc"
-                  }
-                ]
+                "defaults": []
               },
               "output": {
                 "selectors": [
@@ -77472,10 +77439,10 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
                 "idempotency": "none",
                 "confirmation": "none",
                 "stopConditions": [
-                  "Stop on auth/read failure."
+                  "Stop on read failure."
                 ],
                 "nonInferenceRules": [
-                  "Treat missing data as unknown."
+                  "Missing is unknown."
                 ]
               }
             }
@@ -77491,7 +77458,7 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
             "/data"
           ],
           "proves": [
-            "Booked gross uses merchant-day keys; it is not collected cash or net settlement."
+            "Merchant-day booked gross; no collected cash or settlement."
           ],
           "bounds": {
             "maxCalls": 1,
@@ -77508,11 +77475,27 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
             "/data/pagination"
           ],
           "proves": [
-            "A bounded open/pending fulfillment queue; never a total of a partial page."
+            "Bounded open/pending queue with pagination."
           ],
           "bounds": {
             "maxCalls": 1,
             "maxItems": 10,
+            "maxResponseBytes": 65536
+          }
+        },
+        {
+          "id": "paymentRecovery",
+          "surface": "dashboard",
+          "operationId": "dashboard.orders.payment_recovery_list",
+          "responsePointers": [
+            "/data/pagination/total"
+          ],
+          "proves": [
+            "Two current count-only recovery snapshots; no order rows or PII."
+          ],
+          "bounds": {
+            "maxCalls": 2,
+            "maxItems": 1,
             "maxResponseBytes": 65536
           }
         },
@@ -77524,7 +77507,7 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
             "/data"
           ],
           "proves": [
-            "First-class payment and delivery blockers."
+            "Checkout payment and delivery blockers."
           ],
           "bounds": {
             "maxCalls": 1,
@@ -77541,7 +77524,7 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
             "/data/gatewayStatus"
           ],
           "proves": [
-            "Saved selection versus configured, usable, and checkout-visible status."
+            "Saved versus usable and checkout-visible methods."
           ],
           "bounds": {
             "maxCalls": 1,
@@ -77558,7 +77541,7 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
             "/data/pagination"
           ],
           "proves": [
-            "Bounded saved methods with explicit active flags."
+            "Bounded saved methods with active flags."
           ],
           "bounds": {
             "maxCalls": 1,
@@ -77929,19 +77912,21 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
       "surface": "dashboard",
       "kind": "read",
       "title": "Daily operations snapshot",
-      "summary": "Read today's booked sales, open fulfillment, stock alerts, checkout readiness, enabled methods, and currency.",
+      "summary": "Read today's booked revenue and orders plus current fulfillment, low-stock, payment-recovery, and checkout readiness; collected cash and net settlement remain unavailable.",
       "examples": [
-        "How is my store doing today? Include booked sales, open fulfillment, low stock, checkout readiness, active payment and delivery options, and the currency."
+        "How did my store do today—orders, booked revenue, collected cash, low stock, fulfillment backlog, failed-payment recovery work, and checkout readiness?"
       ],
       "tags": [
         "operations",
         "sales",
-        "readiness"
+        "daily",
+        "payment-recovery"
       ],
       "workflowId": "operations.daily-snapshot.v1",
       "operationIds": [
         "dashboard.home.activity",
         "dashboard.orders.list",
+        "dashboard.orders.payment_recovery_list",
         "dashboard.inventory_alerts.list",
         "dashboard.checkout.readiness_get",
         "dashboard.payments.methods_get",
@@ -77952,9 +77937,11 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
       "requiresConfirmation": false,
       "requiresVerification": false,
       "rules": [
-        "Treat dashboard activity as booked sales, not net profit.",
-        "Use open fulfillment filters and bounded stock-alert reads.",
-        "Fail closed when checkout or method settings cannot be read."
+        "Interpret activity.daily.bookedRevenue as Asia/Dhaka order-day booked gross, not collected cash, profit, or net settlement.",
+        "No authoritative merchant-day collected-cash or net-settlement aggregate exists; report it unavailable, never zero or inferred.",
+        "activity.paymentRecovery.total is all recoverable hosted-payment work; activity.paymentNeedsAttention.total is the actionable failed/stale subset; both are current non-transactional backlogs, not daily metrics.",
+        "Never subtract the recovery totals because their parallel reads can observe different instants.",
+        "Fail closed when fulfillment, stock, checkout, payment, delivery, or currency facts cannot be read."
       ]
     },
     {
@@ -78063,6 +78050,40 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
       "rules": [
         "Use only the exact phone number supplied for the lookup.",
         "Return bounded provider evidence without unrelated personal data or inference."
+      ]
+    },
+    {
+      "id": "dashboard.guest-checkout-conditional-enable",
+      "surface": "dashboard",
+      "kind": "write",
+      "title": "Conditionally enable guest access",
+      "summary": "Validate prerequisites, merge only the guest-access switch into the versioned flow, and verify buyer config.",
+      "examples": [
+        "Turn on guest checkout only if payment and shipping are genuinely usable, without changing any other checkout setting."
+      ],
+      "tags": [
+        "guest-access",
+        "conditional-enable",
+        "only-if",
+        "preserve-settings"
+      ],
+      "operationIds": [
+        "dashboard.checkout.flow_get",
+        "dashboard.checkout.readiness_get",
+        "dashboard.payments.methods_get",
+        "dashboard.shipping_methods.list",
+        "dashboard.checkout.flow_update",
+        "storefront.checkout.get_config"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Read the complete versioned checkout flow and authoritative readiness before editing.",
+        "Require at least one active buyer-usable payment method plus active shipping and delivery hierarchy.",
+        "Fail closed without a change when readiness or method evidence is missing or contradictory.",
+        "Merge only the guest-checkout field and preserve every unrelated flow setting.",
+        "Confirm the exact diff, then reread saved flow and verify the separate buyer-facing checkout config."
       ]
     },
     {
@@ -80036,7 +80057,8 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "mode": "curated",
         "workflowIds": [
           "dashboard.checkout-flow-replace",
-          "dashboard.checkout-readiness"
+          "dashboard.checkout-readiness",
+          "dashboard.guest-checkout-conditional-enable"
         ]
       },
       {
@@ -80044,7 +80066,8 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "surface": "dashboard",
         "mode": "curated",
         "workflowIds": [
-          "dashboard.checkout-flow-replace"
+          "dashboard.checkout-flow-replace",
+          "dashboard.guest-checkout-conditional-enable"
         ]
       },
       {
@@ -80054,6 +80077,7 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "workflowIds": [
           "dashboard.checkout-readiness",
           "dashboard.daily-operations-snapshot",
+          "dashboard.guest-checkout-conditional-enable",
           "operations.daily-snapshot.v1"
         ]
       },
@@ -81358,9 +81382,10 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
       {
         "operationId": "dashboard.orders.payment_recovery_list",
         "surface": "dashboard",
-        "mode": "operation-fallback",
+        "mode": "curated",
         "workflowIds": [
-          "operation.dashboard.orders.payment_recovery_list"
+          "dashboard.daily-operations-snapshot",
+          "operations.daily-snapshot.v1"
         ]
       },
       {
@@ -81530,6 +81555,7 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "workflowIds": [
           "dashboard.checkout-readiness",
           "dashboard.daily-operations-snapshot",
+          "dashboard.guest-checkout-conditional-enable",
           "dashboard.payment-methods",
           "operations.daily-snapshot.v1"
         ]
@@ -82066,6 +82092,7 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "workflowIds": [
           "dashboard.checkout-readiness",
           "dashboard.daily-operations-snapshot",
+          "dashboard.guest-checkout-conditional-enable",
           "dashboard.shipping-method",
           "operations.daily-snapshot.v1"
         ]
@@ -82509,6 +82536,7 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "workflowIds": [
           "dashboard.checkout-flow-replace",
           "dashboard.checkout-readiness",
+          "dashboard.guest-checkout-conditional-enable",
           "dashboard.payment-methods",
           "storefront.checkout-options"
         ]

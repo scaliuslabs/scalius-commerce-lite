@@ -62,6 +62,7 @@ function compiled(): CompiledWorkflowRead {
   return {
     version: "3.0.0",
     workflowId: "test.projected-read.v1",
+    rules: ["Treat the returned values as bounded current snapshots."],
     phases: [
       {
         id: "parallel",
@@ -154,6 +155,7 @@ describe("CLI projected workflow execution", () => {
       disposition: "execute",
       version: "3.0.0",
       workflowId: "test.projected-read.v1",
+      rules: ["Treat the returned values as bounded current snapshots."],
       outputs: {
         "parallel.first": { items: [{ id: "one" }] },
         "parallel.second": { count: 7 },
@@ -186,6 +188,35 @@ describe("CLI projected workflow execution", () => {
       "dashboard",
       compiled(),
     )).resolves.toEqual(workflowReadUnavailable());
+    expect(fetches).toBe(0);
+  });
+
+  it("rejects malformed compiled rules before dispatch", async () => {
+    let fetches = 0;
+    const runtime = createTestRuntime({
+      directory,
+      fetch: (async () => {
+        fetches += 1;
+        return Response.json({});
+      }) as typeof globalThis.fetch,
+    });
+    for (const rules of [
+      [],
+      ["duplicate", "duplicate"],
+      [" padded"],
+      ["x".repeat(301)],
+      Array.from({ length: 7 }, (_, index) => `rule ${index}`),
+    ]) {
+      const malformed = compiled();
+      malformed.rules = rules;
+      await expect(executeCompiledWorkflowRead(
+        runtime,
+        profile,
+        document(),
+        "dashboard",
+        malformed,
+      )).resolves.toEqual(workflowReadUnavailable());
+    }
     expect(fetches).toBe(0);
   });
 

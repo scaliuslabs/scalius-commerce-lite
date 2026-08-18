@@ -14,6 +14,7 @@ import {
   type WorkflowResolverOutputField,
   type WorkflowResolverOutputProjection,
   type WorkflowResolverOutputSelector,
+  type WorkflowResolverRepeat,
   type WorkflowResolverRoute,
   type WorkflowResolverSurface,
 } from "./generated/workflow-resolver-core.gen.js";
@@ -147,8 +148,20 @@ function positiveInteger(value: unknown, label: string, maximum: number): number
 
 function jsonPointer(value: unknown, label: string): string {
   const pointer = text(value, label, 500, JSON_POINTER);
-  if (pointer.slice(1).split("/").some((segment) => segment.replace(/~1/g, "/").replace(/~0/g, "~") === "*")) {
-    invalidOpenApi(`${label} cannot contain a wildcard segment.`);
+  const invalidSegment = pointer
+    .slice(1)
+    .split("/")
+    .map(decodeJsonPointerSegment)
+    .find((segment) =>
+      FORBIDDEN_PROJECTION_SEGMENTS.has(segment) ||
+      segment.includes("*") ||
+      segment.includes("{") ||
+      segment.includes("}") ||
+      segment.startsWith("$") ||
+      segment.startsWith("@")
+    );
+  if (invalidSegment !== undefined) {
+    invalidOpenApi(`${label} has a wildcard, pseudo, or prototype JSON pointer segment.`);
   }
   return pointer;
 }
@@ -437,6 +450,104 @@ function parseDependencySource(
   };
 }
 
+function parseRepeat(
+  value: unknown,
+  label: string,
+  facts: ReadonlyMap<string, WorkflowResolverCard["requiredFacts"][number]>,
+  operation: ResolverOperation,
+  template: unknown,
+  occupiedTemplatePointers: ReadonlySet<string>,
+): WorkflowResolverRepeat {
+  const repeat = record(value, `${label} repeat`);
+  exactKeys(repeat, [
+    "factId",
+    "orderPointer",
+    "itemMapPointer",
+    "minItems",
+    "maxItems",
+    "bindings",
+    "capture",
+  ], `${label} repeat`);
+  const factId = text(repeat.factId, `${label} repeat factId`, 64, LOCAL_ID);
+  const fact = facts.get(factId);
+  if (!fact) invalidOpenApi(`${label} repeat references unknown fact '${factId}'.`);
+  if (fact.source.kind !== "merchant") {
+    invalidOpenApi(`${label} repeat fact '${factId}' must be merchant-authoritative.`);
+  }
+  const orderPointer = projectionPointer(repeat.orderPointer, `${label} repeat orderPointer`);
+  const itemMapPointer = projectionPointer(
+    repeat.itemMapPointer,
+    `${label} repeat itemMapPointer`,
+  );
+  if (orderPointer === itemMapPointer) {
+    invalidOpenApi(`${label} repeat order and item-map pointers must differ.`);
+  }
+  const minItems = positiveInteger(repeat.minItems, `${label} repeat minItems`, 250);
+  const maxItems = positiveInteger(repeat.maxItems, `${label} repeat maxItems`, 250);
+  if (minItems > maxItems) {
+    invalidOpenApi(`${label} repeat minItems cannot exceed maxItems.`);
+  }
+  const templatePointers = new Set<string>();
+  const itemPointers = new Set<string>();
+  const bindings = array(repeat.bindings, `${label} repeat bindings`, 16, 1).map(
+    (rawBinding, bindingIndex) => {
+      const bindingLabel = `${label} repeat bindings[${bindingIndex}]`;
+      const binding = record(rawBinding, bindingLabel);
+      exactKeys(binding, ["templatePointer", "itemPointer"], bindingLabel);
+      const templatePointer = projectionPointer(
+        binding.templatePointer,
+        `${bindingLabel} templatePointer`,
+      );
+      const itemPointer = projectionPointer(binding.itemPointer, `${bindingLabel} itemPointer`);
+      if (!templateHasPointer(template, templatePointer)) {
+        invalidOpenApi(`${bindingLabel} points outside the input template.`);
+      }
+      if (templatePointers.has(templatePointer) || itemPointers.has(itemPointer)) {
+        invalidOpenApi(`${label} repeat bindings must use unique pointers.`);
+      }
+      if (occupiedTemplatePointers.has(templatePointer)) {
+        invalidOpenApi(`${bindingLabel} conflicts with a dependency or default pointer.`);
+      }
+      templatePointers.add(templatePointer);
+      itemPointers.add(itemPointer);
+      return { templatePointer, itemPointer };
+    },
+  );
+  const captureLabel = `${label} repeat capture`;
+  const capture = record(repeat.capture, captureLabel);
+  exactKeys(capture, ["responsePointer", "itemPointer"], captureLabel);
+  const responsePointer = projectionPointer(
+    capture.responsePointer,
+    `${captureLabel} responsePointer`,
+  );
+  const captureItemPointer = projectionPointer(
+    capture.itemPointer,
+    `${captureLabel} itemPointer`,
+  );
+  if (itemPointers.has(captureItemPointer)) {
+    invalidOpenApi(`${captureLabel} conflicts with a binding item pointer.`);
+  }
+  if (!isRecord(operation.outputSchema)) {
+    invalidOpenApi(`${label} repeat operation has no object output schema.`);
+  }
+  const selected = schemaNodesAtPointer([operation.outputSchema], responsePointer);
+  if (selected.length === 0) {
+    invalidOpenApi(`${captureLabel} references unknown output field '${responsePointer}'.`);
+  }
+  if (schemaShape(selected) !== "scalar") {
+    invalidOpenApi(`${captureLabel} must select one scalar output field.`);
+  }
+  return {
+    factId,
+    orderPointer,
+    itemMapPointer,
+    minItems,
+    maxItems,
+    bindings,
+    capture: { responsePointer, itemPointer: captureItemPointer },
+  };
+}
+
 function schemaVariants(
   schema: unknown,
   depth = 0,
@@ -674,6 +785,7 @@ function parseCards(
         };
       },
     );
+    const factsById = new Map(requiredFacts.map((fact) => [fact.id, fact] as const));
 
     const phaseIds = new Set<string>();
     const stepIdsByPhase = new Map<string, Set<string>>();
@@ -814,6 +926,19 @@ function parseCards(
             };
           },
         );
+        const repeat = step.repeat === undefined
+          ? undefined
+          : parseRepeat(
+              step.repeat,
+              stepLabel,
+              factsById,
+              operation,
+              template,
+              new Set([
+                ...dependencies.map((dependency) => dependency.templatePointer),
+                ...defaults.map((inputDefault) => inputDefault.templatePointer),
+              ]),
+            );
         const policies = record(step.policies, `${stepLabel} policies`);
         const confirmation = enumValue(policies.confirmation, `${stepLabel} confirmation`, [
           "none",
@@ -830,6 +955,7 @@ function parseCards(
             ? { condition: text(step.condition, `${stepLabel} condition`, 500) }
             : {}),
           input: { template, dependencies, defaults },
+          ...(repeat ? { repeat } : {}),
           ...(output ? { output } : {}),
           policies: {
             revision: enumValue(policies.revision, `${stepLabel} revision`, [

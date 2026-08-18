@@ -65,7 +65,7 @@ describe("agent workflow catalog", () => {
       "catalog.optioned-product.v1",
       "operations.daily-snapshot.v1",
     ]);
-    expect(catalog.routes).toHaveLength(57);
+    expect(catalog.routes).toHaveLength(58);
     expect(catalog.controls).toHaveLength(8);
     for (const route of catalog.routes) {
       expect(Buffer.byteLength(JSON.stringify(route)), route.id).toBeLessThanOrEqual(2 * 1024);
@@ -242,6 +242,8 @@ describe("agent workflow catalog", () => {
       "dashboard.home.activity",
       "dashboard.settings.currency_get",
       "dashboard.orders.list",
+      "dashboard.orders.payment_recovery_list",
+      "dashboard.orders.payment_recovery_list",
       "dashboard.inventory_alerts.list",
       "dashboard.checkout.readiness_get",
       "dashboard.payments.methods_get",
@@ -250,6 +252,29 @@ describe("agent workflow catalog", () => {
     expect(DAILY_OPERATING_SNAPSHOT_WORKFLOW.phases[0]!.steps[2]!.input.template).toMatchObject({
       query: { statusGroup: "open", fulfillmentStatus: "pending" },
     });
+    expect(workflowStep(
+      DAILY_OPERATING_SNAPSHOT_WORKFLOW,
+      "activity",
+      "paymentRecovery",
+    ).input.template).toEqual({ query: { page: 1, limit: 1, state: "recoverable" } });
+    expect(workflowStep(
+      DAILY_OPERATING_SNAPSHOT_WORKFLOW,
+      "activity",
+      "paymentNeedsAttention",
+    ).input.template).toEqual({ query: { page: 1, limit: 1, state: "needs_attention" } });
+
+    const dailyRoute = catalog.routes.find((route) =>
+      route.id === "dashboard.daily-operations-snapshot"
+    )!;
+    expect(dailyRoute.operationIds.filter((operationId) =>
+      operationId === "dashboard.orders.payment_recovery_list"
+    )).toHaveLength(1);
+    expect(dailyRoute.rules).toEqual(expect.arrayContaining([
+      expect.stringContaining("activity.daily.bookedRevenue"),
+      expect.stringContaining("collected-cash"),
+      expect.stringContaining("activity.paymentRecovery.total"),
+      expect.stringContaining("parallel reads"),
+    ]));
   });
 
   it("projects every daily read into bounded schema-valid operational fields", () => {
@@ -275,6 +300,13 @@ describe("agent workflow catalog", () => {
       "/revenue",
       "/newCustomers",
     ]);
+    expect(activity.fields?.map((field) => field.alias)).toEqual([
+      "date",
+      "orders",
+      "bookedRevenue",
+      "newCustomers",
+    ]);
+    expect(JSON.stringify(activity)).not.toContain("collectedCash");
 
     expect(
       workflowStep(daily, "activity", "currency").output!.selectors.map(
@@ -313,6 +345,15 @@ describe("agent workflow catalog", () => {
       "area",
     ]) {
       expect(JSON.stringify(orderQueue)).not.toContain(pii);
+    }
+
+    for (const stepId of ["paymentRecovery", "paymentNeedsAttention"]) {
+      expect(workflowStep(daily, "activity", stepId).output!.selectors).toEqual([
+        { pointer: "/data/pagination/total", alias: "total" },
+      ]);
+      expect(JSON.stringify(workflowStep(daily, "activity", stepId).output)).not.toContain(
+        "/data/orders",
+      );
     }
 
     const alerts = workflowStep(daily, "readiness", "alerts").output!.selectors[0]!;
@@ -479,16 +520,154 @@ describe("agent workflow catalog", () => {
       ],
     });
     const media = OPTIONED_PRODUCT_WORKFLOW.phases.find((phase) => phase.id === "media")!;
-    expect(media.steps.map((step) => step.id)).toEqual(["primary", "secondary"]);
+    expect(media.steps.map((step) => step.id)).toEqual(["asset"]);
+    expect(media.steps[0]).toMatchObject({
+      operationId: "dashboard.media.import_url",
+      condition: expect.stringContaining("dashboard.media-upload"),
+      input: { dependencies: [] },
+      repeat: {
+        factId: "mediaSet",
+        orderPointer: "/order",
+        itemMapPointer: "/byId",
+        minItems: 1,
+        maxItems: 250,
+        bindings: [{ templatePointer: "/body/sourceUrl", itemPointer: "/sourceUrl" }],
+        capture: { responsePointer: "/data/file/id", itemPointer: "/mediaId" },
+      },
+    });
     const product = OPTIONED_PRODUCT_WORKFLOW.phases.find((phase) => phase.id === "create")!
       .steps[0]!;
-    expect(
-      product.input.dependencies
-        .filter((dependency) => dependency.source.kind === "step")
-        .map((dependency) => dependency.source.kind === "step" && dependency.source.stepId),
-    ).toEqual(["primary", "secondary"]);
+    expect((product.input.template as { body: { media: unknown } }).body.media).toBeNull();
+    expect(product.input.dependencies.some((dependency) =>
+      dependency.templatePointer.startsWith("/body/media/")
+    )).toBe(false);
     const publish = OPTIONED_PRODUCT_WORKFLOW.phases.find((phase) => phase.id === "publish")!;
     expect(publish.steps.map((step) => step.id)).toEqual(["category", "readiness", "status"]);
+  });
+
+  it("models shared, Navy, and White media by exact associations without positional inference", () => {
+    const mediaSet = {
+      order: ["pmed_shared_primary", "pmed_navy", "pmed_white"],
+      byId: {
+        pmed_shared_primary: { mediaId: "media_shared", isPrimary: true },
+        pmed_navy: { mediaId: "media_navy", isPrimary: false },
+        pmed_white: { mediaId: "media_white", isPrimary: false },
+      },
+    } as const;
+    const variantRows = [
+      ["Navy", "S", "pmed_navy"],
+      ["Navy", "M", "pmed_navy"],
+      ["Navy", "L", "pmed_navy"],
+      ["White", "S", "pmed_white"],
+      ["White", "M", "pmed_white"],
+      ["White", "L", "pmed_white"],
+    ];
+    const associationIds = new Set<string>(mediaSet.order);
+    const assets = Object.values(mediaSet.byId);
+
+    expect(assets.filter((asset) => asset.isPrimary)).toHaveLength(1);
+    expect(new Set(assets.map((asset) => asset.mediaId)).size).toBe(mediaSet.order.length);
+    expect(variantRows.every((row) => associationIds.has(row[2]!))).toBe(true);
+    expect(new Set(variantRows.filter((row) => row[0] === "Navy").map((row) => row[2]))).toEqual(
+      new Set(["pmed_navy"]),
+    );
+    expect(new Set(variantRows.filter((row) => row[0] === "White").map((row) => row[2]))).toEqual(
+      new Set(["pmed_white"]),
+    );
+
+    const mediaFact = OPTIONED_PRODUCT_WORKFLOW.requiredFacts.find(
+      (fact) => fact.id === "mediaSet",
+    )!;
+    expect(mediaFact.description).toContain("byId:{pmed:");
+    expect(mediaFact.description).toContain("1-250 unique assets");
+    expect(mediaFact.description).not.toContain("localFile");
+    expect(mediaFact.nonInferenceRule).toContain("never infer count, order, role, or position");
+    const mediaStep = OPTIONED_PRODUCT_WORKFLOW.phases.find((phase) => phase.id === "media")!
+      .steps[0]!;
+    expect(mediaStep.condition).toContain(
+      "local files must complete dashboard.media-upload and re-enter as ready.",
+    );
+    const product = OPTIONED_PRODUCT_WORKFLOW.phases.find((phase) => phase.id === "create")!
+      .steps[0]!;
+    expect(product.condition).toContain("exact pmed key/mediaId");
+    expect(product.policies.nonInferenceRules).toContain(
+      "Every variant imageId must equal a mediaSet pmed key; never map by position.",
+    );
+    expect(JSON.stringify(product)).not.toMatch(/pmed_(?:primary|secondary)|\/body\/media\/\d/u);
+  });
+
+  it("rejects malformed, ambiguous, or schema-unsafe repeat contracts", () => {
+    const cases: Array<[string, (card: AgentWorkflowCard) => void, RegExp]> = [
+      ["pseudo dependency", (card) => {
+        workflowStep(card, "media", "asset").input.dependencies = [{
+          templatePointer: "/body/sourceUrl",
+          source: {
+            kind: "fact",
+            factId: "mediaSet",
+            factPointer: "/byId/{associationId}/sourceUrl",
+          },
+        }];
+      }, /invalid JSON pointer/],
+      ["pseudo repeat pointer", (card) => {
+        workflowStep(card, "media", "asset").repeat!.orderPointer = "/{associationId}";
+      }, /wildcard, pseudo, or prototype JSON pointer segment|invalid JSON pointer/],
+      ["unknown fact", (card) => {
+        workflowStep(card, "media", "asset").repeat!.factId = "missingFact";
+      }, /repeat references unknown fact/],
+      ["non-merchant fact", (card) => {
+        workflowStep(card, "media", "asset").repeat!.factId = "categoryId";
+      }, /must be merchant-authoritative/],
+      ["bad lower bound", (card) => {
+        workflowStep(card, "media", "asset").repeat!.minItems = 0;
+      }, /repeat bounds/],
+      ["bad upper bound", (card) => {
+        workflowStep(card, "media", "asset").repeat!.maxItems = 251;
+      }, /repeat bounds/],
+      ["duplicate binding", (card) => {
+        const repeat = workflowStep(card, "media", "asset").repeat!;
+        repeat.bindings.push({ ...repeat.bindings[0]! });
+      }, /duplicate binding pointers/],
+      ["missing binding target", (card) => {
+        workflowStep(card, "media", "asset").repeat!.bindings[0]!.templatePointer =
+          "/body/missing";
+      }, /absent from its template/],
+      ["unknown capture", (card) => {
+        workflowStep(card, "media", "asset").repeat!.capture.responsePointer =
+          "/data/file/missing";
+      }, /references unknown output field/],
+      ["non-scalar capture", (card) => {
+        workflowStep(card, "media", "asset").repeat!.capture.responsePointer = "/data/file";
+      }, /must select one scalar output field/],
+      ["extra declarative key", (card) => {
+        Object.assign(workflowStep(card, "media", "asset").repeat!, { filter: "/ready" });
+      }, /unsupported declarative key filter/],
+    ];
+
+    for (const [name, mutate, error] of cases) {
+      const card = mutableCard(OPTIONED_PRODUCT_WORKFLOW);
+      mutate(card);
+      expect(
+        () => validateAgentWorkflowCards([card], manifest),
+        name,
+      ).toThrowError(error);
+    }
+  });
+
+  it("scopes feed verification to evidence the bounded operations actually expose", () => {
+    const dashboard = OPTIONED_PRODUCT_WORKFLOW.phases.find(
+      (phase) => phase.id === "dashboardVerify",
+    )!;
+    expect(dashboard.stopConditions).toContain(
+      "No bounded product/SKU feed-row read exists; do not claim emitted price/image/availability.",
+    );
+    expect(OPTIONED_PRODUCT_WORKFLOW.verification.find((item) => item.id === "feed")?.proves)
+      .toEqual([
+        "Feed policy, eligibility totals, and sampled exclusions only.",
+      ]);
+    expect(OPTIONED_PRODUCT_WORKFLOW.verification.find((item) => item.id === "buyer")?.proves)
+      .toEqual([
+        "Buyer SKU price, exact image, and availability band; excludes feed rows.",
+      ]);
   });
 
   it("rejects revision, idempotency, and confirmation policy drift", () => {

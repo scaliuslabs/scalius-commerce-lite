@@ -15,6 +15,8 @@ import {
   type AgentWorkflowOutputField,
   type AgentWorkflowOutputProjection,
   type AgentWorkflowOutputSelector,
+  type AgentWorkflowRepeat,
+  type AgentWorkflowRequiredFact,
   type AgentWorkflowSurface,
 } from "./types";
 
@@ -76,11 +78,19 @@ function assertLocalId(value: string, label: string): void {
 }
 
 function assertJsonPointer(value: string, label: string): void {
-  const hasWildcardSegment = value
+  const invalidSegment = value
     .slice(1)
     .split("/")
-    .some((segment) => decodePointerSegment(segment) === "*");
-  if (!JSON_POINTER_PATTERN.test(value) || hasWildcardSegment) {
+    .map(decodePointerSegment)
+    .find((segment) =>
+      FORBIDDEN_PROJECTION_SEGMENTS.has(segment) ||
+      segment.includes("*") ||
+      segment.includes("{") ||
+      segment.includes("}") ||
+      segment.startsWith("$") ||
+      segment.startsWith("@")
+    );
+  if (!JSON_POINTER_PATTERN.test(value) || invalidSegment !== undefined) {
     throw new Error(`${label} has an invalid JSON pointer.`);
   }
 }
@@ -361,6 +371,101 @@ function templateValueAtPointer(template: unknown, pointer: string): unknown {
   return value;
 }
 
+function assertStepRepeat(
+  repeat: AgentWorkflowRepeat,
+  template: unknown,
+  occupiedTemplatePointers: ReadonlySet<string>,
+  facts: ReadonlyMap<string, AgentWorkflowRequiredFact>,
+  operation: AgentOperationManifestEntry,
+  label: string,
+): void {
+  if (!isRecord(repeat)) throw new Error(`${label} repeat must be an object.`);
+  assertExactKeys(
+    repeat,
+    new Set([
+      "factId",
+      "orderPointer",
+      "itemMapPointer",
+      "minItems",
+      "maxItems",
+      "bindings",
+      "capture",
+    ]),
+    `${label} repeat`,
+  );
+  const fact = facts.get(repeat.factId);
+  if (!fact) throw new Error(`${label} repeat references unknown fact ${repeat.factId}.`);
+  if (fact.source.kind !== "merchant") {
+    throw new Error(`${label} repeat fact ${repeat.factId} must be merchant-authoritative.`);
+  }
+  assertProjectionPointer(repeat.orderPointer, `${label} repeat orderPointer`);
+  assertProjectionPointer(repeat.itemMapPointer, `${label} repeat itemMapPointer`);
+  if (repeat.orderPointer === repeat.itemMapPointer) {
+    throw new Error(`${label} repeat order and item-map pointers must differ.`);
+  }
+  if (
+    !Number.isSafeInteger(repeat.minItems) ||
+    !Number.isSafeInteger(repeat.maxItems) ||
+    repeat.minItems < 1 ||
+    repeat.minItems > repeat.maxItems ||
+    repeat.maxItems > 250
+  ) {
+    throw new Error(`${label} repeat bounds must satisfy 1 <= minItems <= maxItems <= 250.`);
+  }
+  if (!Array.isArray(repeat.bindings) || repeat.bindings.length < 1 || repeat.bindings.length > 16) {
+    throw new Error(`${label} repeat requires 1-16 bindings.`);
+  }
+  const templatePointers = new Set<string>();
+  const itemPointers = new Set<string>();
+  for (const [index, binding] of repeat.bindings.entries()) {
+    const bindingLabel = `${label} repeat binding[${index}]`;
+    if (!isRecord(binding)) throw new Error(`${bindingLabel} must be an object.`);
+    assertExactKeys(binding, new Set(["templatePointer", "itemPointer"]), bindingLabel);
+    assertProjectionPointer(binding.templatePointer, `${bindingLabel} templatePointer`);
+    assertProjectionPointer(binding.itemPointer, `${bindingLabel} itemPointer`);
+    if (!templateHasPointer(template, binding.templatePointer)) {
+      throw new Error(`${bindingLabel} pointer ${binding.templatePointer} is absent from its template.`);
+    }
+    if (
+      templatePointers.has(binding.templatePointer) ||
+      itemPointers.has(binding.itemPointer)
+    ) {
+      throw new Error(`${label} repeat has duplicate binding pointers.`);
+    }
+    if (occupiedTemplatePointers.has(binding.templatePointer)) {
+      throw new Error(`${bindingLabel} conflicts with a dependency or default pointer.`);
+    }
+    templatePointers.add(binding.templatePointer);
+    itemPointers.add(binding.itemPointer);
+  }
+  if (!isRecord(repeat.capture)) throw new Error(`${label} repeat capture must be an object.`);
+  assertExactKeys(
+    repeat.capture,
+    new Set(["responsePointer", "itemPointer"]),
+    `${label} repeat capture`,
+  );
+  assertProjectionPointer(repeat.capture.responsePointer, `${label} repeat capture responsePointer`);
+  assertProjectionPointer(repeat.capture.itemPointer, `${label} repeat capture itemPointer`);
+  if (itemPointers.has(repeat.capture.itemPointer)) {
+    throw new Error(`${label} repeat capture conflicts with a binding item pointer.`);
+  }
+  if (!isRecord(operation.outputSchema)) {
+    throw new Error(`${label} repeat operation has no object output schema.`);
+  }
+  const selected = schemaNodesAtPointer(
+    [operation.outputSchema],
+    repeat.capture.responsePointer,
+  );
+  if (selected.length === 0) {
+    throw new Error(
+      `${label} repeat capture references unknown output field ${repeat.capture.responsePointer}.`,
+    );
+  }
+  if (schemaShape(selected) !== "scalar") {
+    throw new Error(`${label} repeat capture must select one scalar output field.`);
+  }
+}
+
 function jsonEqual(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
 }
@@ -487,10 +592,12 @@ export function validateAgentWorkflowCards(
     }
 
     const factIds = new Set<string>();
+    const factsById = new Map<string, AgentWorkflowRequiredFact>();
     for (const fact of card.requiredFacts) {
       assertLocalId(fact.id, `Workflow ${card.id} fact ${fact.id}`);
       if (factIds.has(fact.id)) throw new Error(`Workflow ${card.id} has duplicate fact ID ${fact.id}.`);
       factIds.add(fact.id);
+      factsById.set(fact.id, fact);
       if (!fact.title.trim() || !fact.description.trim() || !fact.nonInferenceRule.trim()) {
         throw new Error(`Workflow ${card.id} fact ${fact.id} is incomplete.`);
       }
@@ -577,10 +684,15 @@ export function validateAgentWorkflowCards(
         if (step.policies.stopConditions.length === 0 || step.policies.nonInferenceRules.length === 0) {
           throw new Error(`${label} requires stop and non-inference rules.`);
         }
+        const occupiedTemplatePointers = new Set<string>();
         for (const dependency of step.input.dependencies) {
           if (!templateHasPointer(step.input.template, dependency.templatePointer)) {
             throw new Error(`${label} dependency pointer ${dependency.templatePointer} is absent from its template.`);
           }
+          if (occupiedTemplatePointers.has(dependency.templatePointer)) {
+            throw new Error(`${label} has duplicate dependency pointer ${dependency.templatePointer}.`);
+          }
+          occupiedTemplatePointers.add(dependency.templatePointer);
           if (dependency.source.kind === "fact") {
             if (!factIds.has(dependency.source.factId)) {
               throw new Error(`${label} references unknown fact ${dependency.source.factId}.`);
@@ -614,6 +726,17 @@ export function validateAgentWorkflowCards(
           )) {
             throw new Error(`${label} default does not match its template value.`);
           }
+          occupiedTemplatePointers.add(defaultValue.templatePointer);
+        }
+        if (step.repeat !== undefined) {
+          assertStepRepeat(
+            step.repeat,
+            step.input.template,
+            occupiedTemplatePointers,
+            factsById,
+            operation,
+            label,
+          );
         }
       }
     }

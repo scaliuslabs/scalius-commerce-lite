@@ -19,6 +19,8 @@ const MAX_WORKFLOW_READ_PHASES = 8;
 const MAX_WORKFLOW_READ_STEPS = 20;
 const MAX_PARALLEL_READS = 2;
 const MAX_WORKFLOW_READ_RESULT_BYTES = 64 * 1024;
+const MAX_WORKFLOW_READ_RULES = 6;
+const MAX_WORKFLOW_READ_RULE_LENGTH = 300;
 
 export type WorkflowReadExecutionResult =
   | {
@@ -26,6 +28,7 @@ export type WorkflowReadExecutionResult =
       disposition: "execute";
       version: string;
       workflowId: string;
+      rules: string[];
       outputs: Record<string, ProjectedWorkflowReadStep>;
     }
   | {
@@ -41,6 +44,26 @@ type PreparedStep = {
   compiled: CompiledWorkflowReadStep;
   operation: IndexedOperation;
 };
+
+function copyWorkflowReadRules(rules: readonly string[]): string[] | null {
+  if (!Array.isArray(rules) || rules.length < 1 || rules.length > MAX_WORKFLOW_READ_RULES) {
+    return null;
+  }
+  const copied: string[] = [];
+  const seen = new Set<string>();
+  for (const rule of rules) {
+    if (
+      typeof rule !== "string" ||
+      rule.length === 0 ||
+      rule.length > MAX_WORKFLOW_READ_RULE_LENGTH ||
+      rule.trim() !== rule ||
+      seen.has(rule)
+    ) return null;
+    copied.push(rule);
+    seen.add(rule);
+  }
+  return copied;
+}
 
 export function workflowReadUnavailable(): WorkflowReadExecutionResult {
   return {
@@ -151,6 +174,8 @@ export async function executeCompiledWorkflowRead(
   surface: "dashboard" | "storefront",
   compiled: CompiledWorkflowRead,
 ): Promise<WorkflowReadExecutionResult> {
+  const rules = copyWorkflowReadRules(compiled.rules);
+  if (!rules) return workflowReadUnavailable();
   const phases = prepareExecution(document, compiled, surface);
   if (!phases) return workflowReadUnavailable();
 
@@ -164,6 +189,7 @@ export async function executeCompiledWorkflowRead(
     disposition: "execute",
     version: compiled.version,
     workflowId: compiled.workflowId,
+    rules,
     outputs,
   };
   return Buffer.byteLength(JSON.stringify(result)) < MAX_WORKFLOW_READ_RESULT_BYTES

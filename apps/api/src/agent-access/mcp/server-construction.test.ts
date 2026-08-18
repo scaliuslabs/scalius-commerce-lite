@@ -157,6 +157,8 @@ describe("MCP server construction", () => {
       });
       expect(JSON.stringify(workflowReadSchema)).toContain("workflow_read_unavailable");
       expect(JSON.stringify(workflowReadSchema)).toContain('"maxItems":100');
+      expect(JSON.stringify(workflowReadSchema)).toContain('"maxItems":6');
+      expect(JSON.stringify(workflowReadSchema)).toContain('"maxLength":300');
     } finally {
       await connection.close();
     }
