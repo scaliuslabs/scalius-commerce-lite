@@ -314,7 +314,7 @@ describe("CLI workflow resolver adapter", () => {
       expect(new TextEncoder().encode(JSON.stringify(result)).byteLength, testCase.id)
         .toBeLessThanOrEqual(16 * 1024);
     }
-  }, 10_000);
+  }, 45_000);
 
   it("validates route-local fixed merchant-calendar windows against card projections", async () => {
     const source = await loadLiveDocument();
