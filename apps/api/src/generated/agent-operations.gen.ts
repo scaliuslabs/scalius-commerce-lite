@@ -78636,7 +78636,7 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
       "surface": "dashboard",
       "kind": "write",
       "title": "Create a shipping method",
-      "summary": "Create a merchant-defined shipping method and verify admin and storefront visibility.",
+      "summary": "Create a globally offered flat-fee shipping method and verify admin and storefront visibility.",
       "examples": [
         "Add a Dhaka delivery method with the merchant-provided price and make sure it appears at checkout."
       ],
@@ -78654,7 +78654,8 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
       "requiresConfirmation": true,
       "requiresVerification": true,
       "rules": [
-        "Require merchant-supplied name, service area, price, and eligibility facts.",
+        "Require the merchant-supplied label, fee, active state, and sort order.",
+        "Treat the label as display text; flat-fee methods do not enforce a geographic service area.",
         "Confirm creation before the write.",
         "Verify the method in bounded admin and buyer-facing lists."
       ]
@@ -79177,6 +79178,80 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
   ],
   "controls": [
     {
+      "id": "dashboard.campaign-layout-needs-review",
+      "surface": "dashboard",
+      "title": "Clarify campaign page presentation limits",
+      "summary": "Campaign page, navigation, and shared-layout changes need reviewed HTML and homepage fallback choices.",
+      "examples": [
+        "Publish a campaign landing page, add it to navigation and the homepage, and announce it in the header."
+      ],
+      "tags": [
+        "campaign",
+        "content",
+        "navigation",
+        "homepage",
+        "header",
+        "unsupported"
+      ],
+      "disposition": "ask",
+      "reasonCode": "campaign_layout_requires_reviewed_facts",
+      "trigger": {
+        "allOf": [
+          [
+            "campaign page",
+            "landing page",
+            "cms page"
+          ],
+          [
+            "navigation",
+            "main menu",
+            "menu"
+          ],
+          [
+            "homepage",
+            "header",
+            "layout",
+            "announcement"
+          ],
+          [
+            "create",
+            "build",
+            "publish",
+            "launch"
+          ]
+        ],
+        "ignoreWhenNegated": false
+      },
+      "safeOperationIds": [
+        "dashboard.content.list",
+        "dashboard.navigation.placements_manifest",
+        "dashboard.navigation.menus_list",
+        "dashboard.settings_header.get_header",
+        "dashboard.settings_homepage_presentation.get_homepage_presentation",
+        "dashboard.hero_sliders.list"
+      ],
+      "forbiddenOperationIds": [
+        "dashboard.products.create",
+        "dashboard.products.update_section",
+        "dashboard.categories.create",
+        "dashboard.categories.set_status",
+        "dashboard.attributes.create",
+        "dashboard.inventory.adjust_stock",
+        "dashboard.inventory.set_stock",
+        "dashboard.seo.settings_update"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Do not substitute product, category, attribute, inventory, or global SEO writes for page-scoped campaign work.",
+        "Explain that CMS pages accept sanitized HTML, not semantic hero, collection, or FAQ blocks.",
+        "Ask whether an untyped HTML page and desktop/mobile hero-slide fallback are acceptable.",
+        "Require exact page SEO, media, menu placement, announcement, hero images, order, and publish facts.",
+        "Keep theme and unrelated layout unchanged; perform discovery reads only until the reviewed facts are confirmed."
+      ]
+    },
+    {
       "id": "dashboard.no-payment-guess",
       "surface": "dashboard",
       "title": "Fail closed on payment readiness",
@@ -79313,6 +79388,75 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
       "rules": [
         "Preserve SKU audit history.",
         "Keep the product in trash when movements exist."
+      ]
+    },
+    {
+      "id": "dashboard.shipping-threshold-unsupported",
+      "surface": "dashboard",
+      "title": "Clarify unsupported delivery thresholds",
+      "summary": "Flat-fee labels cannot enforce geography, and order-value free-delivery thresholds are unsupported.",
+      "examples": [
+        "Add Dhaka and nationwide delivery with fees and a free-shipping threshold."
+      ],
+      "tags": [
+        "shipping",
+        "delivery",
+        "threshold"
+      ],
+      "disposition": "ask",
+      "reasonCode": "shipping_threshold_or_scope_unsupported",
+      "trigger": {
+        "allOf": [
+          [
+            "shipping",
+            "delivery"
+          ],
+          [
+            "free shipping",
+            "free delivery",
+            "waive shipping fee",
+            "waive delivery fee"
+          ],
+          [
+            "threshold",
+            "minimum spend",
+            "minimum cart",
+            "cart value",
+            "order value"
+          ]
+        ],
+        "ignoreWhenNegated": false
+      },
+      "safeOperationIds": [
+        "dashboard.settings.currency_get",
+        "dashboard.checkout.flow_get",
+        "dashboard.checkout.readiness_get",
+        "dashboard.payments.methods_get",
+        "dashboard.shipping_methods.list",
+        "storefront.checkout.get_config"
+      ],
+      "forbiddenOperationIds": [
+        "dashboard.settings.currency_update",
+        "dashboard.payments.methods_update",
+        "dashboard.payments.stripe_update",
+        "dashboard.payments.sslcommerz_update",
+        "dashboard.payments.polar_update",
+        "dashboard.shipping_methods.create",
+        "dashboard.shipping_methods.update",
+        "dashboard.shipping_methods.trash",
+        "dashboard.shipping_methods.restore",
+        "dashboard.shipping_methods.delete_permanently",
+        "dashboard.checkout.flow_update"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Flat-fee names are global labels; they do not enforce Dhaka, nationwide, zone, or other geography.",
+        "Order-value free-delivery thresholds are unsupported; do not encode them in labels or fees.",
+        "Ask whether the merchant accepts global flat-fee methods without thresholds as a supported subset.",
+        "Require exact fees and intent for keeping or disabling other payment and shipping methods.",
+        "Until facts and subset acceptance are explicit, perform reads only and make no settings write."
       ]
     },
     {

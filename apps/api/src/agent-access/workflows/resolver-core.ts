@@ -295,9 +295,11 @@ export type WorkflowResolution =
 const MAX_PROMPT_CHARS = 4_000;
 const MAX_CHOICES = 3;
 const MAX_COMPOSED_ROUTES = 4;
+const MAX_MEANINGFUL_CLAUSES = 8;
 const MAX_PLAN_OPERATIONS = 20;
 const MAX_DETAILED_RESOLUTION_BYTES = 16 * 1024 - 64;
 const MAX_STANDARD_DETAIL_RESOLUTION_BYTES = 12 * 1024 - 64;
+const NON_EXACT_COMPOUND_ROUTE_CONFIDENCE = 0.8;
 const BM25_K1 = 1.25;
 const BM25_B = 0.65;
 
@@ -324,6 +326,8 @@ const VOCABULARY_GROUPS: readonly (readonly string[])[] = [
   ["publish", "published", "publication", "activate", "active"],
   ["deactivate", "inactive", "disable", "disabled"],
   ["variant", "variants", "sku", "skus"],
+  ["unique", "uniqueness", "uniquely"],
+  ["image", "images", "media", "asset", "assets"],
   ["refund", "refunds", "refunded"],
   ["return", "returns"],
   ["page", "pages", "content", "article", "articles"],
@@ -647,7 +651,7 @@ function buildIndex(sources: WorkflowResolverSources): SearchIndex {
       { value: route.tags.join(" "), weight: 7 },
       { value: route.rules.join(" "), weight: 1 },
       { value: operationText, weight: 0.15 },
-    ], [route.id, route.title, ...route.examples], [route.title, route.tags.join(" ")]));
+    ], [...route.examples], [route.title, route.tags.join(" ")]));
   }
   for (const operation of sources.operations) {
     if (
@@ -704,7 +708,7 @@ function scoreCandidates(
 ): ScoredCandidate[] {
   const queryTokens = unique(tokenize(prompt));
   if (queryTokens.length === 0) return [];
-  const normalizedQuery = queryTokens.join(" ");
+  const normalizedQuery = normalizedPhrase(prompt);
   const ranked = index.candidates.flatMap((candidate): ScoredCandidate[] => {
     if (
       !allowedForSurface(surface, candidate, index.operationsById) ||
@@ -728,7 +732,7 @@ function scoreCandidates(
     }
     const coverage = matchedTerms / queryTokens.length;
     const exactPhrase = candidate.normalizedPhrases.some((phrase) =>
-      phrase === normalizedQuery || (normalizedQuery.length >= 12 && phrase.includes(normalizedQuery))
+      phrase === normalizedQuery
     );
     score = score * (0.55 + coverage) * (candidate.source === "route" ? 1.12 : 1) +
       anchorMatches * 2.5 +
@@ -776,12 +780,146 @@ function matchControl(
   }) ?? null;
 }
 
-function splitClauses(prompt: string): string[] {
-  return unique(prompt
+const ACTION_LEMMAS = new Set([
+  "accept", "add", "adjust", "analyze", "announce", "apply", "archive",
+  "build", "calculate", "cancel", "change", "check", "compare", "configure",
+  "compose", "connect", "create", "delete", "disable", "edit", "enable", "enroll", "export",
+  "feature", "find", "fulfill", "generate", "get", "import", "invent", "keep",
+  "list", "make", "move", "place", "plan", "preview", "probe", "publish", "read",
+  "reconcile", "recover", "refund", "remove", "replace", "require", "restore",
+  "return", "save", "schedule", "search", "send", "set", "show", "start", "stop",
+  "test", "trash", "turn", "unpublish", "update", "upload", "use", "validate",
+  "verify", "write",
+]);
+
+const IRREGULAR_ACTION_LEMMAS = new Map([
+  ["built", "build"],
+  ["found", "find"],
+  ["got", "get"],
+  ["made", "make"],
+  ["sent", "send"],
+  ["set", "set"],
+  ["wrote", "write"],
+  ["written", "write"],
+]);
+
+const ACTION_LEAD_PREFIXES = new Set([
+  "carefully", "explicitly", "finally", "never", "next", "now", "only",
+  "please", "safely", "separately", "simultaneously",
+]);
+
+const CLAUSE_CONNECTOR_WORDS = new Set([
+  "along", "also", "and", "as", "but", "plus", "then", "well", "while", "with",
+]);
+
+type PromptClauseAnalysis = {
+  clauses: string[];
+  overflow: boolean;
+};
+
+function rawWords(value: string): string[] {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[’]/g, "'")
+    .toLowerCase()
+    .match(/[a-z]+(?:'[a-z]+)?/g) ?? [];
+}
+
+function undoubleFinalLetter(value: string): string {
+  const final = value.at(-1);
+  return final && value.length > 2 && value.at(-2) === final
+    ? value.slice(0, -1)
+    : value;
+}
+
+function isActionWord(value: string): boolean {
+  const word = value.replace(/[^a-z]/g, "");
+  if (!word) return false;
+  const irregular = IRREGULAR_ACTION_LEMMAS.get(word);
+  if (irregular) return ACTION_LEMMAS.has(irregular);
+  if (ACTION_LEMMAS.has(word)) return true;
+
+  const candidates = new Set<string>();
+  if (word.endsWith("ies") && word.length > 3) candidates.add(`${word.slice(0, -3)}y`);
+  if (word.endsWith("ied") && word.length > 3) candidates.add(`${word.slice(0, -3)}y`);
+  if (word.endsWith("s") && word.length > 2) candidates.add(word.slice(0, -1));
+  for (const suffix of ["ed", "ing"] as const) {
+    if (!word.endsWith(suffix) || word.length <= suffix.length + 1) continue;
+    const stem = word.slice(0, -suffix.length);
+    candidates.add(stem);
+    candidates.add(`${stem}e`);
+    candidates.add(undoubleFinalLetter(stem));
+  }
+  return [...candidates].some((candidate) => ACTION_LEMMAS.has(candidate));
+}
+
+function stripLeadingCoordinator(value: string): string {
+  return value.replace(
+    /^(?:(?:and\s+then|as\s+well\s+as|along\s+with|while\s+also|but\s+also|then|also|plus|and)\s+)+/i,
+    "",
+  ).trim();
+}
+
+function startsWithAction(value: string): boolean {
+  const words = rawWords(stripLeadingCoordinator(value));
+  while (words[0] && ACTION_LEAD_PREFIXES.has(words[0])) words.shift();
+  if (words[0] === "do" && words[1] === "not") words.splice(0, 2);
+  if (words[0] === "don't") words.shift();
+  return Boolean(words[0] && isActionWord(words[0]));
+}
+
+function hasAction(value: string): boolean {
+  return rawWords(value).some(isActionWord);
+}
+
+function isMeaningfulActionClause(value: string): boolean {
+  const terms = rawWords(value).filter((word) => !CLAUSE_CONNECTOR_WORDS.has(word));
+  return hasAction(value) && terms.length >= 2;
+}
+
+function splitActionClauses(prompt: string): PromptClauseAnalysis {
+  const clauses: string[] = [];
+  let clauseStart = 0;
+  const separators = prompt.matchAll(
+    /[;!?]+|\.(?=\s|$)|,\s*|\b(?:and\s+then|as\s+well\s+as|along\s+with|while\s+also|but\s+also|then|also|plus|and)\b/gi,
+  );
+  const pushClause = (rawClause: string): boolean => {
+    const clause = stripLeadingCoordinator(rawClause.trim());
+    if (!isMeaningfulActionClause(clause)) return false;
+    clauses.push(clause);
+    return clauses.length > MAX_MEANINGFUL_CLAUSES;
+  };
+
+  for (const separator of separators) {
+    const separatorIndex = separator.index ?? 0;
+    const left = prompt.slice(clauseStart, separatorIndex);
+    const rightStart = separatorIndex + separator[0].length;
+    const right = prompt.slice(rightStart);
+    if (!hasAction(left) || !startsWithAction(right)) continue;
+    const previousClauseCount = clauses.length;
+    if (pushClause(left)) {
+      return { clauses: clauses.slice(0, MAX_MEANINGFUL_CLAUSES), overflow: true };
+    }
+    if (clauses.length === previousClauseCount) continue;
+    clauseStart = rightStart;
+  }
+
+  if (pushClause(prompt.slice(clauseStart))) {
+    return { clauses: clauses.slice(0, MAX_MEANINGFUL_CLAUSES), overflow: true };
+  }
+  return { clauses, overflow: false };
+}
+
+function splitLexicalClauses(prompt: string): PromptClauseAnalysis {
+  const clauses = prompt
     .split(/(?:[;!?]+|\.(?:\s|$)|,(?:\s+and)?\s+|\b(?:and then|then|also|plus)\b)/i)
     .map((clause) => clause.trim())
-    .filter((clause) => unique(tokenize(clause)).length >= 2))
-    .slice(0, 8);
+    .filter((clause) => unique(tokenize(clause)).length >= 2);
+  return {
+    clauses: clauses.slice(0, MAX_MEANINGFUL_CLAUSES),
+    overflow: clauses.length > MAX_MEANINGFUL_CLAUSES,
+  };
 }
 
 function strongRouteMatch(match: ScoredCandidate, second?: ScoredCandidate): boolean {
@@ -800,6 +938,19 @@ function strongFallbackMatch(match: ScoredCandidate, second?: ScoredCandidate): 
   return match.exactPhrase || (
     match.matchedTerms >= 2 && coverage >= 0.45 && match.score >= 4.5 && margin >= 1.16
   );
+}
+
+function guardedRouteSupportsClause(
+  clauseMatch: ScoredCandidate,
+  wholePromptMatch: ScoredCandidate,
+): boolean {
+  const coverage = clauseMatch.matchedTerms / Math.max(clauseMatch.queryTerms, 1);
+  return clauseMatch.candidate.id === wholePromptMatch.candidate.id &&
+    clauseMatch.score >= 1.5 &&
+    (
+      (clauseMatch.matchedTerms >= 2 && coverage >= 0.3) ||
+      (clauseMatch.matchedTerms >= 1 && clauseMatch.queryTerms <= 2 && coverage === 1)
+    );
 }
 
 function combinedKind(routes: readonly WorkflowResolverRoute[]): WorkflowResolverIntentKind {
@@ -1036,28 +1187,95 @@ export function createWorkflowResolver(
     }
 
     const routes = scoreCandidates(boundedPrompt, surface, index, "route");
-    if (routes[0] && strongRouteMatch(routes[0], routes[1])) {
+    const topRouteKind = routes[0]?.candidate.route?.kind;
+    const clauseAnalysis = topRouteKind === "read"
+      ? splitLexicalClauses(boundedPrompt)
+      : splitActionClauses(boundedPrompt);
+    const clauses = clauseAnalysis.clauses;
+    if (
+      routes[0]?.exactPhrase &&
+      strongRouteMatch(routes[0], routes[1])
+    ) {
+      const plan = planFromRoutes([routes[0]], [boundedPrompt]);
+      if (plan) return resolvedRoutePlan(sources.catalog.version, plan, details);
+    }
+
+    const fallbacks = scoreCandidates(boundedPrompt, surface, index, "operation-fallback");
+    if (clauseAnalysis.overflow) {
+      return {
+        kind: "choices",
+        disposition: "ask",
+        version: sources.catalog.version,
+        choices: choicesFromRanked([...routes.slice(0, 3), ...fallbacks.slice(0, 3)]
+          .sort((left, right) =>
+            right.score - left.score || left.candidate.id.localeCompare(right.candidate.id)
+          )),
+        safetyNotes: [
+          "The request contains more than eight action clauses; split it into smaller reviewed requests.",
+        ],
+      };
+    }
+
+    const nonExactWriteOrMixedCompound = Boolean(
+      routes[0] &&
+      clauses.length > 1 &&
+      !routes[0].exactPhrase &&
+      topRouteKind !== undefined &&
+      topRouteKind !== "read"
+    );
+    const lowConfidenceReadCompound = Boolean(
+      routes[0] &&
+      clauses.length > 1 &&
+      !routes[0].exactPhrase &&
+      topRouteKind === "read" &&
+      routes[0].confidence < NON_EXACT_COMPOUND_ROUTE_CONFIDENCE
+    );
+    const guardedCompoundRoute = Boolean(
+      nonExactWriteOrMixedCompound || lowConfidenceReadCompound
+    );
+    if (
+      routes[0] &&
+      !guardedCompoundRoute &&
+      strongRouteMatch(routes[0], routes[1])
+    ) {
       const plan = planFromRoutes([routes[0]], [boundedPrompt]);
       if (plan) {
         return resolvedRoutePlan(sources.catalog.version, plan, details);
       }
     }
 
-    const clauses = splitClauses(boundedPrompt);
-    if (clauses.length > 1 && clauses.length <= MAX_COMPOSED_ROUTES) {
+    if (clauses.length > 1 && clauses.length <= MAX_MEANINGFUL_CLAUSES) {
       const clauseMatches: ScoredCandidate[] = [];
       let complete = true;
       for (const clause of clauses) {
         const ranked = scoreCandidates(clause, surface, index, "route");
-        if (!ranked[0] || !strongRouteMatch(ranked[0], ranked[1])) {
+        const contextualRouteMatch = routes[0]
+          ? ranked.find((match) => match.candidate.id === routes[0]!.candidate.id)
+          : undefined;
+        const guardedClauseMatch = Boolean(
+          guardedCompoundRoute &&
+          routes[0] &&
+          contextualRouteMatch &&
+          guardedRouteSupportsClause(contextualRouteMatch, routes[0])
+        );
+        const selectedMatch = guardedClauseMatch
+          ? contextualRouteMatch
+          : ranked[0] && strongRouteMatch(ranked[0], ranked[1])
+            ? ranked[0]
+            : undefined;
+        if (!selectedMatch) {
           complete = false;
           break;
         }
-        clauseMatches.push(ranked[0]);
+        clauseMatches.push(selectedMatch);
       }
       const uniqueMatches = unique(clauseMatches.map((match) => match.candidate.id))
         .map((id) => clauseMatches.find((match) => match.candidate.id === id)!);
-      if (complete && uniqueMatches.length > 1) {
+      if (
+        complete &&
+        uniqueMatches.length <= MAX_COMPOSED_ROUTES &&
+        (uniqueMatches.length > 1 || (guardedCompoundRoute && uniqueMatches.length === 1))
+      ) {
         const plan = planFromRoutes(uniqueMatches, clauses);
         if (plan) {
           return resolvedRoutePlan(sources.catalog.version, plan, details);
@@ -1065,8 +1283,20 @@ export function createWorkflowResolver(
       }
     }
 
-    const fallbacks = scoreCandidates(boundedPrompt, surface, index, "operation-fallback");
-    if (fallbacks[0] && strongFallbackMatch(fallbacks[0], fallbacks[1])) {
+    const topFallbackOperation = fallbacks[0]?.candidate.operationIds[0]
+      ? index.operationsById.get(fallbacks[0].candidate.operationIds[0]!)
+      : undefined;
+    const guardedCompoundFallback = Boolean(
+      fallbacks[0] &&
+      clauses.length > 1 &&
+      topFallbackOperation?.risk !== "read"
+    );
+    if (
+      !guardedCompoundRoute &&
+      !guardedCompoundFallback &&
+      fallbacks[0] &&
+      strongFallbackMatch(fallbacks[0], fallbacks[1])
+    ) {
       return {
         kind: "plan",
         disposition: "execute",

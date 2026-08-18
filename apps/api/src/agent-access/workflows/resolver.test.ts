@@ -45,8 +45,60 @@ function resolutionFlags(resolution: WorkflowResolution) {
   };
 }
 
+function createSyntheticWriteResolver(input: {
+  id: string;
+  title: string;
+  summary: string;
+  tags: string[];
+}) {
+  const operationId = `dashboard.synthetic.${input.id}`;
+  return createWorkflowResolver({
+    catalog: {
+      version: "compound-guard-test",
+      cards: [],
+      controls: [],
+      routes: [{
+        id: `dashboard.synthetic-${input.id}`,
+        surface: "dashboard",
+        kind: "write",
+        title: input.title,
+        summary: input.summary,
+        examples: ["Run this reviewed synthetic write."],
+        tags: input.tags,
+        operationIds: [operationId],
+        requiresFacts: true,
+        requiresConfirmation: true,
+        requiresVerification: true,
+        rules: ["Preserve unrelated state."],
+      }],
+    },
+    operations: [
+      {
+        operationId,
+        surface: "dashboard",
+        exposure: "execute",
+        risk: "write",
+        summary: input.title,
+        description: input.summary,
+        tags: input.tags,
+        inputSchema: { type: "object" },
+      },
+      ...Array.from({ length: 8 }, (_, index) => ({
+        operationId: `dashboard.synthetic.decoy_${index}`,
+        surface: "dashboard",
+        exposure: "execute",
+        risk: "read",
+        summary: `Observe quasar nebula ${index}`,
+        description: "Read unrelated astronomy facts.",
+        tags: ["astronomy"],
+        inputSchema: {},
+      })),
+    ],
+  });
+}
+
 describe("reviewed agent workflow resolver", () => {
-  it("returns the exact smallest reviewed outcome for all 66 reviewed cases", () => {
+  it("returns the exact smallest reviewed outcome for all 70 reviewed cases", () => {
     for (const testCase of AGENT_INTENT_EVAL_CASES) {
       const resolution = resolveWorkflow({
         prompt: testCase.prompt,
@@ -59,7 +111,9 @@ describe("reviewed agent workflow resolver", () => {
       if (testCase.expectedDisposition) {
         expect(resolution.kind, testCase.id).toBe("control");
         if (resolution.kind === "control") {
-          expect(resolution.classification.controlId, testCase.id).toBe(testCase.id);
+          expect(resolution.classification.controlId, testCase.id).toBe(
+            testCase.expectedControlId ?? testCase.id,
+          );
           expect(resolution.forbiddenOperationIds, testCase.id).toEqual(
             testCase.forbiddenOperationIds ?? [],
           );
@@ -149,6 +203,21 @@ describe("reviewed agent workflow resolver", () => {
     if (resolution.kind === "plan") expect(resolution.plan.routeIds).toEqual([routeId]);
   });
 
+  it.each([
+    "Make a shirt with sizes and colors, unique SKUs, images per color, and publish it.",
+    "Create a published shirt with rich copy, slug, canonical path, SEO, saved condition, and base price; Size S/M/L by Color Navy/White with six exact SKUs, prices, and stocks; three distinct assets for shared primary, Navy, and White with exact alt text and roles; Cotton attribute and conditional category creation; sitemap and feed inclusion; bounded admin and storefront verification.",
+    "Create an optioned jacket with size and color lists, exact SKU prices and stock, product images and meta description, then publish its category and verify the storefront.",
+  ])("preserves one reviewed rich-product workflow for coherent specifications", (prompt) => {
+    const resolution = resolveWorkflow({ surface: "dashboard", prompt });
+    expect(resolution).toMatchObject({
+      kind: "plan",
+      plan: {
+        source: "route",
+        routeIds: ["dashboard.complex-product-create"],
+      },
+    });
+  });
+
   it("fails conditional guest checkout closed on authoritative payment or delivery gaps", () => {
     const resolution = resolveWorkflow({
       surface: "dashboard",
@@ -175,6 +244,202 @@ describe("reviewed agent workflow resolver", () => {
       expect.stringContaining("Fail closed without a change"),
       expect.stringContaining("Merge only the guest-checkout field"),
     ]));
+  });
+
+  it.each([
+    [
+      "dashboard.shipping-threshold-unsupported",
+      "dashboard.guest-checkout-conditional-enable",
+    ],
+    [
+      "dashboard.shipping-threshold-unsupported-paraphrase",
+      "dashboard.guest-checkout-conditional-enable",
+    ],
+    [
+      "dashboard.campaign-layout-needs-review",
+      "dashboard.complex-product-create",
+    ],
+    [
+      "dashboard.campaign-layout-needs-review-paraphrase",
+      "dashboard.complex-product-create",
+    ],
+  ] as const)("keeps compound safety control %s read-only", (caseId, forbiddenRouteId) => {
+    const testCase = AGENT_INTENT_EVAL_CASES.find((candidate) => candidate.id === caseId)!;
+    const resolution = resolveWorkflow({ prompt: testCase.prompt, surface: testCase.surface });
+    expect(resolution).toMatchObject({
+      kind: "control",
+      disposition: "ask",
+      classification: { controlId: testCase.expectedControlId ?? testCase.id },
+      safePlan: { kind: "read", operationIds: testCase.expectedOperationIds },
+      forbiddenOperationIds: testCase.forbiddenOperationIds,
+    });
+    if (resolution.kind !== "control") return;
+    expect(resolution.safePlan?.routeIds).not.toContain(forbiddenRouteId);
+    expect(resolution.safePlan?.operationIds.every((operationId) =>
+      operations.find((operation) => operation.operationId === operationId)?.risk === "read"
+    )).toBe(true);
+  });
+
+  it("requires complete clauses for a high-confidence write and blocks fallback execution", () => {
+    const resolveSynthetic = createSyntheticWriteResolver({
+      id: "product",
+      title: "Create and publish a complete optioned catalog product",
+      summary:
+        "Create a catalog product with variants, SKUs, media images, prices, stock, category attributes, SEO, sitemap, and feed visibility.",
+      tags: ["create", "publish", "catalog", "product", "variants", "sku", "media", "price", "stock", "seo", "feed"],
+    });
+    const resolution = resolveSynthetic({
+      prompt: "Create and publish a complete optioned catalog product with variants, SKUs, media images, prices, stock, category attributes, SEO, sitemap, and feed visibility, then refund a captured payment.",
+      surface: "dashboard",
+    });
+    expect(resolution.kind).toBe("choices");
+    if (resolution.kind !== "choices") return;
+    const routeChoice = resolution.choices.find((choice) =>
+      choice.id === "dashboard.synthetic-product"
+    );
+    expect(routeChoice).toMatchObject({
+      source: "route",
+    });
+    expect(routeChoice?.confidence).toBeGreaterThan(0.8);
+    expect(resolution.choices.some((choice) => choice.source === "operation-fallback")).toBe(true);
+  });
+
+  it.each([
+    "and refund a captured payment",
+    "as well as refunding a captured payment",
+    "along with refunding a captured payment",
+    "while also refunding a captured payment",
+    "but also refunding a captured payment",
+  ])("recognizes coordinated action separator: %s", (coordinatedAction) => {
+    const resolveSynthetic = createSyntheticWriteResolver({
+      id: "coordinated-product",
+      title: "Create a complete optioned catalog product",
+      summary: "Create a catalog product with variants, SKUs, media, prices, stock, and SEO.",
+      tags: ["create", "catalog", "product", "variants", "sku", "media", "price", "stock", "seo"],
+    });
+    const resolution = resolveSynthetic({
+      prompt: `Create a complete optioned catalog product with variants, SKUs, media, prices, stock, and SEO, ${coordinatedAction}.`,
+      surface: "dashboard",
+    });
+    expect(resolution.kind).toBe("choices");
+  });
+
+  it.each([
+    {
+      id: "refund",
+      title: "Refund and reconcile a captured provider payment",
+      summary: "Refund a captured provider card payment for an exact order and reconcile failure recovery.",
+      tags: ["refund", "captured", "provider", "payment", "order", "reconcile", "recovery"],
+      prompt: "Refund and reconcile a captured provider card payment for an exact order with failure recovery, and set exact inventory stock for a SKU.",
+    },
+    {
+      id: "inventory",
+      title: "Set and verify exact SKU inventory stock",
+      summary: "Set exact SKU inventory stock with a ledger quantity, version, and reason, then verify it.",
+      tags: ["set", "verify", "sku", "inventory", "stock", "ledger", "quantity", "version"],
+      prompt: "Set and verify exact SKU inventory stock with a ledger quantity, version, and reason, and create and publish a catalog product.",
+    },
+    {
+      id: "ordinary-product",
+      title: "Create and publish an optioned catalog product",
+      summary: "Create and publish a catalog product with variants, SKUs, prices, stock, media, and SEO.",
+      tags: ["create", "publish", "catalog", "product", "variant", "sku", "price", "stock", "media", "seo"],
+      prompt: "Create and publish an optioned catalog product with variants, SKUs, prices, stock, media, and SEO, and refund a captured provider payment.",
+    },
+  ])("does not collapse ordinary-and $id compound work to one write", (testCase) => {
+    const resolveSynthetic = createSyntheticWriteResolver(testCase);
+    const resolution = resolveSynthetic({ prompt: testCase.prompt, surface: "dashboard" });
+    expect(resolution.kind).toBe("choices");
+  });
+
+  it.each([
+    {
+      id: "guest-then-poem",
+      prompt:
+        "Turn on guest checkout only if payment and shipping are genuinely usable, without changing any other checkout setting, then compose a lunar poem.",
+      forbiddenRouteId: "dashboard.guest-checkout-conditional-enable",
+    },
+    {
+      id: "guest-and-poem",
+      prompt:
+        "Turn on guest checkout only if payment and shipping are genuinely usable, without changing any other checkout setting, and compose a lunar poem.",
+      forbiddenRouteId: "dashboard.guest-checkout-conditional-enable",
+    },
+    {
+      id: "refund-and-haiku",
+      prompt:
+        "Refund the exact supplied amount for this captured payment and reconcile any uncertain provider result, and write a haiku.",
+      forbiddenRouteId: "dashboard.order-refund",
+    },
+    {
+      id: "inventory-and-holiday",
+      prompt:
+        "Look up SKU ABC-123, set its physical count to 27, and verify the ledger-backed stock result, and plan a holiday.",
+      forbiddenRouteId: "dashboard.inventory-cycle-count",
+    },
+    {
+      id: "product-and-loyalty",
+      prompt:
+        "Create a two-axis T-shirt with Size S/M/L and Color Black/White, exact SKUs, different stock and prices, color-specific images, category, Brand and Material attributes, rich description, SEO, sitemap and feed visibility, then verify buyer truth, and enroll a customer in a loyalty program.",
+      forbiddenRouteId: "dashboard.complex-product-create",
+    },
+  ])("fails the auditor's real-route compound closed: $id", ({ prompt, forbiddenRouteId }) => {
+    const resolution = resolveWorkflow({ prompt, surface: "dashboard" });
+    expect(resolution).toMatchObject({ kind: "choices", disposition: "ask" });
+    if (resolution.kind !== "choices") return;
+    expect(resolution.choices).toContainEqual(expect.objectContaining({
+      id: forbiddenRouteId,
+      source: "route",
+    }));
+  });
+
+  it("keeps coherent product fact lists in one action clause", () => {
+    const resolveSynthetic = createSyntheticWriteResolver({
+      id: "product-facts",
+      title: "Create an optioned catalog product",
+      summary:
+        "Create a catalog product with size and color options, SKU prices and stock, images and meta description.",
+      tags: ["create", "catalog", "product", "size", "color", "sku", "price", "stock", "image", "meta", "description"],
+    });
+    expect(resolveSynthetic({
+      prompt: "Create an optioned catalog product with size and color options, exact SKU prices and stock quantities, product images and meta description.",
+      surface: "dashboard",
+    })).toMatchObject({
+      kind: "plan",
+      plan: { source: "route", routeIds: ["dashboard.synthetic-product-facts"] },
+    });
+  });
+
+  it("asks instead of truncating a ninth meaningful action clause", () => {
+    const resolveSynthetic = createSyntheticWriteResolver({
+      id: "overflow",
+      title: "Create update delete publish verify export import archive restore records",
+      summary:
+        "Create, update, delete, publish, verify, export, import, archive, and restore reviewed records.",
+      tags: ["create", "update", "delete", "publish", "verify", "export", "import", "archive", "restore"],
+    });
+    const resolution = resolveSynthetic({
+      prompt: "Create alpha records, then update beta records, then delete gamma records, then publish delta records, then verify epsilon records, then export zeta records, then import eta records, then archive theta records, then restore iota records.",
+      surface: "dashboard",
+    });
+    expect(resolution).toMatchObject({
+      kind: "choices",
+      disposition: "ask",
+      safetyNotes: [expect.stringContaining("more than eight action clauses")],
+    });
+  });
+
+  it("fails a real write route closed when its ninth action clause is unsupported", () => {
+    const resolution = resolveWorkflow({
+      prompt:
+        "Turn on guest checkout, then compose a lunar poem, then write a haiku, then plan a holiday, then enroll a customer, then schedule a meeting, then create a note, then update a draft, then archive a record.",
+      surface: "dashboard",
+    });
+    expect(resolution).toMatchObject({
+      kind: "choices",
+      disposition: "ask",
+      safetyNotes: [expect.stringContaining("more than eight action clauses")],
+    });
   });
 
   it("does not turn safely negated policy language into a refusal", () => {
