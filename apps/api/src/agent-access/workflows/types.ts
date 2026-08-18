@@ -3,7 +3,7 @@ import type {
   AgentOperationRevision,
 } from "../../openapi/agent-operation-manifest";
 
-export const AGENT_WORKFLOW_CATALOG_VERSION = "2.0.0" as const;
+export const AGENT_WORKFLOW_CATALOG_VERSION = "3.0.0" as const;
 
 export const AGENT_PRODUCT_CONSTRUCTION_RULES = {
   mediaAssociationIds: "caller-local-pmed",
@@ -86,6 +86,26 @@ export type AgentWorkflowStepPolicies = {
   nonInferenceRules: string[];
 };
 
+export type AgentWorkflowOutputField = {
+  /** Fixed JSON Pointer relative to the selected object or array item. */
+  pointer: string;
+  alias: string;
+};
+
+export type AgentWorkflowOutputSelector = {
+  /** Fixed JSON Pointer from the operation response root. */
+  pointer: string;
+  alias: string;
+  /** Required for arrays and forbidden for non-arrays. */
+  maxItems?: number;
+  /** Required for object values/items and forbidden for scalar values/items. */
+  fields?: AgentWorkflowOutputField[];
+};
+
+export type AgentWorkflowOutputProjection = {
+  selectors: AgentWorkflowOutputSelector[];
+};
+
 export type AgentWorkflowStep = {
   id: string;
   title: string;
@@ -97,6 +117,7 @@ export type AgentWorkflowStep = {
     dependencies: AgentWorkflowInputDependency[];
     defaults: AgentWorkflowInputDefault[];
   };
+  output?: AgentWorkflowOutputProjection;
   policies: AgentWorkflowStepPolicies;
 };
 

@@ -47,6 +47,31 @@ function mixedAudienceSpec(): Record<string, unknown> {
   return spec;
 }
 
+function workflowSpec(): Record<string, unknown> {
+  return executableSpec({
+    "x-scalius-workflows": {
+      version: "2.0.0",
+      cards: [],
+      routes: [{
+        id: "dashboard.product-create",
+        surface: "dashboard",
+        kind: "write",
+        title: "Create a product",
+        summary: "Create one reviewed catalog product.",
+        examples: ["Create a new catalog product."],
+        tags: ["catalog", "product"],
+        operationIds: ["dashboard.products.create"],
+        requiresFacts: true,
+        requiresConfirmation: true,
+        requiresVerification: true,
+        rules: ["Collect required facts and confirm before writing."],
+      }],
+      controls: [],
+      coverage: { operations: [] },
+    },
+  });
+}
+
 function specWithCreateRequestLimit(maxRequestBytes: number): Record<string, unknown> {
   const spec = executableSpec();
   const paths = spec.paths as Record<string, Record<string, Record<string, unknown>>>;
@@ -158,6 +183,27 @@ describe("CLI program", () => {
     expect(output.count).toBe(2);
     expect(output.operations).toHaveLength(2);
     expect(output.operations.every(({ openWorld }) => openWorld === false)).toBe(true);
+    expect(runtime.stderrText()).toBe("");
+  });
+
+  it("resolves a natural-language goal from the live workflow catalog in one command", async () => {
+    const fetch = vi.fn(async () => Response.json(workflowSpec(), { headers: { ETag: '"workflow-v1"' } }));
+    const runtime = await authenticatedRuntime(fetch as typeof globalThis.fetch);
+    const exit = await runProgram(runtime, [
+      "--output", "json", "workflow", "resolve", "Please create a new catalog product.",
+    ]);
+
+    expect(exit).toBe(0);
+    expect(JSON.parse(runtime.stdoutText())).toMatchObject({
+      kind: "plan",
+      disposition: "execute",
+      plan: {
+        routeIds: ["dashboard.product-create"],
+        operationIds: ["dashboard.products.create"],
+        requiresConfirmation: true,
+      },
+    });
+    expect(fetch).toHaveBeenCalledTimes(1);
     expect(runtime.stderrText()).toBe("");
   });
 

@@ -1,6 +1,7 @@
 import app from "../app";
 import { finalizeOpenApiContract } from "../openapi-contract";
 import {
+  writeCliWorkflowResolverCore,
   writeAgentOperationManifest,
   writeOpenApiContractModule,
 } from "./generate-agent-operation-manifest";
@@ -23,6 +24,7 @@ const spec = finalizeOpenApiContract(
 
 const source = writeAgentOperationManifest(spec);
 writeOpenApiContractModule(spec);
+writeCliWorkflowResolverCore();
 console.log(
   `Generated ${source.match(/"operationId":/g)?.length ?? 0} agent operation records.`,
 );

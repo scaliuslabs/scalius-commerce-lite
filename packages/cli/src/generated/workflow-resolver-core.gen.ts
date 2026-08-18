@@ -1,3 +1,6 @@
+// Generated from apps/api/src/agent-access/workflows/resolver-core.ts.
+// Do not edit by hand.
+
 export type WorkflowResolverSurface = "dashboard" | "storefront";
 export type WorkflowResolverIntentKind = "read" | "write" | "mixed";
 export type WorkflowResolverDisposition = "execute" | "ask" | "unsupported" | "refuse";

@@ -494,7 +494,7 @@ export const DAILY_OPERATING_SNAPSHOT_WORKFLOW: AgentWorkflowCard = {
   id: "operations.daily-snapshot.v1",
   surface: "dashboard",
   title: "Daily merchant snapshot",
-  summary: "Report booked-gross merchant-day activity, open fulfillment, active alerts, and payment/delivery readiness.",
+  summary: "Report booked-gross activity, open fulfillment, alerts, and payment/delivery readiness.",
   examples: [
     "Show today's booked sales, orders to fulfill, stock alerts, and checkout readiness.",
   ],
@@ -537,6 +537,19 @@ export const DAILY_OPERATING_SNAPSHOT_WORKFLOW: AgentWorkflowCard = {
             dependencies: [{ templatePointer: "/query/days", source: { kind: "fact", factId: "days" } }],
             defaults: [{ templatePointer: "/query/days", value: 1 }],
           },
+          output: {
+            selectors: [{
+              pointer: "/data/dailyActivityData",
+              alias: "activity",
+              maxItems: 2,
+              fields: [
+                { pointer: "/date", alias: "date" },
+                { pointer: "/orders", alias: "orders" },
+                { pointer: "/revenue", alias: "revenue" },
+                { pointer: "/newCustomers", alias: "newCustomers" },
+              ],
+            }],
+          },
           policies: readPolicies,
         },
         {
@@ -545,6 +558,12 @@ export const DAILY_OPERATING_SNAPSHOT_WORKFLOW: AgentWorkflowCard = {
           operationId: "dashboard.settings.currency_get",
           mutation: "read",
           input: { template: {}, dependencies: [], defaults: [] },
+          output: {
+            selectors: [
+              { pointer: "/data/currencyCode", alias: "currencyCode" },
+              { pointer: "/data/currencySymbol", alias: "currencySymbol" },
+            ],
+          },
           policies: readPolicies,
         },
         {
@@ -573,6 +592,36 @@ export const DAILY_OPERATING_SNAPSHOT_WORKFLOW: AgentWorkflowCard = {
               { templatePointer: "/query/order", value: "desc" },
             ],
           },
+          output: {
+            selectors: [
+              {
+                pointer: "/data/orders",
+                alias: "orderQueue",
+                maxItems: 10,
+                fields: [
+                  { pointer: "/id", alias: "id" },
+                  { pointer: "/totalAmount", alias: "totalAmount" },
+                  { pointer: "/status", alias: "status" },
+                  { pointer: "/paymentStatus", alias: "paymentStatus" },
+                  { pointer: "/paymentMethod", alias: "paymentMethod" },
+                  { pointer: "/fulfillmentStatus", alias: "fulfillmentStatus" },
+                  { pointer: "/createdAt", alias: "createdAt" },
+                  { pointer: "/itemCount", alias: "itemCount" },
+                  { pointer: "/totalQuantity", alias: "totalQuantity" },
+                ],
+              },
+              {
+                pointer: "/data/pagination",
+                alias: "pagination",
+                fields: [
+                  { pointer: "/page", alias: "page" },
+                  { pointer: "/limit", alias: "limit" },
+                  { pointer: "/total", alias: "total" },
+                  { pointer: "/totalPages", alias: "totalPages" },
+                ],
+              },
+            ],
+          },
           policies: readPolicies,
         },
       ],
@@ -591,6 +640,23 @@ export const DAILY_OPERATING_SNAPSHOT_WORKFLOW: AgentWorkflowCard = {
           operationId: "dashboard.inventory_alerts.list",
           mutation: "read",
           input: { template: { query: { status: "active" } }, dependencies: [], defaults: [{ templatePointer: "/query/status", value: "active" }] },
+          output: {
+            selectors: [{
+              pointer: "/data/alerts",
+              alias: "inventoryAlerts",
+              maxItems: 20,
+              fields: [
+                { pointer: "/productId", alias: "productId" },
+                { pointer: "/productName", alias: "productName" },
+                { pointer: "/variantId", alias: "variantId" },
+                { pointer: "/variantSku", alias: "sku" },
+                { pointer: "/variantLabel", alias: "variant" },
+                { pointer: "/currentQty", alias: "quantity" },
+                { pointer: "/threshold", alias: "threshold" },
+                { pointer: "/alertStatus", alias: "status" },
+              ],
+            }],
+          },
           policies: readPolicies,
         },
         {
@@ -600,6 +666,28 @@ export const DAILY_OPERATING_SNAPSHOT_WORKFLOW: AgentWorkflowCard = {
           mutation: "read",
           condition: "Use this first-class projection for blockers; never assume COD, gateway, or delivery fallback.",
           input: { template: {}, dependencies: [], defaults: [] },
+          output: {
+            selectors: [
+              { pointer: "/data/ready", alias: "ready" },
+              {
+                pointer: "/data/hasActiveShippingMethod",
+                alias: "hasActiveShippingMethod",
+              },
+              {
+                pointer: "/data/hasActiveDeliveryHierarchy",
+                alias: "hasActiveDeliveryHierarchy",
+              },
+              {
+                pointer: "/data/customerSignInRequired",
+                alias: "customerSignInRequired",
+              },
+              {
+                pointer: "/data/hasUsableCustomerSignIn",
+                alias: "hasUsableCustomerSignIn",
+              },
+              { pointer: "/data/issues", alias: "issues", maxItems: 20 },
+            ],
+          },
           policies: readPolicies,
         },
         {
@@ -609,6 +697,40 @@ export const DAILY_OPERATING_SNAPSHOT_WORKFLOW: AgentWorkflowCard = {
           mutation: "read",
           condition: "Enabled/configured is not usable; report gatewayStatus usability and checkout visibility.",
           input: { template: {}, dependencies: [], defaults: [] },
+          output: {
+            selectors: [
+              {
+                pointer: "/data/enabledMethods",
+                alias: "enabledMethods",
+                maxItems: 4,
+              },
+              {
+                pointer: "/data/activeMethods",
+                alias: "activeMethods",
+                maxItems: 4,
+              },
+              { pointer: "/data/defaultMethod", alias: "defaultMethod" },
+              { pointer: "/data/activeDefaultMethod", alias: "activeDefaultMethod" },
+              {
+                pointer: "/data/gatewayStatus",
+                alias: "gatewayStatus",
+                fields: [
+                  { pointer: "/stripe/configured", alias: "stripeConfigured" },
+                  { pointer: "/stripe/usable", alias: "stripeUsable" },
+                  { pointer: "/stripe/checkoutVisible", alias: "stripeVisible" },
+                  { pointer: "/sslcommerz/configured", alias: "sslConfigured" },
+                  { pointer: "/sslcommerz/usable", alias: "sslUsable" },
+                  { pointer: "/sslcommerz/checkoutVisible", alias: "sslVisible" },
+                  { pointer: "/polar/configured", alias: "polarConfigured" },
+                  { pointer: "/polar/usable", alias: "polarUsable" },
+                  { pointer: "/polar/checkoutVisible", alias: "polarVisible" },
+                  { pointer: "/cod/configured", alias: "codConfigured" },
+                  { pointer: "/cod/usable", alias: "codUsable" },
+                  { pointer: "/cod/checkoutVisible", alias: "codVisible" },
+                ],
+              },
+            ],
+          },
           policies: readPolicies,
         },
         {
@@ -625,6 +747,32 @@ export const DAILY_OPERATING_SNAPSHOT_WORKFLOW: AgentWorkflowCard = {
               { templatePointer: "/query/limit", value: 100 },
               { templatePointer: "/query/sort", value: "sortOrder" },
               { templatePointer: "/query/order", value: "asc" },
+            ],
+          },
+          output: {
+            selectors: [
+              {
+                pointer: "/data/shippingMethods",
+                alias: "shippingMethods",
+                maxItems: 100,
+                fields: [
+                  { pointer: "/id", alias: "id" },
+                  { pointer: "/name", alias: "name" },
+                  { pointer: "/fee", alias: "fee" },
+                  { pointer: "/isActive", alias: "isActive" },
+                  { pointer: "/sortOrder", alias: "sortOrder" },
+                ],
+              },
+              {
+                pointer: "/data/pagination",
+                alias: "pagination",
+                fields: [
+                  { pointer: "/page", alias: "page" },
+                  { pointer: "/limit", alias: "limit" },
+                  { pointer: "/total", alias: "total" },
+                  { pointer: "/totalPages", alias: "totalPages" },
+                ],
+              },
             ],
           },
           policies: readPolicies,

@@ -199334,7 +199334,7 @@
     }
   },
   "x-scalius-workflows": {
-    "version": "2.0.0",
+    "version": "3.0.0",
     "cards": [
       {
         "id": "catalog.optioned-product.v1",
@@ -200354,7 +200354,7 @@
         "id": "operations.daily-snapshot.v1",
         "surface": "dashboard",
         "title": "Daily merchant snapshot",
-        "summary": "Report booked-gross merchant-day activity, open fulfillment, active alerts, and payment/delivery readiness.",
+        "summary": "Report booked-gross activity, open fulfillment, alerts, and payment/delivery readiness.",
         "examples": [
           "Show today's booked sales, orders to fulfill, stock alerts, and checkout readiness."
         ],
@@ -200427,6 +200427,33 @@
                     }
                   ]
                 },
+                "output": {
+                  "selectors": [
+                    {
+                      "pointer": "/data/dailyActivityData",
+                      "alias": "activity",
+                      "maxItems": 2,
+                      "fields": [
+                        {
+                          "pointer": "/date",
+                          "alias": "date"
+                        },
+                        {
+                          "pointer": "/orders",
+                          "alias": "orders"
+                        },
+                        {
+                          "pointer": "/revenue",
+                          "alias": "revenue"
+                        },
+                        {
+                          "pointer": "/newCustomers",
+                          "alias": "newCustomers"
+                        }
+                      ]
+                    }
+                  ]
+                },
                 "policies": {
                   "revision": "none",
                   "idempotency": "none",
@@ -200448,6 +200475,18 @@
                   "template": {},
                   "dependencies": [],
                   "defaults": []
+                },
+                "output": {
+                  "selectors": [
+                    {
+                      "pointer": "/data/currencyCode",
+                      "alias": "currencyCode"
+                    },
+                    {
+                      "pointer": "/data/currencySymbol",
+                      "alias": "currencySymbol"
+                    }
+                  ]
                 },
                 "policies": {
                   "revision": "none",
@@ -200505,6 +200544,75 @@
                     }
                   ]
                 },
+                "output": {
+                  "selectors": [
+                    {
+                      "pointer": "/data/orders",
+                      "alias": "orderQueue",
+                      "maxItems": 10,
+                      "fields": [
+                        {
+                          "pointer": "/id",
+                          "alias": "id"
+                        },
+                        {
+                          "pointer": "/totalAmount",
+                          "alias": "totalAmount"
+                        },
+                        {
+                          "pointer": "/status",
+                          "alias": "status"
+                        },
+                        {
+                          "pointer": "/paymentStatus",
+                          "alias": "paymentStatus"
+                        },
+                        {
+                          "pointer": "/paymentMethod",
+                          "alias": "paymentMethod"
+                        },
+                        {
+                          "pointer": "/fulfillmentStatus",
+                          "alias": "fulfillmentStatus"
+                        },
+                        {
+                          "pointer": "/createdAt",
+                          "alias": "createdAt"
+                        },
+                        {
+                          "pointer": "/itemCount",
+                          "alias": "itemCount"
+                        },
+                        {
+                          "pointer": "/totalQuantity",
+                          "alias": "totalQuantity"
+                        }
+                      ]
+                    },
+                    {
+                      "pointer": "/data/pagination",
+                      "alias": "pagination",
+                      "fields": [
+                        {
+                          "pointer": "/page",
+                          "alias": "page"
+                        },
+                        {
+                          "pointer": "/limit",
+                          "alias": "limit"
+                        },
+                        {
+                          "pointer": "/total",
+                          "alias": "total"
+                        },
+                        {
+                          "pointer": "/totalPages",
+                          "alias": "totalPages"
+                        }
+                      ]
+                    }
+                  ]
+                },
                 "policies": {
                   "revision": "none",
                   "idempotency": "none",
@@ -200550,6 +200658,49 @@
                     }
                   ]
                 },
+                "output": {
+                  "selectors": [
+                    {
+                      "pointer": "/data/alerts",
+                      "alias": "inventoryAlerts",
+                      "maxItems": 20,
+                      "fields": [
+                        {
+                          "pointer": "/productId",
+                          "alias": "productId"
+                        },
+                        {
+                          "pointer": "/productName",
+                          "alias": "productName"
+                        },
+                        {
+                          "pointer": "/variantId",
+                          "alias": "variantId"
+                        },
+                        {
+                          "pointer": "/variantSku",
+                          "alias": "sku"
+                        },
+                        {
+                          "pointer": "/variantLabel",
+                          "alias": "variant"
+                        },
+                        {
+                          "pointer": "/currentQty",
+                          "alias": "quantity"
+                        },
+                        {
+                          "pointer": "/threshold",
+                          "alias": "threshold"
+                        },
+                        {
+                          "pointer": "/alertStatus",
+                          "alias": "status"
+                        }
+                      ]
+                    }
+                  ]
+                },
                 "policies": {
                   "revision": "none",
                   "idempotency": "none",
@@ -200573,6 +200724,35 @@
                   "dependencies": [],
                   "defaults": []
                 },
+                "output": {
+                  "selectors": [
+                    {
+                      "pointer": "/data/ready",
+                      "alias": "ready"
+                    },
+                    {
+                      "pointer": "/data/hasActiveShippingMethod",
+                      "alias": "hasActiveShippingMethod"
+                    },
+                    {
+                      "pointer": "/data/hasActiveDeliveryHierarchy",
+                      "alias": "hasActiveDeliveryHierarchy"
+                    },
+                    {
+                      "pointer": "/data/customerSignInRequired",
+                      "alias": "customerSignInRequired"
+                    },
+                    {
+                      "pointer": "/data/hasUsableCustomerSignIn",
+                      "alias": "hasUsableCustomerSignIn"
+                    },
+                    {
+                      "pointer": "/data/issues",
+                      "alias": "issues",
+                      "maxItems": 20
+                    }
+                  ]
+                },
                 "policies": {
                   "revision": "none",
                   "idempotency": "none",
@@ -200595,6 +200775,82 @@
                   "template": {},
                   "dependencies": [],
                   "defaults": []
+                },
+                "output": {
+                  "selectors": [
+                    {
+                      "pointer": "/data/enabledMethods",
+                      "alias": "enabledMethods",
+                      "maxItems": 4
+                    },
+                    {
+                      "pointer": "/data/activeMethods",
+                      "alias": "activeMethods",
+                      "maxItems": 4
+                    },
+                    {
+                      "pointer": "/data/defaultMethod",
+                      "alias": "defaultMethod"
+                    },
+                    {
+                      "pointer": "/data/activeDefaultMethod",
+                      "alias": "activeDefaultMethod"
+                    },
+                    {
+                      "pointer": "/data/gatewayStatus",
+                      "alias": "gatewayStatus",
+                      "fields": [
+                        {
+                          "pointer": "/stripe/configured",
+                          "alias": "stripeConfigured"
+                        },
+                        {
+                          "pointer": "/stripe/usable",
+                          "alias": "stripeUsable"
+                        },
+                        {
+                          "pointer": "/stripe/checkoutVisible",
+                          "alias": "stripeVisible"
+                        },
+                        {
+                          "pointer": "/sslcommerz/configured",
+                          "alias": "sslConfigured"
+                        },
+                        {
+                          "pointer": "/sslcommerz/usable",
+                          "alias": "sslUsable"
+                        },
+                        {
+                          "pointer": "/sslcommerz/checkoutVisible",
+                          "alias": "sslVisible"
+                        },
+                        {
+                          "pointer": "/polar/configured",
+                          "alias": "polarConfigured"
+                        },
+                        {
+                          "pointer": "/polar/usable",
+                          "alias": "polarUsable"
+                        },
+                        {
+                          "pointer": "/polar/checkoutVisible",
+                          "alias": "polarVisible"
+                        },
+                        {
+                          "pointer": "/cod/configured",
+                          "alias": "codConfigured"
+                        },
+                        {
+                          "pointer": "/cod/usable",
+                          "alias": "codUsable"
+                        },
+                        {
+                          "pointer": "/cod/checkoutVisible",
+                          "alias": "codVisible"
+                        }
+                      ]
+                    }
+                  ]
                 },
                 "policies": {
                   "revision": "none",
@@ -200640,6 +200896,59 @@
                     {
                       "templatePointer": "/query/order",
                       "value": "asc"
+                    }
+                  ]
+                },
+                "output": {
+                  "selectors": [
+                    {
+                      "pointer": "/data/shippingMethods",
+                      "alias": "shippingMethods",
+                      "maxItems": 100,
+                      "fields": [
+                        {
+                          "pointer": "/id",
+                          "alias": "id"
+                        },
+                        {
+                          "pointer": "/name",
+                          "alias": "name"
+                        },
+                        {
+                          "pointer": "/fee",
+                          "alias": "fee"
+                        },
+                        {
+                          "pointer": "/isActive",
+                          "alias": "isActive"
+                        },
+                        {
+                          "pointer": "/sortOrder",
+                          "alias": "sortOrder"
+                        }
+                      ]
+                    },
+                    {
+                      "pointer": "/data/pagination",
+                      "alias": "pagination",
+                      "fields": [
+                        {
+                          "pointer": "/page",
+                          "alias": "page"
+                        },
+                        {
+                          "pointer": "/limit",
+                          "alias": "limit"
+                        },
+                        {
+                          "pointer": "/total",
+                          "alias": "total"
+                        },
+                        {
+                          "pointer": "/totalPages",
+                          "alias": "totalPages"
+                        }
+                      ]
                     }
                   ]
                 },
@@ -201051,11 +201360,15 @@
           "dashboard.attributes.list_summaries",
           "dashboard.products.list_summaries",
           "dashboard.inventory.list",
+          "dashboard.categories.create",
+          "dashboard.attributes.create",
+          "dashboard.seo.settings_update",
           "dashboard.media.import_url",
           "dashboard.products.create",
           "dashboard.categories.publish_readiness",
           "dashboard.categories.set_status",
           "dashboard.products.get_section",
+          "dashboard.categories.get_section",
           "dashboard.seo.feed_diagnostics",
           "dashboard.seo.live_probe",
           "storefront.products.get_section"
@@ -202965,7 +203278,8 @@
           "surface": "dashboard",
           "mode": "curated",
           "workflowIds": [
-            "catalog.optioned-product.v1"
+            "catalog.optioned-product.v1",
+            "dashboard.complex-product-create"
           ]
         },
         {
@@ -203054,7 +203368,8 @@
           "surface": "dashboard",
           "mode": "curated",
           "workflowIds": [
-            "catalog.optioned-product.v1"
+            "catalog.optioned-product.v1",
+            "dashboard.complex-product-create"
           ]
         },
         {
@@ -203080,7 +203395,8 @@
           "mode": "curated",
           "workflowIds": [
             "catalog.optioned-product.v1",
-            "dashboard.category-publish"
+            "dashboard.category-publish",
+            "dashboard.complex-product-create"
           ]
         },
         {
@@ -205023,7 +205339,8 @@
           "mode": "curated",
           "workflowIds": [
             "catalog.optioned-product.v1",
-            "dashboard.business-seo-settings"
+            "dashboard.business-seo-settings",
+            "dashboard.complex-product-create"
           ]
         },
         {

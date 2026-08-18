@@ -120,6 +120,7 @@ export interface OpenApiDocument {
   openapi?: string;
   paths?: Record<string, OpenApiPathItem>;
   components?: Record<string, unknown>;
+  "x-scalius-workflows"?: unknown;
 }
 
 export interface OpenApiPathItem {

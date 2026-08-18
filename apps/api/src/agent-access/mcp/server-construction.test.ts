@@ -60,21 +60,23 @@ async function connectInMemory(server: ReturnType<typeof createAgentMcpServer>) 
 
 describe("MCP server construction", () => {
   it("publishes one concise cross-tool operating loop", () => {
-    expect(AGENT_MCP_INSTRUCTIONS.toLowerCase()).toContain("search");
+    expect(AGENT_MCP_INSTRUCTIONS).toContain("workflows.resolve");
+    expect(AGENT_MCP_INSTRUCTIONS).toContain("workflows.read");
     expect(AGENT_MCP_INSTRUCTIONS.toLowerCase()).toContain("describe");
     expect(AGENT_MCP_INSTRUCTIONS).toContain("operations.read");
     expect(AGENT_MCP_INSTRUCTIONS).toContain("operations.write");
     expect(AGENT_MCP_INSTRUCTIONS).toContain("never arbitrary code, HTTP, or SQL");
-    expect(AGENT_MCP_INSTRUCTIONS.length).toBeLessThan(320);
+    expect(AGENT_MCP_INSTRUCTIONS.length).toBeLessThan(360);
   });
 
-  it("constructs only the split generic operation tools without module-init schema errors", () => {
+  it("constructs the resolver and split generic operation tools without module-init schema errors", () => {
     const server = createAgentMcpServer({
       surface: "dashboard",
       env: {} as Env,
       ctx: {} as ExecutionContext,
     });
-    expect(server.toolInputSchemaJson("operations.search")).toBeDefined();
+    expect(server.toolInputSchemaJson("workflows.resolve")).toBeDefined();
+    expect(server.toolInputSchemaJson("workflows.read")).toBeDefined();
     expect(server.toolInputSchemaJson("operations.describe")).toBeDefined();
     expect(server.toolInputSchemaJson("operations.read")).toBeDefined();
     expect(server.toolInputSchemaJson("operations.write")).toBeDefined();
@@ -86,6 +88,7 @@ describe("MCP server construction", () => {
     }
     expect(server.toolInputSchemaJson("operations.execute")).toBeUndefined();
     expect(server.toolInputSchemaJson("operations.batch")).toBeUndefined();
+    expect(server.toolInputSchemaJson("operations.search")).toBeUndefined();
     expect(server.toolInputSchemaJson("http.request")).toBeUndefined();
   });
 
@@ -105,7 +108,8 @@ describe("MCP server construction", () => {
         outputSchema?: Record<string, unknown>;
       }> }).tools;
       expect(tools.map((tool) => tool.name)).toEqual([
-        "operations.search",
+        "workflows.resolve",
+        "workflows.read",
         "operations.describe",
         "operations.read",
         "operations.read_batch",
@@ -114,7 +118,7 @@ describe("MCP server construction", () => {
       ]);
       expect(tools.map((tool) => tool.name)).not.toContain("operations.execute");
       expect(tools.map((tool) => tool.name)).not.toContain("operations.batch");
-      for (const name of ["operations.search", "operations.describe"]) {
+      for (const name of ["workflows.resolve", "workflows.read", "operations.describe"]) {
         expect(tools.find((tool) => tool.name === name)?.annotations).toMatchObject({
           readOnlyHint: true,
           destructiveHint: false,
@@ -135,16 +139,24 @@ describe("MCP server construction", () => {
           idempotentHint: false,
         });
       }
-      for (const tool of tools) {
+      for (const tool of tools.filter((candidate) => candidate.name !== "workflows.read")) {
         expect(tool.outputSchema).toMatchObject({
           type: "object",
           properties: {
             results: { maxItems: 20 },
-            operations: { maxItems: 50 },
             summary: { maxLength: 240 },
           },
         });
+        expect(tool.outputSchema?.properties).not.toHaveProperty("operations");
+        expect(tool.outputSchema?.properties).not.toHaveProperty("count");
       }
+      const workflowReadSchema = tools.find((tool) => tool.name === "workflows.read")?.outputSchema;
+      expect(workflowReadSchema).toMatchObject({
+        type: "object",
+        properties: { result: {} },
+      });
+      expect(JSON.stringify(workflowReadSchema)).toContain("workflow_read_unavailable");
+      expect(JSON.stringify(workflowReadSchema)).toContain('"maxItems":100');
     } finally {
       await connection.close();
     }

@@ -59,6 +59,7 @@ describe("reviewed agent workflow resolver", () => {
           expect(resolution.forbiddenOperationIds, testCase.id).toEqual(
             testCase.forbiddenOperationIds ?? [],
           );
+          expect(resolution.safePlan?.detail, testCase.id).toBeUndefined();
           expect(resolution.safetyNotes, testCase.id).toHaveLength(
             testCase.safetyAssertions?.length ?? 0,
           );
@@ -90,6 +91,7 @@ describe("reviewed agent workflow resolver", () => {
     const reversed = createWorkflowResolver({
       catalog: {
         ...catalog,
+        cards: [...catalog.cards].reverse(),
         routes: [...catalog.routes].reverse(),
         controls: [...catalog.controls].reverse(),
       },
@@ -164,6 +166,7 @@ describe("reviewed agent workflow resolver", () => {
     if (fallback.kind === "plan") {
       expect(fallback.plan.source).toBe("operation-fallback");
       expect(fallback.plan.operationIds).toEqual(["dashboard.taxes.classifications_list"]);
+      expect(fallback.plan.detail).toBeUndefined();
     }
 
     const unsupported = resolveWorkflow({
@@ -189,6 +192,211 @@ describe("reviewed agent workflow resolver", () => {
     }
   });
 
+  it("projects the optioned-product card into a complete compact execution model", () => {
+    const route = catalog.routes.find((candidate) =>
+      candidate.id === "dashboard.complex-product-create"
+    )!;
+    const resolution = resolveWorkflow({
+      prompt: route.examples[0]!,
+      surface: "dashboard",
+    });
+    expect(resolution.kind).toBe("plan");
+    if (resolution.kind !== "plan") return;
+    const detail = resolution.plan.detail;
+    expect(detail).toBeDefined();
+    if (!detail) return;
+
+    expect(detail.constructionRules).toMatchObject({
+      mediaAssociationIds: "caller-local-pmed",
+      variantImageReferences: "pmed-association-id",
+      selectedOptionValueOrder: "merchant-axis-order",
+      variantMatrix: "complete",
+      skuIdentity: "global-lower-trim-unique",
+      inventoryAuthority: "variant-only-no-product-stock",
+      createMode: "single-atomic-products.create",
+      uncertainCreateRecovery: "reread-before-retry",
+    });
+    expect(detail.requiredFacts.find((fact) => fact.id === "optionMatrix")).toMatchObject({
+      description: "Ordered axes/values and complete SKU price, stock, and pmed image rows.",
+      required: true,
+      source: { kind: "merchant" },
+      nonInferenceRule: "Never add, omit, collapse, or reorder combinations.",
+    });
+    expect(detail.requiredFacts.find((fact) => fact.id === "categoryId")?.source).toMatchObject({
+      kind: "operation",
+      operationId: "dashboard.categories.form_options",
+      alternatives: [{ operationId: "dashboard.categories.create", responsePointer: "/data/id" }],
+    });
+
+    const createSteps = detail.steps.filter((step) =>
+      step.operationId === "dashboard.products.create"
+    );
+    expect(createSteps).toHaveLength(1);
+    const create = createSteps[0]!;
+    expect(create).toMatchObject({
+      phaseId: "create",
+      stepId: "product",
+      mutation: "create",
+      input: {
+        template: {
+          body: {
+            media: [
+              { id: "pmed_primary", mediaId: null, isPrimary: true },
+              { id: "pmed_secondary", mediaId: null, isPrimary: false },
+            ],
+            optionMatrix: null,
+          },
+        },
+      },
+      policies: {
+        revision: "none",
+        idempotency: "none",
+        confirmation: "required",
+        stopConditions: ["Stop on conflict or uncertain write; reread."],
+        nonInferenceRules: ["Use resolved or merchant facts only."],
+      },
+    });
+    expect(create.input.dependencies).toEqual(expect.arrayContaining([
+      {
+        templatePointer: "/body/optionMatrix",
+        source: { kind: "fact", factId: "optionMatrix" },
+      },
+      {
+        templatePointer: "/body/media/0/mediaId",
+        source: {
+          kind: "step",
+          phaseId: "media",
+          stepId: "primary",
+          responsePointer: "/data/file/id",
+        },
+      },
+    ]));
+    expect(create.input.defaults).toEqual(expect.arrayContaining([
+      { templatePointer: "/body/isActive", value: true },
+      { templatePointer: "/body/excludeFromSitemap", value: false },
+      { templatePointer: "/body/excludeFromProductFeed", value: false },
+    ]));
+    expect(detail.steps.find((step) => step.stepId === "status")).toMatchObject({
+      phaseId: "publish",
+      operationId: "dashboard.categories.set_status",
+      mutation: "lifecycle",
+      condition: "Only if not published and ready.",
+      policies: { revision: "required", confirmation: "required" },
+    });
+    expect(detail.phaseStopConditions.create).toEqual([
+      "Stop on conflict; never fall back to per-SKU creation.",
+    ]);
+    expect(detail.steps.some((step) => step.operationId.includes("variants.create"))).toBe(false);
+    expect(detail.verification).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        operationId: "dashboard.products.get_section",
+        responsePointers: ["/data/aggregateRevision", "/data/items", "/data/total"],
+        bounds: { maxCalls: 12, maxItems: 150, maxResponseBytes: 65_536 },
+      }),
+      expect.objectContaining({
+        operationId: "storefront.products.get_section",
+        proves: ["Buyer SKU price, variant image, and availability band."],
+        bounds: { maxCalls: 10, maxItems: 150, maxResponseBytes: 61_440 },
+      }),
+    ]));
+
+    expect(Object.keys(detail)).toEqual([
+      "constructionRules",
+      "requiredFacts",
+      "phaseStopConditions",
+      "steps",
+      "verification",
+    ]);
+    const serialized = JSON.stringify(resolution);
+    for (const wholesaleKey of ["cards", "routes", "controls", "coverage", "examples", "tags"]) {
+      expect(serialized).not.toContain(`"${wholesaleKey}":`);
+    }
+  });
+
+  it("preserves defaults in card detail and omits detail for multiple workflow IDs", () => {
+    const dailyRoute = catalog.routes.find((candidate) =>
+      candidate.id === "dashboard.daily-operations-snapshot"
+    )!;
+    const daily = resolveWorkflow({ prompt: dailyRoute.examples[0]!, surface: "dashboard" });
+    expect(daily.kind).toBe("plan");
+    if (daily.kind === "plan") {
+      expect(daily.plan.detail?.requiredFacts.find((fact) => fact.id === "days")).toMatchObject({
+        required: true,
+        defaultValue: 1,
+        source: { kind: "constant", value: 1 },
+      });
+    }
+
+    const subsetResolver = createWorkflowResolver({
+      catalog: {
+        ...catalog,
+        controls: [],
+        routes: [{
+          ...dailyRoute,
+          id: "dashboard.daily-subset",
+          operationIds: ["dashboard.home.activity"],
+        }],
+      },
+      operations,
+    });
+    const subset = subsetResolver({ prompt: "dashboard.daily-subset", surface: "dashboard" });
+    expect(subset.kind).toBe("plan");
+    if (subset.kind === "plan") expect(subset.plan.detail).toBeUndefined();
+
+    const composedResolver = createWorkflowResolver({
+      catalog: {
+        ...catalog,
+        controls: [],
+        routes: [
+          {
+            id: "dashboard.alpha-work",
+            surface: "dashboard",
+            kind: "read",
+            title: "Alpha quasar",
+            summary: "Read alpha quasar facts.",
+            examples: ["alpha quasar"],
+            tags: ["alpha", "quasar"],
+            workflowId: "operations.daily-snapshot.v1",
+            operationIds: ["dashboard.home.activity"],
+            requiresFacts: false,
+            requiresConfirmation: false,
+            requiresVerification: false,
+            rules: [],
+          },
+          {
+            id: "dashboard.beta-work",
+            surface: "dashboard",
+            kind: "read",
+            title: "Beta nebula",
+            summary: "Read beta nebula facts.",
+            examples: ["beta nebula"],
+            tags: ["beta", "nebula"],
+            workflowId: "catalog.optioned-product.v1",
+            operationIds: ["dashboard.products.get_section"],
+            requiresFacts: false,
+            requiresConfirmation: false,
+            requiresVerification: false,
+            rules: [],
+          },
+        ],
+      },
+      operations,
+    });
+    const composed = composedResolver({
+      prompt: "alpha quasar; beta nebula",
+      surface: "dashboard",
+    });
+    expect(composed.kind).toBe("plan");
+    if (composed.kind === "plan") {
+      expect(composed.plan.source).toBe("composed-route");
+      expect(composed.plan.workflowIds).toEqual([
+        "operations.daily-snapshot.v1",
+        "catalog.optioned-product.v1",
+      ]);
+      expect(composed.plan.detail).toBeUndefined();
+    }
+  });
+
   it("keeps compact plans below their context budgets", () => {
     const daily = resolveWorkflow({
       prompt: catalog.routes.find((route) =>
@@ -202,11 +410,16 @@ describe("reviewed agent workflow resolver", () => {
       )!.examples[0]!,
       surface: "dashboard",
     });
-    expect(Buffer.byteLength(JSON.stringify({ ok: true, result: daily }))).toBeLessThanOrEqual(
-      4 * 1024,
-    );
+    const ordinary = resolveWorkflow({
+      prompt: catalog.routes.find((route) => route.id === "dashboard.sales-today")!.examples[0]!,
+      surface: "dashboard",
+    });
+    expect(Buffer.byteLength(JSON.stringify({ ok: true, result: daily }))).toBeLessThanOrEqual(12 * 1024);
     expect(Buffer.byteLength(JSON.stringify({ ok: true, result: product }))).toBeLessThanOrEqual(
       16 * 1024,
+    );
+    expect(Buffer.byteLength(JSON.stringify({ ok: true, result: ordinary }))).toBeLessThanOrEqual(
+      4 * 1024,
     );
   });
 

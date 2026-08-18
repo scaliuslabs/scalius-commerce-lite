@@ -137,6 +137,6 @@ export async function setupHarness(
     harness: options.harness,
     skill,
     mcp,
-    operatingLoop: "Search, describe one operation, execute, then verify with a bounded read. Load only the relevant skill reference.",
+    operatingLoop: "Resolve the goal, describe only selected operations, execute, then verify with a bounded read. Load only the relevant focused skill.",
   };
 }

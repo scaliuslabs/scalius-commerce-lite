@@ -1,4 +1,4 @@
-import { AGENT_OPERATIONS, AGENT_OPERATIONS_BY_ID } from "../../generated/agent-operations.gen";
+import { AGENT_OPERATIONS_BY_ID } from "../../generated/agent-operations.gen";
 import type { AgentOperationManifestEntry } from "../../openapi/agent-operation-manifest";
 import { loadAgentAccessBackend } from "../backend";
 import type { AgentResource, AgentPrincipal } from "../types";
@@ -16,25 +16,6 @@ function authorizationInput(operation: AgentOperationManifestEntry) {
     exposure: operation.exposure,
     principals: operation.principals,
   };
-}
-
-export async function listAuthorizedOperations(
-  surface: AgentResource,
-  principal: AgentPrincipal,
-): Promise<AgentOperationManifestEntry[]> {
-  const backend = await loadAgentAccessBackend();
-  const candidates: readonly AgentOperationManifestEntry[] = AGENT_OPERATIONS;
-  const surfaced = candidates.filter(
-    (operation) => operation.surface === surface && isMcpOperationExposure(operation),
-  );
-  const allowed = await Promise.all(
-    surfaced.map(async (operation): Promise<AgentOperationManifestEntry | null> =>
-      (await backend.authorizeOperation(principal, authorizationInput(operation)))
-        ? operation
-        : null,
-    ),
-  );
-  return allowed.filter((operation): operation is AgentOperationManifestEntry => operation !== null);
 }
 
 export async function getAuthorizedOperation(
