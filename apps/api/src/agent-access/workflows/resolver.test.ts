@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { AGENT_INTENT_EVAL_CASES } from "../../../../../packages/cli/test/fixtures/agent-intents";
+import {
+  AGENT_INTENT_EVAL_CASES,
+  BANGLADESH_SETUP_ADVERSARIAL_CASES,
+} from "../../../../../packages/cli/test/fixtures/agent-intents";
 import app from "../../app";
 import { finalizeOpenApiContract } from "../../openapi-contract";
 import { buildAgentOperationManifest } from "../../openapi/agent-operation-manifest";
@@ -98,7 +101,7 @@ function createSyntheticWriteResolver(input: {
 }
 
 describe("reviewed agent workflow resolver", () => {
-  it("returns the exact smallest reviewed outcome for all 70 reviewed cases", () => {
+  it("returns the exact smallest reviewed outcome for every reviewed case", () => {
     for (const testCase of AGENT_INTENT_EVAL_CASES) {
       const resolution = resolveWorkflow({
         prompt: testCase.prompt,
@@ -126,7 +129,9 @@ describe("reviewed agent workflow resolver", () => {
         expect(resolution.kind, testCase.id).toBe("plan");
         if (resolution.kind === "plan") {
           expect(resolution.plan.source, testCase.id).toBe("route");
-          expect(resolution.plan.routeIds, testCase.id).toEqual([testCase.id]);
+          expect(resolution.plan.routeIds, testCase.id).toEqual([
+            testCase.expectedRouteId ?? testCase.id,
+          ]);
           expect(resolution.plan.operationIds.length, testCase.id).toBeLessThanOrEqual(20);
         }
       }
@@ -244,6 +249,168 @@ describe("reviewed agent workflow resolver", () => {
       expect.stringContaining("Fail closed without a change"),
       expect.stringContaining("Merge only the guest-checkout field"),
     ]));
+  });
+
+  it("keeps the accepted Bangladesh setup guidance-only and closed to unrelated writes", () => {
+    const expectedRouteId = "dashboard.bangladesh-checkout-supported-setup";
+    for (const caseId of [
+      expectedRouteId,
+      `${expectedRouteId}-paraphrase`,
+    ]) {
+      const testCase = AGENT_INTENT_EVAL_CASES.find((candidate) => candidate.id === caseId)!;
+      const resolution = resolveWorkflow({ prompt: testCase.prompt, surface: testCase.surface });
+      expect(resolution).toMatchObject({
+        kind: "plan",
+        disposition: "execute",
+        plan: {
+          source: "route",
+          routeIds: [expectedRouteId],
+          workflowIds: [],
+          operationIds: testCase.expectedOperationIds,
+          requiresFacts: true,
+          requiresConfirmation: true,
+          requiresVerification: true,
+        },
+      });
+      if (resolution.kind !== "plan") continue;
+      expect(Object.hasOwn(resolution.plan, "detail")).toBe(false);
+      const serialized = JSON.stringify(resolution.plan);
+      expect(serialized).toContain("explicit symbol");
+      expect(serialized).toContain("{enabled:true}");
+      expect(serialized).toContain("keep/disable intent");
+      expect(serialized).toContain("near/duplicate/trashed");
+      expect(serialized).toContain("revision-merge guest only");
+      expect(serialized).toContain("active shipping/delivery hierarchy");
+      expect(serialized).toContain("no charge proof");
+      expect(serialized).toContain("no rollback/retry");
+      expect(resolution.plan.rules.join(" ")).not.toMatch(/\b(?:80|150)\b/);
+      expect(serialized).toContain("Never touch SEO/analytics");
+      expect(resolution.plan.operationIds.join(" ")).not.toMatch(
+        /stripe_update|polar_update|seo|analytics/i,
+      );
+    }
+  });
+
+  it("classifies all reviewed Bangladesh setup adversaries before any write plan", () => {
+    const operationsById = new Map(operations.map((operation) => [operation.operationId, operation]));
+    for (const testCase of BANGLADESH_SETUP_ADVERSARIAL_CASES) {
+      const resolution = resolveWorkflow({ prompt: testCase.prompt, surface: "dashboard" });
+      expect(resolution, testCase.id).toMatchObject({
+        kind: "control",
+        disposition: testCase.expectedDisposition,
+        classification: { controlId: testCase.expectedControlId },
+        safePlan: { kind: "read" },
+      });
+      if (resolution.kind !== "control") continue;
+      expect(
+        resolution.safePlan?.operationIds.every((operationId) =>
+          operationsById.get(operationId)?.risk === "read"
+        ),
+        testCase.id,
+      ).toBe(true);
+      expect(resolution.safetyNotes.join(" "), testCase.id).toContain(
+        testCase.safetyAssertion,
+      );
+      expect(resolution.safePlan?.routeIds, testCase.id).not.toContain(
+        "dashboard.bangladesh-checkout-supported-setup",
+      );
+    }
+  });
+
+  it.each([
+    "update global SEO settings",
+    "install an analytics snippet",
+    "change unrelated business settings",
+  ])("does not treat generic settings words as Bangladesh route support: %s", (suffix) => {
+    const route = catalog.routes.find((candidate) =>
+      candidate.id === "dashboard.bangladesh-checkout-supported-setup"
+    )!;
+    const withoutControls = createWorkflowResolver({
+      catalog: { ...catalog, controls: [] },
+      operations,
+    });
+    const resolution = withoutControls({
+      prompt: `${route.examples[0]} and ${suffix}.`,
+      surface: "dashboard",
+    });
+    expect(resolution).toMatchObject({ kind: "choices", disposition: "ask" });
+  });
+
+  it("requires route support for both action and domain without relying on a control", () => {
+    const operationId = "dashboard.synthetic.checkout_configure";
+    const withoutControls = createWorkflowResolver({
+      catalog: {
+        version: "action-domain-guard-test",
+        cards: [],
+        controls: [],
+        routes: [{
+          id: "dashboard.synthetic-checkout-configure",
+          surface: "dashboard",
+          kind: "write",
+          title: "Configure guest checkout",
+          summary: "Configure guest checkout after shipping readiness.",
+          examples: ["Configure guest checkout after shipping readiness."],
+          tags: ["checkout", "shipping"],
+          operationIds: [operationId],
+          requiresFacts: true,
+          requiresConfirmation: true,
+          requiresVerification: true,
+          rules: ["Never delete a shipping method."],
+        }],
+      },
+      operations: [{
+        operationId,
+        surface: "dashboard",
+        exposure: "execute",
+        risk: "write",
+        summary: "Configure guest checkout",
+        description: "Configure checkout after shipping readiness.",
+        tags: ["checkout", "shipping"],
+        inputSchema: { type: "object" },
+      }],
+    });
+    expect(withoutControls({
+      prompt: "Configure guest checkout after shipping readiness, but delete a shipping method.",
+      surface: "dashboard",
+    })).toMatchObject({ kind: "choices", disposition: "ask" });
+  });
+
+  it.each([
+    "choose a marketing slogan",
+    "decide an unrelated tax policy",
+    "encode a loyalty segment",
+    "force an unavailable gateway",
+    "guarantee an atomic migration",
+    "install an analytics snippet",
+    "rewrite global SEO settings",
+    "retry a failed inventory write",
+    "schedule a staff meeting",
+    "treat placeholder credentials as proof",
+  ])("recognizes audited action after plain but without controls: %s", (extraAction) => {
+    const resolveSynthetic = createSyntheticWriteResolver({
+      id: "audited-action",
+      title: "Configure guest checkout",
+      summary: "Configure guest checkout after shipping readiness.",
+      tags: ["checkout", "shipping"],
+    });
+    expect(resolveSynthetic({
+      prompt: `Configure guest checkout after shipping readiness, but ${extraAction}.`,
+      surface: "dashboard",
+    })).toMatchObject({ kind: "choices", disposition: "ask" });
+  });
+
+  it("keeps positive-threshold Bangladesh requests on the read-only ask control", () => {
+    for (const caseId of [
+      "dashboard.shipping-threshold-unsupported",
+      "dashboard.shipping-threshold-unsupported-paraphrase",
+    ]) {
+      const testCase = AGENT_INTENT_EVAL_CASES.find((candidate) => candidate.id === caseId)!;
+      expect(resolveWorkflow({ prompt: testCase.prompt, surface: testCase.surface })).toMatchObject({
+        kind: "control",
+        disposition: "ask",
+        classification: { controlId: "dashboard.shipping-threshold-unsupported" },
+      });
+    }
   });
 
   it.each([

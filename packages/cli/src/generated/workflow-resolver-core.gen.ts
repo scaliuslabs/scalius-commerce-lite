@@ -366,6 +366,8 @@ type SearchCandidate = {
   route?: WorkflowResolverRoute;
   terms: ReadonlyMap<string, number>;
   anchorTerms: ReadonlySet<string>;
+  supportTerms: ReadonlySet<string>;
+  actionTerms: ReadonlySet<string>;
   length: number;
   normalizedPhrases: string[];
 };
@@ -611,10 +613,14 @@ function operationRequiresFacts(operation: WorkflowResolverOperation): boolean {
 }
 
 function buildCandidate(
-  base: Omit<SearchCandidate, "terms" | "anchorTerms" | "length" | "normalizedPhrases">,
+  base: Omit<
+    SearchCandidate,
+    "terms" | "anchorTerms" | "supportTerms" | "actionTerms" | "length" | "normalizedPhrases"
+  >,
   fields: Array<{ value?: string; weight: number }>,
   phrases: string[],
   anchors: string[],
+  supportText: string[],
 ): SearchCandidate {
   const terms = new Map<string, number>();
   let length = 0;
@@ -623,6 +629,11 @@ function buildCandidate(
     ...base,
     terms,
     anchorTerms: new Set(anchors.flatMap(tokenize)),
+    supportTerms: new Set(supportText.flatMap(tokenize)),
+    actionTerms: new Set(supportText.flatMap(rawWords).flatMap((word) => {
+      const action = actionSupportLemma(word);
+      return action ? [action] : [];
+    })),
     length: Math.max(1, Math.min(length, 200)),
     normalizedPhrases: unique(phrases.map(normalizedPhrase).filter(Boolean)),
   };
@@ -654,7 +665,13 @@ function buildIndex(sources: WorkflowResolverSources): SearchIndex {
       { value: route.tags.join(" "), weight: 7 },
       { value: route.rules.join(" "), weight: 1 },
       { value: operationText, weight: 0.15 },
-    ], [...route.examples], [route.title, route.tags.join(" ")]));
+    ], [...route.examples], [route.title, route.tags.join(" ")], [
+      route.title,
+      route.summary,
+      route.examples.join(" "),
+      route.tags.join(" "),
+      operationText,
+    ]));
   }
   for (const operation of sources.operations) {
     if (
@@ -676,6 +693,11 @@ function buildIndex(sources: WorkflowResolverSources): SearchIndex {
     ], [operation.operationId, operation.summary], [
       operation.operationId,
       operation.summary,
+      operation.tags.join(" "),
+    ], [
+      operation.operationId,
+      operation.summary,
+      operation.description ?? "",
       operation.tags.join(" "),
     ]));
   }
@@ -786,14 +808,32 @@ function matchControl(
 const ACTION_LEMMAS = new Set([
   "accept", "add", "adjust", "analyze", "announce", "apply", "archive",
   "build", "calculate", "cancel", "change", "check", "compare", "configure",
-  "compose", "connect", "create", "delete", "disable", "edit", "enable", "enroll", "export",
-  "feature", "find", "fulfill", "generate", "get", "import", "invent", "keep",
-  "list", "make", "move", "place", "plan", "preview", "probe", "publish", "read",
-  "reconcile", "recover", "refund", "remove", "replace", "require", "restore",
-  "return", "save", "schedule", "search", "send", "set", "show", "start", "stop",
-  "test", "trash", "turn", "unpublish", "update", "upload", "use", "validate",
-  "verify", "write",
+  "choose", "compose", "connect", "create", "decide", "delete", "disable", "edit",
+  "enable", "encode", "enroll", "export", "feature", "find", "force", "fulfill",
+  "generate", "get", "guarantee", "import", "install", "invent", "keep", "list",
+  "make", "move", "place", "plan", "preserve", "preview", "probe", "publish", "read",
+  "reconcile", "recover", "refund", "remove", "replace", "require", "restore", "retry",
+  "return", "rewrite", "save", "schedule", "search", "send", "set", "show", "start",
+  "stop", "test", "trash", "treat", "turn", "unpublish", "update", "upload", "use",
+  "validate", "verify", "write",
 ]);
+
+const ACTION_SUPPORT_GROUPS: readonly (readonly string[])[] = [
+  ["create", "add", "build", "make"],
+  ["update", "adjust", "change", "edit", "rewrite", "set"],
+  ["enable", "start", "turn"],
+  ["verify", "check", "probe", "test", "validate"],
+  ["read", "find", "get", "list", "search", "show"],
+  ["delete", "remove", "trash"],
+  ["preserve", "keep"],
+  ["choose", "decide"],
+];
+
+const ACTION_SUPPORT_CANONICAL = new Map<string, string>();
+for (const group of ACTION_SUPPORT_GROUPS) {
+  const canonical = group[0]!;
+  for (const action of group) ACTION_SUPPORT_CANONICAL.set(action, canonical);
+}
 
 const IRREGULAR_ACTION_LEMMAS = new Map([
   ["built", "build"],
@@ -814,6 +854,19 @@ const ACTION_LEAD_PREFIXES = new Set([
 const CLAUSE_CONNECTOR_WORDS = new Set([
   "along", "also", "and", "as", "but", "plus", "then", "well", "while", "with",
 ]);
+
+const GENERIC_COMPOUND_SUPPORT_TERMS = new Set([
+  "all", "current", "data", "detail", "exact", "existing", "fact", "field",
+  "global", "if", "information", "item", "method", "only", "option", "other", "platform",
+  "provider", "record", "safe", "safely", "service", "setting", "setup", "state",
+  "status", "store", "system", "thing", "unrelated", "value",
+]);
+
+const CONTEXTUAL_ACTION_SUPPORT = new Set(["preserve", "publish", "reconcile", "verify"]);
+const CONTEXTUAL_REFERENCE_TERMS = new Set([
+  "else", "everything", "it", "provider", "store", "that", "them", "this",
+]);
+const CONTEXTUAL_FILLER_TERMS = new Set(["if", "out", "time"]);
 
 type PromptClauseAnalysis = {
   clauses: string[];
@@ -836,12 +889,12 @@ function undoubleFinalLetter(value: string): string {
     : value;
 }
 
-function isActionWord(value: string): boolean {
+function actionLemma(value: string): string | null {
   const word = value.replace(/[^a-z]/g, "");
-  if (!word) return false;
+  if (!word) return null;
   const irregular = IRREGULAR_ACTION_LEMMAS.get(word);
-  if (irregular) return ACTION_LEMMAS.has(irregular);
-  if (ACTION_LEMMAS.has(word)) return true;
+  if (irregular) return ACTION_LEMMAS.has(irregular) ? irregular : null;
+  if (ACTION_LEMMAS.has(word)) return word;
 
   const candidates = new Set<string>();
   if (word.endsWith("ies") && word.length > 3) candidates.add(`${word.slice(0, -3)}y`);
@@ -854,12 +907,21 @@ function isActionWord(value: string): boolean {
     candidates.add(`${stem}e`);
     candidates.add(undoubleFinalLetter(stem));
   }
-  return [...candidates].some((candidate) => ACTION_LEMMAS.has(candidate));
+  return [...candidates].find((candidate) => ACTION_LEMMAS.has(candidate)) ?? null;
+}
+
+function actionSupportLemma(value: string): string | null {
+  const action = actionLemma(value);
+  return action ? (ACTION_SUPPORT_CANONICAL.get(action) ?? action) : null;
+}
+
+function isActionWord(value: string): boolean {
+  return actionLemma(value) !== null;
 }
 
 function stripLeadingCoordinator(value: string): string {
   return value.replace(
-    /^(?:(?:and\s+then|as\s+well\s+as|along\s+with|while\s+also|but\s+also|then|also|plus|and)\s+)+/i,
+    /^(?:(?:and\s+then|as\s+well\s+as|along\s+with|while\s+also|but\s+also|then|also|plus|and|but)\s+)+/i,
     "",
   ).trim();
 }
@@ -885,7 +947,7 @@ function splitActionClauses(prompt: string): PromptClauseAnalysis {
   const clauses: string[] = [];
   let clauseStart = 0;
   const separators = prompt.matchAll(
-    /[;!?]+|\.(?=\s|$)|,\s*|\b(?:and\s+then|as\s+well\s+as|along\s+with|while\s+also|but\s+also|then|also|plus|and)\b/gi,
+    /[;!?]+|\.(?=\s|$)|,\s*|\b(?:and\s+then|as\s+well\s+as|along\s+with|while\s+also|but\s+also|then|also|plus|and|but)\b/gi,
   );
   const pushClause = (rawClause: string): boolean => {
     const clause = stripLeadingCoordinator(rawClause.trim());
@@ -944,16 +1006,39 @@ function strongFallbackMatch(match: ScoredCandidate, second?: ScoredCandidate): 
 }
 
 function guardedRouteSupportsClause(
+  clause: string,
   clauseMatch: ScoredCandidate,
   wholePromptMatch: ScoredCandidate,
 ): boolean {
-  const coverage = clauseMatch.matchedTerms / Math.max(clauseMatch.queryTerms, 1);
-  return clauseMatch.candidate.id === wholePromptMatch.candidate.id &&
-    clauseMatch.score >= 1.5 &&
-    (
-      (clauseMatch.matchedTerms >= 2 && coverage >= 0.3) ||
-      (clauseMatch.matchedTerms >= 1 && clauseMatch.queryTerms <= 2 && coverage === 1)
+  const clauseActionTerms = new Set(rawWords(clause).flatMap((word) => {
+    const action = actionSupportLemma(word);
+    return action ? [action] : [];
+  }));
+  const hasSupportedAction = [...clauseActionTerms].some((action) =>
+    clauseMatch.candidate.actionTerms.has(action)
+  );
+  const clauseTerms = unique(tokenize(clause));
+  const hasInformativeMatch = clauseTerms.some((term) =>
+    clauseMatch.candidate.supportTerms.has(term) &&
+    !isActionWord(term) &&
+    !CLAUSE_CONNECTOR_WORDS.has(term) &&
+    !GENERIC_COMPOUND_SUPPORT_TERMS.has(term)
+  );
+  const contextualTerms = rawWords(clause).map(normalizeToken)
+    .filter((term) => !isActionWord(term));
+  const hasContextualReference = [...clauseActionTerms].some((action) =>
+    CONTEXTUAL_ACTION_SUPPORT.has(action)
+  ) && contextualTerms.some((term) => CONTEXTUAL_REFERENCE_TERMS.has(term)) &&
+    contextualTerms.every((term) =>
+      STOP_WORDS.has(term) ||
+      CLAUSE_CONNECTOR_WORDS.has(term) ||
+      CONTEXTUAL_REFERENCE_TERMS.has(term) ||
+      CONTEXTUAL_FILLER_TERMS.has(term) ||
+      GENERIC_COMPOUND_SUPPORT_TERMS.has(term)
     );
+  return clauseMatch.candidate.id === wholePromptMatch.candidate.id &&
+    hasSupportedAction &&
+    (hasInformativeMatch || hasContextualReference);
 }
 
 function combinedKind(routes: readonly WorkflowResolverRoute[]): WorkflowResolverIntentKind {
@@ -1253,19 +1338,31 @@ export function createWorkflowResolver(
       for (const clause of clauses) {
         const ranked = scoreCandidates(clause, surface, index, "route");
         const contextualRouteMatch = routes[0]
-          ? ranked.find((match) => match.candidate.id === routes[0]!.candidate.id)
+          ? ranked.find((match) => match.candidate.id === routes[0]!.candidate.id) ?? {
+              ...routes[0],
+              score: 0,
+              confidence: 0,
+              matchedTerms: 0,
+              queryTerms: Math.max(unique(tokenize(clause)).length, 1),
+              exactPhrase: false,
+            }
           : undefined;
         const guardedClauseMatch = Boolean(
-          guardedCompoundRoute &&
+          nonExactWriteOrMixedCompound &&
           routes[0] &&
           contextualRouteMatch &&
-          guardedRouteSupportsClause(contextualRouteMatch, routes[0])
+          guardedRouteSupportsClause(clause, contextualRouteMatch, routes[0])
         );
+        const strongestIndependentMatch = ranked[0] && strongRouteMatch(ranked[0], ranked[1])
+          ? ranked[0]
+          : undefined;
         const selectedMatch = guardedClauseMatch
           ? contextualRouteMatch
-          : ranked[0] && strongRouteMatch(ranked[0], ranked[1])
-            ? ranked[0]
-            : undefined;
+          : nonExactWriteOrMixedCompound &&
+              routes[0] &&
+              strongestIndependentMatch?.candidate.id === routes[0].candidate.id
+            ? undefined
+            : strongestIndependentMatch;
         if (!selectedMatch) {
           complete = false;
           break;
@@ -1277,7 +1374,11 @@ export function createWorkflowResolver(
       if (
         complete &&
         uniqueMatches.length <= MAX_COMPOSED_ROUTES &&
-        (uniqueMatches.length > 1 || (guardedCompoundRoute && uniqueMatches.length === 1))
+        (
+          nonExactWriteOrMixedCompound
+            ? uniqueMatches.length === 1
+            : uniqueMatches.length > 1
+        )
       ) {
         const plan = planFromRoutes(uniqueMatches, clauses);
         if (plan) {

@@ -89,6 +89,14 @@ describe("finalized API OpenAPI interop", () => {
       expect(resolution.disposition, testCase.id)
         .toBe(testCase.expectedDisposition ?? "execute");
       expect(operationIds, testCase.id).toEqual(testCase.expectedOperationIds);
+      if (!testCase.expectedDisposition) {
+        expect(resolution.kind, testCase.id).toBe("plan");
+        if (resolution.kind === "plan") {
+          expect(resolution.plan.routeIds, testCase.id).toEqual([
+            testCase.expectedRouteId ?? testCase.id,
+          ]);
+        }
+      }
     }
   }, 15_000);
 });

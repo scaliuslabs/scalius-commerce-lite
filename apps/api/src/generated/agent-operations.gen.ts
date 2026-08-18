@@ -77623,6 +77623,48 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
       ]
     },
     {
+      "id": "dashboard.bangladesh-checkout-supported-setup",
+      "surface": "dashboard",
+      "kind": "mixed",
+      "title": "Bangladesh checkout setup",
+      "summary": "Apply reviewed Bangladesh payment, flat-fee, and guest setup; verify buyer truth.",
+      "examples": [
+        "Configure accepted Bangladesh setup: supplied BDT symbol/rate; keep Dhaka time/phone fixed; preserve payments/default; add COD/proven SSLCommerz; active global Dhaka Delivery 80, Nationwide 150; accept no geography/threshold enforcement; turn on guests only after readiness; verify buyer checkout."
+      ],
+      "tags": [
+        "bangladesh",
+        "bdt",
+        "checkout",
+        "flat-fee"
+      ],
+      "operationIds": [
+        "dashboard.settings.currency_get",
+        "dashboard.payments.methods_get",
+        "dashboard.shipping_methods.list",
+        "dashboard.checkout.flow_get",
+        "dashboard.settings.currency_update",
+        "dashboard.payments.sslcommerz_update",
+        "dashboard.payments.methods_update",
+        "dashboard.shipping_methods.update",
+        "dashboard.shipping_methods.create",
+        "dashboard.checkout.readiness_get",
+        "dashboard.checkout.flow_update",
+        "storefront.checkout.get_config",
+        "storefront.shipping_methods.list"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Require global labels accepted without geography/threshold; Dhaka time and mandatory phone stay fixed.",
+        "BDT needs unlocked code, explicit symbol, positive USD rate; write/reread all or stop.",
+        "Set only {enabled:true} after configured/no-error SSLCommerz status; no secrets/sandbox. Reread usable; no charge proof.",
+        "Require keep/disable intent per payment and exact default; union COD/usable SSLCommerz into fresh enabledMethods. Never choose.",
+        "Require merchant name/fee/active/optional sort. One active exact match: update; none: create; near/duplicate/trashed: ask; never delete.",
+        "Require readiness + active shipping/delivery hierarchy; revision-merge guest only. Failure: stop/reread/report partial; no rollback/retry. Never touch SEO/analytics; verify both audiences."
+      ]
+    },
+    {
       "id": "dashboard.barcode-labels",
       "surface": "dashboard",
       "kind": "read",
@@ -79252,6 +79294,136 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
       ]
     },
     {
+      "id": "dashboard.checkout-prerequisite-bypass",
+      "surface": "dashboard",
+      "title": "Require checkout prerequisites",
+      "summary": "Guest access cannot be enabled when readiness or active delivery hierarchy is absent.",
+      "examples": [
+        "Enable guest checkout even when readiness is false."
+      ],
+      "tags": [
+        "checkout",
+        "readiness",
+        "delivery"
+      ],
+      "disposition": "ask",
+      "reasonCode": "checkout_prerequisites_required",
+      "trigger": {
+        "allOf": [
+          [
+            "guest checkout",
+            "enable guest",
+            "enable guests"
+          ],
+          [
+            "even when",
+            "even if"
+          ],
+          [
+            "readiness is false",
+            "readiness false",
+            "no active city",
+            "no active delivery hierarchy"
+          ]
+        ],
+        "ignoreWhenNegated": false
+      },
+      "safeOperationIds": [
+        "dashboard.settings.currency_get",
+        "dashboard.checkout.flow_get",
+        "dashboard.checkout.readiness_get",
+        "dashboard.payments.methods_get",
+        "dashboard.shipping_methods.list",
+        "storefront.checkout.get_config"
+      ],
+      "forbiddenOperationIds": [
+        "dashboard.settings.currency_update",
+        "dashboard.payments.sslcommerz_update",
+        "dashboard.payments.methods_update",
+        "dashboard.shipping_methods.update",
+        "dashboard.shipping_methods.create",
+        "dashboard.shipping_methods.trash",
+        "dashboard.shipping_methods.delete_permanently",
+        "dashboard.checkout.flow_update",
+        "dashboard.seo.settings_update",
+        "dashboard.analytics.create",
+        "dashboard.analytics.update",
+        "dashboard.analytics.set_active"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Require ready=true, an active shipping method, and active city/zone delivery hierarchy before guest enablement.",
+        "Make no setup write while any prerequisite is false, absent, contradictory, or unreadable."
+      ]
+    },
+    {
+      "id": "dashboard.locked-currency-force",
+      "surface": "dashboard",
+      "title": "Do not bypass the currency lock",
+      "summary": "A locked currency code is authoritative and has no force or bypass operation.",
+      "examples": [
+        "Force BDT even if the currency code is locked."
+      ],
+      "tags": [
+        "currency",
+        "lock",
+        "safety"
+      ],
+      "disposition": "ask",
+      "reasonCode": "locked_currency_requires_supported_choice",
+      "trigger": {
+        "allOf": [
+          [
+            "currency",
+            "currency code",
+            "bdt"
+          ],
+          [
+            "locked",
+            "currency lock"
+          ],
+          [
+            "force",
+            "bypass",
+            "override",
+            "ignore"
+          ]
+        ],
+        "ignoreWhenNegated": false
+      },
+      "safeOperationIds": [
+        "dashboard.settings.currency_get",
+        "dashboard.checkout.flow_get",
+        "dashboard.checkout.readiness_get",
+        "dashboard.payments.methods_get",
+        "dashboard.shipping_methods.list",
+        "storefront.checkout.get_config"
+      ],
+      "forbiddenOperationIds": [
+        "dashboard.settings.currency_update",
+        "dashboard.payments.sslcommerz_update",
+        "dashboard.payments.methods_update",
+        "dashboard.shipping_methods.update",
+        "dashboard.shipping_methods.create",
+        "dashboard.shipping_methods.trash",
+        "dashboard.shipping_methods.delete_permanently",
+        "dashboard.checkout.flow_update",
+        "dashboard.seo.settings_update",
+        "dashboard.analytics.create",
+        "dashboard.analytics.update",
+        "dashboard.analytics.set_active"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": false,
+      "rules": [
+        "Treat currencyCodeLocked as authoritative; never imply a force, override, or bypass path.",
+        "Make no setup write; reread currency and ask whether to retain it or stop this setup."
+      ]
+    },
+    {
       "id": "dashboard.no-payment-guess",
       "surface": "dashboard",
       "title": "Fail closed on payment readiness",
@@ -79345,6 +79517,191 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
       ]
     },
     {
+      "id": "dashboard.non-atomic-setup-guarantee",
+      "surface": "dashboard",
+      "title": "Reject atomic rollback and blind retry claims",
+      "summary": "These settings writes are non-atomic and have no cross-operation rollback guarantee.",
+      "examples": [
+        "Guarantee atomic setup, roll back every write, and blindly retry until success."
+      ],
+      "tags": [
+        "settings",
+        "atomicity",
+        "retries",
+        "safety"
+      ],
+      "disposition": "ask",
+      "reasonCode": "atomic_rollback_unavailable",
+      "trigger": {
+        "allOf": [
+          [
+            "atomic",
+            "roll back",
+            "rollback"
+          ],
+          [
+            "blindly retry",
+            "retry uncertain",
+            "until all changes",
+            "until success"
+          ]
+        ],
+        "ignoreWhenNegated": true
+      },
+      "safeOperationIds": [
+        "dashboard.settings.currency_get",
+        "dashboard.checkout.flow_get",
+        "dashboard.checkout.readiness_get",
+        "dashboard.payments.methods_get",
+        "dashboard.shipping_methods.list",
+        "storefront.checkout.get_config"
+      ],
+      "forbiddenOperationIds": [
+        "dashboard.settings.currency_update",
+        "dashboard.payments.sslcommerz_update",
+        "dashboard.payments.methods_update",
+        "dashboard.shipping_methods.update",
+        "dashboard.shipping_methods.create",
+        "dashboard.shipping_methods.trash",
+        "dashboard.shipping_methods.delete_permanently",
+        "dashboard.checkout.flow_update",
+        "dashboard.seo.settings_update",
+        "dashboard.analytics.create",
+        "dashboard.analytics.update",
+        "dashboard.analytics.set_active"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "State that the sequence is non-atomic: no automatic rollback spans currency, payment, shipping, and checkout writes.",
+        "Make no setup write; require stop, reread, partial-state reporting, and no blind retry after uncertainty."
+      ]
+    },
+    {
+      "id": "dashboard.payment-policy-must-be-explicit",
+      "surface": "dashboard",
+      "title": "Require payment preservation and default intent",
+      "summary": "The resolver cannot choose which existing methods to disable or which method becomes default.",
+      "examples": [
+        "Choose for me which payment methods to keep and which should be default."
+      ],
+      "tags": [
+        "payments",
+        "defaults",
+        "preservation"
+      ],
+      "disposition": "ask",
+      "reasonCode": "payment_policy_missing",
+      "trigger": {
+        "allOf": [
+          [
+            "payment method",
+            "payment methods"
+          ],
+          [
+            "decide for me",
+            "choose for me",
+            "choose whichever"
+          ],
+          [
+            "kept or disabled",
+            "keep or disable",
+            "default"
+          ]
+        ],
+        "ignoreWhenNegated": false
+      },
+      "safeOperationIds": [
+        "dashboard.settings.currency_get",
+        "dashboard.checkout.flow_get",
+        "dashboard.checkout.readiness_get",
+        "dashboard.payments.methods_get",
+        "dashboard.shipping_methods.list",
+        "storefront.checkout.get_config"
+      ],
+      "forbiddenOperationIds": [
+        "dashboard.settings.currency_update",
+        "dashboard.payments.sslcommerz_update",
+        "dashboard.payments.methods_update",
+        "dashboard.shipping_methods.update",
+        "dashboard.shipping_methods.create",
+        "dashboard.shipping_methods.trash",
+        "dashboard.shipping_methods.delete_permanently",
+        "dashboard.checkout.flow_update",
+        "dashboard.seo.settings_update",
+        "dashboard.analytics.create",
+        "dashboard.analytics.update",
+        "dashboard.analytics.set_active"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Require explicit keep/disable intent for every current method and an exact default-method policy.",
+        "Never choose a payment policy; make no setup write until the merchant confirms the full replacement array and default."
+      ]
+    },
+    {
+      "id": "dashboard.phone-required-invariant",
+      "surface": "dashboard",
+      "title": "Keep customer phone mandatory",
+      "summary": "Bangladesh checkout has no supported setting that makes customer phone optional.",
+      "examples": [
+        "Make customer phone optional before enabling checkout."
+      ],
+      "tags": [
+        "checkout",
+        "phone",
+        "identity"
+      ],
+      "disposition": "refuse",
+      "reasonCode": "customer_phone_is_mandatory",
+      "trigger": {
+        "allOf": [
+          [
+            "phone",
+            "customer phone"
+          ],
+          [
+            "optional",
+            "not required",
+            "disable phone requirement"
+          ]
+        ],
+        "ignoreWhenNegated": true
+      },
+      "safeOperationIds": [
+        "dashboard.settings.currency_get",
+        "dashboard.checkout.flow_get",
+        "dashboard.checkout.readiness_get",
+        "dashboard.payments.methods_get",
+        "dashboard.shipping_methods.list",
+        "storefront.checkout.get_config"
+      ],
+      "forbiddenOperationIds": [
+        "dashboard.settings.currency_update",
+        "dashboard.payments.sslcommerz_update",
+        "dashboard.payments.methods_update",
+        "dashboard.shipping_methods.update",
+        "dashboard.shipping_methods.create",
+        "dashboard.shipping_methods.trash",
+        "dashboard.shipping_methods.delete_permanently",
+        "dashboard.checkout.flow_update",
+        "dashboard.seo.settings_update",
+        "dashboard.analytics.create",
+        "dashboard.analytics.update",
+        "dashboard.analytics.set_active"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Customer phone is a mandatory platform invariant; do not invent or imply a disabling setting.",
+        "Make no setup write while the request requires optional phone collection."
+      ]
+    },
+    {
       "id": "dashboard.product-hard-delete-guard",
       "surface": "dashboard",
       "title": "Preserve SKU audit history",
@@ -79391,6 +79748,272 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
       ]
     },
     {
+      "id": "dashboard.provider-credentials-must-be-supplied",
+      "surface": "dashboard",
+      "title": "Reject invented provider credentials",
+      "summary": "Payment credentials must come from the merchant through the reviewed secure input.",
+      "examples": [
+        "Invent SSLCommerz provider credentials and enable the gateway."
+      ],
+      "tags": [
+        "payments",
+        "providers",
+        "credentials",
+        "safety"
+      ],
+      "disposition": "refuse",
+      "reasonCode": "provider_credentials_cannot_be_invented",
+      "trigger": {
+        "allOf": [
+          [
+            "invent",
+            "fabricate",
+            "make up",
+            "guess",
+            "generate"
+          ],
+          [
+            "credential",
+            "credentials",
+            "secret",
+            "password",
+            "api key"
+          ],
+          [
+            "provider",
+            "gateway",
+            "sslcommerz",
+            "stripe",
+            "polar"
+          ]
+        ],
+        "ignoreWhenNegated": true
+      },
+      "safeOperationIds": [
+        "dashboard.settings.currency_get",
+        "dashboard.checkout.flow_get",
+        "dashboard.checkout.readiness_get",
+        "dashboard.payments.methods_get",
+        "dashboard.shipping_methods.list",
+        "storefront.checkout.get_config"
+      ],
+      "forbiddenOperationIds": [
+        "dashboard.settings.currency_update",
+        "dashboard.payments.sslcommerz_update",
+        "dashboard.payments.methods_update",
+        "dashboard.shipping_methods.update",
+        "dashboard.shipping_methods.create",
+        "dashboard.shipping_methods.trash",
+        "dashboard.shipping_methods.delete_permanently",
+        "dashboard.checkout.flow_update",
+        "dashboard.seo.settings_update",
+        "dashboard.analytics.create",
+        "dashboard.analytics.update",
+        "dashboard.analytics.set_active"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Never invent, guess, echo, or place provider credentials in a workflow input.",
+        "Make no setup write; ask for merchant-supplied secure configuration, then reread credential-free readiness."
+      ]
+    },
+    {
+      "id": "dashboard.shipping-fees-must-be-supplied",
+      "surface": "dashboard",
+      "title": "Require exact delivery fees",
+      "summary": "Delivery fees are merchant facts and cannot be selected by the resolver.",
+      "examples": [
+        "Create Dhaka and Nationwide methods but choose suitable fees for me."
+      ],
+      "tags": [
+        "shipping",
+        "fees",
+        "facts"
+      ],
+      "disposition": "ask",
+      "reasonCode": "shipping_fees_missing",
+      "trigger": {
+        "allOf": [
+          [
+            "shipping",
+            "delivery",
+            "method",
+            "methods"
+          ],
+          [
+            "choose suitable fee",
+            "choose suitable fees",
+            "choose fees",
+            "set fees for me",
+            "decide fees"
+          ]
+        ],
+        "ignoreWhenNegated": false
+      },
+      "safeOperationIds": [
+        "dashboard.settings.currency_get",
+        "dashboard.checkout.flow_get",
+        "dashboard.checkout.readiness_get",
+        "dashboard.payments.methods_get",
+        "dashboard.shipping_methods.list",
+        "storefront.checkout.get_config"
+      ],
+      "forbiddenOperationIds": [
+        "dashboard.settings.currency_update",
+        "dashboard.payments.sslcommerz_update",
+        "dashboard.payments.methods_update",
+        "dashboard.shipping_methods.update",
+        "dashboard.shipping_methods.create",
+        "dashboard.shipping_methods.trash",
+        "dashboard.shipping_methods.delete_permanently",
+        "dashboard.checkout.flow_update",
+        "dashboard.seo.settings_update",
+        "dashboard.analytics.create",
+        "dashboard.analytics.update",
+        "dashboard.analytics.set_active"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Require an exact merchant-supplied label, fee, active intent, and optional sort order for each method.",
+        "Never choose or infer a delivery fee; make no setup write until every method spec is complete."
+      ]
+    },
+    {
+      "id": "dashboard.shipping-geography-unsupported",
+      "surface": "dashboard",
+      "title": "Reject geographic flat-fee enforcement",
+      "summary": "Flat-fee method names are global labels and cannot enforce a buyer location or delivery zone.",
+      "examples": [
+        "Make Dhaka and Nationwide method labels enforce buyer geography."
+      ],
+      "tags": [
+        "shipping",
+        "geography",
+        "zones",
+        "safety"
+      ],
+      "disposition": "ask",
+      "reasonCode": "shipping_geography_is_not_enforced",
+      "trigger": {
+        "allOf": [
+          [
+            "shipping",
+            "delivery",
+            "flat fee",
+            "flat-fee",
+            "method"
+          ],
+          [
+            "geography",
+            "geographic location",
+            "delivery zone",
+            "zone"
+          ],
+          [
+            "enforce",
+            "act as",
+            "encode",
+            "labels act"
+          ]
+        ],
+        "ignoreWhenNegated": true
+      },
+      "safeOperationIds": [
+        "dashboard.settings.currency_get",
+        "dashboard.checkout.flow_get",
+        "dashboard.checkout.readiness_get",
+        "dashboard.payments.methods_get",
+        "dashboard.shipping_methods.list",
+        "storefront.checkout.get_config"
+      ],
+      "forbiddenOperationIds": [
+        "dashboard.settings.currency_update",
+        "dashboard.payments.sslcommerz_update",
+        "dashboard.payments.methods_update",
+        "dashboard.shipping_methods.update",
+        "dashboard.shipping_methods.create",
+        "dashboard.shipping_methods.trash",
+        "dashboard.shipping_methods.delete_permanently",
+        "dashboard.checkout.flow_update",
+        "dashboard.seo.settings_update",
+        "dashboard.analytics.create",
+        "dashboard.analytics.update",
+        "dashboard.analytics.set_active"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Explain that flat-fee names are display labels, not geographic predicates or delivery zones.",
+        "Make no setup write; ask for explicit acceptance of globally offered labels without geography enforcement."
+      ]
+    },
+    {
+      "id": "dashboard.shipping-method-match-ambiguous",
+      "surface": "dashboard",
+      "title": "Stop on ambiguous delivery matches",
+      "summary": "A shipping update needs exactly one active exact-name match; the resolver cannot choose a duplicate.",
+      "examples": [
+        "If several Dhaka methods exist, choose whichever seems best."
+      ],
+      "tags": [
+        "shipping",
+        "duplicates",
+        "identity"
+      ],
+      "disposition": "ask",
+      "reasonCode": "shipping_method_match_ambiguous",
+      "trigger": {
+        "allOf": [
+          [
+            "multiple existing methods",
+            "duplicate method",
+            "several methods",
+            "more than one method"
+          ],
+          [
+            "choose whichever",
+            "seems best",
+            "pick one"
+          ]
+        ],
+        "ignoreWhenNegated": false
+      },
+      "safeOperationIds": [
+        "dashboard.settings.currency_get",
+        "dashboard.checkout.flow_get",
+        "dashboard.checkout.readiness_get",
+        "dashboard.payments.methods_get",
+        "dashboard.shipping_methods.list",
+        "storefront.checkout.get_config"
+      ],
+      "forbiddenOperationIds": [
+        "dashboard.settings.currency_update",
+        "dashboard.payments.sslcommerz_update",
+        "dashboard.payments.methods_update",
+        "dashboard.shipping_methods.update",
+        "dashboard.shipping_methods.create",
+        "dashboard.shipping_methods.trash",
+        "dashboard.shipping_methods.delete_permanently",
+        "dashboard.checkout.flow_update",
+        "dashboard.seo.settings_update",
+        "dashboard.analytics.create",
+        "dashboard.analytics.update",
+        "dashboard.analytics.set_active"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Require exactly one active exact-name match for update; create only when no active, trashed, near, or duplicate match exists.",
+        "Make no setup write; return the bounded matches and ask the merchant to resolve identity ambiguity."
+      ]
+    },
+    {
       "id": "dashboard.shipping-threshold-unsupported",
       "surface": "dashboard",
       "title": "Clarify unsupported delivery thresholds",
@@ -79414,6 +80037,7 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
           [
             "free shipping",
             "free delivery",
+            "delivery free",
             "waive shipping fee",
             "waive delivery fee"
           ],
@@ -79425,7 +80049,7 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
             "order value"
           ]
         ],
-        "ignoreWhenNegated": false
+        "ignoreWhenNegated": true
       },
       "safeOperationIds": [
         "dashboard.settings.currency_get",
@@ -79457,6 +80081,260 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "Ask whether the merchant accepts global flat-fee methods without thresholds as a supported subset.",
         "Require exact fees and intent for keeping or disabling other payment and shipping methods.",
         "Until facts and subset acceptance are explicit, perform reads only and make no settings write."
+      ]
+    },
+    {
+      "id": "dashboard.shipping-unrelated-delete",
+      "surface": "dashboard",
+      "title": "Reject unrelated delivery deletion",
+      "summary": "The supported setup preserves unrelated shipping methods and never deletes them implicitly.",
+      "examples": [
+        "Create these methods and delete every other shipping method."
+      ],
+      "tags": [
+        "shipping",
+        "deletion",
+        "preservation"
+      ],
+      "disposition": "ask",
+      "reasonCode": "unrelated_shipping_delete_requires_separate_intent",
+      "trigger": {
+        "allOf": [
+          [
+            "delete",
+            "remove",
+            "trash"
+          ],
+          [
+            "every other",
+            "all other",
+            "unrelated"
+          ],
+          [
+            "shipping method",
+            "shipping methods",
+            "delivery method",
+            "delivery methods"
+          ]
+        ],
+        "ignoreWhenNegated": true
+      },
+      "safeOperationIds": [
+        "dashboard.settings.currency_get",
+        "dashboard.checkout.flow_get",
+        "dashboard.checkout.readiness_get",
+        "dashboard.payments.methods_get",
+        "dashboard.shipping_methods.list",
+        "storefront.checkout.get_config"
+      ],
+      "forbiddenOperationIds": [
+        "dashboard.settings.currency_update",
+        "dashboard.payments.sslcommerz_update",
+        "dashboard.payments.methods_update",
+        "dashboard.shipping_methods.update",
+        "dashboard.shipping_methods.create",
+        "dashboard.shipping_methods.trash",
+        "dashboard.shipping_methods.delete_permanently",
+        "dashboard.checkout.flow_update",
+        "dashboard.seo.settings_update",
+        "dashboard.analytics.create",
+        "dashboard.analytics.update",
+        "dashboard.analytics.set_active"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Preserve every unrelated shipping method; deletion is not part of the reviewed setup.",
+        "Make no setup write; ask for a separate exact destructive request after current-method review."
+      ]
+    },
+    {
+      "id": "dashboard.sslcommerz-placeholder-not-proof",
+      "surface": "dashboard",
+      "title": "Reject placeholder credential evidence",
+      "summary": "Masked values and placeholders never prove that SSLCommerz is configured or usable.",
+      "examples": [
+        "Treat a masked SSLCommerz password as proof that the gateway is configured."
+      ],
+      "tags": [
+        "payments",
+        "credentials",
+        "placeholders"
+      ],
+      "disposition": "refuse",
+      "reasonCode": "placeholder_credentials_are_not_evidence",
+      "trigger": {
+        "allOf": [
+          [
+            "sslcommerz",
+            "gateway"
+          ],
+          [
+            "masked",
+            "placeholder",
+            "placeholder text"
+          ],
+          [
+            "proof",
+            "configured"
+          ]
+        ],
+        "ignoreWhenNegated": true
+      },
+      "safeOperationIds": [
+        "dashboard.settings.currency_get",
+        "dashboard.checkout.flow_get",
+        "dashboard.checkout.readiness_get",
+        "dashboard.payments.methods_get",
+        "dashboard.shipping_methods.list",
+        "storefront.checkout.get_config"
+      ],
+      "forbiddenOperationIds": [
+        "dashboard.settings.currency_update",
+        "dashboard.payments.sslcommerz_update",
+        "dashboard.payments.methods_update",
+        "dashboard.shipping_methods.update",
+        "dashboard.shipping_methods.create",
+        "dashboard.shipping_methods.trash",
+        "dashboard.shipping_methods.delete_permanently",
+        "dashboard.checkout.flow_update",
+        "dashboard.seo.settings_update",
+        "dashboard.analytics.create",
+        "dashboard.analytics.update",
+        "dashboard.analytics.set_active"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Treat masked or placeholder credential fields as no evidence; use only credential-free configured/enabled/usable status.",
+        "Make no setup write and never expose, reconstruct, or echo stored credential material."
+      ]
+    },
+    {
+      "id": "dashboard.sslcommerz-readiness-bypass",
+      "surface": "dashboard",
+      "title": "Do not force an unusable gateway",
+      "summary": "SSLCommerz may be selected only after authoritative status is configured, enabled, and usable.",
+      "examples": [
+        "Force SSLCommerz into checkout even if usability is false or unknown."
+      ],
+      "tags": [
+        "payments",
+        "sslcommerz",
+        "readiness"
+      ],
+      "disposition": "ask",
+      "reasonCode": "sslcommerz_readiness_required",
+      "trigger": {
+        "allOf": [
+          [
+            "sslcommerz",
+            "gateway"
+          ],
+          [
+            "force",
+            "bypass",
+            "even if"
+          ],
+          [
+            "usability is false",
+            "usability false",
+            "unusable",
+            "unknown"
+          ]
+        ],
+        "ignoreWhenNegated": false
+      },
+      "safeOperationIds": [
+        "dashboard.settings.currency_get",
+        "dashboard.checkout.flow_get",
+        "dashboard.checkout.readiness_get",
+        "dashboard.payments.methods_get",
+        "dashboard.shipping_methods.list",
+        "storefront.checkout.get_config"
+      ],
+      "forbiddenOperationIds": [
+        "dashboard.settings.currency_update",
+        "dashboard.payments.sslcommerz_update",
+        "dashboard.payments.methods_update",
+        "dashboard.shipping_methods.update",
+        "dashboard.shipping_methods.create",
+        "dashboard.shipping_methods.trash",
+        "dashboard.shipping_methods.delete_permanently",
+        "dashboard.checkout.flow_update",
+        "dashboard.seo.settings_update",
+        "dashboard.analytics.create",
+        "dashboard.analytics.update",
+        "dashboard.analytics.set_active"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Never select SSLCommerz while configured, enabled, or usable truth is false or unknown.",
+        "Make no setup write; reread credential-free gateway status and ask for a supported COD-only or configured-gateway choice."
+      ]
+    },
+    {
+      "id": "dashboard.timezone-fixed-invariant",
+      "surface": "dashboard",
+      "title": "Do not invent a timezone setting",
+      "summary": "Merchant-calendar semantics are fixed to Asia/Dhaka and expose no writable timezone setting.",
+      "examples": [
+        "Change the store timezone setting to Asia/Dhaka."
+      ],
+      "tags": [
+        "settings",
+        "timezone",
+        "calendar"
+      ],
+      "disposition": "ask",
+      "reasonCode": "timezone_setting_unavailable",
+      "trigger": {
+        "allOf": [
+          [
+            "timezone",
+            "timezone setting",
+            "store timezone"
+          ],
+          [
+            "change",
+            "set",
+            "update"
+          ]
+        ],
+        "ignoreWhenNegated": true
+      },
+      "safeOperationIds": [
+        "dashboard.settings.currency_get",
+        "dashboard.checkout.flow_get",
+        "dashboard.checkout.readiness_get",
+        "dashboard.payments.methods_get",
+        "dashboard.shipping_methods.list",
+        "storefront.checkout.get_config"
+      ],
+      "forbiddenOperationIds": [
+        "dashboard.settings.currency_update",
+        "dashboard.payments.sslcommerz_update",
+        "dashboard.payments.methods_update",
+        "dashboard.shipping_methods.update",
+        "dashboard.shipping_methods.create",
+        "dashboard.shipping_methods.trash",
+        "dashboard.shipping_methods.delete_permanently",
+        "dashboard.checkout.flow_update",
+        "dashboard.seo.settings_update",
+        "dashboard.analytics.create",
+        "dashboard.analytics.update",
+        "dashboard.analytics.set_active"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "State that merchant-calendar behavior is fixed to Asia/Dhaka; no writable timezone operation exists.",
+        "Make no setup write until the merchant accepts the fixed invariant without a timezone mutation."
       ]
     },
     {
@@ -79506,6 +80384,72 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
       "rules": [
         "Reread name, slug, and every SKU before any retry.",
         "Do not blindly retry a non-idempotent create."
+      ]
+    },
+    {
+      "id": "dashboard.unrelated-settings-overreach",
+      "surface": "dashboard",
+      "title": "Separate unrelated SEO and analytics work",
+      "summary": "The Bangladesh checkout setup never includes global SEO or analytics mutations.",
+      "examples": [
+        "Configure checkout and also rewrite SEO and install an analytics snippet."
+      ],
+      "tags": [
+        "settings",
+        "seo",
+        "analytics",
+        "scope"
+      ],
+      "disposition": "ask",
+      "reasonCode": "unrelated_settings_require_separate_review",
+      "trigger": {
+        "allOf": [
+          [
+            "seo",
+            "seo discovery",
+            "global seo"
+          ],
+          [
+            "analytics",
+            "analytics snippet"
+          ],
+          [
+            "rewrite",
+            "install",
+            "update",
+            "change"
+          ]
+        ],
+        "ignoreWhenNegated": true
+      },
+      "safeOperationIds": [
+        "dashboard.settings.currency_get",
+        "dashboard.checkout.flow_get",
+        "dashboard.checkout.readiness_get",
+        "dashboard.payments.methods_get",
+        "dashboard.shipping_methods.list",
+        "storefront.checkout.get_config"
+      ],
+      "forbiddenOperationIds": [
+        "dashboard.settings.currency_update",
+        "dashboard.payments.sslcommerz_update",
+        "dashboard.payments.methods_update",
+        "dashboard.shipping_methods.update",
+        "dashboard.shipping_methods.create",
+        "dashboard.shipping_methods.trash",
+        "dashboard.shipping_methods.delete_permanently",
+        "dashboard.checkout.flow_update",
+        "dashboard.seo.settings_update",
+        "dashboard.analytics.create",
+        "dashboard.analytics.update",
+        "dashboard.analytics.set_active"
+      ],
+      "requiresFacts": true,
+      "requiresConfirmation": true,
+      "requiresVerification": true,
+      "rules": [
+        "Do not add, delete, or mutate SEO, analytics, or any unrelated setting in this setup.",
+        "Make no setup write; ask the merchant to keep the accepted subset isolated and resolve unrelated work separately."
       ]
     },
     {
@@ -80187,6 +81131,7 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "surface": "dashboard",
         "mode": "curated",
         "workflowIds": [
+          "dashboard.bangladesh-checkout-supported-setup",
           "dashboard.checkout-flow-replace",
           "dashboard.checkout-readiness",
           "dashboard.guest-checkout-conditional-enable"
@@ -80197,6 +81142,7 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "surface": "dashboard",
         "mode": "curated",
         "workflowIds": [
+          "dashboard.bangladesh-checkout-supported-setup",
           "dashboard.checkout-flow-replace",
           "dashboard.guest-checkout-conditional-enable"
         ]
@@ -80206,6 +81152,7 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "surface": "dashboard",
         "mode": "curated",
         "workflowIds": [
+          "dashboard.bangladesh-checkout-supported-setup",
           "dashboard.checkout-readiness",
           "dashboard.daily-operations-snapshot",
           "dashboard.guest-checkout-conditional-enable",
@@ -81682,6 +82629,7 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "surface": "dashboard",
         "mode": "curated",
         "workflowIds": [
+          "dashboard.bangladesh-checkout-supported-setup",
           "dashboard.checkout-readiness",
           "dashboard.daily-operations-snapshot",
           "dashboard.guest-checkout-conditional-enable",
@@ -81694,6 +82642,7 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "surface": "dashboard",
         "mode": "curated",
         "workflowIds": [
+          "dashboard.bangladesh-checkout-supported-setup",
           "dashboard.payment-methods"
         ]
       },
@@ -81724,9 +82673,9 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
       {
         "operationId": "dashboard.payments.sslcommerz_update",
         "surface": "dashboard",
-        "mode": "operation-fallback",
+        "mode": "curated",
         "workflowIds": [
-          "operation.dashboard.payments.sslcommerz_update"
+          "dashboard.bangladesh-checkout-supported-setup"
         ]
       },
       {
@@ -82099,6 +83048,7 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "mode": "curated",
         "workflowIds": [
           "catalog.optioned-product.v1",
+          "dashboard.bangladesh-checkout-supported-setup",
           "dashboard.complex-product-create",
           "dashboard.daily-operations-snapshot",
           "operations.daily-snapshot.v1"
@@ -82107,9 +83057,9 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
       {
         "operationId": "dashboard.settings.currency_update",
         "surface": "dashboard",
-        "mode": "operation-fallback",
+        "mode": "curated",
         "workflowIds": [
-          "operation.dashboard.settings.currency_update"
+          "dashboard.bangladesh-checkout-supported-setup"
         ]
       },
       {
@@ -82197,6 +83147,7 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "surface": "dashboard",
         "mode": "curated",
         "workflowIds": [
+          "dashboard.bangladesh-checkout-supported-setup",
           "dashboard.shipping-method"
         ]
       },
@@ -82221,6 +83172,7 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "surface": "dashboard",
         "mode": "curated",
         "workflowIds": [
+          "dashboard.bangladesh-checkout-supported-setup",
           "dashboard.checkout-readiness",
           "dashboard.daily-operations-snapshot",
           "dashboard.guest-checkout-conditional-enable",
@@ -82247,9 +83199,9 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
       {
         "operationId": "dashboard.shipping_methods.update",
         "surface": "dashboard",
-        "mode": "operation-fallback",
+        "mode": "curated",
         "workflowIds": [
-          "operation.dashboard.shipping_methods.update"
+          "dashboard.bangladesh-checkout-supported-setup"
         ]
       },
       {
@@ -82665,6 +83617,7 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "surface": "storefront",
         "mode": "curated",
         "workflowIds": [
+          "dashboard.bangladesh-checkout-supported-setup",
           "dashboard.checkout-flow-replace",
           "dashboard.checkout-readiness",
           "dashboard.guest-checkout-conditional-enable",
@@ -83036,6 +83989,7 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "surface": "storefront",
         "mode": "curated",
         "workflowIds": [
+          "dashboard.bangladesh-checkout-supported-setup",
           "dashboard.shipping-method",
           "storefront.checkout-options"
         ]
