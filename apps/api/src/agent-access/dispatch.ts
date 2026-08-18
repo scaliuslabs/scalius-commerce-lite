@@ -603,13 +603,13 @@ export async function dispatchAgentOperation(
     }
 
     const internalRequest = buildInternalRequest(operation, input, env, requestId);
-    const { default: app } = await import("../app");
+    const { fetchRuntimeApiApp } = await import("../runtime/fetch-runtime-app");
     // No bearer/cookie is forwarded. The Worker-created ExecutionContext is
     // the non-spoofable bridge; Hono auth resolves its verified OAuth props
     // to a fresh principal instead of accepting a synthetic HTTP header.
     let response: Response;
     try {
-      response = await app.fetch(
+      response = await fetchRuntimeApiApp(
         internalRequest,
         withAgentDispatchPrincipal(env, principal),
         ctx,

@@ -1,10 +1,6 @@
 // src/server/index.ts
 
-import { OpenAPIHono } from "@hono/zod-openapi";
 import { swaggerUI } from "@hono/swagger-ui";
-import { cors } from "hono/cors";
-import { getDb } from "@scalius/database/client";
-import { withPublicMediaUrl } from "@scalius/core/integrations/storage";
 import { productRoutes } from "./routes/products";
 import authRoutes from "./routes/auth";
 import { categoryRoutes } from "./routes/categories";
@@ -48,13 +44,8 @@ import { storefrontAgentContextRoutes } from "./routes/storefront-agent-contexts
 import { storefrontAgentContinuationRoutes } from "./routes/storefront-agent-continuations";
 import { agentAuthRoutes } from "./routes/agent-auth";
 import { agentArtifactRoutes } from "./routes/agent-artifacts";
-import { errorResponseFromError, logApiError } from "./utils/api-response";
-import {
-  getRequestCorrelation,
-  requestCorrelationMiddleware,
-} from "./utils/http-correlation";
 import { serveMediaRoute } from "./routes/media-server";
-import { getCorsOriginContext } from "@scalius/shared/cors-helper";
+import { createContractApiApp } from "./runtime/base-app";
 import {
   OPENAPI_CONTRACT_ETAG,
   OPENAPI_CONTRACT_JSON,
@@ -94,111 +85,7 @@ import { adminAgentAccessRoutes } from "./routes/admin/agent-access";
 
 // Create typed OpenAPIHono app with Cloudflare Workers Env bindings
 // basePath("/api/v1") — standalone worker receives full URLs (e.g. /api/v1/products)
-const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
-
-function getR2PublicUrl(env: Env, requestUrl: string): string {
-  const configured = ((env.R2_PUBLIC_URL as string | undefined) || "").trim();
-
-  try {
-    const url = new URL(requestUrl);
-    if (
-      url.hostname === "localhost" ||
-      url.hostname === "127.0.0.1" ||
-      url.hostname === "[::1]"
-    ) {
-      return `${url.origin}/api/v1/media`;
-    }
-  } catch {
-    // Fall through to configured public URL.
-  }
-
-  return configured;
-}
-
-// Global error handler — ensures ALL uncaught errors return JSON, not plain text.
-// Hono's built-in default returns c.text("Internal Server Error", 500) which causes
-// SyntaxError when the browser tries to JSON.parse() it. This handler mirrors the
-// middleware-based handler below but acts as Hono's registered onError fallback.
-app.onError((err, c) => {
-  const correlation = getRequestCorrelation(c);
-  logApiError(err, {
-    method: c.req.method,
-    path: new URL(c.req.url).pathname,
-    requestId: correlation.requestId,
-    cfRay: correlation.cfRay,
-  });
-
-  const { body, status } = errorResponseFromError(err);
-  return c.json(body, status);
-});
-
-// NOTE: Do NOT add compress() middleware here. Cloudflare Workers handles
-// compression at the edge automatically. Application-level compression
-// breaks the cache middleware (compressed body stored as garbled text).
-
-// Per-request initialisation: DB and public media presentation
-app.use("*", requestCorrelationMiddleware);
-
-app.use("*", async (c, next) => {
-  const db = getDb(c.env);
-  c.set("db", db);
-  await withPublicMediaUrl(
-    getR2PublicUrl(c.env, c.req.url),
-    () => next(),
-  );
-});
-
-app.use("*", async (c, next) => {
-  const origin = c.req.header("Origin");
-  const method = c.req.method;
-  if (origin && method === "OPTIONS") {
-    console.log(`[CORS] Preflight request from origin: ${origin}`);
-  }
-  await next();
-});
-
-app.use("*", async (c, next) => {
-  const corsMiddleware = cors({
-    origin: await getCorsOriginContext(c),
-    allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-    allowHeaders: [
-      "Content-Type",
-      "Authorization",
-      "X-API-Token",
-      "Accept",
-      "X-Request-Id",
-    ],
-    exposeHeaders: ["Content-Type", "Cache-Control", "X-Request-Id"],
-    credentials: true,
-  });
-  return corsMiddleware(c, next);
-});
-
-// Security headers middleware — runs after CORS so it doesn't interfere with preflight
-app.use("*", async (c, next) => {
-  await next();
-  c.header("X-Content-Type-Options", "nosniff");
-  c.header("X-Frame-Options", "DENY");
-  c.header("Referrer-Policy", "strict-origin-when-cross-origin");
-  c.header("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
-  // Only add HSTS if not localhost
-  if (!c.req.url.includes("localhost")) {
-    c.header(
-      "Strict-Transport-Security",
-      "max-age=31536000; includeSubDomains",
-    );
-  }
-});
-
-app.use("*", async (c, next) => {
-  // Use PUBLIC_API_BASE_URL from CF Workers env binding, fallback to request origin
-  const baseUrl = (
-    c.env.PUBLIC_API_BASE_URL || new URL(c.req.url).origin
-  ).trim();
-
-  c.header("X-Proxy-Base-URL", `${baseUrl}/api/v1`);
-  await next();
-});
+const app = createContractApiApp();
 
 // Error handling is handled by app.onError() above.
 // All uncaught errors propagate to the global onError handler which

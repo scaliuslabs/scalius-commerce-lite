@@ -2,7 +2,6 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { nanoid } from "nanoid";
 import { claimAgentBrowserHandoff } from "../../agent-access/browser-handoffs";
 import { loadAgentAccessBackend } from "../../agent-access/backend";
-import { resolveAgentOperationById } from "../../agent-access/direct-operation";
 import { resolveAgentPrincipalFromGrant } from "../../agent-access/principal";
 import {
   approveAuthorizationRequest,
@@ -562,6 +561,7 @@ app.openapi(claimBrowserHandoffRoute, async (c) => {
     credentialId: claimed.credentialId,
     resource: claimed.resource,
   });
+  const { resolveAgentOperationById } = await import("../../agent-access/direct-operation");
   const operation = resolveAgentOperationById(claimed.operationId);
   if (
     !principal ||
