@@ -10,6 +10,7 @@ export type WorkflowResolverOperation = {
   surface: string;
   exposure: string;
   risk: string;
+  openWorld?: boolean;
   summary: string;
   description?: string;
   tags: string[];
@@ -72,6 +73,22 @@ export type WorkflowResolverDependencySource =
   | { kind: "fact"; factId: string; factPointer?: string }
   | { kind: "step"; phaseId: string; stepId: string; responsePointer: string };
 
+export type WorkflowResolverOutputField = {
+  pointer: string;
+  alias: string;
+};
+
+export type WorkflowResolverOutputSelector = {
+  pointer: string;
+  alias: string;
+  maxItems?: number;
+  fields?: readonly WorkflowResolverOutputField[];
+};
+
+export type WorkflowResolverOutputProjection = {
+  selectors: readonly WorkflowResolverOutputSelector[];
+};
+
 export type WorkflowResolverCard = {
   id: string;
   constructionRules?: Readonly<Record<string, string>>;
@@ -86,6 +103,7 @@ export type WorkflowResolverCard = {
   phases: readonly {
     id: string;
     surface: WorkflowResolverSurface;
+    dependsOn?: readonly string[];
     stopConditions: readonly string[];
     steps: readonly {
       id: string;
@@ -100,6 +118,7 @@ export type WorkflowResolverCard = {
         }[];
         defaults: readonly { templatePointer: string; value: unknown }[];
       };
+      output?: WorkflowResolverOutputProjection;
       policies: {
         revision: "none" | "optional" | "required";
         idempotency: "none" | "supported" | "required";
@@ -993,4 +1012,498 @@ export function createWorkflowResolver(
       safetyNotes: [],
     };
   };
+}
+
+export type WorkflowReadInputPrimitive = string | number | boolean | null;
+
+export type CompiledWorkflowReadOperationInput = {
+  path?: Record<string, string | number | boolean>;
+  query?: Record<string, WorkflowReadInputPrimitive | WorkflowReadInputPrimitive[]>;
+  body?: unknown;
+};
+
+export type CompiledWorkflowReadStep = {
+  namespace: string;
+  operationId: string;
+  input: CompiledWorkflowReadOperationInput;
+  output: WorkflowResolverOutputProjection;
+};
+
+export type CompiledWorkflowReadPhase = {
+  id: string;
+  steps: CompiledWorkflowReadStep[];
+};
+
+export type CompiledWorkflowRead = {
+  version: string;
+  workflowId: string;
+  phases: CompiledWorkflowReadPhase[];
+};
+
+export type ProjectedWorkflowReadScalar = string | number | boolean | null;
+export type ProjectedWorkflowReadValue = ProjectedWorkflowReadScalar |
+  ProjectedWorkflowReadScalar[] |
+  Record<string, ProjectedWorkflowReadScalar> |
+  Array<Record<string, ProjectedWorkflowReadScalar>>;
+export type ProjectedWorkflowReadStep = Record<string, ProjectedWorkflowReadValue>;
+
+const WORKFLOW_READ_MAX_TEMPLATE_NODES = 1_000;
+const WORKFLOW_READ_MAX_TEMPLATE_DEPTH = 16;
+const WORKFLOW_READ_MAX_PHASES = 8;
+const WORKFLOW_READ_MAX_STEPS = 20;
+const WORKFLOW_READ_MAX_SELECTORS = 24;
+const WORKFLOW_READ_MAX_FIELDS = 32;
+const WORKFLOW_READ_MAX_ITEMS = 100;
+const WORKFLOW_READ_MAX_ALIAS_LENGTH = 64;
+const WORKFLOW_READ_LOCAL_ID = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/;
+const WORKFLOW_READ_ALIAS = /^[A-Za-z][A-Za-z0-9_]*$/;
+const WORKFLOW_READ_FORBIDDEN_SEGMENTS = new Set([
+  "__proto__",
+  "prototype",
+  "constructor",
+  "*",
+  "-",
+  ".",
+  "..",
+]);
+
+function workflowReadRecord(value: unknown): value is Record<string, unknown> {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function workflowReadScalar(value: unknown): value is ProjectedWorkflowReadScalar {
+  return value === null || typeof value === "string" || typeof value === "boolean" ||
+    typeof value === "number" && Number.isFinite(value);
+}
+
+function workflowReadAlias(value: string): boolean {
+  return value.length <= WORKFLOW_READ_MAX_ALIAS_LENGTH && WORKFLOW_READ_ALIAS.test(value) &&
+    !WORKFLOW_READ_FORBIDDEN_SEGMENTS.has(value);
+}
+
+function workflowReadPointer(pointer: string): string[] | null {
+  if (pointer === "") return [];
+  if (!pointer.startsWith("/")) return null;
+  const segments: string[] = [];
+  for (const encoded of pointer.slice(1).split("/")) {
+    if (encoded === "" || /~(?:[^01]|$)/.test(encoded)) return null;
+    const segment = encoded.replaceAll("~1", "/").replaceAll("~0", "~");
+    if (
+      segment === "" ||
+      WORKFLOW_READ_FORBIDDEN_SEGMENTS.has(segment) ||
+      segment.includes("*") ||
+      segment.startsWith("$") ||
+      segment.startsWith("@")
+    ) return null;
+    segments.push(segment);
+  }
+  return segments;
+}
+
+function workflowReadOwnValue(
+  container: unknown,
+  segment: string,
+): { value: unknown } | null {
+  if (Array.isArray(container)) {
+    if (!/^(0|[1-9][0-9]*)$/.test(segment)) return null;
+    const index = Number(segment);
+    if (!Number.isSafeInteger(index) || index >= container.length) return null;
+    return { value: container[index] };
+  }
+  if (!workflowReadRecord(container)) return null;
+  const descriptor = Object.getOwnPropertyDescriptor(container, segment);
+  return descriptor && "value" in descriptor ? { value: descriptor.value } : null;
+}
+
+function workflowReadResolvePointer(
+  root: unknown,
+  pointer: string,
+): { value: unknown } | null {
+  const segments = workflowReadPointer(pointer);
+  if (!segments) return null;
+  let value = root;
+  for (const segment of segments) {
+    const next = workflowReadOwnValue(value, segment);
+    if (!next) return null;
+    value = next.value;
+  }
+  return { value };
+}
+
+function cloneWorkflowReadJson(
+  value: unknown,
+  state: { nodes: number },
+  depth = 0,
+): unknown | undefined {
+  state.nodes += 1;
+  if (
+    state.nodes > WORKFLOW_READ_MAX_TEMPLATE_NODES ||
+    depth > WORKFLOW_READ_MAX_TEMPLATE_DEPTH
+  ) return undefined;
+  if (workflowReadScalar(value)) return value;
+  if (Array.isArray(value)) {
+    const output: unknown[] = [];
+    for (const item of value) {
+      const cloned = cloneWorkflowReadJson(item, state, depth + 1);
+      if (cloned === undefined) return undefined;
+      output.push(cloned);
+    }
+    return output;
+  }
+  if (!workflowReadRecord(value)) return undefined;
+  const output: Record<string, unknown> = {};
+  for (const key of Object.keys(value)) {
+    if (WORKFLOW_READ_FORBIDDEN_SEGMENTS.has(key)) return undefined;
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (!descriptor || !("value" in descriptor)) return undefined;
+    const cloned = cloneWorkflowReadJson(descriptor.value, state, depth + 1);
+    if (cloned === undefined) return undefined;
+    output[key] = cloned;
+  }
+  return output;
+}
+
+function workflowReadJsonEqual(left: unknown, right: unknown): boolean {
+  try {
+    return JSON.stringify(left) === JSON.stringify(right);
+  } catch {
+    return false;
+  }
+}
+
+function setWorkflowReadPointer(root: unknown, pointer: string, value: unknown): boolean {
+  const segments = workflowReadPointer(pointer);
+  if (!segments || segments.length === 0) return false;
+  let parent = root;
+  for (const segment of segments.slice(0, -1)) {
+    const next = workflowReadOwnValue(parent, segment);
+    if (!next) return false;
+    parent = next.value;
+  }
+  const last = segments.at(-1)!;
+  if (!workflowReadOwnValue(parent, last)) return false;
+  if (Array.isArray(parent)) {
+    parent[Number(last)] = value;
+    return true;
+  }
+  if (!workflowReadRecord(parent)) return false;
+  parent[last] = value;
+  return true;
+}
+
+function workflowReadOperationInput(value: unknown): CompiledWorkflowReadOperationInput | null {
+  if (!workflowReadRecord(value)) return null;
+  if (Object.keys(value).some((key) => !["path", "query", "body"].includes(key))) return null;
+  if (
+    value.path !== undefined &&
+    (!workflowReadRecord(value.path) || Object.values(value.path).some((item) =>
+      typeof item !== "string" && typeof item !== "number" && typeof item !== "boolean"
+    ))
+  ) return null;
+  if (
+    value.query !== undefined &&
+    (!workflowReadRecord(value.query) || Object.values(value.query).some((item) =>
+      Array.isArray(item)
+        ? item.some((entry) => !workflowReadScalar(entry))
+        : !workflowReadScalar(item)
+    ))
+  ) return null;
+  return value as CompiledWorkflowReadOperationInput;
+}
+
+type WorkflowReadFact = WorkflowResolverCard["requiredFacts"][number];
+
+function fixedWorkflowReadFact(fact: WorkflowReadFact): unknown | undefined {
+  const value = Object.hasOwn(fact, "defaultValue")
+    ? fact.defaultValue
+    : fact.source.kind === "constant"
+      ? fact.source.value
+      : undefined;
+  return cloneWorkflowReadJson(value, { nodes: 0 });
+}
+
+function workflowReadFacts(
+  card: WorkflowResolverCard,
+  operationIds: ReadonlySet<string>,
+): Map<string, WorkflowReadFact> | null {
+  const facts = new Map<string, WorkflowReadFact>();
+  for (const fact of card.requiredFacts) {
+    if (!fact.id || facts.has(fact.id) || fact.source.kind === "merchant") return null;
+    if (fact.source.kind === "constant") {
+      const constant = cloneWorkflowReadJson(fact.source.value, { nodes: 0 });
+      if (constant === undefined) return null;
+      if (Object.hasOwn(fact, "defaultValue") && !workflowReadJsonEqual(
+        constant,
+        fact.defaultValue,
+      )) return null;
+    }
+    if (fact.source.kind === "operation") {
+      const references = [fact.source, ...(fact.source.alternatives ?? [])];
+      if (references.some((reference) =>
+        !operationIds.has(reference.operationId) ||
+        reference.responsePointer === "" ||
+        workflowReadPointer(reference.responsePointer) === null
+      )) return null;
+    }
+    facts.set(fact.id, fact);
+  }
+  return facts;
+}
+
+function materializeWorkflowReadInput(
+  step: WorkflowResolverCard["phases"][number]["steps"][number],
+  facts: ReadonlyMap<string, WorkflowReadFact>,
+): CompiledWorkflowReadOperationInput | null {
+  const template = cloneWorkflowReadJson(step.input.template, { nodes: 0 });
+  if (template === undefined) return null;
+  const defaultPointers = new Set<string>();
+  for (const inputDefault of step.input.defaults) {
+    const current = workflowReadResolvePointer(template, inputDefault.templatePointer);
+    const value = cloneWorkflowReadJson(inputDefault.value, { nodes: 0 });
+    if (
+      defaultPointers.has(inputDefault.templatePointer) ||
+      !current ||
+      value === undefined ||
+      !workflowReadJsonEqual(current.value, value) ||
+      !setWorkflowReadPointer(template, inputDefault.templatePointer, value)
+    ) return null;
+    defaultPointers.add(inputDefault.templatePointer);
+  }
+  const dependencyPointers = new Set<string>();
+  for (const dependency of step.input.dependencies) {
+    if (
+      dependencyPointers.has(dependency.templatePointer) ||
+      dependency.source.kind !== "fact"
+    ) return null;
+    const fact = facts.get(dependency.source.factId);
+    if (!fact) return null;
+    let value = fixedWorkflowReadFact(fact);
+    if (value === undefined) return null;
+    if (dependency.source.factPointer !== undefined) {
+      const selected = workflowReadResolvePointer(value, dependency.source.factPointer);
+      if (!selected) return null;
+      value = cloneWorkflowReadJson(selected.value, { nodes: 0 });
+      if (value === undefined) return null;
+    }
+    if (!setWorkflowReadPointer(template, dependency.templatePointer, value)) return null;
+    dependencyPointers.add(dependency.templatePointer);
+  }
+  return workflowReadOperationInput(template);
+}
+
+function copyWorkflowReadProjection(
+  projection: WorkflowResolverOutputProjection | undefined,
+): WorkflowResolverOutputProjection | null {
+  if (
+    !projection ||
+    projection.selectors.length === 0 ||
+    projection.selectors.length > WORKFLOW_READ_MAX_SELECTORS
+  ) return null;
+  const aliases = new Set<string>();
+  const selectors: WorkflowResolverOutputSelector[] = [];
+  for (const selector of projection.selectors) {
+    if (
+      !workflowReadAlias(selector.alias) ||
+      aliases.has(selector.alias) ||
+      selector.pointer === "" ||
+      workflowReadPointer(selector.pointer) === null
+    ) return null;
+    aliases.add(selector.alias);
+    if (
+      selector.maxItems !== undefined &&
+      (!Number.isSafeInteger(selector.maxItems) ||
+        selector.maxItems < 1 ||
+        selector.maxItems > WORKFLOW_READ_MAX_ITEMS)
+    ) return null;
+    let fields: WorkflowResolverOutputField[] | undefined;
+    if (selector.fields !== undefined) {
+      if (selector.fields.length === 0 || selector.fields.length > WORKFLOW_READ_MAX_FIELDS) {
+        return null;
+      }
+      const fieldAliases = new Set<string>();
+      fields = [];
+      for (const field of selector.fields) {
+        if (
+          !workflowReadAlias(field.alias) ||
+          fieldAliases.has(field.alias) ||
+          field.pointer === "" ||
+          workflowReadPointer(field.pointer) === null
+        ) return null;
+        fieldAliases.add(field.alias);
+        fields.push({ pointer: field.pointer, alias: field.alias });
+      }
+    }
+    selectors.push({
+      pointer: selector.pointer,
+      alias: selector.alias,
+      ...(selector.maxItems !== undefined ? { maxItems: selector.maxItems } : {}),
+      ...(fields ? { fields } : {}),
+    });
+  }
+  return { selectors };
+}
+
+function workflowReadOperationSet(left: readonly string[], right: readonly string[]): boolean {
+  const leftSet = new Set(left);
+  const rightSet = new Set(right);
+  return leftSet.size === left.length && rightSet.size === right.length &&
+    leftSet.size === rightSet.size && [...leftSet].every((value) => rightSet.has(value));
+}
+
+export function createWorkflowReadCompiler(
+  sources: WorkflowResolverSources,
+): (input: WorkflowResolverInput) => CompiledWorkflowRead | null {
+  const resolveWorkflow = createWorkflowResolver(sources);
+  const operations = new Map<string, WorkflowResolverOperation>();
+  const duplicateOperationIds = new Set<string>();
+  for (const operation of sources.operations) {
+    if (operations.has(operation.operationId)) duplicateOperationIds.add(operation.operationId);
+    operations.set(operation.operationId, operation);
+  }
+
+  return (input) => {
+    const resolution = resolveWorkflow(input);
+    if (
+      resolution.kind !== "plan" ||
+      resolution.disposition !== "execute" ||
+      resolution.plan.source !== "route" ||
+      resolution.plan.kind !== "read" ||
+      !resolution.plan.detail ||
+      resolution.plan.routeIds.length !== 1 ||
+      resolution.plan.workflowIds.length !== 1
+    ) return null;
+
+    const routes = sources.catalog.routes.filter((route) =>
+      route.id === resolution.plan.routeIds[0]
+    );
+    const workflowId = resolution.plan.workflowIds[0]!;
+    const cards = (sources.catalog.cards ?? []).filter((card) => card.id === workflowId);
+    if (routes.length !== 1 || cards.length !== 1) return null;
+    const route = routes[0]!;
+    const card = cards[0]!;
+    const cardSteps = card.phases.flatMap((phase) => phase.steps);
+    const cardOperationIds = unique(cardSteps.map((step) => step.operationId));
+    if (
+      route.surface !== input.surface ||
+      route.kind !== "read" ||
+      route.workflowId !== workflowId ||
+      card.phases.length === 0 ||
+      card.phases.length > WORKFLOW_READ_MAX_PHASES ||
+      cardSteps.length === 0 ||
+      cardSteps.length > WORKFLOW_READ_MAX_STEPS ||
+      !workflowReadOperationSet(route.operationIds, resolution.plan.operationIds) ||
+      !workflowReadOperationSet(route.operationIds, cardOperationIds)
+    ) return null;
+
+    for (const operationId of route.operationIds) {
+      const operation = operations.get(operationId);
+      if (
+        !operation ||
+        duplicateOperationIds.has(operationId) ||
+        operation.surface !== input.surface ||
+        operation.risk !== "read" ||
+        operation.exposure !== "execute" ||
+        operation.openWorld !== false
+      ) return null;
+    }
+
+    const facts = workflowReadFacts(card, new Set(route.operationIds));
+    if (!facts) return null;
+    const phaseIds = new Set<string>();
+    const namespaces = new Set<string>();
+    const phases: CompiledWorkflowReadPhase[] = [];
+    for (const phase of card.phases) {
+      if (
+        !WORKFLOW_READ_LOCAL_ID.test(phase.id) ||
+        phaseIds.has(phase.id) ||
+        phase.surface !== input.surface ||
+        !phase.dependsOn ||
+        phase.dependsOn.some((dependency) => !phaseIds.has(dependency))
+      ) return null;
+      phaseIds.add(phase.id);
+      const steps: CompiledWorkflowReadStep[] = [];
+      for (const step of phase.steps) {
+        const namespace = `${phase.id}.${step.id}`;
+        if (
+          !WORKFLOW_READ_LOCAL_ID.test(step.id) ||
+          namespaces.has(namespace) ||
+          step.mutation !== "read"
+        ) return null;
+        const operation = operations.get(step.operationId);
+        if (
+          !operation ||
+          operation.surface !== input.surface ||
+          operation.risk !== "read" ||
+          operation.exposure !== "execute" ||
+          operation.openWorld !== false
+        ) return null;
+        const materializedInput = materializeWorkflowReadInput(step, facts);
+        const output = copyWorkflowReadProjection(step.output);
+        if (!materializedInput || !output) return null;
+        namespaces.add(namespace);
+        steps.push({ namespace, operationId: step.operationId, input: materializedInput, output });
+      }
+      if (steps.length === 0) return null;
+      phases.push({ id: phase.id, steps });
+    }
+    return { version: resolution.version, workflowId, phases };
+  };
+}
+
+function projectWorkflowReadFields(
+  value: unknown,
+  fields: readonly WorkflowResolverOutputField[],
+): Record<string, ProjectedWorkflowReadScalar> | null {
+  if (!workflowReadRecord(value) || fields.length === 0 || fields.length > WORKFLOW_READ_MAX_FIELDS) {
+    return null;
+  }
+  const output: Record<string, ProjectedWorkflowReadScalar> = {};
+  for (const field of fields) {
+    if (!workflowReadAlias(field.alias) || Object.hasOwn(output, field.alias)) return null;
+    const selected = workflowReadResolvePointer(value, field.pointer);
+    if (!selected || !workflowReadScalar(selected.value)) return null;
+    output[field.alias] = selected.value;
+  }
+  return output;
+}
+
+export function projectWorkflowReadResponse(
+  response: unknown,
+  projection: WorkflowResolverOutputProjection,
+): ProjectedWorkflowReadStep | null {
+  const reviewed = copyWorkflowReadProjection(projection);
+  if (!reviewed) return null;
+  const output: ProjectedWorkflowReadStep = {};
+  for (const selector of reviewed.selectors) {
+    const selected = workflowReadResolvePointer(response, selector.pointer);
+    if (!selected) return null;
+    let value: ProjectedWorkflowReadValue;
+    if (selector.maxItems !== undefined) {
+      if (!Array.isArray(selected.value)) return null;
+      const items = selected.value.slice(0, selector.maxItems);
+      if (selector.fields) {
+        const projectedItems: Array<Record<string, ProjectedWorkflowReadScalar>> = [];
+        for (const item of items) {
+          const projected = projectWorkflowReadFields(item, selector.fields);
+          if (!projected) return null;
+          projectedItems.push(projected);
+        }
+        value = projectedItems;
+      } else {
+        if (items.some((item) => !workflowReadScalar(item))) return null;
+        value = items as ProjectedWorkflowReadScalar[];
+      }
+    } else if (selector.fields) {
+      const projected = projectWorkflowReadFields(selected.value, selector.fields);
+      if (!projected) return null;
+      value = projected;
+    } else {
+      if (!workflowReadScalar(selected.value)) return null;
+      value = selected.value;
+    }
+    output[selector.alias] = value;
+  }
+  return output;
 }

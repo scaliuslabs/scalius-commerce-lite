@@ -11,6 +11,7 @@ npm install --global scalius
 
 scalius auth login --server https://api.example.com
 scalius auth login --server https://api.example.com --resource storefront --profile-name my-store-storefront
+scalius --output json workflow read "How is my store doing today?" --surface dashboard
 scalius --output json workflow resolve "Create a product with size/color variants and exact images" --surface dashboard
 scalius operations search "what are today's sales?" --surface dashboard
 scalius operations describe dashboard.products.create
@@ -38,6 +39,7 @@ scalius auth revoke
 scalius profile list
 scalius profile use <name>
 scalius profile show [name]
+scalius workflow read <request> [--surface dashboard|storefront]
 scalius workflow resolve <request> [--surface dashboard|storefront]
 scalius operations search [query] [--surface dashboard|storefront] [--limit <1-100>]
 scalius operations describe <operationId> [--full]
@@ -50,7 +52,8 @@ scalius skill install [--harness <name>] [--force]
 
 Run `scalius setup` before operating a store. The bundled `scalius-commerce` skill follows the open Agent Skills format and installs to the native user location for Codex, Claude Code, OpenCode, Pi, or the cross-client `.agents/skills` convention. Setup prints exact credential-free instructions for both audience-specific MCP servers; it never writes tokens into harness configuration. Pi supports the skill and full CLI natively; because Pi's core has no MCP client, setup prints the separately installed `pi-mcp-adapter` package from Pi's catalog and shared MCP configuration but never silently installs executable third-party code.
 
-The workflow is deliberately harness-neutral: resolve a natural-language goal,
+The workflow is deliberately harness-neutral: use `workflow read` for a
+supported data question in one projected call; otherwise resolve a natural-language goal,
 compactly describe only the selected operations, request `--full` only while
 building an exact input, execute, and verify with a bounded read. The resolver
 uses the versioned workflow catalog embedded in the same live contract, returns

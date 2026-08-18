@@ -11,6 +11,7 @@ import { writeError, writeResult } from "./output.js";
 import { listProfiles, showProfile, useProfile } from "./profiles.js";
 import { AGENT_HARNESSES, installSkill, setupHarness, type AgentHarness } from "./skill.js";
 import type { OutputMode, Runtime, StructuredInput } from "./types.js";
+import { readWorkflow } from "./workflow-read.js";
 import { resolveWorkflow } from "./workflows.js";
 
 interface GlobalOptions {
@@ -217,6 +218,22 @@ export function createProgram(runtime: Runtime): Command {
       const document = await loadOpenApi(runtime, profile);
       const result = resolveWorkflow(document, { prompt: request, surface: options.surface });
       writeResult(runtime, globalOptions(command).output, result, JSON.stringify(result, null, 2));
+    });
+  workflow.command("read")
+    .description("answer one supported store-data question through fixed reviewed reads")
+    .argument("<request>", "merchant or buyer data question")
+    .addOption(new Option("--surface <audience>", "workflow audience").choices(["dashboard", "storefront"]).default("dashboard"))
+    .action(async (request: string, options: { surface: "dashboard" | "storefront" }, command) => {
+      const profile = await resolveForResource(runtime, command, options.surface);
+      const document = await loadOpenApi(runtime, profile);
+      const result = await readWorkflow(runtime, profile, document, {
+        prompt: request,
+        surface: options.surface,
+      });
+      const human = result.kind === "result"
+        ? `${result.workflowId}\n${JSON.stringify(result.outputs, null, 2)}`
+        : `${result.classification.reason} Use workflow resolve for a reviewed plan.`;
+      writeResult(runtime, globalOptions(command).output, result, human);
     });
 
   const operations = program.command("operations").alias("ops").description("discover and execute operations");

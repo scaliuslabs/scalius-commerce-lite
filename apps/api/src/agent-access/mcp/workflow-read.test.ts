@@ -227,6 +227,15 @@ describe("executeAuthorizedWorkflowRead", () => {
     expect(maxActive).toBe(2);
     expect(completionOrder[0]).toBe("dashboard.settings.currency_get");
     expect(mocks.getAuthorizedOperation).toHaveBeenCalledTimes(7);
+    expect(mocks.getAuthorizedOperation.mock.calls.map(([operationId]) => operationId)).toEqual([
+      "dashboard.home.activity",
+      "dashboard.settings.currency_get",
+      "dashboard.orders.list",
+      "dashboard.inventory_alerts.list",
+      "dashboard.checkout.readiness_get",
+      "dashboard.payments.methods_get",
+      "dashboard.shipping_methods.list",
+    ]);
     expect(mocks.dispatchAgentOperation).toHaveBeenCalledTimes(7);
     expect(result).toEqual({
       kind: "result",
