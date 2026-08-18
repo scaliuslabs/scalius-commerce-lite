@@ -279,6 +279,7 @@ describe("customer auth service intent handling", () => {
     const db = createDb([
       { limit: [baseSiteSettings] },
       { get: null },
+      { all: [createCustomerRow()] },
       { all: readyEmailSettings },
     ]);
 
@@ -315,10 +316,41 @@ describe("customer auth service intent handling", () => {
     );
   });
 
+  it("rejects unknown email sign-in before OTP delivery state is created", async () => {
+    const db = createDb([
+      { limit: [baseSiteSettings] },
+      { get: null },
+      { all: [] },
+      { get: null },
+    ]);
+
+    await expect(sendOtp(db as never, {
+      intent: "sign_in",
+      method: "email",
+      channel: "email",
+      identifier: "missing@example.com",
+      name: "Missing Buyer",
+      ip: "203.0.113.20",
+      emailEnv: readyEmailEnv,
+      ...otpInputSecrets,
+    })).rejects.toThrow("No account was found for this email. Create an account instead.");
+
+    expect(challengeMocks.buildCustomerAuthOtpStorageKey).not.toHaveBeenCalled();
+    expect(rateLimitMocks.enforceCustomerAuthOtpIpRateLimit).toHaveBeenCalledWith(
+      db,
+      expect.objectContaining({
+        ip: "203.0.113.20",
+        hashKey: otpInputSecrets.encryptionKey,
+      }),
+    );
+    expect(challengeMocks.persistCustomerAuthOtpChallenge).not.toHaveBeenCalled();
+  });
+
   it("rejects rate-limited OTP sends before mutating challenge state", async () => {
     const db = createDb([
       { limit: [baseSiteSettings] },
       { get: null },
+      { all: [createCustomerRow()] },
       { all: readyEmailSettings },
     ]);
     rateLimitMocks.enforceCustomerAuthOtpIpRateLimit.mockRejectedValueOnce(
@@ -359,6 +391,8 @@ describe("customer auth service intent handling", () => {
           }),
         },
       },
+      { get: null },
+      { get: createCustomerRow() },
       { all: readySmsSettings },
     ]);
 
@@ -477,6 +511,8 @@ describe("customer auth service intent handling", () => {
     const db = createDb([
       { limit: [{ ...baseSiteSettings, authVerificationMethod: "sms_otp" }] },
       { get: null },
+      { get: null },
+      { get: createCustomerRow() },
       { all: [] },
     ]);
 
@@ -498,6 +534,7 @@ describe("customer auth service intent handling", () => {
     const db = createDb([
       { limit: [baseSiteSettings] },
       { get: null },
+      { all: [createCustomerRow()] },
       { all: [] },
     ]);
 

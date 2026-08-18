@@ -24,7 +24,11 @@ describe("agent hosted continuation page", () => {
   it("does not import the analytics-enabled shared layout or place sensitive values in URLs", () => {
     expect(source).not.toContain("layouts/Layout.astro");
     expect(source).not.toMatch(/receiptToken|statusToken|checkoutToken|cs_tok|chk_|cst_/);
-    expect(source).not.toMatch(/searchParams|location\.search|console\.log/);
+    expect(source).not.toMatch(/searchParams|console\.log/);
+    expect(source.match(/location\.search/g)).toEqual(["location.search"]);
+    expect(source).toContain(
+      'new URLSearchParams(window.location.search).get("paymentReturn")',
+    );
     expect(source).toContain('autocomplete="one-time-code"');
     expect(source).toContain('credentials: "same-origin"');
     expect(source).toContain('referrerPolicy: "no-referrer"');
