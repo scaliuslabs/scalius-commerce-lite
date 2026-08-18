@@ -65,8 +65,8 @@ export abstract class AgentMcpHandler extends WorkerEntrypoint<Env, AgentOAuthPr
         `${canonical}/api/v1/agent-artifacts/${artifactMatch[2]}`,
         { method: "GET", headers: { "X-Request-ID": crypto.randomUUID() } },
       );
-      const { default: app } = await import("../../app");
-      return app.fetch(
+      const { fetchRuntimeApiApp } = await import("../../runtime/fetch-runtime-app");
+      return fetchRuntimeApiApp(
         internalRequest,
         withAgentDispatchPrincipal(this.env, principal),
         this.ctx,

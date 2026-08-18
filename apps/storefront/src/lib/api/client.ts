@@ -93,8 +93,9 @@ async function runFetchWithHardTimeout(
   const fetchPromise = fetcher(controller.signal);
   const timeoutPromise = new Promise<Response>((_resolve, reject) => {
     timeoutId = setTimeout(() => {
-      controller.abort();
-      reject(new StorefrontFetchTimeoutError(label, timeout));
+      const timeoutError = new StorefrontFetchTimeoutError(label, timeout);
+      reject(timeoutError);
+      controller.abort(timeoutError);
     }, timeout);
   });
 
@@ -219,6 +220,7 @@ export async function fetchWithRetry(
   requiresAuth = true,
   logTerminalFailure = true,
 ): Promise<Response> {
+  let usedServiceBinding = false;
   try {
     const headers = new Headers(options.headers || {});
     const method = (options.method ?? "GET").toUpperCase();
@@ -258,6 +260,7 @@ export async function fetchWithRetry(
 
     let response: Response;
     if (import.meta.env.SSR && backendApi && url.startsWith(getApiBaseUrl())) {
+      usedServiceBinding = true;
       const serviceBindingTimeout = canFallbackToHttp
         ? Math.min(timeout, SERVICE_BINDING_READ_TIMEOUT_MS)
         : timeout;
@@ -275,7 +278,7 @@ export async function fetchWithRetry(
           "Storefront API service binding",
         );
       } catch (error: unknown) {
-        if (!canFallbackToHttp) {
+        if (!canFallbackToHttp || error instanceof StorefrontFetchTimeoutError) {
           throw error;
         }
         console.warn(
@@ -333,7 +336,11 @@ export async function fetchWithRetry(
 
     return response;
   } catch (error: unknown) {
-    if (retries > 0) {
+    if (
+      retries > 0 &&
+      !usedServiceBinding &&
+      !(error instanceof StorefrontFetchTimeoutError)
+    ) {
       console.warn(`Fetch to ${url} failed. Retrying... (${retries} left)`);
       await new Promise((resolve) => setTimeout(resolve, 300 * (3 - retries)));
       return fetchWithRetry(

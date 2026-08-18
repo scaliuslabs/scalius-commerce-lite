@@ -41,7 +41,12 @@ describe("storefront browser API URL policy", () => {
     expect(source).toContain(
       "/^\\/api\\/v1\\/(auth|customer|checkout|orders?|payments?|refunds?|webhooks?|scanner|setup)\\b/i",
     );
-    expect(source).toContain("if (!canFallbackToHttp) {");
+    expect(source).toContain(
+      "!canFallbackToHttp || error instanceof StorefrontFetchTimeoutError",
+    );
+    expect(source).toContain(
+      "!usedServiceBinding &&",
+    );
     expect(source).toContain("throw error;");
     expect(source).toContain("falling back to HTTPS API");
     expect(source).toContain("Storefront API HTTPS fallback");

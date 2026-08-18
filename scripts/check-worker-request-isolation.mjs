@@ -76,7 +76,7 @@ for (const [relativePath, forbiddenValues] of rules) {
   }
 }
 
-const appPath = "apps/api/src/app.ts";
+const appPath = "apps/api/src/runtime/base-app.ts";
 const appSource = readFileSync(resolve(root, appPath), "utf8");
 if (
   !appSource.includes("withPublicMediaUrl(") ||

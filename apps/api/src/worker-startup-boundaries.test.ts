@@ -8,6 +8,22 @@ type TestApiWorker = {
   scheduled(controller: ScheduledController): Promise<void>;
 };
 
+type RuntimeAppName = "probe" | "public" | "admin" | "system" | "docs";
+type ExpectedRuntime = RuntimeAppName | "direct";
+
+function mockRuntimeApps(loaded: Record<RuntimeAppName, boolean>) {
+  for (const name of Object.keys(loaded) as RuntimeAppName[]) {
+    vi.doMock(`./runtime/${name}-app`, () => {
+      loaded[name] = true;
+      return {
+        default: {
+          fetch: vi.fn(() => new Response(name)),
+        },
+      };
+    });
+  }
+}
+
 vi.mock("cloudflare:workers", () => ({
   WorkerEntrypoint: class {
     env: Env;
@@ -28,6 +44,11 @@ vi.mock("cloudflare:workers", () => ({
 describe("API Worker startup boundaries", () => {
   afterEach(() => {
     vi.doUnmock("./app");
+    vi.doUnmock("./runtime/probe-app");
+    vi.doUnmock("./runtime/public-app");
+    vi.doUnmock("./runtime/admin-app");
+    vi.doUnmock("./runtime/system-app");
+    vi.doUnmock("./runtime/docs-app");
     vi.doUnmock("./queue-consumer");
     vi.doUnmock("./scheduled-maintenance");
     vi.doUnmock("./agent-access/oauth");
@@ -36,21 +57,18 @@ describe("API Worker startup boundaries", () => {
     vi.resetModules();
   });
 
-  it("does not load HTTP, queue, or scheduled graphs when the entrypoint module is imported", async () => {
+  it("does not load HTTP route families, queue, or scheduled graphs when the entrypoint module is imported", async () => {
     const loaded = {
-      app: false,
+      probe: false,
+      public: false,
+      admin: false,
+      system: false,
+      docs: false,
       queue: false,
       scheduled: false,
     };
 
-    vi.doMock("./app", () => {
-      loaded.app = true;
-      return {
-        default: {
-          fetch: vi.fn(() => new Response("ok")),
-        },
-      };
-    });
+    mockRuntimeApps(loaded);
     vi.doMock("./queue-consumer", () => {
       loaded.queue = true;
       return {
@@ -66,56 +84,80 @@ describe("API Worker startup boundaries", () => {
     await import("./worker");
 
     expect(loaded).toEqual({
-      app: false,
+      probe: false,
+      public: false,
+      admin: false,
+      system: false,
+      docs: false,
       queue: false,
       scheduled: false,
     });
   });
 
-  it("loads only the HTTP app graph for fetch invocations", async () => {
-    const loaded = {
-      app: false,
-      queue: false,
-      scheduled: false,
-    };
-    const fetch = vi.fn(() => new Response("ok"));
+  it.each([
+    ["direct", "/api/v1/health"],
+    ["probe", "/api/v1/readyz"],
+    ["admin", "/api/v1/admin/dashboard/activity"],
+    ["system", "/api/v1/auth/me"],
+    ["system", "/api/v1/payment/stripe/session"],
+    ["system", "/api/v1/webhooks/stripe"],
+    ["docs", "/api/v1/openapi.json"],
+    ["docs", "/api/v1/docs"],
+    ["public", "/api/v1/seo"],
+    ["public", "/api/v1/products"],
+  ] satisfies ReadonlyArray<readonly [ExpectedRuntime, string]>)(
+    "loads only the %s HTTP route family for %s",
+    async (expected, path) => {
+      const loaded: Record<RuntimeAppName, boolean> = {
+        probe: false,
+        public: false,
+        admin: false,
+        system: false,
+        docs: false,
+      };
+      mockRuntimeApps(loaded);
+      vi.doMock("./app", () => ({
+        default: { fetch: vi.fn(() => new Response("legacy")) },
+      }));
 
-    vi.doMock("./app", () => {
-      loaded.app = true;
-      return { default: { fetch } };
-    });
-    vi.doMock("./queue-consumer", () => {
-      loaded.queue = true;
-      return { handleQueueBatch: vi.fn() };
-    });
-    vi.doMock("./scheduled-maintenance", () => {
-      loaded.scheduled = true;
-      return { runScheduledMaintenance: vi.fn() };
-    });
+      const workerModule = await import("./worker");
+      const WorkerClass = expected === "public"
+        ? workerModule.PublicApi
+        : workerModule.default;
+      const worker = new WorkerClass(
+        undefined as never,
+        undefined as never,
+      ) as unknown as TestApiWorker;
+      const response = await worker.fetch(
+        new Request(`https://api.example.test${path}`),
+      );
 
-    const { default: ApiWorker } = await import("./worker");
-    const worker = new ApiWorker(
-      undefined as never,
-      undefined as never,
-    ) as unknown as TestApiWorker;
-    const response = await worker.fetch(
-      new Request("https://api.example.test/api/v1/health"),
-    );
-
-    expect(await response.text()).toBe("ok");
-    expect(fetch).toHaveBeenCalledTimes(1);
-    expect(loaded).toEqual({
-      app: true,
-      queue: false,
-      scheduled: false,
-    });
-  });
+      if (expected === "direct") {
+        expect(await response.json()).toMatchObject({ status: "ok" });
+      } else {
+        expect(await response.text()).toBe(expected);
+      }
+      expect(loaded).toEqual({
+        probe: expected === "probe",
+        public: expected === "public",
+        admin: expected === "admin",
+        system: expected === "system",
+        docs: expected === "docs",
+      });
+    },
+  );
 
   it("loads only the agent runtime graph for exact agent paths", async () => {
-    const appFetch = vi.fn(() => new Response("app"));
     const agentFetch = vi.fn(() => new Response("agent"));
+    const loaded: Record<RuntimeAppName, boolean> = {
+      probe: false,
+      public: false,
+      admin: false,
+      system: false,
+      docs: false,
+    };
     let agentLoaded = false;
-    vi.doMock("./app", () => ({ default: { fetch: appFetch } }));
+    mockRuntimeApps(loaded);
     vi.doMock("./agent-access/runtime", () => {
       agentLoaded = true;
       return {
@@ -137,12 +179,65 @@ describe("API Worker startup boundaries", () => {
 
     expect(await response.text()).toBe("agent");
     expect(agentFetch).toHaveBeenCalledTimes(1);
-    expect(appFetch).not.toHaveBeenCalled();
+    expect(loaded).toEqual({
+      probe: false,
+      public: false,
+      admin: false,
+      system: false,
+      docs: false,
+    });
+  });
+
+  it("returns unknown paths without initializing an HTTP route family", async () => {
+    const loaded: Record<RuntimeAppName, boolean> = {
+      probe: false,
+      public: false,
+      admin: false,
+      system: false,
+      docs: false,
+    };
+    mockRuntimeApps(loaded);
+
+    const { default: ApiWorker } = await import("./worker");
+    const worker = new ApiWorker(
+      undefined as never,
+      undefined as never,
+    ) as unknown as TestApiWorker;
+    const response = await worker.fetch(
+      new Request("https://api.example.test/api/v1/unknown"),
+    );
+
+    expect(response.status).toBe(404);
+    expect(loaded).toEqual({
+      probe: false,
+      public: false,
+      admin: false,
+      system: false,
+      docs: false,
+    });
+  });
+
+  it("evaluates a requested route family once per isolate", async () => {
+    let adminLoads = 0;
+    vi.doMock("./runtime/admin-app", () => {
+      adminLoads += 1;
+      return { default: { fetch: vi.fn(() => new Response("admin")) } };
+    });
+
+    const { default: ApiWorker } = await import("./worker");
+    const worker = new ApiWorker(
+      undefined as never,
+      undefined as never,
+    ) as unknown as TestApiWorker;
+    await worker.fetch(new Request("https://api.example.test/api/v1/admin/dashboard/activity"));
+    await worker.fetch(new Request("https://api.example.test/api/v1/admin/orders"));
+
+    expect(adminLoads).toBe(1);
   });
 
   it("serves only health probes while the database migration freeze is active", async () => {
     const fetch = vi.fn(() => new Response("healthy"));
-    vi.doMock("./app", () => ({ default: { fetch } }));
+    vi.doMock("./runtime/probe-app", () => ({ default: { fetch } }));
     vi.doMock("./queue-consumer", () => ({ handleQueueBatch: vi.fn() }));
     vi.doMock("./scheduled-maintenance", () => ({ runScheduledMaintenance: vi.fn() }));
 
@@ -165,8 +260,8 @@ describe("API Worker startup boundaries", () => {
       new Request("https://api.example.test/api/v1/health"),
     );
     expect(health.status).toBe(200);
-    expect(await health.text()).toBe("healthy");
-    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(await health.json()).toMatchObject({ status: "ok" });
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it("loads only the queue graph for queue invocations", async () => {

@@ -13,7 +13,6 @@ import { resolveAgentPrincipalFromBearer, resolveAgentPrincipalFromGrant } from 
 import type { AgentPrincipal } from "../agent-access/types";
 import { getAgentDispatchPrincipal } from "../agent-access/dispatch-context";
 import { isAgentRiskAllowed } from "../agent-access/types";
-import { resolveDirectAgentOperation } from "../agent-access/direct-operation";
 import {
     enforceAgentRateLimit,
     enforceAgentRequestBoundary,
@@ -333,6 +332,7 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
 
             const pathname = normalizeAdminPath(c.req.url);
             const method = c.req.method as "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+            const { resolveDirectAgentOperation } = await import("../agent-access/direct-operation");
             operation = resolveDirectAgentOperation(method, pathname);
             if (
                 !operation ||
