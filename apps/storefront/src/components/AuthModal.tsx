@@ -647,7 +647,24 @@ export default function AuthModal() {
               </div>
             )}
 
-            {error && <p className="text-xs text-destructive font-medium">{error}</p>}
+            {error && (
+              <div className="space-y-2">
+                <p className="text-xs text-destructive font-medium">{error}</p>
+                {alternateAuthIntent && alternateAuthIntent !== authIntent && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthIntent(alternateAuthIntent);
+                      setOtp("");
+                      setError("");
+                    }}
+                    className="text-xs font-medium text-primary hover:text-primary/80 transition-colors"
+                  >
+                    {getCustomerAuthAlternateIntentLabel(alternateAuthIntent)}
+                  </button>
+                )}
+              </div>
+            )}
 
             <button
               onClick={handleSendOtp}
