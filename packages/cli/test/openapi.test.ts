@@ -269,6 +269,23 @@ describe("OpenAPI operation indexing", () => {
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
+  it("loads the public contract without attaching an execution credential", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "scalius-openapi-public-"));
+    const fetch = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+      expect(new Headers(init?.headers).has("Authorization")).toBe(false);
+      return Response.json(executableSpec(), { headers: { ETag: '"public-contract"' } });
+    });
+    const runtime = createTestRuntime({
+      directory,
+      env: { SCALIUS_SERVER: "https://api.example.com" },
+      fetch: fetch as typeof globalThis.fetch,
+    });
+    const profile = await new ConfigStore(runtime).resolveProfile(undefined, false);
+
+    expect(indexOperations(await loadOpenApi(runtime, profile))).toHaveLength(6);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps a multi-step workflow on one contract and revalidates after thirty minutes", async () => {
     const directory = await mkdtemp(join(tmpdir(), "scalius-openapi-"));
     let calls = 0;
