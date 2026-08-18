@@ -1,0 +1,4 @@
+interface:
+  display_name: "Scalius Content"
+  short_description: "Pages, navigation, themes, SEO, and discovery"
+  default_prompt: "Use $scalius-content to update storefront content and verify publication."

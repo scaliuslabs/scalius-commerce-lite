@@ -323,7 +323,8 @@ export function createProgram(runtime: Runtime): Command {
         throw new CliError(2, "invalid_harness", `Harness must be one of: ${AGENT_HARNESSES.join(", ")}.`);
       }
       const result = await installSkill(runtime, options.harness as AgentHarness, options.force);
-      writeResult(runtime, globalOptions(command).output, result, `${String(result.status)}: ${String(result.path)}`);
+      const count = Array.isArray(result.skills) ? result.skills.length : 0;
+      writeResult(runtime, globalOptions(command).output, result, `${String(result.status)} ${String(count)} Scalius skills in ${String(result.root)}`);
     });
 
   return program;

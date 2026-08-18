@@ -1,4 +1,4 @@
 interface:
   display_name: "Scalius Commerce"
-  short_description: "Operate Scalius stores safely and efficiently"
-  default_prompt: "Use $scalius-commerce to complete this Scalius dashboard or storefront workflow efficiently."
+  short_description: "Connect Scalius tools and route store work"
+  default_prompt: "Use $scalius-commerce to connect Scalius and route this request to the right focused skill."

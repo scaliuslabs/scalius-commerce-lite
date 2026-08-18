@@ -1,5 +1,6 @@
-import { cp, mkdir, stat } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { randomUUID } from "node:crypto";
+import { cp, mkdir, rename, rm, stat } from "node:fs/promises";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { CliError } from "./errors.js";
 import type { Runtime } from "./types.js";
@@ -7,7 +8,15 @@ import type { Runtime } from "./types.js";
 export const AGENT_HARNESSES = ["agents", "codex", "claude", "opencode", "pi"] as const;
 export type AgentHarness = (typeof AGENT_HARNESSES)[number];
 
-const SKILL_NAME = "scalius-commerce";
+export const SCALIUS_SKILL_NAMES = [
+  "scalius-commerce",
+  "scalius-insights",
+  "scalius-catalog",
+  "scalius-content",
+  "scalius-sales",
+  "scalius-settings",
+  "scalius-storefront",
+] as const;
 const MCP_PATHS = {
   dashboard: "/api/v1/mcp/dashboard",
   storefront: "/api/v1/mcp/storefront",
@@ -117,13 +126,65 @@ function mcpInstructions(harness: AgentHarness, server?: string): Record<string,
 }
 
 export async function installSkill(runtime: Runtime, harness: AgentHarness, force: boolean): Promise<Record<string, unknown>> {
-  const source = fileURLToPath(new URL("../skill/scalius-commerce", import.meta.url));
-  const target = join(skillRoot(runtime, harness), SKILL_NAME);
-  const exists = await stat(target).then(() => true, () => false);
-  if (exists && !force) throw new CliError(5, "skill_exists", `Scalius skill already exists at '${target}'. Re-run with --force to update it.`);
-  await mkdir(dirname(target), { recursive: true, mode: 0o700 });
-  await cp(source, target, { recursive: true, force, errorOnExist: !force });
-  return { status: exists ? "updated" : "installed", path: target, skill: SKILL_NAME, harness };
+  const root = skillRoot(runtime, harness);
+  const nonce = randomUUID();
+  const entries = await Promise.all(SCALIUS_SKILL_NAMES.map(async (name) => {
+    const target = join(root, name);
+    return {
+      name,
+      source: fileURLToPath(new URL(`../skill/${name}`, import.meta.url)),
+      target,
+      stage: join(root, `.${name}.${nonce}.stage`),
+      backup: join(root, `.${name}.${nonce}.backup`),
+      exists: await stat(target).then(() => true, () => false),
+    };
+  }));
+  const existing = entries.filter((entry) => entry.exists);
+  if (existing.length > 0 && !force) {
+    throw new CliError(
+      5,
+      "skill_exists",
+      `Scalius skill suite already exists at '${existing[0]!.target}'. Re-run with --force to replace the suite.`,
+    );
+  }
+  await mkdir(root, { recursive: true, mode: 0o700 });
+
+  const staged = await Promise.allSettled(entries.map((entry) =>
+    cp(entry.source, entry.stage, { recursive: true, force: false, errorOnExist: true })
+  ));
+  if (staged.some((result) => result.status === "rejected")) {
+    await Promise.all(entries.map((entry) => rm(entry.stage, { recursive: true, force: true })));
+    throw new CliError(8, "skill_install_failed", "Unable to stage the bundled Scalius skill suite.");
+  }
+
+  const backedUp: typeof entries = [];
+  const promoted: typeof entries = [];
+  try {
+    for (const entry of existing) {
+      await rename(entry.target, entry.backup);
+      backedUp.push(entry);
+    }
+    for (const entry of entries) {
+      await rename(entry.stage, entry.target);
+      promoted.push(entry);
+    }
+  } catch {
+    for (const entry of [...promoted].reverse()) {
+      await rm(entry.target, { recursive: true, force: true }).catch(() => undefined);
+    }
+    for (const entry of [...backedUp].reverse()) {
+      await rename(entry.backup, entry.target).catch(() => undefined);
+    }
+    await Promise.all(entries.map((entry) => rm(entry.stage, { recursive: true, force: true })));
+    throw new CliError(8, "skill_install_failed", "Unable to replace the bundled Scalius skill suite.");
+  }
+  await Promise.all(backedUp.map((entry) => rm(entry.backup, { recursive: true, force: true })));
+  return {
+    status: existing.length > 0 ? "updated" : "installed",
+    root,
+    skills: entries.map((entry) => ({ name: entry.name, path: entry.target })),
+    harness,
+  };
 }
 
 export async function setupHarness(
@@ -131,12 +192,12 @@ export async function setupHarness(
   options: { harness: AgentHarness; force: boolean; server?: string },
 ): Promise<Record<string, unknown>> {
   const mcp = mcpInstructions(options.harness, options.server);
-  const skill = await installSkill(runtime, options.harness, options.force);
+  const skills = await installSkill(runtime, options.harness, options.force);
   return {
     status: "ready_for_mcp",
     harness: options.harness,
-    skill,
+    skills,
     mcp,
-    operatingLoop: "Resolve the goal, describe only selected operations, execute, then verify with a bounded read. Load only the relevant focused skill.",
+    operatingLoop: "Try one projected workflow read for data questions; otherwise resolve the goal, describe only selected operations, execute, and verify. Load only the relevant focused skill.",
   };
 }
