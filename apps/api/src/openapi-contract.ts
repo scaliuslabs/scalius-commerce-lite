@@ -1,5 +1,9 @@
 import { getRoutePermission } from "@scalius/core/auth/rbac/route-permissions";
 import {
+  buildAgentWorkflowCatalog,
+  type AgentWorkflowCatalog,
+} from "./agent-access/workflows";
+import {
   AGENT_OPERATION_ID_PATTERN,
   buildAgentOperationManifest,
   type AgentOperationMetadata,
@@ -27,6 +31,7 @@ export type OpenApiDocument = {
     [key: string]: unknown;
   };
   paths?: Record<string, OpenApiPathItem | unknown>;
+  "x-scalius-workflows"?: AgentWorkflowCatalog;
   [key: string]: unknown;
 };
 
@@ -1111,6 +1116,7 @@ const PLATFORM_SETTINGS_OPERATION_TUPLES: readonly DashboardOperationTuple[] = [
   ["dashboard.seo.settings_get", "read", false, "none", "none", "parallel"],
   ["dashboard.seo.settings_update", "write", false, "none", "none", "sequential"],
   ["dashboard.seo.feed_diagnostics", "read", false, "none", "none", "parallel"],
+  ["dashboard.seo.feed_row_preview", "read", false, "none", "none", "sequential"],
   ["dashboard.seo.live_probe", "read", true, "none", "none", "sequential"],
   ["dashboard.security.policy_get", "read", false, "none", "none", "parallel"],
   ["dashboard.security.policy_update", "security", false, "none", "none", "sequential"],
@@ -1140,6 +1146,7 @@ const PLATFORM_SETTINGS_BOUNDS: Readonly<
   "dashboard.seo.settings_get": { request: 16_384, response: 65_536 },
   "dashboard.seo.settings_update": { request: 65_536, response: 16_384 },
   "dashboard.seo.feed_diagnostics": { request: 16_384, response: 65_536 },
+  "dashboard.seo.feed_row_preview": { request: 16_384, response: 47_104 },
   "dashboard.seo.live_probe": { request: 16_384, response: 65_536 },
   "dashboard.security.policy_get": { request: 16_384, response: 65_536 },
   "dashboard.security.policy_update": { request: 131_072, response: 8_192 },
@@ -2823,5 +2830,8 @@ export function finalizeOpenApiContract<T extends { components?: unknown; paths?
   applySecuritySchemes(document);
   applyOperationContract(document);
   normalizeUnconstrainedOpenApiSchemas(document);
+  document["x-scalius-workflows"] = buildAgentWorkflowCatalog(
+    buildAgentOperationManifest(document),
+  );
   return spec;
 }

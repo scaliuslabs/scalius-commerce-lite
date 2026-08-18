@@ -47,6 +47,31 @@ function mixedAudienceSpec(): Record<string, unknown> {
   return spec;
 }
 
+function workflowSpec(): Record<string, unknown> {
+  return executableSpec({
+    "x-scalius-workflows": {
+      version: "2.0.0",
+      cards: [],
+      routes: [{
+        id: "dashboard.product-create",
+        surface: "dashboard",
+        kind: "write",
+        title: "Create a product",
+        summary: "Create one reviewed catalog product.",
+        examples: ["Create a new catalog product."],
+        tags: ["catalog", "product"],
+        operationIds: ["dashboard.products.create"],
+        requiresFacts: true,
+        requiresConfirmation: true,
+        requiresVerification: true,
+        rules: ["Collect required facts and confirm before writing."],
+      }],
+      controls: [],
+      coverage: { operations: [] },
+    },
+  });
+}
+
 function specWithCreateRequestLimit(maxRequestBytes: number): Record<string, unknown> {
   const spec = executableSpec();
   const paths = spec.paths as Record<string, Record<string, Record<string, unknown>>>;
@@ -161,6 +186,36 @@ describe("CLI program", () => {
     expect(runtime.stderrText()).toBe("");
   });
 
+  it("resolves a natural-language goal from the public workflow catalog without an execution credential", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "scalius-cli-public-workflow-"));
+    const fetch = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+      expect(new Headers(init?.headers).has("Authorization")).toBe(false);
+      return Response.json(workflowSpec(), { headers: { ETag: '"workflow-v1"' } });
+    });
+    const runtime = createTestRuntime({
+      directory,
+      env: { SCALIUS_SERVER: "https://api.example.com" },
+      fetch: fetch as typeof globalThis.fetch,
+    });
+    const exit = await runProgram(runtime, [
+      "--output", "json", "workflow", "resolve", "Please create a new catalog product.",
+    ]);
+
+    expect(exit).toBe(0);
+    expect(JSON.parse(runtime.stdoutText())).toMatchObject({
+      kind: "plan",
+      disposition: "execute",
+      plan: {
+        routeIds: ["dashboard.product-create"],
+        operationIds: ["dashboard.products.create"],
+        requiresConfirmation: true,
+      },
+    });
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(runtime.stdoutText().trim()).not.toContain("\n");
+    expect(runtime.stderrText()).toBe("");
+  });
+
   it("explicitly refreshes a cached live contract for the selected audience", async () => {
     let version = 1;
     const fetch = vi.fn(async (_input: string | URL | Request, _init?: RequestInit) => Response.json(executableSpec(), {
@@ -171,9 +226,12 @@ describe("CLI program", () => {
     expect(await runProgram(runtime, ["--output", "json", "operations", "search", "product"])).toBe(0);
     expect(await runProgram(runtime, ["--output", "json", "operations", "refresh", "--surface", "dashboard"])).toBe(0);
     expect(fetch).toHaveBeenCalledTimes(2);
-    expect(runtime.stdoutText()).toContain('"status": "refreshed"');
-    expect(runtime.stdoutText()).toContain('"surface": "dashboard"');
-    expect(runtime.stdoutText()).toContain('"operationCount": 6');
+    const outputs = runtime.stdoutText().trim().split("\n").map((line) => JSON.parse(line) as Record<string, unknown>);
+    expect(outputs.at(-1)).toMatchObject({
+      status: "refreshed",
+      surface: "dashboard",
+      operationCount: 6,
+    });
     const secondRequest = fetch.mock.calls[1]?.[1] as RequestInit | undefined;
     expect(new Headers(secondRequest?.headers).has("If-None-Match")).toBe(false);
   });

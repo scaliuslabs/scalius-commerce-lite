@@ -1,8 +1,13 @@
-import { mkdtemp, readFile } from "node:fs/promises";
+import { mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { AGENT_HARNESSES, installSkill, setupHarness } from "../src/skill.js";
+import {
+  AGENT_HARNESSES,
+  installSkill,
+  SCALIUS_SKILL_NAMES,
+  setupHarness,
+} from "../src/skill.js";
 import { createTestRuntime } from "./helpers.js";
 
 describe("portable Scalius skill and MCP setup", () => {
@@ -12,23 +17,48 @@ describe("portable Scalius skill and MCP setup", () => {
     ["claude", [".claude", "skills"]],
     ["opencode", [".config", "opencode", "skills"]],
     ["pi", [".pi", "agent", "skills"]],
-  ] as const)("installs for %s without changing the skill", async (harness, segments) => {
+  ] as const)("installs the focused suite for %s without changing its sources", async (harness, segments) => {
     const directory = await mkdtemp(join(tmpdir(), "scalius-skill-test-"));
     const runtime = createTestRuntime({ directory, env: { CODEX_HOME: join(directory, "codex-home") } });
     const installed = await installSkill(runtime, harness, false);
-    expect(installed).toMatchObject({ status: "installed", skill: "scalius-commerce", harness });
+    expect(installed).toMatchObject({
+      status: "installed",
+      harness,
+      skills: SCALIUS_SKILL_NAMES.map((name) => expect.objectContaining({ name })),
+    });
     const skill = await readFile(join(directory, ...segments, "scalius-commerce", "SKILL.md"), "utf8");
-    expect(skill).toContain("Treat the store's live operation contract as authority");
-    expect(skill).toContain("## Fast answers");
-    expect(skill).toContain("--surface dashboard|storefront");
-    const catalogMedia = await readFile(
-      join(directory, ...segments, "scalius-commerce", "references", "catalog-media.md"),
+    expect(skill).toContain("Treat the live finalized contract as authority");
+    expect(skill).toContain("## Route the task");
+    expect(skill).toContain("`workflows.read`");
+    const catalog = await readFile(
+      join(directory, ...segments, "scalius-catalog", "SKILL.md"),
       "utf8",
     );
-    expect(catalogMedia).toContain("describe `dashboard.products.create` once");
-    expect(catalogMedia).toContain("scalius media upload image-1.jpg image-2.png --yes");
+    expect(catalog).toContain("pmed");
+    expect(catalog).toContain("atomic");
     await expect(installSkill(runtime, harness, false)).rejects.toMatchObject({ errorCode: "skill_exists" });
+
+    const stale = join(directory, ...segments, "scalius-commerce", "stale.md");
+    await writeFile(stale, "must be removed", "utf8");
     await expect(installSkill(runtime, harness, true)).resolves.toMatchObject({ status: "updated" });
+    await expect(stat(stale)).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("ships valid concise trigger metadata without stale discovery instructions", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "scalius-skill-shape-"));
+    await installSkill(createTestRuntime({ directory }), "agents", false);
+    for (const name of SCALIUS_SKILL_NAMES) {
+      const root = join(directory, ".agents", "skills", name);
+      const [body, metadata] = await Promise.all([
+        readFile(join(root, "SKILL.md"), "utf8"),
+        readFile(join(root, "agents", "openai.yaml"), "utf8"),
+      ]);
+      expect(body, name).toContain(`name: ${name}`);
+      expect(body, name).not.toContain("TODO");
+      expect(body, name).not.toContain("operations.search");
+      expect(Buffer.byteLength(body), name).toBeLessThan(6 * 1024);
+      expect(metadata, name).toContain(`$${name}`);
+    }
   });
 
   it.each(["codex", "claude", "opencode"] as const)("emits two native OAuth MCP setup paths for %s", async (harness) => {

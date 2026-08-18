@@ -1,3 +1,5 @@
+import type { AgentWorkflowCatalog } from "../agent-access/workflows/types";
+
 export const AGENT_OPERATION_ID_PATTERN =
   /^(dashboard|storefront|system)(\.[a-z][a-z0-9_]*){2,}$/;
 
@@ -122,6 +124,7 @@ type OpenApiOperationLike = {
 
 export type AgentOperationOpenApiDocument = {
   paths?: Record<string, Record<string, unknown> | unknown>;
+  "x-scalius-workflows"?: AgentWorkflowCatalog;
 };
 
 const AGENT_OPERATION_SURFACES = new Set<AgentOperationSurface>([
@@ -1010,6 +1013,7 @@ export function buildAgentOperationManifest(
 
 export function renderAgentOperationManifestModule(
   entries: readonly AgentOperationManifestEntry[],
+  workflowCatalog: AgentWorkflowCatalog,
 ): string {
-  return `// This file is generated from the finalized /api/v1 OpenAPI contract.\n// Do not edit by hand.\n\nimport type { AgentOperationManifestEntry } from "../openapi/agent-operation-manifest";\n\nexport const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = ${JSON.stringify(entries, null, 2)};\n\nexport const AGENT_OPERATIONS_BY_ID: Readonly<Record<string, AgentOperationManifestEntry>> = Object.freeze(\n  Object.fromEntries(AGENT_OPERATIONS.map((operation) => [operation.operationId, operation])),\n);\n`;
+  return `// This file is generated from the finalized /api/v1 OpenAPI contract.\n// Do not edit by hand.\n\nimport type { AgentWorkflowCatalog } from "../agent-access/workflows/types";\nimport type { AgentOperationManifestEntry } from "../openapi/agent-operation-manifest";\n\nexport const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = ${JSON.stringify(entries, null, 2)};\n\nexport const AGENT_OPERATIONS_BY_ID: Readonly<Record<string, AgentOperationManifestEntry>> = Object.freeze(\n  Object.fromEntries(AGENT_OPERATIONS.map((operation) => [operation.operationId, operation])),\n);\n\nexport const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = ${JSON.stringify(workflowCatalog, null, 2)};\n`;
 }

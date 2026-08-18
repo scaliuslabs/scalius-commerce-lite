@@ -1,0 +1,4 @@
+interface:
+  display_name: "Scalius Sales"
+  short_description: "Orders, customers, promotions, and payments"
+  default_prompt: "Use $scalius-sales to complete and verify this sales workflow safely."

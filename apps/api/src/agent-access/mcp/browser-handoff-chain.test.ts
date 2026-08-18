@@ -212,11 +212,11 @@ describe("MCP secure browser handoff chain", () => {
       env,
       ctx: { waitUntil: vi.fn() } as unknown as ExecutionContext,
     });
-    const execute = Reflect.get(server, "_registeredTools")?.["operations.execute"]
+    const read = Reflect.get(server, "_registeredTools")?.["operations.read"]
       ?.handler as ((input: unknown) => Promise<Record<string, unknown>>) | undefined;
-    expect(execute).toBeTypeOf("function");
+    expect(read).toBeTypeOf("function");
 
-    const result = await execute!({
+    const result = await read!({
       operationId: operation!.operationId,
       input: { body: { path: "/products/example", device: "desktop" } },
     });
