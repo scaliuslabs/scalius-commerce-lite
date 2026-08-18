@@ -593,6 +593,37 @@ async function getActiveCustomerByEmailForSignIn(db: Database, email: string): P
     return matches[0] ?? null;
 }
 
+async function requireClaimedCustomerAccountForSignIn(
+    db: Database,
+    method: "email" | "phone",
+    identifier: string,
+): Promise<CustomerAuthProfileRow> {
+    const existing = method === "email"
+        ? await getActiveCustomerByEmailForSignIn(db, identifier)
+        : await getActiveCustomerByPhone(db, identifier);
+
+    if (existing?.accountClaimedAt) {
+        return existing;
+    }
+
+    const deleted = method === "email"
+        ? await getDeletedCustomerByEmail(db, identifier)
+        : await getDeletedCustomerByPhone(db, identifier);
+    if (deleted) {
+        throw new ValidationError(
+            method === "email"
+                ? "This email belongs to a deleted customer account. Contact store support to restore access."
+                : "This phone number belongs to a deleted customer account. Contact store support to restore access.",
+        );
+    }
+
+    throw new ValidationError(
+        method === "email"
+            ? "No account was found for this email. Create an account instead."
+            : "No account was found for this phone number. Create an account instead.",
+    );
+}
+
 async function resolveActiveCustomerLocation(
     db: Database,
     input: { city: string | null; zone: string | null; area: string | null },
@@ -663,8 +694,8 @@ async function resolveActiveCustomerLocation(
 
 /**
  * Handles OTP generation, rate limiting, and queueing for delivery.
- * Send-time checks intentionally avoid account existence lookups so registration
- * state is disclosed only after a valid OTP proves contact ownership.
+ * Sign-in requests require a claimed active customer account before any OTP
+ * delivery state is created. Sign-up duplicate checks still happen after proof.
  * Returns a queue payload that the route should send to AUTH_OTP_QUEUE.
  *
  * @throws {ValidationError} if the identifier is missing or malformed
@@ -713,6 +744,24 @@ export async function sendOtp(
         email: input.email,
         phone: input.phone,
     }, phoneCountryPolicy);
+
+    if (intent === "sign_in") {
+        try {
+            await requireClaimedCustomerAccountForSignIn(db, method, normalizedIdentifier);
+        } catch (dbError: unknown) {
+            if (dbError instanceof ValidationError) {
+                await enforceCustomerAuthOtpIpRateLimit(db, {
+                    ip,
+                    hashKey: input.encryptionKey,
+                });
+                throw dbError;
+            }
+            console.warn("[CustomerAuth] Account preflight failed", {
+                errorType: dbError instanceof Error ? dbError.name : typeof dbError,
+            });
+            throw new ServiceUnavailableError("Customer account service is temporarily unavailable. Please try again.");
+        }
+    }
 
     const otpKey = await buildCustomerAuthOtpStorageKey(channel, normalizedIdentifier, input.encryptionKey);
     const contactEmail = getPrimaryEmail(method, normalizedIdentifier, input.email);
@@ -886,29 +935,16 @@ export async function verifyOtp(
             }, phoneCountryPolicy);
         }
 
-        const existing = method === "email"
-            ? await getActiveCustomerByEmailForSignIn(db, normalizedIdentifier)
-            : await getActiveCustomerByPhone(db, normalizedIdentifier);
-
         if (intent === "sign_in") {
-            if (!existing || !existing.accountClaimedAt) {
-                if (method === "email" && await getDeletedCustomerByEmail(db, normalizedIdentifier)) {
-                    throw new ValidationError("This email belongs to a deleted customer account. Contact store support to restore access.");
-                }
-                if (method === "phone" && await getDeletedCustomerByPhone(db, normalizedIdentifier)) {
-                    throw new ValidationError("This phone number belongs to a deleted customer account. Contact store support to restore access.");
-                }
-                throw new ValidationError(
-                    method === "email"
-                        ? "No account was found for this email. Create an account instead."
-                        : "No account was found for this phone number. Create an account instead.",
-                );
-            }
+            const existing = await requireClaimedCustomerAccountForSignIn(db, method, normalizedIdentifier);
             customerProfileRow = existing;
             customerId = existing.id;
             customerName = existing.name || name;
             resolvedEmail = existing.email || resolvedEmail;
         } else {
+            const existing = method === "email"
+                ? await getActiveCustomerByEmailForSignIn(db, normalizedIdentifier)
+                : await getActiveCustomerByPhone(db, normalizedIdentifier);
             if (existing) {
                 if (existing.accountClaimedAt) {
                     throw new ValidationError(

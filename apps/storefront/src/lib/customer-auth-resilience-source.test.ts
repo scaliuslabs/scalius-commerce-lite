@@ -107,6 +107,18 @@ describe("customer auth resilience source boundaries", () => {
     expect(source).toContain("handleOpen();");
   });
 
+  it("offers account creation directly from a send-time account-not-found error", () => {
+    const source = readStorefrontSource("src/components/AuthModal.tsx");
+    const inputStateStart = source.indexOf('{step === "input"');
+    const otpStateStart = source.indexOf('{step === "otp"');
+    const inputStateSource = source.slice(inputStateStart, otpStateStart);
+
+    expect(inputStateStart).toBeGreaterThanOrEqual(0);
+    expect(otpStateStart).toBeGreaterThan(inputStateStart);
+    expect(inputStateSource).toContain("setAuthIntent(alternateAuthIntent)");
+    expect(inputStateSource).toContain("getCustomerAuthAlternateIntentLabel(alternateAuthIntent)");
+  });
+
   it("keeps global auth hydration free of guest checkout/session network reads", () => {
     const authModalSource = readStorefrontSource("src/components/AuthModal.tsx");
     const cartSource = readStorefrontSource("src/pages/cart.astro");
