@@ -421,7 +421,7 @@ const GENERIC_LOCAL_AGE_CONTEXT =
 const REPORT_WINDOW_ENTITY =
   /\b(?:operations?|reports?|briefs?|briefings?|snapshots?|summaries?|activity)\b/gi;
 const DURATION_EXPRESSION =
-  /\b(?:\d+(?:\.\d+)?|[a-z]+)(?:\s+|-)+(?:days?|weeks?)\b/gi;
+  /\b(?:\d+(?:\.\d+)?|[a-z]+)[\s-]+(?:days?|weeks?)\b/gi;
 
 type TextRange = { start: number; end: number };
 
@@ -479,9 +479,9 @@ function normalizeSemanticPhrases(value: string): string {
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "");
   return annotateOperationalAges(normalized)
-    .replace(/\b(?:last|past|previous|rolling|current)(?:\s+|-)+30(?:\s+|-)+(?:calendar(?:\s+|-)+)?days?\b/gi, "30 day")
-    .replace(/\b(?:calendar(?:\s+|-)+)?30(?:\s+|-)+(?:calendar(?:\s+|-)+)?days?\b/gi, "30 day")
-    .replace(/\bthirty(?:\s+|-)+(?:calendar(?:\s+|-)+)?days?\b/gi, "30 day")
+    .replace(/\b(?:last|past|previous|rolling|current)[\s-]+30[\s-]+(?:calendar[\s-]+)?days?\b/gi, "30 day")
+    .replace(/\b(?:calendar[\s-]+)?30[\s-]+(?:calendar[\s-]+)?days?\b/gi, "30 day")
+    .replace(/\bthirty[\s-]+(?:calendar[\s-]+)?days?\b/gi, "30 day")
     .replace(/\baverage\s+order\s+value\b/gi, "aov")
     .replace(/\blifetime\s+value\b/gi, "ltv")
     .replace(/\bcustomer\s+acquisition\s+cost\b/gi, "cac")
@@ -497,20 +497,20 @@ function normalizeSemanticPhrases(value: string): string {
     .replace(/\bdisplay\s+marks?\b/gi, "currency symbol")
     .replace(/\bcurrency\s+identifiers?\b/gi, "currency code")
     .replace(/\bcurrency\s+marks?\b/gi, "currency symbol")
-    .replace(/\blow(?:\s+|-)+on(?:\s+|-)+hand\b/gi, "low stock")
-    .replace(/\bnear(?:\s+|-)+empty\b/gi, "low stock")
-    .replace(/\bzero(?:\s+|-)+available\b/gi, "out of stock")
-    .replace(/\bsold(?:\s+|-)+out\b/gi, "out of stock")
-    .replace(/\bstock(?:\s+|-)+shortages?\b/gi, "low stock")
-    .replace(/\bexhausted(?:\s+|-)+skus?\b/gi, "out of stock sku")
+    .replace(/\blow[\s-]+on[\s-]+hand\b/gi, "low stock")
+    .replace(/\bnear[\s-]+empty\b/gi, "low stock")
+    .replace(/\bzero[\s-]+available\b/gi, "out of stock")
+    .replace(/\bsold[\s-]+out\b/gi, "out of stock")
+    .replace(/\bstock[\s-]+shortages?\b/gi, "low stock")
+    .replace(/\bexhausted[\s-]+skus?\b/gi, "out of stock sku")
     .replace(/\bdepleted\s+inventor(?:y|ies)\b/gi, "low inventory")
-    .replace(/\b(?:uncompleted|unfinished)(?:\s+|-)+(?:cart|checkout)(?:(?:\s+|-)+flows?|s)?\b/gi, "abandoned cart")
-    .replace(/\b(?:incomplete|unconverted)(?:\s+|-)+(?:cart|checkout)(?:(?:\s+|-)+flows?|s)?\b/gi, "abandoned cart")
-    .replace(/\b(?:one\s+)?merchant(?:\s+|-)+local\s+rows?\s+per\s+business\s+date\b/gi, "daily activity date")
-    .replace(/\bmanual(?:\s+|-)+attention\b/gi, "needs attention")
-    .replace(/\bhosted(?:\s+|-)+payment\s+continuations?\b/gi, "recoverable payment backlog")
+    .replace(/\b(?:uncompleted|unfinished)[\s-]+(?:cart|checkout)(?:[\s-]+flows?|s)?\b/gi, "abandoned cart")
+    .replace(/\b(?:incomplete|unconverted)[\s-]+(?:cart|checkout)(?:[\s-]+flows?|s)?\b/gi, "abandoned cart")
+    .replace(/\b(?:one\s+)?merchant[\s-]+local\s+rows?\s+per\s+business\s+date\b/gi, "daily activity date")
+    .replace(/\bmanual[\s-]+attention\b/gi, "needs attention")
+    .replace(/\bhosted[\s-]+payment\s+continuations?\b/gi, "recoverable payment backlog")
     .replace(/\bpayment\s+rescues?\s+requiring\s+operator\s+intervention\b/gi, "payment needs attention")
-    .replace(/\brecoverable(?:\s+|-)+payments?\s+work\b/gi, "recoverable payment backlog")
+    .replace(/\brecoverable[\s-]+payments?\s+work\b/gi, "recoverable payment backlog")
     .replace(/\bvisitors?\b/gi, "traffic");
 }
 
@@ -1150,7 +1150,7 @@ function fixedCalendarWindowState(
     return (index !== undefined && operationalAges.some((range) =>
       index >= range.start && index < range.end
     )) ||
-      /\btop(?:\s+|-)*$/i.test(local) ||
+      /\btop[\s-]*$/i.test(local) ||
       AGING_CONTEXT.test(local) ||
       /\b(?:orders?|checkouts?|payments?|recover(?:y|ies)|fulfillments?)\s*$/i.test(local) ||
       /\b(?:abandoned\s+)?(?:orders?|checkouts?|payments?|recover(?:y|ies)|fulfillments?)(?:\s+(?:aged|aging|overdue|pending|stuck))?\s+(?:for|over|older\s+than)\s*$/i.test(local) ||
@@ -1206,15 +1206,15 @@ function fixedCalendarWindowState(
     if (isCooperativeLocalScope(index, result[0].length)) return false;
     if (isLocalFactWindow(before, after, index)) return false;
     if (isPeriodLabel(before, after)) return false;
-    const hasTemporalLead = /\b(?:last|past|previous|prior|preceding|current|rolling|latest|earlier|for|over|across|during|within|covering|spanning|throughout)(?:\s+(?:a|an|the))?(?:\s+|-)*$/i
+    const hasTemporalLead = /\b(?:last|past|previous|prior|preceding|current|rolling|latest|earlier|for|over|across|during|within|covering|spanning|throughout)(?:\s+(?:a|an|the))?[\s-]*$/i
       .test(before);
-    const hasCompletionTail = /^(?:\s+|-)*(?:(?:that|which)\s+)?(?:(?:just|recently|most\s+recently)\s+)?(?:completed|finished|ended)\b|^(?:\s+|-)*(?:ending|ended)\s+(?:now|today|recently)\b/i
+    const hasCompletionTail = /^[\s-]*(?:(?:that|which)\s+)?(?:(?:just|recently|most\s+recently)\s+)?(?:completed|finished|ended)\b|^[\s-]*(?:ending|ended)\s+(?:now|today|recently)\b/i
       .test(after);
     return hasTemporalLead || hasCompletionTail || hasReportContext || stronglyTargetsFixedRoute;
   };
   const shouldCollectRelativeNonDay =
     hasReportContext || dayResults.some(isReportDayScope) || stronglyTargetsFixedRoute;
-  const nonDayScope = /\b(?:(?:(?:this|last|past|previous|prior|preceding|current|rolling|latest|earlier)(?:\s+|-)+)(?:(?:fiscal|financial|calendar|accounting)(?:\s+|-)+)?|(?:(?:fiscal|financial|calendar|accounting)(?:\s+|-)+)|(?:(?:\d+(?:\.\d+)?|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)(?:\s+|-)+)(?:(?:fiscal|financial|calendar|accounting)(?:\s+|-)+)?)(?:hours?|weeks?|months?|quarters?|years?)\b/gi;
+  const nonDayScope = /\b(?:(?:(?:this|last|past|previous|prior|preceding|current|rolling|latest|earlier)[\s-]+)(?:(?:fiscal|financial|calendar|accounting)[\s-]+)?|(?:(?:fiscal|financial|calendar|accounting)[\s-]+)|(?:(?:\d+(?:\.\d+)?|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)[\s-]+)(?:(?:fiscal|financial|calendar|accounting)[\s-]+)?)(?:hours?|weeks?|months?|quarters?|years?)\b/gi;
   if (shouldCollectRelativeNonDay) {
     for (const result of normalized.matchAll(nonDayScope)) {
       const index = result.index ?? 0;
@@ -1226,7 +1226,7 @@ function fixedCalendarWindowState(
     }
   }
   if (hasReportContext) {
-    for (const result of normalized.matchAll(/\b(?:mtd|qtd|ytd|q[1-4]|(?:month|quarter|year)(?:\s+|-)+to(?:\s+|-)+date)\b/gi)) {
+    for (const result of normalized.matchAll(/\b(?:mtd|qtd|ytd|q[1-4]|(?:month|quarter|year)[\s-]+to[\s-]+date)\b/gi)) {
       if (!isCooperativeLocalScope(result.index ?? 0, result[0].length)) return "mismatch";
     }
     const dateRanges = [
