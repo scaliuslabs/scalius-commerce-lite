@@ -78,7 +78,30 @@ const batchStepSchema = z.object({
   operationId: z.string().min(1).max(240),
   input: batchOperationInputSchema.optional(),
 }).strict();
+const toolErrorSchema = z.object({
+  code: z.string().min(1).max(120),
+  message: z.string().min(1).max(1_024),
+}).strict();
+const batchStepResultSchema = z.object({
+  id: z.string().regex(AGENT_STEP_ID_PATTERN),
+  ok: z.boolean(),
+  result: z.unknown().optional(),
+  error: toolErrorSchema.optional(),
+}).strict();
+const agentToolOutputSchema = z.object({
+  ok: z.boolean(),
+  result: z.unknown().optional(),
+  results: z.array(batchStepResultSchema).max(AGENT_MAX_BATCH_STEPS).optional(),
+  operations: z.array(z.unknown()).max(AGENT_MAX_SEARCH_RESULTS).optional(),
+  count: z.number().int().min(0).max(AGENT_MAX_SEARCH_RESULTS).optional(),
+  operation: z.unknown().optional(),
+  error: toolErrorSchema.optional(),
+  truncated: z.boolean().optional(),
+  summary: z.string().max(240).optional(),
+}).strict();
 const MCP_TEXT_COMPATIBILITY_BYTES = 4 * 1024;
+const MCP_TOOL_ERROR_CODE_CHARS = 120;
+const MCP_TOOL_ERROR_MESSAGE_CHARS = 1_024;
 
 interface McpServerDependencies {
   surface: AgentResource;
@@ -86,7 +109,7 @@ interface McpServerDependencies {
   ctx: ExecutionContext;
 }
 
-export const AGENT_MCP_INSTRUCTIONS = "Search by merchant intent, describe only the selected operation, execute, then verify with a bounded read. For dependent steps, use one operations.batch call with $step references; never invent IDs, revisions, prices, stock, or secrets.";
+export const AGENT_MCP_INSTRUCTIONS = "Resolve known IDs directly; search/describe only as needed. Use operations.read/read_batch for reads and operations.write/write_batch for mutations; verify writes with a bounded read. Tools run registered operations only—never arbitrary code, HTTP, or SQL. Never invent IDs, revisions, money, stock, or secrets.";
 
 export function formatAgentToolResult(value: Record<string, unknown>) {
   const oneTimeResult = typeof value.result === "object" && value.result !== null
@@ -238,7 +261,13 @@ export function formatAgentBrowserHandoffResult(handoff: {
 }
 
 function toolError(code: string, message: string) {
-  const value = { ok: false, error: { code, message } };
+  const value = {
+    ok: false,
+    error: {
+      code: code.slice(0, MCP_TOOL_ERROR_CODE_CHARS) || "agent_tool_failed",
+      message: message.slice(0, MCP_TOOL_ERROR_MESSAGE_CHARS) || "Agent tool execution failed",
+    },
+  };
   return {
     isError: true,
     content: [{ type: "text" as const, text: JSON.stringify(value) }],
@@ -307,12 +336,36 @@ function operationQueryScore(operation: AgentOperationManifestEntry, query: stri
   return merchantOperationQueryScore(haystack, query);
 }
 
-async function executeOne(
+type AgentOperationToolMode = "read" | "write";
+type BatchStep = z.infer<typeof batchStepSchema>;
+type BatchStepResult = z.infer<typeof batchStepResultSchema>;
+
+interface PreparedBatchStep {
+  step: BatchStep;
+  operation: AgentOperationManifestEntry;
+}
+
+function assertOperationRisk(
+  operation: AgentOperationManifestEntry,
+  mode: AgentOperationToolMode,
+): void {
+  const allowed = mode === "read" ? operation.risk === "read" : operation.risk !== "read";
+  if (allowed) return;
+  throw new AgentDispatchError(
+    "operation_risk_mismatch",
+    mode === "read"
+      ? "Read tools accept only operations declared with risk read"
+      : "Write tools reject operations declared with risk read",
+    400,
+  );
+}
+
+async function getAuthorizedOperationForMode(
   deps: McpServerDependencies,
   principal: AgentPrincipal,
   operationId: string,
-  input: AgentOperationInput,
-): Promise<AgentOperationResult> {
+  mode: AgentOperationToolMode,
+): Promise<AgentOperationManifestEntry> {
   const operation = await getAuthorizedOperation(operationId, deps.surface, principal);
   if (!operation) {
     throw new AgentDispatchError(
@@ -321,7 +374,216 @@ async function executeOne(
       404,
     );
   }
+  assertOperationRisk(operation, mode);
+  return operation;
+}
+
+async function dispatchPreparedOperation(
+  deps: McpServerDependencies,
+  principal: AgentPrincipal,
+  operation: AgentOperationManifestEntry,
+  input: AgentOperationInput,
+): Promise<AgentOperationResult> {
   return dispatchAgentOperation({ operation, input, principal, env: deps.env, ctx: deps.ctx });
+}
+
+async function prepareBatchSteps(
+  deps: McpServerDependencies,
+  principal: AgentPrincipal,
+  steps: BatchStep[],
+  mode: AgentOperationToolMode,
+): Promise<PreparedBatchStep[]> {
+  if (new Set(steps.map((step) => step.id)).size !== steps.length) {
+    throw new AgentDispatchError("duplicate_step_id", "Batch step IDs must be unique", 400);
+  }
+  const prepared: PreparedBatchStep[] = [];
+  for (const step of steps) {
+    const operation = await getAuthorizedOperationForMode(
+      deps,
+      principal,
+      step.operationId,
+      mode,
+    );
+    if (operation.batch === "forbidden") {
+      throw new AgentDispatchError(
+        "batch_forbidden",
+        `Step ${step.id} cannot run in a batch`,
+        400,
+      );
+    }
+    prepared.push({ step, operation });
+  }
+  return prepared;
+}
+
+async function executeBatchStep(
+  deps: McpServerDependencies,
+  principal: AgentPrincipal,
+  prepared: PreparedBatchStep,
+  input: AgentOperationInput,
+): Promise<BatchStepResult> {
+  try {
+    const result = await dispatchPreparedOperation(
+      deps,
+      principal,
+      prepared.operation,
+      input,
+    );
+    return { id: prepared.step.id, ok: result.ok, result };
+  } catch (error) {
+    return {
+      id: prepared.step.id,
+      ok: false,
+      error: safeToolError(error).structuredContent.error,
+    };
+  }
+}
+
+async function executeReadBatch(
+  deps: McpServerDependencies,
+  principal: AgentPrincipal,
+  prepared: PreparedBatchStep[],
+  stopOnError: boolean,
+): Promise<BatchStepResult[]> {
+  const completed = new Map<string, unknown>();
+  const results: BatchStepResult[] = [];
+  let index = 0;
+  while (index < prepared.length) {
+    const current = prepared[index]!;
+    const wave: PreparedBatchStep[] = [];
+    while (index < prepared.length && wave.length < AGENT_MAX_PARALLEL_READS) {
+      const candidate = prepared[index]!;
+      if (
+        candidate.operation.batch !== "parallel" ||
+        containsStepReference(candidate.step.input)
+      ) break;
+      wave.push(candidate);
+      index += 1;
+    }
+
+    if (wave.length > 0) {
+      const waveResults = await Promise.all(wave.map((candidate) =>
+        executeBatchStep(
+          deps,
+          principal,
+          candidate,
+          (candidate.step.input ?? {}) as AgentOperationInput,
+        )
+      ));
+      for (const item of waveResults) {
+        results.push(item);
+        completed.set(item.id, item.result ?? item.error);
+      }
+      if (stopOnError && waveResults.some((item) => !item.ok)) break;
+      continue;
+    }
+
+    index += 1;
+    let item: BatchStepResult;
+    try {
+      const resolvedInput = resolveStepReferences(
+        current.step.input ?? {},
+        completed,
+      ) as AgentOperationInput;
+      item = await executeBatchStep(deps, principal, current, resolvedInput);
+    } catch (error) {
+      item = {
+        id: current.step.id,
+        ok: false,
+        error: safeToolError(error).structuredContent.error,
+      };
+    }
+    results.push(item);
+    completed.set(item.id, item.result ?? item.error);
+    if (stopOnError && !item.ok) break;
+  }
+  return results;
+}
+
+async function executeWriteBatch(
+  deps: McpServerDependencies,
+  principal: AgentPrincipal,
+  prepared: PreparedBatchStep[],
+): Promise<BatchStepResult[]> {
+  const completed = new Map<string, unknown>();
+  const results: BatchStepResult[] = [];
+  for (const current of prepared) {
+    let item: BatchStepResult;
+    try {
+      const resolvedInput = resolveStepReferences(
+        current.step.input ?? {},
+        completed,
+      ) as AgentOperationInput;
+      item = await executeBatchStep(deps, principal, current, resolvedInput);
+    } catch (error) {
+      item = {
+        id: current.step.id,
+        ok: false,
+        error: safeToolError(error).structuredContent.error,
+      };
+    }
+    results.push(item);
+    completed.set(item.id, item.result ?? item.error);
+    if (!item.ok) break;
+  }
+  return results;
+}
+
+async function executeSingleTool(
+  deps: McpServerDependencies,
+  mode: AgentOperationToolMode,
+  operationId: string,
+  input: AgentOperationInput,
+) {
+  // The dispatch boundary charges normal operations. Required client actions
+  // do not dispatch, so they charge explicitly before returning their contract.
+  const principal = await resolveToolPrincipal(deps);
+  if (!principal) {
+    throw new AgentDispatchError("unauthorized", "Agent grant is inactive", 401);
+  }
+  const operation = await getAuthorizedOperationForMode(
+    deps,
+    principal,
+    operationId,
+    mode,
+  );
+  if (operation.requiredClientAction) {
+    if (!(await checkAgentRateLimit(deps.env, `grant:${principal.grantId}`))) {
+      throw new AgentDispatchError(
+        "rate_limited",
+        "Agent request rate limit exceeded",
+        429,
+      );
+    }
+    const result = buildAgentRequiredClientAction(operation, input, deps.env);
+    return formatAgentToolResult({ ok: true, result });
+  }
+  const result = await dispatchPreparedOperation(deps, principal, operation, input);
+  if (result.sensitiveContinuation !== true) {
+    return formatAgentToolResult({ ok: result.ok, result });
+  }
+  const continuation = result.data && typeof result.data === "object"
+    ? (result.data as { continuation?: unknown }).continuation
+    : null;
+  if (!continuation || typeof continuation !== "object") {
+    throw new AgentDispatchError(
+      "invalid_continuation_response",
+      "Operation returned an invalid continuation",
+      502,
+    );
+  }
+  const handoff = await createAgentBrowserHandoff(
+    getDb(deps.env),
+    principal,
+    operation.operationId,
+    continuation as {
+      url: string;
+      method: "POST";
+      fields: Record<string, string>;
+    },
+    deps.env,
+  );
+  return formatAgentBrowserHandoffResult(handoff);
 }
 
 export function createAgentMcpServer(deps: McpServerDependencies): McpServer {
@@ -343,6 +605,7 @@ export function createAgentMcpServer(deps: McpServerDependencies): McpServer {
         limit: z.number().int().min(1).max(AGENT_MAX_SEARCH_RESULTS)
           .default(AGENT_DEFAULT_SEARCH_RESULTS),
       }).strict(),
+      outputSchema: agentToolOutputSchema,
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -384,6 +647,7 @@ export function createAgentMcpServer(deps: McpServerDependencies): McpServer {
         operationId: z.string().min(1).max(240),
         full: z.boolean().default(false),
       }).strict(),
+      outputSchema: agentToolOutputSchema,
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -407,14 +671,71 @@ export function createAgentMcpServer(deps: McpServerDependencies): McpServer {
   );
 
   server.registerTool(
-    "operations.execute",
+    "operations.read",
     {
-      title: "Execute operation",
-      description: "Execute one fixed, authorized OpenAPI operation in-process.",
+      title: "Read operation",
+      description: "Run one fixed, authorized operation declared with risk read.",
       inputSchema: z.object({
         operationId: z.string().min(1).max(240),
         input: operationInputSchema.optional(),
       }).strict(),
+      outputSchema: agentToolOutputSchema,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
+    },
+    async ({ operationId, input }) => {
+      try {
+        return await executeSingleTool(deps, "read", operationId, input ?? {});
+      } catch (error) {
+        return safeToolError(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "operations.read_batch",
+    {
+      title: "Read operation batch",
+      description: "Run up to 20 authorized read operations. Independent parallel-eligible reads use at most two lanes; $step references create ordered waves.",
+      inputSchema: z.object({
+        steps: z.array(batchStepSchema).min(1).max(AGENT_MAX_BATCH_STEPS),
+        stopOnError: z.boolean().default(true),
+      }).strict(),
+      outputSchema: agentToolOutputSchema,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
+    },
+    async ({ steps, stopOnError }) => {
+      try {
+        // Batch requests charge once here plus once in each dispatched step.
+        const principal = await requireToolPrincipal(deps);
+        const prepared = await prepareBatchSteps(deps, principal, steps, "read");
+        const results = await executeReadBatch(deps, principal, prepared, stopOnError);
+        return formatAgentToolResult({ ok: results.every((result) => result.ok), results });
+      } catch (error) {
+        return safeToolError(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "operations.write",
+    {
+      title: "Write operation",
+      description: "Run one fixed, authorized write, destructive, financial, or security operation.",
+      inputSchema: z.object({
+        operationId: z.string().min(1).max(240),
+        input: operationInputSchema.optional(),
+      }).strict(),
+      outputSchema: agentToolOutputSchema,
       annotations: {
         readOnlyHint: false,
         destructiveHint: true,
@@ -424,63 +745,7 @@ export function createAgentMcpServer(deps: McpServerDependencies): McpServer {
     },
     async ({ operationId, input }) => {
       try {
-        // The dispatch boundary charges the single execute operation. Batch
-        // requests charge once here plus once for every step below.
-        const principal = await resolveToolPrincipal(deps);
-        if (!principal) {
-          throw new AgentDispatchError("unauthorized", "Agent grant is inactive", 401);
-        }
-        const operation = await getAuthorizedOperation(operationId, deps.surface, principal);
-        if (!operation) {
-          throw new AgentDispatchError(
-            "operation_not_found",
-            "Operation is unavailable or not authorized",
-            404,
-          );
-        }
-        if (operation.requiredClientAction) {
-          if (!(await checkAgentRateLimit(deps.env, `grant:${principal.grantId}`))) {
-            throw new AgentDispatchError(
-              "rate_limited",
-              "Agent request rate limit exceeded",
-              429,
-            );
-          }
-          const result = buildAgentRequiredClientAction(operation, input ?? {}, deps.env);
-          return formatAgentToolResult({ ok: true, result });
-        }
-        const result = await dispatchAgentOperation({
-          operation,
-          input: input ?? {},
-          principal,
-          env: deps.env,
-          ctx: deps.ctx,
-        });
-        if (result.sensitiveContinuation === true) {
-          const continuation = result.data && typeof result.data === "object"
-            ? (result.data as { continuation?: unknown }).continuation
-            : null;
-          if (!continuation || typeof continuation !== "object") {
-            throw new AgentDispatchError(
-              "invalid_continuation_response",
-              "Operation returned an invalid continuation",
-              502,
-            );
-          }
-          const handoff = await createAgentBrowserHandoff(
-            getDb(deps.env),
-            principal,
-            operation.operationId,
-            continuation as {
-              url: string;
-              method: "POST";
-              fields: Record<string, string>;
-            },
-            deps.env,
-          );
-          return formatAgentBrowserHandoffResult(handoff);
-        }
-        return formatAgentToolResult({ ok: result.ok, result });
+        return await executeSingleTool(deps, "write", operationId, input ?? {});
       } catch (error) {
         return safeToolError(error);
       }
@@ -488,14 +753,14 @@ export function createAgentMcpServer(deps: McpServerDependencies): McpServer {
   );
 
   server.registerTool(
-    "operations.batch",
+    "operations.write_batch",
     {
-      title: "Execute operation batch",
-      description: "Execute up to 20 authorized operations. Later inputs may use {$step:'id',pointer:'/data/data/id'}; writes are sequential and reads use at most two lanes.",
+      title: "Write operation batch",
+      description: "Run up to 20 authorized non-read operations sequentially, stopping on the first failed step. Later inputs may use $step references.",
       inputSchema: z.object({
         steps: z.array(batchStepSchema).min(1).max(AGENT_MAX_BATCH_STEPS),
-        stopOnError: z.boolean().default(true),
       }).strict(),
+      outputSchema: agentToolOutputSchema,
       annotations: {
         readOnlyHint: false,
         destructiveHint: true,
@@ -503,80 +768,12 @@ export function createAgentMcpServer(deps: McpServerDependencies): McpServer {
         openWorldHint: true,
       },
     },
-    async ({ steps, stopOnError }) => {
+    async ({ steps }) => {
       try {
+        // All steps are authorized and risk-checked before the first mutation.
         const principal = await requireToolPrincipal(deps);
-        if (new Set(steps.map((step) => step.id)).size !== steps.length) {
-          return toolError("duplicate_step_id", "Batch step IDs must be unique");
-        }
-
-        const completed = new Map<string, unknown>();
-        const results: Array<{ id: string; ok: boolean; result?: unknown; error?: unknown }> = [];
-        let index = 0;
-        while (index < steps.length) {
-          const step = steps[index]!;
-          const operation = await getAuthorizedOperation(step.operationId, deps.surface, principal);
-          if (!operation || operation.batch === "forbidden") {
-            const failed = { id: step.id, ok: false, error: { code: "batch_forbidden", message: "Operation cannot run in a batch" } };
-            results.push(failed);
-            if (stopOnError) break;
-            index += 1;
-            continue;
-          }
-
-          const candidates: typeof steps = [];
-          while (index < steps.length && candidates.length < AGENT_MAX_PARALLEL_READS) {
-            const candidate = steps[index]!;
-            const candidateOperation = await getAuthorizedOperation(candidate.operationId, deps.surface, principal);
-            if (
-              !candidateOperation ||
-              candidateOperation.risk !== "read" ||
-              candidateOperation.batch !== "parallel" ||
-              containsStepReference(candidate.input)
-            ) break;
-            candidates.push(candidate);
-            index += 1;
-          }
-
-          if (candidates.length > 0) {
-            const wave = await Promise.all(candidates.map(async (candidate) => {
-              try {
-                const result = await executeOne(
-                  deps,
-                  principal,
-                  candidate.operationId,
-                  (candidate.input ?? {}) as AgentOperationInput,
-                );
-                return { id: candidate.id, ok: result.ok, result };
-              } catch (error) {
-                const safe = safeToolError(error).structuredContent;
-                return { id: candidate.id, ok: false, error: safe.error };
-              }
-            }));
-            for (const item of wave) {
-              results.push(item);
-              completed.set(item.id, item.result ?? item.error);
-            }
-            if (stopOnError && wave.some((item) => !item.ok)) break;
-            continue;
-          }
-
-          index += 1;
-          try {
-            const resolvedInput = resolveStepReferences(step.input ?? {}, completed) as AgentOperationInput;
-            const result = await executeOne(deps, principal, step.operationId, resolvedInput);
-            const item = { id: step.id, ok: result.ok, result };
-            results.push(item);
-            completed.set(step.id, result);
-            if (stopOnError && !result.ok) break;
-          } catch (error) {
-            const safe = safeToolError(error).structuredContent;
-            const item = { id: step.id, ok: false, error: safe.error };
-            results.push(item);
-            completed.set(step.id, safe.error);
-            if (stopOnError) break;
-          }
-        }
+        const prepared = await prepareBatchSteps(deps, principal, steps, "write");
+        const results = await executeWriteBatch(deps, principal, prepared);
         return formatAgentToolResult({ ok: results.every((result) => result.ok), results });
       } catch (error) {
         return safeToolError(error);
