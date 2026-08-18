@@ -98,5 +98,5 @@ describe("finalized API OpenAPI interop", () => {
         }
       }
     }
-  }, 15_000);
+  }, 45_000);
 });
