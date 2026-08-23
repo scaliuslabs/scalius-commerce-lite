@@ -19,6 +19,7 @@ type ReceiptRow = {
 type AttemptRow = {
   orderId: string;
   status: string;
+  createdAt: number;
 };
 
 function createReceiptDb(options: {
@@ -135,6 +136,7 @@ describe("order receipts", () => {
       attempt: {
         orderId: "order_1",
         status: "committed",
+        createdAt: 50,
       },
     });
 
@@ -151,6 +153,7 @@ describe("order receipts", () => {
       attempt: {
         orderId: "order_1",
         status: "committed",
+        createdAt: 50,
       },
     });
 
@@ -200,6 +203,7 @@ describe("order receipts", () => {
       attempt: {
         orderId: "order_1",
         status: "processing",
+        createdAt: 50,
       },
     });
 
@@ -214,6 +218,23 @@ describe("order receipts", () => {
       orderId: "order_1",
       shouldRepairKv: false,
     });
+    expect(inserted).toHaveLength(0);
+  });
+
+  it("rejects checkout-attempt compatibility proof after the receipt lifetime", async () => {
+    const { db, inserted } = createReceiptDb({
+      attempt: {
+        orderId: "order_1",
+        status: "committed",
+        createdAt: 100,
+      },
+    });
+
+    await expect(validateOrderReceiptProof(db, {
+      orderId: "order_1",
+      token: "chk_valid",
+      nowSeconds: 100 + (60 * 60 * 24 * 7),
+    })).resolves.toBeNull();
     expect(inserted).toHaveLength(0);
   });
 });

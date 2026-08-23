@@ -65,10 +65,12 @@ describe("order success side effects", () => {
     expect(pageSource).toContain("orderId={order.id}");
     expect(pageSource).toContain("supportRequests={order.supportRequests}");
     expect(pageSource).toContain("supportRequestActions={order.supportRequestActions}");
-    expect(pageSource).toContain("supportRequestIntro={order.supportRequestIntro}");
-    expect(buttonsSource).toContain("Track this order from any device");
-    expect(buttonsSource).toContain("We securely add the order if it is not already saved there.");
+    expect(buttonsSource).toContain("Save this order to your account");
+    expect(buttonsSource).toContain("Create an account with the phone saved on this order");
+    expect(buttonsSource).toContain("sign in with a matching phone or email");
     expect(buttonsSource).not.toContain("navigator.clipboard");
+    expect(buttonsSource).not.toContain("opacity-0");
+    expect(buttonsSource).toContain('href="/"');
     expect(buttonsSource).toContain("/api/order-receipt/claim-account");
     expect(buttonsSource).toContain("Create account");
     expect(buttonsSource).toContain("Sign in");
@@ -86,15 +88,10 @@ describe("order success side effects", () => {
       "utf8",
     );
 
-    expect(buttonsSource).toContain("Need help with this order?");
+    expect(buttonsSource).toContain("Need help?");
     expect(buttonsSource).toContain("/api/order-support/receipt-request");
     expect(buttonsSource).toContain("setSupportRequests(payload.data.supportRequests");
-    expect(buttonsSource).toContain("supportRequestIntro: initialSupportRequestIntro =");
-    expect(buttonsSource).toContain("useState(initialSupportRequestIntro)");
-    expect(buttonsSource).toContain("{supportRequestIntro}");
-    expect(buttonsSource).toContain(
-      "setSupportRequestIntro(payload.data.supportRequestIntro ?? initialSupportRequestIntro)",
-    );
+    expect(buttonsSource).not.toContain("supportRequestIntro: initialSupportRequestIntro =");
     expect(buttonsSource).not.toContain("getReceiptTokenFromUrl");
     expect(buttonsSource).not.toContain("receiptToken");
     expect(pageSource).not.toContain("receiptToken={");

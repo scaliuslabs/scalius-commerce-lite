@@ -26,7 +26,6 @@ describe("OrderSuccessButtons customer request policy rendering", () => {
       root.render(
         <OrderSuccessButtons
           orderId="ord_1"
-          supportRequestIntro="Choose an available request."
           supportRequestActions={[{
             type: "cancel_pre_shipment",
             label: "Request cancellation",
@@ -38,8 +37,9 @@ describe("OrderSuccessButtons customer request policy rendering", () => {
       );
     });
 
-    expect(host.textContent).toContain("Choose an available request.");
+    expect(host.textContent).toContain("Need help?");
     expect(host.textContent).toContain("Request cancellation");
+    expect(host.textContent).not.toContain("Ask the store to review this order before it ships.");
     expect(host.textContent).not.toContain("Request return");
   });
 
@@ -63,10 +63,8 @@ describe("OrderSuccessButtons customer request policy rendering", () => {
 
     const returnButton = [...host.querySelectorAll("button")]
       .find((button) => button.textContent?.includes("Request return"));
-    expect(returnButton?.disabled).toBe(true);
-    expect(returnButton?.textContent).toContain(
-      "Return requests are available after the order ships.",
-    );
+    expect(returnButton).toBeUndefined();
+    expect(host.textContent).toContain("Return requests are available after the order ships.");
   });
 
   it("shows accepted request progress instead of stale review copy", () => {
@@ -138,7 +136,7 @@ describe("OrderSuccessButtons customer request policy rendering", () => {
 
     expect(host.textContent).toContain("Cancellation request rejected");
     expect(host.textContent).toContain("Request cancellation");
-    expect(host.querySelector('button:not([disabled])')?.textContent).toContain("Continue shopping");
+    expect(host.querySelector('a[href="/"]')?.textContent).toContain("Continue shopping");
     expect([...host.querySelectorAll("button")].some((button) =>
       button.textContent?.includes("Request cancellation") && !button.disabled
     )).toBe(true);

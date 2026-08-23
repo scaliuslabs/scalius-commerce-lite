@@ -10,6 +10,25 @@ import {
   resolveOrderSuccessRetryPaymentType,
 } from "./order-success-payment-retry";
 
+function makeRetryOrder(overrides: Partial<{
+  paymentMethod: string;
+  status: string;
+  paymentStatus: string;
+  totalAmount: number;
+  paidAmount: number;
+  balanceDue: number;
+}> = {}) {
+  return {
+    paymentMethod: "sslcommerz",
+    status: "incomplete",
+    paymentStatus: "unpaid",
+    totalAmount: 1200,
+    paidAmount: 0,
+    balanceDue: 1200,
+    ...overrides,
+  };
+}
+
 describe("order success payment retry", () => {
   it("allows receipt-page retry for online gateway cancel and failure returns", () => {
     expect(isRetryableHostedPaymentMethod("sslcommerz")).toBe(true);
@@ -23,7 +42,7 @@ describe("order success payment retry", () => {
 
     expect(
       canRetryOrderSuccessPayment(
-        { paymentMethod: "sslcommerz" },
+        makeRetryOrder(),
         "payment_pending",
         "cancelled",
       ),
@@ -33,7 +52,7 @@ describe("order success payment retry", () => {
   it("allows hosted payment-issue receipts even without a callback result", () => {
     expect(
       canRetryOrderSuccessPayment(
-        { paymentMethod: "polar" },
+        makeRetryOrder({ paymentMethod: "polar", paymentStatus: "failed" }),
         "payment_issue",
         null,
       ),
@@ -44,7 +63,7 @@ describe("order success payment retry", () => {
     expect(getOrderSuccessRetryEndpoint("cod")).toBeNull();
     expect(
       canRetryOrderSuccessPayment(
-        { paymentMethod: "sslcommerz" },
+        makeRetryOrder(),
         "payment_pending",
         null,
       ),
@@ -54,7 +73,7 @@ describe("order success payment retry", () => {
   it("offers every visible online method for an explicitly cancelled receipt", () => {
     expect(
       getOrderSuccessRetryOptions(
-        { paymentMethod: "sslcommerz" },
+        makeRetryOrder(),
         "payment_pending",
         "cancelled",
         [
@@ -76,14 +95,14 @@ describe("order success payment retry", () => {
         gateway: "polar",
         endpoint: "/api/checkout/polar-session",
         current: false,
-        label: "Pay with Polar",
+        label: "Pay online with Polar",
         requiresCardForm: false,
       },
       {
         gateway: "stripe",
         endpoint: "/api/checkout/stripe-intent",
         current: false,
-        label: "Pay with international card",
+        label: "Pay by card",
         requiresCardForm: true,
       },
     ]);
@@ -92,7 +111,7 @@ describe("order success payment retry", () => {
   it("returns alternate visible hosted gateways for durable payment issues", () => {
     expect(
       getOrderSuccessRetryOptions(
-        { paymentMethod: "sslcommerz" },
+        makeRetryOrder({ paymentStatus: "failed" }),
         "payment_issue",
         null,
         [
@@ -114,14 +133,14 @@ describe("order success payment retry", () => {
         gateway: "polar",
         endpoint: "/api/checkout/polar-session",
         current: false,
-        label: "Pay with Polar",
+        label: "Pay online with Polar",
         requiresCardForm: false,
       },
       {
         gateway: "stripe",
         endpoint: "/api/checkout/stripe-intent",
         current: false,
-        label: "Pay with international card",
+        label: "Pay by card",
         requiresCardForm: true,
       },
     ]);
@@ -130,7 +149,7 @@ describe("order success payment retry", () => {
   it("allows a durable payment issue to switch away from a now-hidden current gateway", () => {
     expect(
       getOrderSuccessRetryOptions(
-        { paymentMethod: "sslcommerz" },
+        makeRetryOrder({ paymentStatus: "failed" }),
         "payment_issue",
         null,
         [{ id: "polar" }],
@@ -140,7 +159,7 @@ describe("order success payment retry", () => {
         gateway: "polar",
         endpoint: "/api/checkout/polar-session",
         current: false,
-        label: "Pay with Polar",
+        label: "Pay online with Polar",
         requiresCardForm: false,
       },
     ]);
@@ -149,7 +168,7 @@ describe("order success payment retry", () => {
   it("uses Stripe as an alternate when it is the only visible online retry gateway", () => {
     expect(
       getOrderSuccessRetryOptions(
-        { paymentMethod: "sslcommerz" },
+        makeRetryOrder({ paymentStatus: "failed" }),
         "payment_issue",
         "failed",
         [
@@ -162,7 +181,7 @@ describe("order success payment retry", () => {
         gateway: "stripe",
         endpoint: "/api/checkout/stripe-intent",
         current: false,
-        label: "Pay with international card",
+        label: "Pay by card",
         requiresCardForm: true,
       },
     ]);
@@ -171,12 +190,25 @@ describe("order success payment retry", () => {
   it("fails closed when checkout config exposes only COD", () => {
     expect(
       getOrderSuccessRetryOptions(
-        { paymentMethod: "sslcommerz" },
+        makeRetryOrder({ paymentStatus: "failed" }),
         "payment_issue",
         "failed",
         [{ id: "cod" }],
       ),
     ).toEqual([]);
+  });
+
+  it.each([
+    { status: "cancelled", paymentStatus: "unpaid", balanceDue: 1200 },
+    { status: "returned", paymentStatus: "unpaid", balanceDue: 1200 },
+    { status: "refunded", paymentStatus: "refunded", balanceDue: 1200 },
+    { status: "confirmed", paymentStatus: "paid", balanceDue: 0 },
+  ])("never offers retry for a terminal or paid order", (state) => {
+    expect(canRetryOrderSuccessPayment(
+      makeRetryOrder(state),
+      "order_updated",
+      "failed",
+    )).toBe(false);
   });
 
   it("preserves callback payment type and falls back to balance for partial receipts", () => {

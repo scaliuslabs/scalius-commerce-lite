@@ -254,6 +254,12 @@
     font-size: 9pt !important;
   }
 
+  [data-order-success-print="receipt"] .order-success-print-merchant {
+    display: block !important;
+    margin-bottom: 2mm !important;
+    font-size: 12pt !important;
+  }
+
   [data-order-success-print="receipt"] .order-success-print-grid {
     display: grid !important;
     grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr) !important;
@@ -275,6 +281,7 @@
 
   [data-order-success-print="receipt"] .order-success-print-items {
     grid-column: 1 / -1;
+    break-inside: auto;
   }
 
   [data-order-success-print="receipt"] .order-success-print-card h2 {

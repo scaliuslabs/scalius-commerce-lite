@@ -2,17 +2,19 @@
 import Layout from "@/layouts/Layout.astro";
 import CheckoutProgress from "@/components/CheckoutProgress.astro";
 import OrderSuccessButtons from "../components/OrderSuccessButtons";
-import { getOrderReceipt, getLayoutData, type OrderReceipt, type OrderItem, type LayoutData } from "@/lib/api";
+import { getOrderReceipt, getLayoutData, OrderReceiptAccessError, type OrderReceipt, type OrderItem, type LayoutData } from "@/lib/api";
 import { getCheckoutConfig, type CheckoutConfig } from "@/lib/api/checkout";
 import {
   createPurchaseTrackingPayload,
-  formatOrderSuccessLabel,
+  formatOrderSuccessPaymentMethod,
   getOrderSuccessViewState,
+  getOrderSuccessVisibleBalanceDue,
   shouldClearCheckoutCartForOrder,
 } from "@/lib/order-success-state";
 import {
   canRetryOrderSuccessPayment,
   getOrderSuccessRetryOptions,
+  isHostedPaymentRetryResult,
   normalizeRetryDepositAmount,
   resolveOrderSuccessRetryPaymentType,
 } from "@/lib/order-success-payment-retry";
@@ -70,7 +72,7 @@ const [layoutData, checkoutConfig]: [LayoutData | null, CheckoutConfig] = await 
 ]);
 
 if (!orderId || !receiptToken) {
-  const recoveryUrl = orderId && hostedRecoveryPayment
+  const recoveryUrl = orderId && hostedRecoveryPayment && isHostedPaymentRetryResult(paymentResult)
     ? (() => {
         const url = new URL("/payment-recovery", Astro.url);
         url.searchParams.set("orderId", orderId);
@@ -102,13 +104,22 @@ if (!orderId || !receiptToken) {
       };
     }
   } catch (e: unknown) {
-    console.error(`Error fetching order receipt for ID ${orderId}:`, e);
-    recoveryState = {
-      title: "Receipt temporarily unavailable",
-      message: "We could not load this receipt right now. Please retry or check your account order history.",
-      status: 200,
-      showRetry: true,
-    };
+    if (e instanceof OrderReceiptAccessError && e.status === 404) {
+      recoveryState = {
+        title: "Receipt access expired",
+        message: "This private receipt is no longer available in this browser. Sign in to check account orders, or contact the store if you still need help.",
+        status: 404,
+        showRetry: false,
+      };
+    } else {
+      console.error("Order receipt fetch failed", e instanceof OrderReceiptAccessError ? { status: e.status } : e);
+      recoveryState = {
+        title: "Receipt temporarily unavailable",
+        message: "We could not load this receipt right now. Please retry or check your account order history.",
+        status: 200,
+        showRetry: true,
+      };
+    }
   }
 }
 
@@ -117,10 +128,14 @@ if (recoveryState) {
 }
 
 const orderItemsFromApi: OrderItem[] = order?.items || [];
-const orderSuccessView = order ? getOrderSuccessViewState(order) : null;
+const orderSuccessView = order ? getOrderSuccessViewState(order, paymentResult) : null;
+const visibleBalanceDue = order ? getOrderSuccessVisibleBalanceDue(order) : 0;
 const shouldClearCheckoutCart = order ? shouldClearCheckoutCartForOrder(order) : false;
 const showsPositiveOrderState = orderSuccessView?.kind === "order_placed"
   || orderSuccessView?.kind === "order_updated";
+const successfulUpdatedStatuses = new Set(["confirmed", "processing", "shipped", "delivered", "completed"]);
+const showsSuccessHero = orderSuccessView?.kind === "order_placed"
+  || (orderSuccessView?.kind === "order_updated" && successfulUpdatedStatuses.has((order?.status ?? "").toLowerCase()));
 const shouldFinalizeCurrentCheckout = Boolean(
   hasCurrentCheckoutFinalizeMarker && orderId && showsPositiveOrderState,
 );
@@ -162,12 +177,31 @@ const formatReceiptAmount = (amount: number) => formatPrice(amount, {
 const legacySubtotal = order
   ? order.totalAmount - order.shippingCharge + (order.discountAmount ?? 0)
   : 0;
+const deliveryLocality = order
+  ? [order.areaName || order.area, order.zoneName || order.zone, order.cityName || order.city]
+      .filter((value): value is string => Boolean(value))
+      .join(", ")
+  : "";
+const merchantReceiptName = layoutData?.business?.companyName?.trim()
+  || layoutData?.business?.legalName?.trim()
+  || null;
+const orderPlacedAt = order?.createdAt
+  ? (() => {
+      const value = new Date(order.createdAt);
+      if (Number.isNaN(value.getTime())) return null;
+      return new Intl.DateTimeFormat("en-BD", {
+        dateStyle: "medium",
+        timeStyle: "short",
+        timeZone: "Asia/Dhaka",
+      }).format(value);
+    })()
+  : null;
 ---
 
 <Layout title={orderSuccessView?.title ?? "Order Recovery"} layoutData={layoutData}>
   <meta slot="head" name="robots" content="noindex,nofollow" />
   <section
-    class="container mx-auto px-4 py-8 max-w-2xl"
+    class="container mx-auto max-w-3xl px-4 py-6 sm:py-8"
     data-order-success-print={order ? "receipt" : undefined}
     data-fb-order-details={purchaseTrackingPayload ? JSON.stringify(purchaseTrackingPayload) : undefined}
     data-order-success-state={orderSuccessView?.kind ?? "recovery"}
@@ -179,27 +213,34 @@ const legacySubtotal = order
   >
     {order && orderSuccessView ? (
     <>
-    <CheckoutProgress current="confirmation" paymentRequired={order.paymentMethod !== "cod"} />
+    <CheckoutProgress
+      current={order.paymentMethod !== "cod" && (orderSuccessView.kind === "payment_pending" || orderSuccessView.kind === "payment_issue") ? "payment" : "confirmation"}
+      paymentRequired={order.paymentMethod !== "cod"}
+    />
     <div class="order-success-print-header text-center mb-8 animate-fade-in">
-      {showsPositiveOrderState ? (
+      {merchantReceiptName && <p class="order-success-print-merchant hidden font-semibold">{merchantReceiptName}</p>}
+      {showsSuccessHero ? (
         <div class="success-checkmark" aria-hidden="true">
           <svg class="h-10 w-10" viewBox="0 0 24 24" fill="none" stroke="currentColor">
             <path d="m5 12 4 4L19 6" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"></path>
           </svg>
         </div>
       ) : (
-        <div class={`mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full ${orderSuccessView.kind === "payment_issue" ? "bg-destructive/10 text-destructive" : "bg-amber-100 text-amber-700"}`}>
+        <div class={`mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full ${orderSuccessView.kind === "payment_issue" ? "bg-destructive/10 text-destructive" : orderSuccessView.kind === "payment_pending" ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-700"}`}>
           <svg class="h-10 w-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d={orderSuccessView.kind === "payment_issue" ? "M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" : "M12 6v6l4 2m6-2a10 10 0 1 1-20 0 10 10 0 0 1 20 0Z"}></path>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d={orderSuccessView.kind === "payment_issue" ? "M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" : orderSuccessView.kind === "payment_pending" ? "M12 6v6l4 2m6-2a10 10 0 1 1-20 0 10 10 0 0 1 20 0Z" : "M12 16h.01M12 8v4m9 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"}></path>
           </svg>
         </div>
       )}
-      <h1 class="text-2xl font-bold mb-2">{orderSuccessView.title}</h1>
+      <h1 class="mb-2 text-2xl font-bold">{orderSuccessView.title}</h1>
       <p class="text-gray-600">{orderSuccessView.message}</p>
       {orderSuccessView.kind === "payment_pending" && (
-        <p class="mt-3 text-sm text-muted-foreground" data-payment-status-message aria-live="polite">
-          Checking payment status…
-        </p>
+        <div class="mt-3 text-sm text-muted-foreground">
+          <p data-payment-status-message aria-live="polite">Checking payment status…</p>
+          <button type="button" class="mt-2 hidden min-h-11 rounded-lg border border-border px-4 py-2 font-medium text-foreground hover:bg-muted" data-payment-check-now>
+            Check again
+          </button>
+        </div>
       )}
       {retryPaymentOptions.length > 0 && retryPaymentType && (
         <div class="mt-5 flex flex-col items-center gap-2">
@@ -253,7 +294,7 @@ const legacySubtotal = order
     <div class="order-success-print-grid space-y-6 animate-slide-up">
       {/* Order details sections */}
       <div
-        class="order-success-print-card order-success-print-order bg-gray-50 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow"
+        class="order-success-print-card order-success-print-order rounded-xl border border-border bg-background p-4 sm:p-6"
       >
         <h2 class="text-lg font-medium mb-4 flex items-center">
           <svg
@@ -269,90 +310,90 @@ const legacySubtotal = order
               d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
             ></path>
           </svg>
-          Order Details
+          Order details
         </h2>
         <div class="space-y-4">
           <div class="flex justify-between">
-            <span class="text-gray-600">Order ID:</span>
-            <span class="font-medium">{order.id}</span>
+            <span class="text-gray-600">Order number</span>
+            <span class="break-all text-right font-medium">{order.id}</span>
           </div>
+          {orderPlacedAt && <div class="flex justify-between gap-4">
+            <span class="text-gray-600">Placed</span>
+            <span class="text-right font-medium">{orderPlacedAt}</span>
+          </div>}
           <div class="flex justify-between">
-            <span class="text-gray-600">Order Status:</span>
+            <span class="text-gray-600">Status</span>
             <span
-              class={`font-medium px-2 py-0.5 rounded-full text-sm ${orderSuccessView.badgeClass}`}
+              class={`rounded-full px-2 py-0.5 text-sm font-medium ${orderSuccessView.orderBadgeClass}`}
               >{orderSuccessView.orderStatusLabel}</span
             >
           </div>
           <div class="flex justify-between">
-            <span class="text-gray-600">Payment Method:</span>
-            <span class="font-medium">{formatOrderSuccessLabel(order.paymentMethod)}</span>
+            <span class="text-gray-600">Payment</span>
+            <span class="text-right font-medium">{formatOrderSuccessPaymentMethod(order.paymentMethod)}</span>
           </div>
           <div class="flex justify-between">
-            <span class="text-gray-600">Payment Status:</span>
+            <span class="text-gray-600">Payment status</span>
             <span
-              class={`font-medium px-2 py-0.5 rounded-full text-sm ${orderSuccessView.badgeClass}`}
+              class={`rounded-full px-2 py-0.5 text-sm font-medium ${orderSuccessView.paymentBadgeClass}`}
               >{orderSuccessView.paymentStatusLabel}</span
             >
           </div>
           {savedMoneySummary ? (
             <div class="space-y-3 border-t border-gray-200 pt-4">
               <div class="flex justify-between gap-4">
-                <span class="text-gray-600">Subtotal:</span>
+                <span class="text-gray-600">Subtotal</span>
                 <span class="font-medium">{formatSavedMinorAmount(savedMoneySummary.subtotalMinor, savedMoneySummary)}</span>
               </div>
               <div class="flex justify-between">
-                <span class="text-gray-600">Shipping Charge:</span>
-                <span class="font-medium">{formatSavedMinorAmount(savedMoneySummary.shippingMinor, savedMoneySummary)}</span>
+                <span class="text-gray-600">Shipping</span>
+                <span class="font-medium">{savedMoneySummary.shippingMinor === 0 ? "Free" : formatSavedMinorAmount(savedMoneySummary.shippingMinor, savedMoneySummary)}</span>
               </div>
-              <div class="flex justify-between gap-4">
-                <span class="text-gray-600">Discount:</span>
+              {savedMoneySummary.discountMinor > 0 && <div class="flex justify-between gap-4">
+                <span class="text-gray-600">Discount</span>
                 <span class="font-medium text-primary">
-                  {savedMoneySummary.discountMinor > 0 ? "−" : ""}{formatSavedMinorAmount(savedMoneySummary.discountMinor, savedMoneySummary)}
+                  −{formatSavedMinorAmount(savedMoneySummary.discountMinor, savedMoneySummary)}
                 </span>
-              </div>
-              <div class="flex justify-between gap-4">
-                <span class="text-gray-600">{savedMoneySummary.taxLabel}{savedMoneySummary.pricesIncludeTax ? " (included)" : ""}:</span>
+              </div>}
+              {savedMoneySummary.taxMinor > 0 && <div class="flex justify-between gap-4">
+                <span class="text-gray-600">{savedMoneySummary.taxLabel}{savedMoneySummary.pricesIncludeTax ? " (included)" : ""}</span>
                 <span class="font-medium">{formatSavedMinorAmount(savedMoneySummary.taxMinor, savedMoneySummary)}</span>
-              </div>
+              </div>}
               <div class="flex justify-between gap-4 border-t border-gray-200 pt-3">
-                <span class="font-semibold text-gray-900">Total Amount:</span>
+                <span class="font-semibold text-gray-900">Total</span>
                 <span class="font-semibold text-gray-900">{formatSavedMinorAmount(savedMoneySummary.totalMinor, savedMoneySummary)}</span>
               </div>
-              <p class="text-left text-xs text-gray-500">
-                Amounts saved in {savedMoneySummary.currencyCode} when this order was placed.
-                {savedMoneySummary.pricesIncludeTax && ` ${savedMoneySummary.taxLabel} is already included in the prices above.`}
-              </p>
             </div>
           ) : (
             <div class="space-y-3 border-t border-gray-200 pt-4">
               <div class="flex justify-between gap-4">
-                <span class="text-gray-600">Subtotal:</span>
+                <span class="text-gray-600">Subtotal</span>
                 <span class="font-medium">{formatReceiptAmount(legacySubtotal)}</span>
               </div>
               {order.shippingCharge > 0 && (
                 <div class="flex justify-between gap-4">
-                  <span class="text-gray-600">Shipping Charge:</span>
+                  <span class="text-gray-600">Shipping</span>
                   <span class="font-medium">{formatReceiptAmount(order.shippingCharge)}</span>
                 </div>
               )}
               {(order.discountAmount ?? 0) > 0 && (
                 <div class="flex justify-between">
-                  <span class="text-gray-600">Discount:</span>
+                  <span class="text-gray-600">Discount</span>
                   <span class="font-medium text-primary">
                     −{formatReceiptAmount(order.discountAmount ?? 0)}
                   </span>
                 </div>
               )}
               <div class="flex justify-between gap-4 border-t border-gray-200 pt-3">
-                <span class="font-semibold text-gray-900">Total Amount:</span>
+                <span class="font-semibold text-gray-900">Total</span>
                 <span class="font-semibold text-gray-900">{formatReceiptAmount(order.totalAmount)}</span>
               </div>
             </div>
           )}
           {
-            order.paidAmount > 0 && (
+            order.paidAmount > 0 && visibleBalanceDue > 0 && (
               <div class="flex justify-between">
-                <span class="text-gray-600">Paid Amount:</span>
+                <span class="text-gray-600">Paid</span>
                 <span class="font-medium text-emerald-700">
                   {formatReceiptAmount(order.paidAmount)}
                 </span>
@@ -360,11 +401,11 @@ const legacySubtotal = order
             )
           }
           {
-            order.balanceDue > 0 && (
+            visibleBalanceDue > 0 && (
               <div class="flex justify-between">
-                <span class="text-gray-600">Balance Due:</span>
+                <span class="text-gray-600">{order.paymentMethod === "cod" ? "Due on delivery" : "Balance due"}</span>
                 <span class="font-medium">
-                  {formatReceiptAmount(order.balanceDue)}
+                  {formatReceiptAmount(visibleBalanceDue)}
                 </span>
               </div>
             )
@@ -373,7 +414,7 @@ const legacySubtotal = order
       </div>
 
       <div
-        class="order-success-print-card order-success-print-shipping bg-gray-50 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow"
+        class="order-success-print-card order-success-print-shipping rounded-xl border border-border bg-background p-4 sm:p-6"
       >
         <h2 class="text-lg font-medium mb-4 flex items-center">
           <svg
@@ -394,42 +435,17 @@ const legacySubtotal = order
               stroke-width="2"
               d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
           </svg>
-          Shipping Details
+          Delivery details
         </h2>
-        <div class="space-y-2">
-          <p>
-            <span class="text-gray-600">Name:</span>{" "}
-            <span class="font-medium">{order.customerName}</span>
-          </p>
-          <p>
-            <span class="text-gray-600">Address:</span>{" "}
-            <span class="font-medium">{order.shippingAddress}</span>
-          </p>
-          <div class="flex flex-col items-center md:items-start">
-            <p class="flex items-center gap-1 text-sm">
-              <span class="text-gray-600">City:</span>{" "}
-              <span class="font-medium">{order.cityName || order.city}</span>
-            </p>
-            <p class="flex items-center gap-1 text-sm">
-              <span class="text-gray-600">Zone:</span>{" "}
-              <span class="font-medium">{order.zoneName || order.zone}</span>
-            </p>
-            {
-              (order.areaName || order.area) && (
-                <p class="flex items-center gap-1 text-sm">
-                  <span class="text-gray-600">Area:</span>{" "}
-                  <span class="font-medium">
-                    {order.areaName || order.area}
-                  </span>
-                </p>
-              )
-            }
-          </div>
+        <div class="space-y-1 text-sm">
+          <p class="font-medium text-foreground">{order.customerName}</p>
+          <p class="text-muted-foreground">{order.shippingAddress}</p>
+          {deliveryLocality && <p class="text-muted-foreground">{deliveryLocality}</p>}
         </div>
       </div>
 
       <div
-        class="order-success-print-card order-success-print-items bg-gray-50 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow"
+        class="order-success-print-card order-success-print-items rounded-xl border border-border bg-background p-4 sm:p-6"
       >
         <h2 class="text-lg font-medium mb-4 flex items-center">
           <svg
@@ -444,15 +460,26 @@ const legacySubtotal = order
               stroke-width="2"
               d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path>
           </svg>
-          Order Items
+          Items
         </h2>
         <div class="space-y-4">
           {
             orderItemsFromApi.map((item) => {
               const savedLine = resolveSavedOrderLineMoney(item, savedMoneySummary);
               return (
-                <div class="order-success-print-item flex justify-between items-center border-b border-gray-100 pb-3 last:border-0 last:pb-0">
-                  <div>
+                <div class="order-success-print-item flex items-center justify-between gap-3 border-b border-gray-100 pb-3 last:border-0 last:pb-0">
+                  <div class="flex min-w-0 items-center gap-3">
+                    {item.productImage && (
+                      <img
+                        src={item.productImage}
+                        alt=""
+                        width="48"
+                        height="48"
+                        loading="lazy"
+                        class="h-12 w-12 shrink-0 rounded-lg border border-border object-cover"
+                      />
+                    )}
+                    <div class="min-w-0">
                     <p class="font-medium">
                       {item.productName || "Product Unavailable"}
                     </p>
@@ -476,6 +503,7 @@ const legacySubtotal = order
                         {savedMoneySummary.taxLabel}{savedMoneySummary.pricesIncludeTax ? " included" : " added"}: {formatSavedMinorAmount(savedLine.taxMinor, savedMoneySummary)}
                       </p>
                     )}
+                    </div>
                   </div>
                   <div class="shrink-0 text-right">
                     {savedLine && savedMoneySummary && <p class="text-xs text-gray-500">Line total</p>}
@@ -497,7 +525,6 @@ const legacySubtotal = order
       orderId={order.id}
       supportRequests={order.supportRequests}
       supportRequestActions={order.supportRequestActions}
-      supportRequestIntro={order.supportRequestIntro}
       client:load
     />
     </>
@@ -518,10 +545,10 @@ const legacySubtotal = order
             <a href={recoveryState.recoveryUrl} data-astro-prefetch={getStorefrontPrefetchAttribute(recoveryState.recoveryUrl, Astro.url)} class="inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90">Verify payment recovery</a>
           )}
           {recoveryState?.showRetry && (
-            <a href={Astro.url.pathname + Astro.url.search} data-astro-prefetch={getStorefrontPrefetchAttribute(Astro.url.pathname + Astro.url.search, Astro.url)} class="inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90">Retry Receipt</a>
+            <a href={Astro.url.pathname + Astro.url.search} data-astro-prefetch={getStorefrontPrefetchAttribute(Astro.url.pathname + Astro.url.search, Astro.url)} class="inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90">Retry receipt</a>
           )}
-          <a href="/account" data-astro-prefetch={getStorefrontPrefetchAttribute("/account", Astro.url)} class="inline-flex min-h-11 items-center justify-center rounded-lg border border-border px-5 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted">View Account Orders</a>
-          <a href="/" class="inline-flex min-h-11 items-center justify-center rounded-lg border border-border px-5 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted">Continue Shopping</a>
+          <a href="/account" data-astro-prefetch={getStorefrontPrefetchAttribute("/account", Astro.url)} class="inline-flex min-h-11 items-center justify-center rounded-lg border border-border px-5 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted">View account orders</a>
+          <a href="/" class="inline-flex min-h-11 items-center justify-center rounded-lg border border-border px-5 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted">Continue shopping</a>
         </div>
       </div>
     )}
@@ -634,6 +661,7 @@ const legacySubtotal = order
 
     const orderId = receipt.dataset.orderId;
     const message = receipt.querySelector<HTMLElement>("[data-payment-status-message]");
+    const checkNowButton = receipt.querySelector<HTMLButtonElement>("[data-payment-check-now]");
     if (!orderId) return;
 
     let stopped = false;
@@ -660,6 +688,7 @@ const legacySubtotal = order
       if (stopped) return;
       if (delayIndex >= PAYMENT_STATUS_DELAYS_MS.length) {
         if (message) message.textContent = "Confirmation is taking longer than usual. You can safely leave this receipt and return later.";
+        checkNowButton?.classList.remove("hidden");
         return;
       }
       timeoutId = window.setTimeout(checkStatus, PAYMENT_STATUS_DELAYS_MS[delayIndex]);
@@ -711,6 +740,13 @@ const legacySubtotal = order
     };
 
     document.addEventListener("visibilitychange", checkWhenVisible);
+    checkNowButton?.addEventListener("click", () => {
+      checkNowButton.disabled = true;
+      if (message) message.textContent = "Checking payment status…";
+      void checkStatus().finally(() => {
+        checkNowButton.disabled = false;
+      });
+    });
     window.addEventListener("pagehide", () => {
       stopped = true;
       if (timeoutId) window.clearTimeout(timeoutId);
@@ -933,7 +969,13 @@ const legacySubtotal = order
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .success-checkmark { animation: none; }
+    .success-checkmark,
+    .animate-fade-in,
+    .animate-slide-up {
+      animation: none;
+      opacity: 1;
+      transform: none;
+    }
   }
 
   /* Fade in animation */
@@ -966,8 +1008,4 @@ const legacySubtotal = order
     }
   }
 
-  /* Card hover effect */
-  .transition-shadow {
-    transition: box-shadow 0.3s ease;
-  }
 </style>

@@ -264,6 +264,16 @@ describe("storefront orders API client", () => {
     expect(mocks.fetchWithRetry.mock.calls[0]?.[0]).not.toContain("token=");
   });
 
+  it("distinguishes expired receipt proof from a retryable outage", async () => {
+    mocks.fetchWithRetry.mockResolvedValueOnce(new Response(null, { status: 404 }));
+
+    await expect(getOrderReceipt("order_1", "chk_expired"))
+      .rejects.toEqual(expect.objectContaining({
+        name: "OrderReceiptAccessError",
+        status: 404,
+      }));
+  });
+
   it("polls duplicate checkout status with non-bearer status token", async () => {
     mocks.fetchWithRetry
       .mockResolvedValueOnce(new Response(JSON.stringify({
