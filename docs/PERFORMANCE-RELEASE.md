@@ -207,10 +207,31 @@ The final production repeat-navigation measurements below record click-to-headin
 
 All seven repeat destinations meet the 100 ms responsiveness target. True cold navigation remains 320-627 ms while route code and data become resident; that distinction is retained instead of presenting warm navigation as cold-start performance.
 
+### 2026-08-23 instant-navigation follow-up
+
+This follow-up keeps the production measurements above as the before baseline; the changes below are local production-build evidence and must not be presented as post-deploy RUM. The router no longer replaces useful content with a pending screen. Navigations under 180 ms have no loading flash, slower transitions retain the current page with a thin non-blocking progress rail, and permission-visible route code warms during browser idle time without running loaders or API reads. Protected Orders and Customers data remains Query-owned and demand-driven rather than being bulk-synced into browser memory.
+
+The conservative Rolldown grouping reduced emitted JavaScript files from 522 to 324. The framework's strongly connected initial graph stays in one unsplit shell chunk, while the icon library retains entry-aware grouping. Direct-route preload closures changed as follows:
+
+| Route | Before files / Brotli | After files / Brotli |
+| --- | ---: | ---: |
+| Root shell | 61 / 147.9 KiB | 2 / 134.3 KiB |
+| Products | 123 / 208.0 KiB | 32 / 198.4 KiB |
+| Orders | 136 / 224.5 KiB | 34 / 213.0 KiB |
+| Customers | 123 / 204.7 KiB | 30 / 194.8 KiB |
+| Inventory | 129 / 206.4 KiB | 33 / 197.2 KiB |
+| Discounts | 122 / 198.6 KiB | 28 / 188.1 KiB |
+| Analytics | 131 / 206.8 KiB | 30 / 195.1 KiB |
+| Media | 102 / 174.9 KiB | 19 / 167.5 KiB |
+
+The grouping deliberately leaves html2pdf, Tiptap, html5-qrcode, and the heavy media-theme surface outside the root and principal-route closures. It rejects a generic route group because that experiment overfetched roughly 400-480 KiB and pulled PDF code across the boundary. The first production attempt size-split the initial group and exposed a reciprocal ESM chunk import that crashed login hydration. Production was rolled back immediately; the retained build keeps that graph together, adds a fail-closed static chunk-cycle gate, and passed a real production-build login hydration check.
+
+Provider calls were also collapsed without changing D1, TursoDB, or PostgreSQL authority: product and order lists now use two read waves rather than three (33% fewer provider round trips), while analytics-script lists and the normal theme workspace use one rather than two (50% fewer). The admin product list requests an explicit compact projection so rich descriptions do not cross the wire, while the default API request and response contract remain unchanged. These are deterministic round-trip reductions; production latency deltas still require a deployed comparison.
+
 Retained changes:
 
 - Intent-preload the seven safe principal list routes and load code-only boundaries for other sidebar destinations.
-- Keep pending UI out of fast transitions with a 400 ms delay and 100 ms minimum duration.
+- Keep pending UI out of fast transitions with a 180 ms delay and 160 ms minimum duration.
 - Memoize the shared table row boundary. A 100-row focused test proves a fetch overlay rerenders zero unchanged cells and selecting one row rerenders only that row.
 - Replace the shared table's unconditional mount refetch with a five-second intent-prefetch grace period. The immediate navigation does not duplicate the request, while invalidated data and ordinary route returns revalidate even inside longer domain stale windows.
 - Reject adjacent-page speculation for Orders and Customers. Warming only the committed list avoids abandoned-hover request amplification and retaining an extra page of buyer PII in the client cache.

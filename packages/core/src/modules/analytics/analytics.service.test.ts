@@ -177,20 +177,27 @@ describe("analytics service", () => {
       updatedAt: new Date("2026-07-02T00:00:00.000Z"),
       deletedAt: null,
     };
+    const countQuery = { kind: "analytics-count" };
+    const rowsQuery = { kind: "analytics-page" };
     const select = vi.fn()
       .mockReturnValueOnce({
-        from: () => ({ where: () => ({ get: async () => ({ count: 1 }) }) }),
+        from: () => ({ where: () => countQuery }),
       })
       .mockReturnValueOnce({
         from: () => ({
           where: () => ({
-            orderBy: () => ({ limit: () => ({ offset: async () => [row] }) }),
+            orderBy: () => ({ limit: () => ({ offset: () => rowsQuery }) }),
           }),
         }),
       });
+    const batch = vi.fn(async (statements: unknown[]) => {
+      expect(statements).toEqual([countQuery, rowsQuery]);
+      return [[{ count: 1 }], [row]];
+    });
 
-    const result = await listAnalyticsScripts({ select } as never, { limit: 20 });
+    const result = await listAnalyticsScripts({ select, batch } as never, { limit: 20 });
 
+    expect(batch).toHaveBeenCalledTimes(1);
     expect(result.pagination).toEqual({ total: 1, page: 1, limit: 20, totalPages: 1 });
     expect(result.scripts[0]).toMatchObject({
       id: "analytics_ga4",

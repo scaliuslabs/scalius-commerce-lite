@@ -10,17 +10,6 @@ import {
 } from "./lib/recoverable-route-error";
 import { getAdminScrollRestorationKey } from "./lib/admin-scroll-restoration";
 
-function DefaultPendingComponent() {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
-      <div className="flex flex-col items-center gap-3">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-muted border-t-primary" />
-        <p className="text-sm text-muted-foreground">Loading...</p>
-      </div>
-    </div>
-  );
-}
-
 function DefaultNotFoundComponent() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 sm:p-6 bg-background text-foreground">
@@ -109,12 +98,10 @@ export function getRouter() {
     scrollToTopSelectors: ["#admin-main-scroll"],
     scrollRestorationBehavior: "instant",
     defaultPreload: false,
-    // Keep the current screen interactive for fast route changes. The former
-    // 200/300 split forced 200-500 ms navigations to wait until the pending
-    // screen's minimum display time elapsed.
-    defaultPendingMs: 400,
-    defaultPendingMinMs: 100,
-    defaultPendingComponent: DefaultPendingComponent,
+    // Never replace useful admin content with a route-level loading screen.
+    // The persistent admin shell exposes delayed navigation progress without
+    // blocking the transition or forcing a minimum pending-screen duration.
+    defaultPendingMs: Number.POSITIVE_INFINITY,
     defaultNotFoundComponent: DefaultNotFoundComponent,
     defaultErrorComponent: DefaultErrorComponent,
   });

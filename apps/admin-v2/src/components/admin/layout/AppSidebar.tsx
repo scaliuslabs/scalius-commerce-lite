@@ -2,6 +2,7 @@ import {
   lazy,
   Suspense,
   useEffect,
+  useMemo,
   useRef,
   useCallback,
   useState,
@@ -12,7 +13,6 @@ import {
   Link,
   useLocation,
   useRouter,
-  type AnyRoute,
   type AnyRouter,
 } from "@tanstack/react-router";
 import { ChevronDown, Globe } from "lucide-react";
@@ -39,6 +39,12 @@ import {
 } from "@/components/ui/collapsible";
 import { usePermissions } from "@/contexts/PermissionContext";
 import { getFilteredNavSections, type NavItem, type NavSubItem } from "./AdminNav";
+import {
+  collectPermissionVisibleRouteHrefs,
+  normalizeNavigationPath,
+  preloadAdminRouteChunks,
+  scheduleAdminRouteChunkWarmup,
+} from "./admin-route-chunk-warming";
 import faviconImg from "@/assets/favicon.png";
 import logoDarkImg from "@/assets/logo-dark.png";
 import logoLightImg from "@/assets/logo-light.png";
@@ -76,42 +82,6 @@ type IdleSchedulerWindow = Window & {
   ) => number;
   cancelIdleCallback?: (handle: number) => void;
 };
-
-/**
- * Warm only the code-split UI for a sidebar destination. TanStack's normal
- * route preload also runs beforeLoad/loaders, which would turn a hover into
- * authenticated RBAC and API work. Keeping this to loadRouteChunk makes the
- * optimization safe for an admin surface while still removing the cold JS
- * request from the click path.
- */
-async function preloadAdminRouteChunks(
-  router: Pick<AnyRouter, "loadRouteChunk" | "routesByPath">,
-  href: string,
-): Promise<void> {
-  const pathname = normalizeNavigationPath(href);
-  const routesByPath = router.routesByPath as Record<
-    string,
-    AnyRoute | undefined
-  >;
-  const route =
-    (pathname === "/" ? routesByPath[pathname] : routesByPath[`${pathname}/`]) ??
-    routesByPath[pathname];
-
-  if (!route) return;
-
-  const routeChain: AnyRoute[] = [];
-  let currentRoute: AnyRoute | undefined = route;
-  while (currentRoute) {
-    routeChain.push(currentRoute);
-    currentRoute = currentRoute.parentRoute;
-  }
-
-  await Promise.all(routeChain.map((match) => router.loadRouteChunk(match)));
-}
-
-function normalizeNavigationPath(href: string): string {
-  return href.split(/[?#]/, 1)[0]?.replace(/\/+$/, "") || "/";
-}
 
 function startRouteChunkPreload(
   target: EventTarget,
@@ -242,7 +212,29 @@ export function AppSidebar() {
   const sidebarContentRef = useRef<HTMLDivElement>(null);
   const footerReady = useDeferredSidebarFooter();
 
-  const navSections = getFilteredNavSections(permissions, isSuperAdmin);
+  const navSections = useMemo(
+    () => getFilteredNavSections(permissions, isSuperAdmin),
+    [permissions, isSuperAdmin],
+  );
+  const permissionVisibleRouteHrefs = useMemo(
+    () => collectPermissionVisibleRouteHrefs(navSections),
+    [navSections],
+  );
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const cancel = scheduleAdminRouteChunkWarmup({
+      router,
+      hrefs: permissionVisibleRouteHrefs,
+      currentPath,
+      signal: controller.signal,
+    });
+
+    return () => {
+      controller.abort();
+      cancel();
+    };
+  }, [currentPath, permissionVisibleRouteHrefs, router]);
 
   const closeMobileSidebar = useCallback(() => {
     if (isMobile) {

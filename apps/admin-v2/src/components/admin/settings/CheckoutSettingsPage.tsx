@@ -7,9 +7,9 @@ import {
     SelectTrigger,
     SelectValue,
 } from "../../ui/select";
-import { Loader2 } from "lucide-react";
 import type { CheckoutSettingsSection } from "./checkout-settings-sections";
 import { useWorkspaceScrollMemory } from "~/hooks/use-workspace-scroll-memory";
+import { PanelLoadingSkeleton } from "../shared/LoadingFallback";
 
 const CheckoutFlowSettings = lazy(() =>
     import("./CheckoutFlowSettings")
@@ -37,11 +37,7 @@ const CustomerRequestSettings = lazy(() =>
 );
 
 function TabSpinner() {
-    return (
-        <div className="flex items-center justify-center py-16">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-        </div>
-    );
+    return <PanelLoadingSkeleton />;
 }
 
 const tabs = [

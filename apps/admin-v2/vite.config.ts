@@ -19,6 +19,36 @@ export default defineConfig(({ mode }) => ({
         // Files copied from public/ keep their stable, non-immutable URLs.
         assetsDir: generatedAssetDir,
         sourcemap: false,
+        rolldownOptions: {
+          output: {
+            // TanStack's route boundaries stay lazy, while Rolldown folds the
+            // icon library into useful payloads instead of making every cold
+            // route pay dozens of tiny icon requests. Do not force all
+            // `$initial` modules into size-split groups: Rolldown can split a
+            // strongly connected ESM graph across those chunks, causing an
+            // import to execute before its function export is initialized.
+            codeSplitting: {
+              groups: [
+                {
+                  // One unsplit initial group keeps the framework's strongly
+                  // connected runtime together. The build's import-cycle gate
+                  // protects this boundary if Rolldown behavior changes.
+                  name: "admin-shell",
+                  tags: ["$initial"],
+                  priority: 100,
+                },
+                {
+                  name: "admin-icons",
+                  test: /node_modules[\\/]lucide-react/,
+                  priority: 50,
+                  entriesAware: true,
+                  entriesAwareMergeThreshold: 24 * 1024,
+                  maxSize: 64 * 1024,
+                },
+              ],
+            },
+          },
+        },
       },
     },
     ssr: {

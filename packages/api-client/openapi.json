@@ -155952,6 +155952,21 @@
             "schema": {
               "type": "string",
               "enum": [
+                "full",
+                "compact"
+              ],
+              "default": "full",
+              "description": "Compact lists omit rich descriptions"
+            },
+            "required": false,
+            "description": "Compact lists omit rich descriptions",
+            "name": "view",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
                 "name",
                 "price",
                 "category",
