@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { act } from "react";
-import { hydrateRoot, type Root } from "react-dom/client";
+import { createRoot, hydrateRoot, type Root } from "react-dom/client";
 import { renderToString } from "react-dom/server";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -88,5 +88,27 @@ describe("ShippingLocationSelector hydration", () => {
       container.querySelector<HTMLInputElement>('input[name="shippingLocation"]')?.value,
     ).toBe("standard");
     expect(container.textContent).toContain("Standard delivery");
+  });
+
+  it("exposes one named native radio for each available shipping method", async () => {
+    const methods = [
+      shippingMethods[0],
+      { ...shippingMethods[0], id: "express", name: "Express delivery", fee: 200 },
+    ];
+    const container = document.createElement("div");
+    document.body.append(container);
+
+    await act(async () => {
+      root = createRoot(container);
+      root.render(<ShippingLocationSelector shippingMethods={methods} />);
+    });
+
+    const radios = container.querySelectorAll<HTMLInputElement>(
+      'input[type="radio"][name="shippingLocation"]',
+    );
+    expect(radios).toHaveLength(2);
+    expect(radios[0]?.checked).toBe(true);
+    expect(radios[0]?.getAttribute("aria-label")).toContain("Standard delivery");
+    expect(container.querySelector('[role="radio"]')).toBeNull();
   });
 });
