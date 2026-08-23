@@ -217,7 +217,7 @@ const submitLabel = codOnly
   ? lang.languageData.placeOrderText
   : checkoutUnavailable
     ? "Checkout temporarily unavailable"
-    : "Proceed to Payment →";
+    : "Continue to payment";
 const serializedCheckoutConfig = serializeJsonForInlineScript(checkoutConfig);
 const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
 ---
@@ -518,7 +518,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
               </svg>
               <span class="font-medium">
                 {checkoutConfig.guestCheckoutEnabled === false
-                  ? "Sign in required before checkout"
+                  ? "Sign in to checkout"
                   : "Already have an account? Sign in for faster checkout"}
               </span>
             </span>
@@ -530,7 +530,11 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
         </div>
 
         <div
-          class="bg-card rounded-xl border border-border shadow-sm p-3 sm:p-4 mb-3"
+          id="checkoutFormCard"
+          class:list={[
+            "bg-card rounded-xl border border-border shadow-sm p-3 sm:p-4 mb-3",
+            { hidden: checkoutConfig.guestCheckoutEnabled === false },
+          ]}
         >
           <h2
             class="text-base sm:text-lg font-bold text-foreground mb-3 flex items-center gap-2"
@@ -578,7 +582,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
 
               <div>
                 <PhoneField
-                  client:visible
+                  client:load
                   name="customerPhone"
                   label={lang.languageData.customerPhoneLabel}
                   placeholder={lang.languageData.customerPhonePlaceholder}
@@ -846,6 +850,11 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     }
   };
 
+  const revealCheckoutFormForCustomer = () => {
+    document.getElementById("checkoutSignInPrompt")?.classList.add("hidden");
+    document.getElementById("checkoutFormCard")?.classList.remove("hidden");
+  };
+
   // 1. Initial page load hydration (standalone fetch)
   runWhenDomReady(async () => {
     const isUserLoggedIn = document.cookie
@@ -863,7 +872,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
       if (session?.authenticated && session.customer) {
         fillBasicCustomerFields(session.customer);
         fillLocationDropdowns(session.customer);
-        document.getElementById("checkoutSignInPrompt")?.classList.add("hidden");
+        revealCheckoutFormForCustomer();
       }
     }
   });
@@ -875,7 +884,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
       if (cartPageSignal.aborted) return;
       const customer = e.detail;
       fillBasicCustomerFields(customer);
-      document.getElementById("checkoutSignInPrompt")?.classList.add("hidden");
+      revealCheckoutFormForCustomer();
       // Modal normally resolves quickly, but schedule location fill slightly later to avoid DOM races
       const timeoutId = window.setTimeout(
         () => fillLocationDropdowns(customer),

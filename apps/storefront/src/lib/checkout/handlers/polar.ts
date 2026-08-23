@@ -16,7 +16,7 @@ export const polarHandler: GatewayHandler = {
   },
 
   getButtonText(_isPartialPayment: boolean): string {
-    return "Continue to Payment \u2192";
+    return "Continue to payment";
   },
 
   async processPayment(ctx: PaymentContext): Promise<PaymentResult> {

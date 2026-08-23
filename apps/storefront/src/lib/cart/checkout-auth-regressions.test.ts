@@ -44,4 +44,17 @@ describe("cart checkout auth regressions", () => {
     expect(source).not.toContain("const hasAuthenticatedCustomerSession = async () => {");
     expect(source).not.toContain("!guestCheckoutEnabled && !isUserLoggedIn()");
   });
+
+  it("keeps account-required checkout fields behind the verified customer gate", async () => {
+    const source = await readFile(join(storefrontRoot, "src/pages/cart.astro"), "utf8");
+
+    expect(source).toContain('id="checkoutFormCard"');
+    expect(source).toContain("{ hidden: checkoutConfig.guestCheckoutEnabled === false }");
+    expect(source).toContain("<PhoneField\n                  client:load");
+    expect(source).toContain("const revealCheckoutFormForCustomer = () => {");
+    expect(source).toContain(
+      'document.getElementById("checkoutFormCard")?.classList.remove("hidden")',
+    );
+    expect(source.match(/revealCheckoutFormForCustomer\(\);/g)).toHaveLength(2);
+  });
 });

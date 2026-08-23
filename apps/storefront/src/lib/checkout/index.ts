@@ -649,7 +649,7 @@ async function selectMethod(methodId: string, gw: { id: string; [key: string]: u
 
   // Set button text
   const isPartial = checkoutConfig?.partialPaymentEnabled ?? false;
-  const text = handler?.getButtonText(isPartial) ?? "Continue to Payment";
+  const text = handler?.getButtonText(isPartial) ?? "Continue to payment";
   setPayButton(text, handler?.isReady ? !handler.isReady() : false);
 }
 
@@ -685,7 +685,7 @@ async function processPayment(): Promise<void> {
     hideCheckoutLoadingOverlay();
     showError("Unknown payment method selected.");
     isProcessing = false;
-    setPayButton("Continue to Payment", false);
+    setPayButton("Continue to payment", false);
     return;
   }
 
@@ -756,7 +756,7 @@ async function processPayment(): Promise<void> {
     // Restore button text based on selected method
     const restoreHandler = getGateway(selectedMethod);
     const isPartial = checkoutConfig.partialPaymentEnabled;
-    const text = restoreHandler?.getButtonText(isPartial) ?? "Continue to Payment";
+    const text = restoreHandler?.getButtonText(isPartial) ?? "Continue to payment";
     setPayButton(text, restoreHandler?.isReady ? !restoreHandler.isReady() : false);
   } finally {
     isProcessing = false;
