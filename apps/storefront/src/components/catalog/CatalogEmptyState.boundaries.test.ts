@@ -1,8 +1,9 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { storefrontSourcePath } from "../../lib/test-source-paths";
 
 const source = readFileSync(
-  new URL("./CatalogEmptyState.astro", import.meta.url),
+  storefrontSourcePath("components", "catalog", "CatalogEmptyState.astro"),
   "utf8",
 );
 

@@ -257,6 +257,22 @@ describe("hosted online payment handlers", () => {
   it.each([
     { handler: sslcommerzHandler, gateway: "sslcommerz" },
     { handler: polarHandler, gateway: "polar" },
+  ])("records $gateway recovery immediately after order creation", async ({ handler, gateway }) => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: false,
+      json: async () => ({ error: "Gateway unavailable" }),
+    } as Response);
+    const context = makeContext();
+    context.onOrderCreated = vi.fn();
+
+    await handler.processPayment(context);
+
+    expect(context.onOrderCreated).toHaveBeenCalledWith("order_1", gateway);
+  });
+
+  it.each([
+    { handler: sslcommerzHandler, gateway: "sslcommerz" },
+    { handler: polarHandler, gateway: "polar" },
   ])("returns a receipt recovery URL after $gateway order creation when session setup is still processing", async ({
     handler,
     gateway,
@@ -472,7 +488,9 @@ describe("Stripe checkout handler", () => {
       json: async () => ({ error: "Stripe unavailable" }),
     } as Response);
 
-    const result = await stripeHandler.processPayment(makeContext());
+    const context = makeContext();
+    context.onOrderCreated = vi.fn();
+    const result = await stripeHandler.processPayment(context);
 
     expect(result).toEqual({
       success: false,
@@ -480,6 +498,7 @@ describe("Stripe checkout handler", () => {
     });
     expect(result.redirectUrl).toBeUndefined();
     expect(result).not.toHaveProperty("clearCheckoutSessionOnRedirect");
+    expect(context.onOrderCreated).toHaveBeenCalledWith("order_1", "stripe");
   });
 
   it("creates a Stripe intent after order commit when no fused session is returned", async () => {

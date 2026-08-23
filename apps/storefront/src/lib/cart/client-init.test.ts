@@ -12,7 +12,7 @@ import {
 } from "../../store/cart";
 import type { CartValidationIssue } from "../api/orders";
 import { CHECKOUT_CART_REPAIR_STORAGE_KEY } from "./repair-state";
-import { initCartFunctionality } from "./client";
+import { initCartFunctionality, resumeCartPageFromHistory } from "./client";
 
 const apiMocks = vi.hoisted(() => ({
   getActiveCheckoutLanguage: vi.fn(),
@@ -210,6 +210,24 @@ describe("initCartFunctionality", () => {
         customerPhone: "01700000000",
       }),
     );
+  });
+
+  it("reconciles an accepted order when the cart document returns from BFCache", async () => {
+    await initCartFunctionality();
+    const originalCheckoutId = sessionStorage.getItem("checkoutId");
+    expect(originalCheckoutId).toBeTruthy();
+    expect(cartStore.get().totalItems).toBe(1);
+
+    localStorage.setItem("cart", JSON.stringify({ items: {} }));
+    sessionStorage.removeItem("checkoutId");
+
+    await resumeCartPageFromHistory();
+
+    expect(cartStore.get().items).toEqual({});
+    expect((document.getElementById("cartItemsInput") as HTMLInputElement).value).toBe("{}");
+    expect(sessionStorage.getItem("checkoutId")).toBeTruthy();
+    expect(sessionStorage.getItem("checkoutId")).not.toBe(originalCheckoutId);
+    expect((document.getElementById("submitButton") as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("reveals truthful cart and checkout panels only after stored items hydrate", async () => {

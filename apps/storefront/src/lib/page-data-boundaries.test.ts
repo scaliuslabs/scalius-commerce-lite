@@ -16,10 +16,10 @@ describe("storefront page data boundaries", () => {
     );
 
     expect(source).toContain(
-      '<h1 class="text-sm sm:text-base font-bold text-foreground">',
+      '<h1 class="text-lg font-bold text-foreground sm:text-2xl">',
     );
     expect(source).not.toContain(
-      '<h2 class="text-sm sm:text-base font-bold text-foreground">',
+      '<h2 class="text-lg font-bold text-foreground sm:text-2xl">',
     );
   });
 

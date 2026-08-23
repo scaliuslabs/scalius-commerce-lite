@@ -555,10 +555,15 @@ function add(redirect: boolean) {
 
 function showToast(message: string, type: "success" | "error") {
   const config = TOAST_CONFIG.variants[type];
-  if (!cache.actions) return alert(message);
   const element = document.createElement("div");
   element.className = `${TOAST_CONFIG.container} ${config.bg} ${config.border} ${config.text} text-sm font-medium`;
   element.textContent = message;
-  cache.actions.insertBefore(element, cache.actions.firstChild);
+  element.setAttribute("role", type === "error" ? "alert" : "status");
+  if (cache.actions) {
+    cache.actions.insertBefore(element, cache.actions.firstChild);
+  } else {
+    element.classList.add("fixed", "inset-x-4", "top-4", "z-50", "mx-auto", "max-w-md", "shadow-lg");
+    document.body.appendChild(element);
+  }
   setTimeout(() => element.remove(), 3000);
 }

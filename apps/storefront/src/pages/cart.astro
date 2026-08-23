@@ -351,13 +351,14 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
           <div
             class="p-3 sm:p-4 border-b border-border bg-muted/50 flex items-center justify-between"
           >
-            <h1 class="text-sm sm:text-base font-bold text-foreground">
+            <h1 class="text-lg font-bold text-foreground sm:text-2xl">
               {lang.languageData.cartSectionTitle}
             </h1>
             <a
               href="/"
-              class="flex min-h-11 items-center rounded-md px-1 text-xs font-medium text-muted-foreground transition-colors hover:text-primary sm:min-h-8"
+              class="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-border bg-background px-3 text-sm font-semibold text-foreground shadow-sm transition-colors hover:bg-muted sm:min-h-9"
             >
+              <span aria-hidden="true">←</span>
               {lang.languageData.continueShoppingText}
             </a>
           </div>
@@ -465,7 +466,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
                     type="text"
                     id="discountCodeInput"
                     placeholder={lang.languageData.discountCodePlaceholder}
-                    class="h-11 min-w-0 flex-1 rounded-lg border border-input bg-background px-3 text-xs font-mono uppercase tracking-wider text-foreground transition-all focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:h-9 sm:text-sm"
+                    class="h-11 min-w-0 flex-1 rounded-lg border border-input bg-background px-3 text-base font-mono uppercase tracking-wider text-foreground transition-all focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:h-9"
                   />
                   <button
                     type="submit"
@@ -569,7 +570,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
                   name="customerName"
                   required
                   placeholder={lang.languageData.customerNamePlaceholder}
-                  className="h-11 w-full bg-muted border-input rounded-lg focus:bg-background focus:border-primary focus:ring-primary/20 text-sm text-foreground sm:h-9"
+                  className="h-11 w-full bg-muted border-input rounded-lg focus:bg-background focus:border-primary focus:ring-primary/20 text-base text-foreground sm:h-9"
                 />
               </div>
 
@@ -599,7 +600,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
                       id="customerEmail"
                       name="customerEmail"
                       placeholder={lang.languageData.customerEmailPlaceholder}
-                      className="h-11 w-full bg-muted border-input rounded-lg focus:bg-background focus:border-primary focus:ring-primary/20 text-sm text-foreground sm:h-9"
+                      className="h-11 w-full bg-muted border-input rounded-lg focus:bg-background focus:border-primary focus:ring-primary/20 text-base text-foreground sm:h-9"
                     />
                   </div>
                 )
@@ -621,7 +622,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
                   aria-describedby="shippingAddressError"
                   placeholder={lang.languageData.shippingAddressPlaceholder}
                   rows={2}
-                  className="w-full min-h-16 resize-none bg-muted border-input rounded-lg focus:bg-background focus:border-primary focus:ring-primary/20 px-3 py-2 text-sm text-foreground"
+                  className="w-full min-h-16 resize-none bg-muted border-input rounded-lg focus:bg-background focus:border-primary focus:ring-primary/20 px-3 py-2 text-base text-foreground"
                 />
                 <p
                   id="shippingAddressError"
@@ -672,7 +673,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
                       name="notes"
                       placeholder={lang.languageData.orderNotesPlaceholder}
                       rows={2}
-                      className="w-full min-h-16 resize-none bg-muted border-input rounded-lg focus:bg-background focus:border-primary focus:ring-primary/20 px-3 py-2.5 text-sm text-foreground"
+                      className="w-full min-h-16 resize-none bg-muted border-input rounded-lg focus:bg-background focus:border-primary focus:ring-primary/20 px-3 py-2.5 text-base text-foreground"
                     />
                   </div>
                 )
@@ -680,6 +681,13 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
             </div>
 
             <div class="pt-4">
+              <p
+                id="checkoutFormMessage"
+                class="mb-3 hidden rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive"
+                role="alert"
+                tabindex="-1"
+              >
+              </p>
               <Button
                 type="submit"
                 className="h-11 w-full bg-primary text-primary-foreground font-bold text-base py-3 sm:h-10 sm:py-3.5 rounded-xl shadow-lg hover:bg-primary/90 hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99] transition-all duration-200 overflow-hidden relative"
@@ -716,12 +724,16 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
 />
 
 <script>
-  import { initCartFunctionality } from "@/lib/cart/client";
+  import {
+    initCartFunctionality,
+    resumeCartPageFromHistory,
+  } from "@/lib/cart/client";
   import { getCustomerSession } from "@/lib/api/customer-auth";
   import { getEffectiveCartShippingFee } from "@/store/cart";
   import { validateStorefrontPhone } from "@/lib/phone-country-policy";
   import {
     readCheckoutFormDraft,
+    readHostedPaymentRecoverySession,
     syncCheckoutTransferSession,
     writeCheckoutFormDraft,
     writeCheckoutTransferSession,
@@ -1070,6 +1082,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
 
     const readCustomerSessionForCheckout = async () => getCustomerSession();
     const initialSubmitText = submitButtonText?.textContent?.trim() || "Place Order";
+    const checkoutFormMessage = document.getElementById("checkoutFormMessage");
     let submitAfterCustomerSessionCheck = false;
     let submitAfterCartValidation = false;
 
@@ -1082,13 +1095,27 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
       updateCheckoutButtonState();
     };
 
+    const showCheckoutFormError = (message: string, focusTarget?: HTMLElement | null) => {
+      if (!checkoutFormMessage) return;
+      checkoutFormMessage.textContent = message;
+      checkoutFormMessage.classList.remove("hidden");
+      checkoutFormMessage.scrollIntoView?.({ behavior: "smooth", block: "center" });
+      (focusTarget ?? checkoutFormMessage).focus({ preventScroll: true });
+    };
+
+    const clearCheckoutFormError = () => {
+      if (!checkoutFormMessage) return;
+      checkoutFormMessage.textContent = "";
+      checkoutFormMessage.classList.add("hidden");
+    };
+
     const showCheckoutTransferError = (message: string) => {
       restoreSubmitButton();
       hideCheckoutLoadingOverlay();
 
       const messageEl = document.getElementById("cartValidationMessage");
       if (!messageEl) {
-        alert(message);
+        showCheckoutFormError(message, submitButton);
         return;
       }
 
@@ -1103,9 +1130,10 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
           document.getElementById("cartPageRoot")?.dataset.cartReady === "true";
         const empty = isCartEmpty();
         const cartBlocked = window.hasCartValidationIssues?.() === true;
+        const checkoutPending = readHostedPaymentRecoverySession() !== null;
         submitButton.disabled =
-          !cartReady || checkoutUnavailable || empty || cartBlocked;
-        if (!cartReady || checkoutUnavailable || empty || cartBlocked)
+          !cartReady || checkoutUnavailable || empty || cartBlocked || checkoutPending;
+        if (!cartReady || checkoutUnavailable || empty || cartBlocked || checkoutPending)
           submitButton.classList.add("opacity-50", "cursor-not-allowed");
         else submitButton.classList.remove("opacity-50", "cursor-not-allowed");
         submitButton.title = !cartReady
@@ -1117,6 +1145,8 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
               : cartBlocked
                 ? window.getCartBlockedMessage?.() ||
                   "Some cart items need attention"
+                : checkoutPending
+                  ? "Review the existing checkout before placing another order"
                 : "";
       }
     };
@@ -1136,6 +1166,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
         submitAfterCartValidation = false;
         hideCheckoutLoadingOverlay({ restoreFocus: false });
         restoreSubmitButton();
+        void resumeCartPageFromHistory();
       },
       { signal: cartPageSignal },
     );
@@ -1187,9 +1218,22 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     form.addEventListener(
       "submit",
       async (e) => {
+        clearCheckoutFormError();
         if (checkoutUnavailable) {
           e.preventDefault();
-          alert(checkoutUnavailableMessage);
+          showCheckoutFormError(checkoutUnavailableMessage, submitButton);
+          return;
+        }
+
+        const pendingCheckout = readHostedPaymentRecoverySession();
+        if (pendingCheckout) {
+          e.preventDefault();
+          restoreSubmitButton();
+          const recoveryLink = document.getElementById("checkoutRecoveryLink") as HTMLAnchorElement | null;
+          showCheckoutFormError(
+            "Review your existing order before placing another one.",
+            recoveryLink ?? submitButton,
+          );
           return;
         }
 
@@ -1202,9 +1246,10 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
           const session = await readCustomerSessionForCheckout();
           if (session.unavailable) {
             restoreSubmitButton();
-            alert(
+            showCheckoutFormError(
               session.error ||
                 "We could not verify your account right now. Please try again.",
+              submitButton,
             );
             return;
           }
@@ -1230,8 +1275,9 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
         if (isCartEmpty()) {
           e.preventDefault();
           restoreSubmitButton();
-          alert(
+          showCheckoutFormError(
             "Your cart is empty. Please add items before placing an order.",
+            submitButton,
           );
           return;
         }
@@ -1244,9 +1290,10 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
             Promise.resolve(true));
           if (!cartIsValid || window.hasCartValidationIssues?.() === true) {
             restoreSubmitButton();
-            alert(
+            showCheckoutFormError(
               window.getCartBlockedMessage?.() ||
                 "Please review the highlighted cart items before checkout.",
+              submitButton,
             );
             return;
           }
@@ -1321,7 +1368,23 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
         if (missing.length > 0) {
           e.preventDefault();
           restoreSubmitButton();
-          alert(`Please fill in all required fields: ${missing.join(", ")}`);
+          const firstMissing = missing[0];
+          const missingTarget = document.querySelector<HTMLElement>(`[name="${firstMissing}"]`);
+          if (firstMissing === "customerPhone") {
+            window.dispatchEvent(new CustomEvent("phone-validation-error", {
+              detail: { name: "customerPhone", message: "Enter your phone number." },
+            }));
+            missingTarget?.focus({ preventScroll: true });
+          } else if (firstMissing === "shippingLocation" && shippingLocationError) {
+            shippingLocationError.textContent = "Choose a delivery option.";
+            shippingLocationError.classList.remove("hidden");
+            shippingLocationError.scrollIntoView({ behavior: "smooth", block: "center" });
+          } else {
+            const missingMessage = firstMissing === "customerName"
+              ? "Enter your full name."
+              : "Enter your delivery address.";
+            showCheckoutFormError(missingMessage, missingTarget);
+          }
           return;
         }
 

@@ -16,15 +16,17 @@ describe("order success side effects", () => {
 
     expect(pageSource).toContain("data-order-finalize");
     expect(pageSource).toContain("data-checkout-cart-finalize");
-    expect(pageSource).toContain("data-current-checkout-finalize");
-    expect(pageSource).toContain("matchesCheckoutRecoveryCart");
-    expect(pageSource).toContain("const shouldFinalizeThisReceipt = currentCheckoutFinalize || matchingHostedCheckout");
+    expect(pageSource).toContain("matchesCheckoutRecoverySession");
+    expect(pageSource).toContain("syncCartFromStorage");
+    expect(pageSource).toContain("resolveCheckoutReceiptCleanup");
     expect(pageSource).toContain("clearHostedPaymentRecoverySession");
     expect(pageSource).toContain("[data-order-finalize='true'][data-fb-order-details]");
-    expect(pageSource.indexOf('receiptElement.dataset.checkoutCartFinalize === "true"'))
-      .toBeLessThan(pageSource.indexOf("clearCart();"));
-    expect(pageSource.indexOf("if (shouldFinalizeThisReceipt) clearCheckoutSession();"))
-      .toBeGreaterThan(pageSource.indexOf("const shouldFinalizeThisReceipt"));
+    expect(pageSource).toContain("if (cleanup.clearCart) clearCart();");
+    expect(pageSource).toContain("if (cleanup.clearCheckoutSession) clearCheckoutSession();");
+    expect(pageSource).toContain("preserveFormDraft: true");
+    expect(pageSource).not.toContain("currentCheckoutFinalize || matchingHostedCheckout");
+    expect(pageSource).not.toContain("private receipt cookie");
+    expect(pageSource).toContain("This receipt can only be opened in the browser used at checkout.");
   });
 
   it("keeps hosted redirects from clearing the cart before authoritative receipt finalization", () => {
@@ -124,13 +126,15 @@ describe("order success side effects", () => {
       "utf8",
     );
 
-    expect(pageSource).toContain("data-order-success-state='payment_pending'");
+    expect(pageSource).toContain('initialState !== "payment_pending" && initialState !== "payment_issue"');
     expect(pageSource).toContain('receipt.dataset.paymentMethod !== "stripe"');
     expect(pageSource).toContain('fetch("/api/checkout/stripe-reconcile"');
     expect(pageSource).toContain("/api/order-receipt/status?orderId=");
     expect(pageSource).toContain('credentials: "same-origin"');
     expect(pageSource).toContain('cache: "no-store"');
-    expect(pageSource).toContain('state !== "payment_pending"');
+    expect(pageSource).toContain("state !== initialState");
+    expect(pageSource).toContain("updatedAt !== initialUpdatedAt");
+    expect(pageSource).toContain('window.addEventListener("pageshow"');
     expect(pageSource).toContain("window.location.reload()");
     expect(pageSource).not.toContain("X-Receipt-Token");
     expect(pageSource).not.toContain("receiptToken=${");

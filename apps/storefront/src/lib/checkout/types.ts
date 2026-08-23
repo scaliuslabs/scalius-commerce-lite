@@ -20,6 +20,7 @@ export interface PaymentContext {
   paymentType?: "full" | "deposit" | "balance";
   depositAmount?: number;
   replaceExistingAttempt?: boolean;
+  onOrderCreated?: (orderId: string, gateway: string) => void;
 }
 
 export interface PaymentResult {

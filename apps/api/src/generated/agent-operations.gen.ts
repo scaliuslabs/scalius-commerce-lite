@@ -8719,12 +8719,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 },
                 "isActive": {
                   "type": "boolean",
-                  "default": false,
                   "description": "Whether this language is active"
                 },
                 "isDefault": {
                   "type": "boolean",
-                  "default": false,
                   "description": "Whether this is the default language"
                 }
               }

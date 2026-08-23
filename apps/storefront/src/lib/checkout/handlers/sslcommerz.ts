@@ -25,6 +25,7 @@ export const sslcommerzHandler: GatewayHandler = {
         ? { orderId: ctx.orderId, totalAmount: ctx.totalAmount }
         : await createOrder(ctx.checkoutData, "sslcommerz");
       const { orderId } = createdOrder;
+      if (!ctx.orderId) ctx.onOrderCreated?.(orderId, "sslcommerz");
       paymentRequest = ctx.paymentType
         ? resolveExplicitCheckoutPaymentRequest(ctx.paymentType, ctx.depositAmount)
         : resolveCheckoutPaymentRequest(ctx.config, createdOrder.totalAmount ?? ctx.totalAmount);

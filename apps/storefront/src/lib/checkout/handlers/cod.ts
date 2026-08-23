@@ -16,6 +16,7 @@ export const codHandler: GatewayHandler = {
   async processPayment(ctx: PaymentContext): Promise<PaymentResult> {
     try {
       const { orderId } = await createOrder(ctx.checkoutData, "cod");
+      ctx.onOrderCreated?.(orderId, "cod");
       return {
         success: true,
         redirectUrl: `/order-success?orderId=${encodeURIComponent(orderId)}`,

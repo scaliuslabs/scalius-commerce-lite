@@ -1,5 +1,4 @@
 import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -8,6 +7,7 @@ import {
   normalizeHostedGatewayUrl,
 } from "./account-payment-recovery";
 import type { CustomerPaymentRecovery } from "./api/customer-auth";
+import { storefrontSourcePath } from "./test-source-paths";
 
 function recovery(overrides: Partial<CustomerPaymentRecovery> = {}): CustomerPaymentRecovery {
   return {
@@ -25,7 +25,7 @@ function recovery(overrides: Partial<CustomerPaymentRecovery> = {}): CustomerPay
 
 describe("account payment recovery", () => {
   const accountPageSource = readFileSync(
-    fileURLToPath(new URL("../pages/account/orders/[id].astro", import.meta.url)),
+    storefrontSourcePath("pages", "account", "orders", "[id].astro"),
     "utf8",
   );
 

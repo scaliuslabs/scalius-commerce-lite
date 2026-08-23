@@ -34,6 +34,29 @@ const baseConfig: CheckoutConfig = {
   partialPaymentAmount: 0,
 };
 
+function createMemoryStorage(): Storage {
+  const store = new Map<string, string>();
+  return {
+    get length() {
+      return store.size;
+    },
+    clear: vi.fn(() => store.clear()),
+    getItem: vi.fn((key: string) => store.get(key) ?? null),
+    key: vi.fn((index: number) => Array.from(store.keys())[index] ?? null),
+    removeItem: vi.fn((key: string) => store.delete(key)),
+    setItem: vi.fn((key: string, value: string) => store.set(key, String(value))),
+  };
+}
+
+function installStorageMocks(): void {
+  const local = createMemoryStorage();
+  const session = createMemoryStorage();
+  Object.defineProperty(globalThis, "localStorage", { value: local, configurable: true });
+  Object.defineProperty(window, "localStorage", { value: local, configurable: true });
+  Object.defineProperty(globalThis, "sessionStorage", { value: session, configurable: true });
+  Object.defineProperty(window, "sessionStorage", { value: session, configurable: true });
+}
+
 describe("checkout payment recovery", () => {
   it("turns a cleared stale customer session into an explicit guest continuation", () => {
     expect(getPaymentResultRecovery({
@@ -115,6 +138,8 @@ function successfulCheckoutFetch(quote = taxQuote()): typeof fetch {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  installStorageMocks();
+  localStorage.clear();
   window.__CURRENCY_CODE__ = "BDT";
   vi.stubGlobal("fetch", successfulCheckoutFetch());
 });
@@ -122,6 +147,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals();
   sessionStorage.clear();
+  localStorage.clear();
   document.body.innerHTML = "";
   delete (window as unknown as { __CHECKOUT_CONFIG__?: CheckoutConfig }).__CHECKOUT_CONFIG__;
   delete window.__CURRENCY_CODE__;

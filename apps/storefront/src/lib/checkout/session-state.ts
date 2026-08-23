@@ -207,12 +207,6 @@ export function writeCheckoutTransferSession(
   }
 
   try {
-    sessionStorage.removeItem("scalius_checkout_payment_method");
-  } catch {
-    // ignore optional selection reset errors
-  }
-
-  try {
     sessionStorage.setItem("scalius_checkout_gateways", gatewaysJson);
 
     if (sessionStorage.getItem("scalius_checkout_gateways") !== gatewaysJson) {
@@ -230,9 +224,15 @@ export function writeCheckoutTransferSession(
 }
 
 export function clearCheckoutSession(): void {
+  clearCheckoutAttemptSession();
+}
+
+export function clearCheckoutAttemptSession(options?: {
+  preserveFormDraft?: boolean;
+}): void {
   try {
     clearCheckoutTransferSession();
-    clearCheckoutFormDraft();
+    if (options?.preserveFormDraft !== true) clearCheckoutFormDraft();
     removeSessionKeys(CHECKOUT_RUNTIME_KEYS);
   } catch {
     // ignore storage access errors
@@ -335,6 +335,19 @@ export function matchesCheckoutRecoveryCart(
     recovery?.cartFingerprint &&
     recovery.cartFingerprint === fingerprintCheckoutCart(cartItems),
   );
+}
+
+export function matchesCheckoutRecoverySession(
+  recovery: HostedPaymentRecoverySession | null | undefined,
+  cartItems: unknown,
+): boolean {
+  if (!matchesCheckoutRecoveryCart(recovery, cartItems)) return false;
+  if (!recovery?.checkoutId) return true;
+  try {
+    return sessionStorage.getItem("checkoutId") === recovery.checkoutId;
+  } catch {
+    return false;
+  }
 }
 
 export function writeHostedPaymentRecoverySession(

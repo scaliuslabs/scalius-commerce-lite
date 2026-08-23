@@ -128,7 +128,7 @@ export default function PhoneField({
         aria-invalid={error ? "true" : undefined}
         aria-describedby={error ? errorId : undefined}
         placeholder={placeholder || "Phone number"}
-        className={`flex h-[46px] w-full rounded-lg border bg-muted px-3 text-sm text-foreground shadow-sm transition-all md:h-9 ${error ? "border-destructive focus-within:border-destructive focus-within:ring-destructive/20" : "border-input focus-within:border-primary focus-within:ring-primary/20"} focus-within:bg-background focus-within:ring-1 [&_.PhoneInputInput]:h-full [&_.PhoneInputInput]:border-none [&_.PhoneInputInput]:bg-transparent [&_.PhoneInputInput]:text-sm [&_.PhoneInputInput]:outline-none`}
+        className={`flex h-[46px] w-full rounded-lg border bg-muted px-3 text-base text-foreground shadow-sm transition-all md:h-9 ${error ? "border-destructive focus-within:border-destructive focus-within:ring-destructive/20" : "border-input focus-within:border-primary focus-within:ring-primary/20"} focus-within:bg-background focus-within:ring-1 [&_.PhoneInputInput]:h-full [&_.PhoneInputInput]:border-none [&_.PhoneInputInput]:bg-transparent [&_.PhoneInputInput]:text-base [&_.PhoneInputInput]:outline-none`}
       />
       {error ? (
         <p id={errorId} role="alert" className="mt-1 text-xs font-medium text-destructive">
