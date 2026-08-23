@@ -94,7 +94,7 @@ describe("cart page presentation contract", () => {
       'className="h-11 w-full bg-primary text-primary-foreground',
     );
     expect(cartPageSource).toContain(
-      'class="flex min-h-11 items-center rounded-md px-1',
+      'class="inline-flex min-h-11 items-center gap-1.5 rounded-lg border',
     );
     expect(cartPageSource).toContain(
       'class="h-11 min-w-0 flex-1 rounded-lg border border-input',

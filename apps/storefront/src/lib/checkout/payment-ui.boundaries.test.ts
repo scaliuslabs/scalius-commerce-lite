@@ -11,6 +11,10 @@ const overlaySource = readFileSync(
   storefrontSourcePath("components/CheckoutLoadingOverlay.astro"),
   "utf8",
 );
+const productControllerSource = readFileSync(
+  storefrontSourcePath("components/product/scripts/product-controller.ts"),
+  "utf8",
+);
 
 describe("storefront payment transition UI", () => {
   it("shares one accessible, theme-aware loading surface", () => {
@@ -29,5 +33,14 @@ describe("storefront payment transition UI", () => {
     expect(cartSource).not.toContain("loadingProgressBar");
     expect(checkoutSource).not.toContain("loadingProgressBar");
     expect(checkoutSource).not.toContain("SSL Encrypted");
+  });
+
+  it("uses inline checkout errors and a clear secondary shopping action", () => {
+    expect(cartSource).not.toContain("alert(");
+    expect(productControllerSource).not.toContain("alert(");
+    expect(cartSource).toContain('id="checkoutFormMessage"');
+    expect(cartSource).toContain('role="alert"');
+    expect(cartSource).toContain('<span aria-hidden="true">←</span>');
+    expect(cartSource).toContain("border border-border bg-background");
   });
 });

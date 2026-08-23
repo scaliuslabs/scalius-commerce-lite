@@ -1,7 +1,7 @@
 import type { CheckoutConfig, PaymentContext } from "./types";
 import { registerGateway, getGateway } from "./registry";
 import { codHandler } from "./handlers/cod";
-import { stripeHandler } from "./handlers/stripe";
+import { resetStripePaymentElement, stripeHandler } from "./handlers/stripe";
 import { sslcommerzHandler } from "./handlers/sslcommerz";
 import { polarHandler } from "./handlers/polar";
 import { formatPrice, DEFAULT_CURRENCY } from "@scalius/shared/currency";
@@ -9,6 +9,8 @@ import type { PaymentResult } from "./types";
 import {
   CHECKOUT_TRANSFER_UNAVAILABLE_MESSAGE,
   clearCheckoutTransferSession,
+  matchesCheckoutRecoverySession,
+  readHostedPaymentRecoverySession,
   readCheckoutPaymentSelection,
   writeCheckoutPaymentSelection,
   writeHostedPaymentRecoverySession,
@@ -55,6 +57,7 @@ let retrySelection: {
   gateway: CheckoutConfig["gateways"][number];
 } | null = null;
 let initVersion = 0;
+const PAYMENT_PROCESS_TIMEOUT_MS = 30_000;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -111,6 +114,38 @@ function setReturnToCartButton(): void {
     window.location.href = "/cart";
   };
   if (span) span.textContent = "Return to cart";
+}
+
+function clearCheckoutPresentation(): void {
+  resetStripePaymentElement();
+  document.getElementById("paymentMethods")?.replaceChildren();
+  document.getElementById("summaryDetails")?.replaceChildren();
+  document.getElementById("orderSummary")?.classList.add("hidden");
+  document.getElementById("stripeSection")?.classList.add("hidden");
+  setPaymentControlsDisabled(true);
+}
+
+function checkoutRecoveryHref(orderId: string, gateway: string): string {
+  const params = new URLSearchParams({ orderId, payment: gateway });
+  return `/order-success?${params.toString()}`;
+}
+
+async function withPaymentWatchdog<T>(promise: Promise<T>): Promise<T> {
+  let timeoutId: number | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timeoutId = window.setTimeout(() => {
+          reject(new Error(
+            "This is taking longer than expected. Check the saved order before trying again.",
+          ));
+        }, PAYMENT_PROCESS_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timeoutId) window.clearTimeout(timeoutId);
+  }
 }
 
 function applySelectedMethodStyles(methodId: string | null): void {
@@ -460,6 +495,7 @@ function trackAddPaymentInfoForSelection(methodId: string): void {
 
 function loadCheckoutData(): boolean {
   const fail = (message: string) => {
+    clearCheckoutPresentation();
     showError(message);
     setReturnToCartButton();
     clearCheckoutTransferSession();
@@ -820,6 +856,12 @@ async function processPayment(): Promise<void> {
     !checkoutConfig ||
     !authoritativeTaxQuote
   ) return;
+
+  const existingRecovery = readHostedPaymentRecoverySession();
+  if (matchesCheckoutRecoverySession(existingRecovery, checkoutData.cartItems)) {
+    window.location.replace(existingRecovery!.href);
+    return;
+  }
   const processingMethod = selectedMethod;
   isProcessing = true;
   setPaymentControlsDisabled(true);
@@ -867,9 +909,16 @@ async function processPayment(): Promise<void> {
       totalAmount,
       advanceAmount,
       currencySymbol: (window as unknown as Record<string, string>).__CURRENCY_SYMBOL__ || DEFAULT_CURRENCY.symbol,
+      onOrderCreated: (orderId, gateway) => {
+        writeHostedPaymentRecoverySession(
+          checkoutRecoveryHref(orderId, gateway),
+          checkoutData ?? undefined,
+          gateway,
+        );
+      },
     };
 
-    const result = await handler.processPayment(ctx);
+    const result = await withPaymentWatchdog(handler.processPayment(ctx));
 
     if (result.success && result.redirectUrl) {
       const redirectUrl = normalizeCheckoutRedirectUrl(
@@ -885,7 +934,7 @@ async function processPayment(): Promise<void> {
         processingMethod,
       );
       navigationCommitted = true;
-      window.location.href = redirectUrl;
+      window.location.replace(redirectUrl);
       return;
     }
 
@@ -946,6 +995,12 @@ export async function initCheckoutPage(): Promise<void> {
 
   if (!loadCheckoutData()) return;
 
+  const existingRecovery = readHostedPaymentRecoverySession();
+  if (matchesCheckoutRecoverySession(existingRecovery, checkoutData!.cartItems)) {
+    window.location.replace(existingRecovery!.href);
+    return;
+  }
+
   const freshness = await validateCheckoutCartFreshness(checkoutData!);
   if (currentInitVersion !== initVersion) return;
   if (!freshness.valid) {
@@ -989,5 +1044,6 @@ export async function resumeCheckoutPageFromHistory(): Promise<void> {
   retrySelection = null;
   selectionVersion += 1;
   setPaymentControlsDisabled(false);
+  resetStripePaymentElement();
   await initCheckoutPage();
 }

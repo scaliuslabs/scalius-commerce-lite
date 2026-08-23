@@ -261,6 +261,26 @@ export function hydrateCartFromStorage(): CartStore {
   if (typeof window === "undefined") return cartStore.get();
   if (hasHydratedFromStorage) return cartStore.get();
 
+  return readCartFromStorage(false);
+}
+
+/**
+ * Reconcile the in-memory cart with durable browser storage.
+ *
+ * This is intentionally separate from one-time hydration because a document
+ * restored from the back-forward cache can have an older Nanostore snapshot
+ * than localStorage (for example, after a completed checkout cleared the cart
+ * on the receipt page).
+ */
+export function syncCartFromStorage(): CartStore {
+  if (typeof window === "undefined") return cartStore.get();
+
+  return readCartFromStorage(true);
+}
+
+function readCartFromStorage(resetWhenMissing: boolean): CartStore {
+  if (typeof window === "undefined") return cartStore.get();
+
   if (
     typeof localStorage === "undefined" ||
     typeof localStorage.getItem !== "function" ||
@@ -284,6 +304,8 @@ export function hydrateCartFromStorage(): CartStore {
           console.warn("Could not persist migrated cart state.", error);
         }
       }
+    } else if (resetWhenMissing) {
+      cartStore.set({ ...EMPTY_CART_STATE });
     }
   } catch (error) {
     console.warn("Could not hydrate cart state.", error);

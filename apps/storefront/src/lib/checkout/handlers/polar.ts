@@ -25,6 +25,7 @@ export const polarHandler: GatewayHandler = {
         ? { orderId: ctx.orderId, totalAmount: ctx.totalAmount }
         : await createOrder(ctx.checkoutData, "polar");
       const { orderId } = createdOrder;
+      if (!ctx.orderId) ctx.onOrderCreated?.(orderId, "polar");
       paymentRequest = ctx.paymentType
         ? resolveExplicitCheckoutPaymentRequest(ctx.paymentType, ctx.depositAmount)
         : resolveCheckoutPaymentRequest(ctx.config, createdOrder.totalAmount ?? ctx.totalAmount);

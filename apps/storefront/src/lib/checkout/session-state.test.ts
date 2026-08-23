@@ -5,11 +5,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   CHECKOUT_TRANSFER_UNAVAILABLE_MESSAGE,
   clearCheckoutFormDraft,
+  clearCheckoutAttemptSession,
   clearHostedPaymentRecoverySession,
   clearCheckoutSession,
   clearCheckoutTransferSession,
   fingerprintCheckoutCart,
   matchesCheckoutRecoveryCart,
+  matchesCheckoutRecoverySession,
   readCheckoutFormDraft,
   readCheckoutPaymentSelection,
   readHostedPaymentRecoverySession,
@@ -32,9 +34,6 @@ const legacyAnalyticsKeys = [
   "scalius_user_city",
 ] as const;
 
-const browserSessionStorage = window.sessionStorage;
-const browserLocalStorage = window.localStorage;
-
 function createMemoryStorage(): Storage {
   const store = new Map<string, string>();
   return {
@@ -52,6 +51,9 @@ function createMemoryStorage(): Storage {
     }),
   };
 }
+
+const browserSessionStorage = createMemoryStorage();
+const browserLocalStorage = createMemoryStorage();
 
 function installSessionStorage(storage: Storage): void {
   Object.defineProperty(globalThis, "sessionStorage", {
@@ -121,6 +123,21 @@ describe("checkout session state", () => {
     }
   });
 
+  it("can end a terminal checkout while preserving the buyer form draft", () => {
+    writeCheckoutFormDraft({
+      customerName: "Buyer",
+      customerPhone: "+8801712345678",
+    });
+    sessionStorage.setItem("checkoutId", "checkout_terminal");
+    sessionStorage.setItem("scalius_checkout_data", "{}");
+
+    clearCheckoutAttemptSession({ preserveFormDraft: true });
+
+    expect(sessionStorage.getItem("checkoutId")).toBeNull();
+    expect(sessionStorage.getItem("scalius_checkout_data")).toBeNull();
+    expect(readCheckoutFormDraft()?.customerName).toBe("Buyer");
+  });
+
   it("writes cart-to-checkout transfer state only when storage persists both keys", () => {
     writeCheckoutPaymentSelection("polar");
     const result = writeCheckoutTransferSession(
@@ -134,7 +151,7 @@ describe("checkout session state", () => {
     expect(result).toEqual({ ok: true });
     expect(sessionStorage.getItem("scalius_checkout_data")).toContain("Buyer");
     expect(sessionStorage.getItem("scalius_checkout_gateways")).toBe('[{"id":"cod"}]');
-    expect(readCheckoutPaymentSelection()).toBeNull();
+    expect(readCheckoutPaymentSelection()).toBe("polar");
   });
 
   it("keeps only bounded checkout form fields for Back and Forward navigation", () => {
@@ -189,6 +206,26 @@ describe("checkout session state", () => {
 
     clearCheckoutTransferSession();
     expect(readCheckoutPaymentSelection()).toBeNull();
+  });
+
+  it("matches hosted recovery to the original checkout before clearing current state", () => {
+    const cartItems = {
+      line_1: { id: "product_1", variantId: "variant_1", quantity: 1 },
+    };
+    const recovery = {
+      href: "/order-success?orderId=order_1&payment=stripe",
+      gateway: "stripe" as const,
+      orderId: "order_1",
+      checkoutId: "checkout_original",
+      cartFingerprint: fingerprintCheckoutCart(cartItems),
+      createdAt: Date.now(),
+    };
+
+    sessionStorage.setItem("checkoutId", "checkout_original");
+    expect(matchesCheckoutRecoverySession(recovery, cartItems)).toBe(true);
+
+    sessionStorage.setItem("checkoutId", "checkout_new");
+    expect(matchesCheckoutRecoverySession(recovery, cartItems)).toBe(false);
   });
 
   it("fails closed and clears partial transfer state when required checkout data storage is blocked", () => {

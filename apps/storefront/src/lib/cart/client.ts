@@ -2,6 +2,7 @@
 import {
   cartStore,
   hydrateCartFromStorage,
+  syncCartFromStorage,
   addToCart,
   removeCartItemByKey,
   updateCartItemByKey,
@@ -1306,6 +1307,19 @@ export async function initCartFunctionality() {
   }
   await validateCartSnapshot();
   void updateTotals();
+  updateCheckoutButtonState();
+}
+
+export async function resumeCartPageFromHistory(): Promise<void> {
+  hostedPaymentRecoverySession = readHostedPaymentRecoverySession();
+  syncCartFromStorage();
+  renderCheckoutRecoveryNotice();
+  syncCheckoutIdInput();
+  await renderCartItems();
+  if (Object.keys(cartStore.get().items).length > 0) {
+    await validateCartSnapshot();
+    void updateTotals();
+  }
   updateCheckoutButtonState();
 }
 

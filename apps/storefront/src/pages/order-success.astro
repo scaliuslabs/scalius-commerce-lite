@@ -86,8 +86,8 @@ if (!orderId || !receiptToken) {
   recoveryState = {
     title: "We could not open this receipt",
     message: recoveryUrl
-      ? "This browser is missing the private receipt cookie for this order. Verify the buyer contact to recover payment from this browser."
-      : "This browser is missing the private receipt cookie for this order. Reopen the receipt from the same browser used at checkout, or sign in to check account orders before placing another order.",
+      ? "This receipt can only be opened in the browser used at checkout. Verify your contact to recover payment."
+      : "This receipt can only be opened in the browser used at checkout. Sign in to view your orders, or return to the checkout browser.",
     status: 400,
     showRetry: false,
     recoveryUrl,
@@ -136,10 +136,10 @@ const showsPositiveOrderState = orderSuccessView?.kind === "order_placed"
 const successfulUpdatedStatuses = new Set(["confirmed", "processing", "shipped", "delivered", "completed"]);
 const showsSuccessHero = orderSuccessView?.kind === "order_placed"
   || (orderSuccessView?.kind === "order_updated" && successfulUpdatedStatuses.has((order?.status ?? "").toLowerCase()));
-const shouldFinalizeCurrentCheckout = Boolean(
+const shouldConsumeCurrentCheckoutFinalizeMarker = Boolean(
   hasCurrentCheckoutFinalizeMarker && orderId && showsPositiveOrderState,
 );
-if (shouldFinalizeCurrentCheckout && orderId) {
+if (shouldConsumeCurrentCheckoutFinalizeMarker && orderId) {
   const clearFinalizeCookie = clearOrderReceiptFinalizeCookieHeader(orderId);
   if (clearFinalizeCookie) Astro.response.headers.append("Set-Cookie", clearFinalizeCookie);
 }
@@ -207,9 +207,9 @@ const orderPlacedAt = order?.createdAt
     data-order-success-state={orderSuccessView?.kind ?? "recovery"}
     data-order-finalize={orderSuccessView?.shouldFinalizeClientSide ? "true" : "false"}
     data-checkout-cart-finalize={shouldClearCheckoutCart ? "true" : "false"}
-    data-current-checkout-finalize={shouldFinalizeCurrentCheckout ? "true" : "false"}
     data-order-id={order?.id}
     data-payment-method={order?.paymentMethod}
+    data-order-updated-at={order?.updatedAt ?? undefined}
   >
     {order && orderSuccessView ? (
     <>
@@ -234,11 +234,13 @@ const orderPlacedAt = order?.createdAt
       )}
       <h1 class="mb-2 text-2xl font-bold">{orderSuccessView.title}</h1>
       <p class="text-gray-600">{orderSuccessView.message}</p>
-      {orderSuccessView.kind === "payment_pending" && (
+      {(orderSuccessView.kind === "payment_pending" || orderSuccessView.kind === "payment_issue") && (
         <div class="mt-3 text-sm text-muted-foreground">
-          <p data-payment-status-message aria-live="polite">Checking payment status…</p>
+          <p data-payment-status-message aria-live="polite">
+            {orderSuccessView.kind === "payment_pending" ? "Checking payment status…" : "Checking for a payment update…"}
+          </p>
           <button type="button" class="mt-2 hidden min-h-11 rounded-lg border border-border px-4 py-2 font-medium text-foreground hover:bg-muted" data-payment-check-now>
-            Check again
+            Check payment status
           </button>
         </div>
       )}
@@ -547,7 +549,7 @@ const orderPlacedAt = order?.createdAt
           {recoveryState?.showRetry && (
             <a href={Astro.url.pathname + Astro.url.search} data-astro-prefetch={getStorefrontPrefetchAttribute(Astro.url.pathname + Astro.url.search, Astro.url)} class="inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90">Retry receipt</a>
           )}
-          <a href="/account" data-astro-prefetch={getStorefrontPrefetchAttribute("/account", Astro.url)} class="inline-flex min-h-11 items-center justify-center rounded-lg border border-border px-5 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted">View account orders</a>
+          <a href="/account" data-astro-prefetch={getStorefrontPrefetchAttribute("/account", Astro.url)} class="inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90">View account orders</a>
           <a href="/" class="inline-flex min-h-11 items-center justify-center rounded-lg border border-border px-5 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted">Continue shopping</a>
         </div>
       </div>
@@ -560,14 +562,16 @@ const orderPlacedAt = order?.createdAt
 <script>
   import { trackFbPurchase } from "@/lib/analytics";
   import {
+    clearCheckoutAttemptSession,
     clearCheckoutSession,
     clearHostedPaymentRecoverySession,
-    matchesCheckoutRecoveryCart,
+    matchesCheckoutRecoverySession,
     readHostedPaymentRecoverySession,
   } from "@/lib/checkout/session-state";
   import type { PurchaseTrackingPayload } from "@/lib/order-success-state";
   import { claimMetaPurchaseTracking } from "@/lib/tracking/meta-purchase-guard";
-  import { cartStore, clearCart } from "@/store/cart";
+  import { cartStore, clearCart, syncCartFromStorage } from "@/store/cart";
+  import { resolveCheckoutReceiptCleanup } from "@/lib/checkout/receipt-finalization";
 
   document.addEventListener("DOMContentLoaded", () => {
     const receiptElement = document.querySelector<HTMLElement>(
@@ -576,18 +580,25 @@ const orderPlacedAt = order?.createdAt
     const receiptState = receiptElement?.dataset.orderSuccessState;
     const receiptOrderId = receiptElement?.dataset.orderId;
     if (receiptElement && receiptOrderId && (receiptState === "order_placed" || receiptState === "order_updated")) {
+      syncCartFromStorage();
       const recovery = readHostedPaymentRecoverySession();
       const recoveryMatchesOrder = recovery?.orderId === receiptOrderId;
-      const currentCheckoutFinalize = receiptElement.dataset.currentCheckoutFinalize === "true";
       const matchingHostedCheckout = Boolean(
-        recoveryMatchesOrder && matchesCheckoutRecoveryCart(recovery, cartStore.get().items),
+        recoveryMatchesOrder && matchesCheckoutRecoverySession(recovery, cartStore.get().items),
       );
-      const shouldFinalizeThisReceipt = currentCheckoutFinalize || matchingHostedCheckout;
-      if (shouldFinalizeThisReceipt && receiptElement.dataset.checkoutCartFinalize === "true") {
-        clearCart();
+      const acceptedCheckout = receiptElement.dataset.checkoutCartFinalize === "true";
+      const cleanup = resolveCheckoutReceiptCleanup({
+        receiptState,
+        recoveryMatchesOrder,
+        recoveryMatchesCheckout: matchingHostedCheckout,
+        acceptedCheckout,
+      });
+      if (cleanup.clearCart) clearCart();
+      if (cleanup.clearCheckoutSession) clearCheckoutSession();
+      if (cleanup.clearCheckoutAttemptPreservingDraft) {
+        clearCheckoutAttemptSession({ preserveFormDraft: true });
       }
-      if (shouldFinalizeThisReceipt) clearCheckoutSession();
-      if (shouldFinalizeThisReceipt && recoveryMatchesOrder) clearHostedPaymentRecoverySession();
+      if (cleanup.clearRecoveryPointer) clearHostedPaymentRecoverySession();
     }
 
     const mainElement = document.querySelector(
@@ -655,16 +666,19 @@ const orderPlacedAt = order?.createdAt
 
   document.addEventListener("DOMContentLoaded", () => {
     const receipt = document.querySelector<HTMLElement>(
-      "[data-order-success-state='payment_pending'][data-order-id]",
+      "[data-order-success-state][data-order-id]",
     );
     if (!receipt) return;
 
     const orderId = receipt.dataset.orderId;
+    const initialState = receipt.dataset.orderSuccessState;
+    const initialUpdatedAt = receipt.dataset.orderUpdatedAt || null;
     const message = receipt.querySelector<HTMLElement>("[data-payment-status-message]");
     const checkNowButton = receipt.querySelector<HTMLButtonElement>("[data-payment-check-now]");
-    if (!orderId) return;
+    if (!orderId || (initialState !== "payment_pending" && initialState !== "payment_issue")) return;
 
     let stopped = false;
+    let suspended = false;
     let checking = false;
     let delayIndex = 0;
     let timeoutId: number | undefined;
@@ -685,7 +699,7 @@ const orderPlacedAt = order?.createdAt
     };
 
     const schedule = () => {
-      if (stopped) return;
+      if (stopped || suspended) return;
       if (delayIndex >= PAYMENT_STATUS_DELAYS_MS.length) {
         if (message) message.textContent = "Confirmation is taking longer than usual. You can safely leave this receipt and return later.";
         checkNowButton?.classList.remove("hidden");
@@ -696,7 +710,7 @@ const orderPlacedAt = order?.createdAt
     };
 
     const checkStatus = async () => {
-      if (stopped || checking) return;
+      if (stopped || suspended || checking) return;
       if (document.visibilityState === "hidden") {
         schedule();
         return;
@@ -715,10 +729,16 @@ const orderPlacedAt = order?.createdAt
         );
         const payload = await response.json() as {
           success?: boolean;
-          data?: { state?: string };
+          data?: { state?: string; updatedAt?: string | null };
         };
         const state = payload.success ? payload.data?.state : undefined;
-        if (state && state !== "payment_pending") {
+        const updatedAt = payload.success ? payload.data?.updatedAt : undefined;
+        if (
+          state && (
+            state !== initialState ||
+            (updatedAt && initialUpdatedAt && updatedAt !== initialUpdatedAt)
+          )
+        ) {
           stopped = true;
           if (message) message.textContent = "Payment status updated. Refreshing your receipt…";
           window.location.reload();
@@ -748,13 +768,18 @@ const orderPlacedAt = order?.createdAt
       });
     });
     window.addEventListener("pagehide", () => {
-      stopped = true;
+      suspended = true;
       if (timeoutId) window.clearTimeout(timeoutId);
-      document.removeEventListener("visibilitychange", checkWhenVisible);
-    }, { once: true });
+    });
+    window.addEventListener("pageshow", (event) => {
+      if (!(event as PageTransitionEvent).persisted || stopped) return;
+      suspended = false;
+      delayIndex = 0;
+      void requestStripeReconciliation().finally(() => void checkStatus());
+    });
 
     void requestStripeReconciliation().finally(() => {
-      if (!stopped) void checkStatus();
+      if (!stopped && !suspended) void checkStatus();
     });
   });
 </script>

@@ -28,6 +28,20 @@ describe("phone country policy boundaries", () => {
     expect(phoneFieldSource).not.toContain("py-1 text-sm");
     expect(phoneFieldSource).toContain('role="alert"');
     expect(phoneFieldSource).toContain("required={required}");
+    expect(phoneFieldSource).toContain("[&_.PhoneInputInput]:text-base");
+    expect(phoneFieldSource).not.toContain("[&_.PhoneInputInput]:text-sm");
+  });
+
+  it("keeps account controls labelled, touch-sized, and iOS-zoom safe", () => {
+    expect(authModalSource).toContain('aria-labelledby="customer-auth-title"');
+    expect(authModalSource).toContain('aria-label="Close account dialog"');
+    expect(authModalSource).toContain('className="flex h-11 w-11');
+    expect(authModalSource).toContain('htmlFor="auth-primary-input"');
+    expect(authModalSource).toContain('id="auth-primary-input"');
+    expect(authModalSource).toContain('htmlFor="auth-phone-input"');
+    expect(authModalSource).toContain('id="auth-phone-input"');
+    expect(authModalSource).toContain("min-h-11 flex-1");
+    expect(authModalSource).toContain("[&_.PhoneInputInput]:text-base");
   });
 
   it("validates before either checkout flow leaves the cart", () => {

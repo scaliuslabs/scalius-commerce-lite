@@ -28,6 +28,8 @@ interface StripeElements {
 
 interface StripeCardElement {
   mount(selector: string): void;
+  unmount?(): void;
+  destroy?(): void;
   on(
     event: "change",
     handler: (e: { complete?: boolean; error?: { message: string } }) => void,
@@ -39,6 +41,17 @@ let stripeCard: StripeCardElement | null = null;
 let publishableKey: string | null = null;
 let stripeCardComplete = false;
 let stripeScriptPromise: Promise<void> | null = null;
+
+export function resetStripePaymentElement(): void {
+  try {
+    if (stripeCard?.destroy) stripeCard.destroy();
+    else stripeCard?.unmount?.();
+  } catch {
+    // The prior element may already be detached by browser history restore.
+  }
+  stripeCard = null;
+  stripeCardComplete = false;
+}
 
 function syncPayButtonReadiness(): void {
   const section = document.getElementById("stripeSection");
@@ -69,8 +82,7 @@ export const stripeHandler: GatewayHandler = {
     if (key && key !== publishableKey) {
       publishableKey = key;
       stripeInstance = null;
-      stripeCard = null;
-      stripeCardComplete = false;
+      resetStripePaymentElement();
     } else if (key) {
       publishableKey = key;
     }
@@ -97,7 +109,7 @@ export const stripeHandler: GatewayHandler = {
       const elements = stripeInstance.elements();
       stripeCard = elements.create("card", {
         style: {
-          base: { fontSize: "15px", color: "#111", fontFamily: "sans-serif" },
+          base: { fontSize: "16px", color: "#111", fontFamily: "sans-serif" },
           invalid: { color: "#e53e3e" },
         },
       });
@@ -133,6 +145,7 @@ export const stripeHandler: GatewayHandler = {
         ? { orderId: ctx.orderId, totalAmount: ctx.totalAmount }
         : await createOrder(ctx.checkoutData, "stripe");
       const { orderId } = createdOrder;
+      if (!ctx.orderId) ctx.onOrderCreated?.(orderId, "stripe");
 
       let clientSecret = createdOrder.initialPaymentSession?.gateway === "stripe"
         ? createdOrder.initialPaymentSession.clientSecret

@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { storefrontSourcePath } from "./test-source-paths";
 
 const buyerProductImageSurfaces = [
   "components/CartFlyout.tsx",
@@ -8,27 +9,27 @@ const buyerProductImageSurfaces = [
   "pages/account/orders/[id].astro",
 ].map((path) => ({
   path,
-  source: readFileSync(new URL(`../${path}`, import.meta.url), "utf8"),
+  source: readFileSync(storefrontSourcePath(...path.split("/")), "utf8"),
 }));
 
 const productGallerySource = readFileSync(
-  new URL("../components/product/ProductGallery.astro", import.meta.url),
+  storefrontSourcePath("components", "product", "ProductGallery.astro"),
   "utf8",
 );
 const categoryRailSource = readFileSync(
-  new URL("../components/homepage/HomepageCategoryRail.astro", import.meta.url),
+  storefrontSourcePath("components", "homepage", "HomepageCategoryRail.astro"),
   "utf8",
 );
 const productPageSource = readFileSync(
-  new URL("../pages/products/[slug].astro", import.meta.url),
+  storefrontSourcePath("pages", "products", "[slug].astro"),
   "utf8",
 );
 const collectionPageSource = readFileSync(
-  new URL("../pages/collections/[id].astro", import.meta.url),
+  storefrontSourcePath("pages", "collections", "[id].astro"),
   "utf8",
 );
 const categoryPageSource = readFileSync(
-  new URL("../pages/categories/[slug].astro", import.meta.url),
+  storefrontSourcePath("pages", "categories", "[slug].astro"),
   "utf8",
 );
 
