@@ -56,6 +56,7 @@ import { DataTableToolbar } from "@/components/admin/data-table/DataTableToolbar
 import { abandonedCheckoutsQueryOptions } from "@/lib/api-query-options/abandoned-checkouts";
 import { deleteAbandonedCheckouts } from "@/lib/api-functions/abandoned-checkouts";
 import { useOrderActionPermissions } from "@/hooks/use-order-action-permissions";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   formatAbandonedCheckoutId,
   formatAbandonedCheckoutItemCount,
@@ -719,8 +720,18 @@ export function AbandonedCheckoutsManager({
               )}
               <div className="md:hidden">
                 {isLoading ? (
-                  <div className="grid h-52 place-items-center">
-                    <Loader2 className="h-7 w-7 animate-spin text-primary" />
+                  <div className="space-y-2 p-3" role="status" aria-label="Loading incomplete checkouts">
+                    {Array.from({ length: 3 }).map((_, index) => (
+                      <div key={index} aria-hidden="true" className="space-y-3 rounded-md border p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <Skeleton className="h-5 w-2/3" />
+                          <Skeleton className="h-5 w-16" />
+                        </div>
+                        <Skeleton className="h-4 w-1/2" />
+                        <Skeleton className="h-8 w-full" />
+                      </div>
+                    ))}
+                    <span className="sr-only">Loading incomplete checkouts</span>
                   </div>
                 ) : isError && checkouts.length === 0 ? (
                   <div className="flex h-52 flex-col items-center justify-center gap-2 px-5 text-center text-muted-foreground">
@@ -815,11 +826,30 @@ export function AbandonedCheckoutsManager({
                   </TableHeader>
                   <TableBody>
                   {isLoading ? (
-                    <TableRow>
-                      <TableCell colSpan={7} className="h-64 text-center">
-                        <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
-                      </TableCell>
-                    </TableRow>
+                    Array.from({ length: 5 }).map((_, rowIndex) => (
+                      <TableRow
+                        key={rowIndex}
+                        aria-hidden={rowIndex === 0 ? undefined : true}
+                      >
+                        {Array.from({ length: 7 }).map((__, columnIndex) => (
+                          <TableCell key={columnIndex} className="h-12 py-2">
+                            {rowIndex === 0 && columnIndex === 0 ? (
+                              <span className="sr-only" role="status">Loading incomplete checkouts</span>
+                            ) : null}
+                            <Skeleton
+                              className={cn(
+                                "h-4",
+                                columnIndex === 0
+                                  ? "w-4"
+                                  : columnIndex % 3 === 0
+                                    ? "w-16"
+                                    : "w-full max-w-32",
+                              )}
+                            />
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                    ))
                   ) : isError && checkouts.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={7} className="h-64 text-center text-muted-foreground">

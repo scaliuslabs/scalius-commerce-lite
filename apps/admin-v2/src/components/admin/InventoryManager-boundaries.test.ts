@@ -14,6 +14,14 @@ describe("InventoryManager boundaries", () => {
     expect(source).toContain("void movementsQuery.refetch()");
   });
 
+  it("uses shape-preserving initial states while keeping refresh controls intact", () => {
+    expect(source).toContain("function InventoryTableRowsSkeleton");
+    expect(source).toContain('label="Loading inventory variants"');
+    expect(source).toContain('label="Loading low-stock alerts"');
+    expect(source).toContain('label="Loading inventory movements"');
+    expect(source).not.toContain('className="h-24 text-center"><RefreshCw');
+  });
+
   it("reports truthful physical, reserved, and preorder counter transitions", () => {
     expect(source).toContain("getMovementCounterChanges");
     expect(source).toContain("Reserved");

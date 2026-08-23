@@ -11,7 +11,7 @@ import {
 import { discountQueryOptions } from "~/lib/api-query-options/discounts";
 import { productsByIdsQueryOptions } from "~/lib/api-query-options/products";
 import { RouteErrorComponent } from "~/lib/route-error";
-import { PageLoadingSpinner } from "~/components/admin/shared/LoadingFallback";
+import { PageLoadingSkeleton } from "~/components/admin/shared/LoadingFallback";
 import {
   normalizeBooleanSearchParam,
   type SearchValidatorInput,
@@ -142,7 +142,7 @@ function EditDiscountPage() {
         </Link>
       </div>
 
-      <Suspense fallback={<PageLoadingSpinner />}>
+      <Suspense fallback={<PageLoadingSkeleton />}>
         <DiscountCodeBuilder
           key={`${discount.id}:${duplicate ? "copy" : "edit"}`}
           type={discount.type}

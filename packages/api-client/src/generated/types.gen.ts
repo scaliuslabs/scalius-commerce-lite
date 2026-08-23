@@ -42749,6 +42749,10 @@ export type GetApiV1AdminProductsData = {
          */
         trashed?: 'true' | 'false';
         /**
+         * Compact lists omit rich descriptions
+         */
+        view?: 'full' | 'compact';
+        /**
          * Sort field
          */
         sort?: 'name' | 'price' | 'category' | 'createdAt' | 'updatedAt';

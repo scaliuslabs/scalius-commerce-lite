@@ -366,6 +366,7 @@ const listRoute = createRoute({
             search: z.string().trim().max(120).optional().openapi({ description: "Search term" }),
             category: z.string().optional().openapi({ description: "Category ID filter" }),
             trashed: z.enum(["true", "false"]).optional().openapi({ description: "Show trashed items" }),
+            view: z.enum(["full", "compact"]).optional().default("full").openapi({ description: "Compact lists omit rich descriptions" }),
             sort: z.enum(["name", "price", "category", "createdAt", "updatedAt"]).optional().default("updatedAt").openapi({ description: "Sort field" }),
             order: z.enum(["asc", "desc"]).optional().default("desc").openapi({ description: "Sort order" })
         })
@@ -388,6 +389,7 @@ app.openapi(listRoute, async (c) => {
         search: query.search || undefined,
         categoryId: query.category || undefined,
         showTrashed: query.trashed === "true",
+        includeDescription: query.view !== "compact",
         sort: query.sort as "name" | "price" | "category" | "createdAt" | "updatedAt" | undefined,
         order: query.order as "asc" | "desc" | undefined
     });

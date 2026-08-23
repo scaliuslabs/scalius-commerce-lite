@@ -7,6 +7,7 @@ import {
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/admin/layout/AppSidebar";
 import { AdminHeader } from "@/components/admin/layout/AdminHeader";
+import { AdminNavigationProgress } from "@/components/admin/layout/AdminNavigationProgress";
 import { ThemeProvider } from "@/components/admin/layout/ThemeProvider";
 import { PermissionProvider } from "@/contexts/PermissionContext";
 import { DeferredToaster } from "@/components/ui/deferred-toaster";
@@ -52,6 +53,7 @@ function AdminLayout() {
         <SidebarProvider>
           <AppSidebar />
           <SidebarInset className="h-svh min-w-0 overflow-hidden">
+            <AdminNavigationProgress />
             <AdminHeader user={user} />
             <div
               id="admin-main-scroll"
