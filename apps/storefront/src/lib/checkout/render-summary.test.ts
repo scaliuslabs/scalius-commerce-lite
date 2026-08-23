@@ -16,11 +16,9 @@ import {
   getPaymentResultRecovery,
   initCheckoutPage,
   renderOrderSummaryDetails,
-  shouldClearCheckoutBeforeRedirect,
-  shouldClearCheckoutSessionBeforeRedirect,
   validateCheckoutCartFreshness,
 } from "./index";
-import { resolveCheckoutPaymentRequest } from "./payment-mode";
+import { resolveCheckoutPaymentRequest, resolveExplicitCheckoutPaymentRequest } from "./payment-mode";
 import type { CheckoutConfig } from "./types";
 import type { CheckoutTaxQuote } from "./tax-quote-contract";
 import { CHECKOUT_CART_REPAIR_STORAGE_KEY } from "../cart/repair-state";
@@ -192,6 +190,12 @@ describe("renderOrderSummaryDetails", () => {
 });
 
 describe("resolveCheckoutPaymentRequest", () => {
+  it("supports explicit existing-order balance recovery and validates advances", () => {
+    expect(resolveExplicitCheckoutPaymentRequest("balance")).toEqual({ paymentType: "balance" });
+    expect(resolveExplicitCheckoutPaymentRequest("deposit", 200)).toEqual({ paymentType: "deposit", depositAmount: 200 });
+    expect(() => resolveExplicitCheckoutPaymentRequest("deposit")).toThrow("valid advance amount");
+  });
+
   it("uses a full payment request when the configured deposit is not less than the total", () => {
     expect(
       resolveCheckoutPaymentRequest({
@@ -218,53 +222,6 @@ describe("resolveCheckoutPaymentRequest", () => {
         partialPaymentAmount: 200,
       }, 500),
     ).toEqual({ paymentType: "deposit", depositAmount: 200 });
-  });
-});
-
-describe("checkout redirect cleanup", () => {
-  it("distinguishes cart cleanup from checkout transfer cleanup", () => {
-    expect(
-      shouldClearCheckoutBeforeRedirect({
-        success: true,
-        redirectUrl: "https://gateway.example/checkout",
-      }),
-    ).toBe(false);
-    expect(
-      shouldClearCheckoutSessionBeforeRedirect({
-        success: true,
-        redirectUrl: "https://gateway.example/checkout",
-      }),
-    ).toBe(false);
-
-    expect(
-      shouldClearCheckoutBeforeRedirect({
-        success: true,
-        redirectUrl: "/order-success?orderId=1",
-        clearCartOnRedirect: true,
-      }),
-    ).toBe(true);
-    expect(
-      shouldClearCheckoutSessionBeforeRedirect({
-        success: true,
-        redirectUrl: "/order-success?orderId=1",
-        clearCartOnRedirect: true,
-      }),
-    ).toBe(true);
-
-    expect(
-      shouldClearCheckoutBeforeRedirect({
-        success: true,
-        redirectUrl: "https://gateway.example/checkout",
-        clearCheckoutSessionOnRedirect: true,
-      }),
-    ).toBe(false);
-    expect(
-      shouldClearCheckoutSessionBeforeRedirect({
-        success: true,
-        redirectUrl: "https://gateway.example/checkout",
-        clearCheckoutSessionOnRedirect: true,
-      }),
-    ).toBe(true);
   });
 });
 

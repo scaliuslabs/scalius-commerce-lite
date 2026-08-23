@@ -126,7 +126,9 @@ export const stripeHandler: GatewayHandler = {
     }
 
     try {
-      const createdOrder = await createOrder(ctx.checkoutData, "stripe");
+      const createdOrder = ctx.orderId
+        ? { orderId: ctx.orderId, totalAmount: ctx.totalAmount }
+        : await createOrder(ctx.checkoutData, "stripe");
       const { orderId } = createdOrder;
 
       let clientSecret = createdOrder.initialPaymentSession?.gateway === "stripe"
@@ -140,6 +142,15 @@ export const stripeHandler: GatewayHandler = {
       if (!clientSecret) {
         const intentPayload: Record<string, unknown> = {
           orderId,
+          ...(ctx.orderId
+            ? {
+                paymentType: ctx.paymentType,
+                ...(ctx.paymentType === "deposit" && ctx.depositAmount
+                  ? { depositAmount: ctx.depositAmount }
+                  : {}),
+                replaceExistingAttempt: ctx.replaceExistingAttempt ?? true,
+              }
+            : {}),
         };
 
         const { data: intentData, response: intentRes } = await fetchPaymentSessionWithProcessingRetry(() => fetch("/api/checkout/stripe-intent", {

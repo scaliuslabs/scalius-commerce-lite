@@ -1,6 +1,6 @@
 import type { GatewayHandler, PaymentContext, PaymentResult } from "../types";
 import { CheckoutOrderError, createOrder } from "../create-order";
-import { resolveCheckoutPaymentRequest } from "../payment-mode";
+import { resolveCheckoutPaymentRequest, resolveExplicitCheckoutPaymentRequest } from "../payment-mode";
 import { buildPaymentRecoveryUrl } from "../payment-recovery";
 import { fetchPaymentSessionWithProcessingRetry } from "../payment-session-retry";
 import { normalizeHostedCheckoutUrl } from "../redirect-url";
@@ -23,9 +23,13 @@ export const sslcommerzHandler: GatewayHandler = {
     let createdOrder: Awaited<ReturnType<typeof createOrder>> | null = null;
     let paymentRequest: ReturnType<typeof resolveCheckoutPaymentRequest> | null = null;
     try {
-      createdOrder = await createOrder(ctx.checkoutData, "sslcommerz");
+      createdOrder = ctx.orderId
+        ? { orderId: ctx.orderId, totalAmount: ctx.totalAmount }
+        : await createOrder(ctx.checkoutData, "sslcommerz");
       const { orderId } = createdOrder;
-      paymentRequest = resolveCheckoutPaymentRequest(ctx.config, createdOrder.totalAmount ?? ctx.totalAmount);
+      paymentRequest = ctx.paymentType
+        ? resolveExplicitCheckoutPaymentRequest(ctx.paymentType, ctx.depositAmount)
+        : resolveCheckoutPaymentRequest(ctx.config, createdOrder.totalAmount ?? ctx.totalAmount);
 
       let gatewayUrl = createdOrder.initialPaymentSession?.gateway === "sslcommerz"
         ? createdOrder.initialPaymentSession.gatewayUrl
@@ -38,6 +42,15 @@ export const sslcommerzHandler: GatewayHandler = {
       if (!gatewayUrl) {
         const sessionPayload: Record<string, unknown> = {
           orderId,
+          ...(ctx.orderId
+            ? {
+                paymentType: ctx.paymentType,
+                ...(ctx.paymentType === "deposit" && ctx.depositAmount
+                  ? { depositAmount: ctx.depositAmount }
+                  : {}),
+                replaceExistingAttempt: ctx.replaceExistingAttempt ?? true,
+              }
+            : {}),
         };
 
         const { data: sessionData, response: sessionRes } = await fetchPaymentSessionWithProcessingRetry(() => fetch("/api/checkout/sslcommerz-session", {
@@ -64,7 +77,6 @@ export const sslcommerzHandler: GatewayHandler = {
       return {
         success: true,
         redirectUrl: gatewayUrl,
-        clearCartOnRedirect: true,
         hostedPaymentRecoveryUrl,
       };
     } catch (err: unknown) {
@@ -78,7 +90,6 @@ export const sslcommerzHandler: GatewayHandler = {
         return {
           success: true,
           redirectUrl: hostedPaymentRecoveryUrl,
-          clearCartOnRedirect: true,
           hostedPaymentRecoveryUrl,
         };
       }

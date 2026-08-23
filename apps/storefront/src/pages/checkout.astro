@@ -12,6 +12,7 @@
 
 import Layout from "@/layouts/Layout.astro";
 import CheckoutLoadingOverlay from "@/components/CheckoutLoadingOverlay.astro";
+import CheckoutProgress from "@/components/CheckoutProgress.astro";
 import { getLayoutData, getCheckoutConfig } from "@/lib/api";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
@@ -26,6 +27,7 @@ const serializedCheckoutConfig = serializeJsonForInlineScript(checkoutConfig);
 <Layout title="Payment" layoutData={layoutData}>
   <meta slot="head" name="robots" content="noindex,nofollow" />
   <div class="container max-w-2xl mx-auto px-4 py-8">
+    <CheckoutProgress current="payment" />
     <!-- Back link -->
     <a
       href="/cart"
@@ -36,14 +38,17 @@ const serializedCheckoutConfig = serializeJsonForInlineScript(checkoutConfig);
       <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width={2} d="M15 19l-7-7 7-7" />
       </svg>
-      Back to cart
+      Return to information
     </a>
 
-    <h1 class="text-2xl font-bold mb-6">Choose Payment Method</h1>
+    <div class="mb-6">
+      <h1 class="text-2xl font-bold">Choose how to pay</h1>
+      <p class="mt-1 text-sm text-muted-foreground">Your order is created once. If payment fails, you can retry or choose another available method without duplicating it.</p>
+    </div>
 
     <!-- Order summary (populated by JS) -->
     <div id="orderSummary" class="rounded-xl border border-border bg-muted p-4 mb-6 hidden">
-      <h2 class="text-sm font-semibold text-foreground uppercase tracking-wide mb-3">Order Summary</h2>
+      <h2 class="text-sm font-semibold text-foreground uppercase tracking-wide mb-3">Order summary</h2>
       <div class="space-y-1 text-sm text-muted-foreground" id="summaryDetails"></div>
     </div>
 
@@ -77,7 +82,7 @@ const serializedCheckoutConfig = serializeJsonForInlineScript(checkoutConfig);
     </button>
 
     <p class="text-xs text-muted-foreground text-center mt-3">
-      Secure checkout
+      Secure payment · Your cart stays available until the order is confirmed
     </p>
   </div>
 </Layout>

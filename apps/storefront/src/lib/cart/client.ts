@@ -40,7 +40,6 @@ import {
 } from "./bulk-repair-actions";
 import { resolveCartKeyForValidatedLine } from "./cart-key-resolution";
 import {
-  clearHostedPaymentRecoverySession,
   readHostedPaymentRecoverySession,
   type HostedPaymentRecoverySession,
 } from "../checkout/session-state";
@@ -86,6 +85,26 @@ let latestCheckoutLocation: {
   areaName: string;
 } | null = null;
 let hostedPaymentRecoverySession: HostedPaymentRecoverySession | null = null;
+
+function renderCheckoutRecoveryNotice(): void {
+  const notice = document.getElementById("checkoutRecoveryNotice");
+  const link = document.getElementById("checkoutRecoveryLink") as HTMLAnchorElement | null;
+  const reference = document.getElementById("checkoutRecoveryReference");
+  if (!notice || !link || !reference) return;
+
+  if (!hostedPaymentRecoverySession) {
+    notice.classList.add("hidden");
+    notice.setAttribute("aria-hidden", "true");
+    link.removeAttribute("href");
+    reference.textContent = "";
+    return;
+  }
+
+  reference.textContent = hostedPaymentRecoverySession.orderId;
+  link.href = hostedPaymentRecoverySession.href;
+  notice.classList.remove("hidden");
+  notice.setAttribute("aria-hidden", "false");
+}
 
 // --- Abandoned Checkout ---
 let abandonedCheckoutTimer: ReturnType<typeof setTimeout> | null = null;
@@ -830,20 +849,13 @@ export async function renderCartItems() {
       hostedPaymentRecoverySession
         ? {
             href: hostedPaymentRecoverySession.href,
-            onClick: () => {
-              hostedPaymentRecoverySession = null;
-              clearHostedPaymentRecoverySession();
-            },
           }
         : null,
     );
     syncCartPagePresentation(true);
     return;
   }
-  if (hostedPaymentRecoverySession) {
-    hostedPaymentRecoverySession = null;
-    clearHostedPaymentRecoverySession();
-  }
+  renderCheckoutRecoveryNotice();
 
   cartItemsContainer.innerHTML = Object.entries(items)
     .map(([cartKey, item]) => {
@@ -916,6 +928,7 @@ export function updateCheckoutButtonState() {
     isEmpty,
     cartBlocked: hasBlockingCartIssues(),
     cartBlockedMessage: cartBlockedMessage(),
+    checkoutPending: hostedPaymentRecoverySession !== null,
   });
 }
 
@@ -1038,6 +1051,7 @@ export async function initCartFunctionality() {
   const runtimeSignal = resetCartRuntimeListeners();
   hydrateCartFromStorage();
   hostedPaymentRecoverySession = readHostedPaymentRecoverySession();
+  renderCheckoutRecoveryNotice();
 
   // ── Read server-rendered shipping defaults ────────────────────────────────
   // Eliminates the race condition: this runs before React hydration, ensuring

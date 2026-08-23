@@ -15,9 +15,26 @@ describe("order success side effects", () => {
     );
 
     expect(pageSource).toContain("data-order-finalize");
+    expect(pageSource).toContain("data-checkout-cart-finalize");
+    expect(pageSource).toContain("matchesCheckoutRecoveryCart");
+    expect(pageSource).toContain("clearHostedPaymentRecoverySession");
     expect(pageSource).toContain("[data-order-finalize='true'][data-fb-order-details]");
-    expect(pageSource.indexOf("[data-order-finalize='true'][data-fb-order-details]"))
+    expect(pageSource.indexOf('receiptElement.dataset.checkoutCartFinalize === "true"'))
       .toBeLessThan(pageSource.indexOf("clearCart();"));
+  });
+
+  it("keeps hosted redirects from clearing the cart before authoritative receipt finalization", () => {
+    const checkoutSource = readFileSync(
+      sourcePath("lib", "checkout", "index.ts"),
+      "utf8",
+    );
+    const handlerSources = ["cod.ts", "sslcommerz.ts", "polar.ts", "stripe.ts"]
+      .map((file) => readFileSync(sourcePath("lib", "checkout", "handlers", file), "utf8"))
+      .join("\n");
+
+    expect(checkoutSource).not.toContain('localStorage.removeItem("cart")');
+    expect(checkoutSource).not.toContain("clearCheckoutAndCart");
+    expect(handlerSources).not.toContain("clearCartOnRedirect");
   });
 
   it("keeps navigation buttons free of cart-clearing side effects", () => {
@@ -45,10 +62,12 @@ describe("order success side effects", () => {
     expect(pageSource).toContain("supportRequests={order.supportRequests}");
     expect(pageSource).toContain("supportRequestActions={order.supportRequestActions}");
     expect(pageSource).toContain("supportRequestIntro={order.supportRequestIntro}");
-    expect(buttonsSource).toContain("Save your receipt");
-    expect(buttonsSource).toContain("This guest receipt is private to this browser and available for a limited time.");
-    expect(buttonsSource).toContain("navigator.clipboard");
-    expect(buttonsSource).toContain("Sign in for future orders");
+    expect(buttonsSource).toContain("Track this order from any device");
+    expect(buttonsSource).toContain("We securely add the order if it is not already saved there.");
+    expect(buttonsSource).not.toContain("navigator.clipboard");
+    expect(buttonsSource).toContain("/api/order-receipt/claim-account");
+    expect(buttonsSource).toContain("Create account");
+    expect(buttonsSource).toContain("Sign in");
     expect(buttonsSource).toContain("open-auth-modal");
     expect(buttonsSource).toContain("/account/orders/${encodeURIComponent(orderId)}");
   });
@@ -90,6 +109,7 @@ describe("order success side effects", () => {
     expect(retryScriptIndex).toBeGreaterThan(pageSource.indexOf("clearCart();"));
     const retryScript = pageSource.slice(retryScriptIndex);
     expect(retryScript).toContain("fetchPaymentSessionWithProcessingRetry");
+    expect(retryScript).toContain('replaceExistingAttempt: paymentType !== "balance"');
     expect(retryScript).not.toContain("clearCart");
     expect(retryScript).not.toContain("trackFbPurchase");
     expect(retryScript).toContain("Retrying in ${event.retryAfterSeconds}s");

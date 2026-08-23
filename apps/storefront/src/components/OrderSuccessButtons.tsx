@@ -6,7 +6,7 @@ import type {
   OrderReceiptSupportRequestType,
 } from "@/lib/api/types";
 import { AlertCircle, CheckCircle2, HelpCircle, Loader2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type OrderSuccessButtonsProps = {
   orderId?: string;
@@ -81,7 +81,8 @@ export default function OrderSuccessButtons({
   const [isAnimated, setIsAnimated] = useState(false);
   const [isCustomerAuthenticated, setIsCustomerAuthenticated] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
-  const [receiptCopyState, setReceiptCopyState] = useState<"idle" | "copied" | "failed">("idle");
+  const [accountSaveState, setAccountSaveState] = useState<SubmitState>({ status: "idle", message: null });
+  const saveAfterAuthRef = useRef(false);
   const [supportRequests, setSupportRequests] = useState(initialSupportRequests);
   const [supportRequestActions, setSupportRequestActions] = useState(initialSupportRequestActions);
   const [supportRequestIntro, setSupportRequestIntro] = useState(initialSupportRequestIntro);
@@ -90,14 +91,61 @@ export default function OrderSuccessButtons({
   const [supportMessage, setSupportMessage] = useState("");
   const [supportSubmitState, setSupportSubmitState] = useState<SubmitState>({ status: "idle", message: null });
 
+  const claimOrderToAccount = useCallback(async () => {
+    if (!orderId) {
+      setAccountSaveState({ status: "error", message: "This receipt is missing its order reference." });
+      return;
+    }
+    setAccountSaveState({ status: "submitting", message: "Saving this order to your account..." });
+    try {
+      const response = await fetch("/api/order-receipt/claim-account", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId }),
+      });
+      const payload = await response.json().catch(() => null) as {
+        success?: boolean;
+        data?: { orderId?: string; alreadyClaimed?: boolean };
+        error?: string | { message?: string };
+      } | null;
+      if (!response.ok || payload?.success === false) {
+        throw new Error(getApiMessage(payload, "This order could not be saved. Please try again."));
+      }
+      setAccountSaveState({
+        status: "success",
+        message: payload?.data?.alreadyClaimed
+          ? "This order is already in your account."
+          : "Order saved. You can now track it from any signed-in device.",
+      });
+    } catch (error) {
+      setAccountSaveState({
+        status: "error",
+        message: error instanceof Error ? error.message : "This order could not be saved. Please try again.",
+      });
+    }
+  }, [orderId]);
+
   useEffect(() => {
     setIsCustomerAuthenticated(document.cookie.includes("cs_auth=1"));
     setAuthChecked(true);
 
-    setTimeout(() => {
+    const handleCustomerLogin = () => {
+      setIsCustomerAuthenticated(true);
+      if (saveAfterAuthRef.current) {
+        saveAfterAuthRef.current = false;
+        void claimOrderToAccount();
+      }
+    };
+    window.addEventListener("customer-login", handleCustomerLogin);
+    const animationTimer = window.setTimeout(() => {
       setIsAnimated(true);
     }, 300);
-  }, []);
+    return () => {
+      window.removeEventListener("customer-login", handleCustomerLogin);
+      window.clearTimeout(animationTimer);
+    };
+  }, [claimOrderToAccount]);
 
   useEffect(() => {
     setSupportRequests(initialSupportRequests);
@@ -129,8 +177,8 @@ export default function OrderSuccessButtons({
     window.print();
   };
 
-  const handleOpenAuth = () => {
-    window.dispatchEvent(new CustomEvent("open-auth-modal"));
+  const handleOpenAuth = (intent: "sign_in" | "sign_up" = "sign_in") => {
+    window.dispatchEvent(new CustomEvent("open-auth-modal", { detail: { intent } }));
   };
 
   const handleOpenAccountOrder = () => {
@@ -141,17 +189,19 @@ export default function OrderSuccessButtons({
     window.location.href = "/account";
   };
 
-  const handleCopyReceiptLink = async () => {
-    const receiptUrl = window.location.href;
-    try {
-      if (!navigator.clipboard?.writeText) {
-        throw new Error("Clipboard unavailable");
-      }
-      await navigator.clipboard.writeText(receiptUrl);
-      setReceiptCopyState("copied");
-    } catch {
-      setReceiptCopyState("failed");
+  const handleSaveOrder = (intent: "sign_in" | "sign_up") => {
+    if (isCustomerAuthenticated) {
+      void claimOrderToAccount();
+      return;
     }
+    saveAfterAuthRef.current = true;
+    setAccountSaveState({
+      status: "idle",
+      message: intent === "sign_up"
+        ? "Create your account with the same phone or email used at checkout."
+        : "Sign in with the same phone or email used at checkout.",
+    });
+    handleOpenAuth(intent);
   };
 
   const handleSelectSupportAction = (action: OrderReceiptSupportRequestAction) => {
@@ -249,28 +299,6 @@ export default function OrderSuccessButtons({
           </svg>
           Continue shopping
         </Button>
-        {isCustomerAuthenticated && (
-          <Button
-            variant="outline"
-            className="border-2 border-green-600 text-green-700 font-medium py-3 px-6 rounded-xl hover:bg-green-50 transition-all duration-200 flex-1"
-            onClick={handleOpenAccountOrder}
-          >
-            <svg
-              className="w-5 h-5 mr-2"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-              />
-            </svg>
-            Track in account
-          </Button>
-        )}
         <Button
           className="bg-black text-white font-medium py-3 px-6 rounded-xl hover:bg-gray-800 transition-all duration-200 flex-1"
           onClick={handlePrintOrder}
@@ -296,38 +324,52 @@ export default function OrderSuccessButtons({
       <div className="w-full max-w-xl rounded-xl border border-border bg-muted/30 p-4 text-left">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-foreground">Save your receipt</p>
+            <p className="text-sm font-semibold text-foreground">Track this order from any device</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              This guest receipt is private to this browser and available for a limited time.
+              Create or sign in to an account with the same phone or email used at checkout. We securely add the order if it is not already saved there.
             </p>
           </div>
           <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
-            <Button
-              type="button"
-              variant="outline"
-              className="border-border font-medium"
-              onClick={handleCopyReceiptLink}
-            >
-              Copy receipt link
-            </Button>
-            {authChecked && !isCustomerAuthenticated && (
-              <Button
-                type="button"
-                variant="outline"
-                className="border-border font-medium"
-                onClick={handleOpenAuth}
-              >
-                Sign in for future orders
-              </Button>
-            )}
+            {authChecked && isCustomerAuthenticated ? (
+              accountSaveState.status === "success" ? (
+                <Button type="button" className="font-medium" onClick={handleOpenAccountOrder}>
+                  View in account
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  className="font-medium"
+                  onClick={() => handleSaveOrder("sign_in")}
+                  disabled={accountSaveState.status === "submitting"}
+                >
+                  {accountSaveState.status === "submitting" ? "Saving..." : "Save to my account"}
+                </Button>
+              )
+            ) : authChecked ? (
+              <>
+                <Button
+                  type="button"
+                  className="font-medium"
+                  onClick={() => handleSaveOrder("sign_up")}
+                >
+                  Create account
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="border-border font-medium"
+                  onClick={() => handleSaveOrder("sign_in")}
+                >
+                  Sign in
+                </Button>
+              </>
+            ) : null}
           </div>
         </div>
         <div aria-live="polite">
-          {receiptCopyState !== "idle" ? (
-            <p className={`mt-2 text-sm ${receiptCopyState === "failed" ? "text-destructive" : "text-primary"}`}>
-              {receiptCopyState === "copied"
-                ? "Receipt link copied."
-                : "Copy failed. Save this page from your browser instead."}
+          {accountSaveState.message ? (
+            <p className={`mt-2 text-sm ${accountSaveState.status === "error" ? "text-destructive" : accountSaveState.status === "success" ? "text-primary" : "text-muted-foreground"}`}>
+              {accountSaveState.message}
             </p>
           ) : null}
         </div>

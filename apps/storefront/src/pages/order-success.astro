@@ -1,5 +1,6 @@
 ---
 import Layout from "@/layouts/Layout.astro";
+import CheckoutProgress from "@/components/CheckoutProgress.astro";
 import OrderSuccessButtons from "../components/OrderSuccessButtons";
 import { getOrderReceipt, getLayoutData, type OrderReceipt, type OrderItem, type LayoutData } from "@/lib/api";
 import { getCheckoutConfig, type CheckoutConfig } from "@/lib/api/checkout";
@@ -7,6 +8,7 @@ import {
   createPurchaseTrackingPayload,
   formatOrderSuccessLabel,
   getOrderSuccessViewState,
+  shouldClearCheckoutCartForOrder,
 } from "@/lib/order-success-state";
 import {
   canRetryOrderSuccessPayment,
@@ -16,6 +18,7 @@ import {
 } from "@/lib/order-success-payment-retry";
 import { readOrderReceiptCookie } from "@/lib/order-receipt-cookie";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
+import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import {
   formatSavedMinorAmount,
   resolveSavedOrderLineMoney,
@@ -107,6 +110,7 @@ if (recoveryState) {
 
 const orderItemsFromApi: OrderItem[] = order?.items || [];
 const orderSuccessView = order ? getOrderSuccessViewState(order) : null;
+const shouldClearCheckoutCart = order ? shouldClearCheckoutCartForOrder(order) : false;
 const showsPositiveOrderState = orderSuccessView?.kind === "order_placed"
   || orderSuccessView?.kind === "order_updated";
 const retryPaymentType = order
@@ -114,7 +118,15 @@ const retryPaymentType = order
   : null;
 const retryPaymentOptions = order && orderSuccessView && receiptToken && canRetryOrderSuccessPayment(order, orderSuccessView.kind, paymentResult)
   ? getOrderSuccessRetryOptions(order, orderSuccessView.kind, paymentResult, checkoutConfig.gateways)
+      .filter((option) => retryPaymentType !== "balance" || option.current)
   : [];
+const stripeRetryGateway = retryPaymentOptions.some((option) => option.gateway === "stripe")
+  ? checkoutConfig.gateways.find((gateway) => gateway.id === "stripe")
+  : null;
+const stripeRetryPublishableKey = typeof stripeRetryGateway?.publishableKey === "string"
+  ? stripeRetryGateway.publishableKey
+  : "";
+const serializedRecoveryCheckoutConfig = serializeJsonForInlineScript(checkoutConfig);
 const purchaseTrackingPayload =
   order && orderSuccessView?.shouldFinalizeClientSide
     ? createPurchaseTrackingPayload(order, orderItemsFromApi)
@@ -145,11 +157,13 @@ const legacySubtotal = order
     data-fb-order-details={purchaseTrackingPayload ? JSON.stringify(purchaseTrackingPayload) : undefined}
     data-order-success-state={orderSuccessView?.kind ?? "recovery"}
     data-order-finalize={orderSuccessView?.shouldFinalizeClientSide ? "true" : "false"}
+    data-checkout-cart-finalize={shouldClearCheckoutCart ? "true" : "false"}
     data-order-id={order?.id}
     data-payment-method={order?.paymentMethod}
   >
     {order && orderSuccessView ? (
     <>
+    <CheckoutProgress current="confirmation" paymentRequired={order.paymentMethod !== "cod"} />
     <div class="order-success-print-header text-center mb-8 animate-fade-in">
       {showsPositiveOrderState ? (
         <div class="success-checkmark" aria-hidden="true">
@@ -189,6 +203,32 @@ const legacySubtotal = order
               </button>
             ))}
           </div>
+          {stripeRetryGateway && (
+            <div
+              id="stripeSection"
+              class="hidden w-full max-w-lg rounded-xl border border-border bg-card p-5 text-left"
+              data-publishable-key={stripeRetryPublishableKey}
+              data-order-id={order.id}
+              data-total-amount={String(order.totalAmount)}
+              data-payment-type={retryPaymentType}
+              data-deposit-amount={retryPaymentType === "deposit" && requestedDepositAmount ? String(requestedDepositAmount) : undefined}
+            >
+              <h2 class="text-sm font-semibold text-foreground">Card details</h2>
+              <p class="mt-1 text-xs text-muted-foreground">
+                Your existing order will be updated. This will not create another order.
+              </p>
+              <div id="stripeCardElement" class="mt-4 rounded-lg border border-input bg-background p-3"></div>
+              <div id="stripeError" class="mt-2 hidden text-xs text-destructive" aria-live="polite"></div>
+              <button
+                id="payButton"
+                type="button"
+                class="mt-4 w-full rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+                disabled
+              >
+                <span id="payButtonText">Pay securely by card</span>
+              </button>
+            </div>
+          )}
           <p id="retryPaymentMessage" class="min-h-5 text-sm text-muted-foreground" aria-live="polite"></p>
         </div>
       )}
@@ -472,14 +512,38 @@ const legacySubtotal = order
   </section>
 </Layout>
 
+<script is:inline set:html={`window.__CHECKOUT_CONFIG__=${serializedRecoveryCheckoutConfig};`}></script>
+
 <script>
   import { trackFbPurchase } from "@/lib/analytics";
-  import { clearCheckoutSession } from "@/lib/checkout/session-state";
+  import {
+    clearCheckoutSession,
+    clearHostedPaymentRecoverySession,
+    matchesCheckoutRecoveryCart,
+    readHostedPaymentRecoverySession,
+  } from "@/lib/checkout/session-state";
   import type { PurchaseTrackingPayload } from "@/lib/order-success-state";
   import { claimMetaPurchaseTracking } from "@/lib/tracking/meta-purchase-guard";
-  import { clearCart } from "@/store/cart";
+  import { cartStore, clearCart } from "@/store/cart";
 
   document.addEventListener("DOMContentLoaded", () => {
+    const receiptElement = document.querySelector<HTMLElement>(
+      "[data-order-success-state][data-order-id]",
+    );
+    const receiptState = receiptElement?.dataset.orderSuccessState;
+    const receiptOrderId = receiptElement?.dataset.orderId;
+    if (receiptElement && receiptOrderId && (receiptState === "order_placed" || receiptState === "order_updated")) {
+      const recovery = readHostedPaymentRecoverySession();
+      const recoveryMatchesOrder = recovery?.orderId === receiptOrderId;
+      if (receiptElement.dataset.checkoutCartFinalize === "true") {
+        if (!recovery || (recoveryMatchesOrder && matchesCheckoutRecoveryCart(recovery, cartStore.get().items))) {
+          clearCart();
+        }
+      }
+      clearCheckoutSession();
+      if (recoveryMatchesOrder) clearHostedPaymentRecoverySession();
+    }
+
     const mainElement = document.querySelector(
       "[data-order-finalize='true'][data-fb-order-details]"
     ) as HTMLElement | null;
@@ -496,9 +560,6 @@ const legacySubtotal = order
     try {
       const parsedData: PurchaseTrackingPayload = JSON.parse(orderDataAttr);
       const { order, items: orderItems } = parsedData;
-
-      clearCheckoutSession();
-      clearCart();
 
       setTimeout(() => {
         if (!order || !orderItems) {
@@ -644,35 +705,90 @@ const legacySubtotal = order
 </script>
 
 <script>
+  import { stripeHandler } from "@/lib/checkout/handlers/stripe";
   import { fetchPaymentSessionWithProcessingRetry } from "@/lib/checkout/payment-session-retry";
-  import { normalizeHostedCheckoutUrl } from "@/lib/checkout/redirect-url";
+  import {
+    normalizeCheckoutRedirectUrl,
+    normalizeHostedCheckoutUrl,
+  } from "@/lib/checkout/redirect-url";
+  import { writeHostedPaymentRecoverySession } from "@/lib/checkout/session-state";
+  import type { CheckoutConfig, PaymentContext } from "@/lib/checkout/types";
 
   document.addEventListener("DOMContentLoaded", () => {
     const buttons = Array.from(
       document.querySelectorAll<HTMLButtonElement>("[data-payment-retry-button]")
     );
     const message = document.getElementById("retryPaymentMessage");
+    const stripeSection = document.getElementById("stripeSection");
+    const stripePayButton = document.getElementById("payButton") as HTMLButtonElement | null;
     if (buttons.length === 0) return;
+
+    const previousText = new Map(buttons.map((retryButton) => [
+      retryButton,
+      retryButton.textContent || "Retry payment",
+    ]));
+
+    const setRetryButtonsBusy = (busy: boolean, activeButton?: HTMLButtonElement) => {
+      buttons.forEach((retryButton) => {
+        retryButton.disabled = busy;
+        retryButton.textContent = busy && retryButton === activeButton
+          ? "Opening payment..."
+          : previousText.get(retryButton) ?? "Retry payment";
+      });
+    };
+
+    const buildRecoveryHref = (
+      orderId: string,
+      gateway: string,
+      paymentType: string,
+      depositAmount: number,
+    ) => {
+      const params = new URLSearchParams({ orderId, payment: gateway });
+      if (paymentType) params.set("paymentType", paymentType);
+      if (paymentType === "deposit" && Number.isFinite(depositAmount) && depositAmount > 0) {
+        params.set("depositAmount", String(depositAmount));
+      }
+      return `/order-success?${params.toString()}`;
+    };
 
     buttons.forEach((button) => button.addEventListener("click", async () => {
       const endpoint = button.dataset.endpoint;
+      const gateway = button.dataset.gateway;
       const orderId = button.dataset.orderId;
       const paymentType = button.dataset.paymentType || "full";
       const depositAmount = Number(button.dataset.depositAmount);
 
-      if (!endpoint || !orderId) {
+      if (!endpoint || !gateway || !orderId) {
         if (message) message.textContent = "Payment retry is unavailable for this order.";
         return;
       }
 
-      const previousText = new Map(buttons.map((retryButton) => [
-        retryButton,
-        retryButton.textContent || "Retry payment",
-      ]));
-      buttons.forEach((retryButton) => {
-        retryButton.disabled = true;
-      });
-      button.textContent = "Opening payment...";
+      if (gateway === "stripe") {
+        if (!stripeSection || !stripePayButton) {
+          if (message) message.textContent = "Card payment is unavailable on this receipt.";
+          return;
+        }
+        stripeSection.classList.remove("hidden");
+        stripeSection.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        setRetryButtonsBusy(true, button);
+        if (message) message.textContent = "Loading secure card fields...";
+        try {
+          await stripeHandler.onSelect?.(stripeSection);
+          if (message) message.textContent = "Enter your card details to continue with this order.";
+        } catch (error) {
+          if (message) {
+            message.textContent = error instanceof Error
+              ? error.message
+              : "Could not load the secure card form. Please try another payment method.";
+          }
+        } finally {
+          setRetryButtonsBusy(false);
+        }
+        return;
+      }
+
+      stripeSection?.classList.add("hidden");
+      setRetryButtonsBusy(true, button);
       if (message) message.textContent = "";
 
       try {
@@ -680,6 +796,7 @@ const legacySubtotal = order
           orderId,
           paymentType,
           currency: window.__CURRENCY_CODE__ || "BDT",
+          replaceExistingAttempt: paymentType !== "balance",
         };
         if (paymentType === "deposit" && Number.isFinite(depositAmount) && depositAmount > 0) {
           payload.depositAmount = depositAmount;
@@ -706,17 +823,72 @@ const legacySubtotal = order
         if (!gatewayUrl) {
           throw new Error("Payment gateway did not return a redirect URL.");
         }
+        writeHostedPaymentRecoverySession(
+          buildRecoveryHref(orderId, gateway, paymentType, depositAmount),
+          undefined,
+          gateway,
+        );
         window.location.href = gatewayUrl;
       } catch (error) {
-        buttons.forEach((retryButton) => {
-          retryButton.disabled = false;
-          retryButton.textContent = previousText.get(retryButton) ?? "Retry payment";
-        });
+        setRetryButtonsBusy(false);
         if (message) {
           message.textContent = error instanceof Error ? error.message : "Could not start payment. Please try again.";
         }
       }
     }));
+
+    stripePayButton?.addEventListener("click", async () => {
+      if (!stripeSection) return;
+      const orderId = stripeSection.dataset.orderId;
+      const paymentType = stripeSection.dataset.paymentType || "full";
+      const depositAmount = Number(stripeSection.dataset.depositAmount);
+      const totalAmount = Number(stripeSection.dataset.totalAmount);
+      const checkoutConfig = window.__CHECKOUT_CONFIG__ as CheckoutConfig | undefined;
+      if (!orderId || !checkoutConfig || !Number.isFinite(totalAmount)) {
+        if (message) message.textContent = "Card payment is unavailable for this order.";
+        return;
+      }
+
+      stripePayButton.disabled = true;
+      setRetryButtonsBusy(true);
+      if (message) message.textContent = "Confirming card payment for your existing order...";
+      const context: PaymentContext = {
+        checkoutData: {},
+        config: checkoutConfig,
+        orderId,
+        totalAmount,
+        advanceAmount: paymentType === "deposit" && Number.isFinite(depositAmount)
+          ? depositAmount
+          : 0,
+        currencySymbol: window.__CURRENCY_SYMBOL__ || "",
+        paymentType: paymentType === "deposit" || paymentType === "balance"
+          ? paymentType
+          : "full",
+        depositAmount: paymentType === "deposit" && Number.isFinite(depositAmount)
+          ? depositAmount
+          : undefined,
+        replaceExistingAttempt: paymentType !== "balance",
+      };
+
+      try {
+        const result = await stripeHandler.processPayment(context);
+        if (!result.success || !result.redirectUrl) {
+          throw new Error(result.error || "Card payment could not be completed.");
+        }
+        const redirectUrl = normalizeCheckoutRedirectUrl(result.redirectUrl, window.location.origin);
+        if (!redirectUrl) throw new Error("Card payment returned an unsafe receipt URL.");
+        writeHostedPaymentRecoverySession(redirectUrl, undefined, "stripe");
+        window.location.href = redirectUrl;
+      } catch (error) {
+        stripePayButton.disabled = stripeHandler.isReady?.() !== true;
+        setRetryButtonsBusy(false);
+        if (message) {
+          message.textContent = error instanceof Error
+            ? error.message
+            : "Card payment could not be completed. Your order is still saved.";
+        }
+      }
+    });
   });
 </script>
 

@@ -469,6 +469,18 @@ describe("payment settings cache invalidation", () => {
         expect(mocks.safeBatch.mock.calls[0]?.[1]).toHaveLength(2);
     });
 
+    it("rejects duplicate methods instead of persisting an ambiguous display order", async () => {
+        const { app, env } = createTestApp();
+
+        const response = await postJson(app, env, "/payment-methods", {
+            enabledMethods: ["cod", "cod"],
+            defaultMethod: "cod",
+        });
+
+        expect(response.status).toBe(400);
+        expect(mocks.safeBatch).not.toHaveBeenCalled();
+    });
+
     it("reports Stripe as not checkout-configured without a publishable key", async () => {
         const { app, env } = createTestApp();
         mocks.getStripeSettings.mockResolvedValueOnce({

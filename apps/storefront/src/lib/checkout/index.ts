@@ -8,7 +8,6 @@ import { formatPrice, DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import type { PaymentResult } from "./types";
 import {
   CHECKOUT_TRANSFER_UNAVAILABLE_MESSAGE,
-  clearCheckoutSession,
   clearCheckoutTransferSession,
   writeHostedPaymentRecoverySession,
 } from "./session-state";
@@ -656,23 +655,6 @@ async function selectMethod(methodId: string, gw: { id: string; [key: string]: u
 
 // ── Process payment ───────────────────────────────────────────────────────────
 
-export function clearCheckoutAndCart(): void {
-  clearCheckoutSession();
-  try {
-    localStorage.removeItem("cart");
-  } catch {
-    // ignore
-  }
-}
-
-export function shouldClearCheckoutBeforeRedirect(result: PaymentResult): boolean {
-  return result.clearCartOnRedirect === true;
-}
-
-export function shouldClearCheckoutSessionBeforeRedirect(result: PaymentResult): boolean {
-  return result.clearCartOnRedirect === true || result.clearCheckoutSessionOnRedirect === true;
-}
-
 async function processPayment(): Promise<void> {
   if (
     !selectedMethod ||
@@ -736,12 +718,11 @@ async function processPayment(): Promise<void> {
       if (!redirectUrl) {
         throw new Error("Payment could not open because the gateway returned an unsafe redirect URL.");
       }
-      if (shouldClearCheckoutBeforeRedirect(result)) {
-        writeHostedPaymentRecoverySession(result.hostedPaymentRecoveryUrl);
-        clearCheckoutAndCart();
-      } else if (shouldClearCheckoutSessionBeforeRedirect(result)) {
-        clearCheckoutSession();
-      }
+      writeHostedPaymentRecoverySession(
+        result.hostedPaymentRecoveryUrl ?? redirectUrl,
+        checkoutData,
+        selectedMethod,
+      );
       window.location.href = redirectUrl;
       return;
     }

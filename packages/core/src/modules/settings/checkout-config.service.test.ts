@@ -194,6 +194,18 @@ describe("getCheckoutConfig", () => {
         expect(config.activeDefaultMethod).toBe("stripe");
     });
 
+    it("preserves the merchant's saved payment-method presentation order", async () => {
+        mockGatewaySnapshot({
+            enabledMethods: ["cod", "stripe"],
+            defaultMethod: "stripe",
+        });
+
+        const config = await getCheckoutConfig(createDb() as never);
+
+        expect(config.gateways.map((gateway) => gateway.id)).toEqual(["cod", "stripe"]);
+        expect(config.activeDefaultMethod).toBe("stripe");
+    });
+
     it("normalizes legacy public auth method values", async () => {
         mockGatewaySnapshot({
             enabledMethods: ["cod"],

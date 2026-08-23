@@ -52,6 +52,32 @@ describe("customer auth API helpers", () => {
     expect(JSON.stringify(init)).not.toContain("token");
   });
 
+  it("sends an explicit gateway replacement without any receipt proof", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      success: true,
+      data: {
+        gateway: "polar",
+        paymentType: "full",
+        amount: 900,
+        currency: "BDT",
+        hosted: { gatewayUrl: "https://polar.example.test/pay" },
+      },
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(createCustomerOrderPaymentSession("order_1", {
+      gateway: "polar",
+      replaceExistingAttempt: true,
+    })).resolves.toMatchObject({ success: true, session: { gateway: "polar" } });
+
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toEqual({
+      gateway: "polar",
+      replaceExistingAttempt: true,
+    });
+    expect(String(init.body)).not.toMatch(/receipt|token/i);
+  });
+
   it("extracts customer payment-session API errors", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
       success: false,

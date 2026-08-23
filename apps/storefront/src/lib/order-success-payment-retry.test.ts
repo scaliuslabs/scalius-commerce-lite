@@ -11,13 +11,15 @@ import {
 } from "./order-success-payment-retry";
 
 describe("order success payment retry", () => {
-  it("allows receipt-page retry for hosted gateway cancel and failure returns", () => {
+  it("allows receipt-page retry for online gateway cancel and failure returns", () => {
     expect(isRetryableHostedPaymentMethod("sslcommerz")).toBe(true);
     expect(isRetryableHostedPaymentMethod("polar")).toBe(true);
+    expect(isRetryableHostedPaymentMethod("stripe")).toBe(true);
     expect(isHostedPaymentRetryResult("cancelled")).toBe(true);
     expect(isHostedPaymentRetryResult("failed")).toBe(true);
     expect(getOrderSuccessRetryEndpoint("sslcommerz")).toBe("/api/checkout/sslcommerz-session");
     expect(getOrderSuccessRetryEndpoint("polar")).toBe("/api/checkout/polar-session");
+    expect(getOrderSuccessRetryEndpoint("stripe")).toBe("/api/checkout/stripe-intent");
 
     expect(
       canRetryOrderSuccessPayment(
@@ -38,8 +40,7 @@ describe("order success payment retry", () => {
     ).toBe(true);
   });
 
-  it("does not offer hosted retry for non-hosted methods or ordinary pending receipts", () => {
-    expect(isRetryableHostedPaymentMethod("stripe")).toBe(false);
+  it("does not offer online retry for COD or ordinary pending receipts", () => {
     expect(getOrderSuccessRetryEndpoint("cod")).toBeNull();
     expect(
       canRetryOrderSuccessPayment(
@@ -50,7 +51,7 @@ describe("order success payment retry", () => {
     ).toBe(false);
   });
 
-  it("returns only the current hosted gateway for callback-only cancelled receipts", () => {
+  it("offers every visible online method for an explicitly cancelled receipt", () => {
     expect(
       getOrderSuccessRetryOptions(
         { paymentMethod: "sslcommerz" },
@@ -69,6 +70,21 @@ describe("order success payment retry", () => {
         endpoint: "/api/checkout/sslcommerz-session",
         current: true,
         label: "Retry payment",
+        requiresCardForm: false,
+      },
+      {
+        gateway: "polar",
+        endpoint: "/api/checkout/polar-session",
+        current: false,
+        label: "Pay with Polar",
+        requiresCardForm: false,
+      },
+      {
+        gateway: "stripe",
+        endpoint: "/api/checkout/stripe-intent",
+        current: false,
+        label: "Pay with international card",
+        requiresCardForm: true,
       },
     ]);
   });
@@ -92,12 +108,21 @@ describe("order success payment retry", () => {
         endpoint: "/api/checkout/sslcommerz-session",
         current: true,
         label: "Retry payment",
+        requiresCardForm: false,
       },
       {
         gateway: "polar",
         endpoint: "/api/checkout/polar-session",
         current: false,
         label: "Pay with Polar",
+        requiresCardForm: false,
+      },
+      {
+        gateway: "stripe",
+        endpoint: "/api/checkout/stripe-intent",
+        current: false,
+        label: "Pay with international card",
+        requiresCardForm: true,
       },
     ]);
   });
@@ -116,11 +141,12 @@ describe("order success payment retry", () => {
         endpoint: "/api/checkout/polar-session",
         current: false,
         label: "Pay with Polar",
+        requiresCardForm: false,
       },
     ]);
   });
 
-  it("fails closed when checkout config exposes no hosted retry gateway", () => {
+  it("uses Stripe as an alternate when it is the only visible online retry gateway", () => {
     expect(
       getOrderSuccessRetryOptions(
         { paymentMethod: "sslcommerz" },
@@ -130,6 +156,25 @@ describe("order success payment retry", () => {
           { id: "stripe" },
           { id: "cod" },
         ],
+      ),
+    ).toEqual([
+      {
+        gateway: "stripe",
+        endpoint: "/api/checkout/stripe-intent",
+        current: false,
+        label: "Pay with international card",
+        requiresCardForm: true,
+      },
+    ]);
+  });
+
+  it("fails closed when checkout config exposes only COD", () => {
+    expect(
+      getOrderSuccessRetryOptions(
+        { paymentMethod: "sslcommerz" },
+        "payment_issue",
+        "failed",
+        [{ id: "cod" }],
       ),
     ).toEqual([]);
   });
