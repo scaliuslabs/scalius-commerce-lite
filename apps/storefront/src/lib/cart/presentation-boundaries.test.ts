@@ -120,5 +120,13 @@ describe("cart page presentation contract", () => {
     expect(checkoutPageSource).not.toContain("Choose how to pay");
     expect(checkoutPageSource).not.toContain("Select a payment method to complete your order.");
     expect(checkoutPageSource).not.toContain("All transactions are secure and encrypted.");
+    expect(cartPageSource.match(/Secure checkout/g) ?? []).toHaveLength(0);
+  });
+
+  it("renders exactly one native shipping radio per delivery method", () => {
+    expect(shippingSelectorSource).toContain('type="radio"');
+    expect(shippingSelectorSource).toContain('name="shippingLocation"');
+    expect(shippingSelectorSource).not.toContain("RadioGroupItem");
+    expect(shippingSelectorSource).not.toContain("<RadioGroup");
   });
 });

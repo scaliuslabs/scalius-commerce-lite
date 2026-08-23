@@ -494,12 +494,6 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
           </div>
         </div>
 
-        <!-- Trust badges -->
-        <div class="mt-4 text-center">
-          <p class="text-[10px] text-muted-foreground">
-            Secure checkout
-          </p>
-        </div>
       </div>
 
       <!-- Checkout Form Section - Left on Desktop -->
@@ -933,32 +927,6 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
       if (input && !input.value && draft[field]) input.value = draft[field] || "";
     }
 
-    if (draft.customerPhone) {
-      window.dispatchEvent(
-        new CustomEvent("phone-prefill", { detail: draft.customerPhone }),
-      );
-    }
-    if (draft.city || draft.cityName) {
-      window.dispatchEvent(
-        new CustomEvent("location-prefill", {
-          detail: {
-            city: draft.city,
-            cityName: draft.cityName,
-            zone: draft.zone,
-            zoneName: draft.zoneName,
-            area: draft.area,
-            areaName: draft.areaName,
-          },
-        }),
-      );
-    }
-    if (draft.shippingLocation) {
-      window.dispatchEvent(
-        new CustomEvent("shipping-method-prefill", {
-          detail: draft.shippingLocation,
-        }),
-      );
-    }
   };
 
   runWhenDomReady(() => {

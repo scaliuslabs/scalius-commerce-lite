@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Label } from "@/components/ui/label";
 import CustomDropdown from "@/components/CustomDropdown";
 import { getZones, getAreas, type LocationData } from "@/lib/api";
@@ -42,22 +42,40 @@ export default function LocationSelector({
   const [areas, setAreas] = useState<LocationData[]>([]);
   const [isLoadingZones, setIsLoadingZones] = useState<boolean>(false);
   const [isLoadingAreas, setIsLoadingAreas] = useState<boolean>(false);
+  const [zoneLoadFailed, setZoneLoadFailed] = useState(false);
+  const [areaLoadFailed, setAreaLoadFailed] = useState(false);
+  const zoneRequestId = useRef(0);
+  const areaRequestId = useRef(0);
+  const onSelectionChangeRef = useRef(onSelectionChange);
+
+  useEffect(() => {
+    onSelectionChangeRef.current = onSelectionChange;
+  }, [onSelectionChange]);
 
   const loadZones = useCallback(
     async (cityId: string): Promise<LocationData[]> => {
       if (!cityId) return [];
+      const requestId = ++zoneRequestId.current;
       setIsLoadingZones(true);
+      setZoneLoadFailed(false);
       try {
         const response = await getZones(cityId);
         const nextZones = response || [];
-        setZones(nextZones);
-        return nextZones;
+        if (requestId === zoneRequestId.current) {
+          setZones(nextZones);
+          setZoneLoadFailed(response === null);
+          return nextZones;
+        }
+        return [];
       } catch (error: unknown) {
         console.error("Error loading zones:", error);
-        setZones([]);
+        if (requestId === zoneRequestId.current) {
+          setZones([]);
+          setZoneLoadFailed(true);
+        }
         return [];
       } finally {
-        setIsLoadingZones(false);
+        if (requestId === zoneRequestId.current) setIsLoadingZones(false);
       }
     },
     [],
@@ -66,25 +84,34 @@ export default function LocationSelector({
   const loadAreas = useCallback(
     async (zoneId: string): Promise<LocationData[]> => {
       if (!zoneId) return [];
+      const requestId = ++areaRequestId.current;
       setIsLoadingAreas(true);
+      setAreaLoadFailed(false);
       try {
         const response = await getAreas(zoneId);
         const nextAreas = response || [];
-        setAreas(nextAreas);
-        return nextAreas;
+        if (requestId === areaRequestId.current) {
+          setAreas(nextAreas);
+          setAreaLoadFailed(response === null);
+          return nextAreas;
+        }
+        return [];
       } catch (error: unknown) {
         console.error("Error loading areas:", error);
-        setAreas([]);
+        if (requestId === areaRequestId.current) {
+          setAreas([]);
+          setAreaLoadFailed(true);
+        }
         return [];
       } finally {
-        setIsLoadingAreas(false);
+        if (requestId === areaRequestId.current) setIsLoadingAreas(false);
       }
     },
     [],
   );
 
   const dispatchZoneSelected = useCallback(
-    (zoneId: string, sourceZones = zones) => {
+    (zoneId: string, sourceZones: LocationData[]) => {
       const selectedZoneData = sourceZones.find((z) => z.id === zoneId);
       const event = new CustomEvent("zone-selected", {
         detail: {
@@ -94,17 +121,17 @@ export default function LocationSelector({
       });
       window.dispatchEvent(event);
     },
-    [zones],
+    [],
   );
 
   const notifySelection = useCallback(
     (selection: LocationSelection) => {
-      onSelectionChange?.(selection);
+      onSelectionChangeRef.current?.(selection);
       window.dispatchEvent(
         new CustomEvent("checkout-location-change", { detail: selection }),
       );
     },
-    [onSelectionChange],
+    [],
   );
 
   const prefillLocation = useCallback(
@@ -195,6 +222,9 @@ export default function LocationSelector({
     setSelectedArea("");
     setZones([]);
     setAreas([]);
+    setZoneLoadFailed(false);
+    setAreaLoadFailed(false);
+    areaRequestId.current += 1;
     notifySelection({
       cityId: value,
       cityName: city?.name || "",
@@ -222,9 +252,9 @@ export default function LocationSelector({
     });
     if (value && showAreaField) {
       void loadAreas(value);
-      dispatchZoneSelected(value);
+      dispatchZoneSelected(value, zones);
     } else if (value) {
-      dispatchZoneSelected(value);
+      dispatchZoneSelected(value, zones);
     }
   };
 
@@ -311,6 +341,15 @@ export default function LocationSelector({
             <span className="sr-only">Loading...</span>
           </div>
         )}
+        {zoneLoadFailed && (
+          <button
+            type="button"
+            className="mt-1 text-xs font-medium text-destructive underline underline-offset-2"
+            onClick={() => void loadZones(selectedCity)}
+          >
+            Could not load zones. Try again
+          </button>
+        )}
       </div>
 
       {showAreaField && (
@@ -339,6 +378,15 @@ export default function LocationSelector({
             <div className="absolute right-3 top-[calc(50%+4px)] -translate-y-1/2 h-4 w-4 animate-spin rounded-full border-2 border-solid border-gray-400 border-r-transparent">
               <span className="sr-only">Loading...</span>
             </div>
+          )}
+          {areaLoadFailed && (
+            <button
+              type="button"
+              className="mt-1 text-xs font-medium text-destructive underline underline-offset-2"
+              onClick={() => void loadAreas(selectedZone)}
+            >
+              Could not load areas. Try again
+            </button>
           )}
         </div>
       )}
