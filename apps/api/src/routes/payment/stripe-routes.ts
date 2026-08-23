@@ -21,7 +21,8 @@ const intentSchema = z.object({
   paymentType: z.enum(["full", "deposit", "balance"]).optional(),
   depositAmount: z.number().positive().optional(),
   currency: z.string().length(3).optional(),
-  manualCapture: z.boolean().default(false)
+  manualCapture: z.boolean().default(false),
+  replaceExistingAttempt: z.boolean().optional(),
 });
 
 function getReceiptToken(c: { req: { header: (name: string) => string | undefined } }, body: { receiptToken?: string }): string | undefined {
@@ -85,6 +86,7 @@ app.openapi(createIntentRoute, async (c) => {
     orderId: body.orderId,
     paymentType: body.paymentType,
     depositAmount: body.depositAmount,
+    replaceExistingAttempt: body.replaceExistingAttempt,
     proof: { kind: "receipt", receiptToken },
     returnTarget: { kind: "receipt" },
   });

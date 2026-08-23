@@ -35,6 +35,7 @@ import {
   getCustomerOwnedOrderForDetail,
   getCustomerPaymentSessionOrderForDetail,
 } from "@scalius/core/modules/customers/customers.service";
+import { claimGuestOrderToAccount } from "@scalius/core/modules/customers/order-account-claim";
 import {
   createCustomerOrderSupportRequest,
   CUSTOMER_ORDER_SUPPORT_REQUEST_TYPES,
@@ -63,6 +64,7 @@ import {
   paymentSessionProcessingResponse,
 } from "./payment/payment-session-response";
 import { enqueueOrderSupportRequestNotificationForOrder } from "../utils/order-notification-queue";
+import { validateReceiptToken } from "../utils/order-receipt-token";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const customerAuthIntentSchema = z.enum(["sign_in", "sign_up"]);
@@ -706,6 +708,65 @@ const customerPaymentRecoverySchema = z.object({
   hostedRedirect: z.boolean(),
 });
 
+const claimCustomerOrderReceiptRoute = createRoute({
+  method: "post",
+  path: "/orders/{id}/claim-receipt",
+  tags: ["Customer Auth"],
+  summary: "Save a receipt-proven guest order to the authenticated customer account",
+  request: {
+    params: z.object({ id: z.string().trim().min(1).max(128) }),
+    headers: z.object({
+      "x-receipt-token": z.string().optional(),
+    }),
+    body: {
+      content: {
+        "application/json": {
+          schema: z.object({}).strict(),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Order saved to the authenticated customer account",
+      content: {
+        "application/json": {
+          schema: successEnvelope(z.object({
+            orderId: z.string(),
+            alreadyClaimed: z.boolean(),
+          })),
+        },
+      },
+    },
+    ...errorResponses,
+    409: conflictResponse,
+  },
+});
+
+app.openapi(claimCustomerOrderReceiptRoute, async (c) => {
+  setPrivateNoStoreHeaders(c);
+  const { session } = await requireCustomerSession(c);
+  if (!session.customerId) {
+    throw new UnauthorizedError("Customer profile is incomplete. Please log in again.");
+  }
+
+  const orderId = c.req.valid("param").id;
+  const receiptToken = c.req.valid("header")["x-receipt-token"];
+  const db = c.get("db");
+  await validateReceiptToken(c.env.CACHE, orderId, receiptToken, db);
+  const result = await claimGuestOrderToAccount(db, {
+    orderId,
+    customerId: session.customerId,
+    customerEmail: session.email,
+    customerPhone: session.phone,
+  });
+
+  return ok(c, {
+    orderId: result.orderId,
+    alreadyClaimed: result.alreadyClaimed,
+  });
+});
+
 const customerRefundAttemptSchema = z.object({
   id: z.string(),
   orderId: z.string(),
@@ -1062,7 +1123,10 @@ const createCustomerOrderPaymentSessionRoute = createRoute({
     body: {
       content: {
         "application/json": {
-          schema: z.object({}).strict(),
+          schema: z.object({
+            gateway: z.enum(["stripe", "sslcommerz", "polar"]).optional(),
+            replaceExistingAttempt: z.boolean().optional(),
+          }).strict(),
         },
       },
     },
@@ -1092,9 +1156,14 @@ app.openapi(createCustomerOrderPaymentSessionRoute, async (c) => {
   }
 
   const orderId = c.req.valid("param").id;
+  const body = c.req.valid("json");
   const result = await createCustomerAccountPaymentSession(c, {
     orderId,
     customerId: session.customerId,
+    ...(body.gateway ? { gateway: body.gateway } : {}),
+    ...(body.replaceExistingAttempt !== undefined
+      ? { replaceExistingAttempt: body.replaceExistingAttempt }
+      : {}),
   });
   if (isPaymentSessionProcessingResult(result)) {
     return acceptedPaymentSessionProcessing(c, result);

@@ -1753,6 +1753,20 @@ const AUDITED_STOREFRONT_LEGACY_EXCLUSIONS = {
         "Returns provider client-secret or hosted-session material; use storefront.orders.payment.begin and storefront.payment.status with secure browser continuation.",
     },
   ),
+  "storefront.customer_auth_orders_claim_receipt.claim_receipt": reviewedExclusionMetadata(
+    "storefront.customer_auth_orders_claim_receipt.claim_receipt",
+    {
+      surface: "storefront",
+      principals: ["customer"],
+      risk: "write",
+      openWorld: false,
+      idempotency: "supported",
+      transport: "json",
+      sensitiveOutput: false,
+      exclusionReason:
+        "Browser-only account attachment requires both the private raw receipt proof and the live customer cookie; agent order ownership uses delegated immutable customer authority instead.",
+    },
+  ),
   "storefront.discounts_validate.validate": reviewedExclusionMetadata(
     "storefront.discounts_validate.validate",
     {

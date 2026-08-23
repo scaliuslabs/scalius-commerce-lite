@@ -24,6 +24,8 @@ const mocks = vi.hoisted(() => ({
   createStripePaymentSession: vi.fn(),
   createSSLCommerzPaymentSession: vi.fn(),
   createPolarPaymentSession: vi.fn(),
+  claimGuestOrderToAccount: vi.fn(),
+  validateReceiptToken: vi.fn(),
 }));
 
 vi.mock("@scalius/core/modules/customers/customer-auth.service", () => ({
@@ -46,6 +48,14 @@ vi.mock("@scalius/core/modules/customers/customers.service", () => ({
   getCustomerOwnedOrderForDetail: mocks.getCustomerOwnedOrderForDetail,
   getCustomerOrderDetailForOrder: mocks.getCustomerOrderDetailForOrder,
   getCustomerPaymentSessionOrderForDetail: mocks.getCustomerPaymentSessionOrderForDetail,
+}));
+
+vi.mock("@scalius/core/modules/customers/order-account-claim", () => ({
+  claimGuestOrderToAccount: mocks.claimGuestOrderToAccount,
+}));
+
+vi.mock("../utils/order-receipt-token", () => ({
+  validateReceiptToken: mocks.validateReceiptToken,
 }));
 
 vi.mock("./payment/payment-session-create", () => ({
@@ -78,6 +88,12 @@ describe("customer auth private cache policy", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getSessionCookie.mockReturnValue("session_1");
+    mocks.validateReceiptToken.mockResolvedValue(undefined);
+    mocks.claimGuestOrderToAccount.mockResolvedValue({
+      orderId: "order_1",
+      customerId: "customer_1",
+      alreadyClaimed: false,
+    });
     mocks.getCookieConfig.mockReturnValue({ sameSite: "Lax", domainAttr: "" });
     mocks.buildSetCookieHeader.mockReturnValue("cs_tok=session_1; Path=/; HttpOnly");
     mocks.sendOtp.mockResolvedValue({
@@ -861,6 +877,45 @@ describe("customer auth private cache policy", () => {
     expect(mocks.getCustomerOrderDetailForOrder).not.toHaveBeenCalled();
   });
 
+  it("claims a receipt-proven guest order for the authenticated matching account", async () => {
+    const app = createTestApp();
+
+    const response = await app.request(
+      "/api/v1/customer-auth/orders/order_1/claim-receipt",
+      {
+        method: "POST",
+        headers: {
+          Cookie: "cs_tok=session_1",
+          "Content-Type": "application/json",
+          "X-Receipt-Token": "chk_private_receipt",
+        },
+        body: JSON.stringify({}),
+      },
+      { CACHE: {} } as never,
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Cache-Control")).toBe("private, no-cache, no-store, must-revalidate");
+    expect(mocks.validateReceiptToken).toHaveBeenCalledWith(
+      expect.anything(),
+      "order_1",
+      "chk_private_receipt",
+      expect.anything(),
+    );
+    expect(mocks.claimGuestOrderToAccount).toHaveBeenCalledWith(expect.anything(), {
+      orderId: "order_1",
+      customerId: "customer_1",
+      customerEmail: "customer@example.com",
+      customerPhone: "+8801712345678",
+    });
+    expect(body).toEqual({
+      success: true,
+      data: { orderId: "order_1", alreadyClaimed: false },
+    });
+    expect(JSON.stringify(body)).not.toContain("chk_private_receipt");
+  });
+
   it("creates customer-owned hosted payment sessions without exposing receipt tokens", async () => {
     const app = createTestApp();
 
@@ -891,6 +946,34 @@ describe("customer auth private cache policy", () => {
     expect(text).toContain("https://ssl.example.test/pay");
     expect(text).not.toContain("receiptToken");
     expect(text).not.toContain("chk_");
+  });
+
+  it("lets the authenticated buyer explicitly replace the saved order payment method", async () => {
+    const app = createTestApp();
+
+    const response = await app.request(
+      "/api/v1/customer-auth/orders/order_1/payment-session",
+      {
+        method: "POST",
+        headers: { Cookie: "cs_tok=session_1", "Content-Type": "application/json" },
+        body: JSON.stringify({
+          gateway: "polar",
+          replaceExistingAttempt: true,
+        }),
+      },
+      { CACHE: {} } as never,
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(mocks.createCustomerAccountPaymentSession).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        orderId: "order_1",
+        customerId: "customer_1",
+        gateway: "polar",
+        replaceExistingAttempt: true,
+      },
+    );
   });
 
   it("returns accepted processing state for customer-owned payment sessions already in flight", async () => {

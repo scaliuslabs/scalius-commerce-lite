@@ -215,6 +215,25 @@ export function getOrderSuccessViewState(order: OrderReceipt): OrderSuccessViewS
   };
 }
 
+export function shouldClearCheckoutCartForOrder(
+  order: Pick<OrderReceipt, "status" | "paymentMethod" | "paymentStatus" | "paidAmount">,
+): boolean {
+  const orderStatus = normalize(order.status);
+  const paymentStatus = normalize(order.paymentStatus);
+  if (
+    orderStatus === "incomplete" ||
+    orderStatus === "cancelled" ||
+    orderStatus === "refunded" ||
+    orderStatus === "returned" ||
+    orderStatus === "partially_refunded" ||
+    paymentStatus === "failed"
+  ) {
+    return false;
+  }
+  if (!isOnlinePaymentMethod(order.paymentMethod)) return true;
+  return ACCEPTED_PAYMENT_STATUSES.has(paymentStatus) || Number(order.paidAmount ?? 0) > 0;
+}
+
 export function createPurchaseTrackingPayload(
   order: Pick<OrderReceipt, "id" | "totalAmount">,
   items: OrderItem[],

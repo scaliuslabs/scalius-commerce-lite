@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -22,9 +24,15 @@ function recovery(overrides: Partial<CustomerPaymentRecovery> = {}): CustomerPay
 }
 
 describe("account payment recovery", () => {
+  const accountPageSource = readFileSync(
+    fileURLToPath(new URL("../pages/account/orders/[id].astro", import.meta.url)),
+    "utf8",
+  );
+
   it("builds retry and balance actions from backend recovery policy", () => {
     expect(getAccountPaymentRecoveryAction(recovery())).toMatchObject({
       visible: true,
+      gateway: "sslcommerz",
       title: "Payment needs attention",
       buttonLabel: "Retry payment",
       amountDue: 1200,
@@ -88,5 +96,14 @@ describe("account payment recovery", () => {
     expect(normalizeHostedGatewayUrl("/checkout")).toBeNull();
     expect(normalizeHostedGatewayUrl("javascript:alert(1)")).toBeNull();
     expect(normalizeHostedGatewayUrl("")).toBeNull();
+  });
+
+  it("keeps balance recovery on the current gateway and replaces only untouched attempts", () => {
+    expect(accountPageSource).toContain('currentDetail?.paymentRecovery.paymentType === "balance"');
+    expect(accountPageSource).toContain("return recoveryAction ? [recoveryAction.gateway] : [];");
+    expect(accountPageSource).toContain(
+      'replaceExistingAttempt: currentDetail.paymentRecovery.paymentType !== "balance"',
+    );
+    expect(accountPageSource).toContain('gateway === detail.order.paymentMethod ? "Current method" : "Change method"');
   });
 });

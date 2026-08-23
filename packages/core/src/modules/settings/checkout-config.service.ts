@@ -141,19 +141,21 @@ export async function getCheckoutConfig(
 
     const gatewaySnapshot = await getPaymentGatewaySettingsSnapshot(db, encryptionKey);
     const activePaymentMethods = gatewaySnapshot.activePaymentMethods;
-    const allowedGatewayIds = new Set(activePaymentMethods.enabledMethods);
-
-    // Dynamically resolve enabled gateways from the registry
+    // Resolve the merchant's saved order through the registry. The configured
+    // array is both the allowlist and the buyer-visible presentation order.
     const registeredGateways = getRegisteredGateways();
-    const candidateGateways = registeredGateways.filter((gw) => {
-        if (!allowedGatewayIds.has(gw.id as "stripe" | "sslcommerz" | "polar" | "cod")) return false;
-        return isCheckoutGatewayUsableForFlow({
-            gatewayId: gw.id,
+    const registeredGatewaysById = new Map(
+        registeredGateways.map((gateway) => [gateway.id, gateway]),
+    );
+    const candidateGateways = activePaymentMethods.enabledMethods
+        .map((gatewayId) => registeredGatewaysById.get(gatewayId))
+        .filter((gateway): gateway is NonNullable<typeof gateway> => Boolean(gateway))
+        .filter((gateway) => isCheckoutGatewayUsableForFlow({
+            gatewayId: gateway.id,
             checkoutMode,
             partialPaymentEnabled,
             partialPaymentAmount,
-        });
-    });
+        }));
     const gateways: Array<Record<string, unknown>> = [];
 
     for (let i = 0; i < candidateGateways.length; i++) {

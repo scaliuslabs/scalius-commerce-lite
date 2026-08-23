@@ -141,13 +141,14 @@ Customer account order history -> getCustomerOrders() -> live aggregate summary 
 Customer account order detail -> getCustomerOwnedOrderForDetail() -> getCustomerOrderDetailForOrder() -> order + items + shipments + payments + paymentPlan/COD + notification receipts + timeline
 Customer account payment recovery preview -> API customer-auth route reuses the customer-owned order header -> shared payment-session policy/gateway readiness helpers
 Customer account payment session creation -> API customer-auth route -> createCustomerAccountPaymentSession() -> shared provider-session policy/gateway readiness/attempt helpers -> gateway
+Guest receipt account claim -> receipt proof + active customer session + immutable order contact match -> claimGuestOrderToAccount() -> orders.accountOwnerCustomerId
 ```
 
 Customer account money display deliberately does not reuse `customers.totalSpent`, because that denormalized admin/customer-row counter is maintained by order writers and has historical gross-order semantics. `getCustomerOrders()` computes account `summary.totalSpent` from active paid amounts across all non-deleted owned orders, returns zero customer-visible due for cancelled/refunded/returned/partially-refunded/failed-payment orders, and returns stored `orders.balanceDue` only for active payable order states. `getCustomerOrderDetail()` applies the same customer-visible balance projection so refunded orders never look like unpaid debts to buyers.
 
 Customer account order history uses keyset pagination over `(orders.createdAt, orders.id)` with a default/max page size of 50. The account `summary` is intentionally computed across all non-deleted owned orders, not the current page. Detail timelines start with an immutable `Order placed` event using the order creation timestamp and add a separate `Current status: ...` event so delivered/refunded/cancelled orders do not rewrite the original placement milestone.
 
-`paymentRecovery` is intentionally assembled in `apps/api/src/routes/customer-auth.ts` via `routes/payment/payment-session-create.ts`, not in this core customer module. The preview depends on fresh checkout-flow settings, gateway credential readiness, and public payment-session policy; duplicating that in core without the API route context would invite stale or inconsistent buyer copy. `getCustomerOwnedOrderForDetail()` exposes the customer-scoped order header used by both the detail builder and the API recovery preview; private payment-session fields must stay out of the public `order` response because the API detail schema permits passthrough fields. Account-owned payment-session POSTs still revalidate through `createCustomerAccountPaymentSession()` before provider work instead of trusting a previously rendered preview.
+`paymentRecovery` is intentionally assembled in `apps/api/src/routes/customer-auth.ts` via `routes/payment/payment-session-create.ts`, not in this core customer module. The preview depends on fresh checkout-flow settings, gateway credential readiness, and public payment-session policy; duplicating that in core without the API route context would invite stale or inconsistent buyer copy. `getCustomerOwnedOrderForDetail()` exposes the customer-scoped order header used by both the detail builder and the API recovery preview; private payment-session fields must stay out of the public `order` response because the API detail schema permits passthrough fields. Account-owned payment-session POSTs still revalidate through `createCustomerAccountPaymentSession()` before provider work instead of trusting a previously rendered preview, and may explicitly replace a failed unpaid online method with another currently eligible online method on the same order.
 
 ## Dependencies
 
@@ -217,24 +218,23 @@ profile selected by canonical phone; it cannot overwrite a claimed account
 profile. `customers.accountClaimedAt` distinguishes account and guest buyers.
 
 `orders.accountOwnerCustomerId` is the separate private account-ownership link.
-Only checkout with an active claimed customer session whose canonical phone
-matches the submitted checkout phone may populate it. Account order history and
-account-owned support requests authorize through this field, never the broader
-CRM link. Guest orders remain recoverable through private receipt proof; later
-phone/email matching does not grant account ownership. A future guest-order
-claim flow must require receipt proof plus immutable contact proof and an active
-session.
+Checkout with an active claimed customer session whose canonical phone matches
+the submitted checkout phone may populate it immediately. Account order history
+and account-owned support requests authorize through this field, never the
+broader CRM link. A guest buyer may explicitly claim the order after purchase,
+but only while presenting both private receipt proof and an active customer
+session whose canonical phone or email matches the immutable order contact. The
+claim changes only `accountOwnerCustomerId`; it never rewrites the merchant CRM
+link, historical customer totals, or the saved order contact.
 
 ## Known Gaps
 
 1. **History route not in service**: The `GET /{id}/history` endpoint contains significant business logic inline in the route handler (batch query for customer + history + orders, location enrichment) rather than delegating to the service layer.
 
-2. **Index barrel omission**: `index.ts` only re-exports `customers.service`. `customer-auth.service.ts` and `otp-transport.ts` must be imported by direct path.
+2. **Index barrel omission**: `index.ts` re-exports the customer and guest-order-claim services. `customer-auth.service.ts` and `otp-transport.ts` must still be imported by direct path.
 
 3. **SMS transport**: `SmsOtpTransport.validateConfig()` returns `null` because SMS provider selection lives in settings. Queue delivery fails/retries with a receipt error if `getActiveSmsProvider()` cannot resolve a configured provider. Supported providers: smsnetbd, bdbulksms, mimsms, gennet.
 
 4. **No email update for existing customers**: `verifyOtp()` fills in `resolvedEmail` from the existing customer record but never updates it if the customer authenticates with a new email address.
 
 5. **Guest support requests are receipt-token-only**: Account-owned and receipt-token guest order details both expose eligible pre-shipment cancellation, return, and refund request actions through the order support-request ledger. Admins resolve submitted requests on order detail, submitted requests enqueue merchant/admin notifications, and admin status changes enqueue customer notifications through the order notification outbox. Guest requests stay tied to private receipt proof and do not claim an account or attach the order to account history by mutable phone/email matching. The broader CRM profile remains visible to merchants.
-
-6. **No guest-order account claim flow yet**: True guest orders remain receipt-token-only and are intentionally absent from account history until a receipt-token-backed claim model exists.

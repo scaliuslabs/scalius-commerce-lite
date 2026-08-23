@@ -546,12 +546,12 @@ function parsePaymentMethodPreferences(
       ? JSON.parse(values.enabled_methods) as unknown
       : ["cod"];
     enabledMethods = Array.isArray(parsed)
-      ? parsed.filter((method): method is ("stripe" | "sslcommerz" | "polar" | "cod") =>
+      ? Array.from(new Set(parsed.filter((method): method is ("stripe" | "sslcommerz" | "polar" | "cod") =>
           method === "stripe" ||
           method === "sslcommerz" ||
           method === "polar" ||
           method === "cod",
-        )
+        )))
       : [];
   } catch {
     enabledMethods = hasExplicitEnabledMethods ? [] : ["cod"];

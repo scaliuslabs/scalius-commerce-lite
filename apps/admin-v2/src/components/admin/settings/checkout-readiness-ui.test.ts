@@ -67,7 +67,10 @@ describe("checkout settings status presentation", () => {
       expect(flowSource).toContain(`label: "${label}"`);
     }
     expect(gatewaysSource).toContain("outcome.environmentLabel");
-    expect(gatewaysSource).toContain("Choose which eligible methods appear at checkout.");
+    expect(gatewaysSource).toContain("Choose which eligible methods appear at checkout, their display order, and the preselected option.");
+    expect(gatewaysSource).toContain("Checkout display order");
+    expect(gatewaysSource).toContain("Move ${META[method].label} up");
+    expect(gatewaysSource).toContain("Move ${META[method].label} down");
     expect(gatewaysSource).toContain("At checkout");
     expect(gatewaysSource).not.toContain("<dt className=\"text-muted-foreground\">Setup</dt>");
     expect(gatewaysSource).toContain("Key environment");

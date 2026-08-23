@@ -5,6 +5,7 @@ import {
   formatOrderSuccessLabel,
   getOrderSuccessStateKind,
   getOrderSuccessViewState,
+  shouldClearCheckoutCartForOrder,
 } from "./order-success-state";
 import type { OrderReceipt } from "./api/types";
 
@@ -119,6 +120,31 @@ describe("order success state", () => {
         status: "cancelled",
       })),
     ).toBe("order_updated");
+  });
+
+  it("clears only accepted checkout carts and preserves failed or cancelled carts", () => {
+    expect(shouldClearCheckoutCartForOrder(makeOrder({
+      paymentMethod: "cod",
+      paymentStatus: "unpaid",
+      status: "pending",
+    }))).toBe(true);
+    expect(shouldClearCheckoutCartForOrder(makeOrder({
+      paymentMethod: "sslcommerz",
+      paymentStatus: "paid",
+      paidAmount: 1200,
+      balanceDue: 0,
+      status: "pending",
+    }))).toBe(true);
+    expect(shouldClearCheckoutCartForOrder(makeOrder({
+      paymentMethod: "sslcommerz",
+      paymentStatus: "failed",
+      status: "incomplete",
+    }))).toBe(false);
+    expect(shouldClearCheckoutCartForOrder(makeOrder({
+      paymentMethod: "sslcommerz",
+      paymentStatus: "unpaid",
+      status: "cancelled",
+    }))).toBe(false);
   });
 
   it("renders paid returned orders as a post-sale update without firing purchase finalization", () => {

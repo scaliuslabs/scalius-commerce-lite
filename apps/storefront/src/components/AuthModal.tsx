@@ -269,8 +269,14 @@ export default function AuthModal() {
   }, [hydrateExistingCustomerSession]);
 
   useEffect(() => {
-    const handleOpen = () => {
+    const handleOpen = (event?: Event) => {
       delete window.__scaliusAuthModalOpenPending;
+      const requestedIntent = (event as CustomEvent<{ intent?: AuthIntent }> | undefined)?.detail?.intent;
+      if (requestedIntent === "sign_in" || requestedIntent === "sign_up") {
+        setAuthIntent(requestedIntent);
+        setError("");
+        setOtp("");
+      }
       setIsOpen(true);
       void ensureAuthSettings();
       if (hasCustomerAuthMirrorCookie()) {

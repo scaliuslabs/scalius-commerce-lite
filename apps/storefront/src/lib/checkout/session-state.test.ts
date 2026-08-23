@@ -7,6 +7,8 @@ import {
   clearHostedPaymentRecoverySession,
   clearCheckoutSession,
   clearCheckoutTransferSession,
+  fingerprintCheckoutCart,
+  matchesCheckoutRecoveryCart,
   readHostedPaymentRecoverySession,
   writeHostedPaymentRecoverySession,
   writeCheckoutTransferSession,
@@ -25,6 +27,7 @@ const legacyAnalyticsKeys = [
 ] as const;
 
 const browserSessionStorage = window.sessionStorage;
+const browserLocalStorage = window.localStorage;
 
 function createMemoryStorage(): Storage {
   const store = new Map<string, string>();
@@ -55,11 +58,24 @@ function installSessionStorage(storage: Storage): void {
   });
 }
 
+function installLocalStorage(storage: Storage): void {
+  Object.defineProperty(globalThis, "localStorage", {
+    value: storage,
+    configurable: true,
+  });
+  Object.defineProperty(window, "localStorage", {
+    value: storage,
+    configurable: true,
+  });
+}
+
 describe("checkout session state", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     installSessionStorage(browserSessionStorage);
+    installLocalStorage(browserLocalStorage);
     sessionStorage.clear();
+    localStorage.clear();
   });
 
   it("clears cart-to-checkout transfer state without rotating the active checkout id", () => {
@@ -187,21 +203,48 @@ describe("checkout session state", () => {
     expect(sessionStorage.getItem("scalius_checkout_gateways")).toBeNull();
   });
 
-  it("stores only same-origin hosted payment receipt recovery URLs", () => {
+  it("stores a seven-day, non-secret same-browser recovery pointer with the cart identity", () => {
+    const checkoutData = {
+      checkoutId: "chk_session_1",
+      cartItems: JSON.stringify({
+        "line:1": { id: "product_1", variantId: "variant_1", quantity: 2 },
+      }),
+    };
     expect(
       writeHostedPaymentRecoverySession(
         "/order-success?orderId=order_1&payment=sslcommerz",
+        checkoutData,
       ),
     ).toBe(true);
     expect(readHostedPaymentRecoverySession()).toMatchObject({
       href: "/order-success?orderId=order_1&payment=sslcommerz",
       gateway: "sslcommerz",
+      orderId: "order_1",
+      checkoutId: "chk_session_1",
+      cartFingerprint: fingerprintCheckoutCart(checkoutData.cartItems),
     });
+    expect(localStorage.getItem("scalius_hosted_payment_recovery")).toContain("order_1");
+    expect(localStorage.getItem("scalius_hosted_payment_recovery")).not.toContain("receiptToken");
+    expect(localStorage.getItem("scalius_hosted_payment_recovery")).not.toContain("customerPhone");
+    expect(sessionStorage.getItem("scalius_hosted_payment_recovery")).toBeNull();
+    expect(matchesCheckoutRecoveryCart(
+      readHostedPaymentRecoverySession(),
+      {
+        "line:1": { id: "product_1", variantId: "variant_1", quantity: 2 },
+      },
+    )).toBe(true);
+    expect(matchesCheckoutRecoveryCart(
+      readHostedPaymentRecoverySession(),
+      {
+        "line:1": { id: "product_1", variantId: "variant_1", quantity: 3 },
+      },
+    )).toBe(false);
 
     clearHostedPaymentRecoverySession();
     expect(writeHostedPaymentRecoverySession("https://evil.test/order-success?orderId=order_1&payment=sslcommerz")).toBe(false);
     expect(writeHostedPaymentRecoverySession("/order-success?payment=sslcommerz")).toBe(false);
-    expect(writeHostedPaymentRecoverySession("/order-success?orderId=order_1&payment=stripe")).toBe(false);
+    expect(writeHostedPaymentRecoverySession("/order-success?orderId=order_1&payment=stripe")).toBe(true);
+    clearHostedPaymentRecoverySession();
     for (const legacyProofParam of [["to", "ken"], ["receipt", "_", "token"], ["receipt", "Token"]]) {
       const url = new URL("/order-success?orderId=order_1&payment=sslcommerz", window.location.origin);
       url.searchParams.set(legacyProofParam.join(""), "receipt_1");
@@ -210,18 +253,49 @@ describe("checkout session state", () => {
     expect(readHostedPaymentRecoverySession()).toBeNull();
   });
 
+  it("preserves the original cart identity when receipt recovery changes gateway", () => {
+    const checkoutData = {
+      checkoutRequestId: "checkout_1",
+      cartItems: {
+        line_1: { id: "product_1", variantId: "variant_1", quantity: 2 },
+      },
+    };
+    expect(writeHostedPaymentRecoverySession(
+      "/order-success?orderId=order_1&payment=sslcommerz",
+      checkoutData,
+      "sslcommerz",
+    )).toBe(true);
+
+    expect(writeHostedPaymentRecoverySession(
+      "/order-success?orderId=order_1&payment=polar",
+      undefined,
+      "polar",
+    )).toBe(true);
+
+    const recovery = readHostedPaymentRecoverySession();
+    expect(recovery).toMatchObject({
+      orderId: "order_1",
+      gateway: "polar",
+      checkoutId: "checkout_1",
+    });
+    expect(recovery?.cartFingerprint).toBe(fingerprintCheckoutCart(checkoutData.cartItems));
+  });
+
   it("expires stale hosted payment receipt recovery URLs", () => {
-    const createdAt = Date.now() - (31 * 60 * 1000);
-    sessionStorage.setItem(
+    const createdAt = Date.now() - (7 * 24 * 60 * 60 * 1000 + 1);
+    localStorage.setItem(
       "scalius_hosted_payment_recovery",
       JSON.stringify({
         href: "/order-success?orderId=order_1&payment=polar",
         gateway: "polar",
+        orderId: "order_1",
+        checkoutId: null,
+        cartFingerprint: null,
         createdAt,
       }),
     );
 
     expect(readHostedPaymentRecoverySession(Date.now())).toBeNull();
-    expect(sessionStorage.getItem("scalius_hosted_payment_recovery")).toBeNull();
+    expect(localStorage.getItem("scalius_hosted_payment_recovery")).toBeNull();
   });
 });

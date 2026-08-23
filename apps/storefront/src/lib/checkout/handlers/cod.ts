@@ -21,7 +21,6 @@ export const codHandler: GatewayHandler = {
       return {
         success: true,
         redirectUrl: `/order-success?orderId=${encodeURIComponent(orderId)}`,
-        clearCartOnRedirect: true,
       };
     } catch (err: unknown) {
       if (err instanceof CheckoutOrderError) {
