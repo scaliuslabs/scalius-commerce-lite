@@ -953,9 +953,6 @@ export async function verifyOtp(
                             : "An account already exists for this phone number. Sign in instead.",
                     );
                 }
-                if (method !== "phone") {
-                    throw new ValidationError("Use phone verification to create an account for this customer profile.");
-                }
                 customerProfileRow = existing;
                 customerId = existing.id;
                 customerName = existing.name || name;
