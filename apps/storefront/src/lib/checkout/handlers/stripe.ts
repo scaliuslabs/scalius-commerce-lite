@@ -38,6 +38,7 @@ let stripeInstance: StripeInstance | null = null;
 let stripeCard: StripeCardElement | null = null;
 let publishableKey: string | null = null;
 let stripeCardComplete = false;
+let stripeScriptPromise: Promise<void> | null = null;
 
 function syncPayButtonReadiness(): void {
   const section = document.getElementById("stripeSection");
@@ -49,15 +50,13 @@ function syncPayButtonReadiness(): void {
 export const stripeHandler: GatewayHandler = {
   id: "stripe",
   meta: {
-    label: "International card",
-    icon: `<svg class="w-6 h-6 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-    </svg>`,
-    desc: "Visa, Mastercard, and American Express",
+    label: "Credit or debit card",
+    icon: "",
+    desc: "Pay securely by card",
   },
 
   getButtonText(_isPartialPayment: boolean): string {
-    return "Pay with Card";
+    return "Pay by card";
   },
 
   isReady(): boolean {
@@ -81,13 +80,17 @@ export const stripeHandler: GatewayHandler = {
     try {
       // Dynamically load Stripe.js if not already loaded
       if (!window.Stripe) {
-        await new Promise<void>((resolve, reject) => {
-          const s = document.createElement("script");
-          s.src = "https://js.stripe.com/v3/";
-          s.onload = () => resolve();
-          s.onerror = () => reject(new Error("Failed to load Stripe.js"));
-          document.head.appendChild(s);
+        stripeScriptPromise ??= new Promise<void>((resolve, reject) => {
+          const script = document.createElement("script");
+          script.src = "https://js.stripe.com/v3/";
+          script.onload = () => resolve();
+          script.onerror = () => reject(new Error("Failed to load Stripe.js"));
+          document.head.appendChild(script);
+        }).catch((error) => {
+          stripeScriptPromise = null;
+          throw error;
         });
+        await stripeScriptPromise;
       }
 
       stripeInstance = window.Stripe!(publishableKey);

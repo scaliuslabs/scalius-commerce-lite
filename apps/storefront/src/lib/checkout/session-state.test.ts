@@ -4,19 +4,25 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   CHECKOUT_TRANSFER_UNAVAILABLE_MESSAGE,
+  clearCheckoutFormDraft,
   clearHostedPaymentRecoverySession,
   clearCheckoutSession,
   clearCheckoutTransferSession,
   fingerprintCheckoutCart,
   matchesCheckoutRecoveryCart,
+  readCheckoutFormDraft,
+  readCheckoutPaymentSelection,
   readHostedPaymentRecoverySession,
   writeHostedPaymentRecoverySession,
+  writeCheckoutFormDraft,
+  writeCheckoutPaymentSelection,
   writeCheckoutTransferSession,
 } from "./session-state";
 
 const checkoutTransferKeys = [
   "scalius_checkout_data",
   "scalius_checkout_gateways",
+  "scalius_checkout_payment_method",
 ] as const;
 
 const legacyAnalyticsKeys = [
@@ -116,6 +122,7 @@ describe("checkout session state", () => {
   });
 
   it("writes cart-to-checkout transfer state only when storage persists both keys", () => {
+    writeCheckoutPaymentSelection("polar");
     const result = writeCheckoutTransferSession(
       {
         customerName: "Buyer",
@@ -127,6 +134,61 @@ describe("checkout session state", () => {
     expect(result).toEqual({ ok: true });
     expect(sessionStorage.getItem("scalius_checkout_data")).toContain("Buyer");
     expect(sessionStorage.getItem("scalius_checkout_gateways")).toBe('[{"id":"cod"}]');
+    expect(readCheckoutPaymentSelection()).toBeNull();
+  });
+
+  it("keeps only bounded checkout form fields for Back and Forward navigation", () => {
+    writeCheckoutFormDraft({
+      customerName: "Buyer",
+      customerPhone: "+8801712345678",
+      shippingAddress: "Rajshahi",
+      city: "city_1",
+      zone: "zone_1",
+      shippingLocation: "delivery_2",
+      notes: "Call on arrival",
+      unknownField: "ignored",
+    } as never);
+
+    expect(readCheckoutFormDraft()).toEqual({
+      customerName: "Buyer",
+      customerPhone: "+8801712345678",
+      shippingAddress: "Rajshahi",
+      city: "city_1",
+      zone: "zone_1",
+      shippingLocation: "delivery_2",
+      notes: "Call on arrival",
+    });
+
+    clearCheckoutTransferSession();
+    expect(readCheckoutFormDraft()?.customerName).toBe("Buyer");
+    clearCheckoutFormDraft();
+    expect(readCheckoutFormDraft()).toBeNull();
+  });
+
+  it("expires malformed or old checkout form drafts", () => {
+    sessionStorage.setItem(
+      "scalius_checkout_form_draft",
+      JSON.stringify({
+        version: 1,
+        updatedAt: Date.now() - 25 * 60 * 60 * 1000,
+        values: { customerName: "Old buyer" },
+      }),
+    );
+    expect(readCheckoutFormDraft()).toBeNull();
+
+    sessionStorage.setItem("scalius_checkout_form_draft", "{bad-json");
+    expect(readCheckoutFormDraft()).toBeNull();
+  });
+
+  it("persists only safe payment method identifiers", () => {
+    writeCheckoutPaymentSelection("sslcommerz");
+    expect(readCheckoutPaymentSelection()).toBe("sslcommerz");
+
+    writeCheckoutPaymentSelection("unsafe method/value");
+    expect(readCheckoutPaymentSelection()).toBe("sslcommerz");
+
+    clearCheckoutTransferSession();
+    expect(readCheckoutPaymentSelection()).toBeNull();
   });
 
   it("fails closed and clears partial transfer state when required checkout data storage is blocked", () => {

@@ -11,17 +11,17 @@ export function installLazyGlobalUi(): void {
   window.__scaliusLazyGlobalUiInstalled = true;
 
   let authLoading: Promise<unknown> | null = null;
-  const loadAuth = () => {
-    window.__scaliusAuthModalOpenPending = true;
+  const loadAuth = (openModal: boolean) => {
+    if (openModal) window.__scaliusAuthModalOpenPending = true;
     authLoading ??= import("@/components/client/mount-auth-modal").then(
       ({ mountAuthModal }) => mountAuthModal(),
     );
     return authLoading;
   };
-  window.addEventListener("open-auth-modal", () => void loadAuth());
+  window.addEventListener("open-auth-modal", () => void loadAuth(true));
 
   if (hasCustomerAuthMirrorCookie()) {
-    const resumeAuth = () => void loadAuth();
+    const resumeAuth = () => void loadAuth(false);
     if ("requestIdleCallback" in window) {
       window.requestIdleCallback(resumeAuth, { timeout: 2500 });
     } else {

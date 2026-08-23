@@ -16,11 +16,15 @@ describe("order success side effects", () => {
 
     expect(pageSource).toContain("data-order-finalize");
     expect(pageSource).toContain("data-checkout-cart-finalize");
+    expect(pageSource).toContain("data-current-checkout-finalize");
     expect(pageSource).toContain("matchesCheckoutRecoveryCart");
+    expect(pageSource).toContain("const shouldFinalizeThisReceipt = currentCheckoutFinalize || matchingHostedCheckout");
     expect(pageSource).toContain("clearHostedPaymentRecoverySession");
     expect(pageSource).toContain("[data-order-finalize='true'][data-fb-order-details]");
     expect(pageSource.indexOf('receiptElement.dataset.checkoutCartFinalize === "true"'))
       .toBeLessThan(pageSource.indexOf("clearCart();"));
+    expect(pageSource.indexOf("if (shouldFinalizeThisReceipt) clearCheckoutSession();"))
+      .toBeGreaterThan(pageSource.indexOf("const shouldFinalizeThisReceipt"));
   });
 
   it("keeps hosted redirects from clearing the cart before authoritative receipt finalization", () => {

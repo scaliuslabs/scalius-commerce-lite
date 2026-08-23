@@ -26,11 +26,16 @@ const cartPageSource = readFileSync(
   resolve(storefrontRoot, "src/pages/cart.astro"),
   "utf8",
 );
+const checkoutPageSource = readFileSync(
+  resolve(storefrontRoot, "src/pages/checkout.astro"),
+  "utf8",
+);
 
 describe("cart page presentation contract", () => {
   it("keeps quantity and removal controls accessible after dynamic rendering", () => {
     expect(source).toContain('aria-label="Decrease ${safeName} quantity"');
-    expect(source).toContain('aria-label="Increase ${safeName} quantity"');
+    expect(source).toContain('`Increase ${safeName} quantity`');
+    expect(source).toContain('`Maximum available quantity reached for ${safeName}`');
     expect(source).toContain('aria-label="Remove ${safeName} from cart"');
     expect(source).toContain(
       'class="flex h-11 items-center overflow-hidden rounded-md ring-1',
@@ -103,8 +108,17 @@ describe("cart page presentation contract", () => {
 
   it("reserves the empty-cart result height before storage hydration", () => {
     expect(cartPageSource).toContain(
-      'class="min-h-72 divide-y divide-gray-50 p-3 sm:p-4 block"',
+      'class="min-h-24 divide-y divide-gray-50 p-3 sm:p-4 block"',
     );
     expect(cartPageSource).toContain('aria-busy="true"');
+  });
+
+  it("keeps buyer-facing checkout copy concise and non-duplicative", () => {
+    expect(cartPageSource).not.toContain("Contact information");
+    expect(cartPageSource).not.toContain("Used for delivery updates and order recovery.");
+    expect(cartPageSource).not.toContain("Delivery details");
+    expect(checkoutPageSource).not.toContain("Choose how to pay");
+    expect(checkoutPageSource).not.toContain("Select a payment method to complete your order.");
+    expect(checkoutPageSource).not.toContain("All transactions are secure and encrypted.");
   });
 });

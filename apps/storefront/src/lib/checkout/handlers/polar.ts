@@ -8,15 +8,13 @@ import { normalizeHostedCheckoutUrl } from "../redirect-url";
 export const polarHandler: GatewayHandler = {
   id: "polar",
   meta: {
-    label: "International card & Cash App",
-    icon: `<svg class="w-6 h-6 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 10V3L4 14h7v7l9-11h-7z" />
-    </svg>`,
-    desc: "Cards and Cash App",
+    label: "Card or digital wallet",
+    icon: "",
+    desc: "Complete payment with Polar",
   },
 
   getButtonText(_isPartialPayment: boolean): string {
-    return "Continue to payment";
+    return "Continue to Polar";
   },
 
   async processPayment(ctx: PaymentContext): Promise<PaymentResult> {
