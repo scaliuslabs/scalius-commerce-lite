@@ -70,9 +70,24 @@ describe("customer auth resilience source boundaries", () => {
     expect(cartSource).toMatch(
       /<form\b[^>]*method="POST"[^>]*action="\/cart"[^>]*id="checkoutForm"[\s\S]*name="formIntent"[\s\S]*value="checkout"/,
     );
+    expect(cartSource).toMatch(
+      /<form\b[^>]*method="POST"[^>]*action="\/cart"[^>]*id="checkoutForm"[^>]*novalidate/s,
+    );
     expect(cartSource).toContain('if (formData.get("formIntent") === "checkout") {');
     expect(authModalSource).not.toMatch(/<form\b/);
     expect(authModalSource).not.toMatch(/name="(?:phone|email|otp|code|password|token)"/);
+  });
+
+  it("lets explicit empty checkout edits replace older saved buyer details", () => {
+    const cartSource = readStorefrontSource("src/pages/cart.astro");
+
+    expect(cartSource).toContain("const values: Record<string, string> = {};");
+    expect(cartSource).toContain("if (input) values[field] = input.value;");
+    expect(cartSource).toContain(
+      'else if (draft && field in draft) values[field] = draft[field] ?? "";',
+    );
+    expect(cartSource).toContain("persistCheckoutFormDraftNow();");
+    expect(cartSource).not.toContain("shippingAddressInput?.reportValidity()");
   });
 
   it("keeps post-sale payment recovery controls out of native forms", () => {
