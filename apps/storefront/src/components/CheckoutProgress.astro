@@ -6,63 +6,56 @@ interface Props {
 
 const { current, paymentRequired = true } = Astro.props;
 const allSteps = [
-  { id: "information", label: "Information", shortLabel: "Info" },
-  ...(paymentRequired
-    ? [{ id: "payment", label: "Payment", shortLabel: "Payment" }]
-    : []),
-  { id: "confirmation", label: "Confirmation", shortLabel: "Done" },
+  { id: "information", label: "Information" },
+  ...(paymentRequired ? [{ id: "payment", label: "Payment" }] : []),
+  { id: "confirmation", label: "Confirmation" },
 ] as const;
-const currentIndex = allSteps.findIndex((step) => step.id === current);
 ---
 
-<nav aria-label="Checkout progress" class="mb-5 sm:mb-7">
-  <ol class="mx-auto flex max-w-xl items-start" role="list">
-    {allSteps.map((step, index) => {
-      const isCurrent = step.id === current;
-      const isComplete = index < currentIndex;
-      const canReturnToInformation = step.id === "information" && current === "payment";
-      return (
-        <li class="relative flex flex-1 flex-col items-center text-center last:flex-none">
-          {index < allSteps.length - 1 && (
-            <span
-              class={`absolute left-1/2 top-4 h-px w-full ${index < currentIndex ? "bg-primary" : "bg-border"}`}
-              aria-hidden="true"
-            />
-          )}
-          {canReturnToInformation ? (
-            <a
-              href="/cart"
-              class="relative z-10 flex h-8 w-8 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground ring-4 ring-background transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              aria-label="Return to checkout information"
-            >
-              <svg class="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" aria-hidden="true">
-                <path d="m5 10 3 3 7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
+<nav aria-label="Checkout progress" class="mb-5">
+  <ol class="flex flex-wrap items-center gap-1.5 text-xs sm:text-sm" role="list">
+    {
+      allSteps.map((step, index) => {
+        const isCurrent = step.id === current;
+        const canReturnToInformation =
+          step.id === "information" && current === "payment";
+        return (
+          <li class="contents">
+            {canReturnToInformation ? (
+              <a
+                href="/cart"
+                class="min-h-11 rounded-md px-1.5 py-3 font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-0 sm:py-1"
+              >
+                {step.label}
+              </a>
+            ) : (
+              <span
+                class:list={[
+                  "rounded-md px-1.5 py-1",
+                  {
+                    "font-semibold text-foreground": isCurrent,
+                    "font-medium text-muted-foreground": !isCurrent,
+                  },
+                ]}
+                aria-current={isCurrent ? "step" : undefined}
+              >
+                {step.label}
+              </span>
+            )}
+            {index < allSteps.length - 1 ? (
+              <svg
+                class="h-3.5 w-3.5 shrink-0 text-muted-foreground/60"
+                viewBox="0 0 20 20"
+                fill="none"
+                stroke="currentColor"
+                aria-hidden="true"
+              >
+                <path d="m7 4 6 6-6 6" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" />
               </svg>
-            </a>
-          ) : (
-            <span
-              class={`relative z-10 flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold ring-4 ring-background ${
-                isCurrent
-                  ? "bg-primary text-primary-foreground"
-                  : isComplete
-                    ? "bg-primary text-primary-foreground"
-                    : "border border-border bg-background text-muted-foreground"
-              }`}
-              aria-current={isCurrent ? "step" : undefined}
-            >
-              {isComplete ? (
-                <svg class="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" aria-hidden="true">
-                  <path d="m5 10 3 3 7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
-                </svg>
-              ) : index + 1}
-            </span>
-          )}
-          <span class={`relative z-10 mt-2 bg-background px-1 text-[11px] font-medium sm:text-xs ${isCurrent ? "text-foreground" : "text-muted-foreground"}`}>
-            <span class="sm:hidden">{step.shortLabel}</span>
-            <span class="hidden sm:inline">{step.label}</span>
-          </span>
-        </li>
-      );
-    })}
+            ) : null}
+          </li>
+        );
+      })
+    }
   </ol>
 </nav>

@@ -7,6 +7,7 @@ import {
   hasActivePhoneCountryPolicy,
   validateStorefrontPhone,
 } from "@/lib/phone-country-policy";
+import { readCheckoutFormDraft } from "@/lib/checkout/session-state";
 
 interface PhoneFieldProps {
   name: string;
@@ -79,6 +80,8 @@ export default function PhoneField({
       if (phone) setValue((current) => current || phone);
     };
     window.addEventListener("phone-prefill", handler);
+    const draftPhone = readCheckoutFormDraft()?.customerPhone;
+    if (draftPhone) setValue((current) => current || draftPhone);
     return () => window.removeEventListener("phone-prefill", handler);
   }, []);
 
@@ -100,7 +103,7 @@ export default function PhoneField({
       {label && (
         <label
           htmlFor={inputId}
-          className="mb-1 block text-xs font-semibold text-foreground uppercase tracking-wide"
+          className="mb-1 block text-sm font-medium text-foreground"
         >
           {label}
           {required && <span className="text-destructive ml-0.5">*</span>}

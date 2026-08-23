@@ -2,7 +2,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { CheckCircle2, HelpCircle } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { CheckCircle2, Copy, HelpCircle } from "lucide-react";
+import { toast } from "sonner";
+import { getInheritedSecuritySources } from "@/lib/api-functions/security-runtime";
 import {
   type PolarData,
   PasswordInput,
@@ -11,6 +14,54 @@ import {
   SandboxToggle,
   ExtLink,
 } from "./payment-gateway-utils";
+
+const POLAR_WEBHOOK_PATH = "/api/v1/webhooks/polar";
+
+function usePolarWebhookUrl(): string | null {
+  const runtimeSources = useQuery({
+    queryKey: ["settings", "security", "inherited-sources"],
+    queryFn: getInheritedSecuritySources,
+    staleTime: 1000 * 60 * 10,
+  });
+  const apiOrigin = runtimeSources.data?.find((source) => source.key === "api")?.source;
+  if (!apiOrigin) return null;
+  try {
+    return new URL(POLAR_WEBHOOK_PATH, `${apiOrigin.replace(/\/$/, "")}/`).toString();
+  } catch {
+    return null;
+  }
+}
+
+function PolarWebhookEndpoint() {
+  const webhookUrl = usePolarWebhookUrl();
+  const copy = async () => {
+    if (!webhookUrl) return;
+    try {
+      await navigator.clipboard.writeText(webhookUrl);
+      toast.success("Webhook URL copied");
+    } catch {
+      toast.error("Webhook URL could not be copied");
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-2 rounded-md border border-border bg-muted/40 p-2">
+      <code className="min-w-0 flex-1 break-all text-xs">
+        {webhookUrl ?? "Commerce API URL unavailable"}
+      </code>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="h-8 shrink-0 gap-1.5"
+        onClick={() => void copy()}
+        disabled={!webhookUrl}
+      >
+        <Copy className="h-3.5 w-3.5" /> Copy
+      </Button>
+    </div>
+  );
+}
 
 interface PolarFormProps {
   s: PolarData;
@@ -56,7 +107,8 @@ export function PolarForm({ s, set, conf, saving, dirty, onReset, onSave, onHelp
         </Label>
         <PasswordInput id="polar-wh" value={s.webhookSecret} onChange={(v) => set((p) => ({ ...p, webhookSecret: v }))}
           placeholder="polar_whs_..." configured={conf.webhook} />
-        <p className="text-xs text-muted-foreground">Add endpoint <code className="text-xs bg-muted px-1 rounded">/api/v1/webhooks/polar</code> in Polar webhooks.</p>
+        <p className="text-xs text-muted-foreground">Use this exact endpoint in Polar:</p>
+        <PolarWebhookEndpoint />
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="polar-pid" className="text-sm">Product ID</Label>
@@ -74,7 +126,7 @@ export function PolarSetupGuide() {
     { t: "Create a Polar Account", c: <>Sign up at <ExtLink href="https://polar.sh">polar.sh</ExtLink> and create an organization.</> },
     { t: "Generate an Access Token", c: <>Go to <ExtLink href="https://polar.sh/settings">Organization Settings</ExtLink> &rarr; <strong>Access Tokens</strong> &rarr; Create a token with <code className="bg-muted px-1 rounded text-xs">checkouts:write</code> scope.</> },
     { t: "Create a Generic Product", c: <>In Polar Dashboard &rarr; <strong>Products</strong> &rarr; Create a product. Copy the <strong>Product ID</strong> from the &hellip; menu.</> },
-    { t: "Configure Webhooks", c: <>Add endpoint <code className="block bg-muted px-3 py-2 rounded text-xs break-all mt-1">https://your-domain.com/api/v1/webhooks/polar</code>Select events: <code className="bg-muted px-1 rounded text-xs">checkout.updated</code> and <code className="bg-muted px-1 rounded text-xs">order.paid</code>.</> },
+    { t: "Configure Webhooks", c: <><PolarWebhookEndpoint /><span className="mt-2 block">Select <code className="bg-muted px-1 rounded text-xs">checkout.updated</code>, <code className="bg-muted px-1 rounded text-xs">order.paid</code>, and <code className="bg-muted px-1 rounded text-xs">order.refunded</code>.</span></> },
     { t: "Enable & Save", c: <>Turn <strong>Provider enabled</strong> on, click <strong>Save Polar</strong>, then use <strong>Offer to buyers</strong> on the gateway card when you are ready for customers to see it.</> },
   ];
   return (

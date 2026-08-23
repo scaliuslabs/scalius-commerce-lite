@@ -10,10 +10,14 @@ describe("provider mark manifest", () => {
   it("keeps every adopted mark local, traceable, and byte-verified", () => {
     expect(Object.keys(PROVIDER_MARKS)).toHaveLength(19);
 
-    for (const mark of Object.values(PROVIDER_MARKS)) {
+    for (const [id, mark] of Object.entries(PROVIDER_MARKS)) {
       expect(mark.firstPartyAssetUrl).toMatch(/^https:\/\//);
       expect(mark.governingTermsUrl).toMatch(/^https:\/\//);
-      expect(mark.allowedSurface).toBe("direct-provider-settings");
+      expect(mark.allowedSurface).toBe(
+        ["stripe", "sslcommerz", "polar"].includes(id)
+          ? "direct-provider-settings-and-storefront-checkout"
+          : "direct-provider-settings",
+      );
       expect(mark.minimumCssPixels).toBeGreaterThanOrEqual(16);
 
       if (mark.derivative) {

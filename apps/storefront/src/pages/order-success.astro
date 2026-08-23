@@ -16,7 +16,11 @@ import {
   normalizeRetryDepositAmount,
   resolveOrderSuccessRetryPaymentType,
 } from "@/lib/order-success-payment-retry";
-import { readOrderReceiptCookie } from "@/lib/order-receipt-cookie";
+import {
+  clearOrderReceiptFinalizeCookieHeader,
+  hasOrderReceiptFinalizeCookie,
+  readOrderReceiptCookie,
+} from "@/lib/order-receipt-cookie";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import {
@@ -36,9 +40,13 @@ if (legacyProofParams.some((param) => Astro.url.searchParams.has(param))) {
 }
 
 const orderId = Astro.url.searchParams.get("orderId");
+const requestCookieHeader = Astro.request.headers.get("cookie");
 const receiptToken = orderId
-  ? readOrderReceiptCookie(Astro.request.headers.get("cookie"), orderId)
+  ? readOrderReceiptCookie(requestCookieHeader, orderId)
   : "";
+const hasCurrentCheckoutFinalizeMarker = orderId
+  ? hasOrderReceiptFinalizeCookie(requestCookieHeader, orderId)
+  : false;
 const paymentResult = Astro.url.searchParams.get("result");
 const requestedPayment = Astro.url.searchParams.get("payment");
 const requestedPaymentType = Astro.url.searchParams.get("paymentType");
@@ -113,6 +121,13 @@ const orderSuccessView = order ? getOrderSuccessViewState(order) : null;
 const shouldClearCheckoutCart = order ? shouldClearCheckoutCartForOrder(order) : false;
 const showsPositiveOrderState = orderSuccessView?.kind === "order_placed"
   || orderSuccessView?.kind === "order_updated";
+const shouldFinalizeCurrentCheckout = Boolean(
+  hasCurrentCheckoutFinalizeMarker && orderId && showsPositiveOrderState,
+);
+if (shouldFinalizeCurrentCheckout && orderId) {
+  const clearFinalizeCookie = clearOrderReceiptFinalizeCookieHeader(orderId);
+  if (clearFinalizeCookie) Astro.response.headers.append("Set-Cookie", clearFinalizeCookie);
+}
 const retryPaymentType = order
   ? resolveOrderSuccessRetryPaymentType(order, requestedPaymentType)
   : null;
@@ -158,6 +173,7 @@ const legacySubtotal = order
     data-order-success-state={orderSuccessView?.kind ?? "recovery"}
     data-order-finalize={orderSuccessView?.shouldFinalizeClientSide ? "true" : "false"}
     data-checkout-cart-finalize={shouldClearCheckoutCart ? "true" : "false"}
+    data-current-checkout-finalize={shouldFinalizeCurrentCheckout ? "true" : "false"}
     data-order-id={order?.id}
     data-payment-method={order?.paymentMethod}
   >
@@ -535,13 +551,16 @@ const legacySubtotal = order
     if (receiptElement && receiptOrderId && (receiptState === "order_placed" || receiptState === "order_updated")) {
       const recovery = readHostedPaymentRecoverySession();
       const recoveryMatchesOrder = recovery?.orderId === receiptOrderId;
-      if (receiptElement.dataset.checkoutCartFinalize === "true") {
-        if (!recovery || (recoveryMatchesOrder && matchesCheckoutRecoveryCart(recovery, cartStore.get().items))) {
-          clearCart();
-        }
+      const currentCheckoutFinalize = receiptElement.dataset.currentCheckoutFinalize === "true";
+      const matchingHostedCheckout = Boolean(
+        recoveryMatchesOrder && matchesCheckoutRecoveryCart(recovery, cartStore.get().items),
+      );
+      const shouldFinalizeThisReceipt = currentCheckoutFinalize || matchingHostedCheckout;
+      if (shouldFinalizeThisReceipt && receiptElement.dataset.checkoutCartFinalize === "true") {
+        clearCart();
       }
-      clearCheckoutSession();
-      if (recoveryMatchesOrder) clearHostedPaymentRecoverySession();
+      if (shouldFinalizeThisReceipt) clearCheckoutSession();
+      if (shouldFinalizeThisReceipt && recoveryMatchesOrder) clearHostedPaymentRecoverySession();
     }
 
     const mainElement = document.querySelector(

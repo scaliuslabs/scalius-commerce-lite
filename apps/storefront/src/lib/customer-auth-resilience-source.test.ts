@@ -91,6 +91,9 @@ describe("customer auth resilience source boundaries", () => {
     expect(source).toContain('import { installLazyGlobalUi } from "@/scripts/lazy-global-ui";');
     expect(source).not.toContain("<AuthModal client:");
     expect(runtimeSource).toContain("window.__scaliusAuthModalOpenPending = true;");
+    expect(runtimeSource).toContain("const loadAuth = (openModal: boolean)");
+    expect(runtimeSource).toContain("const resumeAuth = () => void loadAuth(false);");
+    expect(runtimeSource).toContain('window.addEventListener("open-auth-modal", () => void loadAuth(true));');
     expect(runtimeSource).toContain('import("@/components/client/mount-auth-modal")');
     expect(runtimeSource).toContain("if (hasCustomerAuthMirrorCookie()) {");
   });

@@ -10,6 +10,7 @@ import {
   getEffectiveCartShippingFee,
   hydrateCartFromStorage,
 } from "@/store/cart";
+import { readCheckoutFormDraft } from "@/lib/checkout/session-state";
 
 export interface ShippingLocationSelectorProps {
   shippingMethods: ShippingMethod[];
@@ -39,6 +40,23 @@ export default function ShippingLocationSelector({
   useEffect(() => {
     hydrateCartFromStorage();
   }, []);
+
+  useEffect(() => {
+    const restore = (methodId: unknown) => {
+      if (
+        typeof methodId === "string" &&
+        shippingMethods.some((method) => method.id === methodId)
+      ) {
+        setSelectedLocation(methodId);
+      }
+    };
+    const handlePrefill = (event: Event) => {
+      restore((event as CustomEvent<unknown>).detail);
+    };
+    window.addEventListener("shipping-method-prefill", handlePrefill);
+    restore(readCheckoutFormDraft()?.shippingLocation);
+    return () => window.removeEventListener("shipping-method-prefill", handlePrefill);
+  }, [shippingMethods]);
 
   useEffect(() => {
     if (shippingMethods.length > 0 && !selectedLocation) {
@@ -76,16 +94,40 @@ export default function ShippingLocationSelector({
     );
   }
 
+  if (shippingMethods.length === 1) {
+    const method = shippingMethods[0];
+    const effectiveFee = getEffectiveCartShippingFee(
+      visibleCartItems,
+      method.fee,
+    );
+    const feeLabel = effectiveFee === 0 ? "Free" : formatPriceShort(effectiveFee);
+
+    return (
+      <div>
+        <Label className="mb-2 block text-sm font-medium text-foreground">
+          {shippingMethodLabel}
+        </Label>
+        <input type="hidden" name="shippingLocation" value={method.id} />
+        <div className="flex min-h-11 items-center justify-between rounded-lg border border-border bg-background px-3 py-2.5">
+          <span className="text-sm font-medium text-foreground">{method.name}</span>
+          <span className="ml-3 whitespace-nowrap text-sm font-semibold text-foreground">
+            {feeLabel}
+          </span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div>
-      <Label className="mb-2 block text-xs font-semibold text-gray-700 uppercase tracking-wide">
+      <Label className="mb-2 block text-sm font-medium text-foreground">
         {shippingMethodLabel}
       </Label>
+      <input type="hidden" name="shippingLocation" value={selectedLocation} />
       <RadioGroup
         value={selectedLocation}
         onValueChange={handleLocationChange}
         className="grid grid-cols-1 sm:grid-cols-2 gap-3"
-        name="shippingLocation"
         aria-label={shippingMethodLabel}
       >
         {shippingMethods.map((method) => {

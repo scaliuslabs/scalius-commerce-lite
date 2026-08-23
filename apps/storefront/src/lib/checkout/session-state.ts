@@ -1,14 +1,49 @@
 const CHECKOUT_TRANSFER_KEYS = [
   "scalius_checkout_data",
   "scalius_checkout_gateways",
+  "scalius_checkout_payment_method",
 ] as const;
 
 const CHECKOUT_RUNTIME_KEYS = ["checkoutId"] as const;
+const CHECKOUT_FORM_DRAFT_KEY = "scalius_checkout_form_draft";
+const CHECKOUT_FORM_DRAFT_TTL_MS = 24 * 60 * 60 * 1000;
+const CHECKOUT_FORM_DRAFT_FIELDS = [
+  "customerName",
+  "customerPhone",
+  "customerEmail",
+  "shippingAddress",
+  "city",
+  "cityName",
+  "zone",
+  "zoneName",
+  "area",
+  "areaName",
+  "shippingLocation",
+  "notes",
+] as const;
+const CHECKOUT_TRANSFER_SYNC_FIELDS = [
+  ...CHECKOUT_FORM_DRAFT_FIELDS,
+  "cartItems",
+  "checkoutId",
+  "checkoutRequestId",
+  "discountCodeHidden",
+  "shippingMethodId",
+  "shippingCharge",
+] as const;
 const HOSTED_PAYMENT_RECOVERY_STORAGE_KEY = "scalius_hosted_payment_recovery";
 const HOSTED_PAYMENT_RECOVERY_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const CHECKOUT_RECOVERY_GATEWAYS = new Set(["cod", "stripe", "sslcommerz", "polar"]);
 
 type CheckoutRecoveryGateway = "cod" | "stripe" | "sslcommerz" | "polar";
+type CheckoutFormDraftField = (typeof CHECKOUT_FORM_DRAFT_FIELDS)[number];
+
+export type CheckoutFormDraft = Partial<Record<CheckoutFormDraftField, string>>;
+
+type StoredCheckoutFormDraft = {
+  version: 1;
+  updatedAt: number;
+  values: CheckoutFormDraft;
+};
 
 export interface HostedPaymentRecoverySession {
   href: string;
@@ -44,6 +79,108 @@ export function clearCheckoutTransferSession(): void {
   }
 }
 
+export function writeCheckoutFormDraft(values: CheckoutFormDraft): void {
+  const safeValues: CheckoutFormDraft = {};
+  for (const field of CHECKOUT_FORM_DRAFT_FIELDS) {
+    const value = values[field];
+    if (typeof value === "string") safeValues[field] = value.slice(0, 5000);
+  }
+
+  const stored: StoredCheckoutFormDraft = {
+    version: 1,
+    updatedAt: Date.now(),
+    values: safeValues,
+  };
+  try {
+    sessionStorage.setItem(CHECKOUT_FORM_DRAFT_KEY, JSON.stringify(stored));
+  } catch {
+    // Draft persistence is a convenience; checkout submission still fails closed
+    // through the required transfer-state write below.
+  }
+}
+
+export function readCheckoutFormDraft(): CheckoutFormDraft | null {
+  if (typeof sessionStorage === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem(CHECKOUT_FORM_DRAFT_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<StoredCheckoutFormDraft>;
+    if (
+      parsed.version !== 1 ||
+      typeof parsed.updatedAt !== "number" ||
+      Date.now() - parsed.updatedAt > CHECKOUT_FORM_DRAFT_TTL_MS ||
+      !parsed.values ||
+      typeof parsed.values !== "object" ||
+      Array.isArray(parsed.values)
+    ) {
+      sessionStorage.removeItem(CHECKOUT_FORM_DRAFT_KEY);
+      return null;
+    }
+
+    const safeValues: CheckoutFormDraft = {};
+    for (const field of CHECKOUT_FORM_DRAFT_FIELDS) {
+      const value = parsed.values[field];
+      if (typeof value === "string") safeValues[field] = value.slice(0, 5000);
+    }
+    return safeValues;
+  } catch {
+    try {
+      sessionStorage.removeItem(CHECKOUT_FORM_DRAFT_KEY);
+    } catch {
+      // ignore storage cleanup errors
+    }
+    return null;
+  }
+}
+
+export function clearCheckoutFormDraft(): void {
+  try {
+    sessionStorage.removeItem(CHECKOUT_FORM_DRAFT_KEY);
+  } catch {
+    // ignore storage access errors
+  }
+}
+
+export function writeCheckoutPaymentSelection(methodId: string): void {
+  if (!/^[a-z0-9_-]{1,64}$/i.test(methodId)) return;
+  try {
+    sessionStorage.setItem("scalius_checkout_payment_method", methodId);
+  } catch {
+    // fall back to the merchant default when storage is unavailable
+  }
+}
+
+export function readCheckoutPaymentSelection(): string | null {
+  try {
+    const methodId = sessionStorage.getItem("scalius_checkout_payment_method");
+    return methodId && /^[a-z0-9_-]{1,64}$/i.test(methodId) ? methodId : null;
+  } catch {
+    return null;
+  }
+}
+
+export function syncCheckoutTransferSession(
+  values: Record<string, string>,
+): boolean {
+  try {
+    const raw = sessionStorage.getItem("scalius_checkout_data");
+    if (!raw) return false;
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return false;
+    }
+    const next = { ...(parsed as Record<string, unknown>) };
+    for (const field of CHECKOUT_TRANSFER_SYNC_FIELDS) {
+      const value = values[field];
+      if (typeof value === "string") next[field] = value.slice(0, 50_000);
+    }
+    sessionStorage.setItem("scalius_checkout_data", JSON.stringify(next));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function writeCheckoutTransferSession(
   checkoutData: Record<string, unknown>,
   gatewaysJson: string,
@@ -70,6 +207,12 @@ export function writeCheckoutTransferSession(
   }
 
   try {
+    sessionStorage.removeItem("scalius_checkout_payment_method");
+  } catch {
+    // ignore optional selection reset errors
+  }
+
+  try {
     sessionStorage.setItem("scalius_checkout_gateways", gatewaysJson);
 
     if (sessionStorage.getItem("scalius_checkout_gateways") !== gatewaysJson) {
@@ -89,6 +232,7 @@ export function writeCheckoutTransferSession(
 export function clearCheckoutSession(): void {
   try {
     clearCheckoutTransferSession();
+    clearCheckoutFormDraft();
     removeSessionKeys(CHECKOUT_RUNTIME_KEYS);
   } catch {
     // ignore storage access errors

@@ -117,10 +117,12 @@ function renderCartDom() {
         </form>
         <button id="removeDiscountBtn" type="button"></button>
         <div id="discountMessage"></div>
+        <div id="discountRow"><span id="discountAmount"></span></div>
+        <span class="hidden"><span id="appliedDiscountCode"></span></span>
         <span id="subtotal"></span>
         <span id="shippingCost"></span>
         <span id="taxLabel">Tax</span>
-        <span id="taxAmount">Add city &amp; zone</span>
+        <span id="taxAmount">—</span>
         <p id="taxStatus" class="hidden"></p>
         <span id="totalLabel" data-final-label="Total">Estimated total</span>
         <span id="total"></span>
@@ -226,12 +228,60 @@ describe("initCartFunctionality", () => {
     expect(checkoutPanel.classList.contains("hidden")).toBe(false);
     expect(cartItems.getAttribute("aria-busy")).toBe("false");
     expect(cartItems.textContent).toContain("Rice");
-    expect(document.getElementById("taxAmount")?.textContent).toBe(
-      "Add city & zone",
-    );
+    expect(document.getElementById("taxAmount")?.textContent).toBe("—");
     expect(document.getElementById("totalLabel")?.textContent).toBe(
       "Estimated total",
     );
+  });
+
+  it("stops quantity increases at the last validated available stock", async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: true,
+          data: {
+            valid: true,
+            issues: [],
+            items: [
+              {
+                index: 0,
+                cartKey: CART_LINE_KEY,
+                productId: "prod_1",
+                variantId: "var_1",
+                quantity: 1,
+                unitPrice: 100,
+                productName: "Rice",
+                variantLabel: null,
+                freeDelivery: false,
+                inventoryTracked: true,
+                availableQuantity: 2,
+              },
+            ],
+            subtotal: 100,
+            hasFreeDeliveryProduct: false,
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    await initCartFunctionality();
+
+    const increase = document.querySelector<HTMLButtonElement>(
+      'button[aria-label="Increase Rice quantity"]',
+    );
+    expect(increase?.disabled).toBe(false);
+    window.updateCartQuantity?.(CART_LINE_KEY, 2);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(cartStore.get().items[CART_LINE_KEY]?.quantity).toBe(2);
+    const cappedIncrease = document.querySelector<HTMLButtonElement>(
+      'button[aria-label="Maximum available quantity reached for Rice"]',
+    );
+    expect(cappedIncrease?.disabled).toBe(true);
+
+    window.updateCartQuantity?.(CART_LINE_KEY, 99);
+    expect(cartStore.get().items[CART_LINE_KEY]?.quantity).toBe(2);
   });
 
   it("replaces provisional cart totals with the authoritative destination quote", async () => {
@@ -514,6 +564,26 @@ describe("initCartFunctionality", () => {
     expect(removedEvents).toHaveBeenCalledTimes(1);
   });
 
+  it("preserves an applied discount when the cart is restored or revisited", async () => {
+    const discount: Discount = {
+      id: "disc_1",
+      code: "WELCOME",
+      type: "percentage",
+      valueType: "percentage",
+      discountValue: 10,
+      discountAmount: 10,
+    };
+    await initCartFunctionality();
+    cartStore.setKey("discount", discount);
+    await initCartFunctionality();
+    await vi.advanceTimersByTimeAsync(0);
+    await Promise.resolve();
+
+    expect(cartStore.get().discount).toEqual(discount);
+    expect((document.getElementById("discountCodeInput") as HTMLInputElement).value)
+      .toBe("WELCOME");
+  });
+
   it("validates unrestricted discount codes before the buyer enters a phone", async () => {
     const phoneInput = document.getElementById(
       "customerPhone",
@@ -586,7 +656,7 @@ describe("initCartFunctionality", () => {
     expect(cartStore.get().discount).toBeNull();
   });
 
-  it("keeps cart page startup free of stale checkout id and inline discount hooks", () => {
+  it("preserves checkout navigation state and keeps startup free of inline discount hooks", () => {
     const cartPagePath = [
       `${process.cwd()}/src/pages/cart.astro`,
       `${process.cwd()}/apps/storefront/src/pages/cart.astro`,
@@ -594,12 +664,12 @@ describe("initCartFunctionality", () => {
     expect(cartPagePath).toBeDefined();
 
     const cartPage = readFileSync(cartPagePath as string, "utf8");
-    const clearIndex = cartPage.indexOf("clearCheckoutTransferSession();");
-    const initIndex = cartPage.indexOf("void initCartFunctionality();");
-
-    expect(clearIndex).toBeGreaterThan(-1);
-    expect(initIndex).toBeGreaterThan(-1);
-    expect(clearIndex).toBeLessThan(initIndex);
+    expect(cartPage).not.toContain("clearCheckoutTransferSession();");
+    expect(cartPage).toContain("void initCartFunctionality();");
+    expect(cartPage).toContain("readCheckoutFormDraft");
+    expect(cartPage).toContain("writeCheckoutFormDraft");
+    expect(cartPage).toContain('"pageshow"');
+    expect(cartPage).toContain("PageTransitionEvent");
     expect(cartPage).not.toContain('onclick="window.removeDiscountCode()"');
     expect(cartPage).toContain(
       "window.__scaliusCartPageAbortController?.abort();",

@@ -72,6 +72,7 @@ let hasTrackedInitiateCheckout = false;
 let cartValidationIssues: Record<string, CartValidationIssue[]> = {};
 let cartValidationGlobalError = "";
 let cartValidationSummaryMessage = "";
+let cartQuantityLimits: Record<string, number | null> = {};
 let preserveCartValidationSummaryOnce = false;
 let cartValidationTimer: ReturnType<typeof setTimeout> | null = null;
 let cartValidationSequence = 0;
@@ -114,6 +115,7 @@ let cartStoreUnsubscribe: (() => void) | null = null;
 function resetCartRuntimeListeners(): AbortSignal {
   cartTaxQuoteSequence += 1;
   latestCheckoutLocation = null;
+  cartQuantityLimits = {};
   cartStoreUnsubscribe?.();
   cartStoreUnsubscribe = null;
   cartRuntimeAbortController?.abort();
@@ -484,6 +486,10 @@ function renderAuthoritativeCartQuote(
     taxStatus: HTMLElement | null;
   },
 ): void {
+  document.getElementById("taxRow")?.classList.toggle(
+    "hidden",
+    quote.taxMinor === 0,
+  );
   elements.subtotal.textContent = formatPriceShort(quote.subtotalAmount);
   elements.shipping.textContent =
     quote.shippingAmount === 0
@@ -561,6 +567,30 @@ function setCartValidationIssues(
   }
   cartValidationIssues = grouped;
   updateCartValidationMessage();
+}
+
+function updateCartQuantityLimits(
+  result: CartValidationResult,
+  issues: CartValidationIssue[],
+  items: Record<string, CartItem>,
+): void {
+  const next: Record<string, number | null> = {};
+  for (const cartKey of Object.keys(items)) {
+    if (Object.prototype.hasOwnProperty.call(cartQuantityLimits, cartKey)) {
+      next[cartKey] = cartQuantityLimits[cartKey] ?? null;
+    }
+  }
+  for (const item of result.items) {
+    const cartKey = resolveCartKeyForValidatedLine(item, items);
+    if (cartKey) next[cartKey] = item.availableQuantity;
+  }
+  for (const issue of issues) {
+    const cartKey = issueKeyForCart(issue, items);
+    if (cartKey && typeof issue.availableQuantity === "number") {
+      next[cartKey] = Math.max(0, Math.floor(issue.availableQuantity));
+    }
+  }
+  cartQuantityLimits = next;
 }
 
 function clearCartValidationSummary() {
@@ -673,6 +703,7 @@ export async function validateCartSnapshot(): Promise<boolean> {
       reconcileValidatedCartSnapshot(json.data, (message) => {
         showDiscountMessage(message, "info");
       });
+      updateCartQuantityLimits(json.data, issues, cartStore.get().items);
     }
     setCartValidationIssues(issues, cartStore.get().items, summaryMessage);
     if (!response.ok || !json?.success) {
@@ -753,6 +784,7 @@ export async function updateTotals() {
   const taxLabelEl = document.getElementById("taxLabel");
   const taxAmountEl = document.getElementById("taxAmount");
   const taxStatusEl = document.getElementById("taxStatus");
+  const taxRowEl = document.getElementById("taxRow");
   const discountHiddenInput = document.getElementById(
     "discountCodeHidden",
   ) as HTMLInputElement;
@@ -786,7 +818,8 @@ export async function updateTotals() {
   const quoteInput = cartTaxQuoteInput();
   if (!quoteInput) {
     if (taxLabelEl) taxLabelEl.textContent = "Tax";
-    if (taxAmountEl) taxAmountEl.textContent = "Add city & zone";
+    if (taxAmountEl) taxAmountEl.textContent = "—";
+    taxRowEl?.classList.add("hidden");
     if (taxStatusEl) {
       taxStatusEl.textContent = "";
       taxStatusEl.classList.add("hidden");
@@ -795,7 +828,8 @@ export async function updateTotals() {
   }
 
   if (taxLabelEl) taxLabelEl.textContent = "Tax";
-  if (taxAmountEl) taxAmountEl.textContent = "Calculating…";
+  if (taxAmountEl) taxAmountEl.textContent = "—";
+  taxRowEl?.classList.add("hidden");
   if (taxStatusEl) {
     taxStatusEl.textContent = "";
     taxStatusEl.classList.add("hidden");
@@ -820,6 +854,7 @@ export async function updateTotals() {
   } catch {
     if (quoteSequence !== cartTaxQuoteSequence) return;
     if (taxAmountEl) taxAmountEl.textContent = "Unavailable";
+    taxRowEl?.classList.add("hidden");
     totalEl.textContent = "—";
     if (taxStatusEl) {
       taxStatusEl.textContent =
@@ -878,6 +913,19 @@ export async function renderCartItems() {
         }),
       );
       const issueBlock = renderCartItemIssues(cartKey);
+      const quantityKnown = Object.prototype.hasOwnProperty.call(
+        cartQuantityLimits,
+        cartKey,
+      );
+      const quantityLimit = cartQuantityLimits[cartKey];
+      const increaseDisabled =
+        !quantityKnown ||
+        (typeof quantityLimit === "number" && item.quantity >= quantityLimit);
+      const increaseLabel = !quantityKnown
+        ? `Checking available quantity for ${safeName}`
+        : typeof quantityLimit === "number" && item.quantity >= quantityLimit
+          ? `Maximum available quantity reached for ${safeName}`
+          : `Increase ${safeName} quantity`;
 
       const variantInfo = safeOptions
         ? `<div class="space-x-1">${safeOptions
@@ -897,7 +945,7 @@ export async function renderCartItems() {
               <div class="flex h-11 items-center overflow-hidden rounded-md ring-1 ring-inset ring-border sm:h-8">
                 <button aria-label="Decrease ${safeName} quantity" class="flex h-full w-11 items-center justify-center text-sm text-foreground hover:bg-muted sm:w-8" onclick="window.updateCartQuantity(${jsCartKey}, ${Math.max(0, item.quantity - 1)})">-</button>
                 <span class="flex h-full w-7 items-center justify-center text-center text-xs text-foreground sm:w-6 sm:text-sm">${item.quantity}</span>
-                <button aria-label="Increase ${safeName} quantity" class="flex h-full w-11 items-center justify-center text-sm text-foreground hover:bg-muted sm:w-8" onclick="window.updateCartQuantity(${jsCartKey}, ${item.quantity + 1})">+</button>
+                <button aria-label="${increaseLabel}" ${increaseDisabled ? "disabled" : ""} class="flex h-full w-11 items-center justify-center text-sm text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:text-muted-foreground disabled:hover:bg-transparent sm:w-8" onclick="window.updateCartQuantity(${jsCartKey}, ${item.quantity + 1})">+</button>
               </div>
               <div class="text-right"><div class="font-medium text-sm sm:text-base text-foreground">${formatPriceShort(item.price * item.quantity)}</div><div class="text-xs text-muted-foreground">${formatPriceShort(item.price)} each</div></div>
             </div>
@@ -1068,11 +1116,6 @@ export async function initCartFunctionality() {
     }
   }
 
-  // Clear any stale discount on page load — customers must re-apply at checkout
-  if (cartStore.get().discount) {
-    removeDiscount();
-  }
-
   // --- MODIFIED: Call the new quick buy processor first ---
   processQuickBuy();
 
@@ -1085,20 +1128,33 @@ export async function initCartFunctionality() {
   window.getCartBlockedMessage = () => cartBlockedMessage();
 
   window.updateCartQuantity = (cartKey, qty) => {
+    const currentQuantity = cartStore.get().items[cartKey]?.quantity ?? 0;
+    if (
+      !Object.prototype.hasOwnProperty.call(cartQuantityLimits, cartKey) &&
+      qty > currentQuantity
+    ) {
+      return;
+    }
+    const quantityLimit = cartQuantityLimits[cartKey];
+    const nextQuantity = typeof quantityLimit === "number"
+      ? Math.min(qty, quantityLimit)
+      : qty;
     rotateCheckoutIdIfCartBlocked();
     clearCartValidationSummary();
-    if (qty <= 0) removeCartItemByKey(cartKey);
-    else updateCartItemByKey(cartKey, { quantity: qty });
+    if (nextQuantity <= 0) removeCartItemByKey(cartKey);
+    else updateCartItemByKey(cartKey, { quantity: nextQuantity });
   };
   window.removeFromCart = (cartKey) => {
     rotateCheckoutIdIfCartBlocked();
     clearCartValidationSummary();
+    delete cartQuantityLimits[cartKey];
     removeCartItemByKey(cartKey);
   };
   window.removeCartIssueItem = (cartKey) => {
     rotateCheckoutIdIfCartBlocked();
     clearCartValidationSummary();
     delete cartValidationIssues[cartKey];
+    delete cartQuantityLimits[cartKey];
     removeCartItemByKey(cartKey);
   };
   window.reduceCartIssueItem = (cartKey) => {

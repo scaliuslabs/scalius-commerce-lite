@@ -6,6 +6,7 @@ import {
   resolveLocationOption,
   type LocationPrefillDetail,
 } from "./location-selector-utils";
+import { readCheckoutFormDraft } from "@/lib/checkout/session-state";
 
 // Use the LocationData type directly from api-client
 interface LocationSelectorProps {
@@ -173,6 +174,17 @@ export default function LocationSelector({
     };
 
     window.addEventListener("location-prefill", handlePrefill);
+    const draft = readCheckoutFormDraft();
+    if (draft?.city || draft?.cityName) {
+      void prefillLocation({
+        city: draft.city,
+        cityName: draft.cityName,
+        zone: draft.zone,
+        zoneName: draft.zoneName,
+        area: draft.area,
+        areaName: draft.areaName,
+      });
+    }
     return () => window.removeEventListener("location-prefill", handlePrefill);
   }, [prefillLocation]);
 
@@ -253,7 +265,7 @@ export default function LocationSelector({
         <Label
           htmlFor="city"
           id="city-label"
-          className="mb-1 block text-xs font-semibold text-gray-700 uppercase tracking-wide"
+          className="mb-1 block text-sm font-medium text-foreground"
         >
           {cityLabel} <span className="text-red-500 ml-0.5">*</span>
         </Label>
@@ -276,7 +288,7 @@ export default function LocationSelector({
         <Label
           htmlFor="zone"
           id="zone-label"
-          className="mb-1 block text-xs font-semibold text-gray-700 uppercase tracking-wide"
+          className="mb-1 block text-sm font-medium text-foreground"
         >
           {zoneLabel} <span className="text-red-500 ml-0.5">*</span>
         </Label>
@@ -306,7 +318,7 @@ export default function LocationSelector({
           <Label
             htmlFor="area"
             id="area-label"
-            className="mb-1 block text-xs font-semibold text-gray-700 uppercase tracking-wide"
+            className="mb-1 block text-sm font-medium text-foreground"
           >
             {areaLabel}
           </Label>
