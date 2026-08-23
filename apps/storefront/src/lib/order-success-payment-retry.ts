@@ -1,6 +1,7 @@
 import type { OrderReceipt } from "./api/types";
 import type { GatewayConfig } from "./api/checkout";
 import type { OrderSuccessStateKind } from "./order-success-state";
+import { getOrderSuccessVisibleBalanceDue } from "./order-success-state";
 
 export type OrderSuccessRetryPaymentType = "full" | "deposit" | "balance";
 export type OrderSuccessRetryGateway = "stripe" | "sslcommerz" | "polar";
@@ -14,10 +15,17 @@ export type OrderSuccessRetryOption = {
 
 const RETRYABLE_HOSTED_METHODS = new Set(["stripe", "sslcommerz", "polar"]);
 const RETRYABLE_CALLBACK_RESULTS = new Set(["failed", "cancelled"]);
+const PAYMENT_BLOCKED_ORDER_STATUSES = new Set([
+  "cancelled",
+  "returned",
+  "refunded",
+  "partially_refunded",
+]);
+const PAYMENT_BLOCKED_PAYMENT_STATUSES = new Set(["paid", "refunded"]);
 const HOSTED_GATEWAY_LABELS: Record<OrderSuccessRetryGateway, string> = {
-  stripe: "international card",
-  sslcommerz: "SSLCommerz",
-  polar: "Polar",
+  stripe: "Pay by card",
+  sslcommerz: "Pay online with SSLCommerz",
+  polar: "Pay online with Polar",
 };
 
 function normalize(value: string | null | undefined): string {
@@ -41,11 +49,17 @@ export function isHostedPaymentRetryResult(result: string | null | undefined): b
 }
 
 export function canRetryOrderSuccessPayment(
-  order: Pick<OrderReceipt, "paymentMethod">,
+  order: Pick<
+    OrderReceipt,
+    "paymentMethod" | "status" | "paymentStatus" | "totalAmount" | "paidAmount" | "balanceDue"
+  >,
   stateKind: OrderSuccessStateKind,
   callbackResult: string | null | undefined,
 ): boolean {
   if (!isRetryableHostedPaymentMethod(order.paymentMethod)) return false;
+  if (PAYMENT_BLOCKED_ORDER_STATUSES.has(normalize(order.status))) return false;
+  if (PAYMENT_BLOCKED_PAYMENT_STATUSES.has(normalize(order.paymentStatus))) return false;
+  if (getOrderSuccessVisibleBalanceDue(order) <= 0) return false;
   return stateKind === "payment_issue" || isHostedPaymentRetryResult(callbackResult);
 }
 
@@ -55,7 +69,10 @@ function normalizeHostedGateway(value: string | null | undefined): OrderSuccessR
 }
 
 export function getOrderSuccessRetryOptions(
-  order: Pick<OrderReceipt, "paymentMethod">,
+  order: Pick<
+    OrderReceipt,
+    "paymentMethod" | "status" | "paymentStatus" | "totalAmount" | "paidAmount" | "balanceDue"
+  >,
   stateKind: OrderSuccessStateKind,
   callbackResult: string | null | undefined,
   gateways: Pick<GatewayConfig, "id">[],
@@ -81,7 +98,7 @@ export function getOrderSuccessRetryOptions(
         current,
         label: current
           ? gateway === "stripe" ? "Retry card payment" : "Retry payment"
-          : `Pay with ${HOSTED_GATEWAY_LABELS[gateway]}`,
+          : HOSTED_GATEWAY_LABELS[gateway],
         requiresCardForm: gateway === "stripe",
       };
     })

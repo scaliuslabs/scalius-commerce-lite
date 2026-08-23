@@ -12,7 +12,6 @@ type OrderSuccessButtonsProps = {
   orderId?: string;
   supportRequests?: OrderReceiptSupportRequest[];
   supportRequestActions?: OrderReceiptSupportRequestAction[];
-  supportRequestIntro?: string;
 };
 
 type SubmitState =
@@ -76,19 +75,15 @@ export default function OrderSuccessButtons({
   orderId,
   supportRequests: initialSupportRequests = EMPTY_SUPPORT_REQUESTS,
   supportRequestActions: initialSupportRequestActions = EMPTY_SUPPORT_REQUEST_ACTIONS,
-  supportRequestIntro: initialSupportRequestIntro = "Send a request and the store will review it before changing payment, shipment, or inventory.",
 }: OrderSuccessButtonsProps) {
-  const [isAnimated, setIsAnimated] = useState(false);
   const [isCustomerAuthenticated, setIsCustomerAuthenticated] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
   const [accountSaveState, setAccountSaveState] = useState<SubmitState>({ status: "idle", message: null });
   const saveAfterAuthRef = useRef(false);
   const [supportRequests, setSupportRequests] = useState(initialSupportRequests);
   const [supportRequestActions, setSupportRequestActions] = useState(initialSupportRequestActions);
-  const [supportRequestIntro, setSupportRequestIntro] = useState(initialSupportRequestIntro);
   const [selectedSupportType, setSelectedSupportType] = useState<OrderReceiptSupportRequestType | null>(null);
   const [supportReason, setSupportReason] = useState("");
-  const [supportMessage, setSupportMessage] = useState("");
   const [supportSubmitState, setSupportSubmitState] = useState<SubmitState>({ status: "idle", message: null });
 
   const claimOrderToAccount = useCallback(async () => {
@@ -138,12 +133,8 @@ export default function OrderSuccessButtons({
       }
     };
     window.addEventListener("customer-login", handleCustomerLogin);
-    const animationTimer = window.setTimeout(() => {
-      setIsAnimated(true);
-    }, 300);
     return () => {
       window.removeEventListener("customer-login", handleCustomerLogin);
-      window.clearTimeout(animationTimer);
     };
   }, [claimOrderToAccount]);
 
@@ -155,23 +146,19 @@ export default function OrderSuccessButtons({
     setSupportRequestActions(initialSupportRequestActions);
   }, [initialSupportRequestActions]);
 
-  useEffect(() => {
-    setSupportRequestIntro(initialSupportRequestIntro);
-  }, [initialSupportRequestIntro]);
-
   const activeSupportRequest = useMemo(
     () => supportRequests.find((request) => request.active) ?? null,
     [supportRequests],
   );
   const latestSupportRequest = supportRequests[0] ?? null;
+  const availableSupportActions = useMemo(
+    () => supportRequestActions.filter((action) => action.eligible),
+    [supportRequestActions],
+  );
   const selectedSupportAction = selectedSupportType
-    ? supportRequestActions.find((action) => action.type === selectedSupportType)
+    ? availableSupportActions.find((action) => action.type === selectedSupportType)
     : null;
   const firstDisabledReason = supportRequestActions.find((action) => action.disabledReason)?.disabledReason ?? null;
-
-  const handleContinueShopping = () => {
-    window.location.href = "/";
-  };
 
   const handlePrintOrder = () => {
     window.print();
@@ -198,8 +185,8 @@ export default function OrderSuccessButtons({
     setAccountSaveState({
       status: "idle",
       message: intent === "sign_up"
-        ? "Create your account with the same phone or email used at checkout."
-        : "Sign in with the same phone or email used at checkout.",
+        ? "Create your account with the phone number saved on this order."
+        : "Sign in with a phone number or email that matches this order.",
     });
     handleOpenAuth(intent);
   };
@@ -211,8 +198,6 @@ export default function OrderSuccessButtons({
 
   const handleSubmitSupportRequest = async () => {
     const reason = supportReason.trim();
-    const message = supportMessage.trim();
-
     if (!orderId || !selectedSupportType) {
       setSupportSubmitState({
         status: "error",
@@ -238,7 +223,7 @@ export default function OrderSuccessButtons({
           orderId,
           type: selectedSupportType,
           reason,
-          message: message || null,
+          message: null,
         }),
       });
       const payload = await response.json().catch(() => null) as {
@@ -257,10 +242,8 @@ export default function OrderSuccessButtons({
 
       setSupportRequests(payload.data.supportRequests ?? [payload.data.request]);
       setSupportRequestActions(payload.data.supportRequestActions ?? []);
-      setSupportRequestIntro(payload.data.supportRequestIntro ?? initialSupportRequestIntro);
       setSelectedSupportType(null);
       setSupportReason("");
-      setSupportMessage("");
       setSupportSubmitState({
         status: "success",
         message: "Request sent. The store team can now review it from the order.",
@@ -274,14 +257,11 @@ export default function OrderSuccessButtons({
   };
 
   return (
-    <div
-      className={`flex flex-col items-center space-y-6 transition-opacity duration-500 ${isAnimated ? "opacity-100" : "opacity-0"} no-print`}
-    >
-      <div className="flex flex-col sm:flex-row justify-center gap-4 w-full max-w-md mt-6">
-        <Button
-          variant="outline"
-          className="border-2 border-black text-black font-medium py-3 px-6 rounded-xl hover:bg-gray-50 transition-all duration-200 flex-1"
-          onClick={handleContinueShopping}
+    <div className="no-print flex flex-col items-center space-y-6">
+      <div className="mt-6 flex w-full max-w-md flex-col justify-center gap-2 sm:flex-row">
+        <a
+          href="/"
+          className="inline-flex min-h-10 flex-1 items-center justify-center rounded-xl bg-black px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-gray-800"
         >
           <svg
             className="w-5 h-5 mr-2"
@@ -298,9 +278,10 @@ export default function OrderSuccessButtons({
             />
           </svg>
           Continue shopping
-        </Button>
+        </a>
         <Button
-          className="bg-black text-white font-medium py-3 px-6 rounded-xl hover:bg-gray-800 transition-all duration-200 flex-1"
+          variant="outline"
+          className="flex-1 rounded-xl border-border px-6 py-3 font-medium transition-colors hover:bg-muted"
           onClick={handlePrintOrder}
         >
           <svg
@@ -324,10 +305,14 @@ export default function OrderSuccessButtons({
       <div className="w-full max-w-xl rounded-xl border border-border bg-muted/30 p-4 text-left">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-foreground">Track this order from any device</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Create or sign in to an account with the same phone or email used at checkout. We securely add the order if it is not already saved there.
+            <p className="text-sm font-semibold text-foreground">
+              {accountSaveState.status === "success" ? "Order saved to your account" : "Save this order to your account"}
             </p>
+            {accountSaveState.status !== "success" && (
+              <p className="mt-1 text-sm text-muted-foreground">
+                Create an account with the phone saved on this order, or sign in with a matching phone or email.
+              </p>
+            )}
           </div>
           <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
             {authChecked && isCustomerAuthenticated ? (
@@ -375,18 +360,14 @@ export default function OrderSuccessButtons({
         </div>
       </div>
 
-      <div className="w-full max-w-xl rounded-xl border border-border bg-background p-4 text-left shadow-sm">
+      {(latestSupportRequest || supportRequestActions.length > 0) && (
+        <div className="w-full max-w-xl rounded-xl border border-border bg-background p-4 text-left">
         <div className="flex items-start gap-3">
           <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
             {activeSupportRequest ? <CheckCircle2 className="h-5 w-5" /> : <HelpCircle className="h-5 w-5" />}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-foreground">Need help with this order?</p>
-            {!activeSupportRequest && supportRequestActions.length > 0 ? (
-              <p className="mt-1 text-sm text-muted-foreground">
-                {supportRequestIntro}
-              </p>
-            ) : null}
+            <p className="text-sm font-semibold text-foreground">Need help?</p>
           </div>
         </div>
 
@@ -399,14 +380,14 @@ export default function OrderSuccessButtons({
           </div>
         ) : null}
 
-        {!activeSupportRequest && supportRequestActions.length > 0 ? (
+        {!activeSupportRequest && availableSupportActions.length > 0 ? (
           <div className="mt-4 space-y-3">
-            <div className="grid gap-2 sm:grid-cols-3">
-              {supportRequestActions.map((action) => (
+            <div className="flex flex-wrap gap-2">
+              {availableSupportActions.map((action) => (
                 <button
                   key={action.type}
                   type="button"
-                  className={`rounded-lg border px-3 py-2 text-left text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-70 ${
+                  className={`inline-flex min-h-11 items-center justify-center rounded-lg border px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-70 ${
                     selectedSupportType === action.type
                       ? "border-primary bg-primary/10 text-primary"
                       : action.eligible
@@ -414,13 +395,8 @@ export default function OrderSuccessButtons({
                         : "border-border bg-muted/10 text-muted-foreground"
                   }`}
                   onClick={() => handleSelectSupportAction(action)}
-                  disabled={!action.eligible}
                 >
-                  <span className="font-medium">{action.label}</span>
-                  <span className="mt-1 block text-xs text-muted-foreground">{action.description}</span>
-                  {!action.eligible && action.disabledReason && (
-                    <span className="mt-1.5 block text-xs text-foreground/70">{action.disabledReason}</span>
-                  )}
+                  <span>{action.label}</span>
                 </button>
               ))}
             </div>
@@ -439,20 +415,6 @@ export default function OrderSuccessButtons({
                     onChange={(event) => setSupportReason(event.target.value)}
                     className="mt-1 min-h-20 bg-background"
                     placeholder={`Why do you want to ${selectedSupportAction.label.toLowerCase()}?`}
-                  />
-                </div>
-                <div>
-                  <label htmlFor="receiptSupportMessage" className="text-xs font-medium text-foreground">
-                    Details
-                  </label>
-                  <Textarea
-                    id="receiptSupportMessage"
-                    aria-label="Support request details"
-                    maxLength={1000}
-                    value={supportMessage}
-                    onChange={(event) => setSupportMessage(event.target.value)}
-                    className="mt-1 min-h-20 bg-background"
-                    placeholder="Add any details the store should know."
                   />
                 </div>
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -507,7 +469,8 @@ export default function OrderSuccessButtons({
             {supportSubmitState.message}
           </p>
         )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
