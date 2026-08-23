@@ -11,14 +11,24 @@ export function installLazyGlobalUi(): void {
   window.__scaliusLazyGlobalUiInstalled = true;
 
   let authLoading: Promise<unknown> | null = null;
-  const loadAuth = (openModal: boolean) => {
-    if (openModal) window.__scaliusAuthModalOpenPending = true;
+  const loadAuth = (
+    openModal: boolean,
+    intent?: "sign_in" | "sign_up",
+  ) => {
+    if (openModal) {
+      window.__scaliusAuthModalOpenPending = true;
+      if (intent) window.__scaliusAuthModalIntentPending = intent;
+    }
     authLoading ??= import("@/components/client/mount-auth-modal").then(
       ({ mountAuthModal }) => mountAuthModal(),
     );
     return authLoading;
   };
-  window.addEventListener("open-auth-modal", () => void loadAuth(true));
+  window.addEventListener("open-auth-modal", (event) => {
+    const requestedIntent = (event as CustomEvent<{ intent?: "sign_in" | "sign_up" }>)
+      .detail?.intent;
+    void loadAuth(true, requestedIntent);
+  });
 
   if (hasCustomerAuthMirrorCookie()) {
     const resumeAuth = () => void loadAuth(false);
