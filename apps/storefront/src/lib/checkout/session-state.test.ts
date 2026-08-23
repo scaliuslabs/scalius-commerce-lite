@@ -182,6 +182,25 @@ describe("checkout session state", () => {
     expect(readCheckoutFormDraft()).toBeNull();
   });
 
+  it("persists explicit empty buyer fields instead of reviving older draft values", () => {
+    writeCheckoutFormDraft({
+      customerName: "Old buyer",
+      customerPhone: "+8801712345678",
+      shippingAddress: "Old address",
+    });
+    writeCheckoutFormDraft({
+      customerName: "",
+      customerPhone: "+8801812345678",
+      shippingAddress: "",
+    });
+
+    expect(readCheckoutFormDraft()).toMatchObject({
+      customerName: "",
+      customerPhone: "+8801812345678",
+      shippingAddress: "",
+    });
+  });
+
   it("expires malformed or old checkout form drafts", () => {
     sessionStorage.setItem(
       "scalius_checkout_form_draft",

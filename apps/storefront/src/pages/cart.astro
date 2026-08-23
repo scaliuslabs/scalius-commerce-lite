@@ -351,7 +351,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
           <div
             class="p-3 sm:p-4 border-b border-border bg-muted/50 flex items-center justify-between"
           >
-            <h1 class="text-lg font-bold text-foreground sm:text-2xl">
+            <h1 class="text-[1.25rem] font-bold leading-tight text-foreground sm:text-2xl">
               {lang.languageData.cartSectionTitle}
             </h1>
             <a
@@ -545,6 +545,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
             action="/cart"
             class="space-y-3"
             id="checkoutForm"
+            novalidate
           >
             <input type="hidden" name="formIntent" value="checkout" />
             <input type="hidden" name="cartItems" id="cartItemsInput" />
@@ -803,12 +804,16 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
   // Helper to fill basic fields
   const fillBasicCustomerFields = (customer: CustomerAutofillProfile) => {
     const draft = readCheckoutFormDraft();
-    const preferredName = draft?.customerName || customer?.name;
+    const preferredName = draft && "customerName" in draft
+      ? draft.customerName
+      : customer?.name;
     if (preferredName) {
       const el = document.getElementById("customerName") as HTMLInputElement;
       if (el && !el.value) el.value = preferredName;
     }
-    const preferredPhone = draft?.customerPhone || customer?.phone;
+    const preferredPhone = draft && "customerPhone" in draft
+      ? draft.customerPhone
+      : customer?.phone;
     if (preferredPhone) {
       // PhoneField is a React component — dispatch custom event to update its state
       const phone = normalizePhone(preferredPhone);
@@ -821,12 +826,16 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
         );
       }
     }
-    const preferredEmail = draft?.customerEmail || customer?.email;
+    const preferredEmail = draft && "customerEmail" in draft
+      ? draft.customerEmail
+      : customer?.email;
     if (preferredEmail) {
       const el = document.getElementById("customerEmail") as HTMLInputElement;
       if (el && !el.value) el.value = preferredEmail;
     }
-    const preferredAddress = draft?.shippingAddress || customer?.address;
+    const preferredAddress = draft && "shippingAddress" in draft
+      ? draft.shippingAddress
+      : customer?.address;
     if (preferredAddress) {
       const el = document.getElementById(
         "shippingAddress",
@@ -860,14 +869,14 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
   } = {};
 
   const readCheckoutFormValues = () => {
-    const values: Record<string, string> = {
-      ...(readCheckoutFormDraft() ?? {}),
-    };
+    const draft = readCheckoutFormDraft();
+    const values: Record<string, string> = {};
     for (const field of checkoutDraftFields) {
       const input = document.querySelector<HTMLInputElement | HTMLTextAreaElement>(
         `[name="${field}"]`,
       );
       if (input) values[field] = input.value;
+      else if (draft && field in draft) values[field] = draft[field] ?? "";
     }
     Object.assign(values, latestDraftLocation);
     return values;
@@ -983,14 +992,18 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
   const fillLocationDropdowns = (customer: CustomerAutofillProfile) => {
     try {
       const draft = readCheckoutFormDraft();
-      const preferred = draft?.city || draft?.cityName
+      const draftOwnsLocation = Boolean(
+        draft && ["city", "cityName", "zone", "zoneName", "area", "areaName"]
+          .some((field) => Object.prototype.hasOwnProperty.call(draft, field)),
+      );
+      const preferred = draftOwnsLocation
         ? {
-            city: draft.city,
-            cityName: draft.cityName,
-            zone: draft.zone,
-            zoneName: draft.zoneName,
-            area: draft.area,
-            areaName: draft.areaName,
+            city: draft?.city,
+            cityName: draft?.cityName,
+            zone: draft?.zone,
+            zoneName: draft?.zoneName,
+            area: draft?.area,
+            areaName: draft?.areaName,
           }
         : customer;
       if (!preferred?.cityName && !preferred?.city) return;
@@ -1282,81 +1295,17 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
           return;
         }
 
-        if (!submitAfterCartValidation) {
-          e.preventDefault();
-          submitButton.disabled = true;
-          setSubmitButtonText("Checking cart...");
-          const cartIsValid = await (window.validateCartSnapshot?.() ??
-            Promise.resolve(true));
-          if (!cartIsValid || window.hasCartValidationIssues?.() === true) {
-            restoreSubmitButton();
-            showCheckoutFormError(
-              window.getCartBlockedMessage?.() ||
-                "Please review the highlighted cart items before checkout.",
-              submitButton,
-            );
-            return;
-          }
+        // Persist the current DOM immediately so explicit empty edits replace
+        // older draft values before any async validation or navigation.
+        persistCheckoutFormDraftNow();
 
-          if (codOnly) {
-            submitAfterCartValidation = true;
-            form.requestSubmit();
-            return;
-          }
-        }
-
-        if (submitAfterCartValidation) {
-          submitAfterCartValidation = false;
-        }
-
-        if (!syncShippingAddressValidity(true)) {
-          e.preventDefault();
-          restoreSubmitButton();
-          shippingAddressInput?.focus({ preventScroll: true });
-          shippingAddressInput?.reportValidity();
-          shippingAddressInput?.scrollIntoView({
-            behavior: "smooth",
-            block: "center",
-          });
-          return;
-        }
-
-        const cityInput = document.querySelector<HTMLInputElement>(
-          '[name="city"]',
-        );
-        const zoneInput = document.querySelector<HTMLInputElement>(
-          '[name="zone"]',
-        );
-        if (!cityInput?.value?.trim() || !zoneInput?.value?.trim()) {
-          e.preventDefault();
-          restoreSubmitButton();
-          const missingCity = !cityInput?.value?.trim();
-          const message = missingCity
-            ? "Choose a city and zone to continue."
-            : "Choose a zone to continue.";
-          if (shippingLocationError) {
-            shippingLocationError.textContent = message;
-            shippingLocationError.classList.remove("hidden");
-            shippingLocationError.scrollIntoView({
-              behavior: "smooth",
-              block: "center",
-            });
-          }
-          const target = document.querySelector<HTMLButtonElement>(
-            missingCity
-              ? 'button[aria-label^="City:"]'
-              : 'button[aria-label^="Zone:"]',
-          );
-          target?.focus({ preventScroll: true });
-          return;
-        }
-
-        // Required fields validation
+        // Validate in visual form order and keep every error inline. The form
+        // is novalidate so browser-native validation bubbles cannot conflict
+        // with the field that receives focus.
         const requiredFields = [
           "customerName",
           "customerPhone",
           "shippingAddress",
-          "shippingLocation",
         ];
         const missing: string[] = [];
         for (const field of requiredFields) {
@@ -1375,10 +1324,6 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
               detail: { name: "customerPhone", message: "Enter your phone number." },
             }));
             missingTarget?.focus({ preventScroll: true });
-          } else if (firstMissing === "shippingLocation" && shippingLocationError) {
-            shippingLocationError.textContent = "Choose a delivery option.";
-            shippingLocationError.classList.remove("hidden");
-            shippingLocationError.scrollIntoView({ behavior: "smooth", block: "center" });
           } else {
             const missingMessage = firstMissing === "customerName"
               ? "Enter your full name."
@@ -1425,6 +1370,90 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
           return;
         }
         if (phoneInput) phoneInput.value = phoneValidation.value;
+
+        if (!syncShippingAddressValidity(true)) {
+          e.preventDefault();
+          restoreSubmitButton();
+          shippingAddressInput?.focus({ preventScroll: true });
+          shippingAddressInput?.scrollIntoView({
+            behavior: "smooth",
+            block: "center",
+          });
+          return;
+        }
+
+        const cityInput = document.querySelector<HTMLInputElement>(
+          '[name="city"]',
+        );
+        const zoneInput = document.querySelector<HTMLInputElement>(
+          '[name="zone"]',
+        );
+        if (!cityInput?.value?.trim() || !zoneInput?.value?.trim()) {
+          e.preventDefault();
+          restoreSubmitButton();
+          const missingCity = !cityInput?.value?.trim();
+          const message = missingCity
+            ? "Choose a city and zone to continue."
+            : "Choose a zone to continue.";
+          if (shippingLocationError) {
+            shippingLocationError.textContent = message;
+            shippingLocationError.classList.remove("hidden");
+            shippingLocationError.scrollIntoView({
+              behavior: "smooth",
+              block: "center",
+            });
+          }
+          const target = document.querySelector<HTMLButtonElement>(
+            missingCity
+              ? 'button[aria-label^="City:"]'
+              : 'button[aria-label^="Zone:"]',
+          );
+          target?.focus({ preventScroll: true });
+          return;
+        }
+
+        const shippingLocationInput = document.querySelector<HTMLInputElement>(
+          '[name="shippingLocation"]',
+        );
+        if (!shippingLocationInput?.value?.trim()) {
+          e.preventDefault();
+          restoreSubmitButton();
+          if (shippingLocationError) {
+            shippingLocationError.textContent = "Choose a delivery option.";
+            shippingLocationError.classList.remove("hidden");
+            shippingLocationError.scrollIntoView({ behavior: "smooth", block: "center" });
+          }
+          document.querySelector<HTMLButtonElement>('[role="radio"][aria-label]')
+            ?.focus({ preventScroll: true });
+          return;
+        }
+
+        if (!submitAfterCartValidation) {
+          e.preventDefault();
+          submitButton.disabled = true;
+          setSubmitButtonText("Checking cart...");
+          const cartIsValid = await (window.validateCartSnapshot?.() ??
+            Promise.resolve(true));
+          if (!cartIsValid || window.hasCartValidationIssues?.() === true) {
+            restoreSubmitButton();
+            showCheckoutFormError(
+              window.getCartBlockedMessage?.() ||
+                "Please review the highlighted cart items before checkout.",
+              submitButton,
+            );
+            return;
+          }
+
+          if (codOnly) {
+            submitAfterCartValidation = true;
+            form.requestSubmit();
+            return;
+          }
+        }
+
+        if (submitAfterCartValidation) {
+          submitAfterCartValidation = false;
+        }
 
         if (!codOnly) {
           // ── Multi-gateway flow: intercept and redirect to /checkout ──
