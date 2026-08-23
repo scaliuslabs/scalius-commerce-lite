@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   formatRefundAttemptForVisibility,
+  resolveActiveRefundOperationsForOrders,
   summarizeActiveRefundOperation,
   type RefundAttemptVisibilityRow,
 } from "./refund-attempt-visibility";
@@ -85,5 +86,18 @@ describe("refund attempt visibility", () => {
     expect(JSON.stringify(summary)).not.toContain("re_123");
     expect(JSON.stringify(summary)).not.toContain("corr_123");
     expect(JSON.stringify(summary)).not.toContain("ch_123");
+  });
+
+  it("resolves batched order-list rows into bounded operational summaries", () => {
+    const operations = resolveActiveRefundOperationsForOrders([row]);
+
+    expect(operations.get("order_1")).toMatchObject({
+      active: true,
+      status: "reconcile_required",
+      amount: 50,
+      attemptCount: 1,
+    });
+    expect(operations.get("order_1")).not.toHaveProperty("providerRefundId");
+    expect(operations.get("order_1")).not.toHaveProperty("lastError");
   });
 });

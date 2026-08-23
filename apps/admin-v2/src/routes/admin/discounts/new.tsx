@@ -3,7 +3,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { DiscountTypeSelector } from "~/components/admin/discount/DiscountTypeSelector";
 import { Button } from "~/components/ui/button";
 import { ArrowLeft } from "lucide-react";
-import { PageLoadingSpinner } from "~/components/admin/shared/LoadingFallback";
+import { PageLoadingSkeleton } from "~/components/admin/shared/LoadingFallback";
 import {
   discountEditorTypes,
   type DiscountEditorType,
@@ -75,7 +75,7 @@ function NewDiscountPage() {
         {!selectedType ? (
           <DiscountTypeSelector onSelect={selectType} />
         ) : (
-          <Suspense fallback={<PageLoadingSpinner />}>
+          <Suspense fallback={<PageLoadingSkeleton />}>
             <DiscountCodeBuilder
               key={selectedType}
               type={selectedType}

@@ -311,7 +311,7 @@ export type ProductVariantMutationPayload = ProductVariantDto &
   ProductAggregateRevisionResult;
 
 function toProductsParams(input: ProductsQueryInput): Record<string, string> {
-  const params: Record<string, string> = {};
+  const params: Record<string, string> = { view: "compact" };
   if (input.page) params.page = String(input.page);
   if (input.limit) params.limit = String(input.limit);
   if (input.search) params.search = input.search;

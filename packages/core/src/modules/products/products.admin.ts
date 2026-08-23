@@ -52,9 +52,14 @@ import {
     loadProductMediaProjections,
     MAX_PRODUCT_MEDIA_ASSOCIATIONS,
     PRODUCT_MEDIA_REORDER_OFFSET,
+    resolveProductMediaProjectionRows,
     resolveProductImageRepresentation,
+    selectProductMediaProjectionRows,
 } from "./products.media";
-import type { ProductMediaProjection } from "./products.media";
+import type {
+    ProductMediaProjection,
+    ProductMediaProjectionRow,
+} from "./products.media";
 
 type SQLiteBatchItem = BatchItem<"sqlite">;
 
@@ -411,6 +416,8 @@ export async function listProducts(db: Database, options: {
     order?: "asc" | "desc";
     /** Agent summaries omit large text/media projections before they leave SQL. */
     agentSummary?: boolean;
+    /** Compact dashboard lists can omit rich text while preserving the default API contract. */
+    includeDescription?: boolean;
 }) {
     const {
         search,
@@ -422,6 +429,7 @@ export async function listProducts(db: Database, options: {
         sort = "updatedAt",
         order = "desc",
         agentSummary = false,
+        includeDescription = true,
     } = options;
     const offset = (page - 1) * limit;
 
@@ -499,7 +507,9 @@ export async function listProducts(db: Database, options: {
             name: products.name,
             slug: products.slug,
             price: products.price,
-            description: agentSummary ? sql<string | null>`NULL` : products.description,
+            description: includeDescription
+                ? products.description
+                : sql<string | null>`NULL`,
             isActive: products.isActive,
             discountPercentage: products.discountPercentage,
             discountType: products.discountType,
@@ -561,7 +571,7 @@ export async function listProducts(db: Database, options: {
     const productIds: string[] = productResults.map((p) => p.id);
     const productIdSet = JSON.stringify(productIds);
 
-    const [variantCounts, mediaCounts, productSkus] = await db.batch([
+    const enrichmentResults = await safeBatch(db, [
         db
             .select({
                 productId: productVariants.productId,
@@ -596,10 +606,15 @@ export async function listProducts(db: Database, options: {
                 ) AND ${productVariants.deletedAt} IS NULL`,
             )
             .orderBy(productVariants.productId, asc(productVariants.createdAt)),
+        selectProductMediaProjectionRows(db, agentSummary ? [] : productIds),
     ]);
+    const variantCounts = enrichmentResults[0] as { productId: string; count: number }[];
+    const mediaCounts = enrichmentResults[1] as { productId: string; count: number }[];
+    const productSkus = enrichmentResults[2] as { productId: string; sku: string }[];
+    const mediaProjectionRows = enrichmentResults[3] as ProductMediaProjectionRow[];
     const mediaByProduct = agentSummary
         ? new Map<string, ProductMediaProjection[]>()
-        : await loadProductMediaProjections(db, productIds);
+        : resolveProductMediaProjectionRows(mediaProjectionRows);
 
     const variantCountMap = new Map<string, number>(
         variantCounts.map((vc: { productId: string; count: number }) => [vc.productId, vc.count]),

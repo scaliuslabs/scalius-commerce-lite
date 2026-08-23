@@ -292,11 +292,19 @@ export async function listActiveRefundOperationsForOrders(
   db: Database,
   orderIds: string[],
 ): Promise<Map<string, ActiveRefundOperationView>> {
-  const uniqueOrderIds = [...new Set(orderIds)].filter(Boolean);
-  const operations = new Map<string, ActiveRefundOperationView>();
-  if (uniqueOrderIds.length === 0) return operations;
+  return resolveActiveRefundOperationsForOrders(
+    await selectActiveRefundAttemptRowsForOrders(db, orderIds),
+  );
+}
 
-  const rows = await db
+export function selectActiveRefundAttemptRowsForOrders(
+  db: Database,
+  orderIds: readonly string[],
+) {
+  const uniqueOrderIds = [...new Set(orderIds)].filter(Boolean);
+  const orderIdSet = JSON.stringify(uniqueOrderIds);
+
+  return db
     .select({
       id: refundAttempts.id,
       orderId: refundAttempts.orderId,
@@ -325,10 +333,20 @@ export async function listActiveRefundOperationsForOrders(
     })
     .from(refundAttempts)
     .where(and(
-      inArray(refundAttempts.orderId, uniqueOrderIds),
+      uniqueOrderIds.length > 0
+        ? sql`${refundAttempts.orderId} IN (
+            SELECT CAST(value AS TEXT) FROM json_each(${orderIdSet})
+          )`
+        : sql`1 = 0`,
       inArray(refundAttempts.status, [...ACTIVE_REFUND_ATTEMPT_STATUSES]),
     ))
     .orderBy(desc(refundAttempts.createdAt));
+}
+
+export function resolveActiveRefundOperationsForOrders(
+  rows: readonly RefundAttemptVisibilityRow[],
+): Map<string, ActiveRefundOperationView> {
+  const operations = new Map<string, ActiveRefundOperationView>();
 
   const attemptsByOrderId = new Map<string, OrderRefundAttemptView[]>();
   for (const row of rows) {

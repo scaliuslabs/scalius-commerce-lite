@@ -60,8 +60,44 @@ import { useDebounce } from "@/hooks/use-debounce";
 import { useCatalogActionPermissions } from "@/hooks/use-catalog-action-permissions";
 import type { InventoryWorkspaceSection } from "./inventory-workspace";
 import { adminCalendarDateKey } from "~/lib/admin-time";
+import { Skeleton } from "@/components/ui/skeleton";
 
 // ---------- Types ----------
+
+function InventoryTableRowsSkeleton({
+  columns,
+  label,
+  rows = 4,
+}: {
+  columns: number;
+  label: string;
+  rows?: number;
+}) {
+  return Array.from({ length: rows }).map((_, rowIndex) => (
+    <TableRow
+      key={`${label}-${rowIndex}`}
+      aria-hidden={rowIndex === 0 ? undefined : true}
+    >
+      {Array.from({ length: columns }).map((__, columnIndex) => (
+        <TableCell key={columnIndex} className="h-11 py-2">
+          {rowIndex === 0 && columnIndex === 0 ? (
+            <span className="sr-only" role="status">{label}</span>
+          ) : null}
+          <Skeleton
+            className={cn(
+              "h-4",
+              columnIndex === 0
+                ? "w-4"
+                : columnIndex % 3 === 0
+                  ? "w-16"
+                  : "w-full max-w-32",
+            )}
+          />
+        </TableCell>
+      ))}
+    </TableRow>
+  ));
+}
 
 type StockFilter = "all" | "low" | "out" | "reserved";
 type AlertStatusFilter = "active" | "acknowledged" | "resolved" | "all";
@@ -677,11 +713,7 @@ export function InventoryManager({
                       </TableCell>
                     </TableRow>
                   ) : isInitialLoad ? (
-                    <TableRow>
-                      <TableCell colSpan={9} className="h-24 text-center">
-                        <RefreshCw className="h-4 w-4 animate-spin mx-auto text-muted-foreground" />
-                      </TableCell>
-                    </TableRow>
+                    <InventoryTableRowsSkeleton columns={9} label="Loading inventory variants" />
                   ) : variants.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={9} className="h-24 text-center text-xs text-muted-foreground">
@@ -815,7 +847,7 @@ export function InventoryManager({
                       <Button type="button" variant="outline" size="sm" className="mt-2 h-7 text-xs" onClick={() => void alertsQuery.refetch()}>Retry</Button>
                     </TableCell></TableRow>
                   ) : alertsQuery.isLoading ? (
-                    <TableRow><TableCell colSpan={6} className="h-24 text-center"><RefreshCw className="mx-auto h-4 w-4 animate-spin text-muted-foreground" /></TableCell></TableRow>
+                    <InventoryTableRowsSkeleton columns={6} label="Loading low-stock alerts" rows={3} />
                   ) : alerts.length === 0 ? (
                     <TableRow><TableCell colSpan={6} className="h-24 text-center text-xs text-muted-foreground">
                       {alertStatus === "active" ? "No low-stock alerts need review." : "No alerts match this view."}
@@ -1012,7 +1044,7 @@ export function InventoryManager({
                       </TableCell>
                     </TableRow>
                   ) : movementsQuery.isLoading ? (
-                    <TableRow><TableCell colSpan={5} className="h-24 text-center"><RefreshCw className="h-4 w-4 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
+                    <InventoryTableRowsSkeleton columns={5} label="Loading inventory movements" />
                   ) : movements.length === 0 ? (
                     <TableRow><TableCell colSpan={5} className="h-24 text-center text-xs text-muted-foreground">{hasMovementFilters ? "No movements match these filters." : "No movements recorded yet."}</TableCell></TableRow>
                   ) : (
@@ -1147,8 +1179,17 @@ function InventoryVariantMobileList({
           </Button>
         </div>
       ) : isInitialLoad ? (
-        <div role="status" className="rounded-md border px-3 py-6 text-center">
-          <RefreshCw className="mx-auto h-4 w-4 animate-spin text-muted-foreground" />
+        <div role="status" aria-label="Loading inventory variants" className="space-y-2">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <div key={index} aria-hidden="true" className="space-y-3 rounded-md border bg-card px-3 py-3">
+              <div className="flex items-center justify-between gap-3">
+                <Skeleton className="h-5 w-2/3" />
+                <Skeleton className="h-5 w-16" />
+              </div>
+              <Skeleton className="h-4 w-1/2" />
+              <Skeleton className="h-8 w-full" />
+            </div>
+          ))}
           <span className="sr-only">Loading inventory variants</span>
         </div>
       ) : variants.length === 0 ? (
