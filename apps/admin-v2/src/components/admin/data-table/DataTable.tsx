@@ -25,6 +25,10 @@ import { DataTablePagination } from "./DataTablePagination";
 import { DataTableLoadingOverlay } from "./DataTableLoadingOverlay";
 import { DataTableEmptyState, type EmptyStateConfig } from "./DataTableEmptyState";
 import { DataTableBodyRow } from "./DataTableBodyRow";
+import {
+  DataTableInitialCards,
+  DataTableInitialRows,
+} from "./DataTableInitialLoading";
 import type { SortableDataTableContentProps } from "./SortableDataTableContent";
 
 const SortableDataTableContent = lazy(async () => {
@@ -74,6 +78,7 @@ export function DataTable<TData extends TableRowData>({
   const hasRows = rows.length > 0;
   const showError = Boolean(error) && !isLoading;
   const showInitialLoading = isLoading && !hasRows && !showError;
+  const visibleColumnCount = table.getVisibleLeafColumns().length;
 
   const renderErrorState = () => (
     <div className="flex flex-col items-center justify-center px-6 py-12 text-center">
@@ -144,19 +149,18 @@ export function DataTable<TData extends TableRowData>({
               />
             );
           })
+        ) : showInitialLoading ? (
+          <DataTableInitialRows
+            columnCount={visibleColumnCount + (includeDragColumn ? 1 : 0)}
+            includeDragColumn={includeDragColumn}
+          />
         ) : (
           <TableRow>
             <TableCell
               colSpan={table.getAllColumns().length + (includeDragColumn ? 1 : 0)}
               className="h-24 text-center"
             >
-              {showInitialLoading ? (
-                <div className="flex items-center justify-center py-10">
-                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-muted border-t-primary" />
-                </div>
-              ) : (
-                <DataTableEmptyState config={emptyState} />
-              )}
+              <DataTableEmptyState config={emptyState} />
             </TableCell>
           </TableRow>
         )}
@@ -168,7 +172,14 @@ export function DataTable<TData extends TableRowData>({
     <div className={className}>
       {toolbar}
 
-      <div className="relative rounded-md border">
+      <div
+        className="relative rounded-md border"
+        aria-busy={showInitialLoading || undefined}
+        data-data-table-results=""
+      >
+        <span className="sr-only" role="status" aria-live="polite">
+          {showInitialLoading ? `Loading ${itemLabel}` : ""}
+        </span>
         <DataTableLoadingOverlay visible={isFetching && !isLoading && !showError} />
 
         {isMobile && mobileCardRenderer ? (
@@ -181,14 +192,14 @@ export function DataTable<TData extends TableRowData>({
                 <div key={row.id}>{mobileCardRenderer(row)}</div>
               ))
             ) : showInitialLoading ? (
-              <div className="flex items-center justify-center py-10">
-                <div className="h-5 w-5 animate-spin rounded-full border-2 border-muted border-t-primary" />
-              </div>
+              <DataTableInitialCards />
             ) : (
               <DataTableEmptyState config={emptyState} />
             )}
           </div>
         ) : showError ? (
+          renderDesktopTable(sortable)
+        ) : showInitialLoading ? (
           renderDesktopTable(sortable)
         ) : sortable ? (
           <Suspense fallback={renderDesktopTable(true)}>

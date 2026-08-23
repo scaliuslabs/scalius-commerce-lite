@@ -103,6 +103,15 @@ describe("admin product mutation OpenAPI responses", () => {
         expect(list).not.toContain('"imageCount"');
     });
 
+    it("keeps the full list contract while offering a compact dashboard projection", () => {
+        const spec = buildAdminProductsSpec();
+        const list = JSON.stringify(spec.paths?.["/api/v1/admin/products"]?.get);
+
+        expect(list).toContain('"name":"view"');
+        expect(list).toContain('"enum":["full","compact"]');
+        expect(list).toContain('"description":{"type":"string","nullable":true}');
+    });
+
     it("publishes a separate bounded agent summary without rich text or media URLs", () => {
         const spec = buildAdminProductsSpec();
         const operation = spec.paths?.["/api/v1/admin/products/summaries"]?.get;

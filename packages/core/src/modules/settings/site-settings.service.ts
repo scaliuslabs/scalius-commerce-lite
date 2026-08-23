@@ -670,25 +670,42 @@ export async function saveHomepagePresentationSettings(
 // Theme
 // ─────────────────────────────────────────
 
-export async function getThemeSettings(
-  db: Database,
-): Promise<ThemeSettingsDocument> {
-  const current = await db
+function selectThemeSettingsRows(db: Database) {
+  return db
     .select({
       colors: themeSettings.colors,
       revision: themeSettings.revision,
     })
     .from(themeSettings)
     .where(eq(themeSettings.id, THEME_SETTINGS_ID))
-    .get();
+    .limit(1);
+}
 
-  if (current) {
-    return {
-      theme: parseAuthoritativeThemeSettings(current.colors),
-      revision: current.revision,
-    };
-  }
+function selectThemeDraftRows(db: Database) {
+  return db
+    .select({
+      theme: themeSettingsDrafts.theme,
+      revision: themeSettingsDrafts.revision,
+      basePublishedRevision: themeSettingsDrafts.basePublishedRevision,
+      updatedAt: themeSettingsDrafts.updatedAt,
+    })
+    .from(themeSettingsDrafts)
+    .where(eq(themeSettingsDrafts.id, THEME_SETTINGS_ID))
+    .limit(1);
+}
 
+function themeSettingsDocumentFromRow(
+  current: { colors: string; revision: number },
+): ThemeSettingsDocument {
+  return {
+    theme: parseAuthoritativeThemeSettings(current.colors),
+    revision: current.revision,
+  };
+}
+
+async function getLegacyThemeSettings(
+  db: Database,
+): Promise<ThemeSettingsDocument> {
   // Pre-versioned installations stored colors in the generic settings table.
   // A missing document is represented as revision 0 so the first writer can
   // atomically claim revision 1 without overwriting another first writer.
@@ -705,20 +722,39 @@ export async function getThemeSettings(
   return { theme: parseStorefrontThemeSettings(legacy?.value), revision: 0 };
 }
 
+export async function getThemeSettings(
+  db: Database,
+): Promise<ThemeSettingsDocument> {
+  const current = (await selectThemeSettingsRows(db))[0];
+
+  if (current) {
+    return themeSettingsDocumentFromRow(current);
+  }
+
+  return getLegacyThemeSettings(db);
+}
+
 export async function getThemeWorkspace(
   db: Database,
 ): Promise<ThemeWorkspaceDocument> {
-  const published = await getThemeSettings(db);
-  const draft = await db
-    .select({
-      theme: themeSettingsDrafts.theme,
-      revision: themeSettingsDrafts.revision,
-      basePublishedRevision: themeSettingsDrafts.basePublishedRevision,
-      updatedAt: themeSettingsDrafts.updatedAt,
-    })
-    .from(themeSettingsDrafts)
-    .where(eq(themeSettingsDrafts.id, THEME_SETTINGS_ID))
-    .get();
+  const workspaceResults = await safeBatch(db, [
+    selectThemeSettingsRows(db),
+    selectThemeDraftRows(db),
+  ]);
+  const publishedRows = workspaceResults[0] as {
+    colors: string;
+    revision: number;
+  }[];
+  const draftRows = workspaceResults[1] as {
+    theme: string;
+    revision: number;
+    basePublishedRevision: number;
+    updatedAt: Date;
+  }[];
+  const published = publishedRows[0]
+    ? themeSettingsDocumentFromRow(publishedRows[0])
+    : await getLegacyThemeSettings(db);
+  const draft = draftRows[0];
 
   return {
     published,

@@ -99,9 +99,11 @@ import {
     noActiveRefundAttemptForOrderIdCondition,
 } from "../payments/refund-attempt-guard";
 import {
-    listActiveRefundOperationsForOrders,
     listOrderRefundAttempts,
+    resolveActiveRefundOperationsForOrders,
+    selectActiveRefundAttemptRowsForOrders,
     summarizeActiveRefundOperation,
+    type RefundAttemptVisibilityRow,
 } from "../payments/refund-attempt-visibility";
 import { variantOptionLabelSql } from "../products/products.option-model";
 import {
@@ -320,6 +322,25 @@ type OrderListPaymentAttemptRow = {
     claimExpiresAt: number | null;
     createdAt: number;
     updatedAt: number;
+};
+type OrderListItemCountRow = {
+    orderId: string;
+    count: number;
+    totalQuantity: number;
+};
+type OrderListShipmentRow = {
+    orderId: string;
+    id: string;
+    providerId: string | null;
+    providerType: string | null;
+    status: string;
+    rawStatus: string | null;
+    externalId: string | null;
+    trackingId: string | null;
+    lastChecked: Date | null;
+    updatedAt: Date | null;
+    createdAt: Date | null;
+    providerName: string | null;
 };
 type OrderRecoverySourceRow = {
     id: string;
@@ -1351,7 +1372,7 @@ export async function listOrders(db: Database, options: {
 
     const orderIds = results.map((r) => r.id);
 
-    const [itemCounts, shipments, paymentAttempts] = await db.batch([
+    const enrichmentResults = await safeBatch(db, [
         results.length > 0
             ? db
                 .select({
@@ -1428,9 +1449,16 @@ export async function listOrders(db: Database, options: {
                 claimExpiresAt: sql<number | null>`NULL`.as("claimExpiresAt"),
                 createdAt: sql<number>`0`.as("createdAt"),
                 updatedAt: sql<number>`0`.as("updatedAt"),
-            }).from(paymentSessionAttempts).where(sql`1=0`)
+            }).from(paymentSessionAttempts).where(sql`1=0`),
+        selectActiveRefundAttemptRowsForOrders(db, orderIds),
     ]);
-    const activeRefundOperations = await listActiveRefundOperationsForOrders(db, orderIds);
+    const itemCounts = enrichmentResults[0] as OrderListItemCountRow[];
+    const shipments = enrichmentResults[1] as OrderListShipmentRow[];
+    const paymentAttempts = enrichmentResults[2] as OrderListPaymentAttemptRow[];
+    const activeRefundAttemptRows = enrichmentResults[3] as RefundAttemptVisibilityRow[];
+    const activeRefundOperations = resolveActiveRefundOperationsForOrders(
+        activeRefundAttemptRows,
+    );
 
     const itemCountMap = new Map(
         itemCounts.map((ic) => [
@@ -1460,7 +1488,7 @@ export async function listOrders(db: Database, options: {
     }
 
     const attemptsByOrderId = new Map<string, OrderListPaymentAttemptRow[]>();
-    for (const attempt of paymentAttempts as OrderListPaymentAttemptRow[]) {
+    for (const attempt of paymentAttempts) {
         if (!attempt.orderId) continue;
         const attempts = attemptsByOrderId.get(attempt.orderId) ?? [];
         attempts.push(attempt);

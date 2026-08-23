@@ -76,8 +76,10 @@ function createD1Statement(
 describe("versioned storefront theme settings", () => {
   let sqlite: DatabaseSync;
   let db: Database;
+  let batchCalls: number;
 
   beforeEach(() => {
+    batchCalls = 0;
     sqlite = new DatabaseSync(":memory:");
     sqlite.exec(`
       CREATE TABLE settings (
@@ -132,6 +134,7 @@ describe("versioned storefront theme settings", () => {
     const client = {
       prepare: (query: string) => createD1Statement(sqlite, query),
       batch: async (statements: SqliteD1Statement[]) => {
+        batchCalls += 1;
         sqlite.exec("BEGIN IMMEDIATE");
         try {
           const results = statements.map((statement) => statement.execute());
@@ -194,6 +197,16 @@ describe("versioned storefront theme settings", () => {
       },
       revision: 0,
     });
+  });
+
+  it("loads the normal published and draft workspace in one provider batch", async () => {
+    seedPublishedWorkspace();
+
+    await expect(getThemeWorkspace(db)).resolves.toMatchObject({
+      published: { revision: 1 },
+      draft: { revision: 1, basePublishedRevision: 1 },
+    });
+    expect(batchCalls).toBe(1);
   });
 
   it("fails closed when the versioned semantic document is unreadable", async () => {

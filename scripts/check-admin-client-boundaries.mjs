@@ -1,6 +1,7 @@
 import { readdir, readFile } from "node:fs/promises";
 import { extname, join, relative, resolve } from "node:path";
 import { inspectAdminStaticAssets } from "./admin-static-assets.mjs";
+import { findStaticImportCycles } from "./admin-client-import-graph.mjs";
 
 const workspaceRoot = resolve(import.meta.dirname, "..");
 const clientRoot = resolve(workspaceRoot, "apps/admin-v2/dist/client");
@@ -33,8 +34,11 @@ async function collectJavaScriptFiles(directory) {
 }
 
 const violations = [];
-for (const file of await collectJavaScriptFiles(clientRoot)) {
+const javaScriptFiles = await collectJavaScriptFiles(clientRoot);
+const browserSources = new Map();
+for (const file of javaScriptFiles) {
   const source = await readFile(file, "utf8");
+  browserSources.set(file, source);
   const markers = SERVER_DATABASE_MARKERS.filter((marker) => source.includes(marker));
   if (markers.length > 0) {
     violations.push({ file: relative(workspaceRoot, file), markers });
@@ -54,6 +58,20 @@ if (violations.length > 0) {
   );
 } else {
   console.log("Admin browser/server bundle boundary: OK");
+}
+
+const staticImportCycles = findStaticImportCycles(browserSources);
+if (staticImportCycles.length > 0) {
+  failed = true;
+  console.error("Admin browser bundle contains circular static chunk imports:");
+  for (const cycle of staticImportCycles) {
+    console.error(`- ${cycle.map((file) => relative(workspaceRoot, file)).join(" -> ")}`);
+  }
+  console.error(
+    "Keep strongly connected modules in one chunk; forced size splitting can break ESM initialization.",
+  );
+} else {
+  console.log("Admin browser static chunk graph: acyclic");
 }
 
 const staticAssetReport = inspectAdminStaticAssets({ rootDir: workspaceRoot });

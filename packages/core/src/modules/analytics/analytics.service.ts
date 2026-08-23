@@ -11,7 +11,7 @@ import {
     type SQL,
 } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import type { Database } from "@scalius/database/client";
+import { safeBatch, type Database } from "@scalius/database/client";
 import type { Analytics } from "@scalius/database/schema";
 import type { z } from "zod";
 import {
@@ -196,11 +196,10 @@ export async function listAnalyticsScripts(
     }
     const where = and(...conditions);
 
-    const total = Number((await db
+    const countQuery = db
         .select({ count: sql<number>`count(*)` })
         .from(analytics)
-        .where(where)
-        .get())?.count ?? 0);
+        .where(where);
 
     const sortColumn = (() => {
         switch (options.sort) {
@@ -211,13 +210,18 @@ export async function listAnalyticsScripts(
         }
     })();
 
-    const rows = await db
+    const rowsQuery = db
         .select()
         .from(analytics)
         .where(where)
         .orderBy(options.order === "asc" ? asc(sortColumn) : desc(sortColumn))
         .limit(limit)
         .offset((page - 1) * limit);
+
+    const batchResults = await safeBatch(db, [countQuery, rowsQuery]);
+    const countRows = batchResults[0] as { count: number }[];
+    const rows = batchResults[1] as Analytics[];
+    const total = Number(countRows[0]?.count ?? 0);
 
     return {
         scripts: rows.map(formatScriptSummary),

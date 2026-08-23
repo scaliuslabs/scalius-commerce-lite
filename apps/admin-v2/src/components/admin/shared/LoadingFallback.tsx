@@ -17,16 +17,37 @@ export function LoadingFallback({ height = "h-48", className }: LoadingFallbackP
   );
 }
 
-/**
- * Full-page loading spinner for route transitions.
- */
-export function PageLoadingSpinner() {
+/** Stable page-shaped fallback for a cold lazy surface. */
+export function PageLoadingSkeleton() {
   return (
-    <div className="flex items-center justify-center py-20">
-      <div className="flex flex-col items-center gap-3">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-muted border-t-primary" />
-        <p className="text-sm text-muted-foreground">Loading...</p>
+    <div className="animate-pulse space-y-4" role="status" aria-label="Loading page">
+      <div className="flex items-center justify-between gap-4">
+        <div className="h-7 w-48 rounded-md bg-muted" />
+        <div className="h-9 w-28 rounded-md bg-muted" />
       </div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="h-24 rounded-lg bg-muted" />
+        <div className="h-24 rounded-lg bg-muted" />
+        <div className="h-24 rounded-lg bg-muted" />
+      </div>
+      <div className="h-64 rounded-lg bg-muted" />
+      <span className="sr-only">Loading page</span>
+    </div>
+  );
+}
+
+/** Stable panel-shaped fallback for a cold lazy settings editor. */
+export function PanelLoadingSkeleton() {
+  return (
+    <div className="animate-pulse space-y-4 py-4" role="status" aria-label="Loading settings">
+      <div className="h-6 w-44 rounded-md bg-muted" />
+      <div className="h-4 w-2/3 rounded bg-muted" />
+      <div className="space-y-3 rounded-lg border p-4">
+        <div className="h-10 rounded-md bg-muted" />
+        <div className="h-10 rounded-md bg-muted" />
+        <div className="h-10 w-1/3 rounded-md bg-muted" />
+      </div>
+      <span className="sr-only">Loading settings</span>
     </div>
   );
 }

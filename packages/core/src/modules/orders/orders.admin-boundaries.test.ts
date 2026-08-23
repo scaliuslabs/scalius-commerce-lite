@@ -175,8 +175,9 @@ describe("admin order list boundaries", () => {
   it("adds active refund operation summaries to order list rows", () => {
     const source = readFileSync(ORDERS_ADMIN_SOURCE, "utf8");
 
-    expect(source).toContain("listActiveRefundOperationsForOrders");
-    expect(source).toContain("const activeRefundOperations = await listActiveRefundOperationsForOrders(db, orderIds)");
+    expect(source).toContain("selectActiveRefundAttemptRowsForOrders(db, orderIds)");
+    expect(source).toContain("const activeRefundOperations = resolveActiveRefundOperationsForOrders(");
+    expect(source).not.toContain("await listActiveRefundOperationsForOrders(db, orderIds)");
     expect(source).toContain("activeRefundOperation: activeRefundOperations.get(order.id) ?? null");
   });
 
