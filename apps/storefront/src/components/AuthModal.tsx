@@ -270,8 +270,10 @@ export default function AuthModal() {
 
   useEffect(() => {
     const handleOpen = (event?: Event) => {
+      const eventIntent = (event as CustomEvent<{ intent?: AuthIntent }> | undefined)?.detail?.intent;
+      const requestedIntent = eventIntent ?? window.__scaliusAuthModalIntentPending;
       delete window.__scaliusAuthModalOpenPending;
-      const requestedIntent = (event as CustomEvent<{ intent?: AuthIntent }> | undefined)?.detail?.intent;
+      delete window.__scaliusAuthModalIntentPending;
       if (requestedIntent === "sign_in" || requestedIntent === "sign_up") {
         setAuthIntent(requestedIntent);
         setError("");

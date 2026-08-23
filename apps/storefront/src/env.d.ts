@@ -186,6 +186,7 @@ interface Window {
   __CHECKOUT_CONFIG__?: unknown;
   __CHECKOUT_LANGUAGE__?: unknown;
   __scaliusAuthModalOpenPending?: boolean;
+  __scaliusAuthModalIntentPending?: "sign_in" | "sign_up";
   __scaliusSearchPaletteOpenPending?: boolean;
   __scaliusCartPendingEvents?: Array<
     | { type: "open" }

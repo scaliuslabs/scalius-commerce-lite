@@ -108,9 +108,11 @@ describe("customer auth resilience source boundaries", () => {
     expect(source).toContain('import { installLazyGlobalUi } from "@/scripts/lazy-global-ui";');
     expect(source).not.toContain("<AuthModal client:");
     expect(runtimeSource).toContain("window.__scaliusAuthModalOpenPending = true;");
-    expect(runtimeSource).toContain("const loadAuth = (openModal: boolean)");
+    expect(runtimeSource).toContain("window.__scaliusAuthModalIntentPending = intent;");
+    expect(runtimeSource).toContain("const loadAuth = (");
     expect(runtimeSource).toContain("const resumeAuth = () => void loadAuth(false);");
-    expect(runtimeSource).toContain('window.addEventListener("open-auth-modal", () => void loadAuth(true));');
+    expect(runtimeSource).toContain('window.addEventListener("open-auth-modal", (event) => {');
+    expect(runtimeSource).toContain("void loadAuth(true, requestedIntent);");
     expect(runtimeSource).toContain('import("@/components/client/mount-auth-modal")');
     expect(runtimeSource).toContain("if (hasCustomerAuthMirrorCookie()) {");
   });
@@ -122,6 +124,8 @@ describe("customer auth resilience source boundaries", () => {
     const pendingIndex = source.indexOf("if (window.__scaliusAuthModalOpenPending) {");
 
     expect(source).toContain("delete window.__scaliusAuthModalOpenPending;");
+    expect(source).toContain("eventIntent ?? window.__scaliusAuthModalIntentPending");
+    expect(source).toContain("delete window.__scaliusAuthModalIntentPending;");
     expect(listenerIndex).toBeGreaterThanOrEqual(0);
     expect(pendingIndex).toBeGreaterThan(listenerIndex);
     expect(source).toContain("handleOpen();");
