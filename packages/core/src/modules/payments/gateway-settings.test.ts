@@ -118,8 +118,8 @@ describe("payment gateway settings reads", () => {
     });
 
     await expect(getActivePaymentMethods(freshDb as never)).resolves.toEqual({
-      enabledMethods: ["polar"],
-      defaultMethod: "polar",
+      enabledMethods: [],
+      defaultMethod: "cod",
     });
   });
 
@@ -519,8 +519,10 @@ describe("payment gateway settings reads", () => {
       enabled: true,
     })).toMatchObject({
       configured: true,
-      usable: true,
+      usable: false,
       credentialErrors: [],
+      blockedReason:
+        "Polar does not support physical goods. Scalius buyer checkout currently handles shipped products.",
     });
   });
 
@@ -606,7 +608,7 @@ describe("payment gateway settings reads", () => {
     ];
 
     await expect(resolveActivePaymentMethodsFromRows(rows)).resolves.toEqual({
-      enabledMethods: ["cod", "stripe", "sslcommerz", "polar"],
+      enabledMethods: ["cod", "stripe", "sslcommerz"],
       defaultMethod: "stripe",
     });
   });

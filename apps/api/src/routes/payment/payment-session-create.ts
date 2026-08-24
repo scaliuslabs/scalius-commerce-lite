@@ -786,8 +786,11 @@ async function createPolarPaymentSessionForOrder(
     order_id: input.orderId,
     ...buildCallbackParams(input.returnTarget, policy.paymentType, policy.paymentType === "deposit" ? policy.depositAmount : undefined),
   };
+  // Keep the request identity independent from its derived return nonce. The
+  // provider-facing cancel URL receives the nonce after the stable attempt
+  // hash has been computed.
   const successUrl = buildCallbackUrl(baseUrl, "/api/v1/payment/polar/success", callbackParams);
-  const cancelUrl = buildCallbackUrl(baseUrl, "/api/v1/payment/polar/cancel", callbackParams);
+  const identityCancelUrl = buildCallbackUrl(baseUrl, "/api/v1/payment/polar/cancel", callbackParams);
   await ensurePendingPaymentPlanForSession(db, order, policy);
   order = await ensureOrderCanUseGateway(db, order, PaymentMethod.POLAR, "Polar", {
     replaceExistingAttempt: input.replaceExistingAttempt,
@@ -806,13 +809,22 @@ async function createPolarPaymentSessionForOrder(
       originalCurrency,
       exchangeRate,
       successUrl,
-      cancelUrl,
+      cancelUrl: identityCancelUrl,
       customerName: order.customerName,
       customerEmail: order.customerEmail ?? null,
       orderVersion: order.version,
     },
   });
-  const attemptClaim = await claimPaymentSessionAttempt<PolarSessionResponse>(db, attemptIdentity);
+  const returnNonce = await buildHostedReturnNonce("polar", attemptIdentity.requestHash);
+  const returnCallbackParams = {
+    ...callbackParams,
+    return_nonce: returnNonce,
+  };
+  const cancelUrl = buildCallbackUrl(baseUrl, "/api/v1/payment/polar/cancel", returnCallbackParams);
+  const attemptClaim = await claimPaymentSessionAttempt<PolarSessionResponse>(db, {
+    ...attemptIdentity,
+    providerCorrelationId: returnNonce,
+  });
   if (attemptClaim.status === "replay") {
     return {
       gateway: "polar",
@@ -1362,6 +1374,18 @@ function buildCallbackUrl(baseUrl: string, path: string, params: Record<string, 
     if (value) url.searchParams.set(key, value);
   }
   return url.toString();
+}
+
+async function buildHostedReturnNonce(
+  gateway: "polar",
+  requestHash: string,
+): Promise<string> {
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(`hosted-payment-return:${gateway}:${requestHash}`),
+  );
+  const hex = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `hpr_${hex}`;
 }
 
 function getTrustedApiOrigin(env: { PUBLIC_API_BASE_URL?: string }, requestUrl: string): string {

@@ -79,6 +79,7 @@ let cartQuantityLimits: Record<string, number | null> = {};
 let preserveCartValidationSummaryOnce = false;
 let cartValidationTimer: ReturnType<typeof setTimeout> | null = null;
 let cartValidationSequence = 0;
+let isApplyingCartSnapshot = false;
 let cartTaxQuoteSequence = 0;
 let latestCheckoutLocation: {
   cityId: string;
@@ -92,8 +93,11 @@ let hostedPaymentRecoverySession: HostedPaymentRecoverySession | null = null;
 
 function reconcileHostedPaymentRecoveryWithCart(): void {
   if (
-    hostedPaymentRecoverySession?.cartFingerprint
-    && !matchesCheckoutRecoveryCart(hostedPaymentRecoverySession, cartStore.get().items)
+    hostedPaymentRecoverySession?.cartFingerprint &&
+    !matchesCheckoutRecoveryCart(
+      hostedPaymentRecoverySession,
+      cartStore.get().items,
+    )
   ) {
     clearHostedPaymentRecoverySession();
     hostedPaymentRecoverySession = null;
@@ -103,7 +107,9 @@ function reconcileHostedPaymentRecoveryWithCart(): void {
 
 function renderCheckoutRecoveryNotice(): void {
   const notice = document.getElementById("checkoutRecoveryNotice");
-  const link = document.getElementById("checkoutRecoveryLink") as HTMLAnchorElement | null;
+  const link = document.getElementById(
+    "checkoutRecoveryLink",
+  ) as HTMLAnchorElement | null;
   const reference = document.getElementById("checkoutRecoveryReference");
   if (!notice || !link || !reference) return;
 
@@ -379,7 +385,10 @@ function showDiscountMessage(
 
   messageElement.textContent = message;
   messageElement.setAttribute("role", type === "error" ? "alert" : "status");
-  messageElement.setAttribute("aria-live", type === "error" ? "assertive" : "polite");
+  messageElement.setAttribute(
+    "aria-live",
+    type === "error" ? "assertive" : "polite",
+  );
   const colors = {
     success: "text-primary",
     error: "text-destructive",
@@ -462,6 +471,26 @@ function formStringValue(name: string): string | null {
   return value ? value : null;
 }
 
+function formCanonicalPhoneValue(): string | null {
+  if (typeof document === "undefined") return null;
+  const input = document.querySelector<HTMLInputElement>(
+    '[name="customerPhone"]',
+  );
+  if (!input) return null;
+
+  // PhoneField exposes only its validated E.164 value through this dataset.
+  // An empty Bangladesh control visibly contains the "+880" calling code, so
+  // falling back to that display value makes tax-quote construction fail
+  // synchronously before a request can be sent.
+  if (input.dataset.e164Value !== undefined) {
+    const canonical = input.dataset.e164Value.trim();
+    return /^\+[1-9]\d{6,14}$/.test(canonical) ? canonical : null;
+  }
+
+  const legacyValue = input.value.trim();
+  return legacyValue.length >= 7 ? legacyValue : null;
+}
+
 function cartTaxQuoteInput(): Record<string, unknown> | null {
   const city = latestCheckoutLocation?.cityId || formStringValue("city");
   const zone = latestCheckoutLocation?.zoneId || formStringValue("zone");
@@ -486,7 +515,7 @@ function cartTaxQuoteInput(): Record<string, unknown> | null {
     discountCodeHidden: (
       document.getElementById("discountCodeHidden") as HTMLInputElement | null
     )?.value,
-    customerPhone: formStringValue("customerPhone") || undefined,
+    customerPhone: formCanonicalPhoneValue() || undefined,
   };
 }
 
@@ -502,10 +531,9 @@ function renderAuthoritativeCartQuote(
     taxStatus: HTMLElement | null;
   },
 ): void {
-  document.getElementById("taxRow")?.classList.toggle(
-    "hidden",
-    quote.taxMinor === 0,
-  );
+  document
+    .getElementById("taxRow")
+    ?.classList.toggle("hidden", quote.taxMinor === 0);
   elements.subtotal.textContent = formatPriceShort(quote.subtotalAmount);
   elements.shipping.textContent =
     quote.shippingAmount === 0
@@ -716,9 +744,14 @@ export async function validateCartSnapshot(): Promise<boolean> {
         : "";
     preserveCartValidationSummaryOnce = false;
     if (response.ok && json?.success && json.data) {
-      reconcileValidatedCartSnapshot(json.data, (message) => {
-        showDiscountMessage(message, "info");
-      });
+      isApplyingCartSnapshot = true;
+      try {
+        reconcileValidatedCartSnapshot(json.data, (message) => {
+          showDiscountMessage(message, "info");
+        });
+      } finally {
+        isApplyingCartSnapshot = false;
+      }
       updateCartQuantityLimits(json.data, issues, cartStore.get().items);
     }
     setCartValidationIssues(issues, cartStore.get().items, summaryMessage);
@@ -1059,7 +1092,9 @@ async function handleApplyDiscount() {
     '[name="customerPhone"]',
   );
   const enteredPhone = (
-    customerPhoneInput?.dataset.e164Value || customerPhoneInput?.value || ""
+    customerPhoneInput?.dataset.e164Value ||
+    customerPhoneInput?.value ||
+    ""
   ).trim();
   const customerPhone =
     enteredPhone && enteredPhone.length >= 7 ? enteredPhone : undefined;
@@ -1158,9 +1193,8 @@ export async function initCartFunctionality() {
       return;
     }
     const quantityLimit = cartQuantityLimits[cartKey];
-    const nextQuantity = typeof quantityLimit === "number"
-      ? Math.min(qty, quantityLimit)
-      : qty;
+    const nextQuantity =
+      typeof quantityLimit === "number" ? Math.min(qty, quantityLimit) : qty;
     rotateCheckoutIdIfCartBlocked();
     clearCartValidationSummary();
     if (nextQuantity <= 0) removeCartItemByKey(cartKey);
@@ -1229,7 +1263,16 @@ export async function initCartFunctionality() {
     applyBulkCartRepair("reduce_quantity");
   window.bulkRefreshCartIssueItems = () => applyBulkCartRepair("refresh_item");
 
+  let cartSubscriptionIsLive = false;
   cartStoreUnsubscribe = cartStore.subscribe(() => {
+    // Nanostores invokes subscribers once immediately. Initialization already
+    // renders and validates the hydrated cart below, so treating that first
+    // observation as a mutation schedules a duplicate serial validation.
+    if (!cartSubscriptionIsLive) {
+      cartSubscriptionIsLive = true;
+      return;
+    }
+    if (isApplyingCartSnapshot) return;
     reconcileHostedPaymentRecoveryWithCart();
     void renderCartItems();
     updateCheckoutButtonState();
@@ -1295,7 +1338,7 @@ export async function initCartFunctionality() {
     { signal: runtimeSignal },
   );
 
-  document.querySelector<HTMLInputElement>('[name="customerPhone"]')?.addEventListener(
+  document.getElementById("customerPhone-input")?.addEventListener(
     "blur",
     () => {
       attemptToTrackInitiateCheckout();
@@ -1323,20 +1366,24 @@ export async function initCartFunctionality() {
     await renderCartItems();
   }
   await validateCartSnapshot();
-  void updateTotals();
   updateCheckoutButtonState();
 }
 
 export async function resumeCartPageFromHistory(): Promise<void> {
   hostedPaymentRecoverySession = readHostedPaymentRecoverySession();
-  syncCartFromStorage();
+  isApplyingCartSnapshot = true;
+  try {
+    syncCartFromStorage();
+  } finally {
+    isApplyingCartSnapshot = false;
+  }
   reconcileHostedPaymentRecoveryWithCart();
   renderCheckoutRecoveryNotice();
   syncCheckoutIdInput();
-  await renderCartItems();
   if (Object.keys(cartStore.get().items).length > 0) {
     await validateCartSnapshot();
-    void updateTotals();
+  } else {
+    await renderCartItems();
   }
   updateCheckoutButtonState();
 }

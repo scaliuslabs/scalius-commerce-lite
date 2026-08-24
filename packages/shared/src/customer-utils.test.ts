@@ -61,7 +61,7 @@ describe("phone country policy", () => {
     const invalid = phoneNumberSchema.safeParse("01700000000");
     expect(invalid.success).toBe(false);
     if (!invalid.success) {
-      expect(invalid.error.issues[0]?.message).toBe("Invalid phone number format");
+      expect(invalid.error.issues[0]?.message).toBe("Enter a valid phone number");
     }
     expect(phoneNumberSchema.parse("+8801712345678")).toBe("+8801712345678");
   });
