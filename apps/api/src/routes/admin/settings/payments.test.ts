@@ -72,8 +72,7 @@ const mocks = vi.hoisted(() => {
         requireEncryptionKey: vi.fn(),
         invalidateApiAndScheduleStorefrontGroups: vi.fn(),
         safeBatch: vi.fn(),
-        upsertSetting: vi.fn(),
-        upsertEncryptedSetting: vi.fn(),
+        saveSettingAggregate: vi.fn(),
         getPaymentMethodPreferences: vi.fn(),
         getPaymentGatewaySettingsSnapshot: vi.fn(),
         getActivePaymentMethods: vi.fn(),
@@ -260,9 +259,11 @@ vi.mock("@scalius/database/client", async (importOriginal) => ({
     safeBatch: mocks.safeBatch,
 }));
 
+vi.mock("@scalius/core/modules/settings/settings-write", () => ({
+    saveSettingAggregate: mocks.saveSettingAggregate,
+}));
+
 vi.mock("@scalius/core/modules/payments/gateway-settings", () => ({
-    upsertSetting: mocks.upsertSetting,
-    upsertEncryptedSetting: mocks.upsertEncryptedSetting,
     getPaymentMethodPreferences: mocks.getPaymentMethodPreferences,
     getPaymentGatewaySettingsSnapshot: mocks.getPaymentGatewaySettingsSnapshot,
     getActivePaymentMethods: mocks.getActivePaymentMethods,
@@ -320,8 +321,7 @@ function createTestApp(
     mocks.requireEncryptionKey.mockReturnValue("credential-key");
     mocks.invalidateApiAndScheduleStorefrontGroups.mockResolvedValue(undefined);
     mocks.safeBatch.mockResolvedValue([]);
-    mocks.upsertSetting.mockResolvedValue(undefined);
-    mocks.upsertEncryptedSetting.mockResolvedValue(undefined);
+    mocks.saveSettingAggregate.mockResolvedValue(undefined);
     mocks.getPaymentMethodPreferences.mockResolvedValue({
         enabledMethods: ["cod"],
         defaultMethod: "cod",
@@ -469,6 +469,34 @@ describe("payment settings cache invalidation", () => {
         expect(mocks.safeBatch.mock.calls[0]?.[1]).toHaveLength(2);
     });
 
+    it("rejects SSLCommerz buyer visibility when the store currency is not BDT", async () => {
+        const { app, env } = createTestApp({}, [
+            { key: "currency_code", value: "USD" },
+            { key: "currency_symbol", value: "$" },
+        ]);
+        mocks.getSSLCommerzSettings.mockResolvedValueOnce({
+            enabled: true,
+            storeId: "ssl_store_identifier",
+            storePassword: "stored-real-password",
+            sandbox: true,
+        });
+
+        const response = await postJson(app, env, "/payment-methods", {
+            enabledMethods: ["sslcommerz", "cod"],
+            defaultMethod: "sslcommerz",
+        });
+
+        expect(response.status).toBe(400);
+        await expect(response.json()).resolves.toMatchObject({
+            success: false,
+            error: {
+                code: "VALIDATION_ERROR",
+                message: "SSLCommerz checkout requires the store currency to be BDT. Current currency: USD.",
+            },
+        });
+        expect(mocks.safeBatch).not.toHaveBeenCalled();
+    });
+
     it("rejects duplicate methods instead of persisting an ambiguous display order", async () => {
         const { app, env } = createTestApp();
 
@@ -602,6 +630,51 @@ describe("payment settings cache invalidation", () => {
         });
     });
 
+    it("excludes a configured SSLCommerz method from dashboard checkout readiness outside BDT", async () => {
+        const { app, env } = createTestApp({}, [
+            { key: "currency_code", value: "USD" },
+        ]);
+        mocks.getPaymentMethodPreferences.mockResolvedValueOnce({
+            enabledMethods: ["sslcommerz", "cod"],
+            defaultMethod: "sslcommerz",
+            hasExplicitEnabledMethods: true,
+        });
+        mocks.getActivePaymentMethods.mockResolvedValueOnce({
+            enabledMethods: ["sslcommerz", "cod"],
+            defaultMethod: "sslcommerz",
+        });
+        mocks.getSSLCommerzSettings.mockResolvedValueOnce({
+            enabled: true,
+            storeId: "store-id",
+            storePassword: "stored-real-password",
+            sandbox: true,
+        });
+
+        const response = await getJson(app, env, "/payment-methods");
+
+        expect(response.status, await response.clone().text()).toBe(200);
+        await expect(response.json()).resolves.toMatchObject({
+            success: true,
+            data: {
+                activeMethods: ["cod"],
+                activeDefaultMethod: "cod",
+                gatewayStatus: {
+                    sslcommerz: {
+                        configured: true,
+                        enabled: true,
+                        usable: false,
+                        checkoutSelected: true,
+                        checkoutVisible: false,
+                        blockedReason: "SSLCommerz checkout requires the store currency to be BDT. Current currency: USD.",
+                    },
+                    cod: {
+                        checkoutVisible: true,
+                    },
+                },
+            },
+        });
+    });
+
     it("rejects removing every configured online gateway while partial payments are enabled", async () => {
         const { app, env } = createTestApp({
             partialPaymentEnabled: true,
@@ -614,7 +687,7 @@ describe("payment settings cache invalidation", () => {
         });
 
         expect(response.status, await response.clone().text()).toBe(400);
-        expect(mocks.upsertSetting).not.toHaveBeenCalled();
+        expect(mocks.safeBatch).not.toHaveBeenCalled();
     });
 
     it("rejects saving a default method hidden by the current checkout flow", async () => {
@@ -642,7 +715,6 @@ describe("payment settings cache invalidation", () => {
                 message: "Default method is hidden by the current checkout flow settings.",
             },
         });
-        expect(mocks.upsertSetting).not.toHaveBeenCalled();
         expect(mocks.safeBatch).not.toHaveBeenCalled();
     });
 
@@ -683,7 +755,7 @@ describe("payment settings cache invalidation", () => {
                 message: expect.stringContaining("publishable key"),
             },
         });
-        expect(mocks.upsertSetting).not.toHaveBeenCalled();
+        expect(mocks.saveSettingAggregate).not.toHaveBeenCalled();
     });
 
     it("rejects enabling Stripe with submitted placeholder credentials", async () => {
@@ -705,8 +777,7 @@ describe("payment settings cache invalidation", () => {
             },
         });
         expect(mocks.requireEncryptionKey).not.toHaveBeenCalled();
-        expect(mocks.upsertSetting).not.toHaveBeenCalled();
-        expect(mocks.upsertEncryptedSetting).not.toHaveBeenCalled();
+        expect(mocks.saveSettingAggregate).not.toHaveBeenCalled();
     });
 
     it("rejects a new live publishable key paired with a retained test secret", async () => {
@@ -736,7 +807,7 @@ describe("payment settings cache invalidation", () => {
                 message: "Stripe secret and publishable keys use different test/live environments. Choose a matching key pair.",
             },
         });
-        expect(mocks.upsertSetting).not.toHaveBeenCalled();
+        expect(mocks.saveSettingAggregate).not.toHaveBeenCalled();
     });
 
     it("rejects enabling Stripe when a masked stored credential is a placeholder", async () => {
@@ -759,8 +830,7 @@ describe("payment settings cache invalidation", () => {
                 message: "Stripe secret key looks like a placeholder. Enter the real Stripe secret key from your merchant account.",
             },
         });
-        expect(mocks.upsertSetting).not.toHaveBeenCalled();
-        expect(mocks.upsertEncryptedSetting).not.toHaveBeenCalled();
+        expect(mocks.saveSettingAggregate).not.toHaveBeenCalled();
     });
 
     it("requires the credential encryption key before saving Stripe secrets", async () => {
@@ -773,20 +843,53 @@ describe("payment settings cache invalidation", () => {
 
         expect(response.status, await response.clone().text()).toBe(200);
         expect(mocks.requireEncryptionKey).toHaveBeenCalledWith(env);
-        expect(mocks.upsertEncryptedSetting).toHaveBeenCalledWith(
+        expect(mocks.saveSettingAggregate).toHaveBeenCalledWith(
             expect.objectContaining({ id: "db" }),
-            "stripe",
-            "secret_key",
-            "sk_live_new",
+            [
+                { category: "stripe", key: "secret_key", value: "sk_live_new", encrypted: true },
+                { category: "stripe", key: "webhook_secret", value: "whsec_new", encrypted: true },
+            ],
             "credential-key",
         );
-        expect(mocks.upsertEncryptedSetting).toHaveBeenCalledWith(
+    });
+
+    it("submits one atomic aggregate for a complete Stripe credential rotation", async () => {
+        const { app, env } = createTestApp();
+
+        const response = await postJson(app, env, "/stripe", {
+            secretKey: "sk_test_replacement",
+            publishableKey: "pk_test_replacement",
+            webhookSecret: "whsec_replacement",
+            enabled: true,
+        });
+
+        expect(response.status, await response.clone().text()).toBe(200);
+        expect(mocks.saveSettingAggregate).toHaveBeenCalledOnce();
+        expect(mocks.saveSettingAggregate).toHaveBeenCalledWith(
             expect.objectContaining({ id: "db" }),
-            "stripe",
-            "webhook_secret",
-            "whsec_new",
+            [
+                { category: "stripe", key: "secret_key", value: "sk_test_replacement", encrypted: true },
+                { category: "stripe", key: "publishable_key", value: "pk_test_replacement" },
+                { category: "stripe", key: "webhook_secret", value: "whsec_replacement", encrypted: true },
+                { category: "stripe", key: "enabled", value: "true" },
+            ],
             "credential-key",
         );
+    });
+
+    it("does not invalidate checkout caches when an atomic gateway save fails", async () => {
+        mocks.saveSettingAggregate.mockRejectedValueOnce(new Error("atomic batch failed"));
+        const { app, env } = createTestApp({}, [
+            { key: "secret_key", value: "encrypted-secret" },
+            { key: "webhook_secret", value: "encrypted-webhook" },
+        ]);
+
+        const response = await postJson(app, env, "/stripe", {
+            publishableKey: "pk_test_existing",
+        });
+
+        expect(response.status, await response.clone().text()).toBe(500);
+        expect(mocks.invalidateApiAndScheduleStorefrontGroups).not.toHaveBeenCalled();
     });
 
     it("rejects disabling the last configured online gateway while partial payments are enabled", async () => {
@@ -810,7 +913,7 @@ describe("payment settings cache invalidation", () => {
                 code: "VALIDATION_ERROR",
             },
         });
-        expect(mocks.upsertSetting).not.toHaveBeenCalled();
+        expect(mocks.saveSettingAggregate).not.toHaveBeenCalled();
     });
 
     it("allows disabling one online gateway while partial payments still have another online gateway", async () => {
@@ -828,11 +931,10 @@ describe("payment settings cache invalidation", () => {
         });
 
         expect(response.status, await response.clone().text()).toBe(200);
-        expect(mocks.upsertSetting).toHaveBeenCalledWith(
+        expect(mocks.saveSettingAggregate).toHaveBeenCalledWith(
             expect.objectContaining({ id: "db" }),
-            "stripe",
-            "enabled",
-            "false",
+            [{ category: "stripe", key: "enabled", value: "false" }],
+            undefined,
         );
     });
 
@@ -877,7 +979,7 @@ describe("payment settings cache invalidation", () => {
                 message: expect.stringContaining("store password"),
             },
         });
-        expect(mocks.upsertSetting).not.toHaveBeenCalled();
+        expect(mocks.saveSettingAggregate).not.toHaveBeenCalled();
     });
 
     it("rejects enabling SSLCommerz with submitted placeholder credentials", async () => {
@@ -898,8 +1000,7 @@ describe("payment settings cache invalidation", () => {
             },
         });
         expect(mocks.requireEncryptionKey).not.toHaveBeenCalled();
-        expect(mocks.upsertSetting).not.toHaveBeenCalled();
-        expect(mocks.upsertEncryptedSetting).not.toHaveBeenCalled();
+        expect(mocks.saveSettingAggregate).not.toHaveBeenCalled();
     });
 
     it("rejects enabling SSLCommerz when a masked stored credential is a placeholder", async () => {
@@ -928,8 +1029,7 @@ describe("payment settings cache invalidation", () => {
                 message: "SSLCommerz store password looks like a placeholder. Enter the real SSLCommerz store password from your merchant account.",
             },
         });
-        expect(mocks.upsertSetting).not.toHaveBeenCalled();
-        expect(mocks.upsertEncryptedSetting).not.toHaveBeenCalled();
+        expect(mocks.saveSettingAggregate).not.toHaveBeenCalled();
     });
 
     it("requires the credential encryption key before saving SSLCommerz secrets", async () => {
@@ -941,11 +1041,9 @@ describe("payment settings cache invalidation", () => {
 
         expect(response.status, await response.clone().text()).toBe(200);
         expect(mocks.requireEncryptionKey).toHaveBeenCalledWith(env);
-        expect(mocks.upsertEncryptedSetting).toHaveBeenCalledWith(
+        expect(mocks.saveSettingAggregate).toHaveBeenCalledWith(
             expect.objectContaining({ id: "db" }),
-            "sslcommerz",
-            "store_password",
-            "ssl_secret",
+            [{ category: "sslcommerz", key: "store_password", value: "ssl_secret", encrypted: true }],
             "credential-key",
         );
     });
@@ -988,7 +1086,7 @@ describe("payment settings cache invalidation", () => {
                 message: expect.stringContaining("webhook secret"),
             },
         });
-        expect(mocks.upsertSetting).not.toHaveBeenCalled();
+        expect(mocks.saveSettingAggregate).not.toHaveBeenCalled();
     });
 
     it("rejects enabling Polar with submitted placeholder credentials", async () => {
@@ -1010,8 +1108,7 @@ describe("payment settings cache invalidation", () => {
             },
         });
         expect(mocks.requireEncryptionKey).not.toHaveBeenCalled();
-        expect(mocks.upsertSetting).not.toHaveBeenCalled();
-        expect(mocks.upsertEncryptedSetting).not.toHaveBeenCalled();
+        expect(mocks.saveSettingAggregate).not.toHaveBeenCalled();
     });
 
     it("rejects enabling Polar when a masked stored credential is a placeholder", async () => {
@@ -1034,8 +1131,7 @@ describe("payment settings cache invalidation", () => {
                 message: "Polar access token looks like a placeholder. Enter the real Polar access token from your merchant account.",
             },
         });
-        expect(mocks.upsertSetting).not.toHaveBeenCalled();
-        expect(mocks.upsertEncryptedSetting).not.toHaveBeenCalled();
+        expect(mocks.saveSettingAggregate).not.toHaveBeenCalled();
     });
 
     it("requires the credential encryption key before saving Polar secrets", async () => {
@@ -1048,18 +1144,12 @@ describe("payment settings cache invalidation", () => {
 
         expect(response.status, await response.clone().text()).toBe(200);
         expect(mocks.requireEncryptionKey).toHaveBeenCalledWith(env);
-        expect(mocks.upsertEncryptedSetting).toHaveBeenCalledWith(
+        expect(mocks.saveSettingAggregate).toHaveBeenCalledWith(
             expect.objectContaining({ id: "db" }),
-            "polar",
-            "access_token",
-            "polar_token",
-            "credential-key",
-        );
-        expect(mocks.upsertEncryptedSetting).toHaveBeenCalledWith(
-            expect.objectContaining({ id: "db" }),
-            "polar",
-            "webhook_secret",
-            "polar_webhook",
+            [
+                { category: "polar", key: "access_token", value: "polar_token", encrypted: true },
+                { category: "polar", key: "webhook_secret", value: "polar_webhook", encrypted: true },
+            ],
             "credential-key",
         );
     });
@@ -1084,7 +1174,7 @@ describe("payment settings cache invalidation", () => {
                 message: "CREDENTIAL_ENCRYPTION_KEY is required to store provider credentials.",
             },
         });
-        expect(mocks.upsertEncryptedSetting).not.toHaveBeenCalled();
+        expect(mocks.saveSettingAggregate).not.toHaveBeenCalled();
         expect(mocks.invalidateApiAndScheduleStorefrontGroups).not.toHaveBeenCalled();
     });
 });

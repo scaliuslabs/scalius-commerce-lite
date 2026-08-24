@@ -177,6 +177,8 @@ const orderId = Astro.params.id ?? "";
   import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
   import { escapeHtml } from "@scalius/shared/html-escape";
   import { getProductImageUrl } from "@/lib/product-media";
+  import { getGatewayPresentation } from "@/lib/checkout/gateway-presentation";
+  import { isGatewayEligibleForPaymentAmount } from "@/lib/checkout/gateway-amount-eligibility";
   import {
     formatSavedMinorAmount,
     resolveSavedOrderLineMoney,
@@ -314,21 +316,52 @@ const orderId = Astro.params.id ?? "";
     return value === "stripe" || value === "sslcommerz" || value === "polar";
   }
 
-  function recoveryGatewayLabel(gateway: OnlineRecoveryGateway): string {
-    if (gateway === "stripe") return "International card";
-    if (gateway === "sslcommerz") return "Mobile banking & local cards";
-    return "International card & Cash App";
+  function recoveryGatewayMarkup(gateway: OnlineRecoveryGateway): string {
+    const presentation = getGatewayPresentation(gateway, gateway);
+    const lightMark = presentation.markSrc
+      ? `<img src="${escapeHtml(presentation.markSrc)}" alt="" aria-hidden="true" class="h-5 w-auto max-w-24 object-contain ${presentation.darkMarkSrc ? "dark:hidden" : ""}">`
+      : "";
+    const darkMark = presentation.darkMarkSrc
+      ? `<img src="${escapeHtml(presentation.darkMarkSrc)}" alt="" aria-hidden="true" class="hidden h-5 w-auto max-w-24 object-contain dark:block">`
+      : "";
+    const mark = lightMark || darkMark
+      ? `<span class="flex min-w-20 shrink-0 items-center justify-start">${lightMark}${darkMark}</span>`
+      : "";
+    return `<span class="flex items-center gap-3">${mark}<span class="min-w-0"><span class="block font-semibold">${escapeHtml(presentation.buyerLabel)}</span>${presentation.description ? `<span class="mt-0.5 block text-xs text-muted-foreground">${escapeHtml(presentation.description)}</span>` : ""}</span></span>`;
   }
 
   function availableRecoveryGateways(): OnlineRecoveryGateway[] {
     if (currentDetail?.paymentRecovery.paymentType === "balance") {
-      return recoveryAction ? [recoveryAction.gateway] : [];
+      if (!recoveryAction) return [];
+      if (!currentCheckoutConfig || currentCheckoutConfig.unavailable) {
+        return [recoveryAction.gateway];
+      }
+      const configuredGateway = currentCheckoutConfig.gateways.find(
+        (gateway) => gateway.id === recoveryAction?.gateway,
+      );
+      const currencyCode = currentDetail.order.currencyCode
+        ?? currentCheckoutConfig.currency?.code
+        ?? DEFAULT_CURRENCY.code;
+      return configuredGateway && isGatewayEligibleForPaymentAmount(
+        configuredGateway,
+        recoveryAction.amountDue,
+        currencyCode,
+      ) ? [recoveryAction.gateway] : [];
     }
     const configured = (currentCheckoutConfig?.gateways ?? [])
+      .filter((gateway: GatewayConfig) => isGatewayEligibleForPaymentAmount(
+        gateway,
+        recoveryAction?.amountDue ?? 0,
+        currentDetail?.order.currencyCode
+          ?? currentCheckoutConfig?.currency?.code
+          ?? DEFAULT_CURRENCY.code,
+      ))
       .map((gateway: GatewayConfig) => gateway.id)
       .filter(isOnlineRecoveryGateway);
     if (configured.length > 0) return [...new Set(configured)];
-    return recoveryAction ? [recoveryAction.gateway] : [];
+    return currentCheckoutConfig?.unavailable && recoveryAction
+      ? [recoveryAction.gateway]
+      : [];
   }
 
   function recoveryButtonLabelFor(gateway: OnlineRecoveryGateway): string {
@@ -437,7 +470,7 @@ const orderId = Astro.params.id ?? "";
       methods.innerHTML = gateways.map((gateway) => {
         const selected = gateway === selectedRecoveryGateway;
         return `<button type="button" role="radio" aria-checked="${selected ? "true" : "false"}" data-recovery-gateway="${escapeHtml(gateway)}" class="min-h-11 rounded-lg border px-3 py-2 text-left text-sm transition-colors ${selected ? "border-primary bg-primary/10 text-foreground" : "border-border bg-background text-foreground hover:border-primary/40 hover:bg-muted"}">
-          <span class="font-semibold">${escapeHtml(recoveryGatewayLabel(gateway))}</span>
+          ${recoveryGatewayMarkup(gateway)}
           <span class="mt-1 block text-xs text-muted-foreground">${gateway === detail.order.paymentMethod ? "Current method" : "Change method"}</span>
         </button>`;
       }).join("");

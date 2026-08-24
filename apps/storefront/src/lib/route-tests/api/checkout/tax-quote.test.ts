@@ -173,6 +173,53 @@ describe("checkout tax quote proxy", () => {
     expect(response.headers.get("Cache-Control")).toContain("no-store");
   });
 
+  it("forwards only bounded cart-repair issues from a validation failure", async () => {
+    mocks.fetchWithRetry.mockResolvedValueOnce(new Response(JSON.stringify({
+      success: false,
+      error: {
+        code: "VALIDATION_ERROR",
+        message: "Phone +8801700000000 saw a stale price",
+        details: {
+          itemIssues: [{
+            index: 0,
+            cartKey: "line_1",
+            productId: "prod_1",
+            variantId: "var_1",
+            code: "PRICE_CHANGED",
+            action: "refresh_item",
+            message: "The price changed.",
+            productName: "Cotton Panjabi",
+            variantLabel: "M / Blue",
+            requestedQuantity: 2,
+            submittedPrice: 140,
+            currentPrice: 150,
+            buyerPhone: "+8801700000000",
+          }],
+        },
+      },
+    }), { status: 422 }));
+
+    const response = await POST({
+      request: storefrontRequest(requestPayload()),
+    } as never);
+    const body = await response.json() as Record<string, unknown>;
+
+    expect(response.status).toBe(422);
+    expect(body).toMatchObject({
+      success: false,
+      error: "Current checkout total is unavailable",
+      details: {
+        itemIssues: [expect.objectContaining({
+          cartKey: "line_1",
+          code: "PRICE_CHANGED",
+          currentPrice: 150,
+        })],
+      },
+    });
+    expect(JSON.stringify(body)).not.toContain("+8801700000000");
+    expect(JSON.stringify(body)).not.toContain("buyerPhone");
+  });
+
   it("fails closed when the upstream success payload violates the quote contract", async () => {
     mocks.fetchWithRetry.mockResolvedValueOnce(new Response(JSON.stringify({
       ...quoteEnvelope(),

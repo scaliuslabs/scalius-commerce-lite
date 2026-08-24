@@ -27,6 +27,7 @@ import {
   createOrderReceiptFinalizeCookieHeader,
 } from "@/lib/order-receipt-cookie";
 import { MIN_SHIPPING_ADDRESS_LENGTH } from "@/lib/checkout/shipping-address";
+import { hashCheckoutCartFingerprint } from "@/lib/checkout/session-state";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import type { CartValidationIssue } from "@/lib/api/orders";
 
@@ -182,7 +183,13 @@ if (Astro.request.method === "POST" && codOnly) {
         if (receiptCookie) {
           response.headers.append("Set-Cookie", receiptCookie);
         }
-        const finalizeCookie = createOrderReceiptFinalizeCookieHeader(result.orderId);
+        const finalizeCookie = createOrderReceiptFinalizeCookieHeader(
+          result.orderId,
+          {
+            checkoutId: String(formData.get("checkoutId") ?? ""),
+            cartFingerprintHash: await hashCheckoutCartFingerprint(cartItems),
+          },
+        );
         if (finalizeCookie) {
           response.headers.append("Set-Cookie", finalizeCookie);
         }
@@ -259,6 +266,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
       : "false"}
     data-default-shipping-id={shippingMethods[0]?.id || ""}
     data-default-shipping-fee={String(shippingMethods[0]?.fee ?? 0)}
+    data-default-shipping-name={shippingMethods[0]?.name || ""}
     hidden
   >
   </div>
@@ -465,6 +473,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
                   <input
                     type="text"
                     id="discountCodeInput"
+                    aria-describedby="discountMessage"
                     placeholder={lang.languageData.discountCodePlaceholder}
                     class="h-11 min-w-0 flex-1 rounded-lg border border-input bg-background px-3 text-base font-mono uppercase tracking-wider text-foreground transition-all focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:h-9"
                   />
@@ -486,6 +495,9 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
                 </div>
                 <div
                   id="discountMessage"
+                  role="status"
+                  aria-live="polite"
+                  aria-atomic="true"
                   class="absolute -bottom-5 left-0 text-[10px] sm:text-xs font-medium text-danger truncate max-w-full"
                   style="display: none;"
                 >
@@ -817,9 +829,9 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     if (preferredPhone) {
       // PhoneField is a React component — dispatch custom event to update its state
       const phone = normalizePhone(preferredPhone);
-      const phoneInput = document.getElementById(
-        "customerPhone",
-      ) as HTMLInputElement | null;
+      const phoneInput = document.querySelector<HTMLInputElement>(
+        '[name="customerPhone"]',
+      );
       if (phone && !phoneInput?.value) {
         window.dispatchEvent(
           new CustomEvent("phone-prefill", { detail: phone }),
@@ -867,6 +879,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     area?: string;
     areaName?: string;
   } = {};
+  let phoneFieldHasBuyerEdit = false;
 
   const readCheckoutFormValues = () => {
     const draft = readCheckoutFormDraft();
@@ -875,7 +888,22 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
       const input = document.querySelector<HTMLInputElement | HTMLTextAreaElement>(
         `[name="${field}"]`,
       );
-      if (input) values[field] = input.value;
+      const inputValue =
+        field === "customerPhone" &&
+        input instanceof HTMLInputElement &&
+        input.dataset.e164Value !== undefined
+          ? input.dataset.e164Value
+          : input?.value;
+      if (
+        field === "customerPhone" &&
+        input &&
+        !phoneFieldHasBuyerEdit &&
+        !inputValue &&
+        draft &&
+        Object.prototype.hasOwnProperty.call(draft, field)
+      ) {
+        values[field] = draft[field] ?? "";
+      } else if (input) values[field] = inputValue ?? "";
       else if (draft && field in draft) values[field] = draft[field] ?? "";
     }
     Object.assign(values, latestDraftLocation);
@@ -894,6 +922,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     )?.value;
     const shippingMethodId =
       window.lastShippingEventDetail?.id || values.shippingLocation;
+    const shippingMethodName = window.lastShippingEventDetail?.name;
     let shippingCharge = "";
     if (cartItems) {
       try {
@@ -913,6 +942,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
       ...(checkoutId ? { checkoutId } : {}),
       ...(discountCodeHidden !== undefined ? { discountCodeHidden } : {}),
       ...(shippingMethodId ? { shippingMethodId } : {}),
+      ...(shippingMethodName ? { shippingMethodName } : {}),
       ...(shippingCharge ? { shippingCharge } : {}),
     });
   };
@@ -932,12 +962,26 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     }, 120);
   };
 
+  document.addEventListener(
+    "astro:before-swap",
+    () => {
+      if (draftWriteTimer !== null) {
+        window.clearTimeout(draftWriteTimer);
+        draftWriteTimer = null;
+      }
+      persistCheckoutFormDraftNow();
+      cartPageAbortController.abort();
+    },
+    { once: true, signal: cartPageSignal },
+  );
+
   const restoreCheckoutFormDraft = () => {
     const draft = readCheckoutFormDraft();
     if (!draft) return;
 
     for (const field of [
       "customerName",
+      "customerPhone",
       "customerEmail",
       "shippingAddress",
       "notes",
@@ -948,12 +992,25 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
       if (input && !input.value && draft[field]) input.value = draft[field] || "";
     }
 
+    if (draft.customerPhone) {
+      window.dispatchEvent(
+        new CustomEvent("phone-prefill", { detail: draft.customerPhone }),
+      );
+    }
   };
 
   runWhenDomReady(() => {
     restoreCheckoutFormDraft();
     const form = document.getElementById("checkoutForm");
-    form?.addEventListener("input", persistCheckoutFormDraft, {
+    form?.addEventListener("input", (event) => {
+      if (
+        event.isTrusted &&
+        (event.target as HTMLInputElement | null)?.id === "customerPhone-input"
+      ) {
+        phoneFieldHasBuyerEdit = true;
+      }
+      persistCheckoutFormDraft();
+    }, {
       signal: cartPageSignal,
     });
     form?.addEventListener("change", persistCheckoutFormDraft, {
@@ -1369,7 +1426,11 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
           );
           return;
         }
-        if (phoneInput) phoneInput.value = phoneValidation.value;
+        if (phoneInput) {
+          phoneInput.value = phoneValidation.value;
+          phoneInput.dataset.e164Value = phoneValidation.value;
+        }
+        persistCheckoutFormDraftNow();
 
         if (!syncShippingAddressValidity(true)) {
           e.preventDefault();
@@ -1465,6 +1526,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
           formData.forEach((value, key) => {
             checkoutData[key] = value as string;
           });
+          checkoutData.customerPhone = phoneValidation.value;
 
           // Also grab location hidden fields that may not be in formData
           const fields = [
@@ -1494,6 +1556,8 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
             window.lastShippingEventDetail?.fee ?? defaultShippingFee;
           const shippingMethodId =
             window.lastShippingEventDetail?.id ?? defaultShippingId;
+          const shippingMethodName = window.lastShippingEventDetail?.name
+            ?? meta?.dataset.defaultShippingName;
 
           const cartDataForShipping = JSON.parse(
             (document.getElementById("cartItemsInput") as HTMLInputElement)
@@ -1507,6 +1571,8 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
           checkoutData["shippingCharge"] = String(shippingFee);
           if (shippingMethodId)
             checkoutData["shippingMethodId"] = shippingMethodId;
+          if (shippingMethodName)
+            checkoutData["shippingMethodName"] = shippingMethodName;
 
           const transferWrite = writeCheckoutTransferSession(
             checkoutData,

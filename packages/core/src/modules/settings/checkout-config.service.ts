@@ -17,6 +17,7 @@ import {
     type CustomerAuthPolicyConfig,
 } from "@scalius/shared/customer-auth-policy";
 import { getRegisteredGateways } from "../payments/gateway-registry";
+import { isPaymentGatewayCurrencyEligible } from "../payments/gateway-currency-policy";
 import {
     getPaymentGatewaySettingsSnapshot,
     type PaymentGatewaySettingsSnapshot,
@@ -150,6 +151,7 @@ export async function getCheckoutConfig(
     const candidateGateways = activePaymentMethods.enabledMethods
         .map((gatewayId) => registeredGatewaysById.get(gatewayId))
         .filter((gateway): gateway is NonNullable<typeof gateway> => Boolean(gateway))
+        .filter((gateway) => isPaymentGatewayCurrencyEligible(gateway.id, localCurrencyCode))
         .filter((gateway) => isCheckoutGatewayUsableForFlow({
             gatewayId: gateway.id,
             checkoutMode,
@@ -169,11 +171,12 @@ export async function getCheckoutConfig(
                 .map(normalizeSupportedCurrencyCode)
                 .filter((code): code is NonNullable<typeof code> => Boolean(code)),
         ));
+        if (!currencies.some((currencyCode) => currencyCode === localCurrencyCode)) continue;
 
         gateways.push({
             id: gw.id,
             name: gw.name,
-            currencies: currencies.length > 0 ? currencies : [localCurrencyCode],
+            currencies,
             ...(gw.getPublicConfig?.(gwSettings as Record<string, unknown>) || {}),
         });
     }

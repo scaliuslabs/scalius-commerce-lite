@@ -72,6 +72,8 @@ describe("checkout settings status presentation", () => {
     expect(gatewaysSource).toContain("Move ${META[method].label} up");
     expect(gatewaysSource).toContain("Move ${META[method].label} down");
     expect(gatewaysSource).toContain("At checkout");
+    expect(gatewaysSource).toContain("SSLCommerz checkout requires BDT. Current store currency:");
+    expect(gatewaysSource).toContain("Payment-method eligibility and saves stay locked until the store currency is known.");
     expect(gatewaysSource).not.toContain("<dt className=\"text-muted-foreground\">Setup</dt>");
     expect(gatewaysSource).toContain("Key environment");
     expect(gatewaysSource).toContain("Key mismatch");

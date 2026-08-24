@@ -2,6 +2,7 @@ import type { OrderReceipt } from "./api/types";
 import type { GatewayConfig } from "./api/checkout";
 import type { OrderSuccessStateKind } from "./order-success-state";
 import { getOrderSuccessVisibleBalanceDue } from "./order-success-state";
+import { getGatewayPresentation } from "./checkout/gateway-presentation";
 
 export type OrderSuccessRetryPaymentType = "full" | "deposit" | "balance";
 export type OrderSuccessRetryGateway = "stripe" | "sslcommerz" | "polar";
@@ -22,12 +23,6 @@ const PAYMENT_BLOCKED_ORDER_STATUSES = new Set([
   "partially_refunded",
 ]);
 const PAYMENT_BLOCKED_PAYMENT_STATUSES = new Set(["paid", "refunded"]);
-const HOSTED_GATEWAY_LABELS: Record<OrderSuccessRetryGateway, string> = {
-  stripe: "Pay by card",
-  sslcommerz: "Pay online with SSLCommerz",
-  polar: "Pay online with Polar",
-};
-
 function normalize(value: string | null | undefined): string {
   return (value ?? "").trim().toLowerCase();
 }
@@ -60,7 +55,8 @@ export function canRetryOrderSuccessPayment(
   if (PAYMENT_BLOCKED_ORDER_STATUSES.has(normalize(order.status))) return false;
   if (PAYMENT_BLOCKED_PAYMENT_STATUSES.has(normalize(order.paymentStatus))) return false;
   if (getOrderSuccessVisibleBalanceDue(order) <= 0) return false;
-  return stateKind === "payment_issue" || isHostedPaymentRetryResult(callbackResult);
+  void callbackResult;
+  return stateKind === "payment_issue";
 }
 
 function normalizeHostedGateway(value: string | null | undefined): OrderSuccessRetryGateway | null {
@@ -86,7 +82,7 @@ export function getOrderSuccessRetryOptions(
     .map((gateway) => normalizeHostedGateway(gateway.id))
     .filter((gateway): gateway is OrderSuccessRetryGateway => gateway !== null);
   const visibleUniqueGateways = [...new Set(visibleHostedGateways)];
-  const allowAlternates = stateKind === "payment_issue" || isHostedPaymentRetryResult(callbackResult);
+  const allowAlternates = stateKind === "payment_issue";
 
   return visibleUniqueGateways
     .filter((gateway) => gateway === currentGateway || allowAlternates)
@@ -96,9 +92,7 @@ export function getOrderSuccessRetryOptions(
         gateway,
         endpoint: getOrderSuccessRetryEndpoint(gateway) ?? "",
         current,
-        label: current
-          ? gateway === "stripe" ? "Retry card payment" : "Retry payment"
-          : HOSTED_GATEWAY_LABELS[gateway],
+        label: getGatewayPresentation(gateway, gateway).buyerLabel,
         requiresCardForm: gateway === "stripe",
       };
     })

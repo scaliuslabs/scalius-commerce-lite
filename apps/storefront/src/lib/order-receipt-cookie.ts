@@ -2,6 +2,13 @@ const RECEIPT_COOKIE_PREFIX = "scalius_receipt_";
 const RECEIPT_FINALIZE_COOKIE_PREFIX = "scalius_receipt_finalize_";
 export const ORDER_RECEIPT_COOKIE_MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
 export const ORDER_RECEIPT_FINALIZE_COOKIE_MAX_AGE_SECONDS = 10 * 60;
+const CHECKOUT_ID_PATTERN = /^[A-Za-z0-9:_-]{16,128}$/;
+const CART_FINGERPRINT_HASH_PATTERN = /^cartfp_[A-Za-z0-9_-]{43}$/;
+
+export interface OrderReceiptFinalizeMarker {
+  checkoutId: string | null;
+  cartFingerprintHash: string | null;
+}
 
 function fnv1a32(value: string): string {
   let hash = 0x811c9dc5;
@@ -46,12 +53,23 @@ export function createOrderReceiptCookieHeader(orderId: string, receiptToken: st
   ].join("; ");
 }
 
-export function createOrderReceiptFinalizeCookieHeader(orderId: string): string | null {
+export function createOrderReceiptFinalizeCookieHeader(
+  orderId: string,
+  marker?: { checkoutId: string; cartFingerprintHash: string | null },
+): string | null {
   const normalizedOrderId = orderId.trim();
   if (!normalizedOrderId) return null;
 
+  const normalizedCheckoutId = marker?.checkoutId.trim() ?? "";
+  const normalizedCartHash = marker?.cartFingerprintHash?.trim() ?? "";
+  const value = marker
+    && CHECKOUT_ID_PATTERN.test(normalizedCheckoutId)
+    && CART_FINGERPRINT_HASH_PATTERN.test(normalizedCartHash)
+      ? `v1.${normalizedCheckoutId}.${normalizedCartHash}`
+      : "1";
+
   return [
-    `${getOrderReceiptFinalizeCookieName(normalizedOrderId)}=1`,
+    `${getOrderReceiptFinalizeCookieName(normalizedOrderId)}=${value}`,
     `Max-Age=${ORDER_RECEIPT_FINALIZE_COOKIE_MAX_AGE_SECONDS}`,
     "Path=/order-success",
     "HttpOnly",
@@ -78,14 +96,36 @@ export function hasOrderReceiptFinalizeCookie(
   cookieHeader: string | null | undefined,
   orderId: string,
 ): boolean {
+  return readOrderReceiptFinalizeCookie(cookieHeader, orderId) !== null;
+}
+
+export function readOrderReceiptFinalizeCookie(
+  cookieHeader: string | null | undefined,
+  orderId: string,
+): OrderReceiptFinalizeMarker | null {
   const normalizedOrderId = orderId.trim();
-  if (!cookieHeader || !normalizedOrderId) return false;
+  if (!cookieHeader || !normalizedOrderId) return null;
 
   const cookieName = getOrderReceiptFinalizeCookieName(normalizedOrderId);
-  return cookieHeader.split(";").some((part) => {
+  for (const part of cookieHeader.split(";")) {
     const [rawName, ...rawValueParts] = part.trim().split("=");
-    return rawName === cookieName && rawValueParts.join("=") === "1";
-  });
+    if (rawName !== cookieName) continue;
+    const rawValue = rawValueParts.join("=");
+    if (rawValue === "1") {
+      return { checkoutId: null, cartFingerprintHash: null };
+    }
+    const [version, checkoutId, cartFingerprintHash, ...extra] = rawValue.split(".");
+    if (
+      version !== "v1"
+      || extra.length > 0
+      || !CHECKOUT_ID_PATTERN.test(checkoutId ?? "")
+      || !CART_FINGERPRINT_HASH_PATTERN.test(cartFingerprintHash ?? "")
+    ) {
+      return null;
+    }
+    return { checkoutId, cartFingerprintHash };
+  }
+  return null;
 }
 
 export function readOrderReceiptCookie(cookieHeader: string | null | undefined, orderId: string): string {

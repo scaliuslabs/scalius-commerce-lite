@@ -182,6 +182,51 @@ describe("getCheckoutConfig", () => {
         ]);
     });
 
+    it("does not advertise a gateway that cannot process the store currency", async () => {
+        mocks.getRegisteredGateways.mockReturnValue([
+            {
+                id: "sslcommerz",
+                name: "SSLCommerz",
+                settingsCategory: "sslcommerz",
+                getCurrencies: () => ["bdt"],
+            },
+            {
+                id: "cod",
+                name: "Cash on Delivery",
+                settingsCategory: "cod",
+                getCurrencies: (localCurrency: string) => [localCurrency],
+            },
+        ]);
+        mocks.getPaymentGatewaySettingsSnapshot.mockResolvedValue({
+            preferences: {
+                enabledMethods: ["sslcommerz", "cod"],
+                defaultMethod: "sslcommerz",
+                hasExplicitEnabledMethods: true,
+            },
+            activePaymentMethods: {
+                enabledMethods: ["sslcommerz", "cod"],
+                defaultMethod: "sslcommerz",
+            },
+            settings: {
+                stripe: null,
+                sslcommerz: { enabled: true, sandbox: true },
+                polar: null,
+                cod: { enabled: true },
+            },
+        });
+
+        const config = await getCheckoutConfig(createDb({}, undefined, {
+            currencyRows: [
+                { key: "currency_code", value: "USD" },
+                { key: "currency_symbol", value: "$" },
+            ],
+        }) as never);
+
+        expect(config.gateways.map((gateway) => gateway.id)).toEqual(["cod"]);
+        expect(config.activeDefaultMethod).toBeUndefined();
+        expect(config.unavailable).toBe(false);
+    });
+
     it("publishes the active default only when it survives public gateway readiness", async () => {
         mockGatewaySnapshot({
             enabledMethods: ["stripe", "cod"],

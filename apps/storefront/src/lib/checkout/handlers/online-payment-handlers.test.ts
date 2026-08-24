@@ -59,11 +59,11 @@ function makeContext(config: CheckoutConfig = partialConfig): PaymentContext {
 }
 
 function recoveryUrl(gateway: string): string {
-  return `/order-success?orderId=order_1&payment=${gateway}&result=failed&paymentType=deposit&depositAmount=50`;
+  return `/order-success?orderId=order_1&payment=${gateway}&paymentType=deposit&depositAmount=50`;
 }
 
 function failedRecoveryUrl(gateway: string): string {
-  return recoveryUrl(gateway);
+  return `/order-success?orderId=order_1&payment=${gateway}&result=failed&paymentType=deposit&depositAmount=50`;
 }
 
 beforeEach(() => {

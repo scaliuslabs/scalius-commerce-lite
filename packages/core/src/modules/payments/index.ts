@@ -50,6 +50,16 @@ export {
 } from "./gateway-registry";
 export type { GatewayMeta } from "./gateway-registry";
 
+// --- Store-currency eligibility ---
+export {
+  PAYMENT_GATEWAY_IDS,
+  filterPaymentGatewayIdsForCurrency,
+  getPaymentGatewayCurrencyEligibilityIssue,
+  isPaymentGatewayCurrencyEligible,
+  isPaymentGatewayId,
+} from "./gateway-currency-policy";
+export type { PaymentGatewayId } from "./gateway-currency-policy";
+
 // --- Gateway settings ---
 export {
   getStripeSettings,

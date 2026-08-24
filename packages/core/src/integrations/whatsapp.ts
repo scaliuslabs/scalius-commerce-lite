@@ -71,8 +71,8 @@ interface WhatsAppCloudApiSettingsOptions {
   migrationEncryptionKey?: string;
 }
 
-const WHATSAPP_SETTINGS_CATEGORY = "whatsapp";
-const WHATSAPP_ACCESS_TOKEN_KEY = "access_token";
+export const WHATSAPP_SETTINGS_CATEGORY = "whatsapp";
+export const WHATSAPP_ACCESS_TOKEN_KEY = "access_token";
 const ENCRYPTED_VALUE_PREFIX = "enc:";
 const PLACEHOLDER_EXACT_VALUES = new Set([
   "000000",

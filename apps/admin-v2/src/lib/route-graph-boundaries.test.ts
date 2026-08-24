@@ -1924,7 +1924,8 @@ describe("admin route graph boundaries", () => {
     );
     expect(paymentSource).toContain("const isHydrated = useHydrated()");
     expect(paymentSource).toContain("enabled: isHydrated");
-    expect(paymentSource).toContain("enabled: isHydrated && isCOD");
+    expect(paymentSource).toContain("enabled: isHydrated && usesCashCollection");
+    expect(paymentSource).toContain("const usesCashCollection = isCOD || hasCashBalanceDueOnDelivery");
     expect(paymentSource).toContain("(!isHydrated || paymentsLoading)");
     expect(notificationsSource).toContain("const isHydrated = useHydrated()");
     expect(notificationsSource).toContain("enabled: isHydrated");

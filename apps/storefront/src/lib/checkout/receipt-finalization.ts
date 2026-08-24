@@ -17,13 +17,16 @@ export function resolveCheckoutReceiptCleanup(options: {
   receiptState: CheckoutReceiptState;
   recoveryMatchesOrder: boolean;
   recoveryMatchesCheckout: boolean;
+  directCheckoutMatches?: boolean;
   acceptedCheckout: boolean;
 }): CheckoutReceiptCleanupDecision {
   const settledReceipt = options.receiptState === "order_placed"
     || options.receiptState === "order_updated";
   const exactCheckout = settledReceipt
-    && options.recoveryMatchesOrder
-    && options.recoveryMatchesCheckout;
+    && (
+      (options.recoveryMatchesOrder && options.recoveryMatchesCheckout)
+      || options.directCheckoutMatches === true
+    );
   const clearAcceptedCheckout = exactCheckout && options.acceptedCheckout;
 
   return {

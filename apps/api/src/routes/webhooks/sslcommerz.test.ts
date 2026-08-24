@@ -38,7 +38,10 @@ vi.mock("../../utils/webhook-idempotency", async (importOriginal) => {
   };
 });
 
-import { sslcommerzWebhookRoutes } from "./sslcommerz";
+import {
+  reconcileValidatedSSLCommerzSuccess,
+  sslcommerzWebhookRoutes,
+} from "./sslcommerz";
 
 const defaultOrder = {
   id: "ord_1",
@@ -452,6 +455,128 @@ describe("SSLCommerz webhook route", () => {
       "sslcommerz:ipn:ord_1:val_1",
       expect.objectContaining({
         error: "Validated payment type or amount is inconsistent with server-side order state",
+      }),
+    );
+  });
+
+  it("uses the IPN event identity for buyer-return reconciliation so a late IPN cannot enqueue twice", async () => {
+    const validation = {
+      status: "VALID" as const,
+      tran_id: "ord_1_full_ABC12345",
+      val_id: "val_1",
+      amount: "100.50",
+      store_amount: "100.50",
+      bank_tran_id: "bank_1",
+      currency_type: "BDT",
+      currency_amount: "100.50",
+      card_type: "VISA",
+      card_brand: "VISA",
+      value_a: "full",
+      value_b: "ord_1",
+    };
+    const queue = { send: vi.fn().mockResolvedValue(undefined) };
+    const db = createDb();
+
+    const buyerReturn = await reconcileValidatedSSLCommerzSuccess({
+      db: db as never,
+      queue: queue as unknown as Queue,
+      validation,
+      requestedValId: "val_1",
+      expectedTranId: "ord_1_full_ABC12345",
+      expectedOrderId: "ord_1",
+      expectedPaymentType: "full",
+      source: "buyer_return",
+    });
+    expect(buyerReturn.status).toBe("queued");
+    expect(queue.send).toHaveBeenCalledWith(expect.objectContaining({
+      webhookEventId: "sslcommerz:ipn:ord_1_full_abc12345:val_1",
+    }));
+
+    mocks.claimWebhookEvent.mockResolvedValueOnce({
+      claimed: false,
+      existing: { status: "queued" },
+    });
+    const lateIpn = await reconcileValidatedSSLCommerzSuccess({
+      db: db as never,
+      queue: queue as unknown as Queue,
+      validation,
+      requestedValId: "val_1",
+      source: "ipn",
+    });
+
+    expect(lateIpn.status).toBe("duplicate");
+    expect(queue.send).toHaveBeenCalledTimes(1);
+    expect(mocks.claimWebhookEvent).toHaveBeenLastCalledWith(
+      expect.objectContaining({ id: "db" }),
+      expect.objectContaining({ id: "sslcommerz:ipn:ord_1_full_abc12345:val_1" }),
+    );
+  });
+
+  it("rejects a buyer return whose transaction, order, or payment type differs from provider validation", async () => {
+    const queue = { send: vi.fn().mockResolvedValue(undefined) };
+    const result = await reconcileValidatedSSLCommerzSuccess({
+      db: createDb() as never,
+      queue: queue as unknown as Queue,
+      validation: {
+        status: "VALID",
+        tran_id: "ord_1_full_ABC12345",
+        val_id: "val_1",
+        amount: "100.50",
+        store_amount: "100.50",
+        bank_tran_id: "bank_1",
+        currency_type: "BDT",
+        currency_amount: "100.50",
+        card_type: "VISA",
+        value_a: "full",
+        value_b: "ord_1",
+      },
+      requestedValId: "val_1",
+      expectedTranId: "ord_2_deposit_ABC12345",
+      expectedOrderId: "ord_2",
+      expectedPaymentType: "deposit",
+      source: "buyer_return",
+    });
+
+    expect(result.status).toBe("invalid");
+    expect(mocks.claimWebhookEvent).not.toHaveBeenCalled();
+    expect(queue.send).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when the provider currency differs from the stored order currency", async () => {
+    const queue = { send: vi.fn().mockResolvedValue(undefined) };
+    const db = createDb({
+      order: { ...defaultOrder, currencyCode: "USD" },
+    });
+    const result = await reconcileValidatedSSLCommerzSuccess({
+      db: db as never,
+      queue: queue as unknown as Queue,
+      validation: {
+        status: "VALID",
+        tran_id: "ord_1_full_ABC12345",
+        val_id: "val_1",
+        amount: "100.50",
+        store_amount: "100.50",
+        bank_tran_id: "bank_1",
+        currency_type: "BDT",
+        currency_amount: "100.50",
+        card_type: "VISA",
+        value_a: "full",
+        value_b: "ord_1",
+      },
+      requestedValId: "val_1",
+      expectedTranId: "ord_1_full_ABC12345",
+      expectedOrderId: "ord_1",
+      expectedPaymentType: "full",
+      source: "buyer_return",
+    });
+
+    expect(result.status).toBe("retry");
+    expect(queue.send).not.toHaveBeenCalled();
+    expect(mocks.markWebhookEventFailed).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "db" }),
+      "sslcommerz:ipn:ord_1_full_abc12345:val_1",
+      expect.objectContaining({
+        error: "Validated payment currency is inconsistent with the order currency",
       }),
     );
   });
