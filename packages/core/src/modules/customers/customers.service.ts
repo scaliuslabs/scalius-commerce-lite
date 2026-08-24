@@ -81,9 +81,10 @@ export interface CustomerOrderShipmentSummary {
 }
 
 /**
- * D1 maps batched query rows positionally. Keep the second projection of the
- * legacy `price` column explicitly aliased so its duplicate SQL column name
- * cannot collapse and shift the immutable minor-unit fields that follow it.
+ * Some one-shot database adapters map batched query rows positionally. Keep
+ * the second projection of the legacy `price` column explicitly aliased so a
+ * duplicate SQL column name cannot collapse and shift the immutable
+ * minor-unit fields that follow it. The query stays provider-neutral.
  */
 export function buildCustomerOrderItemDetailProjection() {
     return {

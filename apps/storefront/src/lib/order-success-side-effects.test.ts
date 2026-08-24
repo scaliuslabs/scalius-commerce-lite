@@ -76,6 +76,7 @@ describe("order success side effects", () => {
     expect(buttonsSource).toContain("/api/order-receipt/claim-account");
     expect(buttonsSource).toContain("Create account");
     expect(buttonsSource).toContain("Sign in");
+    expect(buttonsSource.match(/className="min-h-11[^"]*font-medium"/g)).toHaveLength(4);
     expect(buttonsSource).toContain("open-auth-modal");
     expect(buttonsSource).toContain("/account/orders/${encodeURIComponent(orderId)}");
   });

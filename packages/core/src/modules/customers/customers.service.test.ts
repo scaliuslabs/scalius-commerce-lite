@@ -261,7 +261,7 @@ describe("customers service session revocation", () => {
 });
 
 describe("customer account order money projection", () => {
-  it("aliases the repeated price projection before saved minor-unit fields", () => {
+  it("keeps the repeated price projection provider-safe before saved minor-unit fields", () => {
     const projection = buildCustomerOrderItemDetailProjection();
     const dialect = new SQLiteSyncDialect();
     const unitPriceSql = dialect.sqlToQuery(projection.unitPrice.sql).sql;
