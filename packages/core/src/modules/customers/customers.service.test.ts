@@ -296,6 +296,14 @@ describe("customer account order money projection", () => {
       paidAmount: 0,
       balanceDue: 100,
     })).toBe(0);
+
+    expect(getCustomerVisibleBalanceDue({
+      status: OrderStatus.PENDING,
+      paymentStatus: PaymentStatus.FAILED,
+      totalAmount: 100,
+      paidAmount: 0,
+      balanceDue: 100,
+    })).toBe(0);
   });
 
   it("keeps stored active balances with a safe computed fallback", () => {
@@ -314,6 +322,14 @@ describe("customer account order money projection", () => {
       paidAmount: 25,
       balanceDue: null,
     })).toBe(75);
+
+    expect(getCustomerVisibleBalanceDue({
+      status: OrderStatus.INCOMPLETE,
+      paymentStatus: PaymentStatus.FAILED,
+      totalAmount: 100,
+      paidAmount: 0,
+      balanceDue: 100,
+    })).toBe(100);
   });
 
   it("summarizes lifetime account stats independently from displayed order pages", () => {

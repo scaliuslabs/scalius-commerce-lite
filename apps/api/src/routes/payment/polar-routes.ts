@@ -11,6 +11,7 @@ import { ok } from "../../utils/api-response";
 import { createPolarPaymentSession, isPaymentSessionProcessingResult } from "./payment-session-create";
 import { acceptedPaymentSessionProcessing, paymentSessionProcessingResponse } from "./payment-session-response";
 import { reconcilePolarOrderPayment } from "./polar-reconciliation";
+import { reconcileHostedPaymentReturn } from "@scalius/core/modules/payments/hosted-payment-return";
 
 export const polarPaymentRoutes = new OpenAPIHono<{ Bindings: Env }>();
 const RECEIPT_TOKEN_HEADER = "X-Receipt-Token";
@@ -125,6 +126,11 @@ function getCallbackDepositAmount(c: { req: { query: (key: string) => string | u
     return Number.isFinite(amount) && amount > 0 ? value : "";
 }
 
+function getHostedReturnNonce(c: { req: { query: (key: string) => string | undefined } }): string | null {
+    const nonce = c.req.query("return_nonce")?.trim() ?? "";
+    return /^hpr_[a-f0-9]{64}$/.test(nonce) ? nonce : null;
+}
+
 function shouldReturnToAccount(c: { req: { query: (key: string) => string | undefined } }): boolean {
     return c.req.query("return_to") === "account" || c.req.query("returnTo") === "account";
 }
@@ -227,16 +233,29 @@ polarPaymentRoutes.get("/cancel", async (c) => {
     const orderId = c.req.query("order_id") ?? "";
 
     if (storefrontUrl) {
+        let showCancelledResult = false;
         if (orderId) {
             const db: Database = c.get("db");
             const invalidRedirect = await validateCallbackOrder(db, orderId, storefrontUrl);
             if (invalidRedirect) return c.redirect(invalidRedirect);
+            const paymentType = getCallbackPaymentType(c);
+            const returnNonce = getHostedReturnNonce(c);
+            if (paymentType && returnNonce) {
+                const outcome = await reconcileHostedPaymentReturn(db, {
+                    orderId,
+                    gateway: "polar",
+                    paymentType,
+                    result: "cancelled",
+                    providerCorrelationId: returnNonce,
+                });
+                showCancelledResult = outcome === "retry_ready";
+            }
         }
         if (shouldReturnToAccount(c) && orderId) {
             return c.redirect(buildStorefrontAccountOrderUrl(storefrontUrl, {
                 orderId,
                 payment: "polar",
-                result: "cancelled",
+                result: showCancelledResult ? "cancelled" : undefined,
                 paymentType: getCallbackPaymentType(c),
             }));
         }
@@ -247,7 +266,7 @@ polarPaymentRoutes.get("/cancel", async (c) => {
         return c.redirect(buildStorefrontOrderSuccessUrl(storefrontUrl, {
             orderId,
             payment: "polar",
-            result: "cancelled",
+            result: showCancelledResult ? "cancelled" : undefined,
             paymentType: getCallbackPaymentType(c),
             depositAmount: getCallbackDepositAmount(c),
         }));

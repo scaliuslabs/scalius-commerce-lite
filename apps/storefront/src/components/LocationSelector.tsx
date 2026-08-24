@@ -124,15 +124,12 @@ export default function LocationSelector({
     [],
   );
 
-  const notifySelection = useCallback(
-    (selection: LocationSelection) => {
-      onSelectionChangeRef.current?.(selection);
-      window.dispatchEvent(
-        new CustomEvent("checkout-location-change", { detail: selection }),
-      );
-    },
-    [],
-  );
+  const notifySelection = useCallback((selection: LocationSelection) => {
+    onSelectionChangeRef.current?.(selection);
+    window.dispatchEvent(
+      new CustomEvent("checkout-location-change", { detail: selection }),
+    );
+  }, []);
 
   const prefillLocation = useCallback(
     async (detail: LocationPrefillDetail) => {
@@ -144,6 +141,9 @@ export default function LocationSelector({
       setSelectedArea("");
       setZones([]);
       setAreas([]);
+      areaRequestId.current += 1;
+      setIsLoadingAreas(false);
+      setAreaLoadFailed(false);
       notifySelection({
         cityId: city.id,
         cityName: city.name,
@@ -163,6 +163,14 @@ export default function LocationSelector({
 
       setSelectedZone(zone.id);
       dispatchZoneSelected(zone.id, nextZones);
+      notifySelection({
+        cityId: city.id,
+        cityName: city.name,
+        zoneId: zone.id,
+        zoneName: zone.name,
+        areaId: "",
+        areaName: "",
+      });
 
       const nextAreas = showAreaField ? await loadAreas(zone.id) : [];
       const area = resolveLocationOption(
@@ -173,15 +181,15 @@ export default function LocationSelector({
       const areaId = area?.id ?? "";
       if (areaId) {
         setSelectedArea(areaId);
+        notifySelection({
+          cityId: city.id,
+          cityName: city.name,
+          zoneId: zone.id,
+          zoneName: zone.name,
+          areaId,
+          areaName: area?.name ?? "",
+        });
       }
-      notifySelection({
-        cityId: city.id,
-        cityName: city.name,
-        zoneId: zone.id,
-        zoneName: zone.name,
-        areaId,
-        areaName: area?.name ?? "",
-      });
     },
     [
       cities,
@@ -225,6 +233,7 @@ export default function LocationSelector({
     setZoneLoadFailed(false);
     setAreaLoadFailed(false);
     areaRequestId.current += 1;
+    setIsLoadingAreas(false);
     notifySelection({
       cityId: value,
       cityName: city?.name || "",
@@ -242,6 +251,9 @@ export default function LocationSelector({
     setSelectedZone(value);
     setSelectedArea("");
     setAreas([]);
+    areaRequestId.current += 1;
+    setIsLoadingAreas(false);
+    setAreaLoadFailed(false);
     notifySelection({
       cityId: selectedCity,
       cityName: city?.name || "",

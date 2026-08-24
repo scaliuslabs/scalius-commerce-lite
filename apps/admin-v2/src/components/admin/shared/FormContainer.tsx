@@ -26,6 +26,8 @@ interface FormContainerProps<T extends FieldValues> {
    * consumer deliberately maps its create/edit API permission.
    */
   canSave: boolean;
+  /** Whether the current form values pass client-side validation. */
+  isFormValid?: boolean;
   /** Optional explanation exposed on the disabled save action. */
   saveDisabledReason?: string;
   /** Custom save button label. Defaults to "Save {title}" / "Create {title}" */
@@ -60,6 +62,7 @@ export function FormContainer<T extends FieldValues>({
   newLabel,
   canCreateNew = true,
   canSave,
+  isFormValid = true,
   saveDisabledReason,
   saveLabel,
   form,
@@ -82,7 +85,7 @@ export function FormContainer<T extends FieldValues>({
           method="post"
           onSubmit={(e) => {
             e.preventDefault();
-            if (canSave && form.formState.isDirty) onSubmit();
+            if (canSave && form.formState.isDirty && isFormValid) onSubmit();
           }}
           className={formClassName}
           noValidate
@@ -104,6 +107,7 @@ export function FormContainer<T extends FieldValues>({
           newLabel={newLabel}
           canCreateNew={canCreateNew}
           canSave={canSave}
+          isFormValid={isFormValid}
           saveDisabledReason={saveDisabledReason}
           saveLabel={saveLabel}
           onSave={onSubmit}

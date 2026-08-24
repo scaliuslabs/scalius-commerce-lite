@@ -18,6 +18,10 @@ import { acceptedPaymentSessionProcessing, paymentSessionProcessingResponse } fr
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import { withPaymentProviderDeadline } from "./payment-provider-deadline";
 import { reconcileValidatedSSLCommerzSuccess } from "../webhooks/sslcommerz";
+import {
+  reconcileHostedPaymentReturn,
+  type HostedPaymentReturnResult,
+} from "@scalius/core/modules/payments/hosted-payment-return";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const RECEIPT_TOKEN_HEADER = "X-Receipt-Token";
@@ -117,6 +121,16 @@ async function extractTranId(c: { req: { method: string; parseBody: () => Promis
   return c.req.query("tran_id") ?? "";
 }
 
+async function extractPostedTranId(c: SslCallbackContext): Promise<string> {
+  if (c.req.method !== "POST") return "";
+  try {
+    const body = await c.req.parseBody();
+    return typeof body.tran_id === "string" ? body.tran_id.trim() : "";
+  } catch {
+    return "";
+  }
+}
+
 async function resolveCallbackOrderId(c: {
   req: {
     method: string;
@@ -143,7 +157,7 @@ type SslCallbackContext = {
     query: (key: string) => string | undefined;
   };
   env?: { STOREFRONT_URL?: string };
-  get: (key: "db") => Pick<Database, "select">;
+  get: (key: "db") => Database;
 };
 
 function normalizeCallbackPaymentType(value: string | undefined): "full" | "deposit" | "balance" | "" {
@@ -211,8 +225,12 @@ function buildStorefrontAccountOrderUrl(
   return url.toString();
 }
 
-async function buildSslCallbackRedirectUrl(c: SslCallbackContext, result?: "failed" | "cancelled"): Promise<string> {
-  const orderId = await resolveCallbackOrderId(c);
+async function buildSslCallbackRedirectUrl(
+  c: SslCallbackContext,
+  result?: HostedPaymentReturnResult,
+  resolvedOrderId?: string,
+): Promise<string> {
+  const orderId = resolvedOrderId ?? await resolveCallbackOrderId(c);
   const storefront = getStorefrontUrl(c);
 
   if (orderId) {
@@ -242,6 +260,43 @@ async function buildSslCallbackRedirectUrl(c: SslCallbackContext, result?: "fail
     paymentType: getCallbackPaymentType(c),
     depositAmount: getCallbackDepositAmount(c),
   });
+}
+
+async function handleUnsuccessfulSslReturn(
+  c: SslCallbackContext & { redirect: (url: string) => Response },
+  result: HostedPaymentReturnResult,
+): Promise<Response> {
+  // Fail/cancel returns are unsigned. Only the provider's POSTed transaction
+  // correlation can select an attempt; query values remain redirect context.
+  const tranId = await extractPostedTranId(c);
+  const parsedTran = parseSSLCommerzTranId(tranId);
+  const queryOrderId = c.req.query("order_id")?.trim() ?? "";
+  const queryPaymentType = getCallbackPaymentType(c);
+  const orderId = queryOrderId || parsedTran.orderId;
+  const paymentType = queryPaymentType || parsedTran.paymentType;
+
+  const callbackContextMatches = Boolean(
+    tranId &&
+    orderId &&
+    paymentType &&
+    (!queryOrderId || !parsedTran.orderId || queryOrderId === parsedTran.orderId) &&
+    (!queryPaymentType || !parsedTran.paymentType || queryPaymentType === parsedTran.paymentType)
+  );
+  const outcome = callbackContextMatches && paymentType
+    ? await reconcileHostedPaymentReturn(c.get("db"), {
+        orderId,
+        gateway: "sslcommerz",
+        paymentType,
+        result,
+        providerCorrelationId: tranId,
+      })
+    : "ignored";
+
+  return c.redirect(await buildSslCallbackRedirectUrl(
+    c,
+    outcome === "retry_ready" ? result : undefined,
+    orderId,
+  ));
 }
 
 app.post("/success", async (c) => {
@@ -302,19 +357,19 @@ app.get("/success", async (c) => {
 });
 
 app.post("/fail", async (c) => {
-  return c.redirect(await buildSslCallbackRedirectUrl(c, "failed"));
+  return handleUnsuccessfulSslReturn(c, "failed");
 });
 
 app.get("/fail", async (c) => {
-  return c.redirect(await buildSslCallbackRedirectUrl(c, "failed"));
+  return handleUnsuccessfulSslReturn(c, "failed");
 });
 
 app.post("/cancel", async (c) => {
-  return c.redirect(await buildSslCallbackRedirectUrl(c, "cancelled"));
+  return handleUnsuccessfulSslReturn(c, "cancelled");
 });
 
 app.get("/cancel", async (c) => {
-  return c.redirect(await buildSslCallbackRedirectUrl(c, "cancelled"));
+  return handleUnsuccessfulSslReturn(c, "cancelled");
 });
 
 export const sslcommerzPaymentRoutes = app;

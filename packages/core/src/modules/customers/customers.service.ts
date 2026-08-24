@@ -195,7 +195,6 @@ const CUSTOMER_CLOSED_BALANCE_ORDER_STATUSES = [
 const CUSTOMER_CLOSED_BALANCE_ORDER_STATUS_SET = new Set<string>(CUSTOMER_CLOSED_BALANCE_ORDER_STATUSES);
 
 const CUSTOMER_CLOSED_BALANCE_PAYMENT_STATUSES = [
-    PaymentStatus.FAILED,
     PaymentStatus.REFUNDED,
 ] as const;
 const CUSTOMER_CLOSED_BALANCE_PAYMENT_STATUS_SET = new Set<string>(CUSTOMER_CLOSED_BALANCE_PAYMENT_STATUSES);
@@ -280,7 +279,11 @@ function normalizeCustomerOrdersLimit(limit: number | undefined): number {
 export function getCustomerVisibleBalanceDue(order: CustomerOrderMoneyState): number {
     if (
         CUSTOMER_CLOSED_BALANCE_ORDER_STATUS_SET.has(order.status) ||
-        CUSTOMER_CLOSED_BALANCE_PAYMENT_STATUS_SET.has(order.paymentStatus)
+        CUSTOMER_CLOSED_BALANCE_PAYMENT_STATUS_SET.has(order.paymentStatus) ||
+        (
+            order.paymentStatus === PaymentStatus.FAILED &&
+            order.status !== OrderStatus.INCOMPLETE
+        )
     ) {
         return 0;
     }
