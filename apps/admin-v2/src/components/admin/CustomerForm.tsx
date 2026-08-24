@@ -71,6 +71,7 @@ export function CustomerForm({
     : canCreate;
   const form = useForm<CustomerFormValues>({
     resolver: zodResolver(customerFormSchema),
+    mode: "onChange",
     defaultValues: {
       name: "",
       email: null,
@@ -145,6 +146,7 @@ export function CustomerForm({
       newLabel="New customer"
       canCreateNew={canCreate}
       canSave={canSave}
+      isFormValid={form.formState.isValid}
       saveLabel={isEdit ? "Save customer" : "Create customer"}
       saveDisabledReason={isEdit
         ? "You do not have permission to edit customers."

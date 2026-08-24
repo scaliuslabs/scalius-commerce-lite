@@ -981,7 +981,6 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
 
     for (const field of [
       "customerName",
-      "customerPhone",
       "customerEmail",
       "shippingAddress",
       "notes",
@@ -1425,10 +1424,6 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
             }),
           );
           return;
-        }
-        if (phoneInput) {
-          phoneInput.value = phoneValidation.value;
-          phoneInput.dataset.e164Value = phoneValidation.value;
         }
         persistCheckoutFormDraftNow();
 

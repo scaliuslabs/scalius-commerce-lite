@@ -91,3 +91,17 @@ describe("resource form canonical validation", () => {
     );
   });
 });
+
+describe("customer form phone validation", () => {
+  it("shares the strict phone parser used by the customer API", () => {
+    const formSchemasSource = readFileSync(FORM_SCHEMAS_SOURCE, "utf8");
+
+    expect(formSchemasSource).toContain(
+      'import { phoneNumberSchema } from "@scalius/shared/customer-utils";',
+    );
+    expect(formSchemasSource).toContain("phone: phoneNumberSchema,");
+    expect(formSchemasSource).not.toMatch(
+      /phone:\s*z\s*\.string\(\)\s*\.min\(7/,
+    );
+  });
+});

@@ -11,6 +11,7 @@
 import { z } from "zod";
 import { getActiveAnalyticsConfigError } from "@scalius/core/modules/analytics/analytics.validation";
 import { categoryStatusSchema } from "@scalius/shared/category-publication";
+import { phoneNumberSchema } from "@scalius/shared/customer-utils";
 import { PAGE_PUBLICATION_MODES } from "@/lib/page-publication";
 import {
   analyticsScriptTypes,
@@ -236,10 +237,7 @@ export const customerFormSchema = z.object({
     .min(3, "Name must be at least 3 characters")
     .max(100, "Name must be less than 100 characters"),
   email: z.email().nullable(),
-  phone: z
-    .string()
-    .min(7, "Phone number too short")
-    .max(16, "Phone number too long"),
+  phone: phoneNumberSchema,
   address: z
     .string()
     .max(500, "Address must be less than 500 characters")

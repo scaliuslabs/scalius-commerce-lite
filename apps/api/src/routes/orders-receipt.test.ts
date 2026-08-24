@@ -379,6 +379,30 @@ describe("order receipt route", () => {
     },
   );
 
+  it("exposes the retryable balance for an incomplete failed hosted order", async () => {
+    const { app, kv } = createTestApp({
+      tokenOrderId: "order_1",
+      orderRowOverride: {
+        status: "incomplete",
+        paymentStatus: "failed",
+        paidAmount: 0,
+        balanceDue: 250,
+      },
+    });
+
+    const response = await app.request(
+      "/api/v1/orders/receipt/order_1",
+      { headers: { "X-Receipt-Token": "chk_valid" } },
+      { CACHE: kv } as never,
+    );
+    const body = await response.json() as {
+      data?: { order?: { balanceDue?: number } };
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.data?.order?.balanceDue).toBe(250);
+  });
+
   it("falls back to D1 checkout attempts, records receipt proof, and repairs KV when receipt row is missing", async () => {
     const { app, db, kv } = createTestApp({
       tokenOrderId: null,

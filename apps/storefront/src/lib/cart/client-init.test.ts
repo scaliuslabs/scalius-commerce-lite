@@ -11,6 +11,7 @@ import {
   type Discount,
 } from "../../store/cart";
 import type { CartValidationIssue } from "../api/orders";
+import type { CheckoutTaxQuote } from "../checkout/tax-quote-contract";
 import { CHECKOUT_CART_REPAIR_STORAGE_KEY } from "./repair-state";
 import { writeHostedPaymentRecoverySession } from "../checkout/session-state";
 import { initCartFunctionality, resumeCartPageFromHistory } from "./client";
@@ -25,6 +26,11 @@ const taxQuoteMocks = vi.hoisted(() => ({
   fetchAuthoritativeTaxQuote: vi.fn(),
 }));
 
+const analyticsMocks = vi.hoisted(() => ({
+  trackFbAddToCart: vi.fn(),
+  trackFbInitiateCheckout: vi.fn(),
+}));
+
 vi.mock("@/lib/api", () => ({
   getActiveCheckoutLanguage: apiMocks.getActiveCheckoutLanguage,
   saveAbandonedCheckout: apiMocks.saveAbandonedCheckout,
@@ -32,8 +38,8 @@ vi.mock("@/lib/api", () => ({
 }));
 
 vi.mock("@/lib/analytics", () => ({
-  trackFbAddToCart: vi.fn(),
-  trackFbInitiateCheckout: vi.fn(),
+  trackFbAddToCart: analyticsMocks.trackFbAddToCart,
+  trackFbInitiateCheckout: analyticsMocks.trackFbInitiateCheckout,
 }));
 
 vi.mock("../checkout/tax-quote-client", () => ({
@@ -57,6 +63,30 @@ const cartState: CartStore = {
   totalAmount: 100,
   discount: null,
 };
+
+function taxQuote(totalAmount: number, zone = "zone_banani"): CheckoutTaxQuote {
+  return {
+    valid: true,
+    quoteFingerprint: `taxq_${zone.padEnd(22, "0")}`,
+    displayLabel: "VAT",
+    pricesIncludeTax: false,
+    shippingTaxed: true,
+    currencyCode: "BDT",
+    decimalPlaces: 2,
+    settingsVersion: 4,
+    subtotalMinor: 10_000,
+    subtotalAmount: 100,
+    shippingMinor: 6_000,
+    shippingAmount: 60,
+    discountMinor: 0,
+    discountAmount: 0,
+    taxMinor: Math.round((totalAmount - 160) * 100),
+    taxAmount: totalAmount - 160,
+    totalMinor: Math.round(totalAmount * 100),
+    totalAmount,
+    items: [],
+  };
+}
 
 function createMemoryStorage(): Storage {
   const store = new Map<string, string>();
@@ -104,6 +134,7 @@ function renderCartDom() {
     <div id="cartPageRoot" data-cart-ready="false" data-cart-has-items="false">
       <div id="checkoutPanel" class="hidden">
         <form id="checkoutForm">
+          <input id="customerPhone-input" value="" />
           <input id="customerPhone" name="customerPhone" value="01700000000" />
           <input id="checkoutIdInput" name="checkoutId" type="hidden" />
           <input id="cartItemsInput" name="cartItems" type="hidden" />
@@ -213,6 +244,14 @@ describe("initCartFunctionality", () => {
     );
   });
 
+  it("does not revalidate a cart solely because validation reconciled server metadata", async () => {
+    await initCartFunctionality();
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(350);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
   it("reconciles an accepted order when the cart document returns from BFCache", async () => {
     await initCartFunctionality();
     const originalCheckoutId = sessionStorage.getItem("checkoutId");
@@ -225,22 +264,68 @@ describe("initCartFunctionality", () => {
     await resumeCartPageFromHistory();
 
     expect(cartStore.get().items).toEqual({});
-    expect((document.getElementById("cartItemsInput") as HTMLInputElement).value).toBe("{}");
+    expect(
+      (document.getElementById("cartItemsInput") as HTMLInputElement).value,
+    ).toBe("{}");
     expect(sessionStorage.getItem("checkoutId")).toBeTruthy();
     expect(sessionStorage.getItem("checkoutId")).not.toBe(originalCheckoutId);
-    expect((document.getElementById("submitButton") as HTMLButtonElement).disabled).toBe(true);
+    expect(
+      (document.getElementById("submitButton") as HTMLButtonElement).disabled,
+    ).toBe(true);
+  });
+
+  it("uses one validation and quote when a populated cart returns from browser history", async () => {
+    document.getElementById("checkoutForm")?.insertAdjacentHTML(
+      "beforeend",
+      `
+        <input name="city" value="city_bagerhat" />
+        <input name="zone" value="zone_bajua" />
+      `,
+    );
+    taxQuoteMocks.fetchAuthoritativeTaxQuote.mockResolvedValue(taxQuote(170));
+
+    await initCartFunctionality();
+    vi.mocked(fetch).mockClear();
+    taxQuoteMocks.fetchAuthoritativeTaxQuote.mockClear();
+
+    await resumeCartPageFromHistory();
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(taxQuoteMocks.fetchAuthoritativeTaxQuote).toHaveBeenCalledTimes(1);
+    expect(document.getElementById("total")?.textContent).toBe("৳170");
+  });
+
+  it("tracks checkout initiation from the visible phone control blur", async () => {
+    const canonicalPhone = document.querySelector<HTMLInputElement>(
+      '[name="customerPhone"]',
+    )!;
+    canonicalPhone.value = "+8801712345678";
+    canonicalPhone.dataset.e164Value = "+8801712345678";
+
+    await initCartFunctionality();
+    document
+      .getElementById("customerPhone-input")
+      ?.dispatchEvent(new FocusEvent("blur"));
+
+    expect(analyticsMocks.trackFbInitiateCheckout).toHaveBeenCalledTimes(1);
   });
 
   it("clears an old hosted-payment pointer after the buyer changes to a different cart", async () => {
-    expect(writeHostedPaymentRecoverySession(
-      "/order-success?orderId=order_old&payment=sslcommerz",
-      {
-        checkoutId: "checkout_old",
-        cartItems: {
-          old_line: { id: "old_product", variantId: "old_variant", quantity: 1 },
+    expect(
+      writeHostedPaymentRecoverySession(
+        "/order-success?orderId=order_old&payment=sslcommerz",
+        {
+          checkoutId: "checkout_old",
+          cartItems: {
+            old_line: {
+              id: "old_product",
+              variantId: "old_variant",
+              quantity: 1,
+            },
+          },
         },
-      },
-    )).toBe(true);
+      ),
+    ).toBe(true);
 
     await initCartFunctionality();
 
@@ -248,18 +333,24 @@ describe("initCartFunctionality", () => {
   });
 
   it("keeps the recovery pointer while the cart still matches the pending checkout", async () => {
-    expect(writeHostedPaymentRecoverySession(
-      "/order-success?orderId=order_current&payment=polar",
-      {
-        checkoutId: "checkout_current",
-        cartItems: cartState.items,
-      },
-    )).toBe(true);
+    expect(
+      writeHostedPaymentRecoverySession(
+        "/order-success?orderId=order_current&payment=polar",
+        {
+          checkoutId: "checkout_current",
+          cartItems: cartState.items,
+        },
+      ),
+    ).toBe(true);
 
     await initCartFunctionality();
 
-    expect(localStorage.getItem("scalius_hosted_payment_recovery")).toContain("order_current");
-    expect((document.getElementById("submitButton") as HTMLButtonElement).disabled).toBe(true);
+    expect(localStorage.getItem("scalius_hosted_payment_recovery")).toContain(
+      "order_current",
+    );
+    expect(
+      (document.getElementById("submitButton") as HTMLButtonElement).disabled,
+    ).toBe(true);
   });
 
   it("reveals truthful cart and checkout panels only after stored items hydrate", async () => {
@@ -384,6 +475,79 @@ describe("initCartFunctionality", () => {
     expect(document.getElementById("totalLabel")?.textContent).toBe("Total");
     expect(document.getElementById("total")?.textContent).toBe("৳171.20");
     expect(document.getElementById("taxStatus")?.classList).toContain("hidden");
+  });
+
+  it("omits an incomplete display-only calling code and still requests the location quote", async () => {
+    const phoneInput = document.querySelector<HTMLInputElement>(
+      '[name="customerPhone"]',
+    )!;
+    phoneInput.value = "+880";
+    phoneInput.dataset.e164Value = "";
+    taxQuoteMocks.fetchAuthoritativeTaxQuote.mockResolvedValue(taxQuote(171.2));
+
+    await initCartFunctionality();
+    window.dispatchEvent(
+      new CustomEvent("checkout-location-change", {
+        detail: {
+          cityId: "city_bagerhat",
+          zoneId: "zone_bagerhat_sadar",
+          areaId: "",
+        },
+      }),
+    );
+
+    await vi.waitFor(() => {
+      expect(taxQuoteMocks.fetchAuthoritativeTaxQuote).toHaveBeenCalledWith(
+        expect.objectContaining({
+          city: "city_bagerhat",
+          zone: "zone_bagerhat_sadar",
+          customerPhone: undefined,
+        }),
+      );
+      expect(document.getElementById("total")?.textContent).toBe("৳171.20");
+    });
+  });
+
+  it("keeps the newest location quote when an older request settles later", async () => {
+    let resolveFirst:
+      ((value: ReturnType<typeof taxQuote>) => void) | undefined;
+    let resolveSecond:
+      ((value: ReturnType<typeof taxQuote>) => void) | undefined;
+    taxQuoteMocks.fetchAuthoritativeTaxQuote
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFirst = resolve;
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveSecond = resolve;
+          }),
+      );
+
+    await initCartFunctionality();
+    window.dispatchEvent(
+      new CustomEvent("checkout-location-change", {
+        detail: { cityId: "city_bagerhat", zoneId: "zone_bajua", areaId: "" },
+      }),
+    );
+    await Promise.resolve();
+    window.dispatchEvent(
+      new CustomEvent("checkout-location-change", {
+        detail: { cityId: "city_baria", zoneId: "zone_akhaura", areaId: "" },
+      }),
+    );
+    await Promise.resolve();
+
+    resolveSecond?.(taxQuote(175, "zone_akhaura"));
+    await Promise.resolve();
+    expect(document.getElementById("total")?.textContent).toBe("৳175");
+
+    resolveFirst?.(taxQuote(170, "zone_bajua"));
+    await Promise.resolve();
+    expect(document.getElementById("total")?.textContent).toBe("৳175");
   });
 
   it("does not present a provisional amount as final when tax cannot be verified", async () => {
@@ -630,8 +794,9 @@ describe("initCartFunctionality", () => {
     await Promise.resolve();
 
     expect(cartStore.get().discount).toEqual(discount);
-    expect((document.getElementById("discountCodeInput") as HTMLInputElement).value)
-      .toBe("WELCOME");
+    expect(
+      (document.getElementById("discountCodeInput") as HTMLInputElement).value,
+    ).toBe("WELCOME");
   });
 
   it("keeps an applied discount while a restored or changed delivery method is re-quoted", async () => {
@@ -646,9 +811,11 @@ describe("initCartFunctionality", () => {
     await initCartFunctionality();
     cartStore.setKey("discount", discount);
 
-    window.dispatchEvent(new CustomEvent("shippingLocationChange", {
-      detail: { id: "shipping_2", fee: 80, name: "Express" },
-    }));
+    window.dispatchEvent(
+      new CustomEvent("shippingLocationChange", {
+        detail: { id: "shipping_2", fee: 80, name: "Express" },
+      }),
+    );
     await Promise.resolve();
 
     expect(cartStore.get().discount).toEqual(discount);

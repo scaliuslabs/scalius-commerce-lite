@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   claimPaymentSessionAttempt: vi.fn(),
   markPaymentSessionAttemptCreated: vi.fn(),
   markPaymentSessionAttemptFailed: vi.fn(),
+  reconcileHostedPaymentReturn: vi.fn(),
 }));
 
 vi.mock("@scalius/core/modules/payments/stripe", () => ({
@@ -56,6 +57,11 @@ vi.mock("@scalius/core/modules/payments/payment-session-attempts", async (import
   markPaymentSessionAttemptFailed: mocks.markPaymentSessionAttemptFailed,
 }));
 
+vi.mock("@scalius/core/modules/payments/hosted-payment-return", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/payments/hosted-payment-return")>()),
+  reconcileHostedPaymentReturn: mocks.reconcileHostedPaymentReturn,
+}));
+
 import { polarPaymentRoutes } from "./polar-routes";
 import { sslcommerzPaymentRoutes } from "./sslcommerz-routes";
 import { stripePaymentRoutes } from "./stripe-routes";
@@ -78,6 +84,8 @@ import {
   settings as settingsTable,
   siteSettings as siteSettingsTable,
 } from "@scalius/database/schema";
+
+const VALID_POLAR_RETURN_NONCE = `hpr_${"a".repeat(64)}`;
 
 const orderRow = {
   id: "order_1",
@@ -395,6 +403,7 @@ beforeEach(() => {
   });
   mocks.markPaymentSessionAttemptCreated.mockResolvedValue(undefined);
   mocks.markPaymentSessionAttemptFailed.mockResolvedValue(undefined);
+  mocks.reconcileHostedPaymentReturn.mockResolvedValue("retry_ready");
 });
 
 describe("payment session receipt-token proof", () => {
@@ -1563,7 +1572,11 @@ describe("payment session receipt-token proof", () => {
 
     const response = await app.request(
       "/api/v1/payment/sslcommerz/fail?order_id=order_1&payment_type=deposit&deposit_amount=60",
-      { method: "GET" },
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ tran_id: "order_1_deposit_ABC12345" }).toString(),
+      },
       envFor(kv),
     );
 
@@ -1573,6 +1586,16 @@ describe("payment session receipt-token proof", () => {
       "https://shop.example.test/order-success?orderId=order_1&payment=sslcommerz&result=failed&paymentType=deposit&depositAmount=60",
     );
     expectNoReceiptProofInUrl(location);
+    expect(mocks.reconcileHostedPaymentReturn).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        orderId: "order_1",
+        gateway: "sslcommerz",
+        paymentType: "deposit",
+        result: "failed",
+        providerCorrelationId: "order_1_deposit_ABC12345",
+      },
+    );
   });
 
   it("redirects SSLCommerz cancelled hosted payments back to the receipt recovery page", async () => {
@@ -1580,7 +1603,11 @@ describe("payment session receipt-token proof", () => {
 
     const response = await app.request(
       "/api/v1/payment/sslcommerz/cancel?order_id=order_1&payment_type=full",
-      { method: "GET" },
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ tran_id: "order_1_full_ABC12345" }).toString(),
+      },
       envFor(kv),
     );
 
@@ -1590,6 +1617,91 @@ describe("payment session receipt-token proof", () => {
       "https://shop.example.test/order-success?orderId=order_1&payment=sslcommerz&result=cancelled&paymentType=full",
     );
     expectNoReceiptProofInUrl(location);
+  });
+
+  it.each(["fail", "cancel"])(
+    "does not reconcile an unsigned SSLCommerz %s query-only return",
+    async (resultPath) => {
+      const { app, kv } = createTestApp("valid", "sslcommerz");
+
+      const response = await app.request(
+        `/api/v1/payment/sslcommerz/${resultPath}?order_id=order_1&payment_type=full&tran_id=order_1_full_ABC12345`,
+        { method: "GET" },
+        envFor(kv),
+      );
+
+      expect(response.status).toBe(302);
+      expect(response.headers.get("location")).toBe(
+        "https://shop.example.test/order-success?orderId=order_1&payment=sslcommerz&paymentType=full",
+      );
+      expect(mocks.reconcileHostedPaymentReturn).not.toHaveBeenCalled();
+    },
+  );
+
+  it("matches an SSLCommerz failed POST to its server-recorded transaction context", async () => {
+    const { app, kv } = createTestApp("valid", "sslcommerz");
+
+    const response = await app.request(
+      "/api/v1/payment/sslcommerz/fail?order_id=order_1&payment_type=full",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ tran_id: "order_1_full_ABC12345" }).toString(),
+      },
+      envFor(kv),
+    );
+
+    expect(response.status).toBe(302);
+    expect(mocks.reconcileHostedPaymentReturn).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        orderId: "order_1",
+        gateway: "sslcommerz",
+        paymentType: "full",
+        result: "failed",
+        providerCorrelationId: "order_1_full_ABC12345",
+      },
+    );
+  });
+
+  it("does not reconcile contradictory unsigned SSLCommerz callback context", async () => {
+    const { app, kv } = createTestApp("valid", "sslcommerz");
+
+    const response = await app.request(
+      "/api/v1/payment/sslcommerz/cancel?order_id=order_1&payment_type=full",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ tran_id: "other_order_full_ABC12345" }).toString(),
+      },
+      envFor(kv),
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe(
+      "https://shop.example.test/order-success?orderId=order_1&payment=sslcommerz&paymentType=full",
+    );
+    expect(mocks.reconcileHostedPaymentReturn).not.toHaveBeenCalled();
+  });
+
+  it("suppresses an SSLCommerz retry result after payment already settled", async () => {
+    mocks.reconcileHostedPaymentReturn.mockResolvedValueOnce("retry_suppressed");
+    const { app, kv } = createTestApp("valid", "sslcommerz");
+
+    const response = await app.request(
+      "/api/v1/payment/sslcommerz/cancel?order_id=order_1&payment_type=full",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ tran_id: "order_1_full_ABC12345" }).toString(),
+      },
+      envFor(kv),
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe(
+      "https://shop.example.test/order-success?orderId=order_1&payment=sslcommerz&paymentType=full",
+    );
   });
 
   it("redirects SSLCommerz account callbacks without exposing receipt tokens", async () => {
@@ -1602,12 +1714,20 @@ describe("payment session receipt-token proof", () => {
     );
     const failed = await app.request(
       "/api/v1/payment/sslcommerz/fail?order_id=order_1&return_to=account&payment_type=balance",
-      { method: "GET" },
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ tran_id: "order_1_balance_ABC12345" }).toString(),
+      },
       envFor(kv),
     );
     const cancelled = await app.request(
       "/api/v1/payment/sslcommerz/cancel?order_id=order_1&return_to=account&payment_type=balance",
-      { method: "GET" },
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ tran_id: "order_1_balance_ABC12345" }).toString(),
+      },
       envFor(kv),
     );
 
@@ -1781,7 +1901,9 @@ describe("payment session receipt-token proof", () => {
         currency: "usd",
         paymentType: "deposit",
         successUrl: "https://api.example.test/api/v1/payment/polar/success?order_id=order_1&payment_type=deposit&deposit_amount=55",
-        cancelUrl: "https://api.example.test/api/v1/payment/polar/cancel?order_id=order_1&payment_type=deposit&deposit_amount=55",
+        cancelUrl: expect.stringMatching(
+          /^https:\/\/api\.example\.test\/api\/v1\/payment\/polar\/cancel\?order_id=order_1&payment_type=deposit&deposit_amount=55&return_nonce=hpr_[a-f0-9]{64}$/,
+        ),
         metadata: expect.objectContaining({
           orderId: "order_1",
           paymentType: "deposit",
@@ -2259,7 +2381,7 @@ describe("payment session receipt-token proof", () => {
     const { app, kv } = createTestApp("valid", "polar");
 
     const response = await app.request(
-      "/api/v1/payment/polar/cancel?order_id=order_1&payment_type=full",
+      `/api/v1/payment/polar/cancel?order_id=order_1&payment_type=full&return_nonce=${VALID_POLAR_RETURN_NONCE}`,
       { method: "GET" },
       envFor(kv),
     );
@@ -2270,6 +2392,69 @@ describe("payment session receipt-token proof", () => {
       "https://shop.example.test/order-success?orderId=order_1&payment=polar&result=cancelled&paymentType=full",
     );
     expectNoReceiptProofInUrl(location);
+    expect(mocks.reconcileHostedPaymentReturn).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        orderId: "order_1",
+        gateway: "polar",
+        paymentType: "full",
+        result: "cancelled",
+        providerCorrelationId: VALID_POLAR_RETURN_NONCE,
+      },
+    );
+  });
+
+  it("does not reconcile a Polar cancel without a server-generated return nonce", async () => {
+    const { app, kv } = createTestApp("valid", "polar");
+
+    const response = await app.request(
+      "/api/v1/payment/polar/cancel?order_id=order_1&payment_type=full",
+      { method: "GET" },
+      envFor(kv),
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe(
+      "https://shop.example.test/order-success?orderId=order_1&payment=polar&paymentType=full",
+    );
+    expect(mocks.reconcileHostedPaymentReturn).not.toHaveBeenCalled();
+  });
+
+  it("does not expose a cancelled result for a forged Polar return nonce", async () => {
+    mocks.reconcileHostedPaymentReturn.mockResolvedValueOnce("ignored");
+    const { app, kv } = createTestApp("valid", "polar");
+    const forgedNonce = `hpr_${"b".repeat(64)}`;
+
+    const response = await app.request(
+      `/api/v1/payment/polar/cancel?order_id=order_1&payment_type=full&return_nonce=${forgedNonce}`,
+      { method: "GET" },
+      envFor(kv),
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe(
+      "https://shop.example.test/order-success?orderId=order_1&payment=polar&paymentType=full",
+    );
+    expect(mocks.reconcileHostedPaymentReturn).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ providerCorrelationId: forgedNonce }),
+    );
+  });
+
+  it("suppresses a Polar cancelled result once payment is settling or terminal", async () => {
+    mocks.reconcileHostedPaymentReturn.mockResolvedValueOnce("retry_suppressed");
+    const { app, kv } = createTestApp("valid", "polar");
+
+    const response = await app.request(
+      `/api/v1/payment/polar/cancel?order_id=order_1&payment_type=full&return_nonce=${VALID_POLAR_RETURN_NONCE}`,
+      { method: "GET" },
+      envFor(kv),
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe(
+      "https://shop.example.test/order-success?orderId=order_1&payment=polar&paymentType=full",
+    );
   });
 
   it("redirects Polar account callbacks without exposing receipt tokens", async () => {
@@ -2281,7 +2466,7 @@ describe("payment session receipt-token proof", () => {
       envFor(kv),
     );
     const cancelled = await app.request(
-      "/api/v1/payment/polar/cancel?order_id=order_1&return_to=account&payment_type=balance",
+      `/api/v1/payment/polar/cancel?order_id=order_1&return_to=account&payment_type=balance&return_nonce=${VALID_POLAR_RETURN_NONCE}`,
       { method: "GET" },
       envFor(kv),
     );
@@ -2364,6 +2549,23 @@ describe("payment session receipt-token proof", () => {
       expect.objectContaining({ id: "psa_1", claimId: "psac_1" }),
       expect.objectContaining({ response: firstJson.data }),
     );
+    if (paymentMethod === "polar") {
+      const firstClaimInput = mocks.claimPaymentSessionAttempt.mock.calls.at(-2)?.[1] as {
+        providerCorrelationId?: string;
+      };
+      const replayClaimInput = mocks.claimPaymentSessionAttempt.mock.calls.at(-1)?.[1] as {
+        providerCorrelationId?: string;
+      };
+      expect(firstClaimInput.providerCorrelationId).toMatch(/^hpr_[a-f0-9]{64}$/);
+      expect(replayClaimInput.providerCorrelationId).toBe(firstClaimInput.providerCorrelationId);
+
+      const providerRequest = mocks.createPolarCheckout.mock.calls.at(-1)?.[1] as {
+        cancelUrl?: string;
+      };
+      const cancelUrl = new URL(providerRequest.cancelUrl ?? "https://invalid.example");
+      expect(cancelUrl.searchParams.get("return_nonce")).toBe(firstClaimInput.providerCorrelationId);
+      expect(providerRequest.cancelUrl).not.toContain("chk_valid");
+    }
   });
 
   it("recovers a reclaimed Polar checkout before creating another provider session", async () => {
@@ -3013,7 +3215,9 @@ describe("payment session receipt-token proof", () => {
       expect.objectContaining({ productId: "polar_product" }),
       expect.objectContaining({
         successUrl: "https://api.example.test/api/v1/payment/polar/success?order_id=order_1&payment_type=full",
-        cancelUrl: "https://api.example.test/api/v1/payment/polar/cancel?order_id=order_1&payment_type=full",
+        cancelUrl: expect.stringMatching(
+          /^https:\/\/api\.example\.test\/api\/v1\/payment\/polar\/cancel\?order_id=order_1&payment_type=full&return_nonce=hpr_[a-f0-9]{64}$/,
+        ),
       }),
     );
     const polarRequest = mocks.createPolarCheckout.mock.calls.at(-1)?.[1] as {
@@ -3026,5 +3230,9 @@ describe("payment session receipt-token proof", () => {
       requestContext?: Record<string, unknown>;
     };
     expect(identityInput.requestContext).not.toHaveProperty("retryKey");
+    expect(identityInput.requestContext).toMatchObject({
+      successUrl: "https://api.example.test/api/v1/payment/polar/success?order_id=order_1&payment_type=full",
+      cancelUrl: "https://api.example.test/api/v1/payment/polar/cancel?order_id=order_1&payment_type=full",
+    });
   });
 });
