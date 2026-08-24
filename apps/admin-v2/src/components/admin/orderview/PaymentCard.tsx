@@ -417,6 +417,15 @@ export function PaymentCard({ order }: PaymentCardProps) {
   const paymentHistoryFetching = isHydrated && paymentsFetching;
   const payments = paymentsResult?.payments ?? [];
   const plan = paymentsResult?.plan ?? null;
+  const hasCashBalanceDueOnDelivery = Boolean(
+    plan?.status === "deposit_paid"
+      && order.paymentStatus === "partial"
+      && Number(order.balanceDue ?? 0) > 0,
+  );
+  const usesCashCollection = isCOD || hasCashBalanceDueOnDelivery;
+  const cashCollectionAmount = Number(order.balanceDue ?? 0) > 0
+    ? Number(order.balanceDue)
+    : grandTotal;
   const paymentSessionAttempts = paymentsResult?.paymentSessionAttempts ?? [];
   const paymentRecovery = order.paymentRecovery ?? null;
   const hasRecoveryLinkDecision =
@@ -449,11 +458,13 @@ export function PaymentCard({ order }: PaymentCardProps) {
   // COD data — conditionally fetch (useQuery, not suspense, since it's optional)
   const codQuery = useQuery({
     ...orderCodQueryOptions(order.id),
-    enabled: isHydrated && isCOD,
+    enabled: isHydrated && usesCashCollection,
     staleTime: ORDER_DETAIL_PREFETCH_STALE_MS,
   });
   const codData = codQuery.data;
-  const codTracking = isCOD ? ((codData as { tracking: CODTracking | null } | null)?.tracking ?? null) : null;
+  const codTracking = usesCashCollection
+    ? ((codData as { tracking: CODTracking | null } | null)?.tracking ?? null)
+    : null;
   const codReadState = resolveOrderOperationalReadState({
     hydrated: isHydrated,
     loading: codQuery.isLoading,
@@ -522,7 +533,9 @@ export function PaymentCard({ order }: PaymentCardProps) {
     codMutation.mutate(body, {
       onSuccess: () => {
         const messages: Record<string, string> = {
-          collected: "COD collection recorded.",
+          collected: hasCashBalanceDueOnDelivery
+            ? "Cash balance recorded. The order is now fully paid."
+            : "COD collection recorded.",
           failed: "Delivery failure recorded.",
           returned: "Order marked as returned.",
         };
@@ -914,7 +927,7 @@ export function PaymentCard({ order }: PaymentCardProps) {
           )}
 
           {/* COD tracking */}
-          {isHydrated && isCOD && (
+          {isHydrated && usesCashCollection && (
             <div className="space-y-2">
               {codReadState.status === "loading" ? (
                 <div className="flex items-center gap-2 rounded-md border bg-muted/20 p-3 text-sm text-muted-foreground">
@@ -925,9 +938,9 @@ export function PaymentCard({ order }: PaymentCardProps) {
                   <div className="flex items-start gap-2">
                     <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                     <div className="min-w-0 flex-1">
-                      <p className="font-medium">COD tracking unavailable</p>
+                      <p className="font-medium">Cash collection status unavailable</p>
                       <p className="mt-1 text-xs opacity-90">
-                        Collection and failure actions are paused until the saved COD state can be verified.
+                        Collection and delivery-attempt actions are paused until the saved payment state can be verified.
                       </p>
                     </div>
                     <Button
@@ -953,7 +966,7 @@ export function PaymentCard({ order }: PaymentCardProps) {
                 <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
                   <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                   <span className="min-w-0 flex-1">
-                    Showing the last loaded COD state. Retry before recording a collection or failure.
+                    Showing the last loaded cash collection state. Retry before recording a collection or delivery attempt.
                   </span>
                   <Button
                     type="button"
@@ -974,7 +987,9 @@ export function PaymentCard({ order }: PaymentCardProps) {
               {codTracking && codReadState.status !== "unavailable" && (
                 <div className="text-sm space-y-1 rounded-lg bg-muted/30 p-3">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">COD Status</span>
+                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                      {hasCashBalanceDueOnDelivery ? "Cash balance on delivery" : "COD status"}
+                    </span>
                     <Badge variant={COD_STATUS_CONFIG[codTracking.codStatus]?.variant ?? "secondary"} className="text-xs">
                       {COD_STATUS_CONFIG[codTracking.codStatus]?.label ?? codTracking.codStatus}
                     </Badge>
@@ -1009,7 +1024,7 @@ export function PaymentCard({ order }: PaymentCardProps) {
               {/* COD action buttons -- only when not yet collected/returned */}
               {codReadState.status === "ready"
                 && (!codTracking || !["collected", "returned"].includes(codTracking.codStatus))
-                && (canRecordCodCollection || canRecordCodFailure || canRecordCodReturn) && (
+                && (canRecordCodCollection || (isCOD && (canRecordCodFailure || canRecordCodReturn))) && (
                 <div className="flex gap-2">
                   {canRecordCodCollection ? (
                     <Button
@@ -1018,15 +1033,15 @@ export function PaymentCard({ order }: PaymentCardProps) {
                       disabled={isRefundLocked}
                       onClick={() => {
                         setCollectedBy("");
-                        setCollectedAmount(String(grandTotal));
+                        setCollectedAmount(String(cashCollectionAmount));
                         setCodAction("collected");
                       }}
                     >
                       <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
-                      Mark Collected
+                      {hasCashBalanceDueOnDelivery ? "Record cash balance" : "Mark collected"}
                     </Button>
                   ) : null}
-                  {canRecordCodFailure ? (
+                  {isCOD && canRecordCodFailure ? (
                     <Button
                       size="sm"
                       variant="outline"
@@ -1042,7 +1057,7 @@ export function PaymentCard({ order }: PaymentCardProps) {
                       Record Failure
                     </Button>
                   ) : null}
-                  {canRecordCodReturn && codTracking && codTracking.deliveryAttempts > 0 ? (
+                  {isCOD && canRecordCodReturn && codTracking && codTracking.deliveryAttempts > 0 ? (
                     <Button
                       size="sm"
                       variant="ghost"
@@ -1233,10 +1248,13 @@ export function PaymentCard({ order }: PaymentCardProps) {
       <Dialog open={codAction === "collected"} onOpenChange={(open) => !open && setCodAction(null)}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Record COD Collection</DialogTitle>
+            <DialogTitle>
+              {hasCashBalanceDueOnDelivery ? "Record cash balance" : "Record COD collection"}
+            </DialogTitle>
             <DialogDescription>
-              Confirm the cash received after delivery. This settles payment, marks the
-              order delivered, and commits its reserved stock.
+              {hasCashBalanceDueOnDelivery
+                ? "Confirm the exact remaining balance received on delivery. This completes the payment plan and marks the order delivered."
+                : "Confirm the cash received on delivery. This settles payment and marks the order delivered."}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
@@ -1267,7 +1285,7 @@ export function PaymentCard({ order }: PaymentCardProps) {
               disabled={codMutation.isPending || !canRecordCodCollection}
             >
               {codMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-              Confirm Collection
+              {hasCashBalanceDueOnDelivery ? "Confirm cash balance" : "Confirm collection"}
             </Button>
           </DialogFooter>
         </DialogContent>

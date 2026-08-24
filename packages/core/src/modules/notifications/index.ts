@@ -6,6 +6,7 @@ export {
   isOrderNotificationType,
 } from "./notification-types";
 export {
+  buildClearNotificationProviderBlocksStatement,
   clearNotificationProviderBlocks,
   getNotificationProviderBlock,
   isNotificationProviderBreakerFailure,

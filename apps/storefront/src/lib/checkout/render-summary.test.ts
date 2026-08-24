@@ -12,12 +12,10 @@ vi.mock("../analytics", () => ({
 }));
 
 import {
-  checkoutCartValidationPayload,
   getPaymentResultRecovery,
   initCheckoutPage,
   renderOrderSummaryDetails,
   resumeCheckoutPageFromHistory,
-  validateCheckoutCartFreshness,
 } from "./index";
 import { showCheckoutLoadingOverlay } from "./loading-overlay";
 import { resolveCheckoutPaymentRequest, resolveExplicitCheckoutPaymentRequest } from "./payment-mode";
@@ -154,6 +152,61 @@ afterEach(() => {
 });
 
 describe("renderOrderSummaryDetails", () => {
+  it("shows the items, delivery method, and delivery identity before payment", () => {
+    const details = document.createElement("div");
+
+    renderOrderSummaryDetails(
+      details,
+      {
+        customerName: "Buyer Name",
+        customerPhone: "+8801700000000",
+        shippingAddress: "11 Example Road",
+        areaName: "Dhanmondi",
+        zoneName: "Dhaka South",
+        cityName: "Dhaka",
+        shippingMethodName: "Standard Delivery",
+      },
+      baseConfig,
+      taxQuote({
+        subtotalMinor: 50_000,
+        subtotalAmount: 500,
+        totalMinor: 50_000,
+        totalAmount: 500,
+        items: [
+          {
+            cartKey: "line_1",
+            productId: "prod_1",
+            variantId: "var_1",
+            quantity: 2,
+            unitPrice: 150,
+            productName: "Product One",
+            variantLabel: "Blue",
+          },
+          {
+            cartKey: "line_2",
+            productId: "prod_2",
+            variantId: "var_2",
+            quantity: 1,
+            unitPrice: 200,
+            productName: "Product Two",
+            variantLabel: null,
+          },
+        ],
+      }),
+    );
+
+    expect(details.textContent).toContain("Product One");
+    expect(details.textContent).toContain("Blue · Qty 2");
+    expect(details.textContent).toContain("Product Two");
+    expect(details.textContent).toContain("Qty 1");
+    expect(details.textContent).toContain("Standard Delivery");
+    expect(details.textContent).toContain("Buyer Name · +8801700000000");
+    expect(details.textContent).toContain("11 Example Road");
+    expect(details.textContent).toContain("Dhanmondi, Dhaka South, Dhaka");
+    expect(details.textContent).not.toContain("prod_1");
+    expect(details.textContent).not.toContain("var_1");
+  });
+
   it("renders customer checkout data as text, not HTML", () => {
     const details = document.createElement("div");
 
@@ -253,85 +306,6 @@ describe("resolveCheckoutPaymentRequest", () => {
   });
 });
 
-describe("checkout cart freshness", () => {
-  it("builds a cart-validation payload with cart keys and customer-facing line labels", () => {
-    const items = checkoutCartValidationPayload({
-      cartItems: JSON.stringify({
-        "line:v2:prod_1:variant:var_1": {
-          id: "prod_1",
-          variantId: "var_1",
-          quantity: 2,
-          price: 150,
-          name: "Cotton Panjabi",
-          options: [
-            { name: "Fit", label: "M" },
-            { name: "Shade", label: "Blue" },
-            { name: "Sleeve", label: "Long" },
-          ],
-        },
-      }),
-    });
-
-    expect(items).toEqual([
-      {
-        cartKey: "line:v2:prod_1:variant:var_1",
-        productId: "prod_1",
-        variantId: "var_1",
-        quantity: 2,
-        price: 150,
-        productName: "Cotton Panjabi",
-        variantLabel: "M / Blue / Long",
-      },
-    ]);
-  });
-
-  it("fails closed before fetch when a checkout snapshot has no persisted variant", async () => {
-    const fetchMock = vi.mocked(fetch);
-    const result = await validateCheckoutCartFreshness({
-      cartItems: JSON.stringify({
-        line_1: { id: "prod_1", variantId: "default", quantity: 1, price: 150 },
-      }),
-    });
-
-    expect(result).toEqual({
-      valid: false,
-      issues: [],
-      message: "Your cart contains an item without a saved product variant. Please return to your cart and add it again.",
-    });
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  it("returns structured item issues when checkout validation fails", async () => {
-    const issue = {
-      index: 0,
-      cartKey: "line_1",
-      productId: "prod_1",
-      variantId: "var_1",
-      code: "PRICE_CHANGED" as const,
-      action: "refresh_item" as const,
-      message: "The price changed.",
-      productName: "Cotton Panjabi",
-      variantLabel: "M / Blue",
-      requestedQuantity: 1,
-      currentPrice: 180,
-    };
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
-      success: true,
-      data: { valid: false, issues: [issue] },
-    }))));
-
-    const result = await validateCheckoutCartFreshness({
-      cartItems: JSON.stringify({
-        line_1: { id: "prod_1", variantId: "var_1", quantity: 1, price: 150 },
-      }),
-    });
-
-    expect(result.valid).toBe(false);
-    expect(result.issues).toEqual([issue]);
-    expect(result.message).toBe("One cart item changed before payment. Please review it before checkout.");
-  });
-});
-
 describe("initCheckoutPage", () => {
   it("shows a clear cart recovery message instead of redirecting when checkout transfer data is missing", async () => {
     window.history.replaceState(null, "", "/checkout");
@@ -405,6 +379,7 @@ describe("initCheckoutPage", () => {
       shippingCharge: "0",
       discountAmount: "0",
       customerName: "Buyer",
+      customerPhone: "+8801700000000",
       shippingAddress: "Dhaka",
       city: "city_1",
       zone: "zone_1",
@@ -774,9 +749,10 @@ describe("initCheckoutPage", () => {
       availableQuantity: 1,
     };
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
-      success: true,
-      data: { valid: false, issues: [issue] },
-    }))));
+      success: false,
+      error: "Current checkout total is unavailable",
+      details: { itemIssues: [issue] },
+    }), { status: 422 })));
     document.body.innerHTML = `
       <section id="orderSummary" class="hidden"><div id="summaryDetails"></div></section>
       <div id="errorMsg" class="hidden"></div>
@@ -790,7 +766,11 @@ describe("initCheckoutPage", () => {
       shippingCharge: "0",
       discountAmount: "0",
       customerName: "Buyer",
+      customerPhone: "+8801700000000",
       shippingAddress: "Dhaka",
+      city: "city_1",
+      zone: "zone_1",
+      shippingMethodId: "ship_1",
     }));
     (window as unknown as { __CHECKOUT_CONFIG__: CheckoutConfig }).__CHECKOUT_CONFIG__ = {
       ...baseConfig,

@@ -134,13 +134,13 @@ Payment webhook handlers attach the source `webhookEventId` to queued payment me
 | Message Type | Handler | Action |
 |------|---------|--------|
 | `payment.stripe.confirmed` | `processPaymentConfirmed()` | Converts amount from smallest unit to major unit (via `getDecimalPlaces()`), records payment, updates order, applies inventory |
-| `payment.stripe.failed` | `processPaymentFailed()` | Marks order as failed if no prior payments; stale incomplete hosted-payment cleanup handles later archive/release after the scheduled grace period |
+| `payment.stripe.failed` | `processPaymentFailed()` | Atomically records the failed attempt and marks an unpaid zero-capture order failed; a concurrent succeeded payment or shipment claim wins safely. Stale incomplete hosted-payment cleanup handles later archive/release after the scheduled grace period |
 | `payment.stripe.canceled` | `releaseOrderInventory()` | Releases reserved inventory |
 | `payment.stripe.refunded` | (audit only) | Logs refund event; actual refund handled synchronously |
 | `payment.sslcommerz.confirmed` | `processPaymentConfirmed()` | Amount already in major unit (no conversion), records payment |
-| `payment.sslcommerz.failed` | `processPaymentFailed()` | Marks order as failed; scheduled stale cleanup handles later archive/release |
+| `payment.sslcommerz.failed` | `processPaymentFailed()` | Uses the same atomic, capture-safe failure transition; scheduled stale cleanup handles later archive/release |
 | `payment.polar.confirmed` | `processPaymentConfirmed()` | Converts amount from smallest unit to major unit (via `getDecimalPlaces()`) |
-| `payment.polar.failed` | `processPaymentFailed()` | Marks order as failed; scheduled stale cleanup handles later archive/release |
+| `payment.polar.failed` | `processPaymentFailed()` | Uses the same atomic, capture-safe failure transition; scheduled stale cleanup handles later archive/release |
 | `payment.polar.refunded` | `processPolarWebhookRefund()` | Requires the matching `polarCheckoutId`, imports only the newly observed delta from Polar's cumulative `refunded_amount`, writes a local `orderPayments` refund row, CAS-updates the order from the payment ledger, releases inventory on pre-fulfillment full-order refund, and returns a post-commit buyer notification fact |
 
 ## Provider Details
@@ -167,9 +167,9 @@ Payment webhook handlers attach the source `webhookEventId` to queued payment me
 - **Amount formatting**: Uses `totalAmount.toFixed(getDecimalPlaces(currency))` for ISO 4217-aware decimal formatting. e.g. BDT: `toFixed(2)`, JPY: `toFixed(0)`, BHD: `toFixed(3)`. No smallest-unit multiplication -- SSLCommerz always receives the display amount.
 - **Session params**: Uses a unique merchant `tran_id` per payment attempt (`{orderId}_{paymentType}_{suffix}`), includes `value_a` for payment type, and includes `value_b` for the canonical order id. Public checkout routes derive the suffix from the durable payment-session attempt hash, so retries for the same canonical attempt reuse the same merchant transaction id.
 - **Redirect handlers**: API has POST + GET handlers for `/success`, `/fail`, `/cancel`; each validates order exists before redirecting to storefront. Trusted callback URLs include `order_id`; legacy callbacks can still derive the order id by parsing scoped `tran_id`. `STOREFRONT_URL` from env determines redirect target.
-- **IPN validation**: SSLCommerz does NOT sign webhooks. `validateSSLCommerzIPN()` makes a server-to-server API call to `/validator/api/validationserverAPI.php` using `val_id`. Only `VALID`/`VALIDATED` statuses are accepted.
+- **IPN and buyer-return validation**: SSLCommerz does NOT sign callbacks. Both the IPN and a successful buyer return call `validateSSLCommerzIPN()` server-to-server with `val_id`; only `VALID`/`VALIDATED` results can schedule payment confirmation. Buyer-return callback fields are expected-value checks only, and the provider response must match the stored order currency, amount, and payment type.
 - **Transaction validation**: `validateSSLCommerzPayment()` validates by `tran_id` via `/validator/api/merchantTransIDvalidationAPI.php`
-- **Replay protection**: Durable `webhook_events` claim `sslcommerz:ipn:{tran_id}:{val_id}` before queueing. Confirmed payment idempotency uses canonical `val_id`; `tran_id` remains a merchant attempt/correlation field.
+- **Replay protection**: Durable `webhook_events` claim `sslcommerz:ipn:{tran_id}:{val_id}` before queueing. The buyer return and IPN deliberately share that identity, so whichever arrives first schedules confirmation and the late duplicate is a no-op. Confirmed payment idempotency also uses canonical `val_id`; `tran_id` remains a merchant attempt/correlation field.
 - **Refund**: `initiateSSLCommerzRefund()` uses `bank_tran_id` (from original payment). Refund amount formatted with `toFixed(2)` (SSLCommerz only supports BDT for refunds). Production requires IP whitelisting. `querySSLCommerzRefundStatus()` checks refund progress (refunded/processing/cancelled). Admin refunds pass a deterministic per-allocation `refund_trans_id` through provider metadata instead of generating a new timestamp id on retry.
 - **Settings**: `store_id`, `store_password`, `sandbox`, `enabled` (stored in `settings` table, category `sslcommerz`)
 
@@ -321,7 +321,7 @@ The `GET /checkout/config` endpoint returns:
 - `currency` -- `{ code, symbol, decimalPlaces }` using `getDecimalPlaces()` for ISO 4217 lookup
 - `allowedCountries` + `allowedCountriesMode` -- phone number country restrictions (include/exclude list)
 - `guestCheckoutEnabled`, `authVerificationMethod`, `checkoutMode`, `partialPaymentEnabled`, `partialPaymentAmount`
-- Cached 60 seconds via `cacheMiddleware` under `api:checkout:config:v3:`
+- Cached for 60 seconds through the Cloudflare `PublicApi` cache with the `checkout` tag; committed payment, checkout, currency, delivery, and auth setting changes purge that tag before storefront warming
 - On assembly/read error: returns a non-cacheable `503 CHECKOUT_CONFIG_UNAVAILABLE`; the storefront fails closed with a temporary checkout-unavailable state instead of guessing COD availability
 
 ### Storefront Proxy Pattern

@@ -6,6 +6,8 @@ import {
   type TaxQuoteRequest,
 } from "./tax-quote-contract";
 import { cartItemVariantLabel } from "../cart/item-options";
+import type { CartValidationIssue } from "../api/orders";
+import { parseTaxQuoteCartIssues } from "./tax-quote-error-contract";
 
 const TAX_QUOTE_ENDPOINT = "/api/checkout/tax-quote";
 const TAX_QUOTE_TIMEOUT_MS = 10_000;
@@ -24,6 +26,17 @@ export class TaxQuoteUnavailableError extends Error {
       "We could not verify the current taxes and order total. Please return to your cart and try again.",
     );
     this.name = "TaxQuoteUnavailableError";
+  }
+}
+
+export class TaxQuoteCartChangedError extends Error {
+  constructor(public readonly issues: CartValidationIssue[]) {
+    super(
+      issues.length === 1
+        ? "One cart item changed before payment."
+        : `${issues.length} cart items changed before payment.`,
+    );
+    this.name = "TaxQuoteCartChangedError";
   }
 }
 
@@ -115,7 +128,9 @@ export async function fetchAuthoritativeTaxQuote(
       signal: AbortSignal.timeout(TAX_QUOTE_TIMEOUT_MS),
     });
     if (!response.ok) {
-      await response.body?.cancel();
+      const payload = await response.json().catch(() => null);
+      const issues = parseTaxQuoteCartIssues(payload);
+      if (issues.length > 0) throw new TaxQuoteCartChangedError(issues);
       throw new TaxQuoteUnavailableError();
     }
     const quote = parseTaxQuoteEnvelope(await response.json());
@@ -138,6 +153,7 @@ export async function fetchAuthoritativeTaxQuote(
     }
     return quote;
   } catch (error) {
+    if (error instanceof TaxQuoteCartChangedError) throw error;
     if (error instanceof TaxQuoteUnavailableError) throw error;
     if (error instanceof TaxQuoteContractError) throw new TaxQuoteUnavailableError();
     throw new TaxQuoteUnavailableError();

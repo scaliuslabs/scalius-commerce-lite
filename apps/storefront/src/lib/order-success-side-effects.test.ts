@@ -121,6 +121,27 @@ describe("order success side effects", () => {
       .toBeLessThan(retryScript.indexOf("Payment gateway did not return a redirect URL."));
   });
 
+  it("uses canonical gateway identity and filters receipt retries by the exact payable amount", () => {
+    const pageSource = readFileSync(
+      sourcePath("pages", "order-success.astro"),
+      "utf8",
+    );
+    const retrySource = readFileSync(
+      sourcePath("lib", "order-success-payment-retry.ts"),
+      "utf8",
+    );
+
+    expect(pageSource).toContain("getGatewayPresentation");
+    expect(pageSource).toContain("isGatewayEligibleForPaymentAmount");
+    expect(pageSource).toContain("retryPaymentAmount");
+    expect(pageSource).toContain("retryEligibleGateways");
+    expect(pageSource).toContain("option.presentation.markSrc");
+    expect(pageSource).toContain("option.presentation.buyerLabel");
+    expect(retrySource).not.toContain("Pay online with SSLCommerz");
+    expect(retrySource).not.toContain("Pay online with Polar");
+    expect(retrySource).not.toContain("Pay by card");
+  });
+
   it("reconciles pending Stripe payments before bounded receipt status reads", () => {
     const pageSource = readFileSync(
       sourcePath("pages", "order-success.astro"),

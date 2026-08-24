@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   buildTaxQuoteRequest,
   fetchAuthoritativeTaxQuote,
+  TaxQuoteCartChangedError,
   TaxQuoteUnavailableError,
 } from "./tax-quote-client";
 import {
@@ -173,5 +174,42 @@ describe("tax quote client contract", () => {
       .catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(TaxQuoteUnavailableError);
     expect(String(error)).not.toContain("+8801700000000");
+  });
+
+  it("preserves only bounded cart-repair issues from a failed quote", async () => {
+    const fetcher = vi.fn(async () => new Response(JSON.stringify({
+      success: false,
+      error: "Current checkout total is unavailable",
+      details: {
+        itemIssues: [{
+          index: 0,
+          cartKey: "line:v2:prod_1:variant:var_1",
+          productId: "prod_1",
+          variantId: "var_1",
+          code: "PRICE_CHANGED",
+          action: "refresh_item",
+          message: "The price changed.",
+          productName: "Cotton Panjabi",
+          variantLabel: "M / Blue",
+          requestedQuantity: 2,
+          submittedPrice: 140,
+          currentPrice: 150,
+          privatePhone: "+8801700000000",
+        }],
+      },
+    }), { status: 422 })) as unknown as typeof fetch;
+
+    const error = await fetchAuthoritativeTaxQuote(checkoutData(), fetcher)
+      .catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(TaxQuoteCartChangedError);
+    expect((error as TaxQuoteCartChangedError).issues).toEqual([
+      expect.objectContaining({
+        cartKey: "line:v2:prod_1:variant:var_1",
+        code: "PRICE_CHANGED",
+        currentPrice: 150,
+      }),
+    ]);
+    expect(JSON.stringify((error as TaxQuoteCartChangedError).issues))
+      .not.toContain("privatePhone");
   });
 });

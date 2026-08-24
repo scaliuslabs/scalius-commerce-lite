@@ -13,12 +13,23 @@ import {
   PaymentRecordStatus,
   PaymentPlanStatus,
 } from "@scalius/database/schema";
-import { safeBatch, type Database } from "@scalius/database/client";
+import {
+  buildBatchGuard,
+  isBatchGuardError,
+  safeBatch,
+  type Database,
+} from "@scalius/database/client";
 import type { BatchItem } from "drizzle-orm/batch";
+import { ConflictError } from "@scalius/core/errors";
 import { applyInventoryForStatusChange } from "../inventory/inventory-transitions";
-import type { ProcessPaymentParams, PaymentGateway } from "./types";
+import type { PaymentType, ProcessPaymentParams, PaymentGateway } from "./types";
 import { validateTransition } from "../orders/order-state-machine";
-import { assertNoActiveShipmentClaim, hasActiveShipmentClaim, SHIPMENT_CLAIM_CONFLICT_MESSAGE } from "../orders/shipment-claim";
+import {
+  assertNoActiveShipmentClaim,
+  hasActiveShipmentClaim,
+  noActiveShipmentClaimCondition,
+  SHIPMENT_CLAIM_CONFLICT_MESSAGE,
+} from "../orders/shipment-claim";
 import { buildMetaPurchaseOutboxClaimInsert } from "../../integrations/meta/purchase-outbox";
 import {
   getUnpayableOrderReason,
@@ -36,11 +47,35 @@ import {
 } from "./order-currency";
 
 const PAYMENT_CONFIRMATION_MAX_CAS_ATTEMPTS = 3;
+const PAYMENT_FAILURE_SHIPMENT_CLAIM_GUARD = "PAYMENT_FAILURE_SHIPMENT_CLAIM";
 type SQLiteBatchItem = BatchItem<"sqlite">;
 
 function isConstraintError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   return /constraint|unique|primary key/i.test(message);
+}
+
+function isPaymentType(value: unknown): value is PaymentType {
+  return value === "full" || value === "deposit" || value === "balance";
+}
+
+function inferFailedPaymentType(input: {
+  existingPaymentType?: unknown;
+  paidAmount: number;
+  paymentStatus: string;
+  paymentPlanStatus?: string | null;
+}): PaymentType {
+  if (isPaymentType(input.existingPaymentType)) return input.existingPaymentType;
+  if (
+    input.paidAmount > 0 ||
+    input.paymentStatus === PaymentStatus.PARTIAL ||
+    input.paymentPlanStatus === PaymentPlanStatus.DEPOSIT_PAID ||
+    input.paymentPlanStatus === PaymentPlanStatus.COMPLETED
+  ) {
+    return "balance";
+  }
+  if (input.paymentPlanStatus === PaymentPlanStatus.PENDING) return "deposit";
+  return "full";
 }
 
 function paymentRecordMatchesAmount(
@@ -707,9 +742,19 @@ export async function processPaymentFailed(
   intentId?: string
 ): Promise<void> {
   try {
+    let existing: {
+      id: string;
+      status: string;
+      paymentType: string;
+    } | undefined;
+
     if (intentId) {
-      const existing = await db
-        .select({ id: orderPayments.id, status: orderPayments.status })
+      existing = await db
+        .select({
+          id: orderPayments.id,
+          status: orderPayments.status,
+          paymentType: orderPayments.paymentType,
+        })
         .from(orderPayments)
         .where(and(
           eq(orderPayments.orderId, orderId),
@@ -721,20 +766,11 @@ export async function processPaymentFailed(
         ))
         .get();
 
-      if (existing?.status === PaymentRecordStatus.FAILED || existing?.status === PaymentRecordStatus.SUCCEEDED) {
-        return;
-      }
-      if (existing?.status === PaymentRecordStatus.PENDING) {
-        await db
-          .update(orderPayments)
-          .set({
-            status: PaymentRecordStatus.FAILED,
-            updatedAt: sql`unixepoch()`,
-          })
-          .where(and(
-            eq(orderPayments.id, existing.id),
-            eq(orderPayments.status, PaymentRecordStatus.PENDING),
-          ));
+      if (
+        existing &&
+        existing.status !== PaymentRecordStatus.PENDING &&
+        existing.status !== PaymentRecordStatus.FAILED
+      ) {
         return;
       }
     }
@@ -747,6 +783,12 @@ export async function processPaymentFailed(
         shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
         currencyCode: orders.currencyCode,
         currencyDecimalPlaces: orders.currencyDecimalPlaces,
+        paymentPlanStatus: sql<string | null>`(
+          SELECT ${paymentPlans.status}
+          FROM ${paymentPlans}
+          WHERE ${paymentPlans.orderId} = ${orders.id}
+          LIMIT 1
+        )`,
       })
       .from(orders)
       .where(eq(orders.id, orderId))
@@ -754,37 +796,95 @@ export async function processPaymentFailed(
 
     if (!order) return;
     assertNoActiveShipmentClaim(order);
-    const currency = resolveOrderCurrencySnapshot(order);
+    const paidAmount = Number(order.paidAmount ?? 0);
+    const paymentType = inferFailedPaymentType({
+      existingPaymentType: existing?.paymentType,
+      paidAmount,
+      paymentStatus: order.paymentStatus,
+      paymentPlanStatus: order.paymentPlanStatus,
+    });
+    const shouldMarkOrderFailed = (
+      order.paymentStatus === PaymentStatus.UNPAID &&
+      paidAmount <= 0
+    );
 
-    try {
-      await db.insert(orderPayments).values({
-        id: crypto.randomUUID(),
-        orderId,
-        amount: 0,
-        currency: currency.code,
-        paymentMethod: gateway,
-        paymentType: "full",
-        status: PaymentRecordStatus.FAILED,
-        stripePaymentIntentId: gateway === "stripe" ? (intentId ?? null) : null,
-        sslcommerzTranId: gateway === "sslcommerz" ? (intentId ?? null) : null,
-        polarCheckoutId: gateway === "polar" ? (intentId ?? null) : null,
-        createdAt: sql`unixepoch()`,
-        updatedAt: sql`unixepoch()`,
-      });
-    } catch (error: unknown) {
-      if (intentId && isConstraintError(error)) return;
-      throw error;
+    // A prior invocation may have durably failed the attempt but stopped before
+    // updating the order. Re-run the order side instead of treating that row as
+    // proof that the whole failure transition completed.
+    if (existing?.status === PaymentRecordStatus.FAILED && !shouldMarkOrderFailed) {
+      return;
     }
 
-    // Only mark as failed if no prior payment was collected
-    if (!order.paidAmount || order.paidAmount <= 0) {
-      await db
+    const batchStatements: SQLiteBatchItem[] = [
+      buildBatchGuard(db, sql`EXISTS (
+        SELECT 1
+        FROM ${orders}
+        WHERE ${orders.id} = ${orderId}
+          AND ${noActiveShipmentClaimCondition()}
+      )`, PAYMENT_FAILURE_SHIPMENT_CLAIM_GUARD),
+      db
         .update(orders)
         .set({
           paymentStatus: PaymentStatus.FAILED,
+          version: sql`${orders.version} + 1`,
           updatedAt: sql`unixepoch()`,
         })
-        .where(eq(orders.id, orderId));
+        .where(and(
+          eq(orders.id, orderId),
+          eq(orders.paymentStatus, PaymentStatus.UNPAID),
+          sql`${orders.paidAmount} <= 0`,
+          noActiveShipmentClaimCondition(),
+          sql`NOT EXISTS (
+            SELECT 1
+            FROM ${orderPayments}
+            WHERE ${orderPayments.orderId} = ${orderId}
+              AND ${orderPayments.status} = ${PaymentRecordStatus.SUCCEEDED}
+          )`,
+        ))
+        .returning({ id: orders.id }),
+    ];
+
+    if (existing?.status === PaymentRecordStatus.PENDING) {
+      batchStatements.push(
+        db
+          .update(orderPayments)
+          .set({
+            status: PaymentRecordStatus.FAILED,
+            updatedAt: sql`unixepoch()`,
+          })
+          .where(and(
+            eq(orderPayments.id, existing.id),
+            eq(orderPayments.status, PaymentRecordStatus.PENDING),
+          ))
+          .returning({ id: orderPayments.id }),
+      );
+    } else if (!existing) {
+      const currency = resolveOrderCurrencySnapshot(order);
+      batchStatements.push(
+        db.insert(orderPayments).values({
+          id: crypto.randomUUID(),
+          orderId,
+          amount: 0,
+          currency: currency.code,
+          paymentMethod: gateway,
+          paymentType,
+          status: PaymentRecordStatus.FAILED,
+          stripePaymentIntentId: gateway === "stripe" ? (intentId ?? null) : null,
+          sslcommerzTranId: gateway === "sslcommerz" ? (intentId ?? null) : null,
+          polarCheckoutId: gateway === "polar" ? (intentId ?? null) : null,
+          createdAt: sql`unixepoch()`,
+          updatedAt: sql`unixepoch()`,
+        }).onConflictDoNothing(),
+      );
+    }
+
+    try {
+      await safeBatch(db, batchStatements);
+    } catch (error: unknown) {
+      if (isBatchGuardError(error, PAYMENT_FAILURE_SHIPMENT_CLAIM_GUARD)) {
+        throw new ConflictError(SHIPMENT_CLAIM_CONFLICT_MESSAGE);
+      }
+      throw error;
     }
   } catch (err: unknown) {
     console.error(`[process-payment] Failed payment recording error:`, err);

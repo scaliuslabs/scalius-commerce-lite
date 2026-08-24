@@ -190,14 +190,14 @@ All under `/api/v1/admin/settings/` -- split across multiple route files:
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/auth` | Get customer verification policy and WhatsApp configuration. Masks encrypted or legacy `whatsappAccessToken`; uses tolerant reads but only migrates/clears legacy WhatsApp tokens when `CREDENTIAL_ENCRYPTION_KEY` is present |
-| POST | `/auth` | Save customer verification policy and WhatsApp configuration. The strict request contract rejects checkout-flow fields, skips masked WhatsApp token values, encrypts new token values with `CREDENTIAL_ENCRYPTION_KEY`, and clears encrypted/legacy token storage when the token is set to an empty string |
+| POST | `/auth` | Atomically save customer verification policy and WhatsApp configuration. The strict request contract rejects checkout-flow fields, skips masked WhatsApp token values, encrypts new token values with `CREDENTIAL_ENCRYPTION_KEY`, and clears encrypted/legacy token storage when the token is set to an empty string |
 | GET | `/checkout-flow` | Get guest-access, payment-flow, and advance-collection settings with the current positive monotonic revision |
 | PUT | `/checkout-flow` | Replace the checkout-flow document using `expectedRevision`. A successful compare-and-swap advances the revision exactly once; stale writers receive typed `409 CHECKOUT_FLOW_REVISION_CONFLICT` with the current revision and do not overwrite the other session |
 | GET | `/checkout-readiness` | Evaluate delivery readiness plus required customer sign-in provider readiness. Admin reads also inspect optional sign-in readiness so the editor can validate turning guest checkout off before saving |
 | GET | `/security` | Get CSP allowed domains |
 | POST | `/security` | Save storefront CSP allowed domains. Also writes to KV at `security:csp_allowed_domains`; this setting is layout/CSP-only and must not expand credentialed API CORS origins |
 | GET | `/email` | Get transactional email provider settings: Cloudflare binding status, Resend key status, selected provider, and sender |
-| POST | `/email` | Save selected email provider + sender. Skips masked Resend key values and encrypts new Resend keys |
+| POST | `/email` | Atomically save the selected email provider + sender. Skips masked Resend key values, encrypts new Resend keys, and requires the selected provider itself—not an unrelated configured provider—to be ready when email OTP is active |
 | GET | `/firebase` | Get Firebase settings (masks service account) |
 | POST | `/firebase` | Save Firebase service account + public config. Service-account saves validate required fields, require `CREDENTIAL_ENCRYPTION_KEY`, and store encrypted `enc:` values |
 
@@ -213,7 +213,7 @@ All under `/api/v1/admin/settings/` -- split across multiple route files:
 | GET | `/polar` | Get Polar credentials (masks token + webhook) |
 | POST | `/polar` | Save Polar credentials/provider enabled state. Rejects enabled saves until access token, product ID, and webhook secret are effectively present and not exact placeholder/demo values. Invalidates checkout projections |
 
-Payment gateway secret saves for Stripe, SSLCommerz, and Polar require the dedicated `CREDENTIAL_ENCRYPTION_KEY` and fail closed before settings writes or checkout-cache invalidation when that secret is missing. Runtime/readiness reads use the dedicated credential key and fail closed on missing/wrong-key ciphertext; legacy plaintext and old bare AES-GCM rows remain readable only when they do not require JWT fallback.
+Payment gateway secret saves for Stripe, SSLCommerz, and Polar require the dedicated `CREDENTIAL_ENCRYPTION_KEY` and fail closed before settings writes or checkout-cache invalidation when that secret is missing. Each logical gateway save encrypts first, commits through one provider-neutral relational batch, and invalidates checkout projections only after that batch succeeds. Runtime/readiness reads use the dedicated credential key and fail closed on missing/wrong-key ciphertext; legacy plaintext and old bare AES-GCM rows remain readable only when they do not require JWT fallback.
 
 Stripe, SSLCommerz, and Polar checkout readiness must reject obvious exact placeholder credentials before checkout exposure or provider calls. Keep the checks narrow enough to avoid blocking legitimate provider test-mode credentials merely because they use `test` prefixes.
 
@@ -223,7 +223,7 @@ COD-only `POST /payment-methods` payloads are valid in compatible checkout flows
 
 Checkout Flow settings also depend on the same payment-method payload for compatibility previews. If payment-method readiness is pending or unavailable, the admin UI should mark payment flow as loading/unknown, show retry state for failed reads, and block checkout-flow saves instead of relying on backend rejection copy.
 
-Checkout-flow composition is no longer coupled to the auth-provider write endpoint. `site_settings.checkout_flow_revision` starts at `1` for legacy rows and is the D1 authority for concurrent editor writes. The admin keeps its dirty draft when a stale save is rejected, then offers an explicit three-way merge (local changed fields win; untouched fields adopt the latest saved values) or a full replacement with the latest revision. Cache invalidation runs only after a committed CAS save.
+Checkout-flow composition is no longer coupled to the auth-provider write endpoint. `site_settings.checkout_flow_revision` starts at `1` for legacy rows and is the selected relational provider's authority for concurrent editor writes on D1, TursoDB, and PostgreSQL. The admin keeps its dirty draft when a stale save is rejected, then offers an explicit three-way merge (local changed fields win; untouched fields adopt the latest saved values) or a full replacement with the latest revision. Cache invalidation runs only after a committed CAS save.
 
 If guest checkout is disabled, checkout readiness requires the dedicated `CREDENTIAL_ENCRYPTION_KEY` and at least one usable OTP channel allowed by the saved customer-auth policy. Email, SMS, and WhatsApp readiness reuse their strict provider readers; provider failures return only a safe aggregate checkout issue. Public `/checkout/config` fails closed before advertising payment gateways when required sign-in cannot deliver an OTP. Guest checkout still requires the buyer phone number; this readiness rule does not make phone collection optional.
 

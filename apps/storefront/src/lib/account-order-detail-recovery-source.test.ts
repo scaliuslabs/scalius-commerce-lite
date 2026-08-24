@@ -19,4 +19,15 @@ describe("account order-detail payment recovery source", () => {
     expect(source).not.toContain("/order-success?");
     expect(source).not.toContain("clearCart");
   });
+
+  it("reuses canonical checkout branding and amount eligibility", () => {
+    const source = readFileSync(accountOrderDetailPath, "utf8");
+
+    expect(source).toContain("getGatewayPresentation");
+    expect(source).toContain("isGatewayEligibleForPaymentAmount");
+    expect(source).toContain("presentation.markSrc");
+    expect(source).not.toContain('return "International card"');
+    expect(source).not.toContain('return "Mobile banking & local cards"');
+    expect(source).not.toContain('return "International card & Cash App"');
+  });
 });

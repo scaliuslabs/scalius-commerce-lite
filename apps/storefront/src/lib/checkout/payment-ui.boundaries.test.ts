@@ -7,12 +7,20 @@ const checkoutSource = readFileSync(
   storefrontSourcePath("pages/checkout.astro"),
   "utf8",
 );
+const orderSuccessSource = readFileSync(
+  storefrontSourcePath("pages/order-success.astro"),
+  "utf8",
+);
 const overlaySource = readFileSync(
   storefrontSourcePath("components/CheckoutLoadingOverlay.astro"),
   "utf8",
 );
 const productControllerSource = readFileSync(
   storefrontSourcePath("components/product/scripts/product-controller.ts"),
+  "utf8",
+);
+const checkoutControllerSource = readFileSync(
+  storefrontSourcePath("lib/checkout/index.ts"),
   "utf8",
 );
 
@@ -42,5 +50,21 @@ describe("storefront payment transition UI", () => {
     expect(cartSource).toContain('role="alert"');
     expect(cartSource).toContain('<span aria-hidden="true">←</span>');
     expect(cartSource).toContain("border border-border bg-background");
+  });
+
+  it("finalizes COD-only carts against the exact submitted cart snapshot", () => {
+    expect(cartSource).toContain(
+      "cartFingerprintHash: await hashCheckoutCartFingerprint(cartItems)",
+    );
+    expect(orderSuccessSource).toContain("data-checkout-finalize-cart-hash");
+    expect(orderSuccessSource).toContain("directCheckoutMatches");
+  });
+
+  it("does not abandon an in-flight order creation behind a UI watchdog", () => {
+    expect(checkoutControllerSource).toContain(
+      "await handler.processPayment(ctx)",
+    );
+    expect(checkoutControllerSource).not.toContain("Promise.race");
+    expect(checkoutControllerSource).not.toContain("PAYMENT_PROCESS_TIMEOUT_MS");
   });
 });

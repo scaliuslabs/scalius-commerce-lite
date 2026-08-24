@@ -30,7 +30,7 @@ function makeRetryOrder(overrides: Partial<{
 }
 
 describe("order success payment retry", () => {
-  it("allows receipt-page retry for online gateway cancel and failure returns", () => {
+  it("recognizes callback outcomes but requires durable failure before offering retry", () => {
     expect(isRetryableHostedPaymentMethod("sslcommerz")).toBe(true);
     expect(isRetryableHostedPaymentMethod("polar")).toBe(true);
     expect(isRetryableHostedPaymentMethod("stripe")).toBe(true);
@@ -46,7 +46,7 @@ describe("order success payment retry", () => {
         "payment_pending",
         "cancelled",
       ),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it("allows hosted payment-issue receipts even without a callback result", () => {
@@ -70,7 +70,7 @@ describe("order success payment retry", () => {
     ).toBe(false);
   });
 
-  it("offers every visible online method for an explicitly cancelled receipt", () => {
+  it("does not trust a stale or forged cancelled query while payment is still pending", () => {
     expect(
       getOrderSuccessRetryOptions(
         makeRetryOrder(),
@@ -83,29 +83,7 @@ describe("order success payment retry", () => {
           { id: "cod" },
         ],
       ),
-    ).toEqual([
-      {
-        gateway: "sslcommerz",
-        endpoint: "/api/checkout/sslcommerz-session",
-        current: true,
-        label: "Retry payment",
-        requiresCardForm: false,
-      },
-      {
-        gateway: "polar",
-        endpoint: "/api/checkout/polar-session",
-        current: false,
-        label: "Pay online with Polar",
-        requiresCardForm: false,
-      },
-      {
-        gateway: "stripe",
-        endpoint: "/api/checkout/stripe-intent",
-        current: false,
-        label: "Pay by card",
-        requiresCardForm: true,
-      },
-    ]);
+    ).toEqual([]);
   });
 
   it("returns alternate visible hosted gateways for durable payment issues", () => {
@@ -126,21 +104,21 @@ describe("order success payment retry", () => {
         gateway: "sslcommerz",
         endpoint: "/api/checkout/sslcommerz-session",
         current: true,
-        label: "Retry payment",
+        label: "Pay online",
         requiresCardForm: false,
       },
       {
         gateway: "polar",
         endpoint: "/api/checkout/polar-session",
         current: false,
-        label: "Pay online with Polar",
+        label: "Card or digital wallet",
         requiresCardForm: false,
       },
       {
         gateway: "stripe",
         endpoint: "/api/checkout/stripe-intent",
         current: false,
-        label: "Pay by card",
+        label: "Credit or debit card",
         requiresCardForm: true,
       },
     ]);
@@ -159,7 +137,7 @@ describe("order success payment retry", () => {
         gateway: "polar",
         endpoint: "/api/checkout/polar-session",
         current: false,
-        label: "Pay online with Polar",
+        label: "Card or digital wallet",
         requiresCardForm: false,
       },
     ]);
@@ -181,7 +159,7 @@ describe("order success payment retry", () => {
         gateway: "stripe",
         endpoint: "/api/checkout/stripe-intent",
         current: false,
-        label: "Pay by card",
+        label: "Credit or debit card",
         requiresCardForm: true,
       },
     ]);

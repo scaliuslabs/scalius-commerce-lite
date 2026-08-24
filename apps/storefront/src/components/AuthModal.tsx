@@ -144,6 +144,8 @@ export default function AuthModal() {
   const [countdown, setCountdown] = useState(0);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const otpInputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const previouslyFocusedElementRef = useRef<HTMLElement | null>(null);
   const authSettingsPromiseRef = useRef<Promise<void> | null>(null);
   const sessionPromiseRef = useRef<Promise<void> | null>(null);
   const authUi = useMemo(
@@ -270,6 +272,10 @@ export default function AuthModal() {
 
   useEffect(() => {
     const handleOpen = (event?: Event) => {
+      const activeElement = document.activeElement;
+      previouslyFocusedElementRef.current = activeElement instanceof HTMLElement
+        ? activeElement
+        : null;
       const eventIntent = (event as CustomEvent<{ intent?: AuthIntent }> | undefined)?.detail?.intent;
       const requestedIntent = eventIntent ?? window.__scaliusAuthModalIntentPending;
       delete window.__scaliusAuthModalOpenPending;
@@ -336,13 +342,59 @@ export default function AuthModal() {
     }));
   };
 
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     if (step === "profile_setup" && customer?.needsProfileCompletion) {
       setError("Save your delivery profile or sign out to continue.");
       return;
     }
     setIsOpen(false);
-  };
+  }, [customer?.needsProfileCompletion, step]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const dialog = dialogRef.current;
+    const previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const focusFrame = window.requestAnimationFrame(() => dialog?.focus());
+
+    const handleDialogKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        handleClose();
+        return;
+      }
+      if (event.key !== "Tab" || !dialog) return;
+
+      const focusable = Array.from(dialog.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ));
+      const first = focusable[0];
+      const last = focusable.at(-1);
+      if (!first || !last) {
+        event.preventDefault();
+        dialog.focus();
+      } else if (event.shiftKey && (document.activeElement === first || document.activeElement === dialog)) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", handleDialogKeyDown, true);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      document.removeEventListener("keydown", handleDialogKeyDown, true);
+      document.body.style.overflow = previousBodyOverflow;
+      const previouslyFocused = previouslyFocusedElementRef.current;
+      previouslyFocusedElementRef.current = null;
+      window.requestAnimationFrame(() => {
+        if (previouslyFocused?.isConnected) previouslyFocused.focus();
+      });
+    };
+  }, [handleClose, isOpen]);
 
   const startCountdown = (seconds: number) => {
     setCountdown(seconds);
@@ -503,8 +555,15 @@ export default function AuthModal() {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-100 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm animate-in fade-in duration-200">
+    <div
+      className="fixed inset-0 z-100 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm animate-in fade-in duration-200"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) handleClose();
+      }}
+    >
       <div
+        ref={dialogRef}
+        tabIndex={-1}
         className="w-full max-w-sm rounded-xl border border-border bg-background p-4 shadow-2xl animate-in zoom-in-95 duration-200 sm:p-6"
         role="dialog"
         aria-modal="true"

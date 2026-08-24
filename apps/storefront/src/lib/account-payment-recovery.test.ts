@@ -100,7 +100,8 @@ describe("account payment recovery", () => {
 
   it("keeps balance recovery on the current gateway and replaces only untouched attempts", () => {
     expect(accountPageSource).toContain('currentDetail?.paymentRecovery.paymentType === "balance"');
-    expect(accountPageSource).toContain("return recoveryAction ? [recoveryAction.gateway] : [];");
+    expect(accountPageSource).toContain("configuredGateway && isGatewayEligibleForPaymentAmount");
+    expect(accountPageSource).toContain("? [recoveryAction.gateway] : [];");
     expect(accountPageSource).toContain(
       'replaceExistingAttempt: currentDetail.paymentRecovery.paymentType !== "balance"',
     );

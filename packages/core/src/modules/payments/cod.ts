@@ -2,10 +2,25 @@
 // Cash on Delivery (COD) tracking and management.
 // No external gateway — tracks delivery attempts and cash collection in DB.
 
-import { and, eq, sql } from "drizzle-orm";
-import { codTracking, orders, orderPayments } from "@scalius/database/schema";
-import { PaymentStatus } from "@scalius/database/schema";
-import type { Database } from "@scalius/database/client";
+import { and, eq, ne, sql } from "drizzle-orm";
+import type { BatchItem } from "drizzle-orm/batch";
+import {
+  codTracking,
+  CodStatus,
+  orders,
+  orderPayments,
+  paymentPlans,
+  PaymentMethod,
+  PaymentPlanStatus,
+  PaymentRecordStatus,
+  PaymentStatus,
+} from "@scalius/database/schema";
+import {
+  buildBatchGuard,
+  isBatchGuardError,
+  safeBatch,
+  type Database,
+} from "@scalius/database/client";
 import type {
   InitCODTrackingParams,
   RecordCODCollectionParams,
@@ -18,7 +33,7 @@ import type {
   RefundParams,
   RefundResult,
 } from "./provider";
-import { NotFoundError, ValidationError } from "@scalius/core/errors";
+import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import { computePaymentStateAfterPayment } from "./payment-state";
 import {
   assertOrderPaymentCurrency,
@@ -41,6 +56,13 @@ interface NormalizedCodCollection {
   expectedAmount: number;
   newPaidAmount: number;
   newBalanceDue: number;
+}
+
+const COD_COLLECTION_BATCH_GUARD = "COD_COLLECTION_STATE_CHANGED";
+type SQLiteBatchItem = BatchItem<"sqlite">;
+
+function codCollectionPaymentId(orderId: string): string {
+  return `cod_collection:${orderId}`;
 }
 
 export function validateCODCollectionDetails(
@@ -147,6 +169,10 @@ export async function recordCODCollection(
         totalAmount: orders.totalAmount,
         paidAmount: orders.paidAmount,
         balanceDue: orders.balanceDue,
+        paymentMethod: orders.paymentMethod,
+        paymentStatus: orders.paymentStatus,
+        version: orders.version,
+        deletedAt: orders.deletedAt,
         currencyCode: orders.currencyCode,
         currencyDecimalPlaces: orders.currencyDecimalPlaces,
       })
@@ -158,23 +184,46 @@ export async function recordCODCollection(
       throw new NotFoundError(`Order ${params.orderId} not found`);
     }
     const currency = resolveOrderCurrencySnapshot(order);
+    const paymentPlan = await db
+      .select({
+        id: paymentPlans.id,
+        status: paymentPlans.status,
+        balanceDue: paymentPlans.balanceDue,
+      })
+      .from(paymentPlans)
+      .where(eq(paymentPlans.orderId, params.orderId))
+      .get();
 
-    // Idempotency: check for existing successful COD payment
+    // A successful COD row is the durable idempotency claim for both a full
+    // COD order and the cash balance of an advance-payment plan.
     const existingPayment = await db
       .select({
         id: orderPayments.id,
         amount: orderPayments.amount,
         currency: orderPayments.currency,
+        paymentType: orderPayments.paymentType,
+        codCollectedBy: orderPayments.codCollectedBy,
       })
       .from(orderPayments)
       .where(
         and(
           eq(orderPayments.orderId, params.orderId),
-          eq(orderPayments.paymentMethod, "cod"),
-          eq(orderPayments.status, "succeeded"),
+          eq(orderPayments.paymentMethod, PaymentMethod.COD),
+          eq(orderPayments.status, PaymentRecordStatus.SUCCEEDED),
         ),
       )
       .get();
+    const tracking = await db
+      .select({
+        id: codTracking.id,
+        codStatus: codTracking.codStatus,
+        collectedBy: codTracking.collectedBy,
+        collectedAmount: codTracking.collectedAmount,
+      })
+      .from(codTracking)
+      .where(eq(codTracking.orderId, params.orderId))
+      .get();
+
     if (existingPayment) {
       assertOrderPaymentCurrency(existingPayment.currency, currency, "Existing COD payment");
       const collectedAmount = roundOrderMoney(params.collectedAmount, currency);
@@ -187,39 +236,124 @@ export async function recordCODCollection(
           collectedAmount,
         });
       }
-      const collectedTracking = await db
-        .select({ id: codTracking.id })
-        .from(codTracking)
-        .where(
-          and(
-            eq(codTracking.orderId, params.orderId),
-            eq(codTracking.codStatus, "collected"),
-          ),
-        )
-        .get();
-      if (!collectedTracking) {
-        throw new ValidationError("COD collection payment exists but collected tracking is missing.");
+      const collectedBy = typeof params.collectedBy === "string"
+        ? params.collectedBy.trim()
+        : "";
+      if (!collectedBy) {
+        throw new ValidationError("Collector name is required for COD collection.");
+      }
+      const expectedPaymentType = paymentPlan ? "balance" : "full";
+      const hasCompleteEvidence =
+        existingPayment.paymentType === expectedPaymentType &&
+        existingPayment.codCollectedBy === collectedBy &&
+        tracking?.codStatus === CodStatus.COLLECTED &&
+        tracking.collectedBy === collectedBy &&
+        tracking.collectedAmount !== null &&
+        orderMoneyEqual(tracking.collectedAmount, collectedAmount, currency) &&
+        order.paymentStatus === PaymentStatus.PAID &&
+        orderMoneyEqual(order.paidAmount ?? 0, order.totalAmount, currency) &&
+        orderMoneyEqual(order.balanceDue ?? 0, 0, currency) &&
+        (!paymentPlan || paymentPlan.status === PaymentPlanStatus.COMPLETED);
+      if (!hasCompleteEvidence) {
+        throw new ValidationError(
+          "Cash collection evidence is incomplete or conflicts with the saved order. Review the payment before retrying.",
+        );
       }
       return { success: true }; // Already recorded — idempotent
     }
 
-    const collection = validateCODCollectionDetails(order, params);
-
-    const tracking = await db
-      .select({ id: codTracking.id })
-      .from(codTracking)
-      .where(eq(codTracking.orderId, params.orderId))
-      .get();
-    if (!tracking) {
-      throw new ValidationError("COD tracking record is missing for this order.");
+    if (tracking?.codStatus === CodStatus.COLLECTED) {
+      throw new ValidationError(
+        "Cash collection tracking exists without a successful payment record. Review the payment before retrying.",
+      );
     }
 
-    // Atomically apply all three mutations
-    await db.batch([
+    const collection = validateCODCollectionDetails(order, params);
+    const isBalanceCollection = Boolean(paymentPlan);
+    if (paymentPlan) {
+      if (paymentPlan.status !== PaymentPlanStatus.DEPOSIT_PAID) {
+        throw new ValidationError(
+          "The online deposit must be paid before collecting the cash balance on delivery.",
+        );
+      }
+      if (!orderMoneyEqual(paymentPlan.balanceDue, collection.collectedAmount, currency)) {
+        throw new ValidationError(
+          "Cash collected must match the remaining balance in the payment plan.",
+          {
+            expectedAmount: roundOrderMoney(paymentPlan.balanceDue, currency),
+            collectedAmount: collection.collectedAmount,
+          },
+        );
+      }
+    } else if (order.paymentMethod !== PaymentMethod.COD) {
+      throw new ValidationError(
+        "Cash collection is available only for cash-on-delivery orders or a paid-deposit balance.",
+      );
+    }
+
+    const paymentId = codCollectionPaymentId(params.orderId);
+    const nextVersion = order.version + 1;
+    const paymentType = isBalanceCollection ? "balance" : "full";
+    const planReadyCondition = isBalanceCollection
+      ? sql`EXISTS (
+          SELECT 1 FROM ${paymentPlans}
+          WHERE ${paymentPlans.orderId} = ${params.orderId}
+            AND ${paymentPlans.status} = ${PaymentPlanStatus.DEPOSIT_PAID}
+            AND round(${paymentPlans.balanceDue}, ${currency.decimalPlaces}) = round(${collection.collectedAmount}, ${currency.decimalPlaces})
+        )`
+      : sql`1 = 1`;
+
+    // The deterministic payment id is the concurrency claim. The final guard
+    // verifies the whole aggregate and aborts the provider-neutral batch if a
+    // stale order version or plan status caused any write to become a no-op.
+    const batchStatements: SQLiteBatchItem[] = [
+      db
+        .insert(codTracking)
+        .values(createCODTrackingInsertValues(params.orderId))
+        .onConflictDoNothing({ target: codTracking.orderId }),
+
+      db
+        .update(orders)
+        .set({
+          paymentStatus: PaymentStatus.PAID,
+          paidAmount: collection.newPaidAmount,
+          balanceDue: collection.newBalanceDue,
+          version: nextVersion,
+          updatedAt: sql`unixepoch()`,
+        })
+        .where(and(
+          eq(orders.id, params.orderId),
+          eq(orders.version, order.version),
+          eq(orders.paymentStatus, order.paymentStatus),
+          sql`round(${orders.paidAmount}, ${currency.decimalPlaces}) = round(${order.paidAmount ?? 0}, ${currency.decimalPlaces})`,
+          sql`round(${orders.balanceDue}, ${currency.decimalPlaces}) = round(${order.balanceDue ?? 0}, ${currency.decimalPlaces})`,
+          sql`${orders.deletedAt} IS NULL`,
+          planReadyCondition,
+        ))
+        .returning({ id: orders.id }),
+
+      db
+        .insert(orderPayments)
+        .values({
+          id: paymentId,
+          orderId: params.orderId,
+          amount: collection.collectedAmount,
+          currency: currency.code,
+          paymentMethod: PaymentMethod.COD,
+          paymentType,
+          status: PaymentRecordStatus.SUCCEEDED,
+          codCollectedBy: collection.collectedBy,
+          codCollectedAt: sql`unixepoch()`,
+          codReceiptUrl: params.receiptUrl ?? null,
+          createdAt: sql`unixepoch()`,
+          updatedAt: sql`unixepoch()`,
+        })
+        .onConflictDoNothing({ target: orderPayments.id }),
+
       db
         .update(codTracking)
         .set({
-          codStatus: "collected",
+          codStatus: CodStatus.COLLECTED,
           collectedBy: collection.collectedBy,
           collectedAmount: collection.collectedAmount,
           collectedAt: sql`unixepoch()`,
@@ -228,38 +362,87 @@ export async function recordCODCollection(
           lastAttemptAt: sql`unixepoch()`,
           updatedAt: sql`unixepoch()`,
         })
-        .where(eq(codTracking.orderId, params.orderId)),
+        .where(and(
+          eq(codTracking.orderId, params.orderId),
+          ne(codTracking.codStatus, CodStatus.COLLECTED),
+          sql`EXISTS (
+            SELECT 1 FROM ${orderPayments}
+            WHERE ${orderPayments.id} = ${paymentId}
+              AND ${orderPayments.orderId} = ${params.orderId}
+          )`,
+        ))
+        .returning({ id: codTracking.id }),
+    ];
 
-      db.insert(orderPayments).values({
-        id: crypto.randomUUID(),
-        orderId: params.orderId,
-        amount: collection.collectedAmount,
-        currency: currency.code,
-        paymentMethod: "cod",
-        paymentType: "full",
-        status: "succeeded",
-        codCollectedBy: collection.collectedBy,
-        codCollectedAt: sql`unixepoch()`,
-        codReceiptUrl: params.receiptUrl ?? null,
-        createdAt: sql`unixepoch()`,
-        updatedAt: sql`unixepoch()`,
-      }),
+    if (isBalanceCollection) {
+      batchStatements.push(
+        db
+          .update(paymentPlans)
+          .set({
+            status: PaymentPlanStatus.COMPLETED,
+            balancePaidAt: sql`unixepoch()`,
+            updatedAt: sql`unixepoch()`,
+          })
+          .where(and(
+            eq(paymentPlans.orderId, params.orderId),
+            eq(paymentPlans.status, PaymentPlanStatus.DEPOSIT_PAID),
+            sql`EXISTS (
+              SELECT 1 FROM ${orderPayments}
+              WHERE ${orderPayments.id} = ${paymentId}
+                AND ${orderPayments.orderId} = ${params.orderId}
+            )`,
+          ))
+          .returning({ id: paymentPlans.id }),
+      );
+    }
 
-      db
-        .update(orders)
-        .set({
-          paymentStatus: PaymentStatus.PAID,
-          paidAmount: collection.newPaidAmount,
-          balanceDue: collection.newBalanceDue,
-          updatedAt: sql`unixepoch()`,
-        })
-        .where(eq(orders.id, params.orderId)),
-    ]);
+    const completedPlanCondition = isBalanceCollection
+      ? sql`EXISTS (
+          SELECT 1 FROM ${paymentPlans}
+          WHERE ${paymentPlans.orderId} = ${params.orderId}
+            AND ${paymentPlans.status} = ${PaymentPlanStatus.COMPLETED}
+            AND ${paymentPlans.balancePaidAt} IS NOT NULL
+        )`
+      : sql`1 = 1`;
+    batchStatements.push(buildBatchGuard(db, sql`
+      EXISTS (
+        SELECT 1 FROM ${orders}
+        WHERE ${orders.id} = ${params.orderId}
+          AND ${orders.version} = ${nextVersion}
+          AND ${orders.paymentStatus} = ${PaymentStatus.PAID}
+          AND round(${orders.paidAmount}, ${currency.decimalPlaces}) = round(${collection.newPaidAmount}, ${currency.decimalPlaces})
+          AND round(${orders.balanceDue}, ${currency.decimalPlaces}) = 0
+      )
+      AND EXISTS (
+        SELECT 1 FROM ${orderPayments}
+        WHERE ${orderPayments.id} = ${paymentId}
+          AND ${orderPayments.orderId} = ${params.orderId}
+          AND ${orderPayments.paymentMethod} = ${PaymentMethod.COD}
+          AND ${orderPayments.paymentType} = ${paymentType}
+          AND ${orderPayments.status} = ${PaymentRecordStatus.SUCCEEDED}
+          AND ${orderPayments.currency} = ${currency.code}
+          AND ${orderPayments.codCollectedBy} = ${collection.collectedBy}
+          AND round(${orderPayments.amount}, ${currency.decimalPlaces}) = round(${collection.collectedAmount}, ${currency.decimalPlaces})
+      )
+      AND EXISTS (
+        SELECT 1 FROM ${codTracking}
+        WHERE ${codTracking.orderId} = ${params.orderId}
+          AND ${codTracking.codStatus} = ${CodStatus.COLLECTED}
+          AND ${codTracking.collectedBy} = ${collection.collectedBy}
+          AND round(${codTracking.collectedAmount}, ${currency.decimalPlaces}) = round(${collection.collectedAmount}, ${currency.decimalPlaces})
+      )
+      AND ${completedPlanCondition}
+    `, COD_COLLECTION_BATCH_GUARD));
+
+    await safeBatch(db, batchStatements as never);
 
     return { success: true };
   } catch (err: unknown) {
     // Re-throw typed errors so the API layer can handle them
-    if (err instanceof NotFoundError || err instanceof ValidationError) throw err;
+    if (err instanceof NotFoundError || err instanceof ValidationError || err instanceof ConflictError) throw err;
+    if (isBatchGuardError(err, COD_COLLECTION_BATCH_GUARD)) {
+      throw new ConflictError("Order payment changed while cash collection was being recorded. Reload and try again.");
+    }
     const message = err instanceof Error ? err.message : "Failed to record COD collection";
     return { success: false, error: message };
   }

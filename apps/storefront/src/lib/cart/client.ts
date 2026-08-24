@@ -41,6 +41,8 @@ import {
 } from "./bulk-repair-actions";
 import { resolveCartKeyForValidatedLine } from "./cart-key-resolution";
 import {
+  clearHostedPaymentRecoverySession,
+  matchesCheckoutRecoveryCart,
   readHostedPaymentRecoverySession,
   type HostedPaymentRecoverySession,
 } from "../checkout/session-state";
@@ -87,6 +89,17 @@ let latestCheckoutLocation: {
   areaName: string;
 } | null = null;
 let hostedPaymentRecoverySession: HostedPaymentRecoverySession | null = null;
+
+function reconcileHostedPaymentRecoveryWithCart(): void {
+  if (
+    hostedPaymentRecoverySession?.cartFingerprint
+    && !matchesCheckoutRecoveryCart(hostedPaymentRecoverySession, cartStore.get().items)
+  ) {
+    clearHostedPaymentRecoverySession();
+    hostedPaymentRecoverySession = null;
+    renderCheckoutRecoveryNotice();
+  }
+}
 
 function renderCheckoutRecoveryNotice(): void {
   const notice = document.getElementById("checkoutRecoveryNotice");
@@ -365,6 +378,8 @@ function showDiscountMessage(
   if (!messageElement) return;
 
   messageElement.textContent = message;
+  messageElement.setAttribute("role", type === "error" ? "alert" : "status");
+  messageElement.setAttribute("aria-live", type === "error" ? "assertive" : "polite");
   const colors = {
     success: "text-primary",
     error: "text-destructive",
@@ -986,10 +1001,11 @@ function attemptToTrackInitiateCheckout() {
   if (hasTrackedInitiateCheckout) return;
 
   const { items, totalAmount } = cartStore.get();
-  const customerPhoneInput = document.getElementById(
-    "customerPhone",
-  ) as HTMLInputElement;
-  const phone = customerPhoneInput?.value;
+  const customerPhoneInput = document.querySelector<HTMLInputElement>(
+    '[name="customerPhone"]',
+  );
+  const phone =
+    customerPhoneInput?.dataset.e164Value || customerPhoneInput?.value;
   const isPhoneValid = phone && phone.trim().length >= 7;
 
   // The checkout is considered "initiated" once we have items and a valid phone number.
@@ -1039,10 +1055,12 @@ async function handleApplyDiscount() {
     return;
   }
 
-  const customerPhoneInput = document.getElementById(
-    "customerPhone",
-  ) as HTMLInputElement | null;
-  const enteredPhone = customerPhoneInput?.value.trim();
+  const customerPhoneInput = document.querySelector<HTMLInputElement>(
+    '[name="customerPhone"]',
+  );
+  const enteredPhone = (
+    customerPhoneInput?.dataset.e164Value || customerPhoneInput?.value || ""
+  ).trim();
   const customerPhone =
     enteredPhone && enteredPhone.length >= 7 ? enteredPhone : undefined;
 
@@ -1100,6 +1118,7 @@ export async function initCartFunctionality() {
   const runtimeSignal = resetCartRuntimeListeners();
   hydrateCartFromStorage();
   hostedPaymentRecoverySession = readHostedPaymentRecoverySession();
+  reconcileHostedPaymentRecoveryWithCart();
   renderCheckoutRecoveryNotice();
 
   // ── Read server-rendered shipping defaults ────────────────────────────────
@@ -1109,10 +1128,12 @@ export async function initCartFunctionality() {
     const meta = document.getElementById("checkout-meta");
     const defaultId = meta?.dataset.defaultShippingId;
     const defaultFee = meta?.dataset.defaultShippingFee;
+    const defaultName = meta?.dataset.defaultShippingName;
     if (defaultId) {
       window.lastShippingEventDetail = {
         id: defaultId,
         fee: parseInt(defaultFee || "0", 10),
+        name: defaultName || "",
       };
     }
   }
@@ -1209,6 +1230,7 @@ export async function initCartFunctionality() {
   window.bulkRefreshCartIssueItems = () => applyBulkCartRepair("refresh_item");
 
   cartStoreUnsubscribe = cartStore.subscribe(() => {
+    reconcileHostedPaymentRecoveryWithCart();
     void renderCartItems();
     updateCheckoutButtonState();
     handleAbandonedCheckout();
@@ -1219,14 +1241,9 @@ export async function initCartFunctionality() {
     "shippingLocationChange",
     (e) => {
       window.lastShippingEventDetail = (e as CustomEvent).detail;
-      // Reset discount when delivery option changes
-      if (cartStore.get().discount) {
-        removeDiscount();
-        showDiscountMessage(
-          "Discount removed — delivery option changed.",
-          "info",
-        );
-      }
+      // Preserve the buyer's code while the authoritative quote rechecks it
+      // against the newly selected delivery method. Initialization and browser
+      // restoration emit this event too, so clearing here loses valid codes.
       void updateTotals();
       handleAbandonedCheckout();
     },
@@ -1278,7 +1295,7 @@ export async function initCartFunctionality() {
     { signal: runtimeSignal },
   );
 
-  document.getElementById("customerPhone")?.addEventListener(
+  document.querySelector<HTMLInputElement>('[name="customerPhone"]')?.addEventListener(
     "blur",
     () => {
       attemptToTrackInitiateCheckout();
@@ -1313,6 +1330,7 @@ export async function initCartFunctionality() {
 export async function resumeCartPageFromHistory(): Promise<void> {
   hostedPaymentRecoverySession = readHostedPaymentRecoverySession();
   syncCartFromStorage();
+  reconcileHostedPaymentRecoveryWithCart();
   renderCheckoutRecoveryNotice();
   syncCheckoutIdInput();
   await renderCartItems();

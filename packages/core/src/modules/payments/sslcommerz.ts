@@ -240,7 +240,8 @@ export async function validateSSLCommerzIPN(
   storeId: string,
   storePassword: string,
   sandbox: boolean,
-  valId: string
+  valId: string,
+  signal?: AbortSignal,
 ): Promise<SSLCommerzValidationResult | null> {
   const base = getBaseUrl(sandbox);
   const url = new URL(`${base}/validator/api/validationserverAPI.php`);
@@ -250,7 +251,7 @@ export async function validateSSLCommerzIPN(
   url.searchParams.set("format", "json");
 
   try {
-    const response = await fetch(url.toString());
+    const response = await fetch(url.toString(), { signal });
     if (!response.ok) return null;
     const data = await response.json() as SSLCommerzValidationResult;
     return data;

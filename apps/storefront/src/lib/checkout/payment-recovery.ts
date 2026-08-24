@@ -3,12 +3,13 @@ export function buildPaymentRecoveryUrl(options: {
   gateway: string;
   paymentType?: string;
   depositAmount?: number;
+  result?: "failed" | "cancelled";
 }): string {
   const params = new URLSearchParams({
     orderId: options.orderId,
     payment: options.gateway,
-    result: "failed",
   });
+  if (options.result) params.set("result", options.result);
   if (options.paymentType) params.set("paymentType", options.paymentType);
   if (typeof options.depositAmount === "number" && Number.isFinite(options.depositAmount)) {
     params.set("depositAmount", String(options.depositAmount));

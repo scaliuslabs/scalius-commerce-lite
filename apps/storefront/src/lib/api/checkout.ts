@@ -16,6 +16,11 @@ export interface GatewayConfig {
   publishableKey?: string;   // Stripe only
   currencies?: string[];
   testMode?: boolean;
+  amountLimits?: {
+    currency: string;
+    min: number;
+    max: number;
+  };
   /** @deprecated Transitional fallback for cached SSLCommerz/Polar config. */
   sandbox?: boolean;
 }
@@ -31,6 +36,11 @@ export interface CheckoutConfig {
   partialPaymentAmount?: number;
   allowedCountries?: string[];
   allowedCountriesMode?: "include" | "exclude";
+  currency?: {
+    code: string;
+    symbol: string;
+    decimalPlaces: number;
+  };
   checkoutReadiness?: {
     ready: boolean;
     hasActiveShippingMethod: boolean;

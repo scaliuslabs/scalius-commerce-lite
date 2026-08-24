@@ -155,10 +155,11 @@ export async function validateOrderReceiptProof(
     )
     .get();
 
-  if (
-    !attempt
-    || attempt.createdAt + ORDER_RECEIPT_TOKEN_TTL_SECONDS <= nowSeconds
-  ) return null;
+  if (!attempt) return null;
+
+  const attemptReceiptExpiresAt =
+    attempt.createdAt + ORDER_RECEIPT_TOKEN_TTL_SECONDS;
+  if (attemptReceiptExpiresAt <= nowSeconds) return null;
 
   if (attempt.status === "committed") {
     await recordOrderReceipt(db, {
@@ -166,7 +167,7 @@ export async function validateOrderReceiptProof(
       token,
       source: "checkout_attempt",
       nowSeconds,
-      ttlSeconds: attempt.createdAt + ORDER_RECEIPT_TOKEN_TTL_SECONDS - nowSeconds,
+      ttlSeconds: attemptReceiptExpiresAt - nowSeconds,
     });
   }
 

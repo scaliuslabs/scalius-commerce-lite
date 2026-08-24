@@ -7315,6 +7315,11 @@ export type GetApiV1CheckoutConfigResponses = {
                 currencies: Array<string>;
                 sandbox: boolean;
                 testMode: boolean;
+                amountLimits: {
+                    currency: 'BDT';
+                    min: number;
+                    max: number;
+                };
             } | {
                 id: 'polar';
                 name: string;

@@ -123,6 +123,7 @@ const supportRequestActions = [
 function createDbMock(options: {
   attemptRow?: { orderId: string; status: string } | null;
   receiptOrderId?: string | null;
+  orderRowOverride?: Partial<typeof orderRow>;
 } = {}) {
   const inserts: unknown[] = [];
   return {
@@ -153,7 +154,7 @@ function createDbMock(options: {
             if (selection && Object.keys(selection).length === 2 && "orderId" in selection) {
               return null;
             }
-            return orderRow;
+            return { ...orderRow, ...options.orderRowOverride };
           }
           return null;
         },
@@ -173,10 +174,12 @@ function createDbMock(options: {
 function createTestApp(options: {
   tokenOrderId?: string | null;
   attemptRow?: { orderId: string; status: string } | null;
+  orderRowOverride?: Partial<typeof orderRow>;
 }) {
   const db = createDbMock({
     attemptRow: options.attemptRow,
     receiptOrderId: options.tokenOrderId,
+    orderRowOverride: options.orderRowOverride,
   });
   const kv = {
     get: vi.fn().mockResolvedValue(
@@ -342,6 +345,39 @@ describe("order receipt route", () => {
       }),
     );
   });
+
+  it.each([
+    ["cancelled", "unpaid"],
+    ["refunded", "refunded"],
+    ["returned", "partial"],
+    ["partially_refunded", "partial"],
+    ["pending", "failed"],
+  ])(
+    "does not expose a buyer-visible balance for %s/%s orders",
+    async (status, paymentStatus) => {
+      const { app, kv } = createTestApp({
+        tokenOrderId: "order_1",
+        orderRowOverride: {
+          status,
+          paymentStatus,
+          paidAmount: 0,
+          balanceDue: 250,
+        },
+      });
+
+      const response = await app.request(
+        "/api/v1/orders/receipt/order_1",
+        { headers: { "X-Receipt-Token": "chk_valid" } },
+        { CACHE: kv } as never,
+      );
+      const body = await response.json() as {
+        data?: { order?: { balanceDue?: number } };
+      };
+
+      expect(response.status).toBe(200);
+      expect(body.data?.order?.balanceDue).toBe(0);
+    },
+  );
 
   it("falls back to D1 checkout attempts, records receipt proof, and repairs KV when receipt row is missing", async () => {
     const { app, db, kv } = createTestApp({

@@ -20,7 +20,7 @@ import {
 } from "@/lib/order-success-payment-retry";
 import {
   clearOrderReceiptFinalizeCookieHeader,
-  hasOrderReceiptFinalizeCookie,
+  readOrderReceiptFinalizeCookie,
   readOrderReceiptCookie,
 } from "@/lib/order-receipt-cookie";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
@@ -30,6 +30,9 @@ import {
   resolveSavedOrderLineMoney,
   resolveSavedOrderMoneySummary,
 } from "@/lib/order-tax-presentation";
+import { getGatewayPresentation } from "@/lib/checkout/gateway-presentation";
+import { isGatewayEligibleForPaymentAmount } from "@/lib/checkout/gateway-amount-eligibility";
+import { DEFAULT_CURRENCY, formatPrice } from "@scalius/shared/currency";
 
 
 const legacyProofParams = ["token", "receipt_token", "receiptToken"];
@@ -46,9 +49,10 @@ const requestCookieHeader = Astro.request.headers.get("cookie");
 const receiptToken = orderId
   ? readOrderReceiptCookie(requestCookieHeader, orderId)
   : "";
-const hasCurrentCheckoutFinalizeMarker = orderId
-  ? hasOrderReceiptFinalizeCookie(requestCookieHeader, orderId)
-  : false;
+const currentCheckoutFinalizeMarker = orderId
+  ? readOrderReceiptFinalizeCookie(requestCookieHeader, orderId)
+  : null;
+const hasCurrentCheckoutFinalizeMarker = currentCheckoutFinalizeMarker !== null;
 const paymentResult = Astro.url.searchParams.get("result");
 const requestedPayment = Astro.url.searchParams.get("payment");
 const requestedPaymentType = Astro.url.searchParams.get("paymentType");
@@ -130,6 +134,11 @@ if (recoveryState) {
 const orderItemsFromApi: OrderItem[] = order?.items || [];
 const orderSuccessView = order ? getOrderSuccessViewState(order, paymentResult) : null;
 const visibleBalanceDue = order ? getOrderSuccessVisibleBalanceDue(order) : 0;
+const savedMoneySummary = order ? resolveSavedOrderMoneySummary(order) : null;
+const configuredCurrencyCode = checkoutConfig.currency?.code
+  ?? layoutData?.currency?.code
+  ?? DEFAULT_CURRENCY.code;
+const receiptCurrencyCode = savedMoneySummary?.currencyCode ?? configuredCurrencyCode;
 const shouldClearCheckoutCart = order ? shouldClearCheckoutCartForOrder(order) : false;
 const showsPositiveOrderState = orderSuccessView?.kind === "order_placed"
   || orderSuccessView?.kind === "order_updated";
@@ -146,9 +155,26 @@ if (shouldConsumeCurrentCheckoutFinalizeMarker && orderId) {
 const retryPaymentType = order
   ? resolveOrderSuccessRetryPaymentType(order, requestedPaymentType)
   : null;
+const configuredDepositAmount = Number(checkoutConfig.partialPaymentAmount ?? 0);
+const retryPaymentAmount = retryPaymentType === "deposit"
+  ? Math.min(
+      order?.totalAmount ?? visibleBalanceDue,
+      requestedDepositAmount
+        ?? (Number.isFinite(configuredDepositAmount) && configuredDepositAmount > 0
+          ? configuredDepositAmount
+          : visibleBalanceDue),
+    )
+  : visibleBalanceDue;
+const retryEligibleGateways = checkoutConfig.gateways.filter((gateway) =>
+  isGatewayEligibleForPaymentAmount(gateway, retryPaymentAmount, receiptCurrencyCode),
+);
 const retryPaymentOptions = order && orderSuccessView && receiptToken && canRetryOrderSuccessPayment(order, orderSuccessView.kind, paymentResult)
-  ? getOrderSuccessRetryOptions(order, orderSuccessView.kind, paymentResult, checkoutConfig.gateways)
+  ? getOrderSuccessRetryOptions(order, orderSuccessView.kind, paymentResult, retryEligibleGateways)
       .filter((option) => retryPaymentType !== "balance" || option.current)
+      .map((option) => ({
+        ...option,
+        presentation: getGatewayPresentation(option.gateway, option.label),
+      }))
   : [];
 const stripeRetryGateway = retryPaymentOptions.some((option) => option.gateway === "stripe")
   ? checkoutConfig.gateways.find((gateway) => gateway.id === "stripe")
@@ -161,11 +187,7 @@ const purchaseTrackingPayload =
   order && orderSuccessView?.shouldFinalizeClientSide
     ? createPurchaseTrackingPayload(order, orderItemsFromApi)
     : null;
-import { DEFAULT_CURRENCY, formatPrice } from "@scalius/shared/currency";
 const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
-const savedMoneySummary = order ? resolveSavedOrderMoneySummary(order) : null;
-const configuredCurrencyCode = layoutData?.currency?.code ?? DEFAULT_CURRENCY.code;
-const receiptCurrencyCode = savedMoneySummary?.currencyCode ?? configuredCurrencyCode;
 const receiptCurrencySymbol = savedMoneySummary
   ? `${receiptCurrencyCode} `
   : currencySymbol;
@@ -207,6 +229,8 @@ const orderPlacedAt = order?.createdAt
     data-order-success-state={orderSuccessView?.kind ?? "recovery"}
     data-order-finalize={orderSuccessView?.shouldFinalizeClientSide ? "true" : "false"}
     data-checkout-cart-finalize={shouldClearCheckoutCart ? "true" : "false"}
+    data-checkout-finalize-id={currentCheckoutFinalizeMarker?.checkoutId ?? undefined}
+    data-checkout-finalize-cart-hash={currentCheckoutFinalizeMarker?.cartFingerprintHash ?? undefined}
     data-order-id={order?.id}
     data-payment-method={order?.paymentMethod}
     data-order-updated-at={order?.updatedAt ?? undefined}
@@ -250,7 +274,8 @@ const orderPlacedAt = order?.createdAt
             {retryPaymentOptions.map((option) => (
               <button
                 type="button"
-                class={`inline-flex min-h-11 items-center justify-center rounded-lg px-5 py-2.5 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${option.current ? "bg-primary text-primary-foreground hover:bg-primary/90" : "border border-border bg-background text-foreground hover:bg-muted"}`}
+                class={`inline-flex min-h-16 items-center gap-3 rounded-xl border bg-background px-4 py-3 text-left text-sm text-foreground transition-colors hover:bg-muted/40 disabled:cursor-not-allowed disabled:opacity-60 ${option.current ? "border-primary ring-1 ring-primary" : "border-border"}`}
+                aria-label={`Retry payment with ${option.presentation.buyerLabel}`}
                 data-payment-retry-button
                 data-endpoint={option.endpoint}
                 data-gateway={option.gateway}
@@ -258,7 +283,29 @@ const orderPlacedAt = order?.createdAt
                 data-payment-type={retryPaymentType}
                 data-deposit-amount={retryPaymentType === "deposit" && requestedDepositAmount ? String(requestedDepositAmount) : undefined}
               >
-                {option.label}
+                <span class="flex h-8 min-w-12 shrink-0 items-center justify-center gap-1.5 rounded-md border border-border bg-background px-2" aria-hidden="true">
+                  {option.presentation.markSrc && (
+                    <img
+                      src={option.presentation.markSrc}
+                      alt=""
+                      width={option.presentation.markKind === "wordmark" ? 72 : 20}
+                      height={24}
+                      class={`${option.presentation.markKind === "wordmark" ? "h-4 max-w-18" : "h-5 w-5"} object-contain ${option.presentation.darkMarkSrc ? "dark:hidden" : ""}`}
+                    />
+                  )}
+                  {option.presentation.darkMarkSrc && (
+                    <img src={option.presentation.darkMarkSrc} alt="" width="20" height="20" class="hidden h-5 w-5 object-contain dark:block" />
+                  )}
+                  {option.presentation.markKind === "icon" && option.presentation.providerLabel && (
+                    <span class="text-[11px] font-semibold text-foreground">{option.presentation.providerLabel}</span>
+                  )}
+                </span>
+                <span class="min-w-0">
+                  <span class="block font-semibold">{option.presentation.buyerLabel}</span>
+                  {option.presentation.description && (
+                    <span class="mt-0.5 block text-xs font-normal text-muted-foreground">{option.presentation.description}</span>
+                  )}
+                </span>
               </button>
             ))}
           </div>
@@ -565,6 +612,7 @@ const orderPlacedAt = order?.createdAt
     clearCheckoutAttemptSession,
     clearCheckoutSession,
     clearHostedPaymentRecoverySession,
+    hashCheckoutCartFingerprint,
     matchesCheckoutRecoverySession,
     readHostedPaymentRecoverySession,
   } from "@/lib/checkout/session-state";
@@ -573,7 +621,7 @@ const orderPlacedAt = order?.createdAt
   import { cartStore, clearCart, syncCartFromStorage } from "@/store/cart";
   import { resolveCheckoutReceiptCleanup } from "@/lib/checkout/receipt-finalization";
 
-  document.addEventListener("DOMContentLoaded", () => {
+  document.addEventListener("DOMContentLoaded", async () => {
     const receiptElement = document.querySelector<HTMLElement>(
       "[data-order-success-state][data-order-id]",
     );
@@ -586,11 +634,26 @@ const orderPlacedAt = order?.createdAt
       const matchingHostedCheckout = Boolean(
         recoveryMatchesOrder && matchesCheckoutRecoverySession(recovery, cartStore.get().items),
       );
+      const directCheckoutId = receiptElement.dataset.checkoutFinalizeId;
+      const directCartHash = receiptElement.dataset.checkoutFinalizeCartHash;
+      let directCheckoutMatches = false;
+      if (directCheckoutId && directCartHash) {
+        const activeCheckoutId = (() => {
+          try {
+            return sessionStorage.getItem("checkoutId");
+          } catch {
+            return null;
+          }
+        })();
+        directCheckoutMatches = activeCheckoutId === directCheckoutId
+          && await hashCheckoutCartFingerprint(cartStore.get().items) === directCartHash;
+      }
       const acceptedCheckout = receiptElement.dataset.checkoutCartFinalize === "true";
       const cleanup = resolveCheckoutReceiptCleanup({
         receiptState,
         recoveryMatchesOrder,
         recoveryMatchesCheckout: matchingHostedCheckout,
+        directCheckoutMatches,
         acceptedCheckout,
       });
       if (cleanup.clearCart) clearCart();
