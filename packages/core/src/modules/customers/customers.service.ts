@@ -80,6 +80,36 @@ export interface CustomerOrderShipmentSummary {
     createdAt: string | null;
 }
 
+/**
+ * Some one-shot database adapters map batched query rows positionally. Keep
+ * the second projection of the legacy `price` column explicitly aliased so a
+ * duplicate SQL column name cannot collapse and shift the immutable
+ * minor-unit fields that follow it. The query stays provider-neutral.
+ */
+export function buildCustomerOrderItemDetailProjection() {
+    return {
+        id: orderItems.id,
+        productId: orderItems.productId,
+        variantId: orderItems.variantId,
+        quantity: orderItems.quantity,
+        price: orderItems.price,
+        productName: orderItems.productName,
+        productSlug: products.slug,
+        productImageObjectKey: media.objectKey,
+        productImageStatus: media.status,
+        variantLabel: orderItems.variantLabel,
+        unitPrice: sql<number>`${orderItems.price}`.as("unitPrice"),
+        lineTotal: sql<number>`${orderItems.quantity} * ${orderItems.price}`.as("lineTotal"),
+        fulfillmentStatus: orderItems.fulfillmentStatus,
+        unitPriceMinor: orderItems.unitPriceMinor,
+        lineSubtotalMinor: orderItems.lineSubtotalMinor,
+        discountAmountMinor: orderItems.discountAmountMinor,
+        taxableAmountMinor: orderItems.taxableAmountMinor,
+        taxAmountMinor: orderItems.taxAmountMinor,
+        createdAt: sql<number>`CAST(${orderItems.createdAt} AS INTEGER)`,
+    };
+}
+
 type CustomerOrderListItem = {
     orderId: string;
     productId: string;
@@ -1058,27 +1088,7 @@ export async function getCustomerOrderDetailForOrder(
     const [batchedRows, refundAttemptViews, supportRequests, customerRequestPolicy] = await Promise.all([
         db.batch([
         db
-            .select({
-                id: orderItems.id,
-                productId: orderItems.productId,
-                variantId: orderItems.variantId,
-                quantity: orderItems.quantity,
-                price: orderItems.price,
-                productName: orderItems.productName,
-                productSlug: products.slug,
-                productImageObjectKey: media.objectKey,
-                productImageStatus: media.status,
-                variantLabel: orderItems.variantLabel,
-                unitPrice: orderItems.price,
-                lineTotal: sql<number>`${orderItems.quantity} * ${orderItems.price}`.as("lineTotal"),
-                fulfillmentStatus: orderItems.fulfillmentStatus,
-                unitPriceMinor: orderItems.unitPriceMinor,
-                lineSubtotalMinor: orderItems.lineSubtotalMinor,
-                discountAmountMinor: orderItems.discountAmountMinor,
-                taxableAmountMinor: orderItems.taxableAmountMinor,
-                taxAmountMinor: orderItems.taxAmountMinor,
-                createdAt: sql<number>`CAST(${orderItems.createdAt} AS INTEGER)`,
-            })
+            .select(buildCustomerOrderItemDetailProjection())
             .from(orderItems)
             .leftJoin(products, eq(products.id, orderItems.productId))
             .leftJoin(media, eq(media.id, orderItems.productImageMediaId))

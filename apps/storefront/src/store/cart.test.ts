@@ -96,6 +96,24 @@ describe("cart store", () => {
     expect(hydrateCartFromStorage()).toBe(hydrated);
   });
 
+  it("reconciles a BFCache-restored cart with current browser storage", async () => {
+    localStorage.setItem("cart", JSON.stringify(persistedCart));
+    const { cartStore, hydrateCartFromStorage, syncCartFromStorage } =
+      await importFreshCartModule();
+
+    hydrateCartFromStorage();
+    expect(cartStore.get().totalItems).toBe(2);
+
+    localStorage.setItem("cart", JSON.stringify({ items: {} }));
+    expect(syncCartFromStorage()).toEqual({
+      items: {},
+      totalItems: 0,
+      totalAmount: 0,
+      discount: null,
+    });
+    expect(cartStore.get().items).toEqual({});
+  });
+
   it("uses one shipping-fee authority for ordinary, waived, mixed, and invalid fees", async () => {
     const {
       cartHasFreeDeliveryItem,

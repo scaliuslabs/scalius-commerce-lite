@@ -1,10 +1,25 @@
 ---
 import Layout from "@/layouts/Layout.astro";
 import { getLayoutData, type LayoutData } from "@/lib/api";
+import { getCheckoutConfig } from "@/lib/api/checkout";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
 
 const orderId = Astro.url.searchParams.get("orderId")?.trim() ?? "";
-const layoutData: LayoutData | null = await getLayoutData();
+const [layoutData, checkoutConfig]: [LayoutData | null, Awaited<ReturnType<typeof getCheckoutConfig>>] = await Promise.all([
+  getLayoutData(),
+  getCheckoutConfig(),
+]);
+const recoveryChannelLabels = {
+  sms: "SMS to order phone",
+  whatsapp: "WhatsApp to order phone",
+  email: "Email on order",
+} as const;
+const recoveryChannels = (checkoutConfig.customerAuthPolicy?.otpChannels ?? [])
+  .filter((channel): channel is keyof typeof recoveryChannelLabels => channel in recoveryChannelLabels);
+const defaultRecoveryChannel = checkoutConfig.customerAuthPolicy?.defaultOtpChannel;
+const orderedRecoveryChannels = defaultRecoveryChannel && recoveryChannels.includes(defaultRecoveryChannel)
+  ? [defaultRecoveryChannel, ...recoveryChannels.filter((channel) => channel !== defaultRecoveryChannel)]
+  : recoveryChannels;
 ---
 
 <Layout title="Payment Recovery" layoutData={layoutData} noindex>
@@ -19,7 +34,7 @@ const layoutData: LayoutData | null = await getLayoutData();
         </p>
       </div>
 
-      {orderId ? (
+      {orderId && orderedRecoveryChannels.length > 0 ? (
         <form id="paymentRecoveryForm" class="space-y-4" method="post" action="/api/payment-recovery/send-code">
           <input type="hidden" id="paymentRecoveryOrderId" name="orderId" value={orderId} />
 
@@ -35,9 +50,9 @@ const layoutData: LayoutData | null = await getLayoutData();
               name="channel"
               class="min-h-11 rounded-lg border border-input bg-background px-3 text-sm text-foreground shadow-sm outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/20"
             >
-              <option value="sms">SMS to order phone</option>
-              <option value="whatsapp">WhatsApp to order phone</option>
-              <option value="email">Email on order</option>
+              {orderedRecoveryChannels.map((channel) => (
+                <option value={channel}>{recoveryChannelLabels[channel]}</option>
+              ))}
             </select>
           </div>
 
@@ -74,6 +89,10 @@ const layoutData: LayoutData | null = await getLayoutData();
 
           <p id="paymentRecoveryMessage" class="min-h-5 text-sm text-muted-foreground" aria-live="polite"></p>
         </form>
+      ) : orderId ? (
+        <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          Payment recovery is not available right now. Sign in to check account orders or contact the store.
+        </div>
       ) : (
         <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
           This recovery link is missing an order reference. Ask the store to send a fresh payment recovery link.

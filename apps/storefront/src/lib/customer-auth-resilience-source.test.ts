@@ -49,9 +49,11 @@ describe("customer auth resilience source boundaries", () => {
 
     expect(source).toContain("const session = await readCustomerSessionForCheckout();");
     expect(source).toContain("if (session.unavailable) {");
-    expect(source).toMatch(
-      /alert\(\s*session\.error\s*\|\|\s*"We could not verify your account right now\. Please try again\."\s*,?\s*\)/,
+    expect(source).toContain("showCheckoutFormError(");
+    expect(source).toContain(
+      '"We could not verify your account right now. Please try again.",',
     );
+    expect(source).not.toMatch(/\b(?:window\.)?alert\s*\(/);
     expect(source).toContain("if (!session.authenticated) {");
     expect(source).toContain("window.dispatchEvent(new CustomEvent(\"open-auth-modal\"));");
   });
@@ -68,9 +70,24 @@ describe("customer auth resilience source boundaries", () => {
     expect(cartSource).toMatch(
       /<form\b[^>]*method="POST"[^>]*action="\/cart"[^>]*id="checkoutForm"[\s\S]*name="formIntent"[\s\S]*value="checkout"/,
     );
+    expect(cartSource).toMatch(
+      /<form\b[^>]*method="POST"[^>]*action="\/cart"[^>]*id="checkoutForm"[^>]*novalidate/s,
+    );
     expect(cartSource).toContain('if (formData.get("formIntent") === "checkout") {');
     expect(authModalSource).not.toMatch(/<form\b/);
     expect(authModalSource).not.toMatch(/name="(?:phone|email|otp|code|password|token)"/);
+  });
+
+  it("lets explicit empty checkout edits replace older saved buyer details", () => {
+    const cartSource = readStorefrontSource("src/pages/cart.astro");
+
+    expect(cartSource).toContain("const values: Record<string, string> = {};");
+    expect(cartSource).toContain("if (input) values[field] = input.value;");
+    expect(cartSource).toContain(
+      'else if (draft && field in draft) values[field] = draft[field] ?? "";',
+    );
+    expect(cartSource).toContain("persistCheckoutFormDraftNow();");
+    expect(cartSource).not.toContain("shippingAddressInput?.reportValidity()");
   });
 
   it("keeps post-sale payment recovery controls out of native forms", () => {
@@ -91,6 +108,11 @@ describe("customer auth resilience source boundaries", () => {
     expect(source).toContain('import { installLazyGlobalUi } from "@/scripts/lazy-global-ui";');
     expect(source).not.toContain("<AuthModal client:");
     expect(runtimeSource).toContain("window.__scaliusAuthModalOpenPending = true;");
+    expect(runtimeSource).toContain("window.__scaliusAuthModalIntentPending = intent;");
+    expect(runtimeSource).toContain("const loadAuth = (");
+    expect(runtimeSource).toContain("const resumeAuth = () => void loadAuth(false);");
+    expect(runtimeSource).toContain('window.addEventListener("open-auth-modal", (event) => {');
+    expect(runtimeSource).toContain("void loadAuth(true, requestedIntent);");
     expect(runtimeSource).toContain('import("@/components/client/mount-auth-modal")');
     expect(runtimeSource).toContain("if (hasCustomerAuthMirrorCookie()) {");
   });
@@ -102,6 +124,8 @@ describe("customer auth resilience source boundaries", () => {
     const pendingIndex = source.indexOf("if (window.__scaliusAuthModalOpenPending) {");
 
     expect(source).toContain("delete window.__scaliusAuthModalOpenPending;");
+    expect(source).toContain("eventIntent ?? window.__scaliusAuthModalIntentPending");
+    expect(source).toContain("delete window.__scaliusAuthModalIntentPending;");
     expect(listenerIndex).toBeGreaterThanOrEqual(0);
     expect(pendingIndex).toBeGreaterThan(listenerIndex);
     expect(source).toContain("handleOpen();");

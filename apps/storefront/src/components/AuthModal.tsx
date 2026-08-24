@@ -269,8 +269,16 @@ export default function AuthModal() {
   }, [hydrateExistingCustomerSession]);
 
   useEffect(() => {
-    const handleOpen = () => {
+    const handleOpen = (event?: Event) => {
+      const eventIntent = (event as CustomEvent<{ intent?: AuthIntent }> | undefined)?.detail?.intent;
+      const requestedIntent = eventIntent ?? window.__scaliusAuthModalIntentPending;
       delete window.__scaliusAuthModalOpenPending;
+      delete window.__scaliusAuthModalIntentPending;
+      if (requestedIntent === "sign_in" || requestedIntent === "sign_up") {
+        setAuthIntent(requestedIntent);
+        setError("");
+        setOtp("");
+      }
       setIsOpen(true);
       void ensureAuthSettings();
       if (hasCustomerAuthMirrorCookie()) {
@@ -497,18 +505,21 @@ export default function AuthModal() {
   return (
     <div className="fixed inset-0 z-100 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm animate-in fade-in duration-200">
       <div
-        className="w-full max-w-sm rounded-xl border border-border bg-background p-6 shadow-2xl animate-in zoom-in-95 duration-200"
+        className="w-full max-w-sm rounded-xl border border-border bg-background p-4 shadow-2xl animate-in zoom-in-95 duration-200 sm:p-6"
         role="dialog"
         aria-modal="true"
+        aria-labelledby="customer-auth-title"
       >
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-bold tracking-tight text-foreground">
+          <h2 id="customer-auth-title" className="text-xl font-bold tracking-tight text-foreground">
             {step === "authenticated" ? "Welcome back" : authIntent === "sign_up" ? "Create Account" : "Sign In"}
           </h2>
           <button
+            type="button"
             onClick={handleClose}
-            className="rounded-full p-1.5 text-muted-foreground hover:bg-muted transition-colors"
+            className="flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted"
+            aria-label="Close account dialog"
           >
             <X className="h-5 w-5" />
           </button>
@@ -528,13 +539,13 @@ export default function AuthModal() {
               <a
                 href="/account"
                 data-astro-prefetch="false"
-                className="flex-1 flex justify-center items-center h-10 rounded-lg border border-border bg-background text-sm font-medium hover:bg-muted transition-colors"
+                className="flex min-h-11 flex-1 items-center justify-center rounded-lg border border-border bg-background text-sm font-medium transition-colors hover:bg-muted"
               >
                 Go to Dashboard
               </a>
               <button
                 onClick={handleLogout}
-                className="flex-1 h-10 rounded-lg bg-foreground text-background text-sm font-medium hover:bg-foreground/90 transition-colors"
+                className="min-h-11 flex-1 rounded-lg bg-foreground text-sm font-medium text-background transition-colors hover:bg-foreground/90"
               >
                 Sign out
               </button>
@@ -558,7 +569,7 @@ export default function AuthModal() {
               {(["sign_in", "sign_up"] as const).map((intent) => (
                 <button
                   key={intent}
-                  className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${authIntent === intent ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                  className={`min-h-11 flex-1 rounded-md text-sm font-medium transition-all ${authIntent === intent ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
                   onClick={() => { setAuthIntent(intent); setError(""); setOtp(""); }}
                 >
                   {intent === "sign_in" ? "Sign in" : "Create account"}
@@ -571,7 +582,7 @@ export default function AuthModal() {
                 {authUi.requestOptions.map((option) => (
                   <button
                     key={option.channel}
-                    className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium rounded-md transition-all ${otpChannel === option.channel ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                    className={`flex min-h-11 flex-1 items-center justify-center gap-2 rounded-md text-sm font-medium transition-all ${otpChannel === option.channel ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
                     onClick={() => { setOtpChannel(option.channel); setError(""); setIdentifier(""); setPhoneInput(""); setEmailInput(""); }}
                   >
                     {option.method === "email" ? <Mail className="h-4 w-4" /> : <Smartphone className="h-4 w-4" />}
@@ -582,21 +593,23 @@ export default function AuthModal() {
             )}
 
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-foreground">
+              <label htmlFor="auth-primary-input" className="text-sm font-medium text-foreground">
                 {authUi.currentOption.destinationLabel}
               </label>
               {authUi.fields.email.primary ? (
                 <input
+                  id="auth-primary-input"
                   type="email"
                   value={identifier}
                   onChange={(e) => { setIdentifier(e.target.value); setError(""); }}
                   onKeyDown={(e) => e.key === "Enter" && handleSendOtp()}
                   placeholder="you@example.com"
-                  className="w-full h-11 rounded-lg border border-input bg-background px-3 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring transition-all"
+                  className="h-11 w-full rounded-lg border border-input bg-background px-3 text-base transition-all focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
                   autoFocus
                 />
               ) : (
                 <PhoneInput
+                  id="auth-primary-input"
                   international
                   addInternationalOption={!hasActiveCountryPolicy}
                   countryCallingCodeEditable={!hasActiveCountryPolicy}
@@ -607,15 +620,16 @@ export default function AuthModal() {
                   countries={effectiveCountries as any}
                   value={identifier}
                   onChange={(value) => { setIdentifier(value || ""); setError(""); }}
-                  className="w-full h-11 rounded-lg border border-input bg-background px-3 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring transition-all [&_.PhoneInputInput]:border-none [&_.PhoneInputInput]:bg-transparent [&_.PhoneInputInput]:outline-none [&_.PhoneInputInput]:text-sm [&_.PhoneInputInput]:h-full"
+                  className="h-11 w-full rounded-lg border border-input bg-background px-3 text-base transition-all focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring [&_.PhoneInputInput]:h-full [&_.PhoneInputInput]:border-none [&_.PhoneInputInput]:bg-transparent [&_.PhoneInputInput]:text-base [&_.PhoneInputInput]:outline-none"
                 />
               )}
             </div>
 
             {authUi.fields.phone.visible && !authUi.fields.phone.primary && (
               <div className="space-y-1.5 mt-2">
-                <label className="text-sm font-medium text-foreground">{authUi.fields.phone.label}</label>
+                <label htmlFor="auth-phone-input" className="text-sm font-medium text-foreground">{authUi.fields.phone.label}</label>
                 <PhoneInput
+                  id="auth-phone-input"
                   international
                   addInternationalOption={!hasActiveCountryPolicy}
                   countryCallingCodeEditable={!hasActiveCountryPolicy}
@@ -626,23 +640,24 @@ export default function AuthModal() {
                   countries={effectiveCountries as any}
                   value={phoneInput}
                   onChange={(value) => { setPhoneInput(value || ""); setError(""); }}
-                  className="w-full h-11 rounded-lg border border-input bg-background px-3 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring transition-all [&_.PhoneInputInput]:border-none [&_.PhoneInputInput]:bg-transparent [&_.PhoneInputInput]:outline-none [&_.PhoneInputInput]:text-sm [&_.PhoneInputInput]:h-full"
+                  className="h-11 w-full rounded-lg border border-input bg-background px-3 text-base transition-all focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring [&_.PhoneInputInput]:h-full [&_.PhoneInputInput]:border-none [&_.PhoneInputInput]:bg-transparent [&_.PhoneInputInput]:text-base [&_.PhoneInputInput]:outline-none"
                 />
               </div>
             )}
 
             {authUi.fields.email.visible && !authUi.fields.email.primary && (
               <div className="space-y-1.5 mt-2">
-                <label className="text-sm font-medium text-foreground">
+                <label htmlFor="auth-email-input" className="text-sm font-medium text-foreground">
                   {authUi.fields.email.label}
                 </label>
                 <input
+                  id="auth-email-input"
                   type="email"
                   value={emailInput}
                   onChange={(e) => { setEmailInput(e.target.value); setError(""); }}
                   onKeyDown={(e) => e.key === "Enter" && handleSendOtp()}
                   placeholder="you@example.com"
-                  className="w-full h-11 rounded-lg border border-input bg-background px-3 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring transition-all"
+                  className="h-11 w-full rounded-lg border border-input bg-background px-3 text-base transition-all focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
                 />
               </div>
             )}
@@ -690,7 +705,9 @@ export default function AuthModal() {
             </div>
 
             <div className="space-y-2">
+              <label htmlFor="customer-otp" className="sr-only">Verification code</label>
               <input
+                id="customer-otp"
                 ref={otpInputRef}
                 type="text"
                 inputMode="numeric"
@@ -778,7 +795,7 @@ export default function AuthModal() {
                   value={profileName}
                   onChange={(e) => { setProfileName(e.target.value); setError(""); }}
                   placeholder="John Doe"
-                  className="h-11 w-full rounded-lg border border-input bg-background px-3 text-sm transition-all focus:border-ring focus:outline-none sm:h-10"
+                  className="h-11 w-full rounded-lg border border-input bg-background px-3 text-base transition-all focus:border-ring focus:outline-none sm:h-10"
                 />
               </div>
 
@@ -794,7 +811,7 @@ export default function AuthModal() {
                   value={profileAddress}
                   onChange={(e) => { setProfileAddress(e.target.value); setError(""); }}
                   placeholder="Apt, Street, Building"
-                  className="h-11 w-full rounded-lg border border-input bg-background px-3 text-sm transition-all focus:border-ring focus:outline-none sm:h-10"
+                  className="h-11 w-full rounded-lg border border-input bg-background px-3 text-base transition-all focus:border-ring focus:outline-none sm:h-10"
                 />
               </div>
 

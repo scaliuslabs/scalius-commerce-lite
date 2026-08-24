@@ -27,6 +27,7 @@ const polarSessionSchema = z.object({
     customerEmail: z.string().optional(),
     customerPhone: z.string().optional(),
     receiptToken: z.string().min(1).optional(),
+    replaceExistingAttempt: z.boolean().optional(),
 });
 
 function getSessionReceiptToken(c: { req: { header: (name: string) => string | undefined } }, body: { receiptToken?: string }): string | undefined {
@@ -89,6 +90,7 @@ polarPaymentRoutes.openapi(createPolarSessionRoute, async (c) => {
         orderId,
         paymentType: body.paymentType || body.type,
         depositAmount: body.depositAmount,
+        replaceExistingAttempt: body.replaceExistingAttempt,
         proof: { kind: "receipt", receiptToken },
         returnTarget: { kind: "receipt" },
     });

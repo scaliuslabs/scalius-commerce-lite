@@ -38,6 +38,11 @@ function createTestApp(options: {
   const selectedRows = [...(options.selectedRows ?? [])];
   const insertReturning = vi.fn().mockResolvedValue([languageRecord]);
   const updateReturning = vi.fn().mockResolvedValue(options.mutationRows ?? [languageRecord]);
+  const updateSet = vi.fn((_values: Record<string, unknown>) => ({
+    where: () => ({
+      returning: updateReturning,
+    }),
+  }));
   const deleteReturning = vi.fn().mockResolvedValue(options.mutationRows ?? [languageRecord]);
   const batch = vi.fn(async (statements: unknown[]) => {
     if (options.batchError) throw options.batchError;
@@ -62,11 +67,7 @@ function createTestApp(options: {
         }),
       }),
       update: () => ({
-        set: () => ({
-          where: () => ({
-            returning: updateReturning,
-          }),
-        }),
+        set: updateSet,
       }),
       insert: () => ({
         values: () => ({
@@ -86,7 +87,7 @@ function createTestApp(options: {
   app.route("/checkout-languages", publicCheckoutLanguageRoutes);
   app.route("/admin/settings/checkout-languages", checkoutLanguageRoutes);
   mocks.invalidateApiAndScheduleStorefrontGroups.mockResolvedValue(undefined);
-  return { app, env, batch, insertReturning, updateReturning, deleteReturning };
+  return { app, env, batch, insertReturning, updateReturning, updateSet, deleteReturning };
 }
 
 describe("checkout language route boundaries", () => {
@@ -271,6 +272,31 @@ describe("checkout language route boundaries", () => {
     expect(response.status).toBe(200);
     expect(batch).not.toHaveBeenCalled();
     expect(updateReturning).toHaveBeenCalledTimes(1);
+  });
+
+  it("preserves active/default flags when a partial update omits them", async () => {
+    const { app, env, batch, updateSet } = createTestApp({
+      selectedRows: [languageRecord],
+    });
+
+    const response = await app.request(
+      "/api/v1/admin/settings/checkout-languages/cl_1",
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fieldVisibility: { showEmailField: true },
+        }),
+      },
+      env,
+    );
+
+    expect(response.status).toBe(200);
+    expect(batch).not.toHaveBeenCalled();
+    expect(updateSet).toHaveBeenCalledWith(expect.not.objectContaining({
+      isActive: expect.anything(),
+      isDefault: expect.anything(),
+    }));
   });
 
   it.each([

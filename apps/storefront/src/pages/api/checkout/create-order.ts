@@ -16,7 +16,10 @@ import {
   PAYMENT_SESSION_PROXY_TIMEOUT_MS,
 } from "../../../lib/checkout/payment-session-proxy";
 import { getCustomerSessionTokenFromCookie } from "../../../lib/customer-session-cookie";
-import { createOrderReceiptCookieHeader } from "../../../lib/order-receipt-cookie";
+import {
+  createOrderReceiptCookieHeader,
+  createOrderReceiptFinalizeCookieHeader,
+} from "../../../lib/order-receipt-cookie";
 
 const CUSTOMER_COOKIE_CLEAR_HEADERS = [
   "cs_tok=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax; Secure",
@@ -158,6 +161,10 @@ export const POST: APIRoute = async ({ request }) => {
     const receiptCookie = createOrderReceiptCookieHeader(result.orderId, result.receiptToken);
     if (receiptCookie) {
       headers.append("Set-Cookie", receiptCookie);
+    }
+    const finalizeCookie = createOrderReceiptFinalizeCookieHeader(result.orderId);
+    if (finalizeCookie) {
+      headers.append("Set-Cookie", finalizeCookie);
     }
 
     return new Response(JSON.stringify({

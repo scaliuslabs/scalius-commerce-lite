@@ -84,6 +84,7 @@ const orderRow = {
   currencyCode: null as string | null,
   currencyDecimalPlaces: null as number | null,
   customerId: "customer_1" as string | null,
+  accountOwnerCustomerId: "customer_1" as string | null,
   customerName: "Payment Customer",
   customerPhone: "+8801712345678",
   customerEmail: "buyer@example.com",
@@ -113,7 +114,7 @@ interface DbMockOptions {
   currentCurrencyCode?: string | null;
   explicitUsdExchangeRate?: string | null;
   paymentRows?: Array<{ paymentMethod: string; status: string }>;
-  paymentSessionAttemptRows?: Array<{ orderId: string }>;
+  paymentSessionAttemptRows?: Array<{ orderId: string; gateway?: string; status?: string }>;
   receiptOrderId?: string | null;
   insertError?: unknown;
   updateResult?: unknown;
@@ -162,7 +163,7 @@ function createDbMock(options: string | DbMockOptions = "stripe") {
       };
     }),
   };
-  return {
+  const db = {
     __insertedValues: insertedValues,
     select: vi.fn(() => {
       let selectedTable: unknown = ordersTable;
@@ -220,8 +221,10 @@ function createDbMock(options: string | DbMockOptions = "stripe") {
     }),
     update: vi.fn(() => updateQuery),
     insert: vi.fn(() => insertQuery),
+    batch: vi.fn(async (statements: Array<PromiseLike<unknown>>) => Promise.all(statements)),
     __updateSetValues: updateSetValues,
   };
+  return db;
 }
 
 function createKvMock(mode: TokenMode) {
@@ -1245,6 +1248,38 @@ describe("payment session receipt-token proof", () => {
     expect(mocks.currentCurrencyReads).not.toHaveBeenCalled();
   });
 
+  it("offers another enabled gateway when the original failed checkout gateway is disabled", async () => {
+    mocks.getPaymentMethodPreferences.mockResolvedValue({
+      enabledMethods: ["sslcommerz", "cod"],
+      defaultMethod: "sslcommerz",
+      hasExplicitEnabledMethods: true,
+    });
+    const db = createDbMock({
+      paymentMethod: "stripe",
+      order: {
+        status: OrderStatus.INCOMPLETE,
+        paymentStatus: PaymentStatus.FAILED,
+        paidAmount: 0,
+        balanceDue: 125,
+      },
+    });
+    const context = createPaymentRouteContext(db, createKvMock("valid"));
+
+    const result = await resolveCustomerPaymentSessionRecovery(context, {
+      orderId: "order_1",
+      expectedCustomerId: "customer_1",
+    });
+
+    expect(result).toMatchObject({
+      eligible: true,
+      gateway: "sslcommerz",
+      paymentType: "full",
+      amountDue: 125,
+    });
+    expect(mocks.getStripeSettings).not.toHaveBeenCalled();
+    expect(mocks.getSSLCommerzSettings).toHaveBeenCalledTimes(1);
+  });
+
   it("fails before provider calls when a pending deposit payment plan cannot be persisted", async () => {
     const { app, kv } = createTestApp("valid", {
       paymentMethod: "stripe",
@@ -1423,6 +1458,27 @@ describe("payment session receipt-token proof", () => {
         cancelUrl: "https://api.example.test/api/v1/payment/sslcommerz/cancel?order_id=order_1&return_to=account&payment_type=balance",
       }),
     );
+  });
+
+  it("authorizes a claimed guest order by private account ownership instead of the merchant CRM link", async () => {
+    const db = createDbMock({
+      paymentMethod: "sslcommerz",
+      order: {
+        customerId: "guest_crm",
+        accountOwnerCustomerId: "customer_1",
+      },
+    });
+    const context = createPaymentRouteContext(db, createKvMock("valid"));
+
+    await expect(createCustomerAccountPaymentSession(context, {
+      orderId: "order_1",
+      customerId: "customer_1",
+    })).resolves.toMatchObject({ gateway: "sslcommerz" });
+
+    await expect(createCustomerAccountPaymentSession(context, {
+      orderId: "order_1",
+      customerId: "guest_crm",
+    })).rejects.toMatchObject({ status: 404 });
   });
 
   it("redirects scoped SSLCommerz transaction IDs back to the canonical order ID", async () => {
@@ -1868,6 +1924,103 @@ describe("payment session receipt-token proof", () => {
         paymentType: "full",
       }),
     );
+  });
+
+  it("does not replace a still-pending hosted attempt with another payable gateway session", async () => {
+    const { app, db, kv } = createTestApp("valid", {
+      paymentMethod: "sslcommerz",
+      order: {
+        status: OrderStatus.INCOMPLETE,
+        paymentStatus: PaymentStatus.UNPAID,
+        paidAmount: 0,
+        balanceDue: 125,
+      },
+      paymentRows: [
+        { paymentMethod: "sslcommerz", status: PaymentRecordStatus.PENDING },
+      ],
+      paymentSessionAttemptRows: [
+        { orderId: "order_1", gateway: "sslcommerz", status: "created" },
+      ],
+    });
+
+    const response = await app.request(
+      "/api/v1/payment/polar/session",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderId: "order_1",
+          receiptToken: "chk_valid",
+          replaceExistingAttempt: true,
+        }),
+      },
+      envFor(kv),
+    );
+
+    expect(response.status).toBe(400);
+    expect(db.batch).not.toHaveBeenCalled();
+    expect(db.__updateSetValues).not.toContainEqual(expect.objectContaining({
+      paymentMethod: "polar",
+    }));
+    expect(mocks.createPolarCheckout).not.toHaveBeenCalled();
+  });
+
+  it("replays the current hosted session instead of replacing a still-pending attempt", async () => {
+    mocks.claimPaymentSessionAttempt.mockResolvedValueOnce({
+      status: "replay",
+      attempt: {
+        id: "psa_1",
+        attemptKey: "payment_session:sslcommerz:hash_order_1_full",
+        claimId: null,
+        attempts: 1,
+      },
+      response: {
+        gatewayUrl: "https://ssl.example.test/existing-session",
+        sessionKey: "ssl_existing_session",
+      },
+    });
+    const { app, db, kv } = createTestApp("valid", {
+      paymentMethod: "sslcommerz",
+      order: {
+        status: OrderStatus.INCOMPLETE,
+        paymentStatus: PaymentStatus.UNPAID,
+        paidAmount: 0,
+        balanceDue: 125,
+      },
+      paymentRows: [
+        { paymentMethod: "sslcommerz", status: PaymentRecordStatus.PENDING },
+      ],
+      paymentSessionAttemptRows: [
+        { orderId: "order_1", gateway: "sslcommerz", status: "created" },
+      ],
+    });
+
+    const response = await app.request(
+      "/api/v1/payment/sslcommerz/session",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderId: "order_1",
+          receiptToken: "chk_valid",
+          replaceExistingAttempt: true,
+        }),
+      },
+      envFor(kv),
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(await response.json()).toMatchObject({
+      data: { gatewayUrl: "https://ssl.example.test/existing-session" },
+    });
+    expect(db.batch).not.toHaveBeenCalled();
+    expect(mocks.buildPaymentSessionAttemptIdentity).toHaveBeenCalledWith(
+      expect.objectContaining({
+        gateway: "sslcommerz",
+        requestContext: expect.objectContaining({ orderVersion: 1 }),
+      }),
+    );
+    expect(mocks.initSSLCommerzSession).not.toHaveBeenCalled();
   });
 
   it("does not switch a failed order to another gateway without failed payment evidence", async () => {

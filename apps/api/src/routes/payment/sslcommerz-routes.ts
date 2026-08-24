@@ -25,6 +25,7 @@ const sessionSchema = z.object({
   paymentType: z.enum(["full", "deposit", "balance"]).optional(),
   depositAmount: z.number().positive().optional(),
   currency: z.string().optional(),
+  replaceExistingAttempt: z.boolean().optional(),
 });
 
 function getSessionReceiptToken(c: { req: { header: (name: string) => string | undefined } }, body: { receiptToken?: string }): string | undefined {
@@ -85,6 +86,7 @@ app.openapi(createSessionRoute, async (c) => {
     orderId: body.orderId,
     paymentType: body.paymentType,
     depositAmount: body.depositAmount,
+    replaceExistingAttempt: body.replaceExistingAttempt,
     proof: { kind: "receipt", receiptToken },
     returnTarget: { kind: "receipt" },
   });

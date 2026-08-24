@@ -8089,6 +8089,117 @@ export type GetApiV1CustomerAuthOrdersResponses = {
 
 export type GetApiV1CustomerAuthOrdersResponse = GetApiV1CustomerAuthOrdersResponses[keyof GetApiV1CustomerAuthOrdersResponses];
 
+export type PostApiV1CustomerAuthOrdersByIdClaimReceiptData = {
+    body?: {
+        [key: string]: never;
+    };
+    headers?: {
+        'x-receipt-token'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/customer-auth/orders/{id}/claim-receipt';
+};
+
+export type PostApiV1CustomerAuthOrdersByIdClaimReceiptErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1CustomerAuthOrdersByIdClaimReceiptError = PostApiV1CustomerAuthOrdersByIdClaimReceiptErrors[keyof PostApiV1CustomerAuthOrdersByIdClaimReceiptErrors];
+
+export type PostApiV1CustomerAuthOrdersByIdClaimReceiptResponses = {
+    /**
+     * Order saved to the authenticated customer account
+     */
+    200: {
+        success: true;
+        data: {
+            orderId: string;
+            alreadyClaimed: boolean;
+        };
+    };
+};
+
+export type PostApiV1CustomerAuthOrdersByIdClaimReceiptResponse = PostApiV1CustomerAuthOrdersByIdClaimReceiptResponses[keyof PostApiV1CustomerAuthOrdersByIdClaimReceiptResponses];
+
 export type GetApiV1CustomerAuthOrdersByIdData = {
     body?: never;
     path: {
@@ -8533,7 +8644,8 @@ export type PostApiV1CustomerAuthOrdersByIdSupportRequestsResponse = PostApiV1Cu
 
 export type PostApiV1CustomerAuthOrdersByIdPaymentSessionData = {
     body?: {
-        [key: string]: never;
+        gateway?: 'stripe' | 'sslcommerz' | 'polar';
+        replaceExistingAttempt?: boolean;
     };
     path: {
         id: string;
@@ -54373,6 +54485,7 @@ export type PostApiV1PaymentStripeIntentData = {
         depositAmount?: number;
         currency?: string;
         manualCapture?: boolean;
+        replaceExistingAttempt?: boolean;
     };
     headers?: {
         'X-Receipt-Token'?: string;
@@ -54635,6 +54748,7 @@ export type PostApiV1PaymentSslcommerzSessionData = {
         paymentType?: 'full' | 'deposit' | 'balance';
         depositAmount?: number;
         currency?: string;
+        replaceExistingAttempt?: boolean;
     };
     headers?: {
         'X-Receipt-Token'?: string;
@@ -54778,6 +54892,7 @@ export type PostApiV1PaymentPolarSessionData = {
         customerEmail?: string;
         customerPhone?: string;
         receiptToken?: string;
+        replaceExistingAttempt?: boolean;
     };
     headers?: {
         'X-Receipt-Token'?: string;

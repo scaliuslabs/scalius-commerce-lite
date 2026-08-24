@@ -17,6 +17,10 @@ export interface PaymentContext {
   totalAmount: number;
   advanceAmount: number;
   currencySymbol: string;
+  paymentType?: "full" | "deposit" | "balance";
+  depositAmount?: number;
+  replaceExistingAttempt?: boolean;
+  onOrderCreated?: (orderId: string, gateway: string) => void;
 }
 
 export interface PaymentResult {
@@ -26,8 +30,6 @@ export interface PaymentResult {
   errorCode?: string;
   status?: number;
   cartIssues?: CartValidationIssue[];
-  clearCartOnRedirect?: boolean;
-  clearCheckoutSessionOnRedirect?: boolean;
   hostedPaymentRecoveryUrl?: string;
 }
 

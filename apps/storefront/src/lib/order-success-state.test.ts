@@ -3,8 +3,11 @@ import { describe, expect, it } from "vitest";
 import {
   createPurchaseTrackingPayload,
   formatOrderSuccessLabel,
+  formatOrderSuccessPaymentMethod,
   getOrderSuccessStateKind,
   getOrderSuccessViewState,
+  getOrderSuccessVisibleBalanceDue,
+  shouldClearCheckoutCartForOrder,
 } from "./order-success-state";
 import type { OrderReceipt } from "./api/types";
 
@@ -42,6 +45,8 @@ describe("order success state", () => {
     expect(formatOrderSuccessLabel("cod")).toBe("Cash on Delivery");
     expect(formatOrderSuccessLabel("sslcommerz")).toBe("SSLCommerz");
     expect(formatOrderSuccessLabel("partially_refunded")).toBe("Partially Refunded");
+    expect(formatOrderSuccessPaymentMethod("stripe")).toBe("Card (Stripe)");
+    expect(formatOrderSuccessPaymentMethod("sslcommerz")).toBe("Online payment (SSLCommerz)");
   });
 
   it("treats COD pending/unpaid orders as placed", () => {
@@ -52,7 +57,11 @@ describe("order success state", () => {
     });
 
     expect(getOrderSuccessStateKind(order)).toBe("order_placed");
-    expect(getOrderSuccessViewState(order).shouldFinalizeClientSide).toBe(true);
+    expect(getOrderSuccessViewState(order)).toMatchObject({
+      shouldFinalizeClientSide: true,
+      title: "Order placed",
+      paymentStatusLabel: "Due on delivery",
+    });
   });
 
   it.each(["stripe", "sslcommerz", "polar"])(
@@ -103,6 +112,45 @@ describe("order success state", () => {
     expect(getOrderSuccessViewState(order).shouldFinalizeClientSide).toBe(true);
   });
 
+  it.each(["confirmed", "processing", "shipped", "delivered", "completed"])(
+    "keeps an active %s online order pending until payment is accepted",
+    (status) => {
+      const order = makeOrder({
+        paymentMethod: "stripe",
+        paymentStatus: "unpaid",
+        status,
+        paidAmount: 0,
+      });
+
+      expect(getOrderSuccessStateKind(order)).toBe("payment_pending");
+      expect(getOrderSuccessViewState(order).title).toBe("Confirming payment");
+    },
+  );
+
+  it("uses a failed return as a truthful payment outcome only while money remains due", () => {
+    const partial = makeOrder({
+      paymentMethod: "sslcommerz",
+      paymentStatus: "partial",
+      status: "confirmed",
+      paidAmount: 300,
+      balanceDue: 900,
+    });
+    expect(getOrderSuccessViewState(partial, "failed")).toMatchObject({
+      kind: "payment_issue",
+      title: "Payment not completed",
+      shouldFinalizeClientSide: false,
+    });
+
+    const paid = makeOrder({
+      paymentMethod: "sslcommerz",
+      paymentStatus: "paid",
+      status: "confirmed",
+      paidAmount: 1200,
+      balanceDue: 0,
+    });
+    expect(getOrderSuccessViewState(paid, "failed").kind).toBe("order_updated");
+  });
+
   it("keeps failed payments actionable without treating cancelled orders as payment failures", () => {
     expect(
       getOrderSuccessStateKind(makeOrder({
@@ -121,6 +169,31 @@ describe("order success state", () => {
     ).toBe("order_updated");
   });
 
+  it("clears only accepted checkout carts and preserves failed or cancelled carts", () => {
+    expect(shouldClearCheckoutCartForOrder(makeOrder({
+      paymentMethod: "cod",
+      paymentStatus: "unpaid",
+      status: "pending",
+    }))).toBe(true);
+    expect(shouldClearCheckoutCartForOrder(makeOrder({
+      paymentMethod: "sslcommerz",
+      paymentStatus: "paid",
+      paidAmount: 1200,
+      balanceDue: 0,
+      status: "pending",
+    }))).toBe(true);
+    expect(shouldClearCheckoutCartForOrder(makeOrder({
+      paymentMethod: "sslcommerz",
+      paymentStatus: "failed",
+      status: "incomplete",
+    }))).toBe(false);
+    expect(shouldClearCheckoutCartForOrder(makeOrder({
+      paymentMethod: "sslcommerz",
+      paymentStatus: "unpaid",
+      status: "cancelled",
+    }))).toBe(false);
+  });
+
   it("renders paid returned orders as a post-sale update without firing purchase finalization", () => {
     const view = getOrderSuccessViewState(makeOrder({
       paymentMethod: "cod",
@@ -133,12 +206,28 @@ describe("order success state", () => {
     expect(view).toMatchObject({
       kind: "order_updated",
       shouldFinalizeClientSide: false,
-      title: "Order Returned",
+      title: "Order returned",
       orderStatusLabel: "Returned",
       paymentStatusLabel: "Paid",
     });
-    expect(view.message).toContain("Any refund appears separately");
+    expect(view.message).toBe("The return for order #order_1 has been recorded.");
     expect(view.message).not.toContain("payment is not complete");
+  });
+
+  it("never presents refund or closed-order accounting as buyer debt", () => {
+    for (const status of ["cancelled", "returned", "refunded", "partially_refunded"]) {
+      expect(getOrderSuccessVisibleBalanceDue(makeOrder({
+        status,
+        paymentStatus: "unpaid",
+        balanceDue: 1200,
+      }))).toBe(0);
+    }
+
+    expect(getOrderSuccessVisibleBalanceDue(makeOrder({
+      status: "pending",
+      paymentStatus: "refunded",
+      balanceDue: 1200,
+    }))).toBe(0);
   });
 
   it("builds a non-PII analytics payload", () => {

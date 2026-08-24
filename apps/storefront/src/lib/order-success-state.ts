@@ -5,12 +5,14 @@ const NON_FINAL_ORDER_STATUSES = new Set(["incomplete"]);
 const PAYMENT_ISSUE_ORDER_STATUSES = new Set([
   "failed",
 ]);
-const UPDATED_ORDER_STATUSES = new Set([
+const ACTIVE_UPDATED_ORDER_STATUSES = new Set([
   "confirmed",
   "processing",
   "shipped",
   "delivered",
   "completed",
+]);
+const CLOSED_ORDER_STATUSES = new Set([
   "cancelled",
   "refunded",
   "returned",
@@ -18,6 +20,7 @@ const UPDATED_ORDER_STATUSES = new Set([
 ]);
 const ACCEPTED_PAYMENT_STATUSES = new Set(["paid", "partial"]);
 const FAILED_PAYMENT_STATUSES = new Set(["failed"]);
+const FAILED_CALLBACK_RESULTS = new Set(["failed", "cancelled"]);
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
   cod: "Cash on Delivery",
   polar: "Polar",
@@ -38,7 +41,8 @@ export interface OrderSuccessViewState {
   message: string;
   orderStatusLabel: string;
   paymentStatusLabel: string;
-  badgeClass: string;
+  orderBadgeClass: string;
+  paymentBadgeClass: string;
 }
 
 export interface PurchaseTrackingPayload {
@@ -78,23 +82,29 @@ export function getOrderSuccessStateKind(
   const paymentStatus = normalize(order.paymentStatus);
 
   if (
+    CLOSED_ORDER_STATUSES.has(orderStatus)
+    || paymentStatus === "refunded"
+  ) {
+    return "order_updated";
+  }
+
+  if (
     PAYMENT_ISSUE_ORDER_STATUSES.has(orderStatus)
     || FAILED_PAYMENT_STATUSES.has(paymentStatus)
   ) {
     return "payment_issue";
   }
 
-  if (UPDATED_ORDER_STATUSES.has(orderStatus) || paymentStatus === "refunded") {
-    return "order_updated";
-  }
-
   if (!isOnlinePaymentMethod(order.paymentMethod)) {
-    return NON_FINAL_ORDER_STATUSES.has(orderStatus) ? "payment_pending" : "order_placed";
+    if (NON_FINAL_ORDER_STATUSES.has(orderStatus)) return "payment_pending";
+    return ACTIVE_UPDATED_ORDER_STATUSES.has(orderStatus) ? "order_updated" : "order_placed";
   }
 
   if (NON_FINAL_ORDER_STATUSES.has(orderStatus) || !isAcceptedPayment(order)) {
     return "payment_pending";
   }
+
+  if (ACTIVE_UPDATED_ORDER_STATUSES.has(orderStatus)) return "order_updated";
 
   return "order_placed";
 }
@@ -110,18 +120,101 @@ export function formatOrderSuccessLabel(value: string | null | undefined): strin
     .join(" ");
 }
 
-export function getOrderSuccessViewState(order: OrderReceipt): OrderSuccessViewState {
-  const kind = getOrderSuccessStateKind(order);
+export function formatOrderSuccessPaymentMethod(value: string | null | undefined): string {
+  switch (normalize(value)) {
+    case "cod":
+      return "Cash on delivery";
+    case "stripe":
+      return "Card (Stripe)";
+    case "sslcommerz":
+      return "Online payment (SSLCommerz)";
+    case "polar":
+      return "Online payment (Polar)";
+    default:
+      return formatOrderSuccessLabel(value);
+  }
+}
+
+export function getOrderSuccessVisibleBalanceDue(
+  order: Pick<OrderReceipt, "status" | "paymentStatus" | "totalAmount" | "paidAmount" | "balanceDue">,
+): number {
+  const orderStatus = normalize(order.status);
+  const paymentStatus = normalize(order.paymentStatus);
+  if (CLOSED_ORDER_STATUSES.has(orderStatus) || paymentStatus === "refunded") return 0;
+
+  const storedBalance = Number(order.balanceDue);
+  if (Number.isFinite(storedBalance)) return Math.max(0, storedBalance);
+  return Math.max(0, Number(order.totalAmount ?? 0) - Number(order.paidAmount ?? 0));
+}
+
+export function getOrderStatusBadgeClass(value: string | null | undefined): string {
+  const status = normalize(value);
+  if (["delivered", "completed"].includes(status)) {
+    return "bg-emerald-100 text-emerald-800";
+  }
+  if (["failed"].includes(status)) {
+    return "bg-destructive/10 text-destructive";
+  }
+  if (["pending"].includes(status)) {
+    return "bg-amber-100 text-amber-800";
+  }
+  if (["confirmed", "processing", "shipped"].includes(status)) {
+    return "bg-sky-100 text-sky-800";
+  }
+  return "bg-slate-100 text-slate-800";
+}
+
+export function getPaymentStatusBadgeClass(value: string | null | undefined): string {
+  const status = normalize(value);
+  if (status === "paid") return "bg-emerald-100 text-emerald-800";
+  if (status === "failed") return "bg-destructive/10 text-destructive";
+  if (["unpaid", "pending", "processing", "partial"].includes(status)) {
+    return "bg-amber-100 text-amber-800";
+  }
+  return "bg-slate-100 text-slate-800";
+}
+
+function getReceiptPaymentStatusLabel(
+  order: Pick<OrderReceipt, "paymentMethod" | "paymentStatus">,
+): string {
+  if (normalize(order.paymentMethod) === "cod" && normalize(order.paymentStatus) === "unpaid") {
+    return "Due on delivery";
+  }
+  return formatOrderSuccessLabel(order.paymentStatus);
+}
+
+function getReceiptPaymentBadgeClass(
+  order: Pick<OrderReceipt, "paymentMethod" | "paymentStatus">,
+): string {
+  if (normalize(order.paymentMethod) === "cod" && normalize(order.paymentStatus) === "unpaid") {
+    return "bg-slate-100 text-slate-800";
+  }
+  return getPaymentStatusBadgeClass(order.paymentStatus);
+}
+
+export function getOrderSuccessViewState(
+  order: OrderReceipt,
+  callbackResult?: string | null,
+): OrderSuccessViewState {
+  const durableKind = getOrderSuccessStateKind(order);
+  const paymentStatus = normalize(order.paymentStatus);
+  const callbackPaymentIssue = isOnlinePaymentMethod(order.paymentMethod)
+    && FAILED_CALLBACK_RESULTS.has(normalize(callbackResult))
+    && getOrderSuccessVisibleBalanceDue(order) > 0
+    && !CLOSED_ORDER_STATUSES.has(normalize(order.status))
+    && !["paid", "refunded"].includes(paymentStatus);
+  const kind = callbackPaymentIssue ? "payment_issue" : durableKind;
   if (kind === "payment_issue") {
     return {
       kind,
       shouldFinalizeClientSide: false,
-      title: "Payment Needs Attention",
+      title: "Payment not completed",
       message:
-        `We found your order #${order.id}, but the payment is not complete. Please retry payment from this receipt when available or contact the store before placing the same order again.`,
+        `Order #${order.id} is saved. Retry payment below instead of placing another order.`,
       orderStatusLabel: formatOrderSuccessLabel(order.status),
-      paymentStatusLabel: formatOrderSuccessLabel(order.paymentStatus),
-      badgeClass: "bg-destructive/10 text-destructive",
+      paymentStatusLabel: getReceiptPaymentStatusLabel(order),
+      orderBadgeClass: getOrderStatusBadgeClass(order.status),
+      paymentBadgeClass: getReceiptPaymentBadgeClass(order),
     };
   }
 
@@ -129,90 +222,108 @@ export function getOrderSuccessViewState(order: OrderReceipt): OrderSuccessViewS
     return {
       kind,
       shouldFinalizeClientSide: false,
-      title: "Payment Confirmation Pending",
+      title: "Confirming payment",
       message:
-        `We received order #${order.id} and are waiting for the payment gateway to confirm it. Please avoid placing the same order again while this updates.`,
-      orderStatusLabel: "Payment pending",
-      paymentStatusLabel: formatOrderSuccessLabel(order.paymentStatus),
-      badgeClass: "bg-amber-100 text-amber-800",
+        `Order #${order.id} is saved. Do not place it again while we check the payment.`,
+      orderStatusLabel: formatOrderSuccessLabel(order.status),
+      paymentStatusLabel: getReceiptPaymentStatusLabel(order),
+      orderBadgeClass: "bg-amber-100 text-amber-800",
+      paymentBadgeClass: getReceiptPaymentBadgeClass(order),
     };
   }
 
   if (kind === "order_updated") {
     const orderStatus = normalize(order.status);
-    const updatedCopy: Record<string, { title: string; message: string; badgeClass: string }> = {
+    const updatedCopy: Record<string, { title: string; message: string }> = {
       confirmed: {
-        title: "Order Confirmed",
+        title: "Order confirmed",
         message: `Order #${order.id} is confirmed and being prepared.`,
-        badgeClass: "bg-sky-100 text-sky-800",
       },
       processing: {
-        title: "Order Processing",
+        title: "Order processing",
         message: `Order #${order.id} is being prepared.`,
-        badgeClass: "bg-sky-100 text-sky-800",
       },
       shipped: {
-        title: "Order Shipped",
+        title: "Order shipped",
         message: `Order #${order.id} is on the way.`,
-        badgeClass: "bg-sky-100 text-sky-800",
       },
       delivered: {
-        title: "Order Delivered",
+        title: "Order delivered",
         message: `Order #${order.id} has been delivered.`,
-        badgeClass: "bg-emerald-100 text-emerald-800",
       },
       completed: {
-        title: "Order Completed",
+        title: "Order completed",
         message: `Order #${order.id} is complete.`,
-        badgeClass: "bg-emerald-100 text-emerald-800",
       },
       cancelled: {
-        title: "Order Cancelled",
-        message: `Order #${order.id} was cancelled. Any payment refund appears in the payment details below.`,
-        badgeClass: "bg-slate-100 text-slate-800",
+        title: "Order cancelled",
+        message: `Order #${order.id} was cancelled.`,
       },
       refunded: {
-        title: "Order Refunded",
-        message: `The refund for order #${order.id} has been recorded. See the payment details below.`,
-        badgeClass: "bg-emerald-100 text-emerald-800",
+        title: "Order refunded",
+        message: `The refund for order #${order.id} has been recorded.`,
       },
       returned: {
-        title: "Order Returned",
-        message: `The return for order #${order.id} has been recorded. Any refund appears separately in the payment details below.`,
-        badgeClass: "bg-emerald-100 text-emerald-800",
+        title: "Order returned",
+        message: `The return for order #${order.id} has been recorded.`,
       },
       partially_refunded: {
-        title: "Order Partially Refunded",
-        message: `A partial refund for order #${order.id} has been recorded. See the payment details below.`,
-        badgeClass: "bg-emerald-100 text-emerald-800",
+        title: "Order partially refunded",
+        message: `A partial refund for order #${order.id} has been recorded.`,
       },
     };
-    const copy = updatedCopy[orderStatus] ?? {
-      title: "Order Updated",
-      message: `Order #${order.id} has been updated.`,
-      badgeClass: "bg-slate-100 text-slate-800",
-    };
+    const copy = paymentStatus === "refunded" && !CLOSED_ORDER_STATUSES.has(orderStatus)
+      ? {
+          title: "Order refunded",
+          message: `The refund for order #${order.id} has been recorded.`,
+        }
+      : updatedCopy[orderStatus] ?? {
+          title: "Order updated",
+          message: `Order #${order.id} has been updated.`,
+        };
 
     return {
       kind,
       shouldFinalizeClientSide: false,
       ...copy,
       orderStatusLabel: formatOrderSuccessLabel(order.status),
-      paymentStatusLabel: formatOrderSuccessLabel(order.paymentStatus),
+      paymentStatusLabel: getReceiptPaymentStatusLabel(order),
+      orderBadgeClass: getOrderStatusBadgeClass(order.status),
+      paymentBadgeClass: getReceiptPaymentBadgeClass(order),
     };
   }
 
   return {
     kind,
     shouldFinalizeClientSide: true,
-    title: "Order Placed Successfully!",
-    message: `Thank you for your order, #${order.id}. We'll start processing it right away.`,
+    title: "Order placed",
+    message: `We received order #${order.id}.`,
     orderStatusLabel: formatOrderSuccessLabel(
       order.status === "incomplete" ? "processing" : order.status,
     ),
-    paymentStatusLabel: formatOrderSuccessLabel(order.paymentStatus),
-    badgeClass: "bg-primary/20 text-primary",
+    paymentStatusLabel: getReceiptPaymentStatusLabel(order),
+    orderBadgeClass: getOrderStatusBadgeClass(order.status),
+    paymentBadgeClass: getReceiptPaymentBadgeClass(order),
   };
+}
+
+export function shouldClearCheckoutCartForOrder(
+  order: Pick<OrderReceipt, "status" | "paymentMethod" | "paymentStatus" | "paidAmount">,
+): boolean {
+  const orderStatus = normalize(order.status);
+  const paymentStatus = normalize(order.paymentStatus);
+  if (
+    orderStatus === "incomplete" ||
+    orderStatus === "cancelled" ||
+    orderStatus === "refunded" ||
+    orderStatus === "returned" ||
+    orderStatus === "partially_refunded" ||
+    paymentStatus === "failed"
+  ) {
+    return false;
+  }
+  if (!isOnlinePaymentMethod(order.paymentMethod)) return true;
+  return ACCEPTED_PAYMENT_STATUSES.has(paymentStatus) || Number(order.paidAmount ?? 0) > 0;
 }
 
 export function createPurchaseTrackingPayload(

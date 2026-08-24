@@ -5,6 +5,7 @@ import { SQLiteSyncDialect } from "drizzle-orm/sqlite-core";
 import {
   bulkDeleteCustomers,
   buildCustomerOrderMetricsProjection,
+  buildCustomerOrderItemDetailProjection,
   customerAccountOrderVisibilityCondition,
   buildCustomerOrderBaseTimelineEvents,
   buildCustomerOrderNotificationTimelineEvents,
@@ -260,6 +261,18 @@ describe("customers service session revocation", () => {
 });
 
 describe("customer account order money projection", () => {
+  it("keeps the repeated price projection provider-safe before saved minor-unit fields", () => {
+    const projection = buildCustomerOrderItemDetailProjection();
+    const dialect = new SQLiteSyncDialect();
+    const unitPriceSql = dialect.sqlToQuery(projection.unitPrice.sql).sql;
+
+    expect(unitPriceSql).toContain('"order_items"."price"');
+    expect(projection.unitPrice.fieldAlias).toBe("unitPrice");
+    expect(projection.price).not.toBe(projection.unitPrice);
+    expect(Object.keys(projection).indexOf("unitPrice"))
+      .toBeLessThan(Object.keys(projection).indexOf("unitPriceMinor"));
+  });
+
   it("hides actionable balance due for closed or refunded customer-visible states", () => {
     for (const status of [
       OrderStatus.CANCELLED,

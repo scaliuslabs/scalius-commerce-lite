@@ -1,6 +1,7 @@
 ---
 // src/pages/cart.astro
 import Layout from "@/layouts/Layout.astro";
+import CheckoutHeader from "@/components/CheckoutHeader.astro";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,6 +10,7 @@ import LocationSelector from "@/components/LocationSelector";
 import ShippingLocationSelector from "@/components/ShippingLocationSelector";
 import PhoneField from "@/components/PhoneField";
 import CheckoutLoadingOverlay from "@/components/CheckoutLoadingOverlay.astro";
+import CheckoutProgress from "@/components/CheckoutProgress.astro";
 import { getCities, processOrder } from "@/lib/cart/server";
 import {
   getShippingMethods,
@@ -20,7 +22,10 @@ import {
   isCodOnly,
 } from "@/lib/api";
 import { getCustomerSessionTokenFromCookie } from "@/lib/customer-session-cookie";
-import { createOrderReceiptCookieHeader } from "@/lib/order-receipt-cookie";
+import {
+  createOrderReceiptCookieHeader,
+  createOrderReceiptFinalizeCookieHeader,
+} from "@/lib/order-receipt-cookie";
 import { MIN_SHIPPING_ADDRESS_LENGTH } from "@/lib/checkout/shipping-address";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import type { CartValidationIssue } from "@/lib/api/orders";
@@ -62,7 +67,7 @@ const lang: CheckoutLanguageData = checkoutLanguageResponse || {
     customerNamePlaceholder: "Enter your full name",
     customerPhoneLabel: "Phone Number",
     customerPhonePlaceholder: "Phone number",
-    customerPhoneHelp: "Enter your phone number with country code",
+    customerPhoneHelp: "Enter your mobile number",
     customerEmailLabel: "Email (Optional)",
     customerEmailPlaceholder: "Enter your email address",
     shippingAddressLabel: "Delivery Address",
@@ -177,6 +182,10 @@ if (Astro.request.method === "POST" && codOnly) {
         if (receiptCookie) {
           response.headers.append("Set-Cookie", receiptCookie);
         }
+        const finalizeCookie = createOrderReceiptFinalizeCookieHeader(result.orderId);
+        if (finalizeCookie) {
+          response.headers.append("Set-Cookie", finalizeCookie);
+        }
         return response;
       } else {
         console.error("Order processing failed:", result.error);
@@ -216,12 +225,13 @@ const submitLabel = codOnly
   ? lang.languageData.placeOrderText
   : checkoutUnavailable
     ? "Checkout temporarily unavailable"
-    : "Proceed to Payment →";
+    : "Continue to payment";
 const serializedCheckoutConfig = serializeJsonForInlineScript(checkoutConfig);
 const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
 ---
 
-<Layout title={lang.languageData.pageTitle} layoutData={layoutData} noindex>
+<Layout title={lang.languageData.pageTitle} layoutData={layoutData} noindex hideHeader hideFooter>
+  <CheckoutHeader layoutData={layoutData} />
   <!-- Hidden checkout meta for client-side JS -->
   <script
     is:inline
@@ -257,7 +267,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     id="cartPageRoot"
     data-cart-ready="false"
     data-cart-has-items="false"
-    class="container max-w-6xl mx-auto px-2 pt-2 pb-3 sm:px-3 sm:pt-2 sm:pb-3"
+    class="container mx-auto max-w-6xl px-4 pb-6 pt-5 sm:px-6 sm:pt-7"
   >
     <noscript>
       <div
@@ -267,6 +277,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
         Enable JavaScript to load your saved cart and continue to checkout.
       </div>
     </noscript>
+    <CheckoutProgress current="information" paymentRequired={!codOnly} />
     {
       checkoutUnavailable && (
         <div
@@ -305,6 +316,29 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
       )
     }
 
+    <aside
+      id="checkoutRecoveryNotice"
+      class="hidden mb-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100"
+      role="status"
+      aria-hidden="true"
+    >
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p class="text-sm font-semibold">You already have a checkout in progress</p>
+          <p class="mt-1 text-xs leading-5 opacity-80">
+            Order <span id="checkoutRecoveryReference" class="font-mono"></span> is waiting for payment confirmation. Your cart is still here, and a second order is blocked until you review this checkout.
+          </p>
+        </div>
+        <a
+          id="checkoutRecoveryLink"
+          data-astro-prefetch="false"
+          class="inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg bg-amber-950 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-amber-900 dark:bg-amber-100 dark:text-amber-950 dark:hover:bg-white"
+        >
+          Continue checkout
+        </a>
+      </div>
+    </aside>
+
     <div class="flex flex-col lg:flex-row-reverse gap-4 lg:gap-8">
       <!-- Cart Items Section - Right on Desktop -->
       <div
@@ -317,13 +351,14 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
           <div
             class="p-3 sm:p-4 border-b border-border bg-muted/50 flex items-center justify-between"
           >
-            <h1 class="text-sm sm:text-base font-bold text-foreground">
+            <h1 class="text-[1.25rem] font-bold leading-tight text-foreground sm:text-2xl">
               {lang.languageData.cartSectionTitle}
             </h1>
             <a
               href="/"
-              class="flex min-h-11 items-center rounded-md px-1 text-xs font-medium text-muted-foreground transition-colors hover:text-primary sm:min-h-8"
+              class="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-border bg-background px-3 text-sm font-semibold text-foreground shadow-sm transition-colors hover:bg-muted sm:min-h-9"
             >
+              <span aria-hidden="true">←</span>
               {lang.languageData.continueShoppingText}
             </a>
           </div>
@@ -336,7 +371,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
           </div>
 
           <div
-            class="min-h-72 divide-y divide-gray-50 p-3 sm:p-4 block"
+            class="min-h-24 divide-y divide-gray-50 p-3 sm:p-4 block"
             id="cartItems"
             aria-live="polite"
             aria-busy="true"
@@ -378,7 +413,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
                 aria-live="polite"
                 aria-atomic="true"
               >
-                Add city &amp; zone
+                —
               </span>
             </div>
             <p
@@ -431,7 +466,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
                     type="text"
                     id="discountCodeInput"
                     placeholder={lang.languageData.discountCodePlaceholder}
-                    class="h-11 min-w-0 flex-1 rounded-lg border border-input bg-background px-3 text-xs font-mono uppercase tracking-wider text-foreground transition-all focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:h-9 sm:text-sm"
+                    class="h-11 min-w-0 flex-1 rounded-lg border border-input bg-background px-3 text-base font-mono uppercase tracking-wider text-foreground transition-all focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:h-9"
                   />
                   <button
                     type="submit"
@@ -460,21 +495,15 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
           </div>
         </div>
 
-        <!-- Trust badges -->
-        <div class="mt-4 text-center">
-          <p class="text-[10px] text-muted-foreground">
-            Secure checkout
-          </p>
-        </div>
       </div>
 
       <!-- Checkout Form Section - Left on Desktop -->
       <div id="checkoutPanel" class="hidden lg:w-7/12 order-2">
         <!-- Optional customer login trigger -->
-        <div class="mb-3">
+        <div id="checkoutSignInPrompt" class="mb-3" data-account-required={checkoutConfig.guestCheckoutEnabled === false ? "true" : "false"}>
           <button
             type="button"
-            onclick="window.dispatchEvent(new CustomEvent('open-auth-modal'))"
+            onclick="window.dispatchEvent(new CustomEvent('open-auth-modal', { detail: { intent: 'sign_in' } }))"
             class="w-full text-left rounded-lg bg-primary/10 border border-border px-4 py-3 text-sm text-primary hover:bg-primary/20 transition-colors shadow-sm flex items-center justify-between group"
           >
             <span class="flex items-center gap-2">
@@ -491,9 +520,11 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
                   d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
                 ></path>
               </svg>
-              <span class="font-medium"
-                >Sign in for faster checkout & order tracking</span
-              >
+              <span class="font-medium">
+                {checkoutConfig.guestCheckoutEnabled === false
+                  ? "Sign in to checkout"
+                  : "Already have an account? Sign in for faster checkout"}
+              </span>
             </span>
             <span
               class="text-primary font-bold group-hover:translate-x-0.5 transition-transform"
@@ -503,19 +534,18 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
         </div>
 
         <div
-          class="bg-card rounded-xl border border-border shadow-sm p-3 sm:p-4 mb-3"
+          id="checkoutFormCard"
+          class:list={[
+            "bg-card rounded-xl border border-border shadow-sm p-3 sm:p-4 mb-3",
+            { hidden: checkoutConfig.guestCheckoutEnabled === false },
+          ]}
         >
-          <h2
-            class="text-base sm:text-lg font-bold text-foreground mb-3 flex items-center gap-2"
-          >
-            {lang.languageData.checkoutSectionTitle}
-          </h2>
-
           <form
             method="POST"
             action="/cart"
             class="space-y-3"
             id="checkoutForm"
+            novalidate
           >
             <input type="hidden" name="formIntent" value="checkout" />
             <input type="hidden" name="cartItems" id="cartItemsInput" />
@@ -530,7 +560,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
               <div>
                 <Label
                   htmlFor="customerName"
-                  className="mb-1 block text-xs font-semibold text-foreground uppercase tracking-wide"
+                  className="mb-1 block text-sm font-medium text-foreground"
                 >
                   {lang.languageData.customerNameLabel}
                   <span class="text-destructive ml-0.5">*</span>
@@ -541,17 +571,16 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
                   name="customerName"
                   required
                   placeholder={lang.languageData.customerNamePlaceholder}
-                  className="h-11 w-full bg-muted border-input rounded-lg focus:bg-background focus:border-primary focus:ring-primary/20 text-sm text-foreground sm:h-9"
+                  className="h-11 w-full bg-muted border-input rounded-lg focus:bg-background focus:border-primary focus:ring-primary/20 text-base text-foreground sm:h-9"
                 />
               </div>
 
               <div>
                 <PhoneField
-                  client:visible
+                  client:load
                   name="customerPhone"
                   label={lang.languageData.customerPhoneLabel}
                   placeholder={lang.languageData.customerPhonePlaceholder}
-                  helpText={lang.languageData.customerPhoneHelp}
                   required
                   allowedCountries={checkoutConfig.allowedCountries || []}
                   allowedCountriesMode={allowedCountriesMode}
@@ -563,7 +592,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
                   <div class="sm:col-span-2">
                     <Label
                       htmlFor="customerEmail"
-                      className="mb-1 block text-xs font-semibold text-foreground uppercase tracking-wide"
+                      className="mb-1 block text-sm font-medium text-foreground"
                     >
                       {lang.languageData.customerEmailLabel}
                     </Label>
@@ -572,16 +601,16 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
                       id="customerEmail"
                       name="customerEmail"
                       placeholder={lang.languageData.customerEmailPlaceholder}
-                      className="h-11 w-full bg-muted border-input rounded-lg focus:bg-background focus:border-primary focus:ring-primary/20 text-sm text-foreground sm:h-9"
+                      className="h-11 w-full bg-muted border-input rounded-lg focus:bg-background focus:border-primary focus:ring-primary/20 text-base text-foreground sm:h-9"
                     />
                   </div>
                 )
               }
 
-              <div class="sm:col-span-2">
+              <div class="sm:col-span-2 border-t border-border pt-4">
                 <Label
                   htmlFor="shippingAddress"
-                  className="mb-1 block text-xs font-semibold text-foreground uppercase tracking-wide"
+                  className="mb-1 block text-sm font-medium text-foreground"
                 >
                   {lang.languageData.shippingAddressLabel}
                   <span class="text-destructive ml-0.5">*</span>
@@ -594,7 +623,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
                   aria-describedby="shippingAddressError"
                   placeholder={lang.languageData.shippingAddressPlaceholder}
                   rows={2}
-                  className="w-full min-h-16 resize-none bg-muted border-input rounded-lg focus:bg-background focus:border-primary focus:ring-primary/20 px-3 py-2 text-sm text-foreground"
+                  className="w-full min-h-16 resize-none bg-muted border-input rounded-lg focus:bg-background focus:border-primary focus:ring-primary/20 px-3 py-2 text-base text-foreground"
                 />
                 <p
                   id="shippingAddressError"
@@ -604,14 +633,8 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
                 </p>
               </div>
 
-              <div class="sm:col-span-2 border-t border-border pt-4">
+              <div class="sm:col-span-2">
                 <div class="space-y-4">
-                  <ShippingLocationSelector
-                    client:load
-                    shippingMethods={shippingMethods}
-                    shippingMethodLabel={lang.languageData.shippingMethodLabel}
-                  />
-
                   <div class="relative pt-1">
                     <LocationSelector
                       client:load
@@ -628,6 +651,12 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
                     >
                     </p>
                   </div>
+
+                  <ShippingLocationSelector
+                    client:load
+                    shippingMethods={shippingMethods}
+                    shippingMethodLabel={lang.languageData.shippingMethodLabel}
+                  />
                 </div>
               </div>
 
@@ -636,7 +665,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
                   <div class="sm:col-span-2">
                     <Label
                       htmlFor="notes"
-                      className="mb-1.5 block text-xs font-semibold text-foreground uppercase tracking-wide"
+                      className="mb-1.5 block text-sm font-medium text-foreground"
                     >
                       {lang.languageData.orderNotesLabel}
                     </Label>
@@ -645,7 +674,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
                       name="notes"
                       placeholder={lang.languageData.orderNotesPlaceholder}
                       rows={2}
-                      className="w-full min-h-16 resize-none bg-muted border-input rounded-lg focus:bg-background focus:border-primary focus:ring-primary/20 px-3 py-2.5 text-sm text-foreground"
+                      className="w-full min-h-16 resize-none bg-muted border-input rounded-lg focus:bg-background focus:border-primary focus:ring-primary/20 px-3 py-2.5 text-base text-foreground"
                     />
                   </div>
                 )
@@ -653,6 +682,13 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
             </div>
 
             <div class="pt-4">
+              <p
+                id="checkoutFormMessage"
+                class="mb-3 hidden rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive"
+                role="alert"
+                tabindex="-1"
+              >
+              </p>
               <Button
                 type="submit"
                 className="h-11 w-full bg-primary text-primary-foreground font-bold text-base py-3 sm:h-10 sm:py-3.5 rounded-xl shadow-lg hover:bg-primary/90 hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99] transition-all duration-200 overflow-hidden relative"
@@ -668,9 +704,13 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
                 </span>
               </Button>
 
-              <p class="text-[10px] text-muted-foreground text-center mt-3">
-                {lang.languageData.termsText}
-              </p>
+              {
+                codOnly && (
+                  <p class="mt-3 text-center text-[10px] text-muted-foreground">
+                    {lang.languageData.termsText}
+                  </p>
+                )
+              }
             </div>
           </form>
         </div>
@@ -685,12 +725,18 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
 />
 
 <script>
-  import { initCartFunctionality } from "@/lib/cart/client";
+  import {
+    initCartFunctionality,
+    resumeCartPageFromHistory,
+  } from "@/lib/cart/client";
   import { getCustomerSession } from "@/lib/api/customer-auth";
   import { getEffectiveCartShippingFee } from "@/store/cart";
   import { validateStorefrontPhone } from "@/lib/phone-country-policy";
   import {
-    clearCheckoutTransferSession,
+    readCheckoutFormDraft,
+    readHostedPaymentRecoverySession,
+    syncCheckoutTransferSession,
+    writeCheckoutFormDraft,
     writeCheckoutTransferSession,
   } from "@/lib/checkout/session-state";
   import { getShippingAddressError } from "@/lib/checkout/shipping-address";
@@ -745,9 +791,6 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     void callback();
   };
 
-  // Clear stale payment-page transfer payloads while preserving the active
-  // checkoutId used by abandoned checkout and COD cleanup during this cart visit.
-  clearCheckoutTransferSession();
   void initCartFunctionality();
 
   // ── Customer login pre-fill ───────────────────────────────────────────────
@@ -760,13 +803,20 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
 
   // Helper to fill basic fields
   const fillBasicCustomerFields = (customer: CustomerAutofillProfile) => {
-    if (customer?.name) {
+    const draft = readCheckoutFormDraft();
+    const preferredName = draft && "customerName" in draft
+      ? draft.customerName
+      : customer?.name;
+    if (preferredName) {
       const el = document.getElementById("customerName") as HTMLInputElement;
-      if (el && !el.value) el.value = customer.name;
+      if (el && !el.value) el.value = preferredName;
     }
-    if (customer?.phone) {
+    const preferredPhone = draft && "customerPhone" in draft
+      ? draft.customerPhone
+      : customer?.phone;
+    if (preferredPhone) {
       // PhoneField is a React component — dispatch custom event to update its state
-      const phone = normalizePhone(customer.phone);
+      const phone = normalizePhone(preferredPhone);
       const phoneInput = document.getElementById(
         "customerPhone",
       ) as HTMLInputElement | null;
@@ -776,22 +826,187 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
         );
       }
     }
-    if (customer?.email) {
+    const preferredEmail = draft && "customerEmail" in draft
+      ? draft.customerEmail
+      : customer?.email;
+    if (preferredEmail) {
       const el = document.getElementById("customerEmail") as HTMLInputElement;
-      if (el && !el.value) el.value = customer.email;
+      if (el && !el.value) el.value = preferredEmail;
     }
-    if (customer?.address) {
+    const preferredAddress = draft && "shippingAddress" in draft
+      ? draft.shippingAddress
+      : customer?.address;
+    if (preferredAddress) {
       const el = document.getElementById(
         "shippingAddress",
       ) as HTMLTextAreaElement;
-      if (el && !el.value) el.value = customer.address;
+      if (el && !el.value) el.value = preferredAddress;
     }
   };
+
+  const checkoutDraftFields = [
+    "customerName",
+    "customerPhone",
+    "customerEmail",
+    "shippingAddress",
+    "city",
+    "cityName",
+    "zone",
+    "zoneName",
+    "area",
+    "areaName",
+    "shippingLocation",
+    "notes",
+  ] as const;
+
+  let latestDraftLocation: {
+    city?: string;
+    cityName?: string;
+    zone?: string;
+    zoneName?: string;
+    area?: string;
+    areaName?: string;
+  } = {};
+
+  const readCheckoutFormValues = () => {
+    const draft = readCheckoutFormDraft();
+    const values: Record<string, string> = {};
+    for (const field of checkoutDraftFields) {
+      const input = document.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+        `[name="${field}"]`,
+      );
+      if (input) values[field] = input.value;
+      else if (draft && field in draft) values[field] = draft[field] ?? "";
+    }
+    Object.assign(values, latestDraftLocation);
+    return values;
+  };
+
+  const syncExistingCheckoutTransfer = (values: Record<string, string>) => {
+    const cartItems = (
+      document.getElementById("cartItemsInput") as HTMLInputElement | null
+    )?.value;
+    const checkoutId = (
+      document.getElementById("checkoutIdInput") as HTMLInputElement | null
+    )?.value;
+    const discountCodeHidden = (
+      document.getElementById("discountCodeHidden") as HTMLInputElement | null
+    )?.value;
+    const shippingMethodId =
+      window.lastShippingEventDetail?.id || values.shippingLocation;
+    let shippingCharge = "";
+    if (cartItems) {
+      try {
+        shippingCharge = String(
+          getEffectiveCartShippingFee(
+            JSON.parse(cartItems),
+            window.lastShippingEventDetail?.fee ?? 0,
+          ),
+        );
+      } catch {
+        shippingCharge = "";
+      }
+    }
+    syncCheckoutTransferSession({
+      ...values,
+      ...(cartItems ? { cartItems } : {}),
+      ...(checkoutId ? { checkoutId } : {}),
+      ...(discountCodeHidden !== undefined ? { discountCodeHidden } : {}),
+      ...(shippingMethodId ? { shippingMethodId } : {}),
+      ...(shippingCharge ? { shippingCharge } : {}),
+    });
+  };
+
+  const persistCheckoutFormDraftNow = () => {
+    const values = readCheckoutFormValues();
+    writeCheckoutFormDraft(values);
+    syncExistingCheckoutTransfer(values);
+  };
+
+  let draftWriteTimer: number | null = null;
+  const persistCheckoutFormDraft = () => {
+    if (draftWriteTimer !== null) window.clearTimeout(draftWriteTimer);
+    draftWriteTimer = window.setTimeout(() => {
+      draftWriteTimer = null;
+      persistCheckoutFormDraftNow();
+    }, 120);
+  };
+
+  const restoreCheckoutFormDraft = () => {
+    const draft = readCheckoutFormDraft();
+    if (!draft) return;
+
+    for (const field of [
+      "customerName",
+      "customerEmail",
+      "shippingAddress",
+      "notes",
+    ] as const) {
+      const input = document.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+        `[name="${field}"]`,
+      );
+      if (input && !input.value && draft[field]) input.value = draft[field] || "";
+    }
+
+  };
+
+  runWhenDomReady(() => {
+    restoreCheckoutFormDraft();
+    const form = document.getElementById("checkoutForm");
+    form?.addEventListener("input", persistCheckoutFormDraft, {
+      signal: cartPageSignal,
+    });
+    form?.addEventListener("change", persistCheckoutFormDraft, {
+      signal: cartPageSignal,
+    });
+    window.addEventListener(
+      "checkout-location-change",
+      (event) => {
+        const detail = (event as CustomEvent<Record<string, unknown>>).detail;
+        latestDraftLocation = {
+          city: typeof detail?.cityId === "string" ? detail.cityId : "",
+          cityName: typeof detail?.cityName === "string" ? detail.cityName : "",
+          zone: typeof detail?.zoneId === "string" ? detail.zoneId : "",
+          zoneName: typeof detail?.zoneName === "string" ? detail.zoneName : "",
+          area: typeof detail?.areaId === "string" ? detail.areaId : "",
+          areaName: typeof detail?.areaName === "string" ? detail.areaName : "",
+        };
+        persistCheckoutFormDraft();
+      },
+      { signal: cartPageSignal },
+    );
+    window.addEventListener("shippingLocationChange", persistCheckoutFormDraft, {
+      signal: cartPageSignal,
+    });
+    window.addEventListener(
+      "pagehide",
+      persistCheckoutFormDraftNow,
+      { signal: cartPageSignal },
+    );
+    document.addEventListener("cart-updated", persistCheckoutFormDraft, {
+      signal: cartPageSignal,
+    });
+  });
 
   // Helper to auto-select City/Zone dropdowns through LocationSelector's event API.
   const fillLocationDropdowns = (customer: CustomerAutofillProfile) => {
     try {
-      if (!customer?.cityName && !customer?.city) return;
+      const draft = readCheckoutFormDraft();
+      const draftOwnsLocation = Boolean(
+        draft && ["city", "cityName", "zone", "zoneName", "area", "areaName"]
+          .some((field) => Object.prototype.hasOwnProperty.call(draft, field)),
+      );
+      const preferred = draftOwnsLocation
+        ? {
+            city: draft?.city,
+            cityName: draft?.cityName,
+            zone: draft?.zone,
+            zoneName: draft?.zoneName,
+            area: draft?.area,
+            areaName: draft?.areaName,
+          }
+        : customer;
+      if (!preferred?.cityName && !preferred?.city) return;
       const existingCity =
         document.querySelector<HTMLInputElement>('input[name="city"]')?.value;
       const existingZone =
@@ -800,18 +1015,23 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
       window.dispatchEvent(
         new CustomEvent("location-prefill", {
           detail: {
-            city: customer.city,
-            cityName: customer.cityName,
-            zone: customer.zone,
-            zoneName: customer.zoneName,
-            area: customer.area,
-            areaName: customer.areaName,
+            city: preferred.city,
+            cityName: preferred.cityName,
+            zone: preferred.zone,
+            zoneName: preferred.zoneName,
+            area: preferred.area,
+            areaName: preferred.areaName,
           },
         }),
       );
     } catch (err: unknown) {
       console.error("Cart autofill location err:", err);
     }
+  };
+
+  const revealCheckoutFormForCustomer = () => {
+    document.getElementById("checkoutSignInPrompt")?.classList.add("hidden");
+    document.getElementById("checkoutFormCard")?.classList.remove("hidden");
   };
 
   // 1. Initial page load hydration (standalone fetch)
@@ -831,6 +1051,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
       if (session?.authenticated && session.customer) {
         fillBasicCustomerFields(session.customer);
         fillLocationDropdowns(session.customer);
+        revealCheckoutFormForCustomer();
       }
     }
   });
@@ -842,6 +1063,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
       if (cartPageSignal.aborted) return;
       const customer = e.detail;
       fillBasicCustomerFields(customer);
+      revealCheckoutFormForCustomer();
       // Modal normally resolves quickly, but schedule location fill slightly later to avoid DOM races
       const timeoutId = window.setTimeout(
         () => fillLocationDropdowns(customer),
@@ -863,6 +1085,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     const submitButton = document.getElementById(
       "submitButton",
     ) as HTMLButtonElement;
+    const submitButtonText = document.getElementById("submitButtonText");
     const isCartEmpty = () => {
       const input = document.getElementById(
         "cartItemsInput",
@@ -871,13 +1094,32 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     };
 
     const readCustomerSessionForCheckout = async () => getCustomerSession();
-    const initialSubmitText = submitButton?.textContent || "Place Order";
+    const initialSubmitText = submitButtonText?.textContent?.trim() || "Place Order";
+    const checkoutFormMessage = document.getElementById("checkoutFormMessage");
     let submitAfterCustomerSessionCheck = false;
     let submitAfterCartValidation = false;
 
+    const setSubmitButtonText = (text: string) => {
+      if (submitButtonText) submitButtonText.textContent = text;
+    };
+
     const restoreSubmitButton = () => {
-      submitButton.textContent = initialSubmitText;
+      setSubmitButtonText(initialSubmitText);
       updateCheckoutButtonState();
+    };
+
+    const showCheckoutFormError = (message: string, focusTarget?: HTMLElement | null) => {
+      if (!checkoutFormMessage) return;
+      checkoutFormMessage.textContent = message;
+      checkoutFormMessage.classList.remove("hidden");
+      checkoutFormMessage.scrollIntoView?.({ behavior: "smooth", block: "center" });
+      (focusTarget ?? checkoutFormMessage).focus({ preventScroll: true });
+    };
+
+    const clearCheckoutFormError = () => {
+      if (!checkoutFormMessage) return;
+      checkoutFormMessage.textContent = "";
+      checkoutFormMessage.classList.add("hidden");
     };
 
     const showCheckoutTransferError = (message: string) => {
@@ -886,7 +1128,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
 
       const messageEl = document.getElementById("cartValidationMessage");
       if (!messageEl) {
-        alert(message);
+        showCheckoutFormError(message, submitButton);
         return;
       }
 
@@ -901,9 +1143,10 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
           document.getElementById("cartPageRoot")?.dataset.cartReady === "true";
         const empty = isCartEmpty();
         const cartBlocked = window.hasCartValidationIssues?.() === true;
+        const checkoutPending = readHostedPaymentRecoverySession() !== null;
         submitButton.disabled =
-          !cartReady || checkoutUnavailable || empty || cartBlocked;
-        if (!cartReady || checkoutUnavailable || empty || cartBlocked)
+          !cartReady || checkoutUnavailable || empty || cartBlocked || checkoutPending;
+        if (!cartReady || checkoutUnavailable || empty || cartBlocked || checkoutPending)
           submitButton.classList.add("opacity-50", "cursor-not-allowed");
         else submitButton.classList.remove("opacity-50", "cursor-not-allowed");
         submitButton.title = !cartReady
@@ -915,6 +1158,8 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
               : cartBlocked
                 ? window.getCartBlockedMessage?.() ||
                   "Some cart items need attention"
+                : checkoutPending
+                  ? "Review the existing checkout before placing another order"
                 : "";
       }
     };
@@ -925,6 +1170,19 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     });
 
     if (!form || !submitButton) return;
+
+    window.addEventListener(
+      "pageshow",
+      (event) => {
+        if (!(event as PageTransitionEvent).persisted) return;
+        submitAfterCustomerSessionCheck = false;
+        submitAfterCartValidation = false;
+        hideCheckoutLoadingOverlay({ restoreFocus: false });
+        restoreSubmitButton();
+        void resumeCartPageFromHistory();
+      },
+      { signal: cartPageSignal },
+    );
 
     const shippingAddressInput = document.getElementById(
       "shippingAddress",
@@ -973,9 +1231,22 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     form.addEventListener(
       "submit",
       async (e) => {
+        clearCheckoutFormError();
         if (checkoutUnavailable) {
           e.preventDefault();
-          alert(checkoutUnavailableMessage);
+          showCheckoutFormError(checkoutUnavailableMessage, submitButton);
+          return;
+        }
+
+        const pendingCheckout = readHostedPaymentRecoverySession();
+        if (pendingCheckout) {
+          e.preventDefault();
+          restoreSubmitButton();
+          const recoveryLink = document.getElementById("checkoutRecoveryLink") as HTMLAnchorElement | null;
+          showCheckoutFormError(
+            "Review your existing order before placing another one.",
+            recoveryLink ?? submitButton,
+          );
           return;
         }
 
@@ -983,14 +1254,15 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
         if (!guestCheckoutEnabled && !submitAfterCustomerSessionCheck) {
           e.preventDefault();
           submitButton.disabled = true;
-          submitButton.textContent = "Checking account...";
+          setSubmitButtonText("Checking account...");
 
           const session = await readCustomerSessionForCheckout();
           if (session.unavailable) {
             restoreSubmitButton();
-            alert(
+            showCheckoutFormError(
               session.error ||
                 "We could not verify your account right now. Please try again.",
+              submitButton,
             );
             return;
           }
@@ -1016,86 +1288,24 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
         if (isCartEmpty()) {
           e.preventDefault();
           restoreSubmitButton();
-          alert(
+          showCheckoutFormError(
             "Your cart is empty. Please add items before placing an order.",
+            submitButton,
           );
           return;
         }
 
-        if (!submitAfterCartValidation) {
-          e.preventDefault();
-          submitButton.disabled = true;
-          submitButton.textContent = "Checking cart...";
-          const cartIsValid = await (window.validateCartSnapshot?.() ??
-            Promise.resolve(true));
-          if (!cartIsValid || window.hasCartValidationIssues?.() === true) {
-            restoreSubmitButton();
-            alert(
-              window.getCartBlockedMessage?.() ||
-                "Please review the highlighted cart items before checkout.",
-            );
-            return;
-          }
+        // Persist the current DOM immediately so explicit empty edits replace
+        // older draft values before any async validation or navigation.
+        persistCheckoutFormDraftNow();
 
-          if (codOnly) {
-            submitAfterCartValidation = true;
-            form.requestSubmit();
-            return;
-          }
-        }
-
-        if (submitAfterCartValidation) {
-          submitAfterCartValidation = false;
-        }
-
-        if (!syncShippingAddressValidity(true)) {
-          e.preventDefault();
-          restoreSubmitButton();
-          shippingAddressInput?.focus({ preventScroll: true });
-          shippingAddressInput?.reportValidity();
-          shippingAddressInput?.scrollIntoView({
-            behavior: "smooth",
-            block: "center",
-          });
-          return;
-        }
-
-        const cityInput = document.querySelector<HTMLInputElement>(
-          '[name="city"]',
-        );
-        const zoneInput = document.querySelector<HTMLInputElement>(
-          '[name="zone"]',
-        );
-        if (!cityInput?.value?.trim() || !zoneInput?.value?.trim()) {
-          e.preventDefault();
-          restoreSubmitButton();
-          const missingCity = !cityInput?.value?.trim();
-          const message = missingCity
-            ? "Choose a city and zone to continue."
-            : "Choose a zone to continue.";
-          if (shippingLocationError) {
-            shippingLocationError.textContent = message;
-            shippingLocationError.classList.remove("hidden");
-            shippingLocationError.scrollIntoView({
-              behavior: "smooth",
-              block: "center",
-            });
-          }
-          const target = document.querySelector<HTMLButtonElement>(
-            missingCity
-              ? 'button[aria-label^="City:"]'
-              : 'button[aria-label^="Zone:"]',
-          );
-          target?.focus({ preventScroll: true });
-          return;
-        }
-
-        // Required fields validation
+        // Validate in visual form order and keep every error inline. The form
+        // is novalidate so browser-native validation bubbles cannot conflict
+        // with the field that receives focus.
         const requiredFields = [
           "customerName",
           "customerPhone",
           "shippingAddress",
-          "shippingLocation",
         ];
         const missing: string[] = [];
         for (const field of requiredFields) {
@@ -1107,7 +1317,19 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
         if (missing.length > 0) {
           e.preventDefault();
           restoreSubmitButton();
-          alert(`Please fill in all required fields: ${missing.join(", ")}`);
+          const firstMissing = missing[0];
+          const missingTarget = document.querySelector<HTMLElement>(`[name="${firstMissing}"]`);
+          if (firstMissing === "customerPhone") {
+            window.dispatchEvent(new CustomEvent("phone-validation-error", {
+              detail: { name: "customerPhone", message: "Enter your phone number." },
+            }));
+            missingTarget?.focus({ preventScroll: true });
+          } else {
+            const missingMessage = firstMissing === "customerName"
+              ? "Enter your full name."
+              : "Enter your delivery address.";
+            showCheckoutFormError(missingMessage, missingTarget);
+          }
           return;
         }
 
@@ -1148,6 +1370,90 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
           return;
         }
         if (phoneInput) phoneInput.value = phoneValidation.value;
+
+        if (!syncShippingAddressValidity(true)) {
+          e.preventDefault();
+          restoreSubmitButton();
+          shippingAddressInput?.focus({ preventScroll: true });
+          shippingAddressInput?.scrollIntoView({
+            behavior: "smooth",
+            block: "center",
+          });
+          return;
+        }
+
+        const cityInput = document.querySelector<HTMLInputElement>(
+          '[name="city"]',
+        );
+        const zoneInput = document.querySelector<HTMLInputElement>(
+          '[name="zone"]',
+        );
+        if (!cityInput?.value?.trim() || !zoneInput?.value?.trim()) {
+          e.preventDefault();
+          restoreSubmitButton();
+          const missingCity = !cityInput?.value?.trim();
+          const message = missingCity
+            ? "Choose a city and zone to continue."
+            : "Choose a zone to continue.";
+          if (shippingLocationError) {
+            shippingLocationError.textContent = message;
+            shippingLocationError.classList.remove("hidden");
+            shippingLocationError.scrollIntoView({
+              behavior: "smooth",
+              block: "center",
+            });
+          }
+          const target = document.querySelector<HTMLButtonElement>(
+            missingCity
+              ? 'button[aria-label^="City:"]'
+              : 'button[aria-label^="Zone:"]',
+          );
+          target?.focus({ preventScroll: true });
+          return;
+        }
+
+        const shippingLocationInput = document.querySelector<HTMLInputElement>(
+          '[name="shippingLocation"]',
+        );
+        if (!shippingLocationInput?.value?.trim()) {
+          e.preventDefault();
+          restoreSubmitButton();
+          if (shippingLocationError) {
+            shippingLocationError.textContent = "Choose a delivery option.";
+            shippingLocationError.classList.remove("hidden");
+            shippingLocationError.scrollIntoView({ behavior: "smooth", block: "center" });
+          }
+          document.querySelector<HTMLButtonElement>('[role="radio"][aria-label]')
+            ?.focus({ preventScroll: true });
+          return;
+        }
+
+        if (!submitAfterCartValidation) {
+          e.preventDefault();
+          submitButton.disabled = true;
+          setSubmitButtonText("Checking cart...");
+          const cartIsValid = await (window.validateCartSnapshot?.() ??
+            Promise.resolve(true));
+          if (!cartIsValid || window.hasCartValidationIssues?.() === true) {
+            restoreSubmitButton();
+            showCheckoutFormError(
+              window.getCartBlockedMessage?.() ||
+                "Please review the highlighted cart items before checkout.",
+              submitButton,
+            );
+            return;
+          }
+
+          if (codOnly) {
+            submitAfterCartValidation = true;
+            form.requestSubmit();
+            return;
+          }
+        }
+
+        if (submitAfterCartValidation) {
+          submitAfterCartValidation = false;
+        }
 
         if (!codOnly) {
           // ── Multi-gateway flow: intercept and redirect to /checkout ──
@@ -1212,7 +1518,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
           }
 
           submitButton.disabled = true;
-          submitButton.textContent = "Redirecting to Payment...";
+          setSubmitButtonText("Redirecting to payment...");
 
           showCheckoutLoadingOverlay({
             title: "Opening payment options",
@@ -1224,7 +1530,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
 
         // ── COD-only flow: normal form POST ──
         submitButton.disabled = true;
-        submitButton.textContent = "Processing...";
+        setSubmitButtonText("Processing...");
         showCheckoutLoadingOverlay({
           title:
             checkoutLanguage?.languageData?.processingOrderTitle ||

@@ -5,6 +5,13 @@ import type { OrderReceipt, CreateOrderPayload } from "./types";
 import { unwrapData } from "./unwrap";
 import { getCheckoutErrorMessage } from "@/lib/checkout/error-messages";
 
+export class OrderReceiptAccessError extends Error {
+  constructor(public readonly status: number) {
+    super(status === 404 ? "Order receipt proof is invalid or expired." : "Order receipt is unavailable.");
+    this.name = "OrderReceiptAccessError";
+  }
+}
+
 type CreateOrderResult = {
   success: boolean;
   orderId?: string;
@@ -329,23 +336,20 @@ export async function getOrderReceipt(
     return null;
   }
 
-  try {
-    const response = await fetchWithRetry(
-      createApiUrl(`/orders/receipt/${encodeURIComponent(orderId)}`),
-      {
-        headers: { "X-Receipt-Token": receiptToken },
-        cache: "no-store",
-      },
-      2,
-      5000,
-      false,
-    );
-    if (!response.ok) return null;
+  const response = await fetchWithRetry(
+    createApiUrl(`/orders/receipt/${encodeURIComponent(orderId)}`),
+    {
+      headers: { "X-Receipt-Token": receiptToken },
+      cache: "no-store",
+    },
+    2,
+    5000,
+    false,
+  );
+  if (!response.ok) throw new OrderReceiptAccessError(response.status);
 
-    const data = await response.json();
-    return unwrapData<{ order: OrderReceipt }>(data)?.order ?? null;
-  } catch (error: unknown) {
-    console.error(`Error fetching receipt for order "${orderId}":`, error);
-    return null;
-  }
+  const data = await response.json();
+  const receipt = unwrapData<{ order: OrderReceipt }>(data)?.order ?? null;
+  if (!receipt) throw new OrderReceiptAccessError(502);
+  return receipt;
 }

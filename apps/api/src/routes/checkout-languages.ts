@@ -206,7 +206,13 @@ const createCheckoutLanguageSchema = z.object({
   isDefault: z.boolean().optional().default(false).openapi({ description: "Whether this is the default language" })
 });
 
-const updateCheckoutLanguageSchema = createCheckoutLanguageSchema.partial();
+const updateCheckoutLanguageSchema = createCheckoutLanguageSchema
+  .omit({ isActive: true, isDefault: true })
+  .partial()
+  .extend({
+    isActive: z.boolean().optional().openapi({ description: "Whether this language is active" }),
+    isDefault: z.boolean().optional().openapi({ description: "Whether this is the default language" }),
+  });
 
 function checkoutLanguageConstraintText(error: unknown, depth = 0): string {
   if (depth > 5 || error === null || error === undefined) return "";

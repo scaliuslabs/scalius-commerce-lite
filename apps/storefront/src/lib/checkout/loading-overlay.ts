@@ -1,5 +1,6 @@
 let previousFocus: HTMLElement | null = null;
 let previousBodyOverflow = "";
+let previousMainInert = false;
 
 function getOverlay(): HTMLElement | null {
   return document.getElementById("loadingOverlay");
@@ -17,6 +18,7 @@ export function showCheckoutLoadingOverlay(options: {
       ? document.activeElement
       : null;
     previousBodyOverflow = document.body.style.overflow;
+    previousMainInert = document.querySelector<HTMLElement>("main")?.inert ?? false;
   }
 
   const title = document.getElementById("loadingTitle");
@@ -27,7 +29,9 @@ export function showCheckoutLoadingOverlay(options: {
   overlay.classList.remove("hidden");
   overlay.classList.add("flex");
   overlay.setAttribute("aria-hidden", "false");
-  document.querySelector("main")?.setAttribute("aria-busy", "true");
+  const main = document.querySelector<HTMLElement>("main");
+  main?.setAttribute("aria-busy", "true");
+  if (main) main.inert = true;
   document.body.style.overflow = "hidden";
   overlay.focus({ preventScroll: true });
 }
@@ -41,7 +45,9 @@ export function hideCheckoutLoadingOverlay(options: {
   overlay.classList.add("hidden");
   overlay.classList.remove("flex");
   overlay.setAttribute("aria-hidden", "true");
-  document.querySelector("main")?.removeAttribute("aria-busy");
+  const main = document.querySelector<HTMLElement>("main");
+  main?.removeAttribute("aria-busy");
+  if (main) main.inert = previousMainInert;
   document.body.style.overflow = previousBodyOverflow;
 
   if (options.restoreFocus !== false && previousFocus?.isConnected) {
@@ -49,4 +55,5 @@ export function hideCheckoutLoadingOverlay(options: {
   }
   previousFocus = null;
   previousBodyOverflow = "";
+  previousMainInert = false;
 }

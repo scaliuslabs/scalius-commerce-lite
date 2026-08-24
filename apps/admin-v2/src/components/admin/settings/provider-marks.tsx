@@ -32,7 +32,9 @@ export interface ProviderMarkManifestEntry {
   sha256: string;
   darkSha256?: string;
   minimumCssPixels: number;
-  allowedSurface: "direct-provider-settings";
+  allowedSurface:
+    | "direct-provider-settings"
+    | "direct-provider-settings-and-storefront-checkout";
   derivative?: {
     operation: string;
     sourceSha256: string;
@@ -50,7 +52,7 @@ export const PROVIDER_MARKS: Record<ProviderMarkId, ProviderMarkManifestEntry> =
     retrievedAt: "2026-07-14",
     sha256: "ff9ed9bc349274d92a49b47e191a135e29cd6519d27311061ecb2ab6b47fa023",
     minimumCssPixels: 48,
-    allowedSurface: "direct-provider-settings",
+    allowedSurface: "direct-provider-settings-and-storefront-checkout",
   },
   sslcommerz: {
     label: "SSLCommerz",
@@ -62,7 +64,7 @@ export const PROVIDER_MARKS: Record<ProviderMarkId, ProviderMarkManifestEntry> =
     retrievedAt: "2026-07-14",
     sha256: "b98954ed65588a8ee0a0438eeb1c380dfb0b92c4f4eef0c65d1d12433f2bd7ed",
     minimumCssPixels: 48,
-    allowedSurface: "direct-provider-settings",
+    allowedSurface: "direct-provider-settings-and-storefront-checkout",
     derivative: {
       operation:
         "Cropped the transparent outer margin to its alpha bounds with two source pixels retained on each side; artwork pixels were not recolored or redrawn.",
@@ -80,7 +82,7 @@ export const PROVIDER_MARKS: Record<ProviderMarkId, ProviderMarkManifestEntry> =
     sha256: "a96f2cc562f1ac1eac4f864b943d313e145626d8fa0cebe12c61b1af80bbb670",
     darkSha256: "4ccc963c7284172dcc475aee1ad4fc5bfe3d10caaf7fbde446451f3f983d2ef4",
     minimumCssPixels: 16,
-    allowedSurface: "direct-provider-settings",
+    allowedSurface: "direct-provider-settings-and-storefront-checkout",
   },
   cloudflare: {
     label: "Cloudflare",

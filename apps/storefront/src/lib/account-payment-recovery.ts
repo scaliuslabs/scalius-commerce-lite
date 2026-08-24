@@ -3,6 +3,7 @@ import { normalizeHostedCheckoutUrl } from "./checkout/redirect-url";
 
 export type AccountPaymentRecoveryAction = {
   visible: boolean;
+  gateway: "stripe" | "sslcommerz" | "polar";
   title: string;
   description: string;
   buttonLabel: string;
@@ -52,6 +53,7 @@ export function getAccountPaymentRecoveryAction(
 
   return {
     visible: true,
+    gateway: recovery.gateway,
     title: recoveryTitle(recovery.paymentType),
     description: recoveryDescription(recovery.paymentType),
     buttonLabel: recoveryButtonLabel(recovery),
