@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  clearOrderReceiptFinalizeCookieHeader,
+  createOrderReceiptFinalizeCookieHeader,
   createOrderReceiptCookieHeader,
+  getOrderReceiptFinalizeCookieName,
   getOrderReceiptCookieName,
+  hasOrderReceiptFinalizeCookie,
   readOrderReceiptCookie,
 } from "./order-receipt-cookie";
 
@@ -20,5 +24,21 @@ describe("order receipt cookie", () => {
     expect(header).not.toContain("Domain=");
     expect(readOrderReceiptCookie(`other=value; ${cookieName}=chk_secret`, "order_1")).toBe("chk_secret");
     expect(readOrderReceiptCookie(`${cookieName}=chk_secret`, "order_2")).toBe("");
+  });
+
+  it("creates and consumes a short-lived order-specific finalization marker", () => {
+    const cookieName = getOrderReceiptFinalizeCookieName("order_1");
+    const header = createOrderReceiptFinalizeCookieHeader("order_1");
+    const clearHeader = clearOrderReceiptFinalizeCookieHeader("order_1");
+
+    expect(header).toContain(`${cookieName}=1`);
+    expect(header).toContain("Max-Age=600");
+    expect(header).toContain("Path=/order-success");
+    expect(header).toContain("HttpOnly");
+    expect(header).not.toContain("Domain=");
+    expect(hasOrderReceiptFinalizeCookie(`other=value; ${cookieName}=1`, "order_1")).toBe(true);
+    expect(hasOrderReceiptFinalizeCookie(`${cookieName}=1`, "order_2")).toBe(false);
+    expect(clearHeader).toContain(`${cookieName}=`);
+    expect(clearHeader).toContain("Max-Age=0");
   });
 });

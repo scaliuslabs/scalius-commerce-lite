@@ -16,11 +16,11 @@ import {
   getPaymentResultRecovery,
   initCheckoutPage,
   renderOrderSummaryDetails,
-  shouldClearCheckoutBeforeRedirect,
-  shouldClearCheckoutSessionBeforeRedirect,
+  resumeCheckoutPageFromHistory,
   validateCheckoutCartFreshness,
 } from "./index";
-import { resolveCheckoutPaymentRequest } from "./payment-mode";
+import { showCheckoutLoadingOverlay } from "./loading-overlay";
+import { resolveCheckoutPaymentRequest, resolveExplicitCheckoutPaymentRequest } from "./payment-mode";
 import type { CheckoutConfig } from "./types";
 import type { CheckoutTaxQuote } from "./tax-quote-contract";
 import { CHECKOUT_CART_REPAIR_STORAGE_KEY } from "../cart/repair-state";
@@ -33,6 +33,29 @@ const baseConfig: CheckoutConfig = {
   partialPaymentEnabled: false,
   partialPaymentAmount: 0,
 };
+
+function createMemoryStorage(): Storage {
+  const store = new Map<string, string>();
+  return {
+    get length() {
+      return store.size;
+    },
+    clear: vi.fn(() => store.clear()),
+    getItem: vi.fn((key: string) => store.get(key) ?? null),
+    key: vi.fn((index: number) => Array.from(store.keys())[index] ?? null),
+    removeItem: vi.fn((key: string) => store.delete(key)),
+    setItem: vi.fn((key: string, value: string) => store.set(key, String(value))),
+  };
+}
+
+function installStorageMocks(): void {
+  const local = createMemoryStorage();
+  const session = createMemoryStorage();
+  Object.defineProperty(globalThis, "localStorage", { value: local, configurable: true });
+  Object.defineProperty(window, "localStorage", { value: local, configurable: true });
+  Object.defineProperty(globalThis, "sessionStorage", { value: session, configurable: true });
+  Object.defineProperty(window, "sessionStorage", { value: session, configurable: true });
+}
 
 describe("checkout payment recovery", () => {
   it("turns a cleared stale customer session into an explicit guest continuation", () => {
@@ -115,6 +138,8 @@ function successfulCheckoutFetch(quote = taxQuote()): typeof fetch {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  installStorageMocks();
+  localStorage.clear();
   window.__CURRENCY_CODE__ = "BDT";
   vi.stubGlobal("fetch", successfulCheckoutFetch());
 });
@@ -122,6 +147,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals();
   sessionStorage.clear();
+  localStorage.clear();
   document.body.innerHTML = "";
   delete (window as unknown as { __CHECKOUT_CONFIG__?: CheckoutConfig }).__CHECKOUT_CONFIG__;
   delete window.__CURRENCY_CODE__;
@@ -192,6 +218,12 @@ describe("renderOrderSummaryDetails", () => {
 });
 
 describe("resolveCheckoutPaymentRequest", () => {
+  it("supports explicit existing-order balance recovery and validates advances", () => {
+    expect(resolveExplicitCheckoutPaymentRequest("balance")).toEqual({ paymentType: "balance" });
+    expect(resolveExplicitCheckoutPaymentRequest("deposit", 200)).toEqual({ paymentType: "deposit", depositAmount: 200 });
+    expect(() => resolveExplicitCheckoutPaymentRequest("deposit")).toThrow("valid advance amount");
+  });
+
   it("uses a full payment request when the configured deposit is not less than the total", () => {
     expect(
       resolveCheckoutPaymentRequest({
@@ -218,53 +250,6 @@ describe("resolveCheckoutPaymentRequest", () => {
         partialPaymentAmount: 200,
       }, 500),
     ).toEqual({ paymentType: "deposit", depositAmount: 200 });
-  });
-});
-
-describe("checkout redirect cleanup", () => {
-  it("distinguishes cart cleanup from checkout transfer cleanup", () => {
-    expect(
-      shouldClearCheckoutBeforeRedirect({
-        success: true,
-        redirectUrl: "https://gateway.example/checkout",
-      }),
-    ).toBe(false);
-    expect(
-      shouldClearCheckoutSessionBeforeRedirect({
-        success: true,
-        redirectUrl: "https://gateway.example/checkout",
-      }),
-    ).toBe(false);
-
-    expect(
-      shouldClearCheckoutBeforeRedirect({
-        success: true,
-        redirectUrl: "/order-success?orderId=1",
-        clearCartOnRedirect: true,
-      }),
-    ).toBe(true);
-    expect(
-      shouldClearCheckoutSessionBeforeRedirect({
-        success: true,
-        redirectUrl: "/order-success?orderId=1",
-        clearCartOnRedirect: true,
-      }),
-    ).toBe(true);
-
-    expect(
-      shouldClearCheckoutBeforeRedirect({
-        success: true,
-        redirectUrl: "https://gateway.example/checkout",
-        clearCheckoutSessionOnRedirect: true,
-      }),
-    ).toBe(false);
-    expect(
-      shouldClearCheckoutSessionBeforeRedirect({
-        success: true,
-        redirectUrl: "https://gateway.example/checkout",
-        clearCheckoutSessionOnRedirect: true,
-      }),
-    ).toBe(true);
   });
 });
 
@@ -437,7 +422,10 @@ describe("initCheckoutPage", () => {
     await initCheckoutPage();
 
     const paymentMethods = document.getElementById("paymentMethods");
-    const codMethod = document.querySelector('[data-method="cod"]');
+    const codCard = document.querySelector('[data-method="cod"]');
+    const codMethod = document.querySelector(
+      '[data-method="cod"] .payment-method-control',
+    );
     expect(paymentMethods?.getAttribute("role")).toBe("radiogroup");
     expect(paymentMethods?.getAttribute("aria-label")).toBe("Payment methods");
     expect(codMethod).toBeInstanceOf(HTMLButtonElement);
@@ -445,15 +433,15 @@ describe("initCheckoutPage", () => {
     expect(codMethod?.getAttribute("aria-checked")).toBe("true");
     expect((codMethod as HTMLButtonElement).type).toBe("button");
     expect(codMethod?.getAttribute("aria-label")).toContain(
-      "Cash on Delivery. Pay when your order arrives",
+      "Cash on delivery. Pay when you receive your order",
     );
     expect((codMethod as HTMLButtonElement).tabIndex).toBe(0);
-    expect(codMethod?.classList.contains("border-primary")).toBe(true);
+    expect(codCard?.classList.contains("border-primary")).toBe(true);
     expect((document.getElementById("payButton") as HTMLButtonElement).disabled).toBe(false);
-    expect(document.getElementById("payButtonText")?.textContent).toContain("Place Order");
+    expect(document.getElementById("payButtonText")?.textContent).toContain("Place order");
 
     const onlineMethod = document.querySelector<HTMLButtonElement>(
-      '[data-method="sslcommerz"]',
+      '[data-method="sslcommerz"] .payment-method-control',
     );
     expect(onlineMethod?.tabIndex).toBe(-1);
 
@@ -498,11 +486,12 @@ describe("initCheckoutPage", () => {
     await initCheckoutPage();
 
     const customMethod = document.querySelector('[data-method="custom"]');
+    const customControl = customMethod?.firstElementChild;
     expect(customMethod?.querySelector("img")).toBeNull();
     expect(customMethod?.textContent).toContain(
       '<img src=x onerror="window.__gatewayPwned=true">Custom pay',
     );
-    expect(customMethod?.getAttribute("aria-label")).toContain("Custom pay");
+    expect(customControl?.getAttribute("aria-label")).toContain("Custom pay");
   });
 
   it("preselects the only eligible method when a saved default is no longer available", async () => {
@@ -534,9 +523,74 @@ describe("initCheckoutPage", () => {
     await initCheckoutPage();
 
     const codMethod = document.querySelector('[data-method="cod"]');
-    expect(codMethod?.getAttribute("aria-checked")).toBe("true");
+    expect(codMethod?.classList.contains("border-primary")).toBe(true);
+    expect(codMethod?.querySelector('[role="radio"]')).toBeNull();
     expect((document.getElementById("payButton") as HTMLButtonElement).disabled).toBe(false);
-    expect(document.getElementById("payButtonText")?.textContent).toContain("Place Order");
+    expect(document.getElementById("payButtonText")?.textContent).toContain("Place order");
+  });
+
+  it("unfreezes a BFCache-restored payment page and keeps the buyer's method", async () => {
+    document.body.innerHTML = `
+      <main>
+        <section id="orderSummary" class="hidden"><div id="summaryDetails"></div></section>
+        <div id="errorMsg" class="hidden"></div>
+        <div id="paymentMethods"></div>
+        <div id="paymentActionParking" class="hidden">
+          <div id="paymentActionHost" class="hidden">
+            <div id="testModeNotice" class="hidden"></div>
+            <div id="stripeSection" class="hidden"></div>
+            <p id="hostedRedirectNote" class="hidden"></p>
+            <button id="payButton" disabled><span id="payButtonText">Select a payment method</span></button>
+          </div>
+        </div>
+      </main>
+      <div id="loadingOverlay" class="hidden" aria-hidden="true" tabindex="-1">
+        <span id="loadingTitle"></span><span id="loadingMsg"></span>
+      </div>
+    `;
+    sessionStorage.setItem("scalius_checkout_data", JSON.stringify({
+      cartItems: JSON.stringify({
+        line_1: { id: "prod_1", variantId: "var_1", price: 100, quantity: 1 },
+      }),
+      customerName: "Buyer",
+      shippingAddress: "Dhaka",
+      city: "city_1",
+      zone: "zone_1",
+      shippingMethodId: "ship_1",
+    }));
+    (window as unknown as { __CHECKOUT_CONFIG__: CheckoutConfig }).__CHECKOUT_CONFIG__ = {
+      ...baseConfig,
+      activeDefaultMethod: "cod",
+      gateways: [
+        { id: "cod", name: "Cash on Delivery" },
+        { id: "sslcommerz", name: "SSLCommerz" },
+      ],
+    };
+
+    await initCheckoutPage();
+    document.querySelector<HTMLButtonElement>(
+      '[data-method="sslcommerz"] .payment-method-control',
+    )?.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    showCheckoutLoadingOverlay({
+      title: "Opening secure payment",
+      message: "Leaving this page",
+    });
+
+    expect(document.querySelector("main")?.inert).toBe(true);
+    expect(document.body.style.overflow).toBe("hidden");
+    await resumeCheckoutPageFromHistory();
+
+    const restored = document.querySelector<HTMLButtonElement>(
+      '[data-method="sslcommerz"] .payment-method-control',
+    );
+    expect(restored?.getAttribute("aria-checked")).toBe("true");
+    expect(document.getElementById("loadingOverlay")?.classList.contains("hidden")).toBe(true);
+    expect(document.querySelector("main")?.inert).toBe(false);
+    expect(document.body.style.overflow).toBe("");
+    expect(document.getElementById("payButtonText")?.textContent).toBe(
+      "Continue to SSLCommerz",
+    );
   });
 
   it("emits safe AddPaymentInfo analytics only when the buyer confirms the selected method", async () => {
@@ -635,7 +689,9 @@ describe("initCheckoutPage", () => {
     });
 
     await new Promise((resolve) => setTimeout(resolve, 0));
-    (document.querySelector('[data-method="sslcommerz"]') as HTMLElement).click();
+    (document.querySelector(
+      '[data-method="sslcommerz"] .payment-method-control',
+    ) as HTMLElement).click();
     expect(analyticsMocks.trackStorefrontAddPaymentInfoOnce).toHaveBeenCalledTimes(1);
 
     (document.getElementById("payButton") as HTMLButtonElement).click();

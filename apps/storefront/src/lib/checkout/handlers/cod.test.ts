@@ -53,6 +53,19 @@ const context: PaymentContext = {
 };
 
 describe("COD checkout handler", () => {
+  it("records safe recovery as soon as the order is committed", async () => {
+    mocks.createOrder.mockResolvedValueOnce({ orderId: "order_cod" });
+    const onOrderCreated = vi.fn();
+
+    const result = await codHandler.processPayment({ ...context, onOrderCreated });
+
+    expect(onOrderCreated).toHaveBeenCalledWith("order_cod", "cod");
+    expect(result).toEqual({
+      success: true,
+      redirectUrl: "/order-success?orderId=order_cod",
+    });
+  });
+
   it("returns backend order failure status before redirect", async () => {
     mocks.createOrder.mockRejectedValueOnce(new CheckoutOrderError(
       "Order creation failed (429)",

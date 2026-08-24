@@ -28,6 +28,8 @@ interface StripeElements {
 
 interface StripeCardElement {
   mount(selector: string): void;
+  unmount?(): void;
+  destroy?(): void;
   on(
     event: "change",
     handler: (e: { complete?: boolean; error?: { message: string } }) => void,
@@ -38,6 +40,18 @@ let stripeInstance: StripeInstance | null = null;
 let stripeCard: StripeCardElement | null = null;
 let publishableKey: string | null = null;
 let stripeCardComplete = false;
+let stripeScriptPromise: Promise<void> | null = null;
+
+export function resetStripePaymentElement(): void {
+  try {
+    if (stripeCard?.destroy) stripeCard.destroy();
+    else stripeCard?.unmount?.();
+  } catch {
+    // The prior element may already be detached by browser history restore.
+  }
+  stripeCard = null;
+  stripeCardComplete = false;
+}
 
 function syncPayButtonReadiness(): void {
   const section = document.getElementById("stripeSection");
@@ -49,15 +63,13 @@ function syncPayButtonReadiness(): void {
 export const stripeHandler: GatewayHandler = {
   id: "stripe",
   meta: {
-    label: "International card",
-    icon: `<svg class="w-6 h-6 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-    </svg>`,
-    desc: "Visa, Mastercard, and American Express",
+    label: "Credit or debit card",
+    icon: "",
+    desc: "Pay securely by card",
   },
 
   getButtonText(_isPartialPayment: boolean): string {
-    return "Pay with Card";
+    return "Pay by card";
   },
 
   isReady(): boolean {
@@ -70,8 +82,7 @@ export const stripeHandler: GatewayHandler = {
     if (key && key !== publishableKey) {
       publishableKey = key;
       stripeInstance = null;
-      stripeCard = null;
-      stripeCardComplete = false;
+      resetStripePaymentElement();
     } else if (key) {
       publishableKey = key;
     }
@@ -81,20 +92,24 @@ export const stripeHandler: GatewayHandler = {
     try {
       // Dynamically load Stripe.js if not already loaded
       if (!window.Stripe) {
-        await new Promise<void>((resolve, reject) => {
-          const s = document.createElement("script");
-          s.src = "https://js.stripe.com/v3/";
-          s.onload = () => resolve();
-          s.onerror = () => reject(new Error("Failed to load Stripe.js"));
-          document.head.appendChild(s);
+        stripeScriptPromise ??= new Promise<void>((resolve, reject) => {
+          const script = document.createElement("script");
+          script.src = "https://js.stripe.com/v3/";
+          script.onload = () => resolve();
+          script.onerror = () => reject(new Error("Failed to load Stripe.js"));
+          document.head.appendChild(script);
+        }).catch((error) => {
+          stripeScriptPromise = null;
+          throw error;
         });
+        await stripeScriptPromise;
       }
 
       stripeInstance = window.Stripe!(publishableKey);
       const elements = stripeInstance.elements();
       stripeCard = elements.create("card", {
         style: {
-          base: { fontSize: "15px", color: "#111", fontFamily: "sans-serif" },
+          base: { fontSize: "16px", color: "#111", fontFamily: "sans-serif" },
           invalid: { color: "#e53e3e" },
         },
       });
@@ -126,8 +141,11 @@ export const stripeHandler: GatewayHandler = {
     }
 
     try {
-      const createdOrder = await createOrder(ctx.checkoutData, "stripe");
+      const createdOrder = ctx.orderId
+        ? { orderId: ctx.orderId, totalAmount: ctx.totalAmount }
+        : await createOrder(ctx.checkoutData, "stripe");
       const { orderId } = createdOrder;
+      if (!ctx.orderId) ctx.onOrderCreated?.(orderId, "stripe");
 
       let clientSecret = createdOrder.initialPaymentSession?.gateway === "stripe"
         ? createdOrder.initialPaymentSession.clientSecret
@@ -140,6 +158,15 @@ export const stripeHandler: GatewayHandler = {
       if (!clientSecret) {
         const intentPayload: Record<string, unknown> = {
           orderId,
+          ...(ctx.orderId
+            ? {
+                paymentType: ctx.paymentType,
+                ...(ctx.paymentType === "deposit" && ctx.depositAmount
+                  ? { depositAmount: ctx.depositAmount }
+                  : {}),
+                replaceExistingAttempt: ctx.replaceExistingAttempt ?? true,
+              }
+            : {}),
         };
 
         const { data: intentData, response: intentRes } = await fetchPaymentSessionWithProcessingRetry(() => fetch("/api/checkout/stripe-intent", {

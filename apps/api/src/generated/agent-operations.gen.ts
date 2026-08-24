@@ -8719,12 +8719,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 },
                 "isActive": {
                   "type": "boolean",
-                  "default": false,
                   "description": "Whether this language is active"
                 },
                 "isDefault": {
                   "type": "boolean",
-                  "default": false,
                   "description": "Whether this is the default language"
                 }
               }
@@ -40632,7 +40630,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "cod"
                     ]
                   },
-                  "minItems": 1
+                  "minItems": 1,
+                  "maxItems": 4
                 },
                 "defaultMethod": {
                   "type": "string",
@@ -66041,6 +66040,39 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "artifactOutput": null,
     "continuationOutput": null,
     "exclusionReason": "Legacy customer-cookie PII projection; use the live delegated-authority storefront.customer_profile.get operation.",
+    "rbac": {
+      "type": "public"
+    },
+    "inputSchema": null,
+    "outputSchema": null
+  },
+  {
+    "operationId": "storefront.customer_auth_orders_claim_receipt.claim_receipt",
+    "method": "POST",
+    "pathTemplate": "/api/v1/customer-auth/orders/{id}/claim-receipt",
+    "summary": "Save a receipt-proven guest order to the authenticated customer account",
+    "tags": [
+      "Customer Auth"
+    ],
+    "surface": "storefront",
+    "exposure": "excluded",
+    "principals": [
+      "customer"
+    ],
+    "risk": "write",
+    "openWorld": false,
+    "idempotency": "supported",
+    "revision": "none",
+    "batch": "forbidden",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "exclusionReason": "Browser-only account attachment requires both the private raw receipt proof and the live customer cookie; agent order ownership uses delegated immutable customer authority instead.",
     "rbac": {
       "type": "public"
     },

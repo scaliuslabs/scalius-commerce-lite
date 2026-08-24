@@ -1,6 +1,6 @@
 import type { GatewayHandler, PaymentContext, PaymentResult } from "../types";
 import { CheckoutOrderError, createOrder } from "../create-order";
-import { resolveCheckoutPaymentRequest } from "../payment-mode";
+import { resolveCheckoutPaymentRequest, resolveExplicitCheckoutPaymentRequest } from "../payment-mode";
 import { buildPaymentRecoveryUrl } from "../payment-recovery";
 import { fetchPaymentSessionWithProcessingRetry } from "../payment-session-retry";
 import { normalizeHostedCheckoutUrl } from "../redirect-url";
@@ -8,24 +8,27 @@ import { normalizeHostedCheckoutUrl } from "../redirect-url";
 export const polarHandler: GatewayHandler = {
   id: "polar",
   meta: {
-    label: "International card & Cash App",
-    icon: `<svg class="w-6 h-6 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 10V3L4 14h7v7l9-11h-7z" />
-    </svg>`,
-    desc: "Cards and Cash App",
+    label: "Card or digital wallet",
+    icon: "",
+    desc: "Complete payment with Polar",
   },
 
   getButtonText(_isPartialPayment: boolean): string {
-    return "Continue to Payment \u2192";
+    return "Continue to Polar";
   },
 
   async processPayment(ctx: PaymentContext): Promise<PaymentResult> {
     let createdOrder: Awaited<ReturnType<typeof createOrder>> | null = null;
     let paymentRequest: ReturnType<typeof resolveCheckoutPaymentRequest> | null = null;
     try {
-      createdOrder = await createOrder(ctx.checkoutData, "polar");
+      createdOrder = ctx.orderId
+        ? { orderId: ctx.orderId, totalAmount: ctx.totalAmount }
+        : await createOrder(ctx.checkoutData, "polar");
       const { orderId } = createdOrder;
-      paymentRequest = resolveCheckoutPaymentRequest(ctx.config, createdOrder.totalAmount ?? ctx.totalAmount);
+      if (!ctx.orderId) ctx.onOrderCreated?.(orderId, "polar");
+      paymentRequest = ctx.paymentType
+        ? resolveExplicitCheckoutPaymentRequest(ctx.paymentType, ctx.depositAmount)
+        : resolveCheckoutPaymentRequest(ctx.config, createdOrder.totalAmount ?? ctx.totalAmount);
 
       let gatewayUrl = createdOrder.initialPaymentSession?.gateway === "polar"
         ? createdOrder.initialPaymentSession.gatewayUrl
@@ -38,6 +41,15 @@ export const polarHandler: GatewayHandler = {
       if (!gatewayUrl) {
         const sessionPayload: Record<string, unknown> = {
           orderId,
+          ...(ctx.orderId
+            ? {
+                paymentType: ctx.paymentType,
+                ...(ctx.paymentType === "deposit" && ctx.depositAmount
+                  ? { depositAmount: ctx.depositAmount }
+                  : {}),
+                replaceExistingAttempt: ctx.replaceExistingAttempt ?? true,
+              }
+            : {}),
         };
 
         const { data: sessionData, response: sessionRes } = await fetchPaymentSessionWithProcessingRetry(() => fetch("/api/checkout/polar-session", {
@@ -64,7 +76,6 @@ export const polarHandler: GatewayHandler = {
       return {
         success: true,
         redirectUrl: gatewayUrl,
-        clearCartOnRedirect: true,
         hostedPaymentRecoveryUrl,
       };
     } catch (err: unknown) {
@@ -78,7 +89,6 @@ export const polarHandler: GatewayHandler = {
         return {
           success: true,
           redirectUrl: hostedPaymentRecoveryUrl,
-          clearCartOnRedirect: true,
           hostedPaymentRecoveryUrl,
         };
       }

@@ -772,7 +772,10 @@ export async function createCustomerOrderSupportRequest(
  * Create a payment session for an order owned by the signed-in customer.
  * This endpoint never accepts or returns receipt tokens.
  */
-type CreateCustomerOrderPaymentSessionOptions = Pick<PaymentSessionRetryOptions, "onProcessing">;
+type CreateCustomerOrderPaymentSessionOptions = Pick<PaymentSessionRetryOptions, "onProcessing"> & {
+  gateway?: "stripe" | "sslcommerz" | "polar";
+  replaceExistingAttempt?: boolean;
+};
 
 export async function createCustomerOrderPaymentSession(orderId: string, options: CreateCustomerOrderPaymentSessionOptions = {}): Promise<{
   success: boolean;
@@ -790,7 +793,12 @@ export async function createCustomerOrderPaymentSession(orderId: string, options
       headers: { "Content-Type": "application/json" },
       credentials: "include",
       cache: "no-store",
-      body: JSON.stringify({}),
+      body: JSON.stringify({
+        ...(options.gateway ? { gateway: options.gateway } : {}),
+        ...(options.replaceExistingAttempt !== undefined
+          ? { replaceExistingAttempt: options.replaceExistingAttempt }
+          : {}),
+      }),
     }, CUSTOMER_AUTH_WRITE_TIMEOUT_MS), {
       onProcessing: options?.onProcessing,
     });

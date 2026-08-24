@@ -113,7 +113,6 @@ describe("hosted online payment handlers", () => {
     expect(result).toEqual({
       success: true,
       redirectUrl: successBody.gatewayUrl,
-      clearCartOnRedirect: true,
       hostedPaymentRecoveryUrl: recoveryUrl(gateway),
     });
     expect(fetch).toHaveBeenCalledWith(
@@ -167,7 +166,6 @@ describe("hosted online payment handlers", () => {
     expect(result).toEqual({
       success: true,
       redirectUrl: gatewayUrl,
-      clearCartOnRedirect: true,
       hostedPaymentRecoveryUrl: recoveryUrl(gateway),
     });
     expect(fetch).not.toHaveBeenCalled();
@@ -195,7 +193,6 @@ describe("hosted online payment handlers", () => {
     expect(result).toEqual({
       success: true,
       redirectUrl: failedRecoveryUrl(gateway),
-      clearCartOnRedirect: true,
       hostedPaymentRecoveryUrl: failedRecoveryUrl(gateway),
     });
     expect(fetch).not.toHaveBeenCalled();
@@ -231,7 +228,6 @@ describe("hosted online payment handlers", () => {
     expect(result).toEqual({
       success: true,
       redirectUrl: "https://ssl.example.test/pay",
-      clearCartOnRedirect: true,
       hostedPaymentRecoveryUrl: recoveryUrl("sslcommerz"),
     });
   });
@@ -251,11 +247,27 @@ describe("hosted online payment handlers", () => {
     const result = await handler.processPayment(makeContext());
 
     expect(result.success).toBe(true);
-    expect(result.clearCartOnRedirect).toBe(true);
+    expect(result).not.toHaveProperty("clearCartOnRedirect");
     expect(result.redirectUrl).toBe(
       failedRecoveryUrl(gateway),
     );
     expect(result.hostedPaymentRecoveryUrl).toBe(failedRecoveryUrl(gateway));
+  });
+
+  it.each([
+    { handler: sslcommerzHandler, gateway: "sslcommerz" },
+    { handler: polarHandler, gateway: "polar" },
+  ])("records $gateway recovery immediately after order creation", async ({ handler, gateway }) => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: false,
+      json: async () => ({ error: "Gateway unavailable" }),
+    } as Response);
+    const context = makeContext();
+    context.onOrderCreated = vi.fn();
+
+    await handler.processPayment(context);
+
+    expect(context.onOrderCreated).toHaveBeenCalledWith("order_1", gateway);
   });
 
   it.each([
@@ -280,7 +292,7 @@ describe("hosted online payment handlers", () => {
 
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(result.success).toBe(true);
-    expect(result.clearCartOnRedirect).toBe(true);
+    expect(result).not.toHaveProperty("clearCartOnRedirect");
     expect(result.redirectUrl).toBe(
       failedRecoveryUrl(gateway),
     );
@@ -305,7 +317,7 @@ describe("hosted online payment handlers", () => {
 
     expect(fetch).not.toHaveBeenCalled();
     expect(result.success).toBe(true);
-    expect(result.clearCartOnRedirect).toBe(true);
+    expect(result).not.toHaveProperty("clearCartOnRedirect");
     expect(result.redirectUrl).toBe(
       failedRecoveryUrl(gateway),
     );
@@ -337,6 +349,73 @@ describe("hosted online payment handlers", () => {
       errorCode: "CHECKOUT_CONFIG_UNAVAILABLE",
       status: 503,
     });
+  });
+
+  it.each([
+    { handler: sslcommerzHandler, gateway: "sslcommerz", endpoint: "/api/checkout/sslcommerz-session", gatewayUrl: "https://ssl.example.test/pay" },
+    { handler: polarHandler, gateway: "polar", endpoint: "/api/checkout/polar-session", gatewayUrl: "https://polar.example.test/pay" },
+  ])("replaces an existing order payment through $gateway without creating another order", async ({
+    handler,
+    gateway,
+    endpoint,
+    gatewayUrl,
+  }) => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ gatewayUrl }),
+    } as Response);
+    const context = makeContext();
+    context.orderId = "order_existing";
+    context.paymentType = "full";
+
+    const result = await handler.processPayment(context);
+
+    expect(result.success).toBe(true);
+    expect(mocks.createOrder).not.toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledWith(
+      endpoint,
+      expect.objectContaining({
+        body: JSON.stringify({
+          orderId: "order_existing",
+          paymentType: "full",
+          replaceExistingAttempt: true,
+        }),
+      }),
+    );
+    expect(result.hostedPaymentRecoveryUrl).toContain(`payment=${gateway}`);
+  });
+
+  it.each([
+    { handler: sslcommerzHandler, endpoint: "/api/checkout/sslcommerz-session", gatewayUrl: "https://ssl.example.test/pay" },
+    { handler: polarHandler, endpoint: "/api/checkout/polar-session", gatewayUrl: "https://polar.example.test/pay" },
+  ])("keeps the existing method for an accepted deposit balance through $endpoint", async ({
+    handler,
+    endpoint,
+    gatewayUrl,
+  }) => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ gatewayUrl }),
+    } as Response);
+    const context = makeContext();
+    context.orderId = "order_partial";
+    context.paymentType = "balance";
+    context.replaceExistingAttempt = false;
+
+    const result = await handler.processPayment(context);
+
+    expect(result.success).toBe(true);
+    expect(mocks.createOrder).not.toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledWith(
+      endpoint,
+      expect.objectContaining({
+        body: JSON.stringify({
+          orderId: "order_partial",
+          paymentType: "balance",
+          replaceExistingAttempt: false,
+        }),
+      }),
+    );
   });
 });
 
@@ -409,14 +488,17 @@ describe("Stripe checkout handler", () => {
       json: async () => ({ error: "Stripe unavailable" }),
     } as Response);
 
-    const result = await stripeHandler.processPayment(makeContext());
+    const context = makeContext();
+    context.onOrderCreated = vi.fn();
+    const result = await stripeHandler.processPayment(context);
 
     expect(result).toEqual({
       success: false,
       error: "Stripe unavailable",
     });
     expect(result.redirectUrl).toBeUndefined();
-    expect(result.clearCheckoutSessionOnRedirect).toBeUndefined();
+    expect(result).not.toHaveProperty("clearCheckoutSessionOnRedirect");
+    expect(context.onOrderCreated).toHaveBeenCalledWith("order_1", "stripe");
   });
 
   it("creates a Stripe intent after order commit when no fused session is returned", async () => {

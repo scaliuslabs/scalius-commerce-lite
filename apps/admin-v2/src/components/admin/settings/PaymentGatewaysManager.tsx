@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import {
     Loader2, CheckCircle2, ChevronDown, Zap, AlertTriangle, RefreshCw,
+    ArrowUp, ArrowDown,
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Accordion, AccordionItem, AccordionContent } from "@/components/ui/accordion";
@@ -104,6 +105,7 @@ export default function PaymentGatewaysManager() {
     const [methodsLoadError, setMethodsLoadError] = useState<string | null>(null);
     const [methods, setMethods] = useState<PaymentMethodsData | null>(null);
     const [enabledMethods, setEnabledMethods] = useState<Set<MethodKey>>(new Set(["cod"]));
+    const [methodOrder, setMethodOrder] = useState<MethodKey[]>(["cod"]);
     const [defaultMethod, setDefaultMethod] = useState<MethodKey>("cod");
     const [savingMethods, setSavingMethods] = useState(false);
 
@@ -137,6 +139,7 @@ export default function PaymentGatewaysManager() {
             setMethods(d);
             if (!preserveDraft) {
                 setEnabledMethods(new Set(d.enabledMethods));
+                setMethodOrder(d.enabledMethods);
                 setDefaultMethod(d.defaultMethod);
             }
             return true;
@@ -199,13 +202,29 @@ export default function PaymentGatewaysManager() {
 
     const toggleMethod = (method: MethodKey, on: boolean) => {
         const next = new Set(enabledMethods);
-        if (on) { next.add(method); }
+        if (on) {
+            next.add(method);
+            setMethodOrder((current) => current.includes(method) ? current : [...current, method]);
+        }
         else {
             if (next.size <= 1) { toast.error("At least one payment method must be enabled."); return; }
             next.delete(method);
-            if (defaultMethod === method) setDefaultMethod(Array.from(next)[0] as MethodKey);
+            const nextOrder = methodOrder.filter((item) => item !== method);
+            setMethodOrder(nextOrder);
+            if (defaultMethod === method) setDefaultMethod(nextOrder[0] ?? Array.from(next)[0] as MethodKey);
         }
         setEnabledMethods(next);
+    };
+
+    const moveMethod = (method: MethodKey, direction: -1 | 1) => {
+        setMethodOrder((current) => {
+            const index = current.indexOf(method);
+            const targetIndex = index + direction;
+            if (index < 0 || targetIndex < 0 || targetIndex >= current.length) return current;
+            const next = [...current];
+            [next[index], next[targetIndex]] = [next[targetIndex]!, next[index]!];
+            return next;
+        });
     };
 
     const saveMethods = async (silent = false) => {
@@ -218,7 +237,7 @@ export default function PaymentGatewaysManager() {
         }
         setSavingMethods(true);
         try {
-            const nextEnabledMethods = Array.from(enabledMethods);
+            const nextEnabledMethods = methodOrder.filter((method) => enabledMethods.has(method));
             await updatePaymentMethods({ data: { enabledMethods: nextEnabledMethods, defaultMethod } });
             setMethods((current) => current
                 ? { ...current, enabledMethods: nextEnabledMethods, defaultMethod }
@@ -383,7 +402,8 @@ export default function PaymentGatewaysManager() {
     const enabledMethodsChanged = ALL_METHODS.some((method) => (
         enabledMethods.has(method) !== savedEnabledMethods.has(method)
     ));
-    const methodsDirty = enabledMethodsChanged || defaultMethod !== methods.defaultMethod;
+    const paymentMethodOrderChanged = methodOrder.join("|") !== methods.enabledMethods.join("|");
+    const methodsDirty = enabledMethodsChanged || defaultMethod !== methods.defaultMethod || paymentMethodOrderChanged;
     const stripeDirty = loadedGateways.current.has("stripe") && stripeDraftIsDirty(stripe, savedStripe);
     const sslDirty = loadedGateways.current.has("sslcommerz") && sslCommerzDraftIsDirty(ssl, savedSsl);
     const polarDirty = loadedGateways.current.has("polar") && polarDraftIsDirty(polar, savedPolar);
@@ -391,6 +411,7 @@ export default function PaymentGatewaysManager() {
     const anySavePending = savingMethods || savingStripe || savingSsl || savingPolar;
     const resetMethods = () => {
         setEnabledMethods(new Set(methods.enabledMethods));
+        setMethodOrder(methods.enabledMethods);
         setDefaultMethod(methods.defaultMethod);
     };
 
@@ -458,25 +479,68 @@ export default function PaymentGatewaysManager() {
                         </Badge>
                     </div>
                     <CardDescription>
-                        Choose which eligible methods appear at checkout.
+                        Choose which eligible methods appear at checkout, their display order, and the preselected option.
                     </CardDescription>
                 </CardHeader>
-                <CardContent className="grid gap-2 px-4 pb-4 sm:grid-cols-[minmax(0,1fr)_15rem] sm:items-center">
-                    <div>
-                        <Label htmlFor="default-payment-method">Default buyer selection</Label>
+                <CardContent className="space-y-5 px-4 pb-4">
+                    <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_15rem] sm:items-center">
+                        <div>
+                            <Label htmlFor="default-payment-method">Default buyer selection</Label>
+                            <p className="mt-1 text-xs text-muted-foreground">Preselected when the payment step opens.</p>
+                        </div>
+                        <Select
+                            value={defaultMethodAvailable ? defaultMethod : undefined}
+                            onValueChange={(value) => setDefaultMethod(value as MethodKey)}
+                            disabled={defaultOptions.length === 0 || Boolean(methodsLoadError) || !checkoutFlowSettings}
+                        >
+                            <SelectTrigger id="default-payment-method" className="h-11 w-full sm:h-9"><SelectValue placeholder="No eligible method" /></SelectTrigger>
+                            <SelectContent>
+                                {defaultOptions.map((method) => (
+                                    <SelectItem key={method} value={method} className="text-sm">{META[method].label}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </div>
-                    <Select
-                        value={defaultMethodAvailable ? defaultMethod : undefined}
-                        onValueChange={(value) => setDefaultMethod(value as MethodKey)}
-                        disabled={defaultOptions.length === 0 || Boolean(methodsLoadError) || !checkoutFlowSettings}
-                    >
-                        <SelectTrigger id="default-payment-method" className="h-11 w-full sm:h-9"><SelectValue placeholder="No eligible method" /></SelectTrigger>
-                        <SelectContent>
-                            {defaultOptions.map((method) => (
-                                <SelectItem key={method} value={method} className="text-sm">{META[method].label}</SelectItem>
+
+                    <div>
+                        <div className="mb-2">
+                            <Label>Checkout display order</Label>
+                            <p className="mt-1 text-xs text-muted-foreground">The storefront shows eligible methods from top to bottom.</p>
+                        </div>
+                        <ol className="divide-y rounded-md border" aria-label="Checkout payment method display order">
+                            {methodOrder.filter((method) => enabledMethods.has(method)).map((method, index, orderedMethods) => (
+                                <li key={method} className="flex min-h-12 items-center gap-3 px-3 py-2">
+                                    <span className="w-5 shrink-0 text-center text-xs tabular-nums text-muted-foreground">{index + 1}</span>
+                                    <span className="min-w-0 flex-1 text-sm font-medium">{META[method].label}</span>
+                                    {defaultMethod === method && <Badge variant="secondary" className="text-[11px]">Default</Badge>}
+                                    <div className="flex shrink-0 gap-1">
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-9 w-9"
+                                            aria-label={`Move ${META[method].label} up`}
+                                            onClick={() => moveMethod(method, -1)}
+                                            disabled={index === 0 || savingMethods}
+                                        >
+                                            <ArrowUp className="h-4 w-4" />
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-9 w-9"
+                                            aria-label={`Move ${META[method].label} down`}
+                                            onClick={() => moveMethod(method, 1)}
+                                            disabled={index === orderedMethods.length - 1 || savingMethods}
+                                        >
+                                            <ArrowDown className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                </li>
                             ))}
-                        </SelectContent>
-                    </Select>
+                        </ol>
+                    </div>
                 </CardContent>
                 {!canSaveMethods && !methodsLoadError && checkoutFlowSettings && (
                     <div className="mx-4 mb-3 flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">

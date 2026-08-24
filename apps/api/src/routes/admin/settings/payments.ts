@@ -91,7 +91,10 @@ async function assertDisablingGatewayKeepsCheckoutFlow(
 // VALIDATION SCHEMAS
 // ─────────────────────────────────────────
 const updateMethodsSchema = z.object({
-    enabledMethods: z.array(z.enum(["stripe", "sslcommerz", "polar", "cod"])).min(1, "At least one payment method is required"),
+    enabledMethods: z.array(z.enum(["stripe", "sslcommerz", "polar", "cod"]))
+        .min(1, "At least one payment method is required")
+        .max(4)
+        .refine((methods) => new Set(methods).size === methods.length, "Payment methods must be unique"),
     defaultMethod: z.enum(["stripe", "sslcommerz", "polar", "cod"])
 });
 

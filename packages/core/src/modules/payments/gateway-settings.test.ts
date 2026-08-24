@@ -123,6 +123,20 @@ describe("payment gateway settings reads", () => {
     });
   });
 
+  it("deduplicates legacy payment-method lists while preserving their saved order", async () => {
+    const db = createDbReturningCategoryReads([
+      [
+        { key: "enabled_methods", value: JSON.stringify(["cod", "cod"]) },
+        { key: "default_method", value: "cod" },
+      ],
+    ]);
+
+    await expect(getActivePaymentMethods(db as never)).resolves.toEqual({
+      enabledMethods: ["cod"],
+      defaultMethod: "cod",
+    });
+  });
+
   it.each([
     ["explicit empty allowlist", []],
     ["invalid explicit allowlist shape", { method: "cod" }],

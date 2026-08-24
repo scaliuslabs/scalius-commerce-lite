@@ -1,0 +1,55 @@
+---
+import type { LayoutData } from "@/lib/api";
+import { getOptimizedImageUrl } from "@/lib/image-optimizer";
+import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
+
+interface Props {
+  layoutData: LayoutData | null;
+}
+
+const { layoutData } = Astro.props;
+const logo = layoutData?.header?.logo ?? { src: "", alt: "" };
+const merchantName =
+  layoutData?.business?.companyName?.trim()
+  || layoutData?.business?.legalName?.trim()
+  || logo.alt?.trim()
+  || "Checkout";
+---
+
+<header class="border-b border-border bg-background">
+  <div class="mx-auto flex min-h-16 w-full max-w-6xl items-center justify-between gap-4 px-4 sm:min-h-18 sm:px-6">
+    <a
+      href="/"
+      data-astro-prefetch={getStorefrontPrefetchAttribute("/", Astro.url)}
+      class="inline-flex min-h-11 items-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      aria-label="Go to homepage"
+    >
+      {
+        logo.src ? (
+          <img
+            src={getOptimizedImageUrl(logo.src, {
+              width: 240,
+              height: 96,
+              fit: "scale-down",
+            })}
+            alt={logo.alt || merchantName}
+            width="120"
+            height="48"
+            class="h-8 w-auto max-w-40 object-contain sm:h-9 sm:max-w-48"
+            decoding="async"
+          />
+        ) : (
+          <span class="text-base font-semibold text-foreground">{merchantName}</span>
+        )
+      }
+    </a>
+
+    <div class="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground" aria-label="Secure checkout">
+      <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+        <rect x="5" y="10" width="14" height="10" rx="2" stroke-width="1.75" />
+        <path d="M8 10V7a4 4 0 0 1 8 0v3" stroke-width="1.75" stroke-linecap="round" />
+      </svg>
+      <span>Secure checkout</span>
+    </div>
+  </div>
+</header>

@@ -125,6 +125,7 @@ const orderId = Astro.params.id ?? "";
                   <h3 id="orderPaymentRecoveryTitle" class="font-semibold text-foreground"></h3>
                   <p id="orderPaymentRecoveryDescription" class="mt-1 text-sm text-muted-foreground"></p>
                 </div>
+                <div id="orderPaymentRecoveryMethods" class="grid gap-2 sm:grid-cols-3" role="radiogroup" aria-label="Payment method"></div>
                 <div id="accountStripeSection" class="hidden space-y-2">
                   <div id="accountStripeCardElement" class="rounded-lg border border-input bg-background p-3"></div>
                   <div id="accountStripeError" class="hidden text-xs text-destructive"></div>
@@ -161,6 +162,11 @@ const orderId = Astro.params.id ?? "";
     type CustomerOrderSupportRequestAction,
     type CustomerOrderSupportRequestType,
   } from "@/lib/api/customer-auth";
+  import {
+    getCheckoutConfig,
+    type CheckoutConfig,
+    type GatewayConfig,
+  } from "@/lib/api/checkout";
   import {
     getAccountPaymentRecoveryAction,
     getAccountPaymentReturnNotice,
@@ -209,8 +215,11 @@ const orderId = Astro.params.id ?? "";
     __scaliusLoadOrderDetail?: () => Promise<void>;
   };
   const detailWindow = window as DetailWindow;
+  type OnlineRecoveryGateway = "stripe" | "sslcommerz" | "polar";
   let currentDetail: CustomerOrderDetail | null = null;
+  let currentCheckoutConfig: CheckoutConfig | null = null;
   let recoveryAction: AccountPaymentRecoveryAction | null = null;
+  let selectedRecoveryGateway: OnlineRecoveryGateway | null = null;
   let recoveryLoading = false;
   let supportRequestLoading = false;
   let selectedSupportRequestType: CustomerOrderSupportRequestType | null = null;
@@ -301,6 +310,49 @@ const orderId = Astro.params.id ?? "";
     button.disabled = disabled;
   }
 
+  function isOnlineRecoveryGateway(value: string): value is OnlineRecoveryGateway {
+    return value === "stripe" || value === "sslcommerz" || value === "polar";
+  }
+
+  function recoveryGatewayLabel(gateway: OnlineRecoveryGateway): string {
+    if (gateway === "stripe") return "International card";
+    if (gateway === "sslcommerz") return "Mobile banking & local cards";
+    return "International card & Cash App";
+  }
+
+  function availableRecoveryGateways(): OnlineRecoveryGateway[] {
+    if (currentDetail?.paymentRecovery.paymentType === "balance") {
+      return recoveryAction ? [recoveryAction.gateway] : [];
+    }
+    const configured = (currentCheckoutConfig?.gateways ?? [])
+      .map((gateway: GatewayConfig) => gateway.id)
+      .filter(isOnlineRecoveryGateway);
+    if (configured.length > 0) return [...new Set(configured)];
+    return recoveryAction ? [recoveryAction.gateway] : [];
+  }
+
+  function recoveryButtonLabelFor(gateway: OnlineRecoveryGateway): string {
+    if (gateway === "stripe") return "Enter card details";
+    if (currentDetail?.paymentRecovery.paymentType === "balance") return "Pay balance";
+    return `Continue with ${gateway === "sslcommerz" ? "SSLCommerz" : "Polar"}`;
+  }
+
+  function selectRecoveryGateway(gateway: OnlineRecoveryGateway): void {
+    if (recoveryLoading || selectedRecoveryGateway === gateway) return;
+    selectedRecoveryGateway = gateway;
+    resetAccountStripeState();
+    const methodButtons = document.querySelectorAll<HTMLButtonElement>("[data-recovery-gateway]");
+    methodButtons.forEach((button) => {
+      const selected = button.dataset.recoveryGateway === gateway;
+      button.setAttribute("aria-checked", selected ? "true" : "false");
+      button.className = `min-h-11 rounded-lg border px-3 py-2 text-left text-sm transition-colors ${selected
+        ? "border-primary bg-primary/10 text-foreground"
+        : "border-border bg-background text-foreground hover:border-primary/40 hover:bg-muted"}`;
+    });
+    setRecoveryMessage(null);
+    setRecoveryButton(recoveryButtonLabelFor(gateway));
+  }
+
   function resetAccountStripeState(): void {
     accountStripeCard?.unmount?.();
     accountStripeInstance = null;
@@ -339,33 +391,62 @@ const orderId = Astro.params.id ?? "";
 
   function renderPaymentRecovery(detail: CustomerOrderDetail): void {
     const container = document.getElementById("orderPaymentRecovery");
+    const methods = document.getElementById("orderPaymentRecoveryMethods");
     if (!container) return;
 
     if (detail.activeRefundOperation) {
       recoveryAction = null;
+      selectedRecoveryGateway = null;
       container.classList.add("hidden");
+      if (methods) methods.innerHTML = "";
       resetAccountStripeState();
       return;
     }
 
     recoveryAction = getAccountPaymentRecoveryAction(detail.paymentRecovery);
     if (!recoveryAction) {
+      selectedRecoveryGateway = null;
       container.classList.add("hidden");
+      if (methods) methods.innerHTML = "";
       resetAccountStripeState();
       return;
+    }
+
+    const gateways = availableRecoveryGateways();
+    if (gateways.length === 0) {
+      selectedRecoveryGateway = null;
+      container.classList.add("hidden");
+      if (methods) methods.innerHTML = "";
+      resetAccountStripeState();
+      return;
+    }
+    if (!selectedRecoveryGateway || !gateways.includes(selectedRecoveryGateway)) {
+      selectedRecoveryGateway = gateways.includes(recoveryAction.gateway)
+        ? recoveryAction.gateway
+        : gateways[0] ?? null;
+      resetAccountStripeState();
     }
 
     const title = document.getElementById("orderPaymentRecoveryTitle");
     const description = document.getElementById("orderPaymentRecoveryDescription");
     if (title) title.textContent = recoveryAction.title;
     if (description) {
-      description.textContent = `${recoveryAction.description} Amount due: ${formatMoney(recoveryAction.amountDue)}.`;
+      description.textContent = `${recoveryAction.description} Amount due: ${formatMoney(recoveryAction.amountDue)}. ${detail.paymentRecovery.paymentType === "balance" ? "Continue with the order's existing payment method." : "Choose any available online payment method; this order will be reused."}`;
+    }
+    if (methods) {
+      methods.innerHTML = gateways.map((gateway) => {
+        const selected = gateway === selectedRecoveryGateway;
+        return `<button type="button" role="radio" aria-checked="${selected ? "true" : "false"}" data-recovery-gateway="${escapeHtml(gateway)}" class="min-h-11 rounded-lg border px-3 py-2 text-left text-sm transition-colors ${selected ? "border-primary bg-primary/10 text-foreground" : "border-border bg-background text-foreground hover:border-primary/40 hover:bg-muted"}">
+          <span class="font-semibold">${escapeHtml(recoveryGatewayLabel(gateway))}</span>
+          <span class="mt-1 block text-xs text-muted-foreground">${gateway === detail.order.paymentMethod ? "Current method" : "Change method"}</span>
+        </button>`;
+      }).join("");
     }
     container.classList.remove("hidden");
     document.getElementById("accountStripeSection")?.classList.toggle("hidden", !accountStripeClientSecret);
-    if (!accountStripeClientSecret) {
+    if (!accountStripeClientSecret && selectedRecoveryGateway) {
       setRecoveryMessage(null);
-      setRecoveryButton(recoveryAction.buttonLabel, recoveryLoading);
+      setRecoveryButton(recoveryButtonLabelFor(selectedRecoveryGateway), recoveryLoading);
     }
   }
 
@@ -610,10 +691,10 @@ const orderId = Astro.params.id ?? "";
   }
 
   async function startAccountPaymentRecovery(): Promise<void> {
-    if (!currentDetail || !recoveryAction || recoveryLoading) return;
+    if (!currentDetail || !recoveryAction || !selectedRecoveryGateway || recoveryLoading) return;
 
     if (
-      recoveryAction.requiresCardForm &&
+      selectedRecoveryGateway === "stripe" &&
       accountStripeClientSecret &&
       accountStripeOrderId === currentDetail.order.id
     ) {
@@ -628,6 +709,8 @@ const orderId = Astro.params.id ?? "";
 
     try {
       const result = await createCustomerOrderPaymentSession(currentDetail.order.id, {
+        gateway: selectedRecoveryGateway,
+        replaceExistingAttempt: currentDetail.paymentRecovery.paymentType !== "balance",
         onProcessing: (event) => {
           setRecoveryMessage(`${event.message} Retrying in ${event.retryAfterSeconds}s...`, "muted");
         },
@@ -637,6 +720,7 @@ const orderId = Astro.params.id ?? "";
       }
 
       if (result.session.gateway === "stripe") {
+        selectedRecoveryGateway = "stripe";
         await prepareAccountStripeForm(result.session);
         return;
       }
@@ -650,7 +734,7 @@ const orderId = Astro.params.id ?? "";
       window.location.assign(gatewayUrl);
     } catch (error: unknown) {
       setRecoveryMessage(error instanceof Error ? error.message : "Payment could not be prepared.", "error");
-      setRecoveryButton(recoveryAction.buttonLabel);
+      setRecoveryButton(recoveryButtonLabelFor(selectedRecoveryGateway));
     } finally {
       recoveryLoading = false;
     }
@@ -933,8 +1017,12 @@ const orderId = Astro.params.id ?? "";
       return;
     }
 
-    const result = await getCustomerOrderDetail(orderId);
+    const [result, checkoutConfig] = await Promise.all([
+      getCustomerOrderDetail(orderId),
+      getCheckoutConfig(),
+    ]);
     if (detailWindow.__scaliusOrderDetailRun !== run) return;
+    currentCheckoutConfig = checkoutConfig;
     if (!result.success || !result.detail) {
       currentDetail = null;
       recoveryAction = null;
@@ -986,6 +1074,15 @@ const orderId = Astro.params.id ?? "";
   const recoveryButton = document.getElementById("orderPaymentRecoveryButton");
   if (recoveryButton) {
     (recoveryButton as HTMLButtonElement).onclick = () => void startAccountPaymentRecovery();
+  }
+
+  const recoveryMethods = document.getElementById("orderPaymentRecoveryMethods");
+  if (recoveryMethods) {
+    recoveryMethods.onclick = (event) => {
+      const button = (event.target as HTMLElement | null)?.closest<HTMLButtonElement>("[data-recovery-gateway]");
+      const gateway = button?.dataset.recoveryGateway;
+      if (gateway && isOnlineRecoveryGateway(gateway)) selectRecoveryGateway(gateway);
+    };
   }
 
   const supportActions = document.getElementById("orderSupportActions");

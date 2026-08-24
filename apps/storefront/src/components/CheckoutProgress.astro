@@ -1,0 +1,61 @@
+---
+interface Props {
+  current: "information" | "payment" | "confirmation";
+  paymentRequired?: boolean;
+}
+
+const { current, paymentRequired = true } = Astro.props;
+const allSteps = [
+  { id: "information", label: "Information" },
+  ...(paymentRequired ? [{ id: "payment", label: "Payment" }] : []),
+  { id: "confirmation", label: "Confirmation" },
+] as const;
+---
+
+<nav aria-label="Checkout progress" class="mb-5">
+  <ol class="flex flex-wrap items-center gap-1.5 text-xs sm:text-sm" role="list">
+    {
+      allSteps.map((step, index) => {
+        const isCurrent = step.id === current;
+        const canReturnToInformation =
+          step.id === "information" && current === "payment";
+        return (
+          <li class="contents">
+            {canReturnToInformation ? (
+              <a
+                href="/cart"
+                class="min-h-11 rounded-md px-1.5 py-3 font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-0 sm:py-1"
+              >
+                {step.label}
+              </a>
+            ) : (
+              <span
+                class:list={[
+                  "rounded-md px-1.5 py-1",
+                  {
+                    "font-semibold text-foreground": isCurrent,
+                    "font-medium text-muted-foreground": !isCurrent,
+                  },
+                ]}
+                aria-current={isCurrent ? "step" : undefined}
+              >
+                {step.label}
+              </span>
+            )}
+            {index < allSteps.length - 1 ? (
+              <svg
+                class="h-3.5 w-3.5 shrink-0 text-muted-foreground/60"
+                viewBox="0 0 20 20"
+                fill="none"
+                stroke="currentColor"
+                aria-hidden="true"
+              >
+                <path d="m7 4 6 6-6 6" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" />
+              </svg>
+            ) : null}
+          </li>
+        );
+      })
+    }
+  </ol>
+</nav>

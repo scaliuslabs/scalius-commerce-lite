@@ -861,6 +861,61 @@ describe("customer auth service intent handling", () => {
     ))).toBe(false);
   });
 
+  it("claims the unique unclaimed guest CRM profile after email sign-up proof", async () => {
+    const guestProfile = createCustomerRow({
+      id: "cust_guest_email",
+      accountClaimedAt: null,
+      phoneVerifiedAt: null,
+      emailVerifiedAt: null,
+      lastAuthenticatedAt: null,
+      address: "Guest checkout address",
+    });
+    const db = createDb([
+      { limit: [baseSiteSettings] },
+      { get: null },
+      { all: [guestProfile] },
+    ]);
+    challengeMocks.claimCustomerAuthOtpChallenge.mockResolvedValueOnce({
+      otpKey: "cust_otp:email:buyer@example.com",
+      method: "email",
+      channel: "email",
+      intent: "sign_up",
+      identifier: "buyer@example.com",
+      contactEmail: "buyer@example.com",
+      phone: "+8801712345678",
+      expiresAt: Math.floor(Date.now() / 1000) + 300,
+      attempts: 1,
+      maxAttempts: 5,
+    });
+
+    const result = await verifyOtp(db as never, {
+      intent: "sign_up",
+      method: "email",
+      channel: "email",
+      identifier: "buyer@example.com",
+      code: "123456",
+      name: "Buyer",
+      encryptionKey: "test-key",
+      sessionHashKey: "session-test-key",
+    });
+
+    expect(result).toMatchObject({
+      success: true,
+      isNewUser: true,
+      session: { customerId: "cust_guest_email" },
+    });
+    expect(db.updateCalls).toHaveLength(1);
+    expect(db.updateCalls[0]?.values).toMatchObject({
+      accountClaimedAt: expect.anything(),
+      emailVerifiedAt: expect.anything(),
+      lastAuthenticatedAt: expect.anything(),
+    });
+    expect(db.updateCalls[0]?.values as Record<string, unknown>).not.toHaveProperty("phoneVerifiedAt");
+    expect(db.insertCalls.some(({ values }) => (
+      (values as { email?: string }).email === "buyer@example.com"
+    ))).toBe(false);
+  });
+
   it("does not treat an unclaimed CRM profile as an existing sign-in account", async () => {
     const db = createDb([
       { limit: [{ ...baseSiteSettings, authVerificationMethod: "sms_otp" }] },

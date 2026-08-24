@@ -263,7 +263,7 @@ export default function CustomDropdown({
                 ref={searchInputRef}
                 type="text"
                 role="combobox"
-                className="h-11 w-full rounded-md border border-border bg-background px-2.5 pr-8 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 sm:h-9"
+                className="h-11 w-full rounded-md border border-border bg-background px-2.5 pr-8 text-base text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 sm:h-9"
                 aria-label={searchLabel}
                 aria-controls={listboxId}
                 aria-expanded="true"

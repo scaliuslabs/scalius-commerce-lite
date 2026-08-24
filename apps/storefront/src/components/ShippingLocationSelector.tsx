@@ -1,7 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { useStore } from "@nanostores/react";
 import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import type { ShippingMethod } from "@/lib/api";
 import { formatPriceShort } from "@/lib/currency";
 import {
@@ -10,6 +9,7 @@ import {
   getEffectiveCartShippingFee,
   hydrateCartFromStorage,
 } from "@/store/cart";
+import { readCheckoutFormDraft } from "@/lib/checkout/session-state";
 
 export interface ShippingLocationSelectorProps {
   shippingMethods: ShippingMethod[];
@@ -39,6 +39,23 @@ export default function ShippingLocationSelector({
   useEffect(() => {
     hydrateCartFromStorage();
   }, []);
+
+  useEffect(() => {
+    const restore = (methodId: unknown) => {
+      if (
+        typeof methodId === "string" &&
+        shippingMethods.some((method) => method.id === methodId)
+      ) {
+        setSelectedLocation(methodId);
+      }
+    };
+    const handlePrefill = (event: Event) => {
+      restore((event as CustomEvent<unknown>).detail);
+    };
+    window.addEventListener("shipping-method-prefill", handlePrefill);
+    restore(readCheckoutFormDraft()?.shippingLocation);
+    return () => window.removeEventListener("shipping-method-prefill", handlePrefill);
+  }, [shippingMethods]);
 
   useEffect(() => {
     if (shippingMethods.length > 0 && !selectedLocation) {
@@ -76,18 +93,37 @@ export default function ShippingLocationSelector({
     );
   }
 
+  if (shippingMethods.length === 1) {
+    const method = shippingMethods[0];
+    const effectiveFee = getEffectiveCartShippingFee(
+      visibleCartItems,
+      method.fee,
+    );
+    const feeLabel = effectiveFee === 0 ? "Free" : formatPriceShort(effectiveFee);
+
+    return (
+      <div>
+        <Label className="mb-2 block text-sm font-medium text-foreground">
+          {shippingMethodLabel}
+        </Label>
+        <input type="hidden" name="shippingLocation" value={method.id} />
+        <div className="flex min-h-11 items-center justify-between rounded-lg border border-border bg-background px-3 py-2.5">
+          <span className="text-sm font-medium text-foreground">{method.name}</span>
+          <span className="ml-3 whitespace-nowrap text-sm font-semibold text-foreground">
+            {feeLabel}
+          </span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div>
-      <Label className="mb-2 block text-xs font-semibold text-gray-700 uppercase tracking-wide">
+      <Label className="mb-2 block text-sm font-medium text-foreground">
         {shippingMethodLabel}
       </Label>
-      <RadioGroup
-        value={selectedLocation}
-        onValueChange={handleLocationChange}
-        className="grid grid-cols-1 sm:grid-cols-2 gap-3"
-        name="shippingLocation"
-        aria-label={shippingMethodLabel}
-      >
+      <fieldset className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <legend className="sr-only">{shippingMethodLabel}</legend>
         {shippingMethods.map((method) => {
           const normalFeeLabel = formatPriceShort(method.fee);
           const effectiveFee = getEffectiveCartShippingFee(
@@ -102,9 +138,8 @@ export default function ShippingLocationSelector({
               : undefined;
 
           return (
-            <Label
+            <label
               key={method.id}
-              htmlFor={method.id}
               className={`flex min-h-11 items-center justify-between rounded-lg border p-3 cursor-pointer transition-all duration-200 ${
                 selectedLocation === method.id
                   ? "border-black bg-white ring-1 ring-black shadow-sm"
@@ -112,11 +147,14 @@ export default function ShippingLocationSelector({
               }`}
             >
               <div className="flex items-center gap-3">
-                <RadioGroupItem
+                <input
+                  type="radio"
+                  name="shippingLocation"
                   value={method.id}
-                  id={method.id}
+                  checked={selectedLocation === method.id}
+                  onChange={(event) => handleLocationChange(event.target.value)}
                   aria-label={`${method.name}, ${feeLabel}`}
-                  className="w-4 h-4 text-black border-gray-300 data-[state=checked]:border-black data-[state=checked]:text-black shrink-0"
+                  className="h-4 w-4 shrink-0 accent-black"
                 />
                 <span className="font-medium text-xs sm:text-sm text-gray-900 leading-tight">
                   {method.name}
@@ -129,10 +167,10 @@ export default function ShippingLocationSelector({
               >
                 {feeLabel}
               </span>
-            </Label>
+            </label>
           );
         })}
-      </RadioGroup>
+      </fieldset>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import type { GatewayHandler, PaymentContext, PaymentResult } from "../types";
 import { CheckoutOrderError, createOrder } from "../create-order";
-import { resolveCheckoutPaymentRequest } from "../payment-mode";
+import { resolveCheckoutPaymentRequest, resolveExplicitCheckoutPaymentRequest } from "../payment-mode";
 import { buildPaymentRecoveryUrl } from "../payment-recovery";
 import { fetchPaymentSessionWithProcessingRetry } from "../payment-session-retry";
 import { normalizeHostedCheckoutUrl } from "../redirect-url";
@@ -8,24 +8,27 @@ import { normalizeHostedCheckoutUrl } from "../redirect-url";
 export const sslcommerzHandler: GatewayHandler = {
   id: "sslcommerz",
   meta: {
-    label: "Mobile banking & local cards",
-    icon: `<svg class="w-6 h-6 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>`,
-    desc: "bKash, Nagad, Rocket, cards, and net banking",
+    label: "Pay online",
+    icon: "",
+    desc: "bKash, Nagad, cards and more",
   },
 
   getButtonText(_isPartialPayment: boolean): string {
-    return "Continue to Payment \u2192";
+    return "Continue to SSLCommerz";
   },
 
   async processPayment(ctx: PaymentContext): Promise<PaymentResult> {
     let createdOrder: Awaited<ReturnType<typeof createOrder>> | null = null;
     let paymentRequest: ReturnType<typeof resolveCheckoutPaymentRequest> | null = null;
     try {
-      createdOrder = await createOrder(ctx.checkoutData, "sslcommerz");
+      createdOrder = ctx.orderId
+        ? { orderId: ctx.orderId, totalAmount: ctx.totalAmount }
+        : await createOrder(ctx.checkoutData, "sslcommerz");
       const { orderId } = createdOrder;
-      paymentRequest = resolveCheckoutPaymentRequest(ctx.config, createdOrder.totalAmount ?? ctx.totalAmount);
+      if (!ctx.orderId) ctx.onOrderCreated?.(orderId, "sslcommerz");
+      paymentRequest = ctx.paymentType
+        ? resolveExplicitCheckoutPaymentRequest(ctx.paymentType, ctx.depositAmount)
+        : resolveCheckoutPaymentRequest(ctx.config, createdOrder.totalAmount ?? ctx.totalAmount);
 
       let gatewayUrl = createdOrder.initialPaymentSession?.gateway === "sslcommerz"
         ? createdOrder.initialPaymentSession.gatewayUrl
@@ -38,6 +41,15 @@ export const sslcommerzHandler: GatewayHandler = {
       if (!gatewayUrl) {
         const sessionPayload: Record<string, unknown> = {
           orderId,
+          ...(ctx.orderId
+            ? {
+                paymentType: ctx.paymentType,
+                ...(ctx.paymentType === "deposit" && ctx.depositAmount
+                  ? { depositAmount: ctx.depositAmount }
+                  : {}),
+                replaceExistingAttempt: ctx.replaceExistingAttempt ?? true,
+              }
+            : {}),
         };
 
         const { data: sessionData, response: sessionRes } = await fetchPaymentSessionWithProcessingRetry(() => fetch("/api/checkout/sslcommerz-session", {
@@ -64,7 +76,6 @@ export const sslcommerzHandler: GatewayHandler = {
       return {
         success: true,
         redirectUrl: gatewayUrl,
-        clearCartOnRedirect: true,
         hostedPaymentRecoveryUrl,
       };
     } catch (err: unknown) {
@@ -78,7 +89,6 @@ export const sslcommerzHandler: GatewayHandler = {
         return {
           success: true,
           redirectUrl: hostedPaymentRecoveryUrl,
-          clearCartOnRedirect: true,
           hostedPaymentRecoveryUrl,
         };
       }

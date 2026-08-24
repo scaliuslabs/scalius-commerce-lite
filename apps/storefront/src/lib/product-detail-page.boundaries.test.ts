@@ -269,6 +269,9 @@ describe("product detail page SKU boundaries", () => {
       source.match(/flex min-h-11 items-center justify-center/g),
     ).toHaveLength(2);
     expect(source).toContain("lg:min-h-10");
+    expect(source).toMatch(
+      /data-action="buy-now"[\s\S]*disabled:text-muted-foreground/,
+    );
   });
 
   it("uses product.hasVariants for customer option metadata instead of buyer SKU count", () => {

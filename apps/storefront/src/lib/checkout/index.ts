@@ -1,15 +1,18 @@
 import type { CheckoutConfig, PaymentContext } from "./types";
 import { registerGateway, getGateway } from "./registry";
 import { codHandler } from "./handlers/cod";
-import { stripeHandler } from "./handlers/stripe";
+import { resetStripePaymentElement, stripeHandler } from "./handlers/stripe";
 import { sslcommerzHandler } from "./handlers/sslcommerz";
 import { polarHandler } from "./handlers/polar";
 import { formatPrice, DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import type { PaymentResult } from "./types";
 import {
   CHECKOUT_TRANSFER_UNAVAILABLE_MESSAGE,
-  clearCheckoutSession,
   clearCheckoutTransferSession,
+  matchesCheckoutRecoverySession,
+  readHostedPaymentRecoverySession,
+  readCheckoutPaymentSelection,
+  writeCheckoutPaymentSelection,
   writeHostedPaymentRecoverySession,
 } from "./session-state";
 import {
@@ -29,6 +32,10 @@ import {
   showCheckoutLoadingOverlay,
 } from "./loading-overlay";
 import { normalizeCheckoutRedirectUrl } from "./redirect-url";
+import {
+  getGatewayPresentation,
+  type GatewayPresentation,
+} from "./gateway-presentation";
 
 // Register all built-in gateway handlers
 registerGateway(codHandler);
@@ -45,6 +52,12 @@ let gateways: CheckoutConfig["gateways"] = [];
 let authoritativeTaxQuote: CheckoutTaxQuote | null = null;
 let isProcessing = false;
 let selectionVersion = 0;
+let retrySelection: {
+  methodId: string;
+  gateway: CheckoutConfig["gateways"][number];
+} | null = null;
+let initVersion = 0;
+const PAYMENT_PROCESS_TIMEOUT_MS = 30_000;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -84,6 +97,14 @@ function setPayButton(text: string, disabled = false): void {
   if (span) span.textContent = text;
 }
 
+function setPaymentControlsDisabled(disabled: boolean): void {
+  document
+    .querySelectorAll<HTMLButtonElement>(".payment-method-control")
+    .forEach((control) => {
+      control.disabled = disabled;
+    });
+}
+
 function setReturnToCartButton(): void {
   const btn = document.getElementById("payButton") as HTMLButtonElement | null;
   const span = document.getElementById("payButtonText");
@@ -95,15 +116,54 @@ function setReturnToCartButton(): void {
   if (span) span.textContent = "Return to cart";
 }
 
+function clearCheckoutPresentation(): void {
+  resetStripePaymentElement();
+  document.getElementById("paymentMethods")?.replaceChildren();
+  document.getElementById("summaryDetails")?.replaceChildren();
+  document.getElementById("orderSummary")?.classList.add("hidden");
+  document.getElementById("stripeSection")?.classList.add("hidden");
+  setPaymentControlsDisabled(true);
+}
+
+function checkoutRecoveryHref(orderId: string, gateway: string): string {
+  const params = new URLSearchParams({ orderId, payment: gateway });
+  return `/order-success?${params.toString()}`;
+}
+
+async function withPaymentWatchdog<T>(promise: Promise<T>): Promise<T> {
+  let timeoutId: number | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timeoutId = window.setTimeout(() => {
+          reject(new Error(
+            "This is taking longer than expected. Check the saved order before trying again.",
+          ));
+        }, PAYMENT_PROCESS_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timeoutId) window.clearTimeout(timeoutId);
+  }
+}
+
 function applySelectedMethodStyles(methodId: string | null): void {
   document.querySelectorAll(".payment-method-card").forEach((card) => {
     const el = card as HTMLElement;
     const isSelected = el.dataset.method === methodId;
-    el.setAttribute("aria-checked", String(isSelected));
-    if (methodId !== null) el.tabIndex = isSelected ? 0 : -1;
+    const control = el.querySelector<HTMLButtonElement>(".payment-method-control");
+    const details = el.querySelector<HTMLElement>(".payment-method-details");
+    if (control) {
+      control.setAttribute("aria-checked", String(isSelected));
+      control.setAttribute("aria-expanded", String(isSelected));
+      if (methodId !== null) control.tabIndex = isSelected ? 0 : -1;
+    }
     el.classList.toggle("border-primary", isSelected);
-    el.classList.toggle("border-input", !isSelected);
+    el.classList.toggle("border-border", !isSelected);
+    el.classList.toggle("shadow-sm", isSelected);
     el.querySelector(".check-dot")?.classList.toggle("hidden", !isSelected);
+    details?.classList.toggle("hidden", !isSelected);
   });
 }
 
@@ -112,7 +172,7 @@ function handlePaymentMethodKeyDown(event: KeyboardEvent): void {
   if (!keys.includes(event.key)) return;
 
   const cards = Array.from(
-    document.querySelectorAll<HTMLButtonElement>(".payment-method-card"),
+    document.querySelectorAll<HTMLButtonElement>(".payment-method-control"),
   );
   const current = event.currentTarget as HTMLButtonElement;
   const currentIndex = cards.indexOf(current);
@@ -133,54 +193,96 @@ function handlePaymentMethodKeyDown(event: KeyboardEvent): void {
   next?.click();
 }
 
-function appendPaymentMethodContent(
-  card: HTMLButtonElement,
-  meta: { label: string; icon: string; desc: string },
-  label: string,
-  testMode: boolean,
-  trustedIcon: boolean,
+function appendProviderIdentity(
+  parent: HTMLElement,
+  presentation: GatewayPresentation,
+  gatewayId: string,
 ): void {
-  const icon = document.createElement("div");
-  icon.className =
-    "flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border bg-muted";
-  if (trustedIcon) icon.innerHTML = meta.icon;
-  else icon.textContent = meta.icon;
-  icon.setAttribute("aria-hidden", "true");
-  card.appendChild(icon);
+  const identity = document.createElement("span");
+  identity.className =
+    "flex h-8 min-w-12 shrink-0 items-center justify-center gap-1.5 rounded-md border border-border bg-background px-2";
+  identity.setAttribute("aria-hidden", "true");
 
+  if (presentation.markSrc) {
+    const light = document.createElement("img");
+    light.src = presentation.markSrc;
+    light.alt = "";
+    light.width = presentation.markKind === "wordmark" ? 72 : 20;
+    light.height = 24;
+    light.className = presentation.markKind === "wordmark"
+      ? "h-4 max-w-18 object-contain"
+      : "h-5 w-5 object-contain";
+    if (presentation.darkMarkSrc) light.classList.add("dark:hidden");
+    identity.appendChild(light);
+
+    if (presentation.darkMarkSrc) {
+      const dark = document.createElement("img");
+      dark.src = presentation.darkMarkSrc;
+      dark.alt = "";
+      dark.width = 20;
+      dark.height = 20;
+      dark.className = "hidden h-5 w-5 object-contain dark:block";
+      identity.appendChild(dark);
+    }
+    if (presentation.markKind === "icon" && presentation.providerLabel) {
+      appendTextElement(
+        identity,
+        "span",
+        "text-[11px] font-semibold text-foreground",
+        presentation.providerLabel,
+      );
+    }
+  } else {
+    appendTextElement(
+      identity,
+      "span",
+      "text-[11px] font-bold uppercase tracking-wide text-foreground",
+      gatewayId === "cod" ? "COD" : gatewayId.slice(0, 8),
+    );
+  }
+  parent.appendChild(identity);
+}
+
+function appendPaymentMethodContent(
+  control: HTMLElement,
+  presentation: GatewayPresentation,
+  gatewayId: string,
+  label: string,
+  showRadio: boolean,
+): void {
   const copy = document.createElement("div");
   copy.className = "min-w-0 flex-1";
   appendTextElement(copy, "p", "text-sm font-semibold text-foreground", label);
-  if (meta.desc) {
+  if (presentation.description) {
     appendTextElement(
       copy,
       "p",
-      "mt-0.5 text-[11px] leading-tight text-muted-foreground",
-      meta.desc,
+      "mt-0.5 text-xs leading-4 text-muted-foreground",
+      presentation.description,
     );
   }
-  if (testMode) {
-    appendTextElement(
-      copy,
-      "span",
-      "mt-1 inline-flex rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-xs font-medium text-amber-900 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-200",
-      "Test mode · no real charge",
-    );
+  control.appendChild(copy);
+
+  appendProviderIdentity(
+    control,
+    presentation,
+    gatewayId,
+  );
+
+  if (showRadio) {
+    const check = document.createElement("span");
+    check.className =
+      "method-check flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 border-input";
+    check.setAttribute("aria-hidden", "true");
+    const dot = document.createElement("span");
+    dot.className = "check-dot hidden h-2.5 w-2.5 rounded-full bg-primary";
+    check.appendChild(dot);
+    control.appendChild(check);
   }
-  card.appendChild(copy);
 
-  const check = document.createElement("div");
-  check.className =
-    "method-check flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 border-input";
-  check.setAttribute("aria-hidden", "true");
-  const dot = document.createElement("div");
-  dot.className = "check-dot hidden h-2.5 w-2.5 rounded-full bg-primary";
-  check.appendChild(dot);
-  card.appendChild(check);
-
-  card.setAttribute(
+  control.setAttribute(
     "aria-label",
-    [label, meta.desc, testMode ? "Test mode, no real charge" : ""]
+    [label, presentation.description, presentation.providerLabel]
       .filter(Boolean)
       .join(". "),
   );
@@ -393,6 +495,7 @@ function trackAddPaymentInfoForSelection(methodId: string): void {
 
 function loadCheckoutData(): boolean {
   const fail = (message: string) => {
+    clearCheckoutPresentation();
     showError(message);
     setReturnToCartButton();
     clearCheckoutTransferSession();
@@ -450,22 +553,28 @@ export function renderOrderSummaryDetails(
 ): void {
   details.replaceChildren();
   appendSummaryRow(details, "Subtotal", currencyFmt(quote.subtotalAmount, quote));
-  appendSummaryRow(details, "Shipping", currencyFmt(quote.shippingAmount, quote));
   appendSummaryRow(
     details,
-    "Discount",
-    quote.discountAmount > 0
-      ? `-${currencyFmt(quote.discountAmount, quote)}`
-      : currencyFmt(0, quote),
-    quote.discountAmount > 0
-      ? "flex justify-between text-primary"
-      : "flex justify-between",
+    "Shipping",
+    quote.shippingMinor === 0
+      ? "Free"
+      : currencyFmt(quote.shippingAmount, quote),
   );
-  appendSummaryRow(
-    details,
-    `${quote.displayLabel}${quote.pricesIncludeTax ? " (included)" : ""}`,
-    currencyFmt(quote.taxAmount, quote),
-  );
+  if (quote.discountMinor > 0) {
+    appendSummaryRow(
+      details,
+      "Discount",
+      `-${currencyFmt(quote.discountAmount, quote)}`,
+      "flex justify-between text-primary",
+    );
+  }
+  if (quote.taxMinor > 0) {
+    appendSummaryRow(
+      details,
+      `${quote.displayLabel}${quote.pricesIncludeTax ? " (included)" : ""}`,
+      currencyFmt(quote.taxAmount, quote),
+    );
+  }
   appendSummaryRow(
     details,
     "Total",
@@ -478,22 +587,22 @@ export function renderOrderSummaryDetails(
     const balance = quote.totalAmount - advance;
     appendSummaryRow(
       details,
-      "Advance Payment Required",
+      "Due now",
       currencyFmt(advance, quote),
-      "flex justify-between font-bold text-primary bg-primary/10 p-2 rounded-lg mb-1 border border-primary/20",
+      "flex justify-between rounded-lg border border-primary/20 bg-primary/10 p-2 font-semibold text-primary",
     );
     appendSummaryRow(
       details,
-      "Balance Due on Delivery",
+      "Due on delivery",
       currencyFmt(balance, quote),
-      "flex justify-between text-gray-600 text-xs px-2 mb-2",
+      "flex justify-between px-2 text-xs text-muted-foreground",
     );
   }
 
   appendTextElement(
     details,
     "div",
-    "text-[10px] text-muted-foreground mt-2 border-t border-border pt-2",
+    "mt-2 border-t border-border pt-2 text-xs leading-5 text-muted-foreground",
     `To: ${String(data.customerName || "")} \u2022 ${String(data.shippingAddress || "")}`,
   );
 }
@@ -511,20 +620,90 @@ function renderSummary(): void {
     authoritativeTaxQuote,
   );
 
+  const mobileTotal = document.getElementById("orderSummaryToggleTotal");
+  if (mobileTotal) {
+    mobileTotal.textContent = currencyFmt(
+      authoritativeTaxQuote.totalAmount,
+      authoritativeTaxQuote,
+    );
+  }
+
   section.classList.remove("hidden");
 }
 
+function installOrderSummaryToggle(): void {
+  const toggle = document.getElementById("orderSummaryToggle") as HTMLButtonElement | null;
+  const panel = document.getElementById("summaryPanel");
+  const chevron = document.getElementById("orderSummaryChevron");
+  if (!toggle || !panel || toggle.dataset.bound === "true") return;
+  toggle.dataset.bound = "true";
+  toggle.addEventListener("click", () => {
+    const expanded = toggle.getAttribute("aria-expanded") === "true";
+    toggle.setAttribute("aria-expanded", String(!expanded));
+    panel.classList.toggle("hidden", expanded);
+    chevron?.classList.toggle("rotate-180", !expanded);
+  });
+}
+
 // ── Render payment method cards ───────────────────────────────────────────────
+
+function eligibleCheckoutGateways(): CheckoutConfig["gateways"] {
+  if (!checkoutConfig) return [];
+  return gateways.filter(
+    (gateway) => !(checkoutConfig?.partialPaymentEnabled && gateway.id === "cod"),
+  );
+}
+
+function paymentActionLabel(methodId: string): string {
+  if (!checkoutConfig || !authoritativeTaxQuote) return "Continue";
+  if (methodId === "cod") return "Place order";
+  if (methodId === "sslcommerz") return "Continue to SSLCommerz";
+  if (methodId === "polar") return "Continue to Polar";
+
+  const paymentRequest = resolveCheckoutPaymentRequest(
+    checkoutConfig,
+    authoritativeTaxQuote.totalAmount,
+  );
+  const amount = paymentRequest.paymentType === "deposit"
+    ? paymentRequest.depositAmount
+    : authoritativeTaxQuote.totalAmount;
+  const formatted = currencyFmt(amount, authoritativeTaxQuote);
+  return paymentRequest.paymentType === "deposit"
+    ? `Pay ${formatted} now`
+    : `Pay ${formatted}`;
+}
+
+function hostedRedirectMessage(methodId: string): string | null {
+  if (methodId === "sslcommerz") {
+    return "You’ll be redirected to SSLCommerz to complete your payment.";
+  }
+  if (methodId === "polar") {
+    return "You’ll be redirected to Polar to complete your payment.";
+  }
+  return null;
+}
 
 function renderGateways(): void {
   if (!checkoutConfig || !checkoutData || !authoritativeTaxQuote) return;
   const container = document.getElementById("paymentMethods");
   if (!container) return;
+  const actionHost = document.getElementById("paymentActionHost");
+  const actionParking = document.getElementById("paymentActionParking");
+  if (actionHost && actionParking && actionHost.parentElement !== actionParking) {
+    actionHost.classList.add("hidden");
+    actionParking.appendChild(actionHost);
+  }
   container.innerHTML = "";
-  container.setAttribute("role", "radiogroup");
-  container.setAttribute("aria-label", "Payment methods");
+  const eligibleGateways = eligibleCheckoutGateways();
+  const singleMethod = eligibleGateways.length === 1;
+  container.setAttribute("role", singleMethod ? "group" : "radiogroup");
+  container.setAttribute(
+    "aria-label",
+    singleMethod ? "Payment method" : "Payment methods",
+  );
 
-  if (checkoutConfig.unavailable || gateways.length === 0) {
+  if (checkoutConfig.unavailable || eligibleGateways.length === 0) {
+    container.setAttribute("aria-busy", "false");
     showError(
       checkoutConfig.unavailableMessage ||
         "Checkout is temporarily unavailable. Please try again shortly.",
@@ -533,90 +712,103 @@ function renderGateways(): void {
     return;
   }
 
-  const depositRequired = isDepositPaymentRequired(
-    checkoutConfig,
-    authoritativeTaxQuote.totalAmount,
-  );
-  const renderedMethodIds = new Set<string>();
-  const renderedGateways: CheckoutConfig["gateways"] = [];
-  let renderedCount = 0;
-
-  for (const gw of gateways) {
-    // If partial payment is active, skip COD since online payment is mandatory
-    if (checkoutConfig.partialPaymentEnabled && gw.id === "cod") continue;
-
+  eligibleGateways.forEach((gw, index) => {
     const handler = getGateway(gw.id);
-    const meta = handler?.meta || {
-      label: (gw as { name?: string }).name || gw.id,
-      icon: "\uD83D\uDCB3",
-      desc: "",
-    };
-
-    // Adjust label if partial payment is required
-    let label = meta.label;
-    if (
-      depositRequired &&
-      (gw.id === "stripe" || gw.id === "sslcommerz" || gw.id === "polar")
-    ) {
-      label = `${meta.label} · advance payment`;
-    }
-
-    const card = document.createElement("button");
-    card.type = "button";
-    card.setAttribute("role", "radio");
-    card.setAttribute("aria-checked", "false");
-    card.tabIndex = renderedCount === 0 ? 0 : -1;
+    const fallbackLabel =
+      (gw as { name?: string }).name || handler?.meta.label || gw.id;
+    const presentation = getGatewayPresentation(gw.id, fallbackLabel);
+    const card = document.createElement("div");
     card.className =
-      "payment-method-card w-full appearance-none cursor-pointer rounded-xl border-2 border-input bg-card p-4 text-left transition-all hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background flex items-center gap-4";
+      "payment-method-card overflow-hidden rounded-xl border border-border bg-card transition-colors";
     card.dataset.method = gw.id;
+
+    const control = singleMethod
+      ? document.createElement("div")
+      : document.createElement("button");
+    control.className = singleMethod
+      ? "flex min-h-16 w-full items-center gap-3 px-4 py-3 text-left"
+      : "payment-method-control flex min-h-16 w-full appearance-none items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-wait";
+    if (control instanceof HTMLButtonElement) {
+      control.type = "button";
+      control.id = `payment-method-${gw.id}`;
+      control.setAttribute("role", "radio");
+      control.setAttribute("aria-checked", "false");
+      control.setAttribute("aria-expanded", "false");
+      control.setAttribute("aria-controls", `payment-details-${gw.id}`);
+      control.tabIndex = index === 0 ? 0 : -1;
+      control.addEventListener("click", () => void selectMethod(gw.id, gw));
+      control.addEventListener("keydown", handlePaymentMethodKeyDown);
+    }
     appendPaymentMethodContent(
-      card,
-      meta,
-      label,
-      isGatewayTestMode(gw),
-      Boolean(handler),
+      control,
+      presentation,
+      gw.id,
+      presentation.buyerLabel,
+      !singleMethod,
     );
-    card.addEventListener("click", () => selectMethod(gw.id, gw));
-    card.addEventListener("keydown", handlePaymentMethodKeyDown);
+    card.appendChild(control);
+
+    const details = document.createElement("div");
+    details.id = `payment-details-${gw.id}`;
+    details.className =
+      "payment-method-details hidden border-t border-border px-4 py-4";
+    if (!singleMethod) {
+      details.setAttribute("aria-labelledby", `payment-method-${gw.id}`);
+    }
+    card.appendChild(details);
     container.appendChild(card);
-    renderedMethodIds.add(gw.id);
-    renderedGateways.push(gw);
-    renderedCount += 1;
-  }
+  });
 
-  if (renderedCount === 0) {
-    showError("No available payment method can complete this checkout. Please go back to cart or contact the store.");
-    setPayButton("Checkout unavailable", true);
-    return;
-  }
-
-  const defaultMethod = checkoutConfig.activeDefaultMethod;
-  const defaultGateway = gateways.find((gw) => gw.id === defaultMethod);
-  if (defaultMethod && defaultGateway && renderedMethodIds.has(defaultMethod)) {
-    void selectMethod(defaultMethod, defaultGateway);
-    return;
-  }
-
-  // A checkout policy may change while a buyer is already on this page. If
-  // that removes the saved default but leaves one usable method, select the
-  // only truthful choice instead of stranding the buyer behind a disabled
-  // "Select a payment method" action.
-  if (renderedGateways.length === 1) {
-    const [onlyGateway] = renderedGateways;
-    if (onlyGateway) void selectMethod(onlyGateway.id, onlyGateway);
-  }
+  container.setAttribute("aria-busy", "false");
+  const restoredMethod = readCheckoutPaymentSelection();
+  const initialGateway =
+    eligibleGateways.find((gateway) => gateway.id === restoredMethod) ??
+    eligibleGateways.find(
+      (gateway) => gateway.id === checkoutConfig?.activeDefaultMethod,
+    ) ?? eligibleGateways[0];
+  if (initialGateway) void selectMethod(initialGateway.id, initialGateway);
 }
 
 // ── Gateway selection ─────────────────────────────────────────────────────────
 
-async function selectMethod(methodId: string, gw: { id: string; [key: string]: unknown }): Promise<void> {
+async function selectMethod(
+  methodId: string,
+  gw: CheckoutConfig["gateways"][number],
+): Promise<void> {
+  if (isProcessing) return;
   const selectionId = ++selectionVersion;
+  retrySelection = null;
   selectedMethod = null;
-  applySelectedMethodStyles(null);
+  applySelectedMethodStyles(methodId);
   setPayButton("Preparing payment...", true);
   hideError();
   const handler = getGateway(methodId);
   const stripeSection = document.getElementById("stripeSection");
+  const actionHost = document.getElementById("paymentActionHost");
+  const details = document.querySelector<HTMLElement>(
+    `.payment-method-card[data-method="${CSS.escape(methodId)}"] .payment-method-details`,
+  );
+  const testNotice = document.getElementById("testModeNotice");
+  const redirectNote = document.getElementById("hostedRedirectNote");
+  if (!handler || !details) {
+    showError("This payment method is not available. Choose another method.");
+    setPayButton("Payment method unavailable", true);
+    return;
+  }
+
+  if (actionHost) {
+    details.appendChild(actionHost);
+    actionHost.classList.remove("hidden");
+  }
+  testNotice?.classList.toggle(
+    "hidden",
+    methodId === "cod" || !isGatewayTestMode(gw),
+  );
+  const redirectMessage = hostedRedirectMessage(methodId);
+  if (redirectNote) {
+    redirectNote.textContent = redirectMessage ?? "";
+    redirectNote.classList.toggle("hidden", !redirectMessage);
+  }
 
   if (methodId === "stripe") {
     stripeSection?.classList.remove("hidden");
@@ -637,41 +829,24 @@ async function selectMethod(methodId: string, gw: { id: string; [key: string]: u
     } catch (err: unknown) {
       showError(err instanceof Error ? err.message : String(err));
       selectedMethod = null;
-      applySelectedMethodStyles(null);
-      stripeSection?.classList.add("hidden");
-      setPayButton("Select a payment method", true);
+      retrySelection = { methodId, gateway: gw };
+      setPayButton("Retry payment form", false);
       return;
     }
   }
 
   if (selectionId !== selectionVersion) return;
   selectedMethod = methodId;
+  writeCheckoutPaymentSelection(methodId);
   applySelectedMethodStyles(methodId);
 
-  // Set button text
-  const isPartial = checkoutConfig?.partialPaymentEnabled ?? false;
-  const text = handler?.getButtonText(isPartial) ?? "Continue to Payment";
-  setPayButton(text, handler?.isReady ? !handler.isReady() : false);
+  setPayButton(
+    paymentActionLabel(methodId),
+    handler.isReady ? !handler.isReady() : false,
+  );
 }
 
 // ── Process payment ───────────────────────────────────────────────────────────
-
-export function clearCheckoutAndCart(): void {
-  clearCheckoutSession();
-  try {
-    localStorage.removeItem("cart");
-  } catch {
-    // ignore
-  }
-}
-
-export function shouldClearCheckoutBeforeRedirect(result: PaymentResult): boolean {
-  return result.clearCartOnRedirect === true;
-}
-
-export function shouldClearCheckoutSessionBeforeRedirect(result: PaymentResult): boolean {
-  return result.clearCartOnRedirect === true || result.clearCheckoutSessionOnRedirect === true;
-}
 
 async function processPayment(): Promise<void> {
   if (
@@ -681,13 +856,21 @@ async function processPayment(): Promise<void> {
     !checkoutConfig ||
     !authoritativeTaxQuote
   ) return;
+
+  const existingRecovery = readHostedPaymentRecoverySession();
+  if (matchesCheckoutRecoverySession(existingRecovery, checkoutData.cartItems)) {
+    window.location.replace(existingRecovery!.href);
+    return;
+  }
+  const processingMethod = selectedMethod;
   isProcessing = true;
+  setPaymentControlsDisabled(true);
   hideError();
   setPayButton("Processing...", true);
-  trackAddPaymentInfoForSelection(selectedMethod);
+  trackAddPaymentInfoForSelection(processingMethod);
 
   showCheckoutLoadingOverlay(
-    selectedMethod === "cod"
+    processingMethod === "cod"
       ? {
           title: "Placing your order",
           message: "Confirming item availability and delivery.",
@@ -698,15 +881,17 @@ async function processPayment(): Promise<void> {
         },
   );
 
-  const handler = getGateway(selectedMethod);
+  const handler = getGateway(processingMethod);
   if (!handler) {
     hideCheckoutLoadingOverlay();
     showError("Unknown payment method selected.");
     isProcessing = false;
-    setPayButton("Continue to Payment", false);
+    setPaymentControlsDisabled(false);
+    setPayButton("Payment method unavailable", true);
     return;
   }
 
+  let navigationCommitted = false;
   try {
     const totalAmount = authoritativeTaxQuote.totalAmount;
     const paymentRequest = resolveCheckoutPaymentRequest(
@@ -724,9 +909,16 @@ async function processPayment(): Promise<void> {
       totalAmount,
       advanceAmount,
       currencySymbol: (window as unknown as Record<string, string>).__CURRENCY_SYMBOL__ || DEFAULT_CURRENCY.symbol,
+      onOrderCreated: (orderId, gateway) => {
+        writeHostedPaymentRecoverySession(
+          checkoutRecoveryHref(orderId, gateway),
+          checkoutData ?? undefined,
+          gateway,
+        );
+      },
     };
 
-    const result = await handler.processPayment(ctx);
+    const result = await withPaymentWatchdog(handler.processPayment(ctx));
 
     if (result.success && result.redirectUrl) {
       const redirectUrl = normalizeCheckoutRedirectUrl(
@@ -736,13 +928,13 @@ async function processPayment(): Promise<void> {
       if (!redirectUrl) {
         throw new Error("Payment could not open because the gateway returned an unsafe redirect URL.");
       }
-      if (shouldClearCheckoutBeforeRedirect(result)) {
-        writeHostedPaymentRecoverySession(result.hostedPaymentRecoveryUrl);
-        clearCheckoutAndCart();
-      } else if (shouldClearCheckoutSessionBeforeRedirect(result)) {
-        clearCheckoutSession();
-      }
-      window.location.href = redirectUrl;
+      writeHostedPaymentRecoverySession(
+        result.hostedPaymentRecoveryUrl ?? redirectUrl,
+        checkoutData,
+        processingMethod,
+      );
+      navigationCommitted = true;
+      window.location.replace(redirectUrl);
       return;
     }
 
@@ -761,6 +953,7 @@ async function processPayment(): Promise<void> {
       if (recovery) {
         hideCheckoutLoadingOverlay();
         isProcessing = false;
+        setPaymentControlsDisabled(false);
         showError(recovery.message);
         setPayButton(recovery.buttonText, false);
         return;
@@ -771,32 +964,45 @@ async function processPayment(): Promise<void> {
     hideCheckoutLoadingOverlay();
     showError(err instanceof Error ? err.message : "An error occurred. Please try again.");
     isProcessing = false;
-
-    // Restore button text based on selected method
-    const restoreHandler = getGateway(selectedMethod);
-    const isPartial = checkoutConfig.partialPaymentEnabled;
-    const text = restoreHandler?.getButtonText(isPartial) ?? "Continue to Payment";
-    setPayButton(text, restoreHandler?.isReady ? !restoreHandler.isReady() : false);
+    setPaymentControlsDisabled(false);
+    setPayButton(
+      paymentActionLabel(processingMethod),
+      handler.isReady ? !handler.isReady() : false,
+    );
   } finally {
-    isProcessing = false;
+    if (!navigationCommitted) {
+      isProcessing = false;
+      setPaymentControlsDisabled(false);
+    }
   }
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 export async function initCheckoutPage(): Promise<void> {
+  const currentInitVersion = ++initVersion;
   selectedMethod = null;
   checkoutData = null;
   gateways = [];
   authoritativeTaxQuote = null;
   isProcessing = false;
+  retrySelection = null;
   selectionVersion += 1;
   checkoutConfig = (window as unknown as Record<string, CheckoutConfig>).__CHECKOUT_CONFIG__;
   if (!checkoutConfig) return;
 
+  installOrderSummaryToggle();
+
   if (!loadCheckoutData()) return;
 
+  const existingRecovery = readHostedPaymentRecoverySession();
+  if (matchesCheckoutRecoverySession(existingRecovery, checkoutData!.cartItems)) {
+    window.location.replace(existingRecovery!.href);
+    return;
+  }
+
   const freshness = await validateCheckoutCartFreshness(checkoutData!);
+  if (currentInitVersion !== initVersion) return;
   if (!freshness.valid) {
     redirectToCartForRepair(freshness);
     return;
@@ -804,6 +1010,7 @@ export async function initCheckoutPage(): Promise<void> {
 
   try {
     authoritativeTaxQuote = await fetchAuthoritativeTaxQuote(checkoutData!);
+    if (currentInitVersion !== initVersion) return;
   } catch (error) {
     showError(
       error instanceof Error
@@ -818,5 +1025,25 @@ export async function initCheckoutPage(): Promise<void> {
   renderGateways();
 
   const payBtn = document.getElementById("payButton");
-  payBtn?.addEventListener("click", processPayment);
+  if (payBtn && payBtn.dataset.checkoutBound !== "true") {
+    payBtn.dataset.checkoutBound = "true";
+    payBtn.addEventListener("click", () => {
+      if (retrySelection) {
+        const { methodId, gateway } = retrySelection;
+        void selectMethod(methodId, gateway);
+        return;
+      }
+      void processPayment();
+    });
+  }
+}
+
+export async function resumeCheckoutPageFromHistory(): Promise<void> {
+  hideCheckoutLoadingOverlay({ restoreFocus: false });
+  isProcessing = false;
+  retrySelection = null;
+  selectionVersion += 1;
+  setPaymentControlsDisabled(false);
+  resetStripePaymentElement();
+  await initCheckoutPage();
 }

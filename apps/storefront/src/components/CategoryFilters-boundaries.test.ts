@@ -2,10 +2,11 @@ import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { storefrontSourcePath } from "../lib/test-source-paths";
 import CategoryFilters from "./CategoryFilters";
 
 const source = readFileSync(
-  new URL("./CategoryFilters.tsx", import.meta.url),
+  storefrontSourcePath("components", "CategoryFilters.tsx"),
   "utf8",
 );
 
