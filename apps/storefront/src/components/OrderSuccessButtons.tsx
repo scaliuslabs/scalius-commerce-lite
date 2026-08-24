@@ -317,13 +317,13 @@ export default function OrderSuccessButtons({
           <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
             {authChecked && isCustomerAuthenticated ? (
               accountSaveState.status === "success" ? (
-                <Button type="button" className="font-medium" onClick={handleOpenAccountOrder}>
+                <Button type="button" className="min-h-11 font-medium" onClick={handleOpenAccountOrder}>
                   View in account
                 </Button>
               ) : (
                 <Button
                   type="button"
-                  className="font-medium"
+                  className="min-h-11 font-medium"
                   onClick={() => handleSaveOrder("sign_in")}
                   disabled={accountSaveState.status === "submitting"}
                 >
@@ -334,7 +334,7 @@ export default function OrderSuccessButtons({
               <>
                 <Button
                   type="button"
-                  className="font-medium"
+                  className="min-h-11 font-medium"
                   onClick={() => handleSaveOrder("sign_up")}
                 >
                   Create account
@@ -342,7 +342,7 @@ export default function OrderSuccessButtons({
                 <Button
                   type="button"
                   variant="outline"
-                  className="border-border font-medium"
+                  className="min-h-11 border-border font-medium"
                   onClick={() => handleSaveOrder("sign_in")}
                 >
                   Sign in
