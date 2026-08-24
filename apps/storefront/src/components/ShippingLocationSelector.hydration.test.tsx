@@ -5,6 +5,10 @@ import { createRoot, hydrateRoot, type Root } from "react-dom/client";
 import { renderToString } from "react-dom/server";
 import { afterEach, describe, expect, it } from "vitest";
 
+import {
+  clearCheckoutFormDraft,
+  writeCheckoutFormDraft,
+} from "@/lib/checkout/session-state";
 import { cartStore, createCartItemKey, type CartStore } from "@/store/cart";
 import ShippingLocationSelector from "./ShippingLocationSelector";
 
@@ -52,6 +56,7 @@ afterEach(async () => {
     root = null;
   }
   cartStore.set(EMPTY_CART);
+  clearCheckoutFormDraft();
   document.body.innerHTML = "";
 });
 
@@ -110,5 +115,37 @@ describe("ShippingLocationSelector hydration", () => {
     expect(radios[0]?.checked).toBe(true);
     expect(radios[0]?.getAttribute("aria-label")).toContain("Standard delivery");
     expect(container.querySelector('[role="radio"]')).toBeNull();
+  });
+
+  it("restores the saved delivery method before publishing the first shipping change", async () => {
+    const methods = [
+      shippingMethods[0],
+      { ...shippingMethods[0], id: "collection", name: "Collection point", fee: 50 },
+    ];
+    writeCheckoutFormDraft({ shippingLocation: "collection" });
+    const publishedMethods: Array<{ id: string; name?: string }> = [];
+    const trackPublishedMethod = (event: Event) => {
+      publishedMethods.push((event as CustomEvent<{ id: string; name?: string }>).detail);
+    };
+    window.addEventListener("shippingLocationChange", trackPublishedMethod);
+
+    const container = document.createElement("div");
+    document.body.append(container);
+
+    await act(async () => {
+      root = createRoot(container);
+      root.render(<ShippingLocationSelector shippingMethods={methods} />);
+      await Promise.resolve();
+    });
+
+    expect(
+      container.querySelector<HTMLInputElement>(
+        'input[name="shippingLocation"][value="collection"]',
+      )?.checked,
+    ).toBe(true);
+    expect(publishedMethods).toEqual([
+      expect.objectContaining({ id: "collection", name: "Collection point" }),
+    ]);
+    window.removeEventListener("shippingLocationChange", trackPublishedMethod);
   });
 });

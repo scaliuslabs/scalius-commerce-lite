@@ -7,6 +7,7 @@ import { errorResponseFromError } from "../../utils/api-response";
 const mocks = vi.hoisted(() => ({
   createPaymentIntent: vi.fn(),
   initSSLCommerzSession: vi.fn(),
+  validateSSLCommerzIPN: vi.fn(),
   createPolarCheckout: vi.fn(),
   findReusablePolarCheckout: vi.fn(),
   getActivePaymentMethods: vi.fn(),
@@ -29,6 +30,7 @@ vi.mock("@scalius/core/modules/payments/stripe", () => ({
 vi.mock("@scalius/core/modules/payments/sslcommerz", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@scalius/core/modules/payments/sslcommerz")>()),
   initSSLCommerzSession: mocks.initSSLCommerzSession,
+  validateSSLCommerzIPN: mocks.validateSSLCommerzIPN,
 }));
 
 vi.mock("@scalius/core/modules/payments/polar", () => ({
@@ -337,6 +339,20 @@ beforeEach(() => {
     success: true,
     gatewayUrl: "https://ssl.example.test/pay",
     sessionKey: "ssl_session_1",
+  });
+  mocks.validateSSLCommerzIPN.mockResolvedValue({
+    status: "VALID",
+    tran_id: "order_1_full_ABC12345",
+    val_id: "val_1",
+    amount: "125.00",
+    store_amount: "125.00",
+    bank_tran_id: "bank_1",
+    currency_type: "BDT",
+    currency_amount: "125.00",
+    card_type: "VISA",
+    card_brand: "VISA",
+    value_a: "full",
+    value_b: "order_1",
   });
   mocks.getPolarSettings.mockResolvedValue({
     enabled: true,
@@ -1496,6 +1512,50 @@ describe("payment session receipt-token proof", () => {
       "https://shop.example.test/order-success?orderId=order_1&payment=sslcommerz",
     );
     expectNoReceiptProofInUrl(location);
+  });
+
+  it("validates and queues a successful SSLCommerz buyer return before redirecting", async () => {
+    const { app, kv } = createTestApp("valid", "sslcommerz");
+    const queue = { send: vi.fn().mockResolvedValue(undefined) };
+    const env = {
+      CACHE: kv,
+      PUBLIC_API_BASE_URL: "https://api.example.test",
+      STOREFRONT_URL: "https://shop.example.test",
+      PAYMENT_EVENTS_QUEUE: queue,
+    } as never;
+
+    const response = await app.request(
+      "/api/v1/payment/sslcommerz/success?order_id=order_1&payment_type=full",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          tran_id: "order_1_full_ABC12345",
+          val_id: "val_1",
+        }).toString(),
+      },
+      env,
+    );
+
+    expect(response.status).toBe(302);
+    expect(mocks.validateSSLCommerzIPN).toHaveBeenCalledWith(
+      "store",
+      "ssl_store_password_123",
+      true,
+      "val_1",
+      expect.any(AbortSignal),
+    );
+    expect(queue.send).toHaveBeenCalledWith(expect.objectContaining({
+      type: "payment.sslcommerz.confirmed",
+      orderId: "order_1",
+      paymentType: "full",
+      amount: 125,
+      currency: "BDT",
+      webhookEventId: "sslcommerz:ipn:order_1_full_abc12345:val_1",
+    }));
+    expect(response.headers.get("location")).toBe(
+      "https://shop.example.test/order-success?orderId=order_1&payment=sslcommerz&paymentType=full",
+    );
   });
 
   it("redirects SSLCommerz failed hosted payments back to the receipt recovery page", async () => {

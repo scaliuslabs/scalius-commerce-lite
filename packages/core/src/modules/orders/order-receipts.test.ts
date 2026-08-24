@@ -4,6 +4,7 @@ import { checkoutAttempts, orderReceipts, orders } from "@scalius/database/schem
 import {
   createOrderReceiptToken,
   hashOrderReceiptToken,
+  ORDER_RECEIPT_TOKEN_TTL_SECONDS,
   recordOrderReceipt,
   validateOrderReceiptProof,
 } from "./order-receipts";
@@ -174,6 +175,7 @@ describe("order receipts", () => {
       orderId: "order_1",
       source: "checkout_attempt",
       status: "active",
+      expiresAt: 50 + ORDER_RECEIPT_TOKEN_TTL_SECONDS,
     });
   });
 
@@ -221,20 +223,23 @@ describe("order receipts", () => {
     expect(inserted).toHaveLength(0);
   });
 
-  it("rejects checkout-attempt compatibility proof after the receipt lifetime", async () => {
-    const { db, inserted } = createReceiptDb({
-      attempt: {
-        orderId: "order_1",
-        status: "committed",
-        createdAt: 100,
-      },
-    });
+  it.each(["committed", "processing"])(
+    "rejects %s checkout-attempt compatibility proof at the receipt lifetime boundary",
+    async (status) => {
+      const { db, inserted } = createReceiptDb({
+        attempt: {
+          orderId: "order_1",
+          status,
+          createdAt: 100,
+        },
+      });
 
-    await expect(validateOrderReceiptProof(db, {
-      orderId: "order_1",
-      token: "chk_valid",
-      nowSeconds: 100 + (60 * 60 * 24 * 7),
-    })).resolves.toBeNull();
-    expect(inserted).toHaveLength(0);
-  });
+      await expect(validateOrderReceiptProof(db, {
+        orderId: "order_1",
+        token: "chk_valid",
+        nowSeconds: 100 + ORDER_RECEIPT_TOKEN_TTL_SECONDS,
+      })).resolves.toBeNull();
+      expect(inserted).toHaveLength(0);
+    },
+  );
 });

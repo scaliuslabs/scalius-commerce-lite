@@ -20,7 +20,6 @@ const CLOSED_ORDER_STATUSES = new Set([
 ]);
 const ACCEPTED_PAYMENT_STATUSES = new Set(["paid", "partial"]);
 const FAILED_PAYMENT_STATUSES = new Set(["failed"]);
-const FAILED_CALLBACK_RESULTS = new Set(["failed", "cancelled"]);
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
   cod: "Cash on Delivery",
   polar: "Polar",
@@ -198,12 +197,8 @@ export function getOrderSuccessViewState(
 ): OrderSuccessViewState {
   const durableKind = getOrderSuccessStateKind(order);
   const paymentStatus = normalize(order.paymentStatus);
-  const callbackPaymentIssue = isOnlinePaymentMethod(order.paymentMethod)
-    && FAILED_CALLBACK_RESULTS.has(normalize(callbackResult))
-    && getOrderSuccessVisibleBalanceDue(order) > 0
-    && !CLOSED_ORDER_STATUSES.has(normalize(order.status))
-    && !["paid", "refunded"].includes(paymentStatus);
-  const kind = callbackPaymentIssue ? "payment_issue" : durableKind;
+  void callbackResult;
+  const kind = durableKind;
   if (kind === "payment_issue") {
     return {
       kind,

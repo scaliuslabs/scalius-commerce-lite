@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
+import type { CartValidationIssue } from "@/lib/api/orders";
 import { createApiUrl, fetchWithRetry } from "@/lib/api/client";
 import {
   normalizeTaxQuoteRequest,
@@ -7,6 +8,7 @@ import {
   TAX_QUOTE_MAX_REQUEST_BYTES,
   TAX_QUOTE_MAX_RESPONSE_BYTES,
 } from "@/lib/checkout/tax-quote-contract";
+import { parseTaxQuoteCartIssues } from "@/lib/checkout/tax-quote-error-contract";
 
 export const prerender = false;
 
@@ -137,9 +139,22 @@ export const POST: APIRoute = async ({ request }) => {
     );
 
     if (!upstream.ok) {
-      await upstream.body?.cancel();
+      let itemIssues: CartValidationIssue[] = [];
+      try {
+        const text = await readBoundedBody(
+          upstream.body,
+          TAX_QUOTE_MAX_RESPONSE_BYTES,
+        );
+        itemIssues = parseTaxQuoteCartIssues(JSON.parse(text));
+      } catch {
+        itemIssues = [];
+      }
       return jsonResponse(
-        { success: false, error: "Current checkout total is unavailable" },
+        {
+          success: false,
+          error: "Current checkout total is unavailable",
+          ...(itemIssues.length > 0 ? { details: { itemIssues } } : {}),
+        },
         safeUpstreamFailureStatus(upstream.status),
       );
     }

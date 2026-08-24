@@ -22,6 +22,7 @@ function outcome(options: {
   selected?: boolean;
   flowAllowed?: boolean;
   environment?: PaymentMethodEnvironment;
+  eligibilityIssue?: string | null;
 }) {
   return getPaymentMethodOutcome({
     method: options.method,
@@ -29,6 +30,7 @@ function outcome(options: {
     checkoutSelected: options.selected ?? true,
     flowAllowed: options.flowAllowed ?? true,
     environment: options.environment,
+    eligibilityIssue: options.eligibilityIssue,
   });
 }
 
@@ -152,6 +154,21 @@ describe("payment method merchant outcome matrix", () => {
     });
   });
 
+  it("blocks an otherwise-ready gateway when store-level eligibility fails", () => {
+    expect(outcome({
+      method: "sslcommerz",
+      status: readyStatus,
+      eligibilityIssue: "SSLCommerz checkout requires BDT. Current store currency: USD.",
+    })).toMatchObject({
+      state: "blocked",
+      label: "Blocked",
+      checkoutLabel: "Unavailable",
+      canSelect: false,
+      effective: false,
+      description: "SSLCommerz checkout requires BDT. Current store currency: USD.",
+    });
+  });
+
   it("does not imply that cash on delivery has an external connection to probe", () => {
     expect(outcome({ method: "cod" })).toMatchObject({
       healthLabel: "Not applicable",
@@ -207,7 +224,8 @@ describe("payment method merchant outcome matrix", () => {
       statuses,
       selectedMethods: new Set(methods),
       flowAllowed: (method) => method !== "cod",
-    })).toEqual(["sslcommerz", "polar"]);
+      eligibilityIssue: (method) => method === "sslcommerz" ? "Unsupported currency" : null,
+    })).toEqual(["polar"]);
   });
 
   it.each([

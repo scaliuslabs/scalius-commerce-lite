@@ -7,6 +7,7 @@ import {
   getOrderReceiptFinalizeCookieName,
   getOrderReceiptCookieName,
   hasOrderReceiptFinalizeCookie,
+  readOrderReceiptFinalizeCookie,
   readOrderReceiptCookie,
 } from "./order-receipt-cookie";
 
@@ -40,5 +41,23 @@ describe("order receipt cookie", () => {
     expect(hasOrderReceiptFinalizeCookie(`${cookieName}=1`, "order_2")).toBe(false);
     expect(clearHeader).toContain(`${cookieName}=`);
     expect(clearHeader).toContain("Max-Age=0");
+  });
+
+  it("binds a direct checkout finalization marker to the checkout and cart snapshot", () => {
+    const cookieName = getOrderReceiptFinalizeCookieName("order_1");
+    const header = createOrderReceiptFinalizeCookieHeader("order_1", {
+      checkoutId: "chk_session_checkout_1",
+      cartFingerprintHash: `cartfp_${"a".repeat(43)}`,
+    });
+
+    expect(header).toContain(
+      `${cookieName}=v1.chk_session_checkout_1.cartfp_${"a".repeat(43)}`,
+    );
+    expect(readOrderReceiptFinalizeCookie(header, "order_1")).toEqual({
+      checkoutId: "chk_session_checkout_1",
+      cartFingerprintHash: `cartfp_${"a".repeat(43)}`,
+    });
+    expect(readOrderReceiptFinalizeCookie(`${cookieName}=malformed`, "order_1"))
+      .toBeNull();
   });
 });

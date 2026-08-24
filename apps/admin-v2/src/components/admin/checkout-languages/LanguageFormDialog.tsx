@@ -225,7 +225,7 @@ export function LanguageFormDialog({
             <TabsContent value="visibility" className="space-y-4 mt-4">
               <div className="space-y-4">
                 {[
-                  ["showEmailField", "Show Email Field"],
+                  ["showEmailField", "Ask for email at checkout (optional)"],
                   ["showOrderNotesField", "Show Order Notes Field"],
                   ["showAreaField", "Show Area Field (Optional)"],
                 ].map(([key, label]) => (

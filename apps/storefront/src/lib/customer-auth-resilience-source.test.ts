@@ -82,12 +82,45 @@ describe("customer auth resilience source boundaries", () => {
     const cartSource = readStorefrontSource("src/pages/cart.astro");
 
     expect(cartSource).toContain("const values: Record<string, string> = {};");
-    expect(cartSource).toContain("if (input) values[field] = input.value;");
+    expect(cartSource).toContain(
+      'else if (input) values[field] = inputValue ?? "";',
+    );
     expect(cartSource).toContain(
       'else if (draft && field in draft) values[field] = draft[field] ?? "";',
     );
     expect(cartSource).toContain("persistCheckoutFormDraftNow();");
     expect(cartSource).not.toContain("shippingAddressInput?.reportValidity()");
+  });
+
+  it("restores the phone bridge before delivery hydration can persist an empty value", () => {
+    const cartSource = readStorefrontSource("src/pages/cart.astro");
+    const phoneSource = readStorefrontSource("src/components/PhoneField.tsx");
+
+    expect(cartSource).toContain('"customerPhone",\n      "customerEmail"');
+    expect(cartSource).toContain(
+      'new CustomEvent("phone-prefill", { detail: draft.customerPhone })',
+    );
+    expect(phoneSource).toContain(
+      'const initialValue = defaultValue || readCheckoutFormDraft()?.customerPhone || "";',
+    );
+    expect(phoneSource).toContain("return result.ok ? result.value : \"\";");
+    expect(cartSource).toContain("let phoneFieldHasBuyerEdit = false;");
+    expect(cartSource).toContain('!phoneFieldHasBuyerEdit &&');
+    expect(cartSource).toContain(
+      '(event.target as HTMLInputElement | null)?.id === "customerPhone-input"',
+    );
+    expect(cartSource).toContain("phoneFieldHasBuyerEdit = true;");
+    expect(cartSource).toContain('document.addEventListener(\n    "astro:before-swap"');
+    expect(cartSource).toContain("cartPageAbortController.abort();");
+    expect(cartSource).toContain("event.isTrusted &&");
+    expect(cartSource).toContain(
+      "phoneInput.value = phoneValidation.value;\n          phoneInput.dataset.e164Value = phoneValidation.value;",
+    );
+    expect(phoneSource).toContain("name={name}");
+    expect(phoneSource).not.toContain('type="hidden"');
+    expect(phoneSource).toContain("input.dataset.e164Value = value;");
+    expect(cartSource).toContain("input.dataset.e164Value !== undefined");
+    expect(cartSource).toContain("checkoutData.customerPhone = phoneValidation.value;");
   });
 
   it("keeps post-sale payment recovery controls out of native forms", () => {

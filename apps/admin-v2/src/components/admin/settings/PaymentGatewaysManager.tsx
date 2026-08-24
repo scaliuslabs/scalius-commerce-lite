@@ -54,6 +54,7 @@ import { getServerFnError } from "@/lib/api-helpers";
 import { getSettingsLoadErrorMessage } from "@/hooks/use-settings-form";
 import { queryKeys } from "@/lib/query-keys";
 import { checkoutFlowSettingsQueryOptions } from "@/lib/api-query-options/settings";
+import { currencySettingsQueryOptions } from "@/lib/api-query-options/currency";
 import {
     getPaymentMethods,
     updatePaymentMethods,
@@ -101,6 +102,12 @@ export default function PaymentGatewaysManager() {
         isFetching: checkoutFlowFetching,
         refetch: refetchCheckoutFlow,
     } = useQuery(checkoutFlowSettingsQueryOptions());
+    const {
+        data: currencySettings,
+        isError: currencySettingsError,
+        isFetching: currencySettingsFetching,
+        refetch: refetchCurrencySettings,
+    } = useQuery(currencySettingsQueryOptions());
     const [loading, setLoading] = useState(true);
     const [methodsLoadError, setMethodsLoadError] = useState<string | null>(null);
     const [methods, setMethods] = useState<PaymentMethodsData | null>(null);
@@ -228,10 +235,12 @@ export default function PaymentGatewaysManager() {
     };
 
     const saveMethods = async (silent = false) => {
-        if (loading || !methods || methodsLoadError || !checkoutFlowSettings) {
+        if (loading || !methods || methodsLoadError || !checkoutFlowSettings || !currencySettings) {
             const message = !checkoutFlowSettings
                 ? "Reload checkout flow before saving buyer payment methods."
-                : "Reload payment status before saving buyer payment methods.";
+                : !currencySettings
+                    ? "Reload store currency before saving buyer payment methods."
+                    : "Reload payment status before saving buyer payment methods.";
             if (!silent) toast.error(message);
             return false;
         }
@@ -335,14 +344,23 @@ export default function PaymentGatewaysManager() {
         });
     }, [checkoutFlowSettings]);
 
+    const getGatewayEligibilityIssue = useCallback((method: MethodKey): string | null => {
+        if (method !== "sslcommerz") return null;
+        if (!currencySettings) return "Store currency could not be checked.";
+        return currencySettings.currencyCode === "BDT"
+            ? null
+            : `SSLCommerz checkout requires BDT. Current store currency: ${currencySettings.currencyCode}.`;
+    }, [currencySettings]);
+
     const defaultOptions = useMemo(() => methods
         ? getEligibleDefaultPaymentMethods({
             methods: ALL_METHODS,
             statuses: methods.gatewayStatus,
             selectedMethods: enabledMethods,
             flowAllowed: methodAllowedByFlow,
+            eligibilityIssue: getGatewayEligibilityIssue,
         })
-        : [], [enabledMethods, methodAllowedByFlow, methods]);
+        : [], [enabledMethods, getGatewayEligibilityIssue, methodAllowedByFlow, methods]);
 
     useEffect(() => {
         if (defaultOptions.length > 0 && !defaultOptions.includes(defaultMethod)) {
@@ -392,9 +410,11 @@ export default function PaymentGatewaysManager() {
         checkoutSelected: enabledMethods.has(method),
         flowAllowed: methodAllowedByFlow(method),
         environment: getSavedEnvironment(method),
+        eligibilityIssue: getGatewayEligibilityIssue(method),
     });
     const defaultMethodAvailable = defaultOptions.includes(defaultMethod);
     const canSaveMethods = Boolean(checkoutFlowSettings)
+        && Boolean(currencySettings)
         && !methodsLoadError
         && defaultOptions.length > 0
         && defaultMethodAvailable;
@@ -449,6 +469,32 @@ export default function PaymentGatewaysManager() {
                     </AlertDescription>
                 </Alert>
             )}
+            {!currencySettings && (
+                <Alert className={currencySettingsError ? "border-amber-500/30 bg-amber-500/5" : undefined}>
+                    {currencySettingsError
+                        ? <AlertTriangle className="h-4 w-4 text-amber-500" />
+                        : <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+                    <AlertTitle>{currencySettingsError ? "Store currency could not be loaded" : "Checking store currency"}</AlertTitle>
+                    <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <span>
+                            Payment-method eligibility and saves stay locked until the store currency is known.
+                        </span>
+                        {currencySettingsError && (
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="shrink-0"
+                                onClick={() => void refetchCurrencySettings()}
+                                disabled={currencySettingsFetching}
+                            >
+                                {currencySettingsFetching && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+                                Retry currency check
+                            </Button>
+                        )}
+                    </AlertDescription>
+                </Alert>
+            )}
             {methodsLoadError && methods && (
                 <Alert className="border-amber-500/30 bg-amber-500/5">
                     <AlertTriangle className="h-4 w-4 text-amber-500" />
@@ -491,7 +537,7 @@ export default function PaymentGatewaysManager() {
                         <Select
                             value={defaultMethodAvailable ? defaultMethod : undefined}
                             onValueChange={(value) => setDefaultMethod(value as MethodKey)}
-                            disabled={defaultOptions.length === 0 || Boolean(methodsLoadError) || !checkoutFlowSettings}
+                            disabled={defaultOptions.length === 0 || Boolean(methodsLoadError) || !checkoutFlowSettings || !currencySettings}
                         >
                             <SelectTrigger id="default-payment-method" className="h-11 w-full sm:h-9"><SelectValue placeholder="No eligible method" /></SelectTrigger>
                             <SelectContent>

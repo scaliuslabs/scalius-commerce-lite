@@ -28,6 +28,7 @@ const CHECKOUT_TRANSFER_SYNC_FIELDS = [
   "checkoutRequestId",
   "discountCodeHidden",
   "shippingMethodId",
+  "shippingMethodName",
   "shippingCharge",
 ] as const;
 const HOSTED_PAYMENT_RECOVERY_STORAGE_KEY = "scalius_hosted_payment_recovery";
@@ -325,6 +326,22 @@ export function fingerprintCheckoutCart(value: unknown): string | null {
     .sort((left, right) => left.key.localeCompare(right.key));
 
   return lines.length > 0 ? JSON.stringify(lines) : null;
+}
+
+function encodeBase64Url(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+export async function hashCheckoutCartFingerprint(value: unknown): Promise<string | null> {
+  const fingerprint = fingerprintCheckoutCart(value);
+  if (!fingerprint) return null;
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(fingerprint),
+  );
+  return `cartfp_${encodeBase64Url(new Uint8Array(digest))}`;
 }
 
 export function matchesCheckoutRecoveryCart(

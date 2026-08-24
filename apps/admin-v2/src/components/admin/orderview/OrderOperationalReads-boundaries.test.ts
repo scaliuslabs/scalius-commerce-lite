@@ -47,7 +47,7 @@ describe("order operational reads", () => {
   });
 
   it("fails COD actions closed while tracking state is unknown", () => {
-    expect(paymentSource).toContain("COD tracking unavailable");
+    expect(paymentSource).toContain("Cash collection status unavailable");
     expect(paymentSource).toContain("codReadState.status === \"ready\"");
     expect(paymentSource).toContain("Retry");
   });
@@ -102,10 +102,20 @@ describe("order operational reads", () => {
   });
 
   it("describes COD collection and failure dialogs for assistive technology", () => {
-    expect(paymentSource).toContain("Confirm the cash received after delivery.");
+    expect(paymentSource).toContain("Confirm the cash received on delivery.");
     expect(paymentSource).toContain("order delivered");
     expect(paymentSource).toContain(
       "Record the failed cash-on-delivery attempt and its reason.",
     );
+  });
+
+  it("exposes the saved advance-payment balance as the only cash amount to collect", () => {
+    expect(paymentSource).toContain('plan?.status === "deposit_paid"');
+    expect(paymentSource).toContain('order.paymentStatus === "partial"');
+    expect(paymentSource).toContain("setCollectedAmount(String(cashCollectionAmount))");
+    expect(paymentSource).toContain("Record cash balance");
+    expect(paymentSource).toContain("exact remaining balance received on delivery");
+    expect(paymentSource).toContain("isCOD && canRecordCodFailure");
+    expect(paymentSource).toContain("isCOD && canRecordCodReturn");
   });
 });

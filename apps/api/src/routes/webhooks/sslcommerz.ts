@@ -9,6 +9,7 @@ import type { PaymentType, SSLCommerzIPNPayload, SSLCommerzValidationResult } fr
 import { orders, paymentPlans, PaymentMethod, PaymentStatus } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import { pricesEqual, roundPrice } from "@scalius/shared/price-utils";
+import { normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
 import type { PaymentQueueMessage } from "../../queue-consumer";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import {
@@ -32,6 +33,7 @@ type ServerPaymentContext = {
     balanceDue: number;
     paymentMethod: string;
     paymentStatus: string;
+    currencyCode: string | null;
   };
   plan: {
     depositAmount: number;
@@ -71,6 +73,7 @@ async function getServerPaymentContext(db: Database, orderId: string): Promise<S
       balanceDue: orders.balanceDue,
       paymentMethod: orders.paymentMethod,
       paymentStatus: orders.paymentStatus,
+      currencyCode: orders.currencyCode,
     })
     .from(orders)
     .where(eq(orders.id, orderId))
@@ -143,6 +146,157 @@ function resolvePaymentType(
         : null;
 }
 
+export type SSLCommerzReconciliationResult = {
+  status: "queued" | "duplicate" | "invalid" | "retry" | "manual_reconciliation";
+  orderId: string | null;
+};
+
+/**
+ * Applies one provider-validated SSLCommerz success through the same durable
+ * event identity for both the buyer return and a later IPN. No callback field
+ * is financial authority; it is only an expected-value check against the
+ * server-to-server validation response and the stored order.
+ */
+export async function reconcileValidatedSSLCommerzSuccess(input: {
+  db: Database;
+  queue?: Queue;
+  validation: SSLCommerzValidationResult;
+  requestedValId: string;
+  expectedTranId?: string;
+  expectedOrderId?: string;
+  expectedPaymentType?: PaymentType | null;
+  source: "ipn" | "buyer_return";
+}): Promise<SSLCommerzReconciliationResult> {
+  if (input.validation.status !== "VALID" && input.validation.status !== "VALIDATED") {
+    return { status: "invalid", orderId: null };
+  }
+  const tranId = clean(input.validation.tran_id);
+  const valId = clean(input.validation.val_id);
+  const parsedTran = parseSSLCommerzTranId(tranId);
+  const metadataOrderId = parseCanonicalOrderId(input.validation);
+  const orderId = metadataOrderId ?? parsedTran.orderId;
+  const metadataPaymentType = parseCanonicalPaymentType(input.validation);
+
+  if (
+    !tranId ||
+    !valId ||
+    valId !== clean(input.requestedValId) ||
+    (input.expectedTranId && tranId !== clean(input.expectedTranId)) ||
+    (metadataOrderId && parsedTran.orderId !== metadataOrderId) ||
+    (input.expectedOrderId && orderId !== clean(input.expectedOrderId)) ||
+    (metadataPaymentType && parsedTran.paymentType && metadataPaymentType !== parsedTran.paymentType) ||
+    (input.expectedPaymentType && metadataPaymentType && input.expectedPaymentType !== metadataPaymentType) ||
+    (input.expectedPaymentType && parsedTran.paymentType && input.expectedPaymentType !== parsedTran.paymentType)
+  ) {
+    return { status: "invalid", orderId: orderId || null };
+  }
+
+  const eventId = buildWebhookEventId("sslcommerz", "ipn", `${tranId}:${valId}`);
+  const claim = await claimWebhookEvent(input.db, {
+    id: eventId,
+    provider: "sslcommerz",
+    eventType: "ipn",
+    orderId,
+    status: "processing",
+    result: { orderId, tranId, valId, status: input.validation.status, source: input.source },
+  });
+  if (!claim.claimed) return { status: "duplicate", orderId };
+
+  const amount = parseCanonicalAmount(input.validation);
+  const currency = normalizeSupportedCurrencyCode(
+    clean(input.validation.currency_type) || clean(input.validation.currency),
+  );
+  const bankTranId = clean(input.validation.bank_tran_id);
+  const context = await getServerPaymentContext(input.db, orderId);
+
+  if (!amount || !currency || currency !== "BDT" || !bankTranId || !context) {
+    const error = !context
+      ? "Canonical order not found"
+      : "Validation response missing or invalid canonical payment data";
+    await markWebhookEventFailed(input.db, eventId, {
+      orderId, tranId, valId, status: input.validation.status, source: input.source, error,
+    });
+    return { status: "retry", orderId };
+  }
+
+  const orderCurrency = normalizeSupportedCurrencyCode(context.order.currencyCode) ?? "BDT";
+  if (orderCurrency !== currency) {
+    await markWebhookEventFailed(input.db, eventId, {
+      orderId,
+      tranId,
+      valId,
+      status: input.validation.status,
+      source: input.source,
+      error: "Validated payment currency is inconsistent with the order currency",
+    });
+    return { status: "retry", orderId };
+  }
+
+  if (context.order.paymentMethod !== PaymentMethod.SSLCOMMERZ && !canAcceptLateSwitchedSslPayment(context)) {
+    await markWebhookEventManualReconciliation(input.db, eventId, {
+      orderId,
+      tranId,
+      valId,
+      status: input.validation.status,
+      source: input.source,
+      error: "Validated SSLCommerz payment conflicts with the current order payment state",
+      currentPaymentMethod: context.order.paymentMethod,
+      currentPaymentStatus: context.order.paymentStatus,
+    });
+    return { status: "manual_reconciliation", orderId };
+  }
+
+  const canonicalPaymentType = metadataPaymentType ?? parsedTran.paymentType;
+  const paymentType = resolvePaymentType(context, amount, currency, canonicalPaymentType);
+  if (!paymentType || (input.expectedPaymentType && paymentType !== input.expectedPaymentType)) {
+    await markWebhookEventFailed(input.db, eventId, {
+      orderId,
+      tranId,
+      valId,
+      status: input.validation.status,
+      source: input.source,
+      error: "Validated payment type or amount is inconsistent with server-side order state",
+    });
+    return { status: "retry", orderId };
+  }
+
+  if (!input.queue) {
+    await markWebhookEventFailed(input.db, eventId, { orderId, tranId, valId, error: "Queue not available" });
+    return { status: "retry", orderId };
+  }
+
+  const message: PaymentQueueMessage = {
+    type: "payment.sslcommerz.confirmed",
+    orderId,
+    tranId,
+    valId,
+    bankTranId,
+    amount,
+    currency,
+    cardType: clean(input.validation.card_type) || undefined,
+    cardBrand: clean(input.validation.card_brand) || undefined,
+    paymentType,
+  };
+  try {
+    await input.queue.send({ ...message, webhookEventId: eventId });
+    await markWebhookEventQueued(input.db, eventId, {
+      tranId, orderId, valId, status: input.validation.status, source: input.source,
+    });
+  } catch (error) {
+    await markWebhookEventFailed(input.db, eventId, {
+      tranId,
+      orderId,
+      valId,
+      status: input.validation.status,
+      source: input.source,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return { status: "retry", orderId };
+  }
+
+  return { status: "queued", orderId };
+}
+
 app.post("/", async (c) => {
   const db = c.get("db") as Database;
   const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
@@ -197,19 +351,26 @@ app.post("/", async (c) => {
     return c.text("RETRY", 503);
   }
 
+  const isValid = validation.status === "VALID" || validation.status === "VALIDATED";
+  const isTerminalFailure = validation.status === "FAILED" || validation.status === "CANCELLED";
+
+  if (isValid) {
+    const result = await reconcileValidatedSSLCommerzSuccess({
+      db,
+      queue: c.env.PAYMENT_EVENTS_QUEUE,
+      validation,
+      requestedValId,
+      source: "ipn",
+    });
+    return result.status === "retry" ? c.text("RETRY", 503) : c.text("OK");
+  }
+
   const tranId = clean(validation.tran_id);
   const valId = clean(validation.val_id);
   const parsedTran = parseSSLCommerzTranId(tranId);
   const orderId = parseCanonicalOrderId(validation) ?? parsedTran.orderId;
 
-  if (!tranId || !valId || valId !== requestedValId) {
-    console.warn("[ssl-webhook] IPN validation response missing or inconsistent canonical identifiers", {
-      requestedValId,
-      validationTranId: tranId,
-      validationValId: valId,
-    });
-    return c.text("OK");
-  }
+  if (!tranId || !valId || valId !== requestedValId) return c.text("OK");
 
   const eventId = buildWebhookEventId("sslcommerz", "ipn", `${tranId}:${valId}`);
   const claim = await claimWebhookEvent(db, {
@@ -220,73 +381,11 @@ app.post("/", async (c) => {
     status: "processing",
     result: { orderId, tranId, valId, status: validation.status },
   });
-
-  if (!claim.claimed) {
-    return c.text("OK");
-  }
-
-  const isValid = validation.status === "VALID" || validation.status === "VALIDATED";
-  const isTerminalFailure = validation.status === "FAILED" || validation.status === "CANCELLED";
+  if (!claim.claimed) return c.text("OK");
 
   let message: PaymentQueueMessage;
 
-  if (isValid) {
-    const amount = parseCanonicalAmount(validation);
-    const currency = clean(validation.currency_type) || clean(validation.currency);
-    const bankTranId = clean(validation.bank_tran_id);
-    const context = await getServerPaymentContext(db, orderId);
-
-    if (!amount || !currency || !bankTranId || !context) {
-      const error = !context
-        ? "Canonical order not found"
-        : "Validation response missing canonical payment data";
-      console.warn(`[ssl-webhook] ${error} for transaction ${tranId}`);
-      await markWebhookEventFailed(db, eventId, { orderId, tranId, valId, status: validation.status, error });
-      return c.text("RETRY", 503);
-    }
-
-    if (context.order.paymentMethod !== PaymentMethod.SSLCOMMERZ && !canAcceptLateSwitchedSslPayment(context)) {
-      const error = "Validated SSLCommerz payment conflicts with the current order payment state";
-      console.warn(`[ssl-webhook] ${error} for transaction ${tranId}`);
-      await markWebhookEventManualReconciliation(db, eventId, {
-        orderId,
-        tranId,
-        valId,
-        status: validation.status,
-        error,
-        currentPaymentMethod: context.order.paymentMethod,
-        currentPaymentStatus: context.order.paymentStatus,
-      });
-      return c.text("OK");
-    }
-
-    const paymentType = resolvePaymentType(
-      context,
-      amount,
-      currency,
-      parseCanonicalPaymentType(validation) ?? parsedTran.paymentType,
-    );
-
-    if (!paymentType) {
-      const error = "Validated payment type or amount is inconsistent with server-side order state";
-      console.warn(`[ssl-webhook] ${error} for transaction ${tranId}`);
-      await markWebhookEventFailed(db, eventId, { orderId, tranId, valId, status: validation.status, error });
-      return c.text("RETRY", 503);
-    }
-
-    message = {
-      type: "payment.sslcommerz.confirmed",
-      orderId,
-      tranId,
-      valId,
-      bankTranId,
-      amount,
-      currency,
-      cardType: clean(validation.card_type) || undefined,
-      cardBrand: clean(validation.card_brand) || undefined,
-      paymentType,
-    };
-  } else if (isTerminalFailure) {
+  if (isTerminalFailure) {
     console.warn(`[ssl-webhook] IPN terminal failure for order ${tranId}: ${validation.status}`);
     message = {
       type: "payment.sslcommerz.failed",

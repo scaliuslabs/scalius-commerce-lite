@@ -12,7 +12,6 @@ const mocks = vi.hoisted(() => ({
   readEmailSetting: vi.fn(),
   firstWhatsAppPlaceholderConfigError: vi.fn(),
   getWhatsAppCloudApiSettings: vi.fn(),
-  saveWhatsAppAccessToken: vi.fn(),
   getSmsProviderReadiness: vi.fn(),
   normalizeFirebaseServiceAccountJson: vi.fn(),
   saveFirebaseServiceAccountJson: vi.fn(),
@@ -28,8 +27,9 @@ const mocks = vi.hoisted(() => ({
     }
   }),
   getActivePaymentMethods: vi.fn(),
-  upsertEncryptedSetting: vi.fn(),
-  upsertSetting: vi.fn(),
+  safeBatch: vi.fn(),
+  prepareSettingAggregateStatements: vi.fn(),
+  buildClearNotificationProviderBlocksStatement: vi.fn(),
   clearNotificationProviderBlocks: vi.fn(),
 }));
 
@@ -62,8 +62,15 @@ vi.mock("../../../utils/cache-invalidation", () => ({
 
 vi.mock("@scalius/core/modules/payments/gateway-settings", () => ({
   getActivePaymentMethods: mocks.getActivePaymentMethods,
-  upsertEncryptedSetting: mocks.upsertEncryptedSetting,
-  upsertSetting: mocks.upsertSetting,
+}));
+
+vi.mock("@scalius/database/client", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/database/client")>()),
+  safeBatch: mocks.safeBatch,
+}));
+
+vi.mock("@scalius/core/modules/settings/settings-write", () => ({
+  prepareSettingAggregateStatements: mocks.prepareSettingAggregateStatements,
 }));
 
 vi.mock("@scalius/core/integrations/email", () => ({
@@ -75,7 +82,8 @@ vi.mock("@scalius/core/integrations/email", () => ({
 vi.mock("@scalius/core/integrations/whatsapp", () => ({
   firstWhatsAppPlaceholderConfigError: mocks.firstWhatsAppPlaceholderConfigError,
   getWhatsAppCloudApiSettings: mocks.getWhatsAppCloudApiSettings,
-  saveWhatsAppAccessToken: mocks.saveWhatsAppAccessToken,
+  WHATSAPP_ACCESS_TOKEN_KEY: "access_token",
+  WHATSAPP_SETTINGS_CATEGORY: "whatsapp",
 }));
 
 vi.mock("@scalius/core/integrations/sms", () => ({
@@ -88,6 +96,7 @@ vi.mock("@scalius/core/integrations/firebase/settings", () => ({
 }));
 
 vi.mock("@scalius/core/modules/notifications/notification-provider-health", () => ({
+  buildClearNotificationProviderBlocksStatement: mocks.buildClearNotificationProviderBlocksStatement,
   clearNotificationProviderBlocks: mocks.clearNotificationProviderBlocks,
 }));
 
@@ -108,6 +117,9 @@ function createDb(settingRows: Array<{ key: string; value: string }> = []) {
       set: vi.fn(() => ({
         where: vi.fn(async () => undefined),
       })),
+    })),
+    delete: vi.fn(() => ({
+      where: vi.fn(() => ({ statement: "delete-setting" })),
     })),
     insert: vi.fn(() => ({
       values: vi.fn(() => ({
@@ -137,8 +149,11 @@ function createTestApp(settingRows: Array<{ key: string; value: string }> = []) 
 
   mocks.invalidateSiteSettingsCache.mockResolvedValue(undefined);
   mocks.invalidateApiAndScheduleStorefrontGroups.mockResolvedValue(undefined);
-  mocks.upsertEncryptedSetting.mockResolvedValue(undefined);
-  mocks.upsertSetting.mockResolvedValue(undefined);
+  mocks.safeBatch.mockResolvedValue([]);
+  mocks.prepareSettingAggregateStatements.mockResolvedValue([]);
+  mocks.buildClearNotificationProviderBlocksStatement.mockReturnValue({
+    statement: "clear-provider-health",
+  });
   mocks.clearNotificationProviderBlocks.mockResolvedValue(undefined);
   mocks.firstWhatsAppPlaceholderConfigError.mockReturnValue(null);
   mocks.getEmailRuntimeSettings.mockResolvedValue({
@@ -168,7 +183,6 @@ function createTestApp(settingRows: Array<{ key: string; value: string }> = []) 
     authTemplateName: "auth_otp",
     accessTokenSource: "none",
   });
-  mocks.saveWhatsAppAccessToken.mockResolvedValue(undefined);
   mocks.getSmsProviderReadiness.mockResolvedValue({
     activeProvider: "bdbulksms",
     configured: true,
@@ -381,7 +395,7 @@ describe("system settings cache invalidation", () => {
     });
 
     expect(response.status, await response.clone().text()).toBe(400);
-    expect(mocks.upsertSetting).not.toHaveBeenCalled();
+    expect(mocks.safeBatch).not.toHaveBeenCalled();
     expect(mocks.invalidateSiteSettingsCache).not.toHaveBeenCalled();
     expect(mocks.invalidateApiAndScheduleStorefrontGroups).not.toHaveBeenCalled();
   });
@@ -412,7 +426,7 @@ describe("system settings cache invalidation", () => {
     });
 
     expect(response.status, await response.clone().text()).toBe(400);
-    expect(mocks.upsertSetting).not.toHaveBeenCalled();
+    expect(mocks.safeBatch).not.toHaveBeenCalled();
     expect(mocks.invalidateSiteSettingsCache).not.toHaveBeenCalled();
     expect(mocks.invalidateApiAndScheduleStorefrontGroups).not.toHaveBeenCalled();
   });
@@ -435,17 +449,22 @@ describe("system settings cache invalidation", () => {
       env,
       encryptionKey: "credential-key",
     });
-    expect(mocks.upsertSetting).toHaveBeenCalledWith(
+    expect(mocks.prepareSettingAggregateStatements).toHaveBeenCalledWith(
       expect.anything(),
-      "customer_auth",
-      "policy",
-      JSON.stringify({
-        otpChannels: ["email"],
-        requiredContactFields: ["phone"],
-        optionalContactFields: [],
-        defaultOtpChannel: "email",
-      }),
+      [{
+        category: "customer_auth",
+        key: "policy",
+        value: JSON.stringify({
+          otpChannels: ["email"],
+          requiredContactFields: ["phone"],
+          optionalContactFields: [],
+          defaultOtpChannel: "email",
+        }),
+        type: "json",
+      }],
+      undefined,
     );
+    expect(mocks.safeBatch).toHaveBeenCalledOnce();
   });
 
   it("rejects WhatsApp customer auth policy before writes when WhatsApp is not ready", async () => {
@@ -461,8 +480,7 @@ describe("system settings cache invalidation", () => {
     });
 
     expect(response.status, await response.clone().text()).toBe(400);
-    expect(mocks.upsertSetting).not.toHaveBeenCalled();
-    expect(mocks.saveWhatsAppAccessToken).not.toHaveBeenCalled();
+    expect(mocks.safeBatch).not.toHaveBeenCalled();
     expect(mocks.invalidateSiteSettingsCache).not.toHaveBeenCalled();
   });
 
@@ -484,8 +502,7 @@ describe("system settings cache invalidation", () => {
     });
 
     expect(response.status, await response.clone().text()).toBe(503);
-    expect(mocks.upsertSetting).not.toHaveBeenCalled();
-    expect(mocks.saveWhatsAppAccessToken).not.toHaveBeenCalled();
+    expect(mocks.safeBatch).not.toHaveBeenCalled();
     expect(mocks.invalidateSiteSettingsCache).not.toHaveBeenCalled();
   });
 
@@ -507,8 +524,7 @@ describe("system settings cache invalidation", () => {
       ["WhatsApp phone number ID", "123456"],
       ["WhatsApp template name", "test"],
     ]);
-    expect(mocks.saveWhatsAppAccessToken).not.toHaveBeenCalled();
-    expect(mocks.upsertSetting).not.toHaveBeenCalled();
+    expect(mocks.safeBatch).not.toHaveBeenCalled();
     expect(mocks.invalidateSiteSettingsCache).not.toHaveBeenCalled();
   });
 
@@ -529,7 +545,7 @@ describe("system settings cache invalidation", () => {
     }), "PUT");
 
     expect(response.status, await response.clone().text()).toBe(400);
-    expect(mocks.upsertSetting).not.toHaveBeenCalled();
+    expect(mocks.safeBatch).not.toHaveBeenCalled();
     expect(mocks.invalidateSiteSettingsCache).not.toHaveBeenCalled();
   });
 
@@ -548,7 +564,28 @@ describe("system settings cache invalidation", () => {
     }), "PUT");
 
     expect(response.status, await response.clone().text()).toBe(400);
-    expect(mocks.upsertSetting).not.toHaveBeenCalled();
+    expect(mocks.safeBatch).not.toHaveBeenCalled();
+    expect(mocks.invalidateSiteSettingsCache).not.toHaveBeenCalled();
+  });
+
+  it("treats SSLCommerz as unavailable for checkout-flow validation outside BDT", async () => {
+    mocks.getActivePaymentMethods.mockResolvedValueOnce({
+      enabledMethods: ["sslcommerz"],
+      defaultMethod: "sslcommerz",
+    });
+    mocks.saveCheckoutFlowSettingsDocument.mockImplementationOnce(async (_db, input) => {
+      expect(input.availablePaymentMethods).toEqual([]);
+      throw new ValidationError("Online-only checkout requires an enabled online payment gateway.");
+    });
+    const { app, env, executionCtx } = createTestApp([
+      { key: "currency_code", value: "USD" },
+    ]);
+
+    const response = await requestJson(app, env, executionCtx, "/checkout-flow", checkoutFlowBody({
+      checkoutMode: "gateways_only",
+    }), "PUT");
+
+    expect(response.status, await response.clone().text()).toBe(400);
     expect(mocks.invalidateSiteSettingsCache).not.toHaveBeenCalled();
   });
 
@@ -567,7 +604,7 @@ describe("system settings cache invalidation", () => {
     }), "PUT");
 
     expect(response.status, await response.clone().text()).toBe(400);
-    expect(mocks.upsertSetting).not.toHaveBeenCalled();
+    expect(mocks.safeBatch).not.toHaveBeenCalled();
     expect(mocks.invalidateSiteSettingsCache).not.toHaveBeenCalled();
   });
 
@@ -611,16 +648,48 @@ describe("system settings cache invalidation", () => {
     });
 
     expect(response.status, await response.clone().text()).toBe(200);
-    expect(mocks.saveWhatsAppAccessToken).toHaveBeenCalledWith(
+    expect(mocks.prepareSettingAggregateStatements).toHaveBeenCalledWith(
       expect.anything(),
-      "EAAG_meta_token",
+      [{
+        category: "whatsapp",
+        key: "access_token",
+        value: "EAAG_meta_token",
+        encrypted: true,
+      }],
       "credential-key",
-      "site_settings_1",
     );
-    expect(mocks.clearNotificationProviderBlocks).toHaveBeenCalledWith(
+    expect(mocks.buildClearNotificationProviderBlocksStatement).toHaveBeenCalledWith(
       expect.anything(),
       { channel: "whatsapp" },
     );
+    expect(mocks.safeBatch).toHaveBeenCalledOnce();
+  });
+
+  it("rejects clearing WhatsApp credentials while the saved sign-in policy still uses WhatsApp", async () => {
+    mocks.getWhatsAppCloudApiSettings.mockResolvedValueOnce({
+      accessToken: "existing-meta-token",
+      accessTokenConfigured: true,
+      phoneNumberId: "phone_id_1",
+      authTemplateName: "auth_otp",
+      accessTokenSource: "encrypted",
+    });
+    const { app, env, executionCtx } = createTestApp([{
+      key: "policy",
+      value: JSON.stringify({
+        otpChannels: ["whatsapp"],
+        requiredContactFields: ["phone"],
+        optionalContactFields: [],
+        defaultOtpChannel: "whatsapp",
+      }),
+    }]);
+
+    const response = await requestJson(app, env, executionCtx, "/auth", {
+      whatsappAccessToken: "",
+    });
+
+    expect(response.status, await response.clone().text()).toBe(400);
+    expect(mocks.safeBatch).not.toHaveBeenCalled();
+    expect(mocks.invalidateSiteSettingsCache).not.toHaveBeenCalled();
   });
 
   it("does not pass JWT fallback as the WhatsApp read or migration write key", async () => {
@@ -698,7 +767,11 @@ describe("system settings cache invalidation", () => {
     });
 
     expect(response.status, await response.clone().text()).toBe(200);
-    expect(mocks.saveWhatsAppAccessToken).not.toHaveBeenCalled();
+    expect(mocks.prepareSettingAggregateStatements).toHaveBeenCalledWith(
+      expect.anything(),
+      [],
+      undefined,
+    );
   });
 
   it("invalidates layout caches after CSP security settings save", async () => {
@@ -881,23 +954,19 @@ describe("system settings cache invalidation", () => {
     });
 
     expect(response.status, await response.clone().text()).toBe(200);
-    expect(mocks.upsertSetting).toHaveBeenCalledWith(
+    expect(mocks.prepareSettingAggregateStatements).toHaveBeenCalledWith(
       expect.anything(),
-      "email",
-      "email_provider",
-      "cloudflare",
+      [
+        { category: "email", key: "email_provider", value: "cloudflare" },
+        { category: "email", key: "email_sender", value: "orders@example.com" },
+      ],
+      undefined,
     );
-    expect(mocks.upsertSetting).toHaveBeenCalledWith(
-      expect.anything(),
-      "email",
-      "email_sender",
-      "orders@example.com",
-    );
-    expect(mocks.upsertEncryptedSetting).not.toHaveBeenCalled();
-    expect(mocks.clearNotificationProviderBlocks).toHaveBeenCalledWith(
+    expect(mocks.buildClearNotificationProviderBlocksStatement).toHaveBeenCalledWith(
       expect.anything(),
       { channel: "email" },
     );
+    expect(mocks.safeBatch).toHaveBeenCalledOnce();
     expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
       ["checkout"],
       expect.objectContaining({ env }),
@@ -914,21 +983,59 @@ describe("system settings cache invalidation", () => {
     });
 
     expect(response.status, await response.clone().text()).toBe(200);
-    expect(mocks.upsertEncryptedSetting).toHaveBeenCalledWith(
+    expect(mocks.prepareSettingAggregateStatements).toHaveBeenCalledWith(
       expect.anything(),
-      "email",
-      "resend_api_key",
-      "re_secret_key",
+      [
+        { category: "email", key: "email_provider", value: "resend" },
+        { category: "email", key: "resend_api_key", value: "re_secret_key", encrypted: true },
+        { category: "email", key: "email_sender", value: "orders@example.com" },
+      ],
       "credential-key",
     );
-    expect(mocks.clearNotificationProviderBlocks).toHaveBeenCalledWith(
+    expect(mocks.buildClearNotificationProviderBlocksStatement).toHaveBeenCalledWith(
       expect.anything(),
       { channel: "email" },
     );
+    expect(mocks.safeBatch).toHaveBeenCalledOnce();
     expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
       ["checkout"],
       expect.objectContaining({ env }),
     );
+  });
+
+  it("rejects removing the configured email provider while Email OTP remains enabled", async () => {
+    const { app, env, executionCtx } = createTestApp([{
+      key: "policy",
+      value: JSON.stringify({
+        otpChannels: ["email"],
+        requiredContactFields: ["phone"],
+        optionalContactFields: [],
+        defaultOtpChannel: "email",
+      }),
+    }]);
+
+    const response = await requestJson(app, env, executionCtx, "/email", {
+      provider: "resend",
+      sender: "orders@example.com",
+      apiKey: "",
+    });
+
+    expect(response.status, await response.clone().text()).toBe(400);
+    expect(mocks.safeBatch).not.toHaveBeenCalled();
+    expect(mocks.invalidateApiAndScheduleStorefrontGroups).not.toHaveBeenCalled();
+  });
+
+  it("does not invalidate checkout caches when the atomic email save fails", async () => {
+    mocks.safeBatch.mockRejectedValueOnce(new Error("atomic batch failed"));
+    const { app, env, executionCtx } = createTestApp();
+
+    const response = await requestJson(app, env, executionCtx, "/email", {
+      provider: "cloudflare",
+      sender: "orders@example.com",
+    });
+
+    expect(response.status, await response.clone().text()).toBe(500);
+    expect(mocks.invalidateApiAndScheduleStorefrontGroups).not.toHaveBeenCalled();
   });
 
   it("saves a new Firebase service account through encrypted credential storage", async () => {

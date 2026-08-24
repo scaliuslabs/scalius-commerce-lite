@@ -95,17 +95,20 @@ export async function getEmailProviderReadiness(
 ): Promise<EmailProviderReadiness> {
   const settings = await getEmailRuntimeSettings(context);
   const blockers: string[] = [];
-  const hasProvider = settings.cloudflareBindingConfigured || settings.hasResendApiKey;
+  const selectedProviderConfigured = settings.provider === "cloudflare"
+    ? settings.cloudflareBindingConfigured
+    : settings.hasResendApiKey;
 
   if (!settings.senderConfigured) {
     blockers.push("Sender email is required before enabling email delivery.");
   }
 
-  if (!hasProvider) {
+  if (!selectedProviderConfigured) {
     blockers.push(
-      settings.resendCredentialError
+      settings.provider === "resend"
         ? settings.resendCredentialError
-        : "Configure Cloudflare Email or save a Resend API key before enabling email delivery.",
+          ?? "The selected Resend provider requires a Resend API key."
+        : "The selected Cloudflare Email provider requires the EMAIL binding.",
     );
   }
 

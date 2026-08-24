@@ -50,8 +50,9 @@ export function getPaymentMethodOutcome(options: {
   checkoutSelected: boolean;
   flowAllowed: boolean | undefined;
   environment?: PaymentMethodEnvironment;
+  eligibilityIssue?: string | null;
 }): PaymentMethodOutcome {
-  const { method, status, checkoutSelected, flowAllowed, environment } = options;
+  const { method, status, checkoutSelected, flowAllowed, environment, eligibilityIssue } = options;
   const isCod = method === "cod";
   const configured = isCod || status?.configured === true;
   const providerEnabled = isCod || (status?.providerEnabled ?? status?.enabled) === true;
@@ -93,6 +94,18 @@ export function getPaymentMethodOutcome(options: {
       label: "Blocked",
       description: status?.blockedReason ?? FALLBACK_BLOCKED_COPY,
       checkoutLabel: "Hidden",
+      effective: false,
+    };
+  }
+
+  if (eligibilityIssue) {
+    return {
+      ...common,
+      canSelect: false,
+      state: "blocked",
+      label: "Blocked",
+      description: eligibilityIssue,
+      checkoutLabel: "Unavailable",
       effective: false,
     };
   }
@@ -147,6 +160,7 @@ export function getEligibleDefaultPaymentMethods(options: {
   statuses: Partial<Record<MethodKey, GatewayStatus>>;
   selectedMethods: ReadonlySet<MethodKey>;
   flowAllowed: (method: MethodKey) => boolean | undefined;
+  eligibilityIssue?: (method: MethodKey) => string | null;
 }): MethodKey[] {
   return options.methods.filter((method) => {
     if (!options.selectedMethods.has(method) || options.flowAllowed(method) !== true) return false;
@@ -155,6 +169,7 @@ export function getEligibleDefaultPaymentMethods(options: {
       status: options.statuses[method],
       checkoutSelected: true,
       flowAllowed: true,
+      eligibilityIssue: options.eligibilityIssue?.(method),
     }).canSelect;
   });
 }

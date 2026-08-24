@@ -12,6 +12,7 @@ import {
 } from "../../store/cart";
 import type { CartValidationIssue } from "../api/orders";
 import { CHECKOUT_CART_REPAIR_STORAGE_KEY } from "./repair-state";
+import { writeHostedPaymentRecoverySession } from "../checkout/session-state";
 import { initCartFunctionality, resumeCartPageFromHistory } from "./client";
 
 const apiMocks = vi.hoisted(() => ({
@@ -227,6 +228,37 @@ describe("initCartFunctionality", () => {
     expect((document.getElementById("cartItemsInput") as HTMLInputElement).value).toBe("{}");
     expect(sessionStorage.getItem("checkoutId")).toBeTruthy();
     expect(sessionStorage.getItem("checkoutId")).not.toBe(originalCheckoutId);
+    expect((document.getElementById("submitButton") as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("clears an old hosted-payment pointer after the buyer changes to a different cart", async () => {
+    expect(writeHostedPaymentRecoverySession(
+      "/order-success?orderId=order_old&payment=sslcommerz",
+      {
+        checkoutId: "checkout_old",
+        cartItems: {
+          old_line: { id: "old_product", variantId: "old_variant", quantity: 1 },
+        },
+      },
+    )).toBe(true);
+
+    await initCartFunctionality();
+
+    expect(localStorage.getItem("scalius_hosted_payment_recovery")).toBeNull();
+  });
+
+  it("keeps the recovery pointer while the cart still matches the pending checkout", async () => {
+    expect(writeHostedPaymentRecoverySession(
+      "/order-success?orderId=order_current&payment=polar",
+      {
+        checkoutId: "checkout_current",
+        cartItems: cartState.items,
+      },
+    )).toBe(true);
+
+    await initCartFunctionality();
+
+    expect(localStorage.getItem("scalius_hosted_payment_recovery")).toContain("order_current");
     expect((document.getElementById("submitButton") as HTMLButtonElement).disabled).toBe(true);
   });
 
@@ -600,6 +632,35 @@ describe("initCartFunctionality", () => {
     expect(cartStore.get().discount).toEqual(discount);
     expect((document.getElementById("discountCodeInput") as HTMLInputElement).value)
       .toBe("WELCOME");
+  });
+
+  it("keeps an applied discount while a restored or changed delivery method is re-quoted", async () => {
+    const discount: Discount = {
+      id: "disc_1",
+      code: "WELCOME",
+      type: "percentage",
+      valueType: "percentage",
+      discountValue: 10,
+      discountAmount: 10,
+    };
+    await initCartFunctionality();
+    cartStore.setKey("discount", discount);
+
+    window.dispatchEvent(new CustomEvent("shippingLocationChange", {
+      detail: { id: "shipping_2", fee: 80, name: "Express" },
+    }));
+    await Promise.resolve();
+
+    expect(cartStore.get().discount).toEqual(discount);
+    expect(window.lastShippingEventDetail).toMatchObject({
+      id: "shipping_2",
+      fee: 80,
+    });
+    window.lastShippingEventDetail = {
+      id: "shipping_1",
+      fee: 60,
+      name: "Standard",
+    };
   });
 
   it("validates unrestricted discount codes before the buyer enters a phone", async () => {

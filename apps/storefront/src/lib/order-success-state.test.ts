@@ -127,7 +127,7 @@ describe("order success state", () => {
     },
   );
 
-  it("uses a failed return as a truthful payment outcome only while money remains due", () => {
+  it("does not let a stale or forged callback query override durable payment truth", () => {
     const partial = makeOrder({
       paymentMethod: "sslcommerz",
       paymentStatus: "partial",
@@ -135,11 +135,7 @@ describe("order success state", () => {
       paidAmount: 300,
       balanceDue: 900,
     });
-    expect(getOrderSuccessViewState(partial, "failed")).toMatchObject({
-      kind: "payment_issue",
-      title: "Payment not completed",
-      shouldFinalizeClientSide: false,
-    });
+    expect(getOrderSuccessViewState(partial, "failed").kind).toBe("order_updated");
 
     const paid = makeOrder({
       paymentMethod: "sslcommerz",

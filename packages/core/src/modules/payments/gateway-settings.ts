@@ -8,6 +8,7 @@ import { settings } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import { getStripeCredentialEnvironment } from "@scalius/shared/payment-gateway-environment";
 import { registerGateway } from "./gateway-registry";
+import { SSL_COMMERZ_BDT_AMOUNT_LIMITS } from "./sslcommerz";
 import {
   encodeEncryptedCredential,
   encryptCredentials,
@@ -736,8 +737,9 @@ registerGateway({
   getPublicConfig: (s) => ({
     sandbox: s.sandbox,
     testMode: s.sandbox === true,
+    amountLimits: SSL_COMMERZ_BDT_AMOUNT_LIMITS,
   }),
-  getCurrencies: (localCurrency) => [localCurrency],
+  getCurrencies: () => ["bdt"],
 });
 
 registerGateway({

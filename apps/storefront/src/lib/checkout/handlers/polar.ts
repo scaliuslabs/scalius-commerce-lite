@@ -85,6 +85,7 @@ export const polarHandler: GatewayHandler = {
           gateway: "polar",
           paymentType: paymentRequest?.paymentType,
           depositAmount: paymentRequest?.paymentType === "deposit" ? paymentRequest.depositAmount : undefined,
+          result: "failed",
         });
         return {
           success: true,
