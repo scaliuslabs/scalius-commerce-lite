@@ -62,21 +62,31 @@ describe("admin form workflow boundaries", () => {
     expect(actionBarSource).toContain("canSave: boolean;");
     expect(actionBarSource).not.toContain("canSave = true");
     expect(actionBarSource).toContain(
-      "disabled={isSubmitting || !canSave || !isDirty}",
+      "disabled={isSubmitting || !canSave || !isDirty || !isFormValid}",
     );
-    expect(actionBarSource).toContain("if (canSave && isDirty) onSave();");
+    expect(actionBarSource).toContain(
+      "if (canSave && isDirty && isFormValid) onSave();",
+    );
     expect(formContainerSource).toContain("canSave: boolean;");
     expect(formContainerSource).not.toContain("canSave = true");
     expect(formContainerSource).toContain(
-      "if (canSave && form.formState.isDirty) onSubmit();",
+      "if (canSave && form.formState.isDirty && isFormValid) onSubmit();",
     );
     expect(formContainerSource).toContain(
       "getFormEntityLabel(title, newLabel)",
     );
     expect(formContainerSource).toContain("title={entityLabel}");
     expect(formContainerSource).toContain("canSave={canSave}");
+    expect(formContainerSource).toContain("isFormValid={isFormValid}");
     expect(formContainerSource).toContain(
       "saveDisabledReason={saveDisabledReason}",
+    );
+  });
+
+  it("keeps the customer save action disabled until live validation passes", () => {
+    expect(customerFormSource).toContain('mode: "onChange"');
+    expect(customerFormSource).toContain(
+      "isFormValid={form.formState.isValid}",
     );
   });
 

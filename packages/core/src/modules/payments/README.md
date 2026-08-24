@@ -175,6 +175,7 @@ Payment webhook handlers attach the source `webhookEventId` to queued payment me
 
 ### Polar
 
+- **Buyer-checkout eligibility**: Polar credentials and webhooks remain supported for existing-order reconciliation, but Polar is not returned as an active method for the current shipping-based storefront. [Polar's merchant-of-record acceptable-use policy](https://polar.sh/legal/acceptable-use-policy) prohibits physical goods. A future digital-only product/fulfillment model must be designed before enabling new Polar buyer checkouts.
 - **SDK**: `@polar-sh/sdk` (`Polar` class) + `standardwebhooks` (`Webhook` class for signature verification)
 - **Client singleton**: Module-level `_cachedClient` keyed by access token and sandbox/production server so credential or environment rotation takes effect in warm isolates
 - **Session creation**: `createPolarCheckout()` uses ad-hoc pricing -- a Polar Product must exist but the actual amount is set per-checkout via `prices` override. Returns `checkoutUrl` (redirect) + `checkoutId`, and forwards trusted success/cancel URLs from the API route.

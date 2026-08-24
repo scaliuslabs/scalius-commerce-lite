@@ -364,6 +364,8 @@ async function resolveSSLCommerzSettingsFromValues(
 // ---------------------------------------------------------------------------
 
 const POLAR_CATEGORY = "polar";
+const POLAR_PHYSICAL_GOODS_BLOCKED_REASON =
+  "Polar does not support physical goods. Scalius buyer checkout currently handles shipped products.";
 const POLAR_PLACEHOLDER_VALUES = new Set([
   "dummy",
   "placeholder",
@@ -432,10 +434,16 @@ export function getPolarCheckoutReadiness(
   return {
     configured,
     enabled,
-    usable: enabled && configured,
+    // Polar's merchant-of-record terms prohibit physical goods. Keep stored
+    // credentials readable for existing-order webhooks/reconciliation, but do
+    // not offer Polar for the current shipping-based storefront product model.
+    usable: false,
     missingFields,
     credentialErrors,
-    blockedReason: credentialErrors[0] ?? polarBlockedReason(missingFields),
+    blockedReason:
+      credentialErrors[0] ??
+      polarBlockedReason(missingFields) ??
+      POLAR_PHYSICAL_GOODS_BLOCKED_REASON,
   };
 }
 

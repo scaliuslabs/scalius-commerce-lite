@@ -133,7 +133,10 @@ export const phoneNumberSchema = z
     } catch (error: unknown) {
       context.addIssue({
         code: "custom",
-        message: error instanceof Error ? error.message : "Invalid phone number format",
+        message:
+          error instanceof Error && error.message.includes("not accepted")
+            ? error.message
+            : "Enter a valid phone number",
       });
       return z.NEVER;
     }

@@ -1,13 +1,24 @@
 import PhoneInput, { getCountries } from "react-phone-number-input";
 import "react-phone-number-input/style.css";
-import { useCallback, useEffect, useId, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { Country } from "react-phone-number-input";
 import { FLAG_URL } from "@scalius/shared/phone-flags";
 import {
   hasActivePhoneCountryPolicy,
   validateStorefrontPhone,
 } from "@/lib/phone-country-policy";
-import { readCheckoutFormDraft } from "@/lib/checkout/session-state";
+import {
+  readCheckoutFormDraft,
+  syncCheckoutTransferSession,
+  writeCheckoutFormDraft,
+} from "@/lib/checkout/session-state";
 
 interface PhoneFieldProps {
   name: string;
@@ -33,25 +44,42 @@ export default function PhoneField({
   allowedCountriesMode = "include",
 }: PhoneFieldProps) {
   const inputId = `${name}-input`;
-  const [value, setValue] = useState(
-    () => {
-      const initialValue = defaultValue || readCheckoutFormDraft()?.customerPhone || "";
-      if (!initialValue) return "";
-      const result = validateStorefrontPhone(
-        initialValue,
-        { countries: allowedCountries, mode: allowedCountriesMode },
-        { required: false },
-      );
-      return result.ok ? result.value : "";
-    },
-  );
-  const [error, setError] = useState("");
-  const errorId = useId();
   const countryPolicy = useMemo(
     () => ({ countries: allowedCountries, mode: allowedCountriesMode }),
     [allowedCountries, allowedCountriesMode],
   );
+  const normalizePhone = useCallback(
+    (phone: string | undefined) => {
+      if (!phone) return "";
+      const result = validateStorefrontPhone(phone, countryPolicy, {
+        required: false,
+      });
+      return result.ok ? result.value : "";
+    },
+    [countryPolicy],
+  );
+  const [value, setValue] = useState(() => {
+    const draft = readCheckoutFormDraft();
+    const initialValue =
+      draft && Object.prototype.hasOwnProperty.call(draft, "customerPhone")
+        ? draft.customerPhone
+        : defaultValue;
+    return normalizePhone(initialValue);
+  });
+  const [error, setError] = useState("");
+  const errorId = useId();
+  const buyerHasEdited = useRef(false);
+  const canonicalValue = normalizePhone(value);
   const hasActiveCountryPolicy = hasActivePhoneCountryPolicy(countryPolicy);
+
+  const persistCanonicalValue = useCallback((phone: string) => {
+    const draft = readCheckoutFormDraft();
+    writeCheckoutFormDraft({
+      ...(draft ?? {}),
+      customerPhone: phone,
+    });
+    syncCheckoutTransferSession({ customerPhone: phone });
+  }, []);
 
   // Compute the effective countries list based on mode
   const effectiveCountries = useMemo(() => {
@@ -74,34 +102,41 @@ export default function PhoneField({
   const validate = useCallback(() => {
     const result = validateStorefrontPhone(value, countryPolicy, { required });
     setError(result.ok ? "" : result.message || "Enter a valid phone number.");
-    if (result.ok && result.value !== value) setValue(result.value);
+    if (result.ok) {
+      if (result.value !== value) setValue(result.value);
+      persistCanonicalValue(result.value);
+    }
     return result.ok;
-  }, [countryPolicy, required, value]);
-
-  useEffect(() => {
-    const input = document.getElementById(inputId) as HTMLInputElement | null;
-    if (input) input.dataset.e164Value = value;
-  }, [inputId, value]);
+  }, [countryPolicy, persistCanonicalValue, required, value]);
 
   // Listen for external pre-fill (customer login autofill dispatches this event)
   useEffect(() => {
     const handler = (e: Event) => {
       const phone = (e as CustomEvent<string>).detail;
-      if (phone) setValue((current) => current || phone);
+      if (buyerHasEdited.current) return;
+      const draft = readCheckoutFormDraft();
+      const draftOwnsPhone = Boolean(
+        draft && Object.prototype.hasOwnProperty.call(draft, "customerPhone"),
+      );
+      const preferredPhone = draftOwnsPhone ? draft?.customerPhone : phone;
+      setValue(normalizePhone(preferredPhone));
     };
     window.addEventListener("phone-prefill", handler);
-    const draftPhone = readCheckoutFormDraft()?.customerPhone;
-    if (draftPhone) setValue((current) => current || draftPhone);
     return () => window.removeEventListener("phone-prefill", handler);
-  }, []);
+  }, [normalizePhone]);
 
   useEffect(() => {
     const handler = (event: Event) => {
-      const detail = (event as CustomEvent<{ name?: string; message?: string }>).detail;
+      const detail = (event as CustomEvent<{ name?: string; message?: string }>)
+        .detail;
       if (detail?.name !== name) return;
       setError(detail.message || "Enter a valid phone number.");
       requestAnimationFrame(() => {
-        document.querySelector<HTMLInputElement>(`#${CSS.escape(name)}-field .PhoneInputInput`)?.focus();
+        document
+          .querySelector<HTMLInputElement>(
+            `#${CSS.escape(name)}-field .PhoneInputInput`,
+          )
+          ?.focus();
       });
     };
     window.addEventListener("phone-validation-error", handler);
@@ -119,9 +154,15 @@ export default function PhoneField({
           {required && <span className="text-destructive ml-0.5">*</span>}
         </label>
       )}
+      <input
+        type="hidden"
+        name={name}
+        value={canonicalValue}
+        data-e164-value={canonicalValue}
+        readOnly
+      />
       <PhoneInput
         id={inputId}
-        name={name}
         international
         addInternationalOption={!hasActiveCountryPolicy}
         countryCallingCodeEditable={!hasActiveCountryPolicy}
@@ -130,8 +171,11 @@ export default function PhoneField({
         flagUrl={FLAG_URL}
         value={value}
         onChange={(v) => {
-          setValue(v || "");
+          const nextValue = v || "";
+          buyerHasEdited.current = true;
+          setValue(nextValue);
           setError("");
+          persistCanonicalValue(normalizePhone(nextValue));
         }}
         onBlur={validate}
         required={required}
@@ -141,7 +185,11 @@ export default function PhoneField({
         className={`flex h-[46px] w-full rounded-lg border bg-muted px-3 text-base text-foreground shadow-sm transition-all md:h-9 ${error ? "border-destructive focus-within:border-destructive focus-within:ring-destructive/20" : "border-input focus-within:border-primary focus-within:ring-primary/20"} focus-within:bg-background focus-within:ring-1 [&_.PhoneInputInput]:h-full [&_.PhoneInputInput]:border-none [&_.PhoneInputInput]:bg-transparent [&_.PhoneInputInput]:text-base [&_.PhoneInputInput]:outline-none`}
       />
       {error ? (
-        <p id={errorId} role="alert" className="mt-1 text-xs font-medium text-destructive">
+        <p
+          id={errorId}
+          role="alert"
+          className="mt-1 text-xs font-medium text-destructive"
+        >
           {error}
         </p>
       ) : helpText ? (

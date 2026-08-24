@@ -19,6 +19,8 @@ export interface FormActionBarProps {
    * authorization remains the final enforcement boundary.
    */
   canSave: boolean;
+  /** Whether the current form values pass client-side validation. */
+  isFormValid?: boolean;
   /** Optional explanation exposed on a disabled save action. */
   saveDisabledReason?: string;
   saveLabel?: string;
@@ -40,6 +42,7 @@ export function FormActionBar({
   newLabel,
   canCreateNew = true,
   canSave,
+  isFormValid = true,
   saveDisabledReason,
   saveLabel,
   onDiscard,
@@ -119,14 +122,16 @@ export function FormActionBar({
           <Button
             size="sm"
             type="button"
-            disabled={isSubmitting || !canSave || !isDirty}
+            disabled={isSubmitting || !canSave || !isDirty || !isFormValid}
             title={!canSave
               ? saveDisabledReason ?? `You do not have permission to save this ${title.replace(/s$/, "").toLowerCase()}.`
               : !isDirty
                 ? "No changes to save"
-              : undefined}
+                : !isFormValid
+                  ? "Fix the highlighted fields before saving"
+                  : undefined}
             onClick={() => {
-              if (canSave && isDirty) onSave();
+              if (canSave && isDirty && isFormValid) onSave();
             }}
             className="h-11 text-xs font-medium sm:h-8"
           >
