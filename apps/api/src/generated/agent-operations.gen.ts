@@ -63669,6 +63669,32 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       },
                       "testMode": {
                         "type": "boolean"
+                      },
+                      "amountLimits": {
+                        "type": "object",
+                        "properties": {
+                          "currency": {
+                            "type": "string",
+                            "enum": [
+                              "BDT"
+                            ]
+                          },
+                          "min": {
+                            "type": "number",
+                            "minimum": 0,
+                            "exclusiveMinimum": true
+                          },
+                          "max": {
+                            "type": "number",
+                            "minimum": 0,
+                            "exclusiveMinimum": true
+                          }
+                        },
+                        "required": [
+                          "currency",
+                          "min",
+                          "max"
+                        ]
                       }
                     },
                     "required": [
@@ -63676,7 +63702,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "name",
                       "currencies",
                       "sandbox",
-                      "testMode"
+                      "testMode",
+                      "amountLimits"
                     ]
                   },
                   {

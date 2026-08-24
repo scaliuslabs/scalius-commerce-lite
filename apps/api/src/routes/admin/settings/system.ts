@@ -1,4 +1,5 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { safeBatch } from "@scalius/database/client";
 import { settings, siteSettings } from "@scalius/database/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
@@ -14,13 +15,13 @@ import {
 import {
     firstWhatsAppPlaceholderConfigError,
     getWhatsAppCloudApiSettings,
-    saveWhatsAppAccessToken,
+    WHATSAPP_ACCESS_TOKEN_KEY,
+    WHATSAPP_SETTINGS_CATEGORY,
 } from "@scalius/core/integrations/whatsapp";
 import {
     getActivePaymentMethods,
-    upsertEncryptedSetting,
-    upsertSetting,
 } from "@scalius/core/modules/payments/gateway-settings";
+import { filterPaymentGatewayIdsForCurrency } from "@scalius/core/modules/payments/gateway-currency-policy";
 import {
     CUSTOMER_AUTH_CONTACT_FIELDS,
     CUSTOMER_AUTH_METHODS,
@@ -38,6 +39,11 @@ import {
     getCheckoutFlowSettingsDocument,
     saveCheckoutFlowSettingsDocument,
 } from "@scalius/core/modules/settings/checkout-flow-admin.service";
+import { getCurrencySettings } from "@scalius/core/modules/settings/site-settings.service";
+import {
+    prepareSettingAggregateStatements,
+    type SettingAggregateWrite,
+} from "@scalius/core/modules/settings/settings-write";
 import {
     CHECKOUT_READINESS_CUSTOMER_SIGN_IN_ISSUE,
     getCheckoutReadiness,
@@ -47,7 +53,10 @@ import {
     getOptionalExecutionContext,
     invalidateApiAndScheduleStorefrontGroups,
 } from "../../../utils/cache-invalidation";
-import { clearNotificationProviderBlocks } from "@scalius/core/modules/notifications/notification-provider-health";
+import {
+    buildClearNotificationProviderBlocksStatement,
+    clearNotificationProviderBlocks,
+} from "@scalius/core/modules/notifications/notification-provider-health";
 import {
     normalizePlatformOrigin,
     parseMerchantCspSources,
@@ -317,13 +326,16 @@ app.openapi(saveCheckoutFlowRoute, async (c) => {
             throw new ValidationError(CHECKOUT_READINESS_CUSTOMER_SIGN_IN_ISSUE);
         }
     }
-    const activePaymentMethods = await getActivePaymentMethods(
-        db,
-        credentialEncryptionKey,
-    );
+    const [activePaymentMethods, currencySettings] = await Promise.all([
+        getActivePaymentMethods(db, credentialEncryptionKey),
+        getCurrencySettings(db),
+    ]);
     const saved = await saveCheckoutFlowSettingsDocument(db, {
         ...body,
-        availablePaymentMethods: activePaymentMethods.enabledMethods,
+        availablePaymentMethods: filterPaymentGatewayIdsForCurrency(
+            activePaymentMethods.enabledMethods,
+            currencySettings.currencyCode,
+        ),
     });
 
     await invalidateSiteSettingsCache(c.env.CACHE);
@@ -424,7 +436,15 @@ const saveAuthRoute = createRoute({
 app.openapi(saveAuthRoute, async (c) => {
     const db = c.get("db");
         const body = c.req.valid("json");
-        const [existingSettings] = await db.select().from(siteSettings).limit(1);
+        const [[existingSettings], existingPolicyRow] = await Promise.all([
+            db.select().from(siteSettings).limit(1),
+            db
+                .select({ value: settings.value })
+                .from(settings)
+                .where(and(eq(settings.category, "customer_auth"), eq(settings.key, "policy")))
+                .get()
+                .catch(() => null),
+        ]);
 
         if (!existingSettings) throw new ValidationError("Base Site Settings must be configured first");
 
@@ -434,6 +454,10 @@ app.openapi(saveAuthRoute, async (c) => {
             | ReturnType<typeof normalizeCustomerAuthPolicy>
             | undefined;
         const credentialEncryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
+        const existingCustomerAuthPolicy = normalizeCustomerAuthPolicy(
+            parseCustomerAuthPolicy(existingPolicyRow?.value),
+            existingSettings.authVerificationMethod,
+        );
         const incomingWhatsAppAccessToken =
             typeof body.whatsappAccessToken === "string" &&
             body.whatsappAccessToken !== MASKED
@@ -480,6 +504,8 @@ app.openapi(saveAuthRoute, async (c) => {
             updates.whatsappTemplateName = body.whatsappTemplateName;
         }
 
+        const effectiveCustomerAuthPolicy = requestedCustomerAuthPolicy ?? existingCustomerAuthPolicy;
+
         if (requestedCustomerAuthPolicy && customerAuthPolicyUsesEmailProvider(requestedCustomerAuthPolicy)) {
             const emailReadiness = await getEmailProviderReadiness({
                 db,
@@ -502,7 +528,7 @@ app.openapi(saveAuthRoute, async (c) => {
             }
         }
 
-        if (requestedCustomerAuthPolicy && customerAuthPolicyUsesWhatsAppProvider(requestedCustomerAuthPolicy)) {
+        if (customerAuthPolicyUsesWhatsAppProvider(effectiveCustomerAuthPolicy)) {
             const whatsapp = await getWhatsAppCloudApiSettings(db, credentialEncryptionKey);
             const nextAccessToken =
                 typeof body.whatsappAccessToken === "string"
@@ -526,27 +552,56 @@ app.openapi(saveAuthRoute, async (c) => {
             }
         }
 
+        const settingWrites: SettingAggregateWrite[] = [];
         if (customerAuthPolicyValue !== undefined) {
-            await upsertSetting(db, "customer_auth", "policy", customerAuthPolicyValue);
+            settingWrites.push({
+                category: "customer_auth",
+                key: "policy",
+                value: customerAuthPolicyValue,
+                type: "json",
+            });
         }
 
+        const whatsappAccessTokenChanged =
+            typeof body.whatsappAccessToken === "string"
+            && body.whatsappAccessToken !== MASKED;
+        if (whatsappAccessTokenChanged && incomingWhatsAppAccessToken) {
+            settingWrites.push({
+                category: WHATSAPP_SETTINGS_CATEGORY,
+                key: WHATSAPP_ACCESS_TOKEN_KEY,
+                value: incomingWhatsAppAccessToken,
+                encrypted: true,
+            });
+        }
+        if (whatsappAccessTokenChanged) {
+            updates.whatsappAccessToken = null;
+        }
+
+        const statements = await prepareSettingAggregateStatements(
+            db,
+            settingWrites,
+            credentialWriteKey,
+        );
+        if (whatsappAccessTokenChanged && !incomingWhatsAppAccessToken) {
+            statements.push(db.delete(settings).where(and(
+                eq(settings.category, WHATSAPP_SETTINGS_CATEGORY),
+                eq(settings.key, WHATSAPP_ACCESS_TOKEN_KEY),
+            )));
+        }
         if (Object.keys(updates).length > 0) {
-            await db
+            statements.push(db
                 .update(siteSettings)
-                .set(updates)
-                .where(eq(siteSettings.id, existingSettings.id));
-        }
-
-        if (typeof body.whatsappAccessToken === "string" && body.whatsappAccessToken !== MASKED) {
-            await saveWhatsAppAccessToken(
-                db,
-                body.whatsappAccessToken,
-                credentialWriteKey,
-                existingSettings.id,
-            );
+                .set({ ...updates, updatedAt: sql`unixepoch()` })
+                .where(eq(siteSettings.id, existingSettings.id)));
         }
         if (whatsappProviderTouched) {
-            await clearNotificationProviderBlocks(db, { channel: "whatsapp" });
+            statements.push(buildClearNotificationProviderBlocksStatement(
+                db,
+                { channel: "whatsapp" },
+            ));
+        }
+        if (statements.length > 0) {
+            await safeBatch(db, statements);
         }
 
         await invalidateSiteSettingsCache(c.env.CACHE);
@@ -760,29 +815,85 @@ const saveEmailRoute = createRoute({
 app.openapi(saveEmailRoute, async (c) => {
     const db = c.get("db");
         const { apiKey, sender, provider } = c.req.valid("json");
-        const updates: Promise<unknown>[] = [];
+        const writes: SettingAggregateWrite[] = [];
+        const credentialEncryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
+        const [currentEmailSettings, [currentSiteSettings], currentPolicyRow] = await Promise.all([
+            getEmailRuntimeSettings({
+                db,
+                env: c.env as Record<string, unknown>,
+                encryptionKey: credentialEncryptionKey,
+            }),
+            db
+                .select({
+                    authVerificationMethod: siteSettings.authVerificationMethod,
+                })
+                .from(siteSettings)
+                .limit(1),
+            db
+                .select({ value: settings.value })
+                .from(settings)
+                .where(and(eq(settings.category, "customer_auth"), eq(settings.key, "policy")))
+                .get()
+                .catch(() => null),
+        ]);
 
         if (provider) {
-            updates.push(upsertSetting(db, "email", "email_provider", provider));
+            writes.push({ category: "email", key: "email_provider", value: provider });
         }
 
+        let credentialWriteKey: string | undefined;
         if (typeof apiKey === "string" && apiKey !== MASKED) {
             const trimmedApiKey = apiKey.trim();
             if (trimmedApiKey) {
-                const encKey = requireEncryptionKey(c.env as Record<string, unknown>);
-                updates.push(upsertEncryptedSetting(db, "email", "resend_api_key", trimmedApiKey, encKey));
+                credentialWriteKey = requireEncryptionKey(c.env as Record<string, unknown>);
+                writes.push({
+                    category: "email",
+                    key: "resend_api_key",
+                    value: trimmedApiKey,
+                    encrypted: true,
+                });
             } else {
-                updates.push(upsertSetting(db, "email", "resend_api_key", ""));
+                writes.push({ category: "email", key: "resend_api_key", value: "" });
             }
         }
 
         if (typeof sender === "string") {
-            updates.push(upsertSetting(db, "email", "email_sender", sender.trim()));
+            writes.push({ category: "email", key: "email_sender", value: sender.trim() });
         }
 
-        await Promise.all(updates);
-        if (updates.length > 0) {
-            await clearNotificationProviderBlocks(db, { channel: "email" });
+        const effectiveCustomerAuthPolicy = normalizeCustomerAuthPolicy(
+            parseCustomerAuthPolicy(currentPolicyRow?.value),
+            currentSiteSettings?.authVerificationMethod,
+        );
+        if (writes.length > 0 && customerAuthPolicyUsesEmailProvider(effectiveCustomerAuthPolicy)) {
+            const nextProvider = provider ?? currentEmailSettings.provider;
+            const nextSenderConfigured = typeof sender === "string"
+                ? /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(sender.trim())
+                : currentEmailSettings.senderConfigured;
+            const nextResendConfigured = typeof apiKey === "string" && apiKey !== MASKED
+                ? Boolean(apiKey.trim())
+                : currentEmailSettings.hasResendApiKey;
+            const nextProviderConfigured = nextProvider === "resend"
+                ? nextResendConfigured
+                : currentEmailSettings.cloudflareBindingConfigured;
+            if (!nextSenderConfigured || !nextProviderConfigured) {
+                throw new ValidationError(
+                    "Email OTP is enabled for customer sign-in. Keep a valid sender and the selected email provider configured, or remove Email OTP first.",
+                );
+            }
+        }
+
+        if (writes.length > 0) {
+            const statements = await prepareSettingAggregateStatements(
+                db,
+                writes,
+                credentialWriteKey,
+            );
+            statements.push(buildClearNotificationProviderBlocksStatement(
+                db,
+                { channel: "email" },
+            ));
+            await safeBatch(db, statements);
             // Email readiness is projected into the cached public checkout
             // configuration when customer sign-in is required.
             await invalidateApiAndScheduleStorefrontGroups(CHECKOUT_CACHE_GROUPS, c);

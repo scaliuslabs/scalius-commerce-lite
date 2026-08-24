@@ -546,7 +546,7 @@ export default function AuthSettingsBuilder() {
 
                         <div className="space-y-3">
                             <div className="flex flex-wrap items-center justify-between gap-2">
-                                <Label id="email-collection-label">Email collection</Label>
+                                <Label id="email-collection-label">Email on phone verification</Label>
                                 <span className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                                     <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
                                     Phone required
@@ -559,7 +559,7 @@ export default function AuthSettingsBuilder() {
                                 className="grid grid-cols-1 gap-3 sm:grid-cols-3"
                             >
                                 {([
-                                    ["none", "Do not collect"],
+                                    ["none", "Don't ask"],
                                     ["optional", "Optional"],
                                     ["required", "Required"],
                                 ] as const).map(([value, label]) => (

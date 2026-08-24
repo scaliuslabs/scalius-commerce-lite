@@ -49,6 +49,11 @@ export interface CheckoutConfig {
   gateways: Array<{
     id: string;
     testMode?: boolean;
+    amountLimits?: {
+      currency: string;
+      min: number;
+      max: number;
+    };
     /** @deprecated Transitional fallback for cached gateway configuration. */
     sandbox?: boolean;
     [key: string]: unknown;

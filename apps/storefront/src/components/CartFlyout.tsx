@@ -55,6 +55,7 @@ export default function CartFlyout({ onReady }: Props) {
   const cart = useStore(cartStore);
   const isOpen = useStore(cartOpenState);
   const autoCloseTimer = useRef<NodeJS.Timeout | null>(null);
+  const cartTriggerRef = useRef<HTMLElement | null>(null);
   const isAutoCloseEnabled = useRef(false);
   const lastInteractionTime = useRef<number>(0);
 
@@ -133,6 +134,10 @@ export default function CartFlyout({ onReady }: Props) {
       if (event.detail.redirectToCart) {
         window.location.href = "/cart";
       } else {
+        const activeElement = document.activeElement;
+        cartTriggerRef.current = activeElement instanceof HTMLElement
+          ? activeElement
+          : null;
         setCartOpen(true);
         startAutoCloseTimer();
       }
@@ -140,6 +145,10 @@ export default function CartFlyout({ onReady }: Props) {
 
     const handleOpenCartEvent = () => {
       disableAutoClose();
+      const activeElement = document.activeElement;
+      cartTriggerRef.current = activeElement instanceof HTMLElement
+        ? activeElement
+        : null;
       setCartOpen(true);
     };
 
@@ -193,6 +202,16 @@ export default function CartFlyout({ onReady }: Props) {
     >
       <SheetContent
         side="right"
+        role="dialog"
+        aria-modal="true"
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          const trigger = cartTriggerRef.current;
+          cartTriggerRef.current = null;
+          window.requestAnimationFrame(() => {
+            if (trigger?.isConnected) trigger.focus();
+          });
+        }}
         className={cn(
           "flex flex-col p-0 bg-card shadow-2xl gap-0 transition-transform duration-300 ease-out border-none focus:outline-none z-100",
           // Mobile: Bottom Half Sheet

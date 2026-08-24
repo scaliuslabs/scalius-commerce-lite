@@ -27,6 +27,11 @@ const checkoutGatewaySchema = z.discriminatedUnion("id", [
     ...checkoutGatewayBaseSchema,
     sandbox: z.boolean(),
     testMode: z.boolean(),
+    amountLimits: z.object({
+      currency: z.literal("BDT"),
+      min: z.number().positive(),
+      max: z.number().positive(),
+    }),
   }),
   z.object({
     id: z.literal("polar"),

@@ -10,6 +10,7 @@ import {
   clearCheckoutSession,
   clearCheckoutTransferSession,
   fingerprintCheckoutCart,
+  hashCheckoutCartFingerprint,
   matchesCheckoutRecoveryCart,
   matchesCheckoutRecoverySession,
   readCheckoutFormDraft,
@@ -245,6 +246,25 @@ describe("checkout session state", () => {
 
     sessionStorage.setItem("checkoutId", "checkout_new");
     expect(matchesCheckoutRecoverySession(recovery, cartItems)).toBe(false);
+  });
+
+  it("hashes the canonical cart identity without exposing product or variant ids", async () => {
+    const cartItems = {
+      line_b: { id: "product_b", variantId: "variant_b", quantity: 2 },
+      line_a: { id: "product_a", variantId: "variant_a", quantity: 1 },
+    };
+    const reordered = {
+      line_a: cartItems.line_a,
+      line_b: cartItems.line_b,
+    };
+
+    const first = await hashCheckoutCartFingerprint(cartItems);
+    const second = await hashCheckoutCartFingerprint(reordered);
+
+    expect(first).toMatch(/^cartfp_[A-Za-z0-9_-]{43}$/);
+    expect(second).toBe(first);
+    expect(first).not.toContain("product_a");
+    expect(await hashCheckoutCartFingerprint({})).toBeNull();
   });
 
   it("fails closed and clears partial transfer state when required checkout data storage is blocked", () => {

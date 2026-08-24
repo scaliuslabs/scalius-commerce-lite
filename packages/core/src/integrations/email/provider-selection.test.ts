@@ -288,11 +288,26 @@ describe("email provider selection", () => {
       env: { EMAIL: { send: vi.fn() } },
       encryptionKey: wrongKey,
     })).resolves.toMatchObject({
-      configured: true,
+      configured: false,
       cloudflareBindingConfigured: true,
       resendConfigured: false,
       senderConfigured: true,
-      error: null,
+      error: expect.stringContaining("Resend API key"),
+    });
+
+    await expect(getEmailProviderReadiness({
+      db: createEmailSettingsDb([
+        { key: "email_provider", value: "cloudflare" },
+        { key: "email_sender", value: "orders@example.com" },
+        { key: "resend_api_key", value: encryptedResendKey },
+      ]),
+      encryptionKey: key,
+    })).resolves.toMatchObject({
+      configured: false,
+      cloudflareBindingConfigured: false,
+      resendConfigured: true,
+      senderConfigured: true,
+      error: "The selected Cloudflare Email provider requires the EMAIL binding.",
     });
 
     await expect(getEmailProviderReadiness({

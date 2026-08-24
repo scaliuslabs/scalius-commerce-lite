@@ -748,10 +748,12 @@ describe("orders fulfillment side-effect ordering", () => {
         amount: 100,
         paymentMethod: PaymentMethod.COD,
         status: PaymentRecordStatus.SUCCEEDED,
+        collectedBy: "Courier A",
       },
       selectedCodTracking: {
         id: "cod_1",
         codStatus: CodStatus.COLLECTED,
+        collectedBy: "Courier A",
       },
       updateResults: [[{ id: "order_1" }], [{ id: "order_1" }]],
     });
@@ -765,7 +767,12 @@ describe("orders fulfillment side-effect ordering", () => {
     ).rejects.toThrow("inventory transition failed");
 
     expect(mocks.validateCODCollectionDetails).not.toHaveBeenCalled();
-    expect(mocks.recordCODCollection).not.toHaveBeenCalled();
+    expect(mocks.recordCODCollection).toHaveBeenCalledWith(db, {
+      orderId: "order_1",
+      collectedBy: "Courier A",
+      collectedAmount: 100,
+      receiptUrl: undefined,
+    });
     expect(mocks.applyInventoryForStatusChange).toHaveBeenCalledWith(db, "order_1", OrderStatus.DELIVERED);
     expect(updates[0]).toMatchObject({ status: OrderStatus.SHIPPED, version: 4 });
     expect(updates[1]).toMatchObject({ status: OrderStatus.DELIVERED, version: 5 });
@@ -787,10 +794,12 @@ describe("orders fulfillment side-effect ordering", () => {
         amount: 100,
         paymentMethod: PaymentMethod.COD,
         status: PaymentRecordStatus.SUCCEEDED,
+        collectedBy: "Courier A",
       },
       selectedCodTracking: {
         id: "cod_1",
         codStatus: CodStatus.COLLECTED,
+        collectedBy: "Courier A",
       },
       updateResults: [[{ id: "order_1" }]],
     });
@@ -802,9 +811,50 @@ describe("orders fulfillment side-effect ordering", () => {
     });
 
     expect(mocks.validateCODCollectionDetails).not.toHaveBeenCalled();
-    expect(mocks.recordCODCollection).not.toHaveBeenCalled();
+    expect(mocks.recordCODCollection).toHaveBeenCalledWith(db, {
+      orderId: "order_1",
+      collectedBy: "Courier A",
+      collectedAmount: 100,
+      receiptUrl: undefined,
+    });
     expect(updates[0]).toMatchObject({ status: OrderStatus.DELIVERED });
     expect(mocks.applyInventoryForStatusChange).toHaveBeenCalledWith(db, "order_1", OrderStatus.DELIVERED);
+  });
+
+  it("rejects a replay that names a different collector than the durable collection evidence", async () => {
+    const { db, updates } = createDbMock({
+      selectedOrder: {
+        status: OrderStatus.SHIPPED,
+        version: 3,
+        totalAmount: 100,
+        paidAmount: 100,
+        balanceDue: 0,
+        inventoryAction: "reserved",
+      },
+      selectedPayment: {
+        id: "pay_1",
+        amount: 100,
+        paymentMethod: PaymentMethod.COD,
+        status: PaymentRecordStatus.SUCCEEDED,
+        collectedBy: "Courier A",
+      },
+      selectedCodTracking: {
+        id: "cod_1",
+        codStatus: CodStatus.COLLECTED,
+        collectedBy: "Courier A",
+      },
+      updateResults: [[{ id: "order_1" }]],
+    });
+
+    await expect(processCodAction(db as never, "order_1", {
+      action: "collected",
+      collectedBy: "Courier B",
+      collectedAmount: 100,
+    })).rejects.toThrow("different collector");
+
+    expect(updates).toHaveLength(0);
+    expect(mocks.recordCODCollection).not.toHaveBeenCalled();
+    expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
   });
 
   it("compares a duplicate KWD COD collection at the order's immutable precision", async () => {
@@ -825,8 +875,13 @@ describe("orders fulfillment side-effect ordering", () => {
         currency: "KWD",
         paymentMethod: PaymentMethod.COD,
         status: PaymentRecordStatus.SUCCEEDED,
+        collectedBy: "Courier A",
       },
-      selectedCodTracking: { id: "cod_kwd", codStatus: CodStatus.COLLECTED },
+      selectedCodTracking: {
+        id: "cod_kwd",
+        codStatus: CodStatus.COLLECTED,
+        collectedBy: "Courier A",
+      },
       updateResults: [],
     });
 
@@ -840,7 +895,12 @@ describe("orders fulfillment side-effect ordering", () => {
     });
 
     expect(mocks.validateCODCollectionDetails).not.toHaveBeenCalled();
-    expect(mocks.recordCODCollection).not.toHaveBeenCalled();
+    expect(mocks.recordCODCollection).toHaveBeenCalledWith(db, {
+      orderId: "order_1",
+      collectedBy: "Courier A",
+      collectedAmount: 1.235,
+      receiptUrl: undefined,
+    });
   });
 
   it("retries COD collection inventory reconciliation when the order is already delivered", async () => {
@@ -1254,10 +1314,12 @@ describe("orders fulfillment side-effect ordering", () => {
         amount: 100,
         paymentMethod: PaymentMethod.COD,
         status: PaymentRecordStatus.SUCCEEDED,
+        collectedBy: "Courier A",
       },
       selectedCodTracking: {
         id: "cod_1",
         codStatus: CodStatus.COLLECTED,
+        collectedBy: "Courier A",
       },
       updateResults: [[{ id: "order_1" }]],
     });
@@ -1280,6 +1342,9 @@ describe("orders fulfillment side-effect ordering", () => {
         customerEmail: "customer@example.com",
         paymentMethod: PaymentMethod.STRIPE,
         paymentStatus: PaymentStatus.PAID,
+        totalAmount: 100,
+        paidAmount: 100,
+        balanceDue: 0,
       },
       selectedPayment: null,
       selectedCodTracking: null,
@@ -1292,6 +1357,58 @@ describe("orders fulfillment side-effect ordering", () => {
     expect(updates[0]).toMatchObject({ status: OrderStatus.DELIVERED });
     expect(updates[0]).not.toHaveProperty("paymentStatus");
     expect(mocks.applyInventoryForStatusChange).toHaveBeenCalledWith(db, "order_1", OrderStatus.DELIVERED);
+  });
+
+  it("rejects generic delivery while an online deposit still has a cash balance due", async () => {
+    const { db, updates } = createDbMock({
+      selectedOrder: {
+        status: OrderStatus.SHIPPED,
+        inventoryAction: "reserved",
+        version: 8,
+        customerName: "Customer",
+        customerEmail: "customer@example.com",
+        paymentMethod: PaymentMethod.SSLCOMMERZ,
+        paymentStatus: PaymentStatus.PARTIAL,
+        totalAmount: 2500,
+        paidAmount: 500,
+        balanceDue: 2000,
+      },
+      selectedPayment: null,
+      selectedCodTracking: null,
+      updateResults: [[{ id: "order_1" }]],
+    });
+
+    await expect(updateOrderStatus(db as never, "order_1", OrderStatus.DELIVERED))
+      .rejects.toThrow("Record the remaining cash balance");
+
+    expect(updates).toHaveLength(0);
+    expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
+  });
+
+  it("does not let a same-status delivered retry reconcile inventory while money remains due", async () => {
+    const { db, updates } = createDbMock({
+      selectedOrder: {
+        status: OrderStatus.DELIVERED,
+        inventoryAction: "reserved",
+        version: 8,
+        customerName: "Customer",
+        customerEmail: "customer@example.com",
+        paymentMethod: PaymentMethod.STRIPE,
+        paymentStatus: PaymentStatus.PARTIAL,
+        totalAmount: 2500,
+        paidAmount: 500,
+        balanceDue: 2000,
+      },
+      selectedPayment: null,
+      selectedCodTracking: null,
+      updateResults: [],
+    });
+
+    await expect(updateOrderStatus(db as never, "order_1", OrderStatus.DELIVERED))
+      .rejects.toThrow("Record the remaining cash balance");
+
+    expect(updates).toHaveLength(0);
+    expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
   });
 
   it("canonicalizes direct admin status updates before persistence and notifications", async () => {

@@ -11,8 +11,6 @@ import {
 } from "../../../utils/cache-invalidation";
 import { successEnvelope, messageResponse, errorResponses, serviceUnavailableResponse } from "../../../schemas/responses";
 import {
-    upsertSetting,
-    upsertEncryptedSetting,
     getPaymentGatewaySettingsSnapshot,
     getActivePaymentMethods,
     getStripeSettings,
@@ -29,9 +27,18 @@ import {
     isPolarCheckoutUsable,
 } from "@scalius/core/modules/payments/gateway-settings";
 import {
+    saveSettingAggregate,
+    type SettingAggregateWrite,
+} from "@scalius/core/modules/settings/settings-write";
+import {
     getCheckoutFlowValidationIssues,
     isCheckoutGatewayUsableForFlow,
 } from "@scalius/core/modules/settings/checkout-flow";
+import {
+    filterPaymentGatewayIdsForCurrency,
+    getPaymentGatewayCurrencyEligibilityIssue,
+} from "@scalius/core/modules/payments/gateway-currency-policy";
+import { getCurrencySettings } from "@scalius/core/modules/settings/site-settings.service";
 import { getStripeCredentialEnvironment } from "@scalius/shared/payment-gateway-environment";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -68,11 +75,17 @@ async function assertDisablingGatewayKeepsCheckoutFlow(
 
     if (!checkoutSettings) return;
 
-    const activePaymentMethods = await getActivePaymentMethods(
-        db,
-        getCredentialEncryptionKey(env as Record<string, unknown>),
+    const [activePaymentMethods, currencySettings] = await Promise.all([
+        getActivePaymentMethods(
+            db,
+            getCredentialEncryptionKey(env as Record<string, unknown>),
+        ),
+        getCurrencySettings(db),
+    ]);
+    const nextPaymentMethods = filterPaymentGatewayIdsForCurrency(
+        activePaymentMethods.enabledMethods.filter((method) => method !== gatewayId),
+        currencySettings.currencyCode,
     );
-    const nextPaymentMethods = activePaymentMethods.enabledMethods.filter((method) => method !== gatewayId);
     const checkoutFlowIssues = getCheckoutFlowValidationIssues({
         checkoutMode: checkoutSettings.checkoutMode,
         partialPaymentEnabled: checkoutSettings.partialPaymentEnabled,
@@ -324,7 +337,7 @@ app.openapi(getPaymentMethodsRoute, async (c) => {
     const { stripe: stripeSettings, sslcommerz: sslSettings, polar: polarSettings } =
         gatewaySnapshot.settings;
 
-    const [stripeMap, sslMap, polarMap, checkoutSettings] = await Promise.all([
+    const [stripeMap, sslMap, polarMap, checkoutSettings, currencySettings] = await Promise.all([
         readStripeSettingsMap(db),
         readSSLCommerzSettingsMap(db),
         readPolarSettingsMap(db),
@@ -337,6 +350,7 @@ app.openapi(getPaymentMethodsRoute, async (c) => {
             .from(siteSettings)
             .limit(1)
             .then((rows) => rows[0]),
+        getCurrencySettings(db),
     ]);
         const stripeReadiness = getStripeCheckoutReadiness(
             stripeSettings ?? getEffectiveStripeCheckoutSettings(stripeMap, {}),
@@ -358,7 +372,11 @@ app.openapi(getPaymentMethodsRoute, async (c) => {
             partialPaymentEnabled: checkoutSettings?.partialPaymentEnabled ?? false,
             partialPaymentAmount: checkoutSettings?.partialPaymentAmount ?? 0,
         };
-        const flowActiveMethods = activeConfig.enabledMethods.filter((method) =>
+        const currencyActiveMethods = filterPaymentGatewayIdsForCurrency(
+            activeConfig.enabledMethods,
+            currencySettings.currencyCode,
+        );
+        const flowActiveMethods = currencyActiveMethods.filter((method) =>
             isCheckoutGatewayUsableForFlow({
                 gatewayId: method,
                 checkoutMode: flowSettings.checkoutMode,
@@ -368,7 +386,11 @@ app.openapi(getPaymentMethodsRoute, async (c) => {
         );
         const flowDefaultMethod = flowActiveMethods.includes(activeConfig.defaultMethod)
             ? activeConfig.defaultMethod
-            : (flowActiveMethods[0] ?? activeConfig.defaultMethod);
+            : flowActiveMethods[0];
+        const sslCurrencyIssue = getPaymentGatewayCurrencyEligibilityIssue(
+            "sslcommerz",
+            currencySettings.currencyCode,
+        );
 
         return ok(c, {
             enabledMethods: rawConfig.enabledMethods,
@@ -376,7 +398,7 @@ app.openapi(getPaymentMethodsRoute, async (c) => {
                 ? rawConfig.defaultMethod
                 : (rawConfig.enabledMethods[0] ?? "cod"),
             activeMethods: flowActiveMethods,
-            activeDefaultMethod: flowDefaultMethod,
+            ...(flowDefaultMethod ? { activeDefaultMethod: flowDefaultMethod } : {}),
             gatewayStatus: {
                 stripe: {
                     ...stripeReadiness,
@@ -390,6 +412,8 @@ app.openapi(getPaymentMethodsRoute, async (c) => {
                 },
                 sslcommerz: {
                     ...sslReadiness,
+                    usable: sslReadiness.usable && !sslCurrencyIssue,
+                    blockedReason: sslCurrencyIssue ?? sslReadiness.blockedReason,
                     environment: getSandboxEnvironment(sslSettings?.sandbox ?? sslMap.sandbox !== "false"),
                     providerEnabled: sslReadiness.enabled,
                     checkoutSelected: rawConfig.enabledMethods.includes("sslcommerz"),
@@ -438,10 +462,11 @@ app.openapi(savePaymentMethodsRoute, async (c) => {
     }
 
     const encKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
-    const [stripeSettings, sslSettings, polarSettings] = await Promise.all([
+    const [stripeSettings, sslSettings, polarSettings, currencySettings] = await Promise.all([
         getStripeSettings(db, encKey),
         getSSLCommerzSettings(db, encKey),
         getPolarSettings(db, encKey),
+        getCurrencySettings(db),
     ]);
     const stripeReadiness = getStripeCheckoutReadiness(stripeSettings);
     if (data.enabledMethods.includes("stripe") && !stripeReadiness.usable) {
@@ -452,16 +477,27 @@ app.openapi(savePaymentMethodsRoute, async (c) => {
     if (data.enabledMethods.includes("sslcommerz") && !sslReadiness.usable) {
         throw new ValidationError(sslReadiness.blockedReason ?? "SSLCommerz is not ready for checkout.");
     }
+    const sslCurrencyIssue = getPaymentGatewayCurrencyEligibilityIssue(
+        "sslcommerz",
+        currencySettings.currencyCode,
+    );
+    if (data.enabledMethods.includes("sslcommerz") && sslCurrencyIssue) {
+        throw new ValidationError(sslCurrencyIssue);
+    }
     if (data.enabledMethods.includes("polar") && !polarReadiness.usable) {
         throw new ValidationError(polarReadiness.blockedReason ?? "Polar is not ready for checkout.");
     }
-    const usableMethods = data.enabledMethods.filter((method) => {
+    const credentialUsableMethods = data.enabledMethods.filter((method) => {
         if (method === "cod") return true;
         if (method === "stripe") return isStripeCheckoutUsable(stripeSettings);
         if (method === "sslcommerz") return isSSLCommerzCheckoutUsable(sslSettings);
         if (method === "polar") return isPolarCheckoutUsable(polarSettings);
         return false;
     });
+    const usableMethods = filterPaymentGatewayIdsForCurrency(
+        credentialUsableMethods,
+        currencySettings.currencyCode,
+    );
 
     const [checkoutSettings] = await db
         .select({
@@ -554,7 +590,7 @@ const saveStripeRoute = createRoute({
 app.openapi(saveStripeRoute, async (c) => {
     const db = c.get("db");
         const body = c.req.valid("json");
-        const ops: Promise<void>[] = [];
+        const writes: SettingAggregateWrite[] = [];
         const configuredEncryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
         const [existingMap, storedSettings] = await Promise.all([
             readStripeSettingsMap(db),
@@ -577,12 +613,12 @@ app.openapi(saveStripeRoute, async (c) => {
             await assertDisablingGatewayKeepsCheckoutFlow(db, c.env, "stripe");
         }
 
-        if (body.secretKey && body.secretKey !== MASKED && body.secretKey.trim()) ops.push(upsertEncryptedSetting(db, "stripe", "secret_key", body.secretKey.trim(), encKey));
-        if (body.publishableKey !== undefined && body.publishableKey !== MASKED) ops.push(upsertSetting(db, "stripe", "publishable_key", body.publishableKey.trim()));
-        if (body.webhookSecret && body.webhookSecret !== MASKED && body.webhookSecret.trim()) ops.push(upsertEncryptedSetting(db, "stripe", "webhook_secret", body.webhookSecret.trim(), encKey));
-        if (body.enabled !== undefined) ops.push(upsertSetting(db, "stripe", "enabled", String(body.enabled)));
+        if (body.secretKey && body.secretKey !== MASKED && body.secretKey.trim()) writes.push({ category: "stripe", key: "secret_key", value: body.secretKey.trim(), encrypted: true });
+        if (body.publishableKey !== undefined && body.publishableKey !== MASKED) writes.push({ category: "stripe", key: "publishable_key", value: body.publishableKey.trim() });
+        if (body.webhookSecret && body.webhookSecret !== MASKED && body.webhookSecret.trim()) writes.push({ category: "stripe", key: "webhook_secret", value: body.webhookSecret.trim(), encrypted: true });
+        if (body.enabled !== undefined) writes.push({ category: "stripe", key: "enabled", value: String(body.enabled) });
 
-        await Promise.all(ops);
+        await saveSettingAggregate(db, writes, encKey);
 
         await invalidateCheckoutCaches(c);
 
@@ -642,7 +678,7 @@ const saveSSLCommerzRoute = createRoute({
 app.openapi(saveSSLCommerzRoute, async (c) => {
     const db = c.get("db");
         const body = c.req.valid("json");
-        const ops: Promise<void>[] = [];
+        const writes: SettingAggregateWrite[] = [];
         const existingMap = await readSSLCommerzSettingsMap(db);
         const storedSettings = await getSSLCommerzSettings(
             db,
@@ -662,12 +698,12 @@ app.openapi(saveSSLCommerzRoute, async (c) => {
             await assertDisablingGatewayKeepsCheckoutFlow(db, c.env, "sslcommerz");
         }
 
-        if (body.storeId && body.storeId.trim()) ops.push(upsertSetting(db, "sslcommerz", "store_id", body.storeId.trim()));
-        if (body.storePassword && body.storePassword !== MASKED && body.storePassword.trim()) ops.push(upsertEncryptedSetting(db, "sslcommerz", "store_password", body.storePassword.trim(), encKey));
-        if (body.sandbox !== undefined) ops.push(upsertSetting(db, "sslcommerz", "sandbox", String(body.sandbox)));
-        if (body.enabled !== undefined) ops.push(upsertSetting(db, "sslcommerz", "enabled", String(body.enabled)));
+        if (body.storeId && body.storeId.trim()) writes.push({ category: "sslcommerz", key: "store_id", value: body.storeId.trim() });
+        if (body.storePassword && body.storePassword !== MASKED && body.storePassword.trim()) writes.push({ category: "sslcommerz", key: "store_password", value: body.storePassword.trim(), encrypted: true });
+        if (body.sandbox !== undefined) writes.push({ category: "sslcommerz", key: "sandbox", value: String(body.sandbox) });
+        if (body.enabled !== undefined) writes.push({ category: "sslcommerz", key: "enabled", value: String(body.enabled) });
 
-        await Promise.all(ops);
+        await saveSettingAggregate(db, writes, encKey);
 
         await invalidateCheckoutCaches(c);
 
@@ -729,7 +765,7 @@ const savePolarRoute = createRoute({
 app.openapi(savePolarRoute, async (c) => {
     const db = c.get("db");
         const body = c.req.valid("json");
-        const ops: Promise<void>[] = [];
+        const writes: SettingAggregateWrite[] = [];
         const existingMap = await readPolarSettingsMap(db);
         const effectiveSettings = getEffectivePolarCheckoutSettings(existingMap, body);
         const polarReadiness = getPolarCheckoutReadiness(effectiveSettings);
@@ -748,13 +784,13 @@ app.openapi(savePolarRoute, async (c) => {
             await assertDisablingGatewayKeepsCheckoutFlow(db, c.env, "polar");
         }
 
-        if (body.accessToken && body.accessToken !== MASKED && body.accessToken.trim()) ops.push(upsertEncryptedSetting(db, "polar", "access_token", body.accessToken.trim(), encKey));
-        if (body.webhookSecret && body.webhookSecret !== MASKED && body.webhookSecret.trim()) ops.push(upsertEncryptedSetting(db, "polar", "webhook_secret", body.webhookSecret.trim(), encKey));
-        if (body.productId && body.productId.trim()) ops.push(upsertSetting(db, "polar", "product_id", body.productId.trim()));
-        if (body.sandbox !== undefined) ops.push(upsertSetting(db, "polar", "sandbox", String(body.sandbox)));
-        if (body.enabled !== undefined) ops.push(upsertSetting(db, "polar", "enabled", String(body.enabled)));
+        if (body.accessToken && body.accessToken !== MASKED && body.accessToken.trim()) writes.push({ category: "polar", key: "access_token", value: body.accessToken.trim(), encrypted: true });
+        if (body.webhookSecret && body.webhookSecret !== MASKED && body.webhookSecret.trim()) writes.push({ category: "polar", key: "webhook_secret", value: body.webhookSecret.trim(), encrypted: true });
+        if (body.productId && body.productId.trim()) writes.push({ category: "polar", key: "product_id", value: body.productId.trim() });
+        if (body.sandbox !== undefined) writes.push({ category: "polar", key: "sandbox", value: String(body.sandbox) });
+        if (body.enabled !== undefined) writes.push({ category: "polar", key: "enabled", value: String(body.enabled) });
 
-        await Promise.all(ops);
+        await saveSettingAggregate(db, writes, encKey);
 
         await invalidateCheckoutCaches(c);
 

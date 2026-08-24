@@ -35,6 +35,7 @@ export default function ShippingLocationSelector({
   const [selectedLocation, setSelectedLocation] = useState<string | undefined>(
     shippingMethods.length > 0 ? shippingMethods[0].id : undefined,
   );
+  const [draftRestoreReady, setDraftRestoreReady] = useState(false);
 
   useEffect(() => {
     hydrateCartFromStorage();
@@ -54,6 +55,7 @@ export default function ShippingLocationSelector({
     };
     window.addEventListener("shipping-method-prefill", handlePrefill);
     restore(readCheckoutFormDraft()?.shippingLocation);
+    setDraftRestoreReady(true);
     return () => window.removeEventListener("shipping-method-prefill", handlePrefill);
   }, [shippingMethods]);
 
@@ -64,17 +66,19 @@ export default function ShippingLocationSelector({
   }, [shippingMethods, selectedLocation]);
 
   useEffect(() => {
-    if (selectedLocation) {
+    if (draftRestoreReady && selectedLocation) {
+      const selectedMethod = shippingMethods.find((sm) => sm.id === selectedLocation);
       const detail = {
         id: selectedLocation,
-        fee: shippingMethods.find((sm) => sm.id === selectedLocation)?.fee || 0,
+        fee: selectedMethod?.fee || 0,
+        name: selectedMethod?.name || "",
       };
       // Set directly on window to eliminate race condition with event listeners
       window.lastShippingEventDetail = detail;
       const event = new CustomEvent("shippingLocationChange", { detail });
       window.dispatchEvent(event);
     }
-  }, [selectedLocation, shippingMethods]);
+  }, [draftRestoreReady, selectedLocation, shippingMethods]);
 
   const handleLocationChange = (value: string) => {
     setSelectedLocation(value);

@@ -371,9 +371,18 @@ describe("payment gateway settings reads", () => {
       publishableKey: "pk_live_realishValue",
     })).toMatchObject({ testMode: false });
     expect(getGatewayMeta("sslcommerz")?.getPublicConfig?.({ sandbox: true }))
-      .toMatchObject({ testMode: true });
+      .toMatchObject({
+        testMode: true,
+        amountLimits: { currency: "BDT", min: 10, max: 500_000 },
+      });
     expect(getGatewayMeta("polar")?.getPublicConfig?.({ sandbox: false }))
       .toMatchObject({ testMode: false });
+  });
+
+  it("advertises SSLCommerz only for its supported BDT checkout currency", () => {
+    expect(getGatewayMeta("sslcommerz")?.getCurrencies?.("usd")).toEqual(["bdt"]);
+    expect(getGatewayMeta("stripe")?.getCurrencies?.("bhd")).toContain("bhd");
+    expect(getGatewayMeta("cod")?.getCurrencies?.("jpy")).toEqual(["jpy"]);
   });
 
   it("blocks Stripe checkout readiness when credentials are placeholders", () => {

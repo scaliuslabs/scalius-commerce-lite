@@ -32,10 +32,21 @@ export default function PhoneField({
   allowedCountries,
   allowedCountriesMode = "include",
 }: PhoneFieldProps) {
-  const [value, setValue] = useState(defaultValue || "");
+  const inputId = `${name}-input`;
+  const [value, setValue] = useState(
+    () => {
+      const initialValue = defaultValue || readCheckoutFormDraft()?.customerPhone || "";
+      if (!initialValue) return "";
+      const result = validateStorefrontPhone(
+        initialValue,
+        { countries: allowedCountries, mode: allowedCountriesMode },
+        { required: false },
+      );
+      return result.ok ? result.value : "";
+    },
+  );
   const [error, setError] = useState("");
   const errorId = useId();
-  const inputId = `${name}-input`;
   const countryPolicy = useMemo(
     () => ({ countries: allowedCountries, mode: allowedCountriesMode }),
     [allowedCountries, allowedCountriesMode],
@@ -67,11 +78,10 @@ export default function PhoneField({
     return result.ok;
   }, [countryPolicy, required, value]);
 
-  // Sync hidden input whenever value changes so DOM reads always see current value
   useEffect(() => {
-    const hidden = document.getElementById(name) as HTMLInputElement | null;
-    if (hidden) hidden.value = value;
-  }, [value, name]);
+    const input = document.getElementById(inputId) as HTMLInputElement | null;
+    if (input) input.dataset.e164Value = value;
+  }, [inputId, value]);
 
   // Listen for external pre-fill (customer login autofill dispatches this event)
   useEffect(() => {
@@ -109,9 +119,9 @@ export default function PhoneField({
           {required && <span className="text-destructive ml-0.5">*</span>}
         </label>
       )}
-      <input type="hidden" id={name} name={name} value={value} />
       <PhoneInput
         id={inputId}
+        name={name}
         international
         addInternationalOption={!hasActiveCountryPolicy}
         countryCallingCodeEditable={!hasActiveCountryPolicy}

@@ -10,6 +10,14 @@ const source = readFileSync(
   resolve(storefrontRoot, "src/components/CartFlyout.tsx"),
   "utf8",
 );
+const cartPageSource = readFileSync(
+  resolve(storefrontRoot, "src/pages/cart.astro"),
+  "utf8",
+);
+const cartClientSource = readFileSync(
+  resolve(storefrontRoot, "src/lib/cart/client.ts"),
+  "utf8",
+);
 
 describe("CartFlyout accessibility contract", () => {
   it("gives the Radix sheet an accessible description", () => {
@@ -17,6 +25,13 @@ describe("CartFlyout accessibility contract", () => {
     expect(source).toMatch(
       /<SheetContent[\s\S]*?<SheetDescription className="sr-only">[\s\S]*?Review cart items, change quantities, or continue to checkout\.[\s\S]*?<\/SheetDescription>[\s\S]*?<\/SheetContent>/,
     );
+  });
+
+  it("restores focus to the control that opened the cart", () => {
+    expect(source).toContain("cartTriggerRef");
+    expect(source).toContain('aria-modal="true"');
+    expect(source).toContain("onCloseAutoFocus={(event) => {");
+    expect(source).toContain("if (trigger?.isConnected) trigger.focus()");
   });
 
   it("names every icon-only cart line action", () => {
@@ -52,5 +67,14 @@ describe("CartFlyout accessibility contract", () => {
     expect(source).toContain("formatPriceShort(item.price * item.quantity)");
     expect(source).toContain("formatPriceShort(cart.totalAmount)");
     expect(source).not.toContain("toLocaleString()");
+  });
+
+  it("announces discount validation and status messages", () => {
+    expect(cartPageSource).toContain('aria-describedby="discountMessage"');
+    expect(cartPageSource).toContain('id="discountMessage"\n                  role="status"');
+    expect(cartPageSource).toContain('aria-live="polite"');
+    expect(cartClientSource).toContain(
+      'messageElement.setAttribute("role", type === "error" ? "alert" : "status")',
+    );
   });
 });

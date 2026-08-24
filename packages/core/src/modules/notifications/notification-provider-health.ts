@@ -80,11 +80,21 @@ export async function clearNotificationProviderBlocks(
     provider?: string;
   },
 ): Promise<void> {
+    await buildClearNotificationProviderBlocksStatement(db, options);
+}
+
+export function buildClearNotificationProviderBlocksStatement(
+  db: Database,
+  options: {
+    channel: NotificationProviderHealthChannel;
+    provider?: string;
+  },
+) {
     const key = options.provider
         ? providerHealthKey(options.channel, options.provider)
         : `${options.channel}:%`;
 
-    await db
+    return db
         .delete(settings)
         .where(and(
             eq(settings.category, PROVIDER_HEALTH_CATEGORY),

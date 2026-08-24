@@ -217,12 +217,13 @@ async function getRecordedCodCollection(
     db: Database,
     orderId: string,
     currency: OrderCurrencySnapshot,
-): Promise<{ amount: number } | null> {
+): Promise<{ amount: number; collectedBy: string } | null> {
     const payment = await db
         .select({
             id: orderPayments.id,
             amount: orderPayments.amount,
             currency: orderPayments.currency,
+            collectedBy: orderPayments.codCollectedBy,
         })
         .from(orderPayments)
         .where(and(
@@ -236,7 +237,10 @@ async function getRecordedCodCollection(
     assertOrderPaymentCurrency(payment.currency, currency, "Recorded COD payment");
 
     const tracking = await db
-        .select({ id: codTracking.id })
+        .select({
+            id: codTracking.id,
+            collectedBy: codTracking.collectedBy,
+        })
         .from(codTracking)
         .where(and(
             eq(codTracking.orderId, orderId),
@@ -245,8 +249,12 @@ async function getRecordedCodCollection(
         .get();
 
     if (!tracking) return null;
+    const collectedBy = payment.collectedBy?.trim();
+    if (!collectedBy || tracking.collectedBy?.trim() !== collectedBy) return null;
     const amount = Number(payment.amount);
-    return Number.isFinite(amount) ? { amount: roundOrderMoney(amount, currency) } : null;
+    return Number.isFinite(amount)
+        ? { amount: roundOrderMoney(amount, currency), collectedBy }
+        : null;
 }
 
 async function hasRecordedCodCollection(
@@ -766,6 +774,14 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
                         collectedAmount: requestedAmount,
                     });
                 }
+                const requestedCollector = typeof body.collectedBy === "string"
+                    ? body.collectedBy.trim()
+                    : "";
+                if (!requestedCollector || existingCodCollection.collectedBy !== requestedCollector) {
+                    throw new ValidationError(
+                        "Cash collection was already recorded by a different collector.",
+                    );
+                }
             }
 
             // Validate transition to DELIVERED. If current status is CONFIRMED,
@@ -817,14 +833,17 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
                     claimedVersion: deliveredVersion,
                 };
             }
-            if (collection) {
-                try {
-                    const colResult = await recordCODCollection(db, { orderId, collectedBy: collection.collectedBy, collectedAmount: collection.collectedAmount, receiptUrl: body.receiptUrl as string | undefined });
-                    if (!colResult.success) throw new ValidationError(colResult.error || "COD collection failed");
-                } catch (error: unknown) {
-                    await rollbackStatusClaim();
-                    throw error;
-                }
+            try {
+                const colResult = await recordCODCollection(db, {
+                    orderId,
+                    collectedBy: collection?.collectedBy ?? existingCodCollection!.collectedBy,
+                    collectedAmount: collection?.collectedAmount ?? existingCodCollection!.amount,
+                    receiptUrl: body.receiptUrl as string | undefined,
+                });
+                if (!colResult.success) throw new ValidationError(colResult.error || "COD collection failed");
+            } catch (error: unknown) {
+                await rollbackStatusClaim();
+                throw error;
             }
             try {
                 const availabilityTransitionVariantIds = await reconcileInventoryForStatus(
@@ -1096,6 +1115,7 @@ export async function updateOrderStatus(db: Database, orderId: string, status: s
         customerEmail: orders.customerEmail,
         paymentMethod: orders.paymentMethod,
         paymentStatus: orders.paymentStatus,
+        totalAmount: orders.totalAmount,
         paidAmount: orders.paidAmount,
         balanceDue: orders.balanceDue,
         currencyCode: orders.currencyCode,
@@ -1111,6 +1131,31 @@ export async function updateOrderStatus(db: Database, orderId: string, status: s
     assertNoActiveShipmentClaim(existingOrder);
     await assertNoActiveRefundAttempt(db, orderId);
     await assertNoActivePaymentSessionAttempt(db, orderId);
+    const isDeliveredOrCompleted = nextStatus === OrderStatus.DELIVERED || nextStatus === OrderStatus.COMPLETED;
+    if (isDeliveredOrCompleted) {
+        const currency = resolveOrderCurrencySnapshot(existingOrder);
+        const paidAmount = roundOrderMoney(existingOrder.paidAmount ?? 0, currency);
+        const totalAmount = roundOrderMoney(existingOrder.totalAmount, currency);
+        const storedBalanceDue = roundOrderMoney(existingOrder.balanceDue ?? 0, currency);
+        const computedBalanceDue = roundOrderMoney(Math.max(0, totalAmount - paidAmount), currency);
+        const hasMoneyDue = storedBalanceDue > 0 || computedBalanceDue > 0;
+        if (hasMoneyDue || existingOrder.paymentStatus !== PaymentStatus.PAID) {
+            throw new ValidationError(
+                existingOrder.paymentMethod === PaymentMethod.COD
+                    ? "Record COD collection through the COD action before marking the order delivered or completed."
+                    : existingOrder.paymentStatus === PaymentStatus.PARTIAL
+                    ? "Record the remaining cash balance through the collection action before marking the order delivered or completed."
+                    : "Settle the outstanding payment before marking the order delivered or completed.",
+            );
+        }
+
+        if (existingOrder.paymentMethod === PaymentMethod.COD) {
+            const hasCodCollection = await hasRecordedCodCollection(db, orderId, currency);
+            if (!hasCodCollection || paidAmount <= 0) {
+                throw new ValidationError("Record COD collection through the COD action before marking the order delivered or completed.");
+            }
+        }
+    }
     if (currentStatus === nextStatus) {
         const availabilityTransitionVariantIds = await reconcileInventoryForStatus(
             db,
@@ -1130,21 +1175,6 @@ export async function updateOrderStatus(db: Database, orderId: string, status: s
 
     // Validate the status transition before applying any side effects
     validateTransition("order", currentStatus, nextStatus);
-
-    const isCod = existingOrder.paymentMethod === PaymentMethod.COD;
-    const isDeliveredOrCompleted = nextStatus === OrderStatus.DELIVERED || nextStatus === OrderStatus.COMPLETED;
-    if (isCod && isDeliveredOrCompleted) {
-        const currency = resolveOrderCurrencySnapshot(existingOrder);
-        const hasCodCollection = await hasRecordedCodCollection(db, orderId, currency);
-        if (
-            !hasCodCollection ||
-            existingOrder.paymentStatus !== PaymentStatus.PAID ||
-            (existingOrder.balanceDue ?? 0) > 0 ||
-            (existingOrder.paidAmount ?? 0) <= 0
-        ) {
-            throw new ValidationError("Record COD collection through the COD action before marking the order delivered or completed.");
-        }
-    }
 
     // Optimistic locking: CAS update FIRST — only proceed with side effects
     // if we win the version check. This prevents the race condition where two

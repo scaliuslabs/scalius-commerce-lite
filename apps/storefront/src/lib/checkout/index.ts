@@ -19,13 +19,15 @@ import {
   isDepositPaymentRequired,
   resolveCheckoutPaymentRequest,
 } from "./payment-mode";
-import type { CartValidationIssue, CartValidationRequestItem } from "../api/orders";
+import type { CartValidationIssue } from "../api/orders";
 import { trackStorefrontAddPaymentInfoOnce } from "../analytics";
 import { writeCartRepairState } from "../cart/repair-state";
 import { getCheckoutStatusErrorMessage } from "./error-messages";
-import { fetchAuthoritativeTaxQuote } from "./tax-quote-client";
+import {
+  fetchAuthoritativeTaxQuote,
+  TaxQuoteCartChangedError,
+} from "./tax-quote-client";
 import type { CheckoutTaxQuote } from "./tax-quote-contract";
-import { cartItemVariantLabel } from "../cart/item-options";
 import { isGatewayTestMode } from "./gateway-environment";
 import {
   hideCheckoutLoadingOverlay,
@@ -36,6 +38,7 @@ import {
   getGatewayPresentation,
   type GatewayPresentation,
 } from "./gateway-presentation";
+import { isGatewayEligibleForPaymentAmount } from "./gateway-amount-eligibility";
 
 // Register all built-in gateway handlers
 registerGateway(codHandler);
@@ -57,7 +60,6 @@ let retrySelection: {
   gateway: CheckoutConfig["gateways"][number];
 } | null = null;
 let initVersion = 0;
-const PAYMENT_PROCESS_TIMEOUT_MS = 30_000;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -128,24 +130,6 @@ function clearCheckoutPresentation(): void {
 function checkoutRecoveryHref(orderId: string, gateway: string): string {
   const params = new URLSearchParams({ orderId, payment: gateway });
   return `/order-success?${params.toString()}`;
-}
-
-async function withPaymentWatchdog<T>(promise: Promise<T>): Promise<T> {
-  let timeoutId: number | undefined;
-  try {
-    return await Promise.race([
-      promise,
-      new Promise<never>((_, reject) => {
-        timeoutId = window.setTimeout(() => {
-          reject(new Error(
-            "This is taking longer than expected. Check the saved order before trying again.",
-          ));
-        }, PAYMENT_PROCESS_TIMEOUT_MS);
-      }),
-    ]);
-  } finally {
-    if (timeoutId) window.clearTimeout(timeoutId);
-  }
 }
 
 function applySelectedMethodStyles(methodId: string | null): void {
@@ -326,70 +310,95 @@ function appendSummaryRow(
   parent.appendChild(row);
 }
 
+function displayString(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim();
+  return normalized || null;
+}
+
+function appendOrderItems(
+  parent: HTMLElement,
+  quote: CheckoutTaxQuote,
+): void {
+  const list = document.createElement("ul");
+  list.className = "space-y-3 border-b border-border pb-3";
+
+  for (const item of quote.items) {
+    const row = document.createElement("li");
+    row.className = "flex items-start justify-between gap-3";
+
+    const itemCopy = document.createElement("div");
+    itemCopy.className = "min-w-0";
+    appendTextElement(
+      itemCopy,
+      "p",
+      "font-medium leading-5 text-foreground",
+      item.productName,
+    );
+    appendTextElement(
+      itemCopy,
+      "p",
+      "text-xs leading-5 text-muted-foreground",
+      [item.variantLabel, `Qty ${item.quantity}`].filter(Boolean).join(" · "),
+    );
+    row.appendChild(itemCopy);
+
+    appendTextElement(
+      row,
+      "span",
+      "shrink-0 font-medium tabular-nums text-foreground",
+      currencyFmt(item.unitPrice * item.quantity, quote),
+    );
+    list.appendChild(row);
+  }
+
+  parent.appendChild(list);
+}
+
+function appendDeliverySummary(
+  parent: HTMLElement,
+  data: Record<string, unknown>,
+): void {
+  const delivery = document.createElement("div");
+  delivery.className = "border-t border-border pt-3 text-xs leading-5 text-muted-foreground";
+
+  const methodName = displayString(data.shippingMethodName);
+  if (methodName) {
+    appendTextElement(
+      delivery,
+      "p",
+      "font-semibold text-foreground",
+      methodName,
+    );
+  }
+
+  const recipient = [
+    displayString(data.customerName),
+    displayString(data.customerPhone),
+  ].filter((value): value is string => Boolean(value)).join(" · ");
+  if (recipient) appendTextElement(delivery, "p", "", recipient);
+
+  const address = displayString(data.shippingAddress);
+  if (address) appendTextElement(delivery, "p", "", address);
+
+  const location = [
+    displayString(data.areaName),
+    displayString(data.zoneName),
+    displayString(data.cityName),
+  ].filter((value): value is string => Boolean(value));
+  const uniqueLocation = [...new Set(location)].join(", ");
+  if (uniqueLocation) appendTextElement(delivery, "p", "", uniqueLocation);
+
+  if (delivery.childElementCount > 0) parent.appendChild(delivery);
+}
+
 type CheckoutCartFreshnessResult = {
   valid: boolean;
   issues: CartValidationIssue[];
   message: string;
 };
 
-type CheckoutCartLine = {
-  id?: unknown;
-  variantId: unknown;
-  quantity?: unknown;
-  price?: unknown;
-  name?: unknown;
-  options?: unknown;
-};
-
-function readNumber(value: unknown, fallback = 0): number {
-  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
-}
-
-function variantLabelForCheckoutLine(item: CheckoutCartLine): string | null {
-  return cartItemVariantLabel(item.options);
-}
-
-export function checkoutCartValidationPayload(
-  data: Record<string, unknown>,
-): CartValidationRequestItem[] {
-  let cartItems: Record<string, CheckoutCartLine> = {};
-  try {
-    const parsed = JSON.parse(String(data.cartItems || "{}")) as unknown;
-    if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
-      cartItems = parsed as Record<string, CheckoutCartLine>;
-    }
-  } catch {
-    cartItems = {};
-  }
-
-  return Object.entries(cartItems)
-    .map<CartValidationRequestItem>(([cartKey, item]) => {
-      if (typeof item.id !== "string" || item.id.trim() === "") {
-        throw new Error("A checkout cart item is missing its product id.");
-      }
-      if (
-        typeof item.variantId !== "string" ||
-        item.variantId.trim() === "" ||
-        item.variantId.trim() === "default"
-      ) {
-        throw new Error("A checkout cart item is missing its saved product variant.");
-      }
-      const quantity = Math.max(1, Math.floor(readNumber(item.quantity, 1)));
-      const price = readNumber(item.price);
-      return {
-        cartKey,
-        productId: item.id.trim(),
-        variantId: item.variantId.trim(),
-        quantity,
-        price,
-        productName: typeof item.name === "string" ? item.name : null,
-        variantLabel: variantLabelForCheckoutLine(item),
-      };
-    });
-}
-
 function checkoutFreshnessMessage(
-  json: { error?: unknown; details?: { message?: unknown } } | null,
   issues: CartValidationIssue[],
 ): string {
   if (issues.length > 0) {
@@ -397,64 +406,7 @@ function checkoutFreshnessMessage(
       ? "One cart item changed before payment. Please review it before checkout."
       : `${issues.length} cart items changed before payment. Please review them before checkout.`;
   }
-  if (typeof json?.details?.message === "string" && json.details.message.trim()) {
-    return json.details.message;
-  }
-  if (typeof json?.error === "string" && json.error.trim()) {
-    return json.error;
-  }
   return "Could not verify cart availability. Please review your cart before checkout.";
-}
-
-export async function validateCheckoutCartFreshness(
-  data: Record<string, unknown>,
-): Promise<CheckoutCartFreshnessResult> {
-  let items: CartValidationRequestItem[];
-  try {
-    items = checkoutCartValidationPayload(data);
-  } catch {
-    return {
-      valid: false,
-      issues: [],
-      message: "Your cart contains an item without a saved product variant. Please return to your cart and add it again.",
-    };
-  }
-  if (items.length === 0) {
-    return {
-      valid: false,
-      issues: [],
-      message: "Your cart is empty. Please add items before checkout.",
-    };
-  }
-
-  try {
-    const response = await fetch("/api/checkout/validate-cart", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ items }),
-    });
-    const json = await response.json().catch(() => null) as {
-      success?: boolean;
-      error?: unknown;
-      data?: { valid: boolean; issues: CartValidationIssue[] };
-      details?: { itemIssues?: CartValidationIssue[]; message?: unknown };
-    } | null;
-    const rawIssues = json?.data?.issues ?? json?.details?.itemIssues ?? [];
-    const issues = Array.isArray(rawIssues) ? rawIssues : [];
-    const valid = response.ok && json?.success === true && json.data?.valid !== false && issues.length === 0;
-
-    return {
-      valid,
-      issues,
-      message: checkoutFreshnessMessage(json, issues),
-    };
-  } catch {
-    return {
-      valid: false,
-      issues: [],
-      message: "Could not verify cart availability. Please review your cart before checkout.",
-    };
-  }
 }
 
 function redirectToCartForRepair(result: CheckoutCartFreshnessResult): void {
@@ -552,6 +504,7 @@ export function renderOrderSummaryDetails(
   quote: CheckoutTaxQuote,
 ): void {
   details.replaceChildren();
+  appendOrderItems(details, quote);
   appendSummaryRow(details, "Subtotal", currencyFmt(quote.subtotalAmount, quote));
   appendSummaryRow(
     details,
@@ -599,12 +552,7 @@ export function renderOrderSummaryDetails(
     );
   }
 
-  appendTextElement(
-    details,
-    "div",
-    "mt-2 border-t border-border pt-2 text-xs leading-5 text-muted-foreground",
-    `To: ${String(data.customerName || "")} \u2022 ${String(data.shippingAddress || "")}`,
-  );
+  appendDeliverySummary(details, data);
 }
 
 function renderSummary(): void {
@@ -648,9 +596,25 @@ function installOrderSummaryToggle(): void {
 // ── Render payment method cards ───────────────────────────────────────────────
 
 function eligibleCheckoutGateways(): CheckoutConfig["gateways"] {
-  if (!checkoutConfig) return [];
+  if (!checkoutConfig || !authoritativeTaxQuote) return [];
+  const currentConfig = checkoutConfig;
+  const currentQuote = authoritativeTaxQuote;
+  const paymentRequest = resolveCheckoutPaymentRequest(
+    currentConfig,
+    currentQuote.totalAmount,
+  );
+  const payableAmount = paymentRequest.paymentType === "deposit"
+    ? paymentRequest.depositAmount
+    : currentQuote.totalAmount;
   return gateways.filter(
-    (gateway) => !(checkoutConfig?.partialPaymentEnabled && gateway.id === "cod"),
+    (gateway) => (
+      !(currentConfig.partialPaymentEnabled && gateway.id === "cod")
+      && isGatewayEligibleForPaymentAmount(
+        gateway,
+        payableAmount,
+        currentQuote.currencyCode,
+      )
+    ),
   );
 }
 
@@ -706,7 +670,7 @@ function renderGateways(): void {
     container.setAttribute("aria-busy", "false");
     showError(
       checkoutConfig.unavailableMessage ||
-        "Checkout is temporarily unavailable. Please try again shortly.",
+        "No available payment method can accept this order total. Return to your cart or contact the store.",
     );
     setPayButton("Checkout unavailable", true);
     return;
@@ -918,7 +882,10 @@ async function processPayment(): Promise<void> {
       },
     };
 
-    const result = await withPaymentWatchdog(handler.processPayment(ctx));
+    // Each provider request has its own bounded network deadline. Do not race
+    // the complete flow against a UI-only timer: an abandoned promise can
+    // still create an order after the controls have been re-enabled.
+    const result = await handler.processPayment(ctx);
 
     if (result.success && result.redirectUrl) {
       const redirectUrl = normalizeCheckoutRedirectUrl(
@@ -944,7 +911,7 @@ async function processPayment(): Promise<void> {
         redirectToCartForRepair({
           valid: false,
           issues: result.cartIssues,
-          message: result.error || checkoutFreshnessMessage(null, result.cartIssues),
+          message: result.error || checkoutFreshnessMessage(result.cartIssues),
         });
         return;
       }
@@ -1001,17 +968,18 @@ export async function initCheckoutPage(): Promise<void> {
     return;
   }
 
-  const freshness = await validateCheckoutCartFreshness(checkoutData!);
-  if (currentInitVersion !== initVersion) return;
-  if (!freshness.valid) {
-    redirectToCartForRepair(freshness);
-    return;
-  }
-
   try {
     authoritativeTaxQuote = await fetchAuthoritativeTaxQuote(checkoutData!);
     if (currentInitVersion !== initVersion) return;
   } catch (error) {
+    if (error instanceof TaxQuoteCartChangedError) {
+      redirectToCartForRepair({
+        valid: false,
+        issues: error.issues,
+        message: checkoutFreshnessMessage(error.issues),
+      });
+      return;
+    }
     showError(
       error instanceof Error
         ? error.message

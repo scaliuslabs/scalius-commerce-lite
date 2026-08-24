@@ -23,6 +23,7 @@ import { phoneNumberSchema } from "@scalius/shared/customer-utils";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { roundPrice } from "@scalius/shared/price-utils";
 import { getCustomerBySession, getSessionCookie } from "@scalius/core/modules/customers/customer-auth.service";
+import { getCustomerVisibleBalanceDue } from "@scalius/core/modules/customers/customers.service";
 import { getCurrentPublicMediaUrl } from "@scalius/core/integrations/storage";
 import type { CheckoutPaymentMethodId } from "@scalius/core/modules/settings/checkout-flow";
 import { getCurrencySettings } from "@scalius/core/modules/settings/site-settings.service";
@@ -1011,7 +1012,7 @@ app.openapi(getOrderReceiptRoute, async (c) => {
       paymentMethod: order.paymentMethod,
       paymentStatus: order.paymentStatus,
       paidAmount: order.paidAmount,
-      balanceDue: order.balanceDue,
+      balanceDue: getCustomerVisibleBalanceDue(order),
       createdAt: unixToDate(order.createdAt)?.toISOString() || null,
       updatedAt: unixToDate(order.updatedAt)?.toISOString() || null,
       items: items.map(({ productImageObjectKey, productImageStatus, ...item }) => ({

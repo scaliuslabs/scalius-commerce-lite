@@ -1,5 +1,26 @@
+import {
+  DatabaseSync,
+  type SQLInputValue,
+  type SQLOutputValue,
+  type StatementSync,
+} from "node:sqlite";
+import { readdirSync, readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
+import { drizzle } from "drizzle-orm/d1";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { OrderStatus, PaymentPlanStatus, PaymentRecordStatus, PaymentStatus } from "@scalius/database/schema";
+import type { Database } from "@scalius/database/client";
+import { compileSqliteMigrationForProvider } from "@scalius/database/migration-artifacts";
+import {
+  orders,
+  orderPayments,
+  paymentPlans,
+  OrderStatus,
+  PaymentPlanStatus,
+  PaymentRecordStatus,
+  PaymentStatus,
+} from "@scalius/database/schema";
+import * as schema from "@scalius/database/schema";
 
 const mocks = vi.hoisted(() => ({
   getCurrencyConfig: vi.fn(),
@@ -19,6 +40,109 @@ import {
   processPaymentFailed,
   releaseOrderInventory,
 } from "./process-payment";
+
+const migrationDirectory = fileURLToPath(new URL(
+  "../../../../database/migrations/",
+  import.meta.url,
+));
+
+interface SqliteD1Result {
+  results: Record<string, SQLOutputValue>[];
+  success: true;
+  meta: Record<string, never>;
+}
+
+interface SqliteD1Statement {
+  bind(...values: SQLInputValue[]): SqliteD1Statement;
+  run(): Promise<SqliteD1Result>;
+  all(): Promise<SqliteD1Result>;
+  raw(): Promise<SQLOutputValue[][]>;
+  first(column?: string): Promise<unknown>;
+  execute(): SqliteD1Result;
+}
+
+function statementRows(statement: StatementSync, values: SQLInputValue[]) {
+  return statement.all(...values) as Record<string, SQLOutputValue>[];
+}
+
+function d1Statement(
+  sqlite: DatabaseSync,
+  query: string,
+  values: SQLInputValue[] = [],
+): SqliteD1Statement {
+  const execute = (): SqliteD1Result => ({
+    results: statementRows(sqlite.prepare(query), values),
+    success: true,
+    meta: {},
+  });
+  return {
+    bind: (...nextValues) => d1Statement(sqlite, query, nextValues),
+    run: async () => execute(),
+    all: async () => execute(),
+    raw: async () => {
+      const statement = sqlite.prepare(query);
+      statement.setReturnArrays(true);
+      return statement.all(...values) as unknown as SQLOutputValue[][];
+    },
+    first: async (column) => {
+      const row = statementRows(sqlite.prepare(query), values)[0];
+      return column ? row?.[column] ?? null : row ?? null;
+    },
+    execute,
+  };
+}
+
+function createPaymentDatabase(beforeFirstBatch?: (sqlite: DatabaseSync) => void): {
+  sqlite: DatabaseSync;
+  db: Database;
+} {
+  const sqlite = new DatabaseSync(":memory:");
+  for (const name of readdirSync(migrationDirectory).filter((file) => /^\d{4}_.+\.sql$/.test(file)).sort()) {
+    sqlite.exec(compileSqliteMigrationForProvider(readFileSync(`${migrationDirectory}/${name}`, "utf8"), "d1"));
+  }
+  let beforeBatch = beforeFirstBatch;
+  const binding = {
+    prepare: (query: string) => d1Statement(sqlite, query),
+    async batch(statements: SqliteD1Statement[]) {
+      if (beforeBatch) {
+        const prepareRace = beforeBatch;
+        beforeBatch = undefined;
+        prepareRace(sqlite);
+      }
+      sqlite.exec("BEGIN IMMEDIATE");
+      try {
+        const results = statements.map((statement) => statement.execute());
+        sqlite.exec("COMMIT");
+        return results;
+      } catch (error) {
+        sqlite.exec("ROLLBACK");
+        throw error;
+      }
+    },
+  };
+  return {
+    sqlite,
+    db: drizzle(binding as unknown as D1Database, { schema }) as unknown as Database,
+  };
+}
+
+async function insertPaymentTestOrder(
+  db: Database,
+  overrides: Partial<typeof orders.$inferInsert> = {},
+) {
+  await db.insert(orders).values({
+    id: "order_1",
+    customerName: "Buyer",
+    customerPhone: "+8801711111111",
+    shippingAddress: "Dhaka",
+    city: "dhaka",
+    zone: "zone_1",
+    totalAmount: 100,
+    shippingCharge: 0,
+    balanceDue: 100,
+    ...overrides,
+  });
+}
 
 function createDbMock({
   selectGetResults,
@@ -51,10 +175,18 @@ function createDbMock({
     },
     insert() {
       return {
-        values: async (values: Record<string, unknown>) => {
+        values: (values: Record<string, unknown>) => {
           operations.push("insert");
           inserts.push(values);
-          if (insertError) throw insertError;
+          const execution = insertError
+            ? Promise.reject(insertError)
+            : Promise.resolve(undefined);
+          return {
+            type: "insert-values",
+            values,
+            onConflictDoNothing: () => ({ type: "insert-values-on-conflict", values }),
+            then: execution.then.bind(execution),
+          };
         },
         select: (query: unknown) => ({
           type: "insert-select",
@@ -443,7 +575,13 @@ describe("payment processing idempotency", () => {
   it("does not rewrite duplicate failed gateway attempts", async () => {
     const { db, inserts, updates, batch } = createDbMock({
       selectGetResults: [
-        { id: "pay_1", status: PaymentRecordStatus.FAILED },
+        { id: "pay_1", status: PaymentRecordStatus.FAILED, paymentType: "full" },
+        {
+          paidAmount: 0,
+          paymentStatus: PaymentStatus.FAILED,
+          shipmentClaimId: null,
+          shipmentClaimExpiresAt: null,
+        },
       ],
     });
 
@@ -455,27 +593,150 @@ describe("payment processing idempotency", () => {
     expect(mocks.getCurrencyConfig).not.toHaveBeenCalled();
   });
 
-  it("records a failed attempt before marking the order failed", async () => {
-    const { db, operations, inserts, updates } = createDbMock({
+  it("records a new failed attempt and the unpaid order failure in one atomic batch", async () => {
+    const { db, operations, inserts, updates, batch } = createDbMock({
       selectGetResults: [
         null,
-        { paidAmount: 0, paymentStatus: PaymentStatus.UNPAID, shipmentClaimId: null, shipmentClaimExpiresAt: null },
+        {
+          paidAmount: 0,
+          paymentStatus: PaymentStatus.UNPAID,
+          shipmentClaimId: null,
+          shipmentClaimExpiresAt: null,
+          paymentPlanStatus: null,
+        },
       ],
     });
 
     await processPaymentFailed(db as never, "order_1", "sslcommerz", "tran_1");
 
-    expect(operations).toEqual(["insert", "update"]);
+    expect(operations).toEqual(["update", "insert"]);
+    expect(batch).toHaveBeenCalledTimes(1);
+    const batchCalls = (batch as unknown as { mock: { calls: Array<[unknown[]]> } }).mock.calls;
+    expect(batchCalls[0]?.[0]).toHaveLength(3);
     expect(inserts).toHaveLength(1);
     expect(inserts[0]).toMatchObject({
       orderId: "order_1",
       amount: 0,
+      paymentType: "full",
       status: PaymentRecordStatus.FAILED,
       sslcommerzTranId: "tran_1",
     });
     expect(updates).toContainEqual(expect.objectContaining({
       paymentStatus: PaymentStatus.FAILED,
     }));
+  });
+
+  it("atomically converges a pending attempt and its unpaid order to failed", async () => {
+    const { db, inserts, updates, batch } = createDbMock({
+      selectGetResults: [
+        { id: "pay_1", status: PaymentRecordStatus.PENDING, paymentType: "deposit" },
+        {
+          paidAmount: 0,
+          paymentStatus: PaymentStatus.UNPAID,
+          shipmentClaimId: null,
+          shipmentClaimExpiresAt: null,
+          paymentPlanStatus: PaymentPlanStatus.PENDING,
+        },
+      ],
+    });
+
+    await processPaymentFailed(db as never, "order_1", "stripe", "pi_1");
+
+    expect(inserts).toHaveLength(0);
+    expect(updates).toContainEqual(expect.objectContaining({
+      paymentStatus: PaymentStatus.FAILED,
+    }));
+    expect(updates).toContainEqual(expect.objectContaining({
+      status: PaymentRecordStatus.FAILED,
+    }));
+    expect(batch).toHaveBeenCalledTimes(1);
+    const batchCalls = (batch as unknown as { mock: { calls: Array<[unknown[]]> } }).mock.calls;
+    expect(batchCalls[0]?.[0]).toHaveLength(3);
+  });
+
+  it("does not require order currency repair to finish an existing pending failure", async () => {
+    const { db, batch } = createDbMock({
+      selectGetResults: [
+        { id: "pay_1", status: PaymentRecordStatus.PENDING, paymentType: "full" },
+        {
+          paidAmount: 0,
+          paymentStatus: PaymentStatus.UNPAID,
+          shipmentClaimId: null,
+          shipmentClaimExpiresAt: null,
+          currencyCode: "invalid",
+          currencyDecimalPlaces: 2,
+          paymentPlanStatus: null,
+        },
+      ],
+    });
+
+    await expect(processPaymentFailed(db as never, "order_1", "stripe", "pi_1"))
+      .resolves.toBeUndefined();
+    expect(batch).toHaveBeenCalledTimes(1);
+  });
+
+  it("records a balance failure without downgrading a partially paid order", async () => {
+    const { db, inserts, batch } = createDbMock({
+      selectGetResults: [
+        null,
+        {
+          paidAmount: 25,
+          paymentStatus: PaymentStatus.PARTIAL,
+          shipmentClaimId: null,
+          shipmentClaimExpiresAt: null,
+          paymentPlanStatus: PaymentPlanStatus.DEPOSIT_PAID,
+        },
+      ],
+    });
+
+    await processPaymentFailed(db as never, "order_1", "polar", "checkout_balance");
+
+    expect(inserts).toContainEqual(expect.objectContaining({
+      orderId: "order_1",
+      paymentType: "balance",
+      status: PaymentRecordStatus.FAILED,
+      polarCheckoutId: "checkout_balance",
+    }));
+    expect(batch).toHaveBeenCalledTimes(1);
+  });
+
+  it("finishes stale failed-attempt bookkeeping when the order is still unpaid", async () => {
+    const { db, inserts, updates, batch } = createDbMock({
+      selectGetResults: [
+        { id: "pay_1", status: PaymentRecordStatus.FAILED, paymentType: "full" },
+        {
+          paidAmount: 0,
+          paymentStatus: PaymentStatus.UNPAID,
+          shipmentClaimId: null,
+          shipmentClaimExpiresAt: null,
+          paymentPlanStatus: null,
+        },
+      ],
+    });
+
+    await processPaymentFailed(db as never, "order_1", "stripe", "pi_1");
+
+    expect(inserts).toHaveLength(0);
+    expect(updates).toContainEqual(expect.objectContaining({
+      paymentStatus: PaymentStatus.FAILED,
+    }));
+    expect(batch).toHaveBeenCalledTimes(1);
+    const batchCalls = (batch as unknown as { mock: { calls: Array<[unknown[]]> } }).mock.calls;
+    expect(batchCalls[0]?.[0]).toHaveLength(2);
+  });
+
+  it("does not downgrade a gateway attempt that has already succeeded", async () => {
+    const { db, inserts, updates, batch } = createDbMock({
+      selectGetResults: [
+        { id: "pay_1", status: PaymentRecordStatus.SUCCEEDED, paymentType: "full" },
+      ],
+    });
+
+    await processPaymentFailed(db as never, "order_1", "stripe", "pi_1");
+
+    expect(inserts).toHaveLength(0);
+    expect(updates).toHaveLength(0);
+    expect(batch).not.toHaveBeenCalled();
   });
 
   it("uses the centralized inventory transition for payment cancellation releases", async () => {
@@ -733,5 +994,160 @@ describe("payment processing idempotency", () => {
       metadata: { currency: "BDT" },
     })).resolves.toMatchObject({ success: false, error: expect.stringContaining("currency does not match") });
     expect(batch).not.toHaveBeenCalled();
+  });
+});
+
+describe("failed payment database transitions", () => {
+  it("durably converges a pending deposit attempt and its unpaid order", async () => {
+    const { sqlite, db } = createPaymentDatabase();
+    try {
+      await insertPaymentTestOrder(db, {
+        version: 3,
+        currencyCode: "BDT",
+        currencyDecimalPlaces: 2,
+      });
+      await db.insert(paymentPlans).values({
+        id: "plan_1",
+        orderId: "order_1",
+        totalAmount: 100,
+        depositAmount: 25,
+        balanceDue: 75,
+        status: PaymentPlanStatus.PENDING,
+      });
+      await db.insert(orderPayments).values({
+        id: "pay_1",
+        orderId: "order_1",
+        amount: 0,
+        currency: "BDT",
+        paymentMethod: "stripe",
+        paymentType: "deposit",
+        status: PaymentRecordStatus.PENDING,
+        stripePaymentIntentId: "pi_deposit",
+      });
+
+      await processPaymentFailed(db, "order_1", "stripe", "pi_deposit");
+
+      expect(sqlite.prepare(`
+        SELECT payment_status, paid_amount, balance_due, version
+        FROM orders
+        WHERE id = ?
+      `).get("order_1")).toMatchObject({
+        payment_status: PaymentStatus.FAILED,
+        paid_amount: 0,
+        balance_due: 100,
+        version: 4,
+      });
+      expect(sqlite.prepare(`
+        SELECT status, payment_type
+        FROM order_payments
+        WHERE id = ?
+      `).get("pay_1")).toMatchObject({
+        status: PaymentRecordStatus.FAILED,
+        payment_type: "deposit",
+      });
+    } finally {
+      sqlite.close();
+    }
+  });
+
+  it("records a balance failure without changing partial-payment truth", async () => {
+    const { sqlite, db } = createPaymentDatabase();
+    try {
+      await insertPaymentTestOrder(db, {
+        paidAmount: 25,
+        balanceDue: 75,
+        paymentStatus: PaymentStatus.PARTIAL,
+        version: 5,
+        currencyCode: "BDT",
+        currencyDecimalPlaces: 2,
+      });
+      await db.insert(paymentPlans).values({
+        id: "plan_1",
+        orderId: "order_1",
+        totalAmount: 100,
+        depositAmount: 25,
+        balanceDue: 75,
+        status: PaymentPlanStatus.DEPOSIT_PAID,
+      });
+
+      await processPaymentFailed(db, "order_1", "polar", "checkout_balance");
+
+      expect(sqlite.prepare(`
+        SELECT payment_status, paid_amount, balance_due, version
+        FROM orders
+        WHERE id = ?
+      `).get("order_1")).toMatchObject({
+        payment_status: PaymentStatus.PARTIAL,
+        paid_amount: 25,
+        balance_due: 75,
+        version: 5,
+      });
+      expect(sqlite.prepare(`
+        SELECT status, payment_type, polar_checkout_id
+        FROM order_payments
+        WHERE order_id = ?
+      `).get("order_1")).toMatchObject({
+        status: PaymentRecordStatus.FAILED,
+        payment_type: "balance",
+        polar_checkout_id: "checkout_balance",
+      });
+    } finally {
+      sqlite.close();
+    }
+  });
+
+  it("does not let a late failure overwrite success committed before its batch", async () => {
+    const { sqlite, db } = createPaymentDatabase((raceDatabase) => {
+      raceDatabase.prepare(`
+        UPDATE order_payments
+        SET status = ?, amount = 100
+        WHERE id = ?
+      `).run(PaymentRecordStatus.SUCCEEDED, "pay_1");
+      raceDatabase.prepare(`
+        UPDATE orders
+        SET payment_status = ?, paid_amount = 100, balance_due = 0, version = version + 1
+        WHERE id = ?
+      `).run(PaymentStatus.PAID, "order_1");
+    });
+    try {
+      await insertPaymentTestOrder(db, {
+        version: 7,
+        currencyCode: "BDT",
+        currencyDecimalPlaces: 2,
+      });
+      await db.insert(orderPayments).values({
+        id: "pay_1",
+        orderId: "order_1",
+        amount: 0,
+        currency: "BDT",
+        paymentMethod: "stripe",
+        paymentType: "full",
+        status: PaymentRecordStatus.PENDING,
+        stripePaymentIntentId: "pi_race",
+      });
+
+      await processPaymentFailed(db, "order_1", "stripe", "pi_race");
+
+      expect(sqlite.prepare(`
+        SELECT payment_status, paid_amount, balance_due, version
+        FROM orders
+        WHERE id = ?
+      `).get("order_1")).toMatchObject({
+        payment_status: PaymentStatus.PAID,
+        paid_amount: 100,
+        balance_due: 0,
+        version: 8,
+      });
+      expect(sqlite.prepare(`
+        SELECT status, amount
+        FROM order_payments
+        WHERE id = ?
+      `).get("pay_1")).toMatchObject({
+        status: PaymentRecordStatus.SUCCEEDED,
+        amount: 100,
+      });
+    } finally {
+      sqlite.close();
+    }
   });
 });

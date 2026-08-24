@@ -7,12 +7,17 @@ import type { Database } from "@scalius/database/client";
 import { orders } from "@scalius/database/schema";
 import {
   parseSSLCommerzTranId,
+  validateSSLCommerzIPN,
 } from "@scalius/core/modules/payments/sslcommerz";
+import { getSSLCommerzSettings } from "@scalius/core/modules/payments/gateway-settings";
 import { validateReceiptToken } from "../../utils/order-receipt-token";
 import { successEnvelope, errorResponses, serviceUnavailableResponse } from "../../schemas/responses";
 import { ok } from "../../utils/api-response";
 import { createSSLCommerzPaymentSession, isPaymentSessionProcessingResult } from "./payment-session-create";
 import { acceptedPaymentSessionProcessing, paymentSessionProcessingResponse } from "./payment-session-response";
+import { getCredentialEncryptionKey } from "../../utils/encryption-key";
+import { withPaymentProviderDeadline } from "./payment-provider-deadline";
+import { reconcileValidatedSSLCommerzSuccess } from "../webhooks/sslcommerz";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const RECEIPT_TOKEN_HEADER = "X-Receipt-Token";
@@ -240,6 +245,55 @@ async function buildSslCallbackRedirectUrl(c: SslCallbackContext, result?: "fail
 }
 
 app.post("/success", async (c) => {
+  try {
+    const body = await c.req.parseBody().catch((): Record<string, string | File> => ({}));
+    const bodyTranId = typeof body.tran_id === "string" ? body.tran_id : "";
+    const bodyValId = typeof body.val_id === "string" ? body.val_id : "";
+    const tranId = (bodyTranId || c.req.query("tran_id") || "").trim();
+    const valId = (bodyValId || c.req.query("val_id") || "").trim();
+    const expectedOrderId = c.req.query("order_id")?.trim() || parseSSLCommerzTranId(tranId).orderId;
+    const expectedPaymentType = normalizeCallbackPaymentType(
+      c.req.query("payment_type") ?? c.req.query("paymentType"),
+    ) || null;
+    if (tranId && valId && expectedOrderId) {
+      const db = c.get("db") as Database;
+      const settings = await getSSLCommerzSettings(
+        db,
+        getCredentialEncryptionKey(c.env as Record<string, unknown>),
+      );
+      // A gateway may be disabled after the buyer left for the provider. Keep
+      // accepting already-authorized historical returns while readable saved
+      // credentials remain available, matching the late-IPN policy.
+      if (settings?.storeId && settings.storePassword && !settings.credentialErrors?.length) {
+        const validation = await withPaymentProviderDeadline(
+          "SSLCommerz",
+          (signal) => validateSSLCommerzIPN(
+            settings.storeId,
+            settings.storePassword,
+            settings.sandbox,
+            valId,
+            signal,
+          ),
+        );
+        if (validation && (validation.status === "VALID" || validation.status === "VALIDATED")) {
+          await reconcileValidatedSSLCommerzSuccess({
+            db,
+            queue: c.env.PAYMENT_EVENTS_QUEUE,
+            validation,
+            requestedValId: valId,
+            expectedTranId: tranId,
+            expectedOrderId,
+            expectedPaymentType,
+            source: "buyer_return",
+          });
+        }
+      }
+    }
+  } catch (error) {
+    console.warn("[ssl-return] Buyer-return payment verification did not settle before redirect", {
+      error: error instanceof Error ? error.message : "verification_failed",
+    });
+  }
   return c.redirect(await buildSslCallbackRedirectUrl(c));
 });
 

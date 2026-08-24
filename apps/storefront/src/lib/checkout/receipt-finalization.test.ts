@@ -17,6 +17,21 @@ describe("checkout receipt cleanup", () => {
     });
   });
 
+  it("clears an exact COD-only checkout without requiring a hosted-payment pointer", () => {
+    expect(resolveCheckoutReceiptCleanup({
+      receiptState: "order_placed",
+      recoveryMatchesOrder: false,
+      recoveryMatchesCheckout: false,
+      directCheckoutMatches: true,
+      acceptedCheckout: true,
+    })).toEqual({
+      clearCart: true,
+      clearCheckoutSession: true,
+      clearCheckoutAttemptPreservingDraft: false,
+      clearRecoveryPointer: false,
+    });
+  });
+
   it.each([
     { label: "a different cart", recoveryMatchesCheckout: false },
     { label: "an identical new cart with a different checkout id", recoveryMatchesCheckout: false },
