@@ -58,8 +58,8 @@ import { deleteAbandonedCheckouts } from "@/lib/api-functions/abandoned-checkout
 import { useOrderActionPermissions } from "@/hooks/use-order-action-permissions";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  buildAbandonedCheckoutListPresentation,
   formatAbandonedCheckoutId,
-  formatAbandonedCheckoutItemCount,
   formatAbandonedCheckoutRecordCount,
   parseAbandonedCheckoutDisplay,
   type AbandonedCheckoutCartItem,
@@ -83,6 +83,10 @@ interface Pagination {
 const getCheckoutDisplayId = (checkout: AbandonedCheckout): string => {
   return checkout.checkoutId || checkout.id;
 };
+
+const UnavailableValue = ({ label }: { label: string }) => (
+  <span className="text-muted-foreground" aria-label={label}>—</span>
+);
 
 const timeSince = (date: Date | null): string => {
   if (!date || isNaN(date.getTime())) return "...";
@@ -127,6 +131,9 @@ const CheckoutRow = React.memo(
     const displayId = getCheckoutDisplayId(checkout);
     const compactId = formatAbandonedCheckoutId(displayId);
     const isHostedArchive = display.kind === "stale_hosted_payment_order";
+    const phone = display.customerInfo.phone;
+    const presentation = buildAbandonedCheckoutListPresentation(display);
+    const amount = presentation.amount === null ? null : fmt(presentation.amount);
     const updatedAt = useMemo(
       () => (checkout.updatedAt ? new Date(checkout.updatedAt) : null),
       [checkout.updatedAt],
@@ -147,17 +154,25 @@ const CheckoutRow = React.memo(
           {compactId}
         </TableCell>
         <TableCell className="font-medium">
-          {checkout.customerPhone ? formatPhoneForDisplay(checkout.customerPhone) : (
+          {phone ? formatPhoneForDisplay(phone) : (
             <span className="text-muted-foreground">No phone</span>
           )}
         </TableCell>
         <TableCell>
-          <Badge variant={display.variant}>{display.stage}</Badge>
+          <p className="text-xs font-medium">{presentation.checkoutType}</p>
+          <Badge variant={display.variant} className="mt-1">{display.stage}</Badge>
         </TableCell>
-        <TableCell>
-          {display.kind === "stale_hosted_payment_order"
-            ? `${display.paymentMethod?.toUpperCase() ?? "Gateway"} ${display.paymentStatus ?? "unpaid"} / ${fmt(display.total)}`
-            : `${formatAbandonedCheckoutItemCount(display.items.length)} / ${fmt(display.total)}`}
+        <TableCell className="text-xs font-medium">
+          {presentation.cartContents}
+        </TableCell>
+        <TableCell className="font-mono text-xs font-medium">
+          {amount ?? <UnavailableValue label={`${presentation.amountLabel} unavailable`} />}
+        </TableCell>
+        <TableCell className="text-xs font-medium">
+          {presentation.paymentProvider ?? <UnavailableValue label="No payment provider recorded" />}
+        </TableCell>
+        <TableCell className="text-xs font-medium">
+          {presentation.paymentStatus ?? <UnavailableValue label="No payment status recorded" />}
         </TableCell>
         <TableCell className="text-muted-foreground">
           {timeSince(updatedAt)}
@@ -228,14 +243,13 @@ const CheckoutCard = React.memo(
     const displayId = getCheckoutDisplayId(checkout);
     const compactId = formatAbandonedCheckoutId(displayId);
     const isHostedArchive = display.kind === "stale_hosted_payment_order";
+    const phone = display.customerInfo.phone;
+    const presentation = buildAbandonedCheckoutListPresentation(display);
+    const amount = presentation.amount === null ? null : fmt(presentation.amount);
     const updatedAt = useMemo(
       () => (checkout.updatedAt ? new Date(checkout.updatedAt) : null),
       [checkout.updatedAt],
     );
-    const cartSummary = isHostedArchive
-      ? `${display.paymentMethod?.toUpperCase() ?? "Gateway"} ${display.paymentStatus ?? "unpaid"} · ${fmt(display.total)}`
-      : `${display.items.length} ${display.items.length === 1 ? "item" : "items"} · ${fmt(display.total)}`;
-
     return (
       <article className="border-b px-3 py-2.5 last:border-b-0" data-state={isSelected ? "selected" : undefined}>
         <div className="flex min-w-0 items-start gap-2.5">
@@ -250,24 +264,51 @@ const CheckoutCard = React.memo(
           <div className="min-w-0 flex-1">
             <div className="flex min-w-0 items-center justify-between gap-2">
               <span className="truncate font-mono text-xs font-medium" title={displayId}>{compactId}</span>
-              <Badge variant={display.variant} className="shrink-0 px-1.5 py-0 text-[10px]">{display.stage}</Badge>
+              <span className="text-[11px] text-muted-foreground">Updated {timeSince(updatedAt)}</span>
             </div>
-            <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+            <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+              <div className="col-span-2 min-w-0">
+                <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">Customer</dt>
+                <dd className="mt-0.5 truncate font-medium">
+                  {phone ? formatPhoneForDisplay(phone) : "No phone"}
+                </dd>
+              </div>
               <div className="min-w-0">
-                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Customer</p>
-                <p className="mt-0.5 truncate font-medium">
-                  {checkout.customerPhone ? formatPhoneForDisplay(checkout.customerPhone) : "No phone"}
-                </p>
+                <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">Checkout type</dt>
+                <dd className="mt-0.5 font-medium">{presentation.checkoutType}</dd>
               </div>
-              <div className="min-w-0 text-right">
-                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Saved cart</p>
-                <p className="mt-0.5 truncate font-medium" title={cartSummary}>{cartSummary}</p>
+              <div className="min-w-0">
+                <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">Checkout stage</dt>
+                <dd className="mt-0.5">
+                  <Badge variant={display.variant} className="px-1.5 py-0 text-[10px]">{display.stage}</Badge>
+                </dd>
               </div>
-            </div>
+              <div className="min-w-0">
+                <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">Cart contents</dt>
+                <dd className="mt-0.5 font-medium">{presentation.cartContents}</dd>
+              </div>
+              <div className="min-w-0">
+                <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">{presentation.amountLabel}</dt>
+                <dd className="mt-0.5 font-mono font-medium">
+                  {amount ?? <UnavailableValue label={`${presentation.amountLabel} unavailable`} />}
+                </dd>
+              </div>
+              <div className="min-w-0">
+                <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">Payment provider</dt>
+                <dd className="mt-0.5 font-medium">
+                  {presentation.paymentProvider ?? <UnavailableValue label="No payment provider recorded" />}
+                </dd>
+              </div>
+              <div className="min-w-0">
+                <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">Payment status</dt>
+                <dd className="mt-0.5 font-medium">
+                  {presentation.paymentStatus ?? <UnavailableValue label="No payment status recorded" />}
+                </dd>
+              </div>
+            </dl>
           </div>
         </div>
-        <div className="mt-2 flex items-center justify-between border-t pt-1.5">
-          <span className="text-[11px] text-muted-foreground">Updated {timeSince(updatedAt)}</span>
+        <div className="mt-2 flex items-center justify-end border-t pt-1.5">
           <div className="flex items-center gap-1">
             {isHostedArchive && display.orderId ? (
               <Button variant="ghost" size="sm" asChild className="h-7 px-2 text-xs">
@@ -382,7 +423,7 @@ const DetailsModal = ({
                 <Phone className="h-4 w-4 mt-1 text-muted-foreground shrink-0" />{" "}
                 <span>
                   <strong>Phone:</strong>{" "}
-                  {(checkout.customerPhone || customerInfo.phone) ? formatPhoneForDisplay(checkout.customerPhone || customerInfo.phone || "") : "N/A"}
+                  {customerInfo.phone ? formatPhoneForDisplay(customerInfo.phone) : "N/A"}
                 </span>
               </p>
               <p className="flex items-start gap-3">
@@ -776,8 +817,8 @@ export function AbandonedCheckoutsManager({
                   </>
                 )}
               </div>
-              <div className="hidden md:block">
-                <Table>
+              <div className="hidden overflow-x-auto md:block">
+                <Table className="min-w-[1150px]">
                   <TableHeader>
                   <TableRow>
                     <TableHead className="w-10">
@@ -810,8 +851,11 @@ export function AbandonedCheckoutsManager({
                         Customer {renderSortArrow("customerPhone")}
                       </button>
                     </TableHead>
-                    <TableHead>Stage</TableHead>
-                    <TableHead>Saved cart</TableHead>
+                    <TableHead>Checkout</TableHead>
+                    <TableHead>Cart</TableHead>
+                    <TableHead>Amount</TableHead>
+                    <TableHead>Provider</TableHead>
+                    <TableHead>Payment status</TableHead>
                     <TableHead>
                       <button
                         type="button"
@@ -831,7 +875,7 @@ export function AbandonedCheckoutsManager({
                         key={rowIndex}
                         aria-hidden={rowIndex === 0 ? undefined : true}
                       >
-                        {Array.from({ length: 7 }).map((__, columnIndex) => (
+                        {Array.from({ length: 10 }).map((__, columnIndex) => (
                           <TableCell key={columnIndex} className="h-12 py-2">
                             {rowIndex === 0 && columnIndex === 0 ? (
                               <span className="sr-only" role="status">Loading incomplete checkouts</span>
@@ -852,7 +896,7 @@ export function AbandonedCheckoutsManager({
                     ))
                   ) : isError && checkouts.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="h-64 text-center text-muted-foreground">
+                      <TableCell colSpan={10} className="h-64 text-center text-muted-foreground">
                         <div className="flex flex-col items-center justify-center gap-2">
                           <AlertCircle className="h-9 w-9 text-destructive" />
                           <p className="font-medium text-foreground">Incomplete checkouts unavailable</p>
@@ -863,7 +907,7 @@ export function AbandonedCheckoutsManager({
                   ) : checkouts.length === 0 ? (
                     <TableRow>
                       <TableCell
-                        colSpan={7}
+                        colSpan={10}
                         className="h-64 text-center text-muted-foreground"
                       >
                         <div className="flex flex-col items-center justify-center gap-2">

@@ -176,7 +176,7 @@ app.openapi(listAbandonedCheckoutSummariesRoute, async (c) => {
     return ok(c, {
         checkouts: rows.map(({ checkoutData, customerPhone, ...row }) => ({
             ...row,
-            ...projectAbandonedCheckoutAgentSummary(checkoutData, Boolean(customerPhone)),
+            ...projectAbandonedCheckoutAgentSummary(checkoutData, customerPhone),
         })),
         pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
     });

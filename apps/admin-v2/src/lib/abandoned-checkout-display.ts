@@ -1,3 +1,5 @@
+import { validateAndFormatPhone } from "@scalius/shared/customer-utils";
+
 export interface AbandonedCheckoutDisplayRecord {
   id: string;
   checkoutId: string | null;
@@ -40,6 +42,15 @@ export interface ParsedAbandonedCheckoutDisplay {
   balanceDue: number | null;
 }
 
+export interface AbandonedCheckoutListPresentation {
+  checkoutType: string;
+  cartContents: string;
+  amountLabel: "Cart value" | "Order total" | "Amount";
+  amount: number | null;
+  paymentProvider: string | null;
+  paymentStatus: string | null;
+}
+
 export function formatAbandonedCheckoutId(value: string | null | undefined): string {
   const normalized = value?.trim() ?? "";
   if (!normalized) return "Unknown";
@@ -57,6 +68,43 @@ export function formatAbandonedCheckoutRecordCount(count: number): string {
   return `${count} checkout ${count === 1 ? "record" : "records"}`;
 }
 
+export function buildAbandonedCheckoutListPresentation(
+  display: ParsedAbandonedCheckoutDisplay,
+): AbandonedCheckoutListPresentation {
+  if (display.kind === "cart") {
+    return {
+      checkoutType: "Cart session",
+      cartContents: formatAbandonedCheckoutItemCount(display.items.length),
+      amountLabel: "Cart value",
+      amount: display.total,
+      paymentProvider: null,
+      paymentStatus: null,
+    };
+  }
+
+  if (display.kind === "stale_hosted_payment_order") {
+    return {
+      checkoutType: "Hosted payment recovery",
+      cartContents: "Not retained",
+      amountLabel: "Order total",
+      amount: display.total,
+      paymentProvider: display.paymentMethod?.toUpperCase() ?? null,
+      paymentStatus: display.paymentStatus
+        ? `${display.paymentStatus.charAt(0).toUpperCase()}${display.paymentStatus.slice(1)}`
+        : null,
+    };
+  }
+
+  return {
+    checkoutType: "Unknown record",
+    cartContents: "Unavailable",
+    amountLabel: "Amount",
+    amount: null,
+    paymentProvider: null,
+    paymentStatus: null,
+  };
+}
+
 function asObject(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -69,6 +117,16 @@ function asString(value: unknown): string | null {
 
 function asNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function asValidPhone(value: unknown): string | null {
+  if (typeof value !== "string" || value.trim().length > 32) return null;
+
+  try {
+    return validateAndFormatPhone(value);
+  } catch {
+    return null;
+  }
 }
 
 function readableLocation(data: Record<string, unknown>): string | null {
@@ -125,7 +183,7 @@ function parseCartShape(data: Record<string, unknown>): ParsedAbandonedCheckoutD
   const total = asNumber(cart?.totalAmount) ?? 0;
   const customerInfo: AbandonedCheckoutCustomerInfo = {
     name: asString(data.customerName),
-    phone: asString(data.customerPhone),
+    phone: asValidPhone(data.customerPhone),
     address: asString(data.shippingAddress),
     notes: asString(data.notes),
     email: asString(data.customerEmail),
@@ -171,7 +229,7 @@ function parseArchivedHostedOrder(data: Record<string, unknown>): ParsedAbandone
 
   const customerInfo: AbandonedCheckoutCustomerInfo = {
     name: asString(data.customerName),
-    phone: asString(data.customerPhone),
+    phone: asValidPhone(data.customerPhone),
     address: asString(data.shippingAddress),
     notes: asString(data.notes),
     email: asString(data.customerEmail),
@@ -199,12 +257,21 @@ export function parseAbandonedCheckoutDisplay(
   try {
     const data = asObject(JSON.parse(checkout.checkoutData));
     if (!data) throw new Error("Checkout data is not an object");
+    const storedPhone = asValidPhone(checkout.customerPhone);
 
     const archivedOrder = parseArchivedHostedOrder(data);
-    if (archivedOrder) return archivedOrder;
+    if (archivedOrder) {
+      return {
+        ...archivedOrder,
+        customerInfo: {
+          ...archivedOrder.customerInfo,
+          phone: storedPhone ?? archivedOrder.customerInfo.phone ?? null,
+        },
+      };
+    }
 
     const cartDisplay = parseCartShape(data);
-    const phone = checkout.customerPhone ?? cartDisplay.customerInfo.phone ?? null;
+    const phone = storedPhone ?? cartDisplay.customerInfo.phone ?? null;
     return {
       ...cartDisplay,
       customerInfo: {
@@ -227,7 +294,7 @@ export function parseAbandonedCheckoutDisplay(
       variant: "outline",
       items: [],
       customerInfo: {
-        phone: checkout.customerPhone,
+        phone: asValidPhone(checkout.customerPhone),
       },
       total: 0,
       orderId: null,

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildAbandonedCheckoutListPresentation,
   formatAbandonedCheckoutId,
   formatAbandonedCheckoutItemCount,
   formatAbandonedCheckoutRecordCount,
@@ -142,5 +143,95 @@ describe("abandoned checkout display parsing", () => {
         phone: "+8801711111111",
       },
     });
+  });
+
+  it("treats partial and invalid legacy phones as unavailable", () => {
+    const display = parseAbandonedCheckoutDisplay({
+      id: "ab_invalid_phone",
+      checkoutId: "chk_1",
+      customerPhone: "+880",
+      checkoutData: JSON.stringify({
+        customerPhone: "01700",
+        cart: {
+          totalAmount: 500,
+          items: [{ id: "item_1", name: "Shoe", quantity: 1, price: 500 }],
+        },
+      }),
+    });
+
+    expect(display.customerInfo.phone).toBeNull();
+    expect(display.stage).toBe("Cart Started");
+    expect(display.paymentMethod).toBeNull();
+    expect(display.paymentStatus).toBeNull();
+  });
+
+  it("canonicalizes valid legacy phone formatting for display", () => {
+    const display = parseAbandonedCheckoutDisplay({
+      id: "ab_valid_phone",
+      checkoutId: "chk_1",
+      customerPhone: "+880 1712-345678",
+      checkoutData: JSON.stringify({ cart: { items: [] } }),
+    });
+
+    expect(display.customerInfo.phone).toBe("+8801712345678");
+    expect(display.stage).toBe("Info Captured");
+  });
+
+  it("labels cart values and hosted-payment order totals without conflating them", () => {
+    const cartPresentation = buildAbandonedCheckoutListPresentation({
+      kind: "cart",
+      stage: "Cart Started",
+      variant: "secondary",
+      items: [{ id: "item_1", name: "Shoe", quantity: 1, price: 500 }],
+      customerInfo: {},
+      total: 500,
+      orderId: null,
+      paymentMethod: null,
+      paymentStatus: null,
+      paidAmount: null,
+      balanceDue: null,
+    });
+    const hostedPresentation = buildAbandonedCheckoutListPresentation({
+      kind: "stale_hosted_payment_order",
+      stage: "Archived hosted payment",
+      variant: "outline",
+      items: [],
+      customerInfo: {},
+      total: 3499,
+      orderId: "order_1",
+      paymentMethod: "sslcommerz",
+      paymentStatus: "failed",
+      paidAmount: 0,
+      balanceDue: 3499,
+    });
+
+    expect(cartPresentation).toEqual({
+      checkoutType: "Cart session",
+      cartContents: "1 item",
+      amountLabel: "Cart value",
+      amount: 500,
+      paymentProvider: null,
+      paymentStatus: null,
+    });
+    expect(hostedPresentation).toEqual({
+      checkoutType: "Hosted payment recovery",
+      cartContents: "Not retained",
+      amountLabel: "Order total",
+      amount: 3499,
+      paymentProvider: "SSLCOMMERZ",
+      paymentStatus: "Failed",
+    });
+  });
+
+  it("does not expose an invalid stored phone when checkout data is unreadable", () => {
+    const display = parseAbandonedCheckoutDisplay({
+      id: "ab_bad_phone",
+      checkoutId: "chk_1",
+      customerPhone: "+880",
+      checkoutData: "{not-json",
+    });
+
+    expect(display.kind).toBe("unknown");
+    expect(display.customerInfo.phone).toBeNull();
   });
 });

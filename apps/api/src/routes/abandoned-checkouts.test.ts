@@ -76,4 +76,80 @@ describe("public abandoned checkout snapshot route", () => {
     expect(db.select).not.toHaveBeenCalled();
     expect(inserted).toEqual([]);
   });
+
+  it.each([undefined, "", "+880", "01700", "not-a-phone"])(
+    "accepts a pre-contact snapshot and persists %s as unavailable",
+    async (customerPhone) => {
+      const { app, inserted } = createTestApp();
+      const response = await app.request("/api/v1/abandoned-checkouts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          checkoutId: "chk_session_1234567890abcdef",
+          customerPhone,
+          checkoutData: {
+            customerPhone,
+            cart: {
+              totalAmount: 500,
+              items: [{ id: "prod_1", name: "Shoe", quantity: 1, price: 500 }],
+            },
+          },
+        }),
+      }, {} as Env);
+
+      expect(response.status).toBe(200);
+      expect(inserted[0]?.customerPhone).toBeNull();
+      expect(JSON.parse(String(inserted[0]?.checkoutData))).not.toHaveProperty("customerPhone");
+    },
+  );
+
+  it("canonicalizes a valid phone without rejecting the cart snapshot", async () => {
+    const { app, inserted } = createTestApp();
+    const response = await app.request("/api/v1/abandoned-checkouts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        checkoutId: "chk_session_1234567890abcdef",
+        customerPhone: "+880 1712-345678",
+        checkoutData: {
+          customerPhone: "+880 1712-345678",
+          cart: { items: [] },
+        },
+      }),
+    }, {} as Env);
+
+    expect(response.status).toBe(200);
+    expect(inserted[0]?.customerPhone).toBe("+8801712345678");
+    expect(JSON.parse(String(inserted[0]?.checkoutData)).customerPhone).toBe("+8801712345678");
+  });
+
+  it("preserves separate records for separate checkout sessions sharing a phone", async () => {
+    const { app, inserted } = createTestApp();
+
+    for (const checkoutId of [
+      "chk_session_1234567890abcdef",
+      "chk_session_fedcba0987654321",
+    ]) {
+      const response = await app.request("/api/v1/abandoned-checkouts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          checkoutId,
+          customerPhone: "+8801712345678",
+          checkoutData: { cart: { items: [] } },
+        }),
+      }, {} as Env);
+      expect(response.status).toBe(200);
+    }
+
+    expect(inserted).toHaveLength(2);
+    expect(inserted.map((row) => row.checkoutId)).toEqual([
+      "chk_session_1234567890abcdef",
+      "chk_session_fedcba0987654321",
+    ]);
+    expect(inserted.map((row) => row.customerPhone)).toEqual([
+      "+8801712345678",
+      "+8801712345678",
+    ]);
+  });
 });
