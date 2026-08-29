@@ -30,6 +30,9 @@ describe("phone country policy boundaries", () => {
     expect(phoneFieldSource).toContain("required={required}");
     expect(phoneFieldSource).toContain("[&_.PhoneInputInput]:text-base");
     expect(phoneFieldSource).not.toContain("[&_.PhoneInputInput]:text-sm");
+    expect(phoneFieldSource).toContain('new Intl.DisplayNames([languageCode], { type: "region" })');
+    expect(phoneFieldSource).toContain("country: countrySelectLabel");
+    expect(cartSource).toContain("countrySelectLabel={copy.phoneCountryLabelText}");
   });
 
   it("keeps account controls labelled, touch-sized, and iOS-zoom safe", () => {

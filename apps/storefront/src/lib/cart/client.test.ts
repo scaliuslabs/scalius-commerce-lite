@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ENGLISH_CHECKOUT_LANGUAGE_DATA } from "@scalius/shared/checkout-language";
 
 import { cartStore, createCartItemKey } from "../../store/cart";
 import type { CheckoutLanguageData } from "../api/types";
@@ -29,40 +30,7 @@ function checkoutLanguage(
     name: "Malicious",
     code: "xx",
     languageData: {
-      pageTitle: "Cart & Checkout",
-      checkoutSectionTitle: "Checkout Information",
-      cartSectionTitle: "Shopping Cart",
-      customerNameLabel: "Full Name",
-      customerNamePlaceholder: "Enter your full name",
-      customerPhoneLabel: "Phone Number",
-      customerPhonePlaceholder: "Phone number",
-      customerPhoneHelp: "Enter your phone number with country code",
-      customerEmailLabel: "Email (Optional)",
-      customerEmailPlaceholder: "Enter your email address",
-      shippingAddressLabel: "Delivery Address",
-      shippingAddressPlaceholder: "Enter your full delivery address",
-      cityLabel: "City",
-      zoneLabel: "Zone",
-      areaLabel: "Area (Optional)",
-      shippingMethodLabel: "Choose Delivery Option",
-      orderNotesLabel: "Order Notes (Optional)",
-      orderNotesPlaceholder: "Any special instructions for your order?",
-      continueShoppingText: "Continue Shopping",
-      subtotalText: "Subtotal",
-      shippingText: "Shipping",
-      discountText: "Discount",
-      totalText: "Total",
-      discountCodePlaceholder: "Discount code",
-      applyDiscountText: "Apply",
-      removeDiscountText: "Remove",
-      placeOrderText: "Place Order",
-      processingText: "Processing...",
-      emptyCartText: "Your cart is empty",
-      termsText:
-        "By placing this order, you agree to our Terms of Service and Privacy Policy",
-      processingOrderTitle: "Processing Your Order",
-      processingOrderMessage: "Please wait while we process your order.",
-      requiredFieldIndicator: "*",
+      ...ENGLISH_CHECKOUT_LANGUAGE_DATA,
       ...overrides,
     },
     fieldVisibility: {

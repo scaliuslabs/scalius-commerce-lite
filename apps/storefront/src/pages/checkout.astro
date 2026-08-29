@@ -5,28 +5,59 @@ import Layout from "@/layouts/Layout.astro";
 import CheckoutHeader from "@/components/CheckoutHeader.astro";
 import CheckoutLoadingOverlay from "@/components/CheckoutLoadingOverlay.astro";
 import CheckoutProgress from "@/components/CheckoutProgress.astro";
-import { getLayoutData, getCheckoutConfig } from "@/lib/api";
+import {
+  getLayoutData,
+  getCheckoutConfig,
+  getActiveCheckoutLanguage,
+  type CheckoutLanguageData,
+} from "@/lib/api";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
+import {
+  ENGLISH_CHECKOUT_LANGUAGE_DATA,
+  checkoutLanguageBaseCode,
+} from "@scalius/shared/checkout-language";
 
-const [layoutData, checkoutConfig] = await Promise.all([
+const [layoutData, checkoutConfig, checkoutLanguageResponse] = await Promise.all([
   getLayoutData(),
   getCheckoutConfig(),
+  getActiveCheckoutLanguage(),
 ]);
+const checkoutLanguage: CheckoutLanguageData = checkoutLanguageResponse ?? {
+  id: "fallback",
+  name: "English (Fallback)",
+  code: "en",
+  languageData: { ...ENGLISH_CHECKOUT_LANGUAGE_DATA },
+  fieldVisibility: {
+    showEmailField: true,
+    showOrderNotesField: true,
+    showAreaField: true,
+  },
+  isActive: true,
+  isDefault: true,
+};
+const copy = checkoutLanguage.languageData;
 const serializedCheckoutConfig = serializeJsonForInlineScript(checkoutConfig);
+const serializedCheckoutLanguage = serializeJsonForInlineScript(checkoutLanguage);
 ---
 
-<Layout title="Payment" layoutData={layoutData} hideHeader hideFooter>
+<Layout
+  title={copy.paymentPageTitle}
+  layoutData={layoutData}
+  documentLanguage={checkoutLanguageBaseCode(checkoutLanguage.code)}
+  hideHeader
+  hideFooter
+>
   <meta slot="head" name="robots" content="noindex,nofollow" />
-  <CheckoutHeader layoutData={layoutData} />
+  <CheckoutHeader layoutData={layoutData} copy={copy} />
 
   <div class="mx-auto w-full max-w-6xl px-4 py-5 sm:px-6 sm:py-7">
-    <CheckoutProgress current="payment" />
+    <CheckoutProgress current="payment" copy={copy} />
 
     <div class="grid items-start gap-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(18rem,0.65fr)] lg:gap-10">
       <aside
         id="orderSummary"
         class="order-1 hidden overflow-hidden rounded-xl border border-border bg-card lg:order-2 lg:sticky lg:top-6"
-        aria-label="Order summary"
+        aria-label={copy.orderSummaryText}
       >
         <button
           id="orderSummaryToggle"
@@ -36,7 +67,7 @@ const serializedCheckoutConfig = serializeJsonForInlineScript(checkoutConfig);
           aria-controls="summaryPanel"
         >
           <span class="inline-flex items-center gap-2 text-sm font-semibold text-foreground">
-            Order summary
+            {copy.orderSummaryText}
             <svg id="orderSummaryChevron" class="h-4 w-4 transition-transform" viewBox="0 0 20 20" fill="none" stroke="currentColor" aria-hidden="true">
               <path d="m5 7.5 5 5 5-5" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" />
             </svg>
@@ -44,14 +75,14 @@ const serializedCheckoutConfig = serializeJsonForInlineScript(checkoutConfig);
           <span id="orderSummaryToggleTotal" class="text-sm font-semibold tabular-nums text-foreground"></span>
         </button>
         <div id="summaryPanel" class="hidden border-t border-border p-4 lg:block lg:border-t-0">
-          <h2 class="mb-3 hidden text-sm font-semibold text-foreground lg:block">Order summary</h2>
+          <h2 class="mb-3 hidden text-sm font-semibold text-foreground lg:block">{copy.orderSummaryText}</h2>
           <div class="space-y-2 text-sm text-muted-foreground" id="summaryDetails"></div>
         </div>
       </aside>
 
       <section class="order-2 min-w-0 lg:order-1" aria-labelledby="paymentHeading">
         <div class="mb-5">
-          <h1 id="paymentHeading" class="text-2xl font-semibold tracking-tight text-foreground">Payment</h1>
+          <h1 id="paymentHeading" class="text-2xl font-semibold tracking-tight text-foreground">{copy.paymentPageTitle}</h1>
         </div>
 
         <div
@@ -65,12 +96,12 @@ const serializedCheckoutConfig = serializeJsonForInlineScript(checkoutConfig);
           id="paymentMethods"
           class="space-y-2"
           role="radiogroup"
-          aria-label="Payment methods"
+          aria-label={copy.paymentMethodsText}
           aria-busy="true"
         >
           <div class="h-16 animate-pulse rounded-xl border border-border bg-muted/50" aria-hidden="true"></div>
           <div class="h-16 animate-pulse rounded-xl border border-border bg-muted/50" aria-hidden="true"></div>
-          <span class="sr-only" role="status">Loading payment methods</span>
+          <span class="sr-only" role="status">{copy.loadingPaymentMethodsText}</span>
         </div>
 
         <div id="paymentActionParking" class="hidden">
@@ -80,11 +111,11 @@ const serializedCheckoutConfig = serializeJsonForInlineScript(checkoutConfig);
             class="hidden rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100"
             role="status"
           >
-            Test mode — No real payments will be processed.
+            {copy.testModeNoticeText}
           </div>
 
           <div id="stripeSection" class="hidden space-y-2">
-            <h3 class="text-sm font-semibold text-foreground">Card details</h3>
+            <h3 class="text-sm font-semibold text-foreground">{copy.cardDetailsText}</h3>
             <div id="stripeCardElement" class="min-h-12 rounded-lg border border-input bg-background p-3"></div>
             <div id="stripeError" class="hidden text-xs font-medium text-destructive" role="alert" aria-live="polite"></div>
           </div>
@@ -96,7 +127,7 @@ const serializedCheckoutConfig = serializeJsonForInlineScript(checkoutConfig);
             class="min-h-12 w-full rounded-lg bg-primary px-4 py-3 text-base font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
             disabled
           >
-            <span id="payButtonText">Select a payment method</span>
+            <span id="payButtonText">{copy.selectPaymentMethodText}</span>
           </button>
         </div>
         </div>
@@ -106,11 +137,11 @@ const serializedCheckoutConfig = serializeJsonForInlineScript(checkoutConfig);
 </Layout>
 
 <CheckoutLoadingOverlay
-  title="Processing payment"
-  message="Confirming your order and payment details."
+  title={copy.processingPaymentTitle}
+  message={copy.processingPaymentMessage}
 />
 
-<script is:inline set:html={`window.__CHECKOUT_CONFIG__=${serializedCheckoutConfig};`}></script>
+<script is:inline set:html={`window.__CHECKOUT_CONFIG__=${serializedCheckoutConfig};window.__CHECKOUT_LANGUAGE__=${serializedCheckoutLanguage};`}></script>
 <script>
   import {
     initCheckoutPage,

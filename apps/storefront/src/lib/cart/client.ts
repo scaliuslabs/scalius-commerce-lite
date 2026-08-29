@@ -23,6 +23,10 @@ import {
   saveAbandonedCheckout,
 } from "@/lib/api";
 import { formatPriceShort } from "@scalius/shared/currency";
+import {
+  ENGLISH_CHECKOUT_LANGUAGE_DATA,
+  formatCheckoutLanguageText,
+} from "@scalius/shared/checkout-language";
 import { trackFbAddToCart, trackFbInitiateCheckout } from "@/lib/analytics";
 import { nanoid } from "nanoid";
 import { getProductImageUrl } from "@/lib/product-media";
@@ -71,6 +75,8 @@ function inlineJsString(value: string): string {
 }
 
 let globalLangData: CheckoutLanguageData | null = null;
+const activeCheckoutCopy = () =>
+  globalLangData?.languageData ?? ENGLISH_CHECKOUT_LANGUAGE_DATA;
 let hasTrackedInitiateCheckout = false;
 let cartValidationIssues: Record<string, CartValidationIssue[]> = {};
 let cartValidationGlobalError = "";
@@ -279,42 +285,7 @@ async function getLanguageData(): Promise<CheckoutLanguageData> {
     id: "fallback",
     name: "English (Fallback)",
     code: "en",
-    languageData: {
-      pageTitle: "Cart & Checkout",
-      checkoutSectionTitle: "Checkout Information",
-      cartSectionTitle: "Shopping Cart",
-      customerNameLabel: "Full Name",
-      customerNamePlaceholder: "Enter your full name",
-      customerPhoneLabel: "Phone Number",
-      customerPhonePlaceholder: "Phone number",
-      customerPhoneHelp: "Enter your phone number with country code",
-      customerEmailLabel: "Email (Optional)",
-      customerEmailPlaceholder: "Enter your email address",
-      shippingAddressLabel: "Delivery Address",
-      shippingAddressPlaceholder: "Enter your full delivery address",
-      cityLabel: "City",
-      zoneLabel: "Zone",
-      areaLabel: "Area (Optional)",
-      shippingMethodLabel: "Choose Delivery Option",
-      orderNotesLabel: "Order Notes (Optional)",
-      orderNotesPlaceholder: "Any special instructions for your order?",
-      continueShoppingText: "Continue Shopping",
-      subtotalText: "Subtotal",
-      shippingText: "Shipping",
-      discountText: "Discount",
-      totalText: "Total",
-      discountCodePlaceholder: "Discount code",
-      applyDiscountText: "Apply",
-      removeDiscountText: "Remove",
-      placeOrderText: "Place Order",
-      processingText: "Processing...",
-      emptyCartText: "Your cart is empty",
-      termsText:
-        "By placing this order, you agree to our Terms of Service and Privacy Policy",
-      processingOrderTitle: "Processing Your Order",
-      processingOrderMessage: "Please wait while we process your order.",
-      requiredFieldIndicator: "*",
-    },
+    languageData: { ...ENGLISH_CHECKOUT_LANGUAGE_DATA },
     fieldVisibility: {
       showEmailField: true,
       showOrderNotesField: true,
@@ -537,12 +508,12 @@ function renderAuthoritativeCartQuote(
   elements.subtotal.textContent = formatPriceShort(quote.subtotalAmount);
   elements.shipping.textContent =
     quote.shippingAmount === 0
-      ? "Free"
+      ? activeCheckoutCopy().freeText
       : formatPriceShort(quote.shippingAmount);
   elements.total.textContent = formatPriceShort(quote.totalAmount);
   if (elements.totalLabel) {
     elements.totalLabel.textContent =
-      elements.totalLabel.dataset.finalLabel || "Total";
+      elements.totalLabel.dataset.finalLabel || activeCheckoutCopy().totalText;
   }
 
   if (elements.taxLabel) {
@@ -659,7 +630,7 @@ function cartBlockedMessage(): string {
   if (count <= 0) return "";
   if (cartValidationSummaryMessage) return cartValidationSummaryMessage;
   return count === 1
-    ? "One cart item needs attention before checkout."
+    ? activeCheckoutCopy().cartItemChangedText
     : `${count} cart items need attention before checkout.`;
 }
 
@@ -761,7 +732,7 @@ export async function validateCartSnapshot(): Promise<boolean> {
           ? ""
           : json?.error ||
             json?.details?.message ||
-            "Could not verify cart availability. Please refresh and try again.";
+            activeCheckoutCopy().cartAvailabilityFailedText;
       if (issues.length === 0) clearCartValidationSummary();
       updateCartValidationMessage();
     }
@@ -778,7 +749,7 @@ export async function validateCartSnapshot(): Promise<boolean> {
     cartValidationIssues = {};
     clearCartValidationSummary();
     cartValidationGlobalError =
-      "Could not verify cart availability. Please refresh and try again.";
+      activeCheckoutCopy().cartAvailabilityFailedText;
     updateCartValidationMessage();
     updateCheckoutButtonState();
     return false;
@@ -843,7 +814,7 @@ export async function updateTotals() {
   subtotalEl.textContent = formatPriceShort(totalAmount);
   shippingEl.textContent =
     shippingFeeIsWaived || shippingFee === 0
-      ? "Free"
+      ? activeCheckoutCopy().freeText
       : formatPriceShort(shippingFee);
 
   let finalTotal = totalAmount + shippingFee;
@@ -861,12 +832,12 @@ export async function updateTotals() {
   }
 
   totalEl.textContent = formatPriceShort(Math.max(0, finalTotal));
-  if (totalLabelEl) totalLabelEl.textContent = "Estimated total";
+  if (totalLabelEl) totalLabelEl.textContent = activeCheckoutCopy().estimatedTotalText;
   updateDiscountUI();
 
   const quoteInput = cartTaxQuoteInput();
   if (!quoteInput) {
-    if (taxLabelEl) taxLabelEl.textContent = "Tax";
+    if (taxLabelEl) taxLabelEl.textContent = activeCheckoutCopy().taxText;
     if (taxAmountEl) taxAmountEl.textContent = "—";
     taxRowEl?.classList.add("hidden");
     if (taxStatusEl) {
@@ -876,16 +847,17 @@ export async function updateTotals() {
     return;
   }
 
-  if (taxLabelEl) taxLabelEl.textContent = "Tax";
+  if (taxLabelEl) taxLabelEl.textContent = activeCheckoutCopy().taxText;
   if (taxAmountEl) taxAmountEl.textContent = "—";
   taxRowEl?.classList.add("hidden");
   if (taxStatusEl) {
     taxStatusEl.textContent = "";
     taxStatusEl.classList.add("hidden");
   }
-  totalEl.textContent = "Calculating…";
+  totalEl.textContent = activeCheckoutCopy().calculatingText;
   if (totalLabelEl) {
-    totalLabelEl.textContent = totalLabelEl.dataset.finalLabel || "Total";
+    totalLabelEl.textContent =
+      totalLabelEl.dataset.finalLabel || activeCheckoutCopy().totalText;
   }
 
   try {
@@ -902,12 +874,12 @@ export async function updateTotals() {
     });
   } catch {
     if (quoteSequence !== cartTaxQuoteSequence) return;
-    if (taxAmountEl) taxAmountEl.textContent = "Unavailable";
+    if (taxAmountEl) taxAmountEl.textContent = activeCheckoutCopy().unavailableText;
     taxRowEl?.classList.add("hidden");
     totalEl.textContent = "—";
     if (taxStatusEl) {
       taxStatusEl.textContent =
-        "We could not verify tax. Change the destination or try again.";
+        activeCheckoutCopy().taxVerificationFailedText;
       taxStatusEl.classList.remove("hidden");
     }
   }
@@ -944,7 +916,8 @@ export async function renderCartItems() {
   cartItemsContainer.innerHTML = Object.entries(items)
     .map(([cartKey, item]) => {
       // Escape all user-supplied strings to prevent XSS via innerHTML
-      const safeName = escapeHtml(item.name || "");
+      const rawName = item.name || "";
+      const safeName = escapeHtml(rawName);
       const safeImage = escapeHtml(
         getProductImageUrl(item.image, {
           width: 96,
@@ -970,11 +943,11 @@ export async function renderCartItems() {
       const increaseDisabled =
         !quantityKnown ||
         (typeof quantityLimit === "number" && item.quantity >= quantityLimit);
-      const increaseLabel = !quantityKnown
-        ? `Checking available quantity for ${safeName}`
+      const increaseLabel = escapeHtml(!quantityKnown
+        ? formatCheckoutLanguageText(activeCheckoutCopy().checkingAvailableQuantityText, { item: rawName })
         : typeof quantityLimit === "number" && item.quantity >= quantityLimit
-          ? `Maximum available quantity reached for ${safeName}`
-          : `Increase ${safeName} quantity`;
+          ? formatCheckoutLanguageText(activeCheckoutCopy().maximumAvailableQuantityText, { item: rawName })
+          : formatCheckoutLanguageText(activeCheckoutCopy().increaseQuantityText, { item: rawName }));
 
       const variantInfo = safeOptions
         ? `<div class="space-x-1">${safeOptions
@@ -988,15 +961,15 @@ export async function renderCartItems() {
           <div class="flex-1 min-w-0">
             <div class="flex justify-between">
               <div class="min-w-0"><h3 class="line-clamp-2 text-sm font-medium text-foreground sm:text-base">${safeName}</h3><div class="mt-0.5 text-xs text-muted-foreground sm:mt-1 sm:text-sm">${variantInfo}</div></div>
-              <button aria-label="Remove ${safeName} from cart" class="ml-1.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive sm:ml-2 sm:h-9 sm:w-9" onclick="window.removeFromCart(${jsCartKey})"><svg class="w-4 h-4 sm:w-5 sm:h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 18L18 6M6 6l12 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              <button aria-label="${escapeHtml(formatCheckoutLanguageText(activeCheckoutCopy().removeFromCartText, { item: rawName }))}" class="ml-1.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive sm:ml-2 sm:h-9 sm:w-9" onclick="window.removeFromCart(${jsCartKey})"><svg class="w-4 h-4 sm:w-5 sm:h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 18L18 6M6 6l12 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
             </div>
             <div class="flex items-center justify-between mt-1.5 sm:mt-2">
               <div class="flex h-11 items-center overflow-hidden rounded-md ring-1 ring-inset ring-border sm:h-8">
-                <button aria-label="Decrease ${safeName} quantity" class="flex h-full w-11 items-center justify-center text-sm text-foreground hover:bg-muted sm:w-8" onclick="window.updateCartQuantity(${jsCartKey}, ${Math.max(0, item.quantity - 1)})">-</button>
+                <button aria-label="${escapeHtml(formatCheckoutLanguageText(activeCheckoutCopy().decreaseQuantityText, { item: rawName }))}" class="flex h-full w-11 items-center justify-center text-sm text-foreground hover:bg-muted sm:w-8" onclick="window.updateCartQuantity(${jsCartKey}, ${Math.max(0, item.quantity - 1)})">-</button>
                 <span class="flex h-full w-7 items-center justify-center text-center text-xs text-foreground sm:w-6 sm:text-sm">${item.quantity}</span>
                 <button aria-label="${increaseLabel}" ${increaseDisabled ? "disabled" : ""} class="flex h-full w-11 items-center justify-center text-sm text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:text-muted-foreground disabled:hover:bg-transparent sm:w-8" onclick="window.updateCartQuantity(${jsCartKey}, ${item.quantity + 1})">+</button>
               </div>
-              <div class="text-right"><div class="font-medium text-sm sm:text-base text-foreground">${formatPriceShort(item.price * item.quantity)}</div><div class="text-xs text-muted-foreground">${formatPriceShort(item.price)} each</div></div>
+              <div class="text-right"><div class="font-medium text-sm sm:text-base text-foreground">${formatPriceShort(item.price * item.quantity)}</div><div class="text-xs text-muted-foreground">${formatPriceShort(item.price)} ${escapeHtml(activeCheckoutCopy().eachText)}</div></div>
             </div>
             ${issueBlock}
           </div>
@@ -1017,7 +990,7 @@ export function updateCheckoutButtonState() {
   const checkoutUnavailable = meta?.dataset.checkoutUnavailable === "true";
   const unavailableMessage =
     meta?.dataset.checkoutUnavailableMessage ||
-    "Checkout is temporarily unavailable. Please try again shortly.";
+    activeCheckoutCopy().checkoutUnavailableMessage;
   const isEmpty = Object.keys(cartStore.get().items).length === 0;
   applyCheckoutButtonState(submitButton, {
     checkoutUnavailable,
@@ -1072,7 +1045,7 @@ async function handleApplyDiscount() {
   ) as HTMLInputElement;
   const code = codeInput.value.trim().toUpperCase();
   if (!code) {
-    showDiscountMessage("Please enter a discount code", "error");
+    showDiscountMessage(activeCheckoutCopy().enterDiscountCodeText, "error");
     return;
   }
   // Reflect the normalized code back in the input
@@ -1084,7 +1057,7 @@ async function handleApplyDiscount() {
     return;
   }
   if (existingDiscount) {
-    showDiscountMessage("Please remove the current discount first.", "error");
+    showDiscountMessage(activeCheckoutCopy().removeCurrentDiscountText, "error");
     return;
   }
 
@@ -1127,16 +1100,16 @@ async function handleApplyDiscount() {
         ...result.discount,
         discountAmount: result.discountAmount,
       });
-      showDiscountMessage("Discount applied successfully!", "success");
+      showDiscountMessage(activeCheckoutCopy().discountAppliedText, "success");
     } else {
       if (result?.requiresCustomerPhone) {
         customerPhoneInput?.focus();
       }
-      showDiscountMessage(result?.error || "Invalid discount code", "error");
+      showDiscountMessage(result?.error || activeCheckoutCopy().invalidDiscountCodeText, "error");
     }
   } catch (error: unknown) {
     console.error("Error applying discount:", error);
-    showDiscountMessage("Failed to apply discount. Please try again.", "error");
+    showDiscountMessage(activeCheckoutCopy().discountApplyFailedText, "error");
   } finally {
     applyBtn.textContent = lang.languageData.applyDiscountText;
     applyBtn.disabled = false;
@@ -1145,7 +1118,7 @@ async function handleApplyDiscount() {
 
 function handleRemoveDiscount() {
   removeDiscount();
-  showDiscountMessage("Discount removed.", "success");
+  showDiscountMessage(activeCheckoutCopy().discountRemovedText, "success");
 }
 
 // --- Initialization ---

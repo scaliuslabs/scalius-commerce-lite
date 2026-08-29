@@ -11,8 +11,8 @@ describe("cart shipping address boundary", () => {
     expect(cartSource).toContain("getShippingAddressError");
     expect(cartSource).toContain("syncShippingAddressValidity(true)");
     expect(cartSource).toContain('id="shippingLocationError"');
-    expect(cartSource).toContain("Choose a city and zone to continue.");
-    expect(cartSource).toContain("Choose a zone to continue.");
+    expect(cartSource).toContain("checkoutCopy.cityZoneRequiredText");
+    expect(cartSource).toContain("checkoutCopy.zoneRequiredText");
     expect(cartSource).not.toContain('"city",\n          "zone",');
     expect(cartSource.indexOf("syncShippingAddressValidity(true)")).toBeLessThan(
       cartSource.indexOf("writeCheckoutTransferSession("),
