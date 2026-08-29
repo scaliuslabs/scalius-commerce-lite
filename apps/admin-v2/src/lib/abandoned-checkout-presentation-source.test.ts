@@ -40,4 +40,21 @@ describe("incomplete checkout presentation", () => {
     expect(manager).toContain("Cart items (");
     expect(manager).toContain('aria-label="Close incomplete checkout details"');
   });
+
+  it("separates checkout, cart, provider, and payment status in desktop and mobile layouts", () => {
+    const manager = source("components/admin/AbandonedCheckoutsManager.tsx");
+
+    expect(manager).toContain("<TableHead>Checkout</TableHead>");
+    expect(manager).toContain("<TableHead>Cart</TableHead>");
+    expect(manager).toContain("<TableHead>Amount</TableHead>");
+    expect(manager).toContain("<TableHead>Provider</TableHead>");
+    expect(manager).toContain("<TableHead>Payment status</TableHead>");
+    expect(manager).not.toContain("<TableHead>Saved cart</TableHead>");
+    expect(manager).toContain(">Checkout type</dt>");
+    expect(manager).toContain(">Checkout stage</dt>");
+    expect(manager).toContain(">Cart contents</dt>");
+    expect(manager).toContain("{presentation.amountLabel}</dt>");
+    expect(manager).toContain(">Payment provider</dt>");
+    expect(manager).toContain(">Payment status</dt>");
+  });
 });
