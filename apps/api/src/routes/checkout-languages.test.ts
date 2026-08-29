@@ -151,6 +151,36 @@ describe("checkout language route boundaries", () => {
     expect(body.data?.language?.id).toBe("fallback");
   });
 
+  it("upgrades untouched English defaults for an active Bangla locale", async () => {
+    const banglaRecord = {
+      ...languageRecord,
+      name: "Bangla",
+      code: "bn",
+      languageData: JSON.stringify({
+        pageTitle: "Cart & Checkout",
+        paymentStepText: "Payment",
+        checkoutSectionTitle: "Checkout Information",
+        customerNameLabel: "ক্রেতার নাম",
+      }),
+    };
+    const { app } = createTestApp({ selectedRows: [banglaRecord] });
+
+    const response = await app.request("/api/v1/checkout-languages/active");
+    const body = await response.json() as {
+      data?: { language?: { languageData?: Record<string, string> } };
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.data?.language?.languageData).toMatchObject({
+      pageTitle: "কার্ট ও চেকআউট",
+      paymentStepText: "পেমেন্ট",
+      checkoutSectionTitle: "চেকআউটের তথ্য",
+      customerNameLabel: "ক্রেতার নাম",
+      paymentPageTitle: "পেমেন্ট",
+      phoneCountryLabelText: "ফোন নম্বরের দেশ",
+    });
+  });
+
   it("publishes distinct surface-qualified identities for public and admin active reads", () => {
     const { app } = createTestApp();
     const spec = app.getOpenAPIDocument({

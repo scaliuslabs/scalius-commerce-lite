@@ -14,6 +14,9 @@ import { readCheckoutFormDraft } from "@/lib/checkout/session-state";
 export interface ShippingLocationSelectorProps {
   shippingMethods: ShippingMethod[];
   shippingMethodLabel?: string;
+  freeText?: string;
+  noShippingMethodsText?: string;
+  waivedShippingFeeText?: string;
 }
 
 const subscribeToClientReadiness = () => () => {};
@@ -23,6 +26,9 @@ const getServerReadiness = () => false;
 export default function ShippingLocationSelector({
   shippingMethods,
   shippingMethodLabel = "Choose Delivery Option",
+  freeText = "Free",
+  noShippingMethodsText = "No shipping methods are available at this time.",
+  waivedShippingFeeText = "Normally {fee}; waived by an item in your cart.",
 }: ShippingLocationSelectorProps) {
   const storedCart = useStore(cartStore);
   const clientReady = useSyncExternalStore(
@@ -91,7 +97,7 @@ export default function ShippingLocationSelector({
           {shippingMethodLabel}
         </Label>
         <p className="text-sm text-gray-500">
-          No shipping methods available at this time.
+          {noShippingMethodsText}
         </p>
       </div>
     );
@@ -103,7 +109,7 @@ export default function ShippingLocationSelector({
       visibleCartItems,
       method.fee,
     );
-    const feeLabel = effectiveFee === 0 ? "Free" : formatPriceShort(effectiveFee);
+    const feeLabel = effectiveFee === 0 ? freeText : formatPriceShort(effectiveFee);
 
     return (
       <div>
@@ -135,10 +141,10 @@ export default function ShippingLocationSelector({
             method.fee,
           );
           const feeLabel =
-            effectiveFee === 0 ? "Free" : formatPriceShort(effectiveFee);
+            effectiveFee === 0 ? freeText : formatPriceShort(effectiveFee);
           const waivedFeeTitle =
             shippingFeeIsWaived && method.fee > 0
-              ? `Normally ${normalFeeLabel}; waived by an item in your cart.`
+              ? waivedShippingFeeText.replace("{fee}", normalFeeLabel)
               : undefined;
 
           return (

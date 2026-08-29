@@ -58,7 +58,7 @@ describe("customer auth resilience source boundaries", () => {
     expect(source).toContain("if (session.unavailable) {");
     expect(source).toContain("showCheckoutFormError(");
     expect(source).toContain(
-      '"We could not verify your account right now. Please try again.",',
+      "checkoutCopy.accountUnavailableText,",
     );
     expect(source).not.toMatch(/\b(?:window\.)?alert\s*\(/);
     expect(source).toContain("if (!session.authenticated) {");

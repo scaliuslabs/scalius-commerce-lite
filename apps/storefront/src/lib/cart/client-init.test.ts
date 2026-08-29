@@ -948,9 +948,9 @@ describe("initCartFunctionality", () => {
     expect(cartPage).toContain('id="checkoutPanel"');
     expect(cartPage).toContain('id="taxAmount"');
     expect(cartPage).toContain('id="totalLabel"');
-    expect(cartPage).toContain("Estimated total");
-    expect(cartPage).toContain("Loading your cart…");
-    expect(cartPage).toContain("Enable JavaScript to load your saved cart");
+    expect(cartPage).toContain("copy.estimatedTotalText");
+    expect(cartPage).toContain("copy.cartLoadingText");
+    expect(cartPage).toContain("copy.noScriptText");
     expect(cartPage).toContain("window.__CHECKOUT_LANGUAGE__=");
     expect(cartPage).toContain("disabled={true}");
   });

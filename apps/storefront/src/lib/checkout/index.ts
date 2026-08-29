@@ -5,9 +5,13 @@ import { resetStripePaymentElement, stripeHandler } from "./handlers/stripe";
 import { sslcommerzHandler } from "./handlers/sslcommerz";
 import { polarHandler } from "./handlers/polar";
 import { formatPrice, DEFAULT_CURRENCY } from "@scalius/shared/currency";
+import {
+  ENGLISH_CHECKOUT_LANGUAGE_DATA,
+  formatCheckoutLanguageText,
+  type CheckoutLanguageData,
+} from "@scalius/shared/checkout-language";
 import type { PaymentResult } from "./types";
 import {
-  CHECKOUT_TRANSFER_UNAVAILABLE_MESSAGE,
   clearCheckoutTransferSession,
   matchesCheckoutRecoverySession,
   readHostedPaymentRecoverySession,
@@ -60,6 +64,7 @@ let retrySelection: {
   gateway: CheckoutConfig["gateways"][number];
 } | null = null;
 let initVersion = 0;
+let checkoutCopy: CheckoutLanguageData = { ...ENGLISH_CHECKOUT_LANGUAGE_DATA };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -77,7 +82,11 @@ function hideError(): void {
 }
 
 function getPaymentResultErrorMessage(result: PaymentResult): string {
-  return getCheckoutStatusErrorMessage(result.status, result.error || "Payment failed");
+  return getCheckoutStatusErrorMessage(
+    result.status,
+    result.error || checkoutCopy.paymentFailedText,
+    checkoutCopy,
+  );
 }
 
 export function getPaymentResultRecovery(result: PaymentResult): {
@@ -87,8 +96,8 @@ export function getPaymentResultRecovery(result: PaymentResult): {
   if (result.errorCode !== "CUSTOMER_SESSION_STALE") return null;
 
   return {
-    message: "Your sign-in session expired. Your checkout details are safe. Continue as a guest, or sign in again.",
-    buttonText: "Continue as guest",
+    message: checkoutCopy.sessionExpiredText,
+    buttonText: checkoutCopy.continueAsGuestText,
   };
 }
 
@@ -115,7 +124,7 @@ function setReturnToCartButton(): void {
   btn.onclick = () => {
     window.location.href = "/cart";
   };
-  if (span) span.textContent = "Return to cart";
+  if (span) span.textContent = checkoutCopy.returnToCartText;
 }
 
 function clearCheckoutPresentation(): void {
@@ -272,6 +281,43 @@ function appendPaymentMethodContent(
   );
 }
 
+function localizedGatewayPresentation(
+  gatewayId: string,
+  presentation: GatewayPresentation,
+): GatewayPresentation {
+  switch (gatewayId) {
+    case "stripe":
+      return {
+        ...presentation,
+        buyerLabel: checkoutCopy.creditDebitCardText,
+        description: checkoutCopy.paySecurelyByCardText,
+      };
+    case "sslcommerz":
+      return {
+        ...presentation,
+        buyerLabel: checkoutCopy.onlinePaymentText,
+        description: checkoutCopy.onlinePaymentDescriptionText,
+      };
+    case "polar":
+      return {
+        ...presentation,
+        buyerLabel: checkoutCopy.cardOrWalletText,
+        description: formatCheckoutLanguageText(
+          checkoutCopy.completeWithProviderText,
+          { provider: presentation.providerLabel ?? "Polar" },
+        ),
+      };
+    case "cod":
+      return {
+        ...presentation,
+        buyerLabel: checkoutCopy.cashOnDeliveryText,
+        description: checkoutCopy.payOnDeliveryText,
+      };
+    default:
+      return presentation;
+  }
+}
+
 function currencyFmt(amount: number | string, quote: CheckoutTaxQuote): string {
   const currentCode = window.__CURRENCY_CODE__;
   const symbol = currentCode === quote.currencyCode
@@ -339,7 +385,12 @@ function appendOrderItems(
       itemCopy,
       "p",
       "text-xs leading-5 text-muted-foreground",
-      [item.variantLabel, `Qty ${item.quantity}`].filter(Boolean).join(" · "),
+      [
+        item.variantLabel,
+        formatCheckoutLanguageText(checkoutCopy.quantityShortText, {
+          quantity: item.quantity,
+        }),
+      ].filter(Boolean).join(" · "),
     );
     row.appendChild(itemCopy);
 
@@ -403,10 +454,12 @@ function checkoutFreshnessMessage(
 ): string {
   if (issues.length > 0) {
     return issues.length === 1
-      ? "One cart item changed before payment. Please review it before checkout."
-      : `${issues.length} cart items changed before payment. Please review them before checkout.`;
+      ? checkoutCopy.oneCartItemChangedText
+      : formatCheckoutLanguageText(checkoutCopy.cartItemsChangedText, {
+          count: issues.length,
+        });
   }
-  return "Could not verify cart availability. Please review your cart before checkout.";
+  return checkoutCopy.cartAvailabilityReviewText;
 }
 
 function redirectToCartForRepair(result: CheckoutCartFreshnessResult): void {
@@ -460,12 +513,12 @@ function loadCheckoutData(): boolean {
     raw = sessionStorage.getItem("scalius_checkout_data");
     gwRaw = sessionStorage.getItem("scalius_checkout_gateways");
   } catch {
-    return fail(CHECKOUT_TRANSFER_UNAVAILABLE_MESSAGE);
+    return fail(checkoutCopy.checkoutDetailsUnreadableText);
   }
 
   if (!raw) {
     return fail(
-      "Checkout details were not found. Please return to cart and try again.",
+      checkoutCopy.checkoutDetailsMissingText,
     );
   }
 
@@ -490,7 +543,7 @@ function loadCheckoutData(): boolean {
     return true;
   } catch {
     return fail(
-      "Checkout details could not be read. Please return to cart and try again.",
+      checkoutCopy.checkoutDetailsUnreadableText,
     );
   }
 }
@@ -505,18 +558,18 @@ export function renderOrderSummaryDetails(
 ): void {
   details.replaceChildren();
   appendOrderItems(details, quote);
-  appendSummaryRow(details, "Subtotal", currencyFmt(quote.subtotalAmount, quote));
+  appendSummaryRow(details, checkoutCopy.subtotalText, currencyFmt(quote.subtotalAmount, quote));
   appendSummaryRow(
     details,
-    "Shipping",
+    checkoutCopy.shippingText,
     quote.shippingMinor === 0
-      ? "Free"
+      ? checkoutCopy.freeText
       : currencyFmt(quote.shippingAmount, quote),
   );
   if (quote.discountMinor > 0) {
     appendSummaryRow(
       details,
-      "Discount",
+      checkoutCopy.discountText,
       `-${currencyFmt(quote.discountAmount, quote)}`,
       "flex justify-between text-primary",
     );
@@ -524,13 +577,13 @@ export function renderOrderSummaryDetails(
   if (quote.taxMinor > 0) {
     appendSummaryRow(
       details,
-      `${quote.displayLabel}${quote.pricesIncludeTax ? " (included)" : ""}`,
+      `${quote.displayLabel}${quote.pricesIncludeTax ? ` (${checkoutCopy.includedText})` : ""}`,
       currencyFmt(quote.taxAmount, quote),
     );
   }
   appendSummaryRow(
     details,
-    "Total",
+    checkoutCopy.totalText,
     currencyFmt(quote.totalAmount, quote),
     "flex justify-between font-bold text-foreground pt-2 border-t border-border mt-2 mb-2",
   );
@@ -540,13 +593,13 @@ export function renderOrderSummaryDetails(
     const balance = quote.totalAmount - advance;
     appendSummaryRow(
       details,
-      "Due now",
+      checkoutCopy.dueNowText,
       currencyFmt(advance, quote),
       "flex justify-between rounded-lg border border-primary/20 bg-primary/10 p-2 font-semibold text-primary",
     );
     appendSummaryRow(
       details,
-      "Due on delivery",
+      checkoutCopy.dueOnDeliveryText,
       currencyFmt(balance, quote),
       "flex justify-between px-2 text-xs text-muted-foreground",
     );
@@ -619,10 +672,13 @@ function eligibleCheckoutGateways(): CheckoutConfig["gateways"] {
 }
 
 function paymentActionLabel(methodId: string): string {
-  if (!checkoutConfig || !authoritativeTaxQuote) return "Continue";
-  if (methodId === "cod") return "Place order";
-  if (methodId === "sslcommerz") return "Continue to SSLCommerz";
-  if (methodId === "polar") return "Continue to Polar";
+  if (!checkoutConfig || !authoritativeTaxQuote) return checkoutCopy.continueText;
+  if (methodId === "cod") return checkoutCopy.placeOrderText;
+  if (methodId === "sslcommerz" || methodId === "polar") {
+    return formatCheckoutLanguageText(checkoutCopy.continueToProviderText, {
+      provider: methodId === "sslcommerz" ? "SSLCommerz" : "Polar",
+    });
+  }
 
   const paymentRequest = resolveCheckoutPaymentRequest(
     checkoutConfig,
@@ -633,18 +689,19 @@ function paymentActionLabel(methodId: string): string {
     : authoritativeTaxQuote.totalAmount;
   const formatted = currencyFmt(amount, authoritativeTaxQuote);
   return paymentRequest.paymentType === "deposit"
-    ? `Pay ${formatted} now`
-    : `Pay ${formatted}`;
+    ? formatCheckoutLanguageText(checkoutCopy.payAmountNowText, { amount: formatted })
+    : formatCheckoutLanguageText(checkoutCopy.payAmountText, { amount: formatted });
 }
 
 function hostedRedirectMessage(methodId: string): string | null {
-  if (methodId === "sslcommerz") {
-    return "You’ll be redirected to SSLCommerz to complete your payment.";
-  }
-  if (methodId === "polar") {
-    return "You’ll be redirected to Polar to complete your payment.";
-  }
-  return null;
+  const provider = methodId === "sslcommerz"
+    ? "SSLCommerz"
+    : methodId === "polar"
+      ? "Polar"
+      : null;
+  return provider
+    ? formatCheckoutLanguageText(checkoutCopy.providerRedirectText, { provider })
+    : null;
 }
 
 function renderGateways(): void {
@@ -663,16 +720,16 @@ function renderGateways(): void {
   container.setAttribute("role", singleMethod ? "group" : "radiogroup");
   container.setAttribute(
     "aria-label",
-    singleMethod ? "Payment method" : "Payment methods",
+    singleMethod ? checkoutCopy.paymentMethodText : checkoutCopy.paymentMethodsText,
   );
 
   if (checkoutConfig.unavailable || eligibleGateways.length === 0) {
     container.setAttribute("aria-busy", "false");
     showError(
       checkoutConfig.unavailableMessage ||
-        "No available payment method can accept this order total. Return to your cart or contact the store.",
+        checkoutCopy.noPaymentMethodsText,
     );
-    setPayButton("Checkout unavailable", true);
+    setPayButton(checkoutCopy.checkoutUnavailableText, true);
     return;
   }
 
@@ -680,7 +737,10 @@ function renderGateways(): void {
     const handler = getGateway(gw.id);
     const fallbackLabel =
       (gw as { name?: string }).name || handler?.meta.label || gw.id;
-    const presentation = getGatewayPresentation(gw.id, fallbackLabel);
+    const presentation = localizedGatewayPresentation(
+      gw.id,
+      getGatewayPresentation(gw.id, fallbackLabel),
+    );
     const card = document.createElement("div");
     card.className =
       "payment-method-card overflow-hidden rounded-xl border border-border bg-card transition-colors";
@@ -744,7 +804,7 @@ async function selectMethod(
   retrySelection = null;
   selectedMethod = null;
   applySelectedMethodStyles(methodId);
-  setPayButton("Preparing payment...", true);
+  setPayButton(checkoutCopy.preparingPaymentText, true);
   hideError();
   const handler = getGateway(methodId);
   const stripeSection = document.getElementById("stripeSection");
@@ -755,8 +815,8 @@ async function selectMethod(
   const testNotice = document.getElementById("testModeNotice");
   const redirectNote = document.getElementById("hostedRedirectNote");
   if (!handler || !details) {
-    showError("This payment method is not available. Choose another method.");
-    setPayButton("Payment method unavailable", true);
+    showError(checkoutCopy.paymentMethodUnavailableMessage);
+    setPayButton(checkoutCopy.paymentMethodUnavailableText, true);
     return;
   }
 
@@ -794,7 +854,7 @@ async function selectMethod(
       showError(err instanceof Error ? err.message : String(err));
       selectedMethod = null;
       retrySelection = { methodId, gateway: gw };
-      setPayButton("Retry payment form", false);
+      setPayButton(checkoutCopy.retryPaymentFormText, false);
       return;
     }
   }
@@ -830,28 +890,28 @@ async function processPayment(): Promise<void> {
   isProcessing = true;
   setPaymentControlsDisabled(true);
   hideError();
-  setPayButton("Processing...", true);
+  setPayButton(checkoutCopy.processingText, true);
   trackAddPaymentInfoForSelection(processingMethod);
 
   showCheckoutLoadingOverlay(
     processingMethod === "cod"
       ? {
-          title: "Placing your order",
-          message: "Confirming item availability and delivery.",
+          title: checkoutCopy.placingOrderTitle,
+          message: checkoutCopy.placingOrderMessage,
         }
       : {
-          title: "Opening secure payment",
-          message: "You'll continue with the selected payment provider.",
+          title: checkoutCopy.openingSecurePaymentTitle,
+          message: checkoutCopy.openingSecurePaymentMessage,
         },
   );
 
   const handler = getGateway(processingMethod);
   if (!handler) {
     hideCheckoutLoadingOverlay();
-    showError("Unknown payment method selected.");
+    showError(checkoutCopy.unknownPaymentMethodText);
     isProcessing = false;
     setPaymentControlsDisabled(false);
-    setPayButton("Payment method unavailable", true);
+    setPayButton(checkoutCopy.paymentMethodUnavailableText, true);
     return;
   }
 
@@ -893,7 +953,7 @@ async function processPayment(): Promise<void> {
         window.location.origin,
       );
       if (!redirectUrl) {
-        throw new Error("Payment could not open because the gateway returned an unsafe redirect URL.");
+        throw new Error(checkoutCopy.unsafeRedirectText);
       }
       writeHostedPaymentRecoverySession(
         result.hostedPaymentRecoveryUrl ?? redirectUrl,
@@ -929,7 +989,7 @@ async function processPayment(): Promise<void> {
     }
   } catch (err: unknown) {
     hideCheckoutLoadingOverlay();
-    showError(err instanceof Error ? err.message : "An error occurred. Please try again.");
+    showError(err instanceof Error ? err.message : checkoutCopy.genericErrorText);
     isProcessing = false;
     setPaymentControlsDisabled(false);
     setPayButton(
@@ -956,6 +1016,13 @@ export async function initCheckoutPage(): Promise<void> {
   retrySelection = null;
   selectionVersion += 1;
   checkoutConfig = (window as unknown as Record<string, CheckoutConfig>).__CHECKOUT_CONFIG__;
+  const activeLanguage = window.__CHECKOUT_LANGUAGE__ as
+    | { languageData?: Partial<CheckoutLanguageData> }
+    | undefined;
+  checkoutCopy = {
+    ...ENGLISH_CHECKOUT_LANGUAGE_DATA,
+    ...(activeLanguage?.languageData ?? {}),
+  };
   if (!checkoutConfig) return;
 
   installOrderSummaryToggle();
@@ -983,9 +1050,9 @@ export async function initCheckoutPage(): Promise<void> {
     showError(
       error instanceof Error
         ? error.message
-        : "We could not verify the current taxes and order total. Please return to your cart and try again.",
+        : checkoutCopy.totalVerificationFailedText,
     );
-    setPayButton("Total unavailable", true);
+    setPayButton(checkoutCopy.totalUnavailableText, true);
     return;
   }
 

@@ -1,18 +1,21 @@
 ---
+import { ENGLISH_CHECKOUT_LANGUAGE_DATA } from "@scalius/shared/checkout-language";
+
 interface Props {
   current: "information" | "payment" | "confirmation";
   paymentRequired?: boolean;
+  copy?: import("@scalius/shared/checkout-language").CheckoutLanguageData;
 }
 
-const { current, paymentRequired = true } = Astro.props;
+const { current, paymentRequired = true, copy = ENGLISH_CHECKOUT_LANGUAGE_DATA } = Astro.props;
 const allSteps = [
-  { id: "information", label: "Information" },
-  ...(paymentRequired ? [{ id: "payment", label: "Payment" }] : []),
-  { id: "confirmation", label: "Confirmation" },
+  { id: "information", label: copy.informationStepText },
+  ...(paymentRequired ? [{ id: "payment", label: copy.paymentStepText }] : []),
+  { id: "confirmation", label: copy.confirmationStepText },
 ] as const;
 ---
 
-<nav aria-label="Checkout progress" class="mb-5">
+<nav aria-label={copy.checkoutProgressLabel} class="mb-5">
   <ol class="flex flex-wrap items-center gap-1.5 text-xs sm:text-sm" role="list">
     {
       allSteps.map((step, index) => {

@@ -1,0 +1,58 @@
+import { describe, expect, it } from "vitest";
+
+import {
+  BANGLA_CHECKOUT_LANGUAGE_DATA,
+  CHECKOUT_LANGUAGE_KEYS,
+  ENGLISH_CHECKOUT_LANGUAGE_DATA,
+  formatCheckoutLanguageText,
+  getCheckoutLanguagePreset,
+  resolveCheckoutLanguageData,
+} from "./checkout-language";
+
+describe("checkout language presets", () => {
+  it("keeps the built-in presets structurally complete", () => {
+    expect(Object.keys(BANGLA_CHECKOUT_LANGUAGE_DATA)).toEqual(
+      Object.keys(ENGLISH_CHECKOUT_LANGUAGE_DATA),
+    );
+    expect(CHECKOUT_LANGUAGE_KEYS.length).toBeGreaterThan(80);
+  });
+
+  it("selects a preset from a regional locale code", () => {
+    expect(getCheckoutLanguagePreset("bn-BD").paymentStepText).toBe("পেমেন্ট");
+    expect(getCheckoutLanguagePreset("fr").paymentStepText).toBe("Payment");
+  });
+
+  it("upgrades untouched English defaults in an older Bangla record", () => {
+    const resolved = resolveCheckoutLanguageData("bn", {
+      pageTitle: ENGLISH_CHECKOUT_LANGUAGE_DATA.pageTitle,
+      paymentStepText: ENGLISH_CHECKOUT_LANGUAGE_DATA.paymentStepText,
+      checkoutSectionTitle: "Checkout Information",
+      customerNameLabel: "Full Name",
+      processingText: "Processing...",
+    });
+
+    expect(resolved.pageTitle).toBe("কার্ট ও চেকআউট");
+    expect(resolved.paymentStepText).toBe("পেমেন্ট");
+    expect(resolved.checkoutSectionTitle).toBe("চেকআউটের তথ্য");
+    expect(resolved.customerNameLabel).toBe("পুরো নাম");
+    expect(resolved.processingText).toBe("প্রক্রিয়া চলছে…");
+  });
+
+  it("preserves genuine merchant overrides", () => {
+    const resolved = resolveCheckoutLanguageData("bn", {
+      pageTitle: "দ্রুত চেকআউট",
+      paymentStepText: "পেমেন্ট ধাপ",
+    });
+
+    expect(resolved.pageTitle).toBe("দ্রুত চেকআউট");
+    expect(resolved.paymentStepText).toBe("পেমেন্ট ধাপ");
+  });
+
+  it("interpolates known values and leaves missing placeholders visible", () => {
+    expect(
+      formatCheckoutLanguageText("Pay {amount} with {provider}", {
+        amount: "৳500",
+      }),
+    ).toBe("Pay ৳500 with {provider}");
+  });
+});
