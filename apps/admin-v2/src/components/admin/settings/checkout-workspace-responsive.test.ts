@@ -50,6 +50,8 @@ describe("checkout settings mobile workspace", () => {
     expect(languageContainer).toContain("h-11 text-xs sm:h-7");
     expect(methodContainer).toContain("h-11 text-xs sm:h-7");
     expect(languageDialog).toContain("min-h-11 text-sm sm:min-h-9");
+    expect(languageDialog).toContain("resolveCheckoutLanguageData(code, prev.languageData)");
+    expect(languageDialog).toContain("Reset to {activePresetName}");
     expect(methodDialog).toContain("min-h-11 text-sm sm:min-h-9");
     expect(bulkActions).toContain("h-11 text-xs sm:h-7");
     expect(delivery).toContain("min-h-11 sm:min-h-9");

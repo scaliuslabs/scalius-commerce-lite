@@ -9,6 +9,12 @@ import {
 import { checkoutLanguages } from "@scalius/database/schema";
 import { eq, and, isNull, or, like, asc, desc, ne, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import {
+  CHECKOUT_LANGUAGE_KEYS,
+  CHECKOUT_LANGUAGE_LONG_TEXT_KEYS,
+  ENGLISH_CHECKOUT_LANGUAGE_DATA,
+  resolveCheckoutLanguageData,
+} from "@scalius/shared/checkout-language";
 import { NotFoundError, ConflictError } from "../utils/api-error";
 
 import { ok, created, noContent } from "../utils/api-response";
@@ -47,42 +53,38 @@ const checkoutLanguageSideEffectErrorResponses = {
   500: errorResponses[500],
 } as const;
 
-const checkoutLanguageShortTextSchema = z.string().max(80);
-const checkoutLanguageDataSchema = z.object({
-  pageTitle: checkoutLanguageShortTextSchema,
-  checkoutSectionTitle: checkoutLanguageShortTextSchema,
-  cartSectionTitle: checkoutLanguageShortTextSchema,
-  customerNameLabel: checkoutLanguageShortTextSchema,
-  customerNamePlaceholder: checkoutLanguageShortTextSchema,
-  customerPhoneLabel: checkoutLanguageShortTextSchema,
-  customerPhonePlaceholder: checkoutLanguageShortTextSchema,
-  customerPhoneHelp: checkoutLanguageShortTextSchema,
-  customerEmailLabel: checkoutLanguageShortTextSchema,
-  customerEmailPlaceholder: checkoutLanguageShortTextSchema,
-  shippingAddressLabel: checkoutLanguageShortTextSchema,
-  shippingAddressPlaceholder: checkoutLanguageShortTextSchema,
-  cityLabel: checkoutLanguageShortTextSchema,
-  zoneLabel: checkoutLanguageShortTextSchema,
-  areaLabel: checkoutLanguageShortTextSchema,
-  shippingMethodLabel: checkoutLanguageShortTextSchema,
-  orderNotesLabel: checkoutLanguageShortTextSchema,
-  orderNotesPlaceholder: checkoutLanguageShortTextSchema,
-  continueShoppingText: checkoutLanguageShortTextSchema,
-  subtotalText: checkoutLanguageShortTextSchema,
-  shippingText: checkoutLanguageShortTextSchema,
-  discountText: checkoutLanguageShortTextSchema,
-  totalText: checkoutLanguageShortTextSchema,
-  discountCodePlaceholder: checkoutLanguageShortTextSchema,
-  applyDiscountText: checkoutLanguageShortTextSchema,
-  removeDiscountText: checkoutLanguageShortTextSchema,
-  placeOrderText: checkoutLanguageShortTextSchema,
-  processingText: checkoutLanguageShortTextSchema,
-  emptyCartText: checkoutLanguageShortTextSchema,
-  termsText: z.string().max(1_000),
-  processingOrderTitle: checkoutLanguageShortTextSchema,
-  processingOrderMessage: z.string().max(500),
-  requiredFieldIndicator: checkoutLanguageShortTextSchema,
-});
+const checkoutLanguageKeySet = new Set<string>(CHECKOUT_LANGUAGE_KEYS);
+const checkoutLanguageDataSchema = z
+  .record(z.string().max(64), z.string().min(1).max(1_000))
+  .superRefine((data, context) => {
+    for (const [key, value] of Object.entries(data)) {
+      if (!checkoutLanguageKeySet.has(key)) {
+        context.addIssue({
+          code: "custom",
+          path: [key],
+          message: "Unknown checkout language key",
+        });
+        continue;
+      }
+      const maximumLength = CHECKOUT_LANGUAGE_LONG_TEXT_KEYS.has(
+        key as (typeof CHECKOUT_LANGUAGE_KEYS)[number],
+      ) ? 1_000 : 120;
+      if (value.length > maximumLength) {
+        context.addIssue({
+          code: "too_big",
+          origin: "string",
+          maximum: maximumLength,
+          inclusive: true,
+          path: [key],
+          message: `Checkout language text must contain at most ${maximumLength} characters`,
+        });
+      }
+    }
+  })
+  .openapi({
+    description:
+      "Buyer-facing checkout copy. Responses contain the complete resolved locale; writes may include only merchant overrides.",
+  });
 const checkoutLanguageFieldVisibilitySchema = z.object({
   showEmailField: z.boolean(),
   showOrderNotesField: z.boolean(),
@@ -115,42 +117,6 @@ const publicCheckoutLanguageSchema = z.object({
   deletedAt: optionalNullableTimestampSchema,
 });
 
-const defaultLanguageData = {
-  pageTitle: "Cart & Checkout",
-  checkoutSectionTitle: "Checkout Information",
-  cartSectionTitle: "Shopping Cart",
-  customerNameLabel: "Full Name",
-  customerNamePlaceholder: "Enter your full name",
-  customerPhoneLabel: "Phone Number",
-  customerPhonePlaceholder: "Phone number",
-  customerPhoneHelp: "Enter your phone number with country code",
-  customerEmailLabel: "Email (Optional)",
-  customerEmailPlaceholder: "Enter your email address",
-  shippingAddressLabel: "Delivery Address",
-  shippingAddressPlaceholder: "Enter your full delivery address",
-  cityLabel: "City",
-  zoneLabel: "Zone",
-  areaLabel: "Area (Optional)",
-  shippingMethodLabel: "Choose Delivery Option",
-  orderNotesLabel: "Order Notes (Optional)",
-  orderNotesPlaceholder: "Any special instructions for your order?",
-  continueShoppingText: "Continue Shopping",
-  subtotalText: "Subtotal",
-  shippingText: "Shipping",
-  discountText: "Discount",
-  totalText: "Total",
-  discountCodePlaceholder: "Discount code",
-  applyDiscountText: "Apply",
-  removeDiscountText: "Remove",
-  placeOrderText: "Place Order",
-  processingText: "Processing...",
-  emptyCartText: "Your cart is empty",
-  termsText: "By placing this order, you agree to our Terms of Service and Privacy Policy",
-  processingOrderTitle: "Processing Your Order",
-  processingOrderMessage: "Please wait while we process your order.",
-  requiredFieldIndicator: "*"
-};
-
 const defaultFieldVisibility = {
   showEmailField: true,
   showOrderNotesField: true,
@@ -172,19 +138,16 @@ function parseStoredObject(value: unknown): Record<string, unknown> {
   }
 }
 
-function publicCheckoutLanguageProjection(languageData: unknown, fieldVisibility: unknown) {
-  const storedLanguageData = parseStoredObject(languageData);
+function publicCheckoutLanguageProjection(
+  languageCode: unknown,
+  languageData: unknown,
+  fieldVisibility: unknown,
+) {
   const storedFieldVisibility = parseStoredObject(fieldVisibility);
-  const projectedLanguageData = { ...defaultLanguageData };
-  for (const key of Object.keys(projectedLanguageData) as Array<keyof typeof projectedLanguageData>) {
-    const value = storedLanguageData[key];
-    if (typeof value !== "string") continue;
-    const maximumLength = key === "termsText"
-      ? 1_000
-      : key === "processingOrderMessage"
-        ? 500
-        : 80;
-    projectedLanguageData[key] = value.slice(0, maximumLength);
+  const projectedLanguageData = resolveCheckoutLanguageData(languageCode, languageData);
+  for (const key of CHECKOUT_LANGUAGE_KEYS) {
+    const maximumLength = CHECKOUT_LANGUAGE_LONG_TEXT_KEYS.has(key) ? 1_000 : 120;
+    projectedLanguageData[key] = projectedLanguageData[key].slice(0, maximumLength);
   }
   const projectedFieldVisibility = { ...defaultFieldVisibility };
   for (const key of Object.keys(projectedFieldVisibility) as Array<keyof typeof projectedFieldVisibility>) {
@@ -200,7 +163,7 @@ function publicCheckoutLanguageProjection(languageData: unknown, fieldVisibility
 const createCheckoutLanguageSchema = z.object({
   name: z.string().min(1, "Name is required").max(100).openapi({ description: "Language name" }),
   code: z.string().min(1, "Code is required").max(10).openapi({ description: "Language code" }),
-  languageData: checkoutLanguageDataSchema.partial().optional().openapi({ description: "Language strings" }),
+  languageData: checkoutLanguageDataSchema.optional().openapi({ description: "Checkout language overrides" }),
   fieldVisibility: checkoutLanguageFieldVisibilitySchema.partial().optional().openapi({ description: "Field visibility settings" }),
   isActive: z.boolean().optional().default(false).openapi({ description: "Whether this language is active" }),
   isDefault: z.boolean().optional().default(false).openapi({ description: "Whether this is the default language" })
@@ -312,7 +275,7 @@ async function getActiveCheckoutLanguage(db: Database) {
         id: "fallback",
         name: "English (Fallback)",
         code: "en",
-        languageData: defaultLanguageData,
+        languageData: ENGLISH_CHECKOUT_LANGUAGE_DATA,
         fieldVisibility: fallbackFieldVisibility,
         isActive: true,
         isDefault: true
@@ -322,7 +285,11 @@ async function getActiveCheckoutLanguage(db: Database) {
 
   const parsedLanguage = {
     ...language,
-    ...publicCheckoutLanguageProjection(language.languageData, language.fieldVisibility),
+    ...publicCheckoutLanguageProjection(
+      language.code,
+      language.languageData,
+      language.fieldVisibility,
+    ),
   };
 
   return { language: parsedLanguage };
@@ -408,6 +375,7 @@ adminApp.openapi(listRoute, async (c) => {
     languages: results.map((language) => ({
       ...language,
       ...publicCheckoutLanguageProjection(
+        language.code,
         language.languageData,
         language.fieldVisibility,
       ),
@@ -463,7 +431,7 @@ adminApp.openapi(createRoute2, async (c) => {
     id: newLanguageId,
     name: data.name,
     code: data.code,
-    languageData: JSON.stringify(data.languageData || defaultLanguageData),
+    languageData: JSON.stringify(resolveCheckoutLanguageData(data.code, data.languageData)),
     fieldVisibility: JSON.stringify(data.fieldVisibility || defaultFieldVisibility),
     isActive: data.isActive || false,
     isDefault: data.isDefault || false,
@@ -504,6 +472,7 @@ adminApp.openapi(createRoute2, async (c) => {
       ? {
           ...insertedLanguage,
           ...publicCheckoutLanguageProjection(
+            insertedLanguage.code,
             insertedLanguage.languageData,
             insertedLanguage.fieldVisibility,
           ),
@@ -541,6 +510,7 @@ adminApp.openapi(getByIdRoute, async (c) => {
   return ok(c, {
     ...language,
     ...publicCheckoutLanguageProjection(
+      language.code,
       language.languageData,
       language.fieldVisibility,
     ),
@@ -592,7 +562,12 @@ adminApp.openapi(updateRoute, async (c) => {
   const updateData: Record<string, unknown> = { updatedAt: sql`(cast(strftime('%s','now') as int))` };
   if (data.name !== undefined) updateData.name = data.name;
   if (data.code !== undefined) updateData.code = data.code;
-  if (data.languageData !== undefined) updateData.languageData = JSON.stringify(data.languageData);
+  if (data.languageData !== undefined) {
+    updateData.languageData = JSON.stringify(resolveCheckoutLanguageData(
+      data.code ?? existing.code,
+      data.languageData,
+    ));
+  }
   if (data.fieldVisibility !== undefined) updateData.fieldVisibility = JSON.stringify(data.fieldVisibility);
   if (data.isActive !== undefined) updateData.isActive = data.isActive;
   if (data.isDefault !== undefined) updateData.isDefault = data.isDefault;
@@ -647,6 +622,7 @@ adminApp.openapi(updateRoute, async (c) => {
     language: {
       ...updated,
       ...publicCheckoutLanguageProjection(
+        updated.code,
         updated.languageData,
         updated.fieldVisibility,
       ),

@@ -9,6 +9,7 @@ import {
   useState,
 } from "react";
 import type { Country } from "react-phone-number-input";
+import englishPhoneLabels from "react-phone-number-input/locale/en.json";
 import { FLAG_URL } from "@scalius/shared/phone-flags";
 import {
   hasActivePhoneCountryPolicy,
@@ -30,6 +31,11 @@ interface PhoneFieldProps {
   label?: string;
   allowedCountries?: string[];
   allowedCountriesMode?: "include" | "exclude";
+  requiredMessage?: string;
+  invalidMessage?: string;
+  countryNotAcceptedMessage?: string;
+  countrySelectLabel?: string;
+  languageCode?: string;
 }
 
 export default function PhoneField({
@@ -42,6 +48,11 @@ export default function PhoneField({
   label,
   allowedCountries,
   allowedCountriesMode = "include",
+  requiredMessage = "Enter your phone number.",
+  invalidMessage = "Enter a valid phone number.",
+  countryNotAcceptedMessage = "This store does not accept phone numbers from that country.",
+  countrySelectLabel = "Phone number country",
+  languageCode = "en",
 }: PhoneFieldProps) {
   const inputId = `${name}-input`;
   const countryPolicy = useMemo(
@@ -90,6 +101,26 @@ export default function PhoneField({
     }
     return allowedCountries as Country[];
   }, [allowedCountries, allowedCountriesMode]);
+  const phoneLabels = useMemo(() => {
+    let displayNames: Intl.DisplayNames | null = null;
+    try {
+      displayNames = new Intl.DisplayNames([languageCode], { type: "region" });
+    } catch {
+      displayNames = null;
+    }
+    const localizedCountries = Object.fromEntries(
+      getCountries().map((country) => [
+        country,
+        displayNames?.of(country) || englishPhoneLabels[country],
+      ]),
+    );
+    return {
+      ...englishPhoneLabels,
+      ...localizedCountries,
+      country: countrySelectLabel,
+      phone: label || placeholder || englishPhoneLabels.phone,
+    };
+  }, [countrySelectLabel, label, languageCode, placeholder]);
 
   const effectiveDefaultCountry = useMemo(() => {
     if (effectiveCountries && effectiveCountries.length > 0) {
@@ -101,13 +132,20 @@ export default function PhoneField({
 
   const validate = useCallback(() => {
     const result = validateStorefrontPhone(value, countryPolicy, { required });
-    setError(result.ok ? "" : result.message || "Enter a valid phone number.");
+    const localizedError = !result.message
+      ? invalidMessage
+      : result.message.includes("does not accept")
+        ? countryNotAcceptedMessage
+        : result.message.includes("your phone number")
+          ? requiredMessage
+          : invalidMessage;
+    setError(result.ok ? "" : localizedError);
     if (result.ok) {
       if (result.value !== value) setValue(result.value);
       persistCanonicalValue(result.value);
     }
     return result.ok;
-  }, [countryPolicy, persistCanonicalValue, required, value]);
+  }, [countryNotAcceptedMessage, countryPolicy, invalidMessage, persistCanonicalValue, required, requiredMessage, value]);
 
   // Listen for external pre-fill (customer login autofill dispatches this event)
   useEffect(() => {
@@ -130,7 +168,7 @@ export default function PhoneField({
       const detail = (event as CustomEvent<{ name?: string; message?: string }>)
         .detail;
       if (detail?.name !== name) return;
-      setError(detail.message || "Enter a valid phone number.");
+      setError(detail.message || invalidMessage);
       requestAnimationFrame(() => {
         document
           .querySelector<HTMLInputElement>(
@@ -141,7 +179,7 @@ export default function PhoneField({
     };
     window.addEventListener("phone-validation-error", handler);
     return () => window.removeEventListener("phone-validation-error", handler);
-  }, [name]);
+  }, [invalidMessage, name]);
 
   return (
     <div id={`${name}-field`}>
@@ -169,6 +207,7 @@ export default function PhoneField({
         defaultCountry={effectiveDefaultCountry}
         countries={effectiveCountries}
         flagUrl={FLAG_URL}
+        labels={phoneLabels}
         value={value}
         onChange={(v) => {
           const nextValue = v || "";

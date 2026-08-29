@@ -8898,40 +8898,11 @@ export type GetApiV1CheckoutLanguagesActiveResponses = {
                 id: string;
                 name: string;
                 code: string;
+                /**
+                 * Buyer-facing checkout copy. Responses contain the complete resolved locale; writes may include only merchant overrides.
+                 */
                 languageData: {
-                    pageTitle: string;
-                    checkoutSectionTitle: string;
-                    cartSectionTitle: string;
-                    customerNameLabel: string;
-                    customerNamePlaceholder: string;
-                    customerPhoneLabel: string;
-                    customerPhonePlaceholder: string;
-                    customerPhoneHelp: string;
-                    customerEmailLabel: string;
-                    customerEmailPlaceholder: string;
-                    shippingAddressLabel: string;
-                    shippingAddressPlaceholder: string;
-                    cityLabel: string;
-                    zoneLabel: string;
-                    areaLabel: string;
-                    shippingMethodLabel: string;
-                    orderNotesLabel: string;
-                    orderNotesPlaceholder: string;
-                    continueShoppingText: string;
-                    subtotalText: string;
-                    shippingText: string;
-                    discountText: string;
-                    totalText: string;
-                    discountCodePlaceholder: string;
-                    applyDiscountText: string;
-                    removeDiscountText: string;
-                    placeOrderText: string;
-                    processingText: string;
-                    emptyCartText: string;
-                    termsText: string;
-                    processingOrderTitle: string;
-                    processingOrderMessage: string;
-                    requiredFieldIndicator: string;
+                    [key: string]: string;
                 };
                 fieldVisibility: {
                     showEmailField: boolean;
@@ -53170,40 +53141,11 @@ export type GetApiV1AdminSettingsCheckoutLanguagesActiveResponses = {
                 id: string;
                 name: string;
                 code: string;
+                /**
+                 * Buyer-facing checkout copy. Responses contain the complete resolved locale; writes may include only merchant overrides.
+                 */
                 languageData: {
-                    pageTitle: string;
-                    checkoutSectionTitle: string;
-                    cartSectionTitle: string;
-                    customerNameLabel: string;
-                    customerNamePlaceholder: string;
-                    customerPhoneLabel: string;
-                    customerPhonePlaceholder: string;
-                    customerPhoneHelp: string;
-                    customerEmailLabel: string;
-                    customerEmailPlaceholder: string;
-                    shippingAddressLabel: string;
-                    shippingAddressPlaceholder: string;
-                    cityLabel: string;
-                    zoneLabel: string;
-                    areaLabel: string;
-                    shippingMethodLabel: string;
-                    orderNotesLabel: string;
-                    orderNotesPlaceholder: string;
-                    continueShoppingText: string;
-                    subtotalText: string;
-                    shippingText: string;
-                    discountText: string;
-                    totalText: string;
-                    discountCodePlaceholder: string;
-                    applyDiscountText: string;
-                    removeDiscountText: string;
-                    placeOrderText: string;
-                    processingText: string;
-                    emptyCartText: string;
-                    termsText: string;
-                    processingOrderTitle: string;
-                    processingOrderMessage: string;
-                    requiredFieldIndicator: string;
+                    [key: string]: string;
                 };
                 fieldVisibility: {
                     showEmailField: boolean;
@@ -53336,40 +53278,11 @@ export type GetApiV1AdminSettingsCheckoutLanguagesResponses = {
                 id: string;
                 name: string;
                 code: string;
+                /**
+                 * Buyer-facing checkout copy. Responses contain the complete resolved locale; writes may include only merchant overrides.
+                 */
                 languageData: {
-                    pageTitle: string;
-                    checkoutSectionTitle: string;
-                    cartSectionTitle: string;
-                    customerNameLabel: string;
-                    customerNamePlaceholder: string;
-                    customerPhoneLabel: string;
-                    customerPhonePlaceholder: string;
-                    customerPhoneHelp: string;
-                    customerEmailLabel: string;
-                    customerEmailPlaceholder: string;
-                    shippingAddressLabel: string;
-                    shippingAddressPlaceholder: string;
-                    cityLabel: string;
-                    zoneLabel: string;
-                    areaLabel: string;
-                    shippingMethodLabel: string;
-                    orderNotesLabel: string;
-                    orderNotesPlaceholder: string;
-                    continueShoppingText: string;
-                    subtotalText: string;
-                    shippingText: string;
-                    discountText: string;
-                    totalText: string;
-                    discountCodePlaceholder: string;
-                    applyDiscountText: string;
-                    removeDiscountText: string;
-                    placeOrderText: string;
-                    processingText: string;
-                    emptyCartText: string;
-                    termsText: string;
-                    processingOrderTitle: string;
-                    processingOrderMessage: string;
-                    requiredFieldIndicator: string;
+                    [key: string]: string;
                 };
                 fieldVisibility: {
                     showEmailField: boolean;
@@ -53407,42 +53320,10 @@ export type PostApiV1AdminSettingsCheckoutLanguagesData = {
          */
         code: string;
         /**
-         * Language strings
+         * Checkout language overrides
          */
         languageData?: {
-            pageTitle?: string;
-            checkoutSectionTitle?: string;
-            cartSectionTitle?: string;
-            customerNameLabel?: string;
-            customerNamePlaceholder?: string;
-            customerPhoneLabel?: string;
-            customerPhonePlaceholder?: string;
-            customerPhoneHelp?: string;
-            customerEmailLabel?: string;
-            customerEmailPlaceholder?: string;
-            shippingAddressLabel?: string;
-            shippingAddressPlaceholder?: string;
-            cityLabel?: string;
-            zoneLabel?: string;
-            areaLabel?: string;
-            shippingMethodLabel?: string;
-            orderNotesLabel?: string;
-            orderNotesPlaceholder?: string;
-            continueShoppingText?: string;
-            subtotalText?: string;
-            shippingText?: string;
-            discountText?: string;
-            totalText?: string;
-            discountCodePlaceholder?: string;
-            applyDiscountText?: string;
-            removeDiscountText?: string;
-            placeOrderText?: string;
-            processingText?: string;
-            emptyCartText?: string;
-            termsText?: string;
-            processingOrderTitle?: string;
-            processingOrderMessage?: string;
-            requiredFieldIndicator?: string;
+            [key: string]: string;
         };
         /**
          * Field visibility settings
@@ -53537,40 +53418,11 @@ export type PostApiV1AdminSettingsCheckoutLanguagesResponses = {
                 id: string;
                 name: string;
                 code: string;
+                /**
+                 * Buyer-facing checkout copy. Responses contain the complete resolved locale; writes may include only merchant overrides.
+                 */
                 languageData: {
-                    pageTitle: string;
-                    checkoutSectionTitle: string;
-                    cartSectionTitle: string;
-                    customerNameLabel: string;
-                    customerNamePlaceholder: string;
-                    customerPhoneLabel: string;
-                    customerPhonePlaceholder: string;
-                    customerPhoneHelp: string;
-                    customerEmailLabel: string;
-                    customerEmailPlaceholder: string;
-                    shippingAddressLabel: string;
-                    shippingAddressPlaceholder: string;
-                    cityLabel: string;
-                    zoneLabel: string;
-                    areaLabel: string;
-                    shippingMethodLabel: string;
-                    orderNotesLabel: string;
-                    orderNotesPlaceholder: string;
-                    continueShoppingText: string;
-                    subtotalText: string;
-                    shippingText: string;
-                    discountText: string;
-                    totalText: string;
-                    discountCodePlaceholder: string;
-                    applyDiscountText: string;
-                    removeDiscountText: string;
-                    placeOrderText: string;
-                    processingText: string;
-                    emptyCartText: string;
-                    termsText: string;
-                    processingOrderTitle: string;
-                    processingOrderMessage: string;
-                    requiredFieldIndicator: string;
+                    [key: string]: string;
                 };
                 fieldVisibility: {
                     showEmailField: boolean;
@@ -53746,40 +53598,11 @@ export type GetApiV1AdminSettingsCheckoutLanguagesByIdResponses = {
             id: string;
             name: string;
             code: string;
+            /**
+             * Buyer-facing checkout copy. Responses contain the complete resolved locale; writes may include only merchant overrides.
+             */
             languageData: {
-                pageTitle: string;
-                checkoutSectionTitle: string;
-                cartSectionTitle: string;
-                customerNameLabel: string;
-                customerNamePlaceholder: string;
-                customerPhoneLabel: string;
-                customerPhonePlaceholder: string;
-                customerPhoneHelp: string;
-                customerEmailLabel: string;
-                customerEmailPlaceholder: string;
-                shippingAddressLabel: string;
-                shippingAddressPlaceholder: string;
-                cityLabel: string;
-                zoneLabel: string;
-                areaLabel: string;
-                shippingMethodLabel: string;
-                orderNotesLabel: string;
-                orderNotesPlaceholder: string;
-                continueShoppingText: string;
-                subtotalText: string;
-                shippingText: string;
-                discountText: string;
-                totalText: string;
-                discountCodePlaceholder: string;
-                applyDiscountText: string;
-                removeDiscountText: string;
-                placeOrderText: string;
-                processingText: string;
-                emptyCartText: string;
-                termsText: string;
-                processingOrderTitle: string;
-                processingOrderMessage: string;
-                requiredFieldIndicator: string;
+                [key: string]: string;
             };
             fieldVisibility: {
                 showEmailField: boolean;
@@ -53880,42 +53703,10 @@ export type PutApiV1AdminSettingsCheckoutLanguagesByIdData = {
          */
         code?: string;
         /**
-         * Language strings
+         * Checkout language overrides
          */
         languageData?: {
-            pageTitle?: string;
-            checkoutSectionTitle?: string;
-            cartSectionTitle?: string;
-            customerNameLabel?: string;
-            customerNamePlaceholder?: string;
-            customerPhoneLabel?: string;
-            customerPhonePlaceholder?: string;
-            customerPhoneHelp?: string;
-            customerEmailLabel?: string;
-            customerEmailPlaceholder?: string;
-            shippingAddressLabel?: string;
-            shippingAddressPlaceholder?: string;
-            cityLabel?: string;
-            zoneLabel?: string;
-            areaLabel?: string;
-            shippingMethodLabel?: string;
-            orderNotesLabel?: string;
-            orderNotesPlaceholder?: string;
-            continueShoppingText?: string;
-            subtotalText?: string;
-            shippingText?: string;
-            discountText?: string;
-            totalText?: string;
-            discountCodePlaceholder?: string;
-            applyDiscountText?: string;
-            removeDiscountText?: string;
-            placeOrderText?: string;
-            processingText?: string;
-            emptyCartText?: string;
-            termsText?: string;
-            processingOrderTitle?: string;
-            processingOrderMessage?: string;
-            requiredFieldIndicator?: string;
+            [key: string]: string;
         };
         /**
          * Field visibility settings
@@ -54023,40 +53814,11 @@ export type PutApiV1AdminSettingsCheckoutLanguagesByIdResponses = {
                 id: string;
                 name: string;
                 code: string;
+                /**
+                 * Buyer-facing checkout copy. Responses contain the complete resolved locale; writes may include only merchant overrides.
+                 */
                 languageData: {
-                    pageTitle: string;
-                    checkoutSectionTitle: string;
-                    cartSectionTitle: string;
-                    customerNameLabel: string;
-                    customerNamePlaceholder: string;
-                    customerPhoneLabel: string;
-                    customerPhonePlaceholder: string;
-                    customerPhoneHelp: string;
-                    customerEmailLabel: string;
-                    customerEmailPlaceholder: string;
-                    shippingAddressLabel: string;
-                    shippingAddressPlaceholder: string;
-                    cityLabel: string;
-                    zoneLabel: string;
-                    areaLabel: string;
-                    shippingMethodLabel: string;
-                    orderNotesLabel: string;
-                    orderNotesPlaceholder: string;
-                    continueShoppingText: string;
-                    subtotalText: string;
-                    shippingText: string;
-                    discountText: string;
-                    totalText: string;
-                    discountCodePlaceholder: string;
-                    applyDiscountText: string;
-                    removeDiscountText: string;
-                    placeOrderText: string;
-                    processingText: string;
-                    emptyCartText: string;
-                    termsText: string;
-                    processingOrderTitle: string;
-                    processingOrderMessage: string;
-                    requiredFieldIndicator: string;
+                    [key: string]: string;
                 };
                 fieldVisibility: {
                     showEmailField: boolean;

@@ -14,6 +14,10 @@ import {
   type CheckoutLanguagesQueryInput,
   type CheckoutLanguageWriteInput,
 } from "@/lib/api-functions/checkout-languages";
+import {
+  ENGLISH_CHECKOUT_LANGUAGE_DATA,
+  getCheckoutLanguagePreset,
+} from "@scalius/shared/checkout-language";
 
 export type { CheckoutLanguage };
 
@@ -33,39 +37,7 @@ export type SortField =
 export type SortOrder = "asc" | "desc";
 
 export const defaultLanguageData: Record<string, string> = {
-  pageTitle: "Cart & Checkout",
-  checkoutSectionTitle: "Checkout Information",
-  cartSectionTitle: "Shopping Cart",
-  customerNameLabel: "Full Name",
-  customerNamePlaceholder: "Enter your full name",
-  customerPhoneLabel: "Phone Number",
-  customerPhonePlaceholder: "Phone number",
-  customerPhoneHelp: "Enter your phone number with country code",
-  customerEmailLabel: "Email (Optional)",
-  customerEmailPlaceholder: "Enter your email address",
-  shippingAddressLabel: "Delivery Address",
-  shippingAddressPlaceholder: "Enter your full delivery address",
-  cityLabel: "City",
-  zoneLabel: "Zone",
-  areaLabel: "Area (Optional)",
-  shippingMethodLabel: "Choose Delivery Option",
-  orderNotesLabel: "Order Notes (Optional)",
-  orderNotesPlaceholder: "Any special instructions for your order?",
-  continueShoppingText: "Continue Shopping",
-  subtotalText: "Subtotal",
-  shippingText: "Shipping",
-  discountText: "Discount",
-  totalText: "Total",
-  discountCodePlaceholder: "Discount code",
-  applyDiscountText: "Apply",
-  removeDiscountText: "Remove",
-  placeOrderText: "Place Order",
-  processingText: "Processing...",
-  emptyCartText: "Your cart is empty",
-  termsText: "By placing this order, you agree to our Terms of Service and Privacy Policy",
-  processingOrderTitle: "Processing Your Order",
-  processingOrderMessage: "Please wait while we process your order.",
-  requiredFieldIndicator: "*",
+  ...ENGLISH_CHECKOUT_LANGUAGE_DATA,
 };
 
 export const defaultFieldVisibility: Record<string, boolean> = {
@@ -169,7 +141,10 @@ export function useLanguages() {
     const rawLanguages = data?.languages ?? EMPTY_CHECKOUT_LANGUAGES;
     return rawLanguages.map((lang) => ({
       ...lang,
-      languageData: toStringRecord(lang.languageData, defaultLanguageData),
+      languageData: toStringRecord(
+        lang.languageData,
+        getCheckoutLanguagePreset(lang.code),
+      ),
       fieldVisibility: toBooleanRecord(
         lang.fieldVisibility,
         defaultFieldVisibility,

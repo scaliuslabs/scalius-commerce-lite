@@ -5,15 +5,16 @@ import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
 
 interface Props {
   layoutData: LayoutData | null;
+  copy: import("@scalius/shared/checkout-language").CheckoutLanguageData;
 }
 
-const { layoutData } = Astro.props;
+const { layoutData, copy } = Astro.props;
 const logo = layoutData?.header?.logo ?? { src: "", alt: "" };
 const merchantName =
   layoutData?.business?.companyName?.trim()
   || layoutData?.business?.legalName?.trim()
   || logo.alt?.trim()
-  || "Checkout";
+  || copy.pageTitle;
 ---
 
 <header class="border-b border-border bg-background">
@@ -22,7 +23,7 @@ const merchantName =
       href="/"
       data-astro-prefetch={getStorefrontPrefetchAttribute("/", Astro.url)}
       class="inline-flex min-h-11 items-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-      aria-label="Go to homepage"
+      aria-label={copy.homeAriaLabel}
     >
       {
         logo.src ? (
@@ -44,12 +45,12 @@ const merchantName =
       }
     </a>
 
-    <div class="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground" aria-label="Secure checkout">
+    <div class="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground" aria-label={copy.secureCheckoutText}>
       <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
         <rect x="5" y="10" width="14" height="10" rx="2" stroke-width="1.75" />
         <path d="M8 10V7a4 4 0 0 1 8 0v3" stroke-width="1.75" stroke-linecap="round" />
       </svg>
-      <span>Secure checkout</span>
+      <span>{copy.secureCheckoutText}</span>
     </div>
   </div>
 </header>

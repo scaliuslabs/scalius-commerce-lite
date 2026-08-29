@@ -566,45 +566,13 @@ export interface SearchResults {
 // Checkout Language Types (local domain type — SDK only has response wrappers)
 // ---------------------------------------------------------------------------
 
+import type { CheckoutLanguageData as CheckoutLanguageStrings } from "@scalius/shared/checkout-language";
+
 export interface CheckoutLanguageData {
   id: string;
   name: string;
   code: string;
-  languageData: {
-    pageTitle: string;
-    checkoutSectionTitle: string;
-    cartSectionTitle: string;
-    customerNameLabel: string;
-    customerNamePlaceholder: string;
-    customerPhoneLabel: string;
-    customerPhonePlaceholder: string;
-    customerPhoneHelp: string;
-    customerEmailLabel: string;
-    customerEmailPlaceholder: string;
-    shippingAddressLabel: string;
-    shippingAddressPlaceholder: string;
-    cityLabel: string;
-    zoneLabel: string;
-    areaLabel: string;
-    shippingMethodLabel: string;
-    orderNotesLabel: string;
-    orderNotesPlaceholder: string;
-    continueShoppingText: string;
-    subtotalText: string;
-    shippingText: string;
-    discountText: string;
-    totalText: string;
-    discountCodePlaceholder: string;
-    applyDiscountText: string;
-    removeDiscountText: string;
-    placeOrderText: string;
-    processingText: string;
-    emptyCartText: string;
-    termsText: string;
-    processingOrderTitle: string;
-    processingOrderMessage: string;
-    requiredFieldIndicator: string;
-  };
+  languageData: CheckoutLanguageStrings;
   fieldVisibility: {
     showEmailField: boolean;
     showOrderNotesField: boolean;

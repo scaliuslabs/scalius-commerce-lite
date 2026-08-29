@@ -4,6 +4,7 @@ import {
   getCheckoutErrorMessage,
   getCheckoutStatusErrorMessage,
 } from "./error-messages";
+import { BANGLA_CHECKOUT_LANGUAGE_DATA } from "@scalius/shared/checkout-language";
 
 describe("checkout error messages", () => {
   it("keeps specific backend messages", () => {
@@ -32,5 +33,13 @@ describe("checkout error messages", () => {
       429,
       "Too many checkout attempts. Please wait before trying again.",
     )).toBe("Too many checkout attempts. Please wait before trying again.");
+  });
+
+  it("uses active checkout copy for generic status failures", () => {
+    expect(getCheckoutStatusErrorMessage(
+      429,
+      BANGLA_CHECKOUT_LANGUAGE_DATA.paymentFailedText,
+      BANGLA_CHECKOUT_LANGUAGE_DATA,
+    )).toBe(BANGLA_CHECKOUT_LANGUAGE_DATA.tooManyCheckoutAttemptsText);
   });
 });

@@ -16,6 +16,11 @@ import {
 } from "~/components/ui/dialog";
 import { Loader2 } from "lucide-react";
 import {
+  checkoutLanguageBaseCode,
+  getCheckoutLanguagePreset,
+  resolveCheckoutLanguageData,
+} from "@scalius/shared/checkout-language";
+import {
   type ManagerCheckoutLanguage,
   defaultLanguageData,
   defaultFieldVisibility,
@@ -81,6 +86,17 @@ export function LanguageFormDialog({
     }));
   };
 
+  const updateLanguageCode = (code: string) => {
+    setCurrentFormData((prev) => ({
+      ...prev,
+      code,
+      languageData: resolveCheckoutLanguageData(code, prev.languageData),
+    }));
+  };
+
+  const activePresetCode = checkoutLanguageBaseCode(currentFormData.code);
+  const activePresetName = activePresetCode === "bn" ? "Bangla" : "English";
+
   return (
     <Dialog
       open={isOpen}
@@ -123,14 +139,34 @@ export function LanguageFormDialog({
               <Input
                 id="code"
                 value={currentFormData.code || ""}
-                onChange={(e) =>
-                  setCurrentFormData((p) => ({ ...p, code: e.target.value }))
-                }
+                onChange={(e) => updateLanguageCode(e.target.value)}
                 required
                 placeholder="e.g., en, bn"
                 className="mt-1 min-h-11 text-sm sm:min-h-9"
               />
             </div>
+          </div>
+
+          <div className="flex flex-col gap-2 rounded-lg border bg-muted/30 p-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-xs leading-5 text-muted-foreground">
+              The locale code selects complete buyer-facing defaults for cart,
+              checkout, validation, payment, and accessibility copy. Custom text
+              below remains an override.
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-11 shrink-0 text-xs sm:h-8"
+              onClick={() =>
+                setCurrentFormData((prev) => ({
+                  ...prev,
+                  languageData: getCheckoutLanguagePreset(prev.code),
+                }))
+              }
+            >
+              Reset to {activePresetName}
+            </Button>
           </div>
 
           <div className="grid gap-2 sm:grid-cols-2">
@@ -289,7 +325,7 @@ function getInitialFormData(
   return {
     ...lang,
     languageData: {
-      ...defaultLanguageData,
+      ...getCheckoutLanguagePreset(lang.code),
       ...(lang.languageData || {}),
     },
     fieldVisibility: {

@@ -14,6 +14,12 @@ interface LocationSelectorProps {
   cityLabel?: string;
   zoneLabel?: string;
   areaLabel?: string;
+  cityPlaceholder?: string;
+  zonePlaceholder?: string;
+  areaPlaceholder?: string;
+  loadingText?: string;
+  zonesLoadFailedText?: string;
+  areasLoadFailedText?: string;
   showAreaField?: boolean;
   onSelectionChange?: (selection: LocationSelection) => void;
 }
@@ -32,6 +38,12 @@ export default function LocationSelector({
   cityLabel = "City",
   zoneLabel = "Zone",
   areaLabel = "Area (Optional)",
+  cityPlaceholder = "Select a city",
+  zonePlaceholder = "Select a zone",
+  areaPlaceholder = "Select an area (optional)",
+  loadingText = "Loading…",
+  zonesLoadFailedText = "Could not load zones. Try again",
+  areasLoadFailedText = "Could not load areas. Try again",
   showAreaField = true,
   onSelectionChange,
 }: LocationSelectorProps) {
@@ -316,7 +328,7 @@ export default function LocationSelector({
           labelId="city-label"
           ariaLabel={cityLabel}
           name="city"
-          placeholder="Select a city"
+          placeholder={cityPlaceholder}
           options={cityOptions}
           value={selectedCity}
           onChange={handleCityChange}
@@ -339,7 +351,7 @@ export default function LocationSelector({
           labelId="zone-label"
           ariaLabel={zoneLabel}
           name="zone"
-          placeholder="Select a zone"
+          placeholder={zonePlaceholder}
           options={zoneOptions}
           value={selectedZone}
           onChange={handleZoneChange}
@@ -350,7 +362,7 @@ export default function LocationSelector({
         />
         {isLoadingZones && (
           <div className="absolute right-3 top-[calc(50%+4px)] -translate-y-1/2 h-4 w-4 animate-spin rounded-full border-2 border-solid border-gray-400 border-r-transparent">
-            <span className="sr-only">Loading...</span>
+            <span className="sr-only">{loadingText}</span>
           </div>
         )}
         {zoneLoadFailed && (
@@ -359,7 +371,7 @@ export default function LocationSelector({
             className="mt-1 text-xs font-medium text-destructive underline underline-offset-2"
             onClick={() => void loadZones(selectedCity)}
           >
-            Could not load zones. Try again
+            {zonesLoadFailedText}
           </button>
         )}
       </div>
@@ -378,7 +390,7 @@ export default function LocationSelector({
             labelId="area-label"
             ariaLabel={areaLabel}
             name="area"
-            placeholder="Select an area (optional)"
+            placeholder={areaPlaceholder}
             options={areaOptions}
             value={selectedArea}
             onChange={handleAreaChange}
@@ -388,7 +400,7 @@ export default function LocationSelector({
           />
           {isLoadingAreas && (
             <div className="absolute right-3 top-[calc(50%+4px)] -translate-y-1/2 h-4 w-4 animate-spin rounded-full border-2 border-solid border-gray-400 border-r-transparent">
-              <span className="sr-only">Loading...</span>
+              <span className="sr-only">{loadingText}</span>
             </div>
           )}
           {areaLoadFailed && (
@@ -397,7 +409,7 @@ export default function LocationSelector({
               className="mt-1 text-xs font-medium text-destructive underline underline-offset-2"
               onClick={() => void loadAreas(selectedZone)}
             >
-              Could not load areas. Try again
+              {areasLoadFailedText}
             </button>
           )}
         </div>
