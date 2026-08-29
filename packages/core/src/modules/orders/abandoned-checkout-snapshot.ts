@@ -1,3 +1,5 @@
+import { validateAndFormatPhone } from "@scalius/shared/customer-utils";
+
 const MAX_TEXT_LENGTH = 500;
 const MAX_NOTES_LENGTH = 1_000;
 const MAX_CART_ITEMS = 100;
@@ -45,8 +47,9 @@ function finiteMoney(value: unknown): number | null {
 /** Compact agent list projection. Buyer identity and raw checkout JSON stay out. */
 export function projectAbandonedCheckoutAgentSummary(
     checkoutData: string,
-    hasStoredPhone: boolean,
+    storedPhone: string | null | undefined,
 ): AbandonedCheckoutAgentSummary {
+    const hasStoredPhone = normalizeOptionalPhone(storedPhone) !== undefined;
     try {
         const data = asRecord(JSON.parse(checkoutData));
         if (!data) throw new Error("Checkout data is not an object");
@@ -67,7 +70,7 @@ export function projectAbandonedCheckoutAgentSummary(
                 itemCount: 0,
                 total: finiteMoney(data.totalAmount) ?? 0,
                 hasCustomerContact: hasStoredPhone || Boolean(
-                    cleanText(data.customerPhone, 32) || cleanText(data.customerEmail, 320),
+                    normalizeOptionalPhone(data.customerPhone) || cleanText(data.customerEmail, 320),
                 ),
                 orderId,
                 paymentMethod,
@@ -80,7 +83,7 @@ export function projectAbandonedCheckoutAgentSummary(
             ? Math.min(MAX_CART_ITEMS, cart.items.length)
             : 0;
         const hasCustomerContact = hasStoredPhone || Boolean(
-            cleanText(data.customerPhone, 32)
+            normalizeOptionalPhone(data.customerPhone)
             || cleanText(data.customerEmail, 320)
             || cleanText(data.customerName, 160)
             || cleanText(data.shippingAddress, MAX_TEXT_LENGTH),
@@ -117,6 +120,18 @@ function cleanText(value: unknown, maxLength = MAX_TEXT_LENGTH): string | undefi
     if (typeof value !== "string") return undefined;
     const normalized = value.trim().slice(0, maxLength);
     return normalized || undefined;
+}
+
+function normalizeOptionalPhone(value: unknown): string | undefined {
+    if (typeof value !== "string") return undefined;
+    const normalized = value.trim();
+    if (!normalized || normalized.length > 32) return undefined;
+
+    try {
+        return validateAndFormatPhone(normalized);
+    } catch {
+        return undefined;
+    }
 }
 
 function cleanMoney(value: unknown): number | undefined {
@@ -200,7 +215,7 @@ function normalizeCheckoutData(value: UnknownRecord): UnknownRecord {
 
     return compact({
         customerName: cleanText(value.customerName, 160),
-        customerPhone: cleanText(value.customerPhone, 32),
+        customerPhone: normalizeOptionalPhone(value.customerPhone),
         customerEmail: cleanText(value.customerEmail, 320),
         shippingAddress: cleanText(value.shippingAddress, MAX_TEXT_LENGTH),
         notes: cleanText(value.notes, MAX_NOTES_LENGTH),
@@ -241,8 +256,8 @@ export function normalizeAbandonedCheckoutSnapshot(
 
     return {
         checkoutId,
-        customerPhone: cleanText(input.customerPhone, 32)
-            ?? cleanText(checkoutData.customerPhone, 32)
+        customerPhone: normalizeOptionalPhone(input.customerPhone)
+            ?? normalizeOptionalPhone(checkoutData.customerPhone)
             ?? null,
         checkoutData,
         checkoutDataString,
