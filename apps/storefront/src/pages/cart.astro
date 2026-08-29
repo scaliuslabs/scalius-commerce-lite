@@ -30,6 +30,10 @@ import { MIN_SHIPPING_ADDRESS_LENGTH } from "@/lib/checkout/shipping-address";
 import { hashCheckoutCartFingerprint } from "@/lib/checkout/session-state";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import type { CartValidationIssue } from "@/lib/api/orders";
+import {
+  ENGLISH_CHECKOUT_LANGUAGE_DATA,
+  checkoutLanguageBaseCode,
+} from "@scalius/shared/checkout-language";
 
 // Parallel fetch: layout + cities + shipping methods + checkout language + checkout config
 const [
@@ -53,49 +57,15 @@ const checkoutUnavailable =
   cities.length === 0;
 const checkoutUnavailableMessage =
   checkoutConfig.unavailableMessage ||
-  "Checkout is temporarily unavailable. Please try again shortly.";
+  checkoutLanguageResponse?.languageData.checkoutUnavailableMessage ||
+  ENGLISH_CHECKOUT_LANGUAGE_DATA.checkoutUnavailableMessage;
 const codOnly = !checkoutUnavailable && isCodOnly(checkoutConfig);
 const allowedCountriesMode = checkoutConfig?.allowedCountriesMode || "include";
 const lang: CheckoutLanguageData = checkoutLanguageResponse || {
   id: "fallback",
   name: "English (Fallback)",
   code: "en",
-  languageData: {
-    pageTitle: "Cart & Checkout",
-    checkoutSectionTitle: "Checkout Information",
-    cartSectionTitle: "Shopping Cart",
-    customerNameLabel: "Full Name",
-    customerNamePlaceholder: "Enter your full name",
-    customerPhoneLabel: "Phone Number",
-    customerPhonePlaceholder: "Phone number",
-    customerPhoneHelp: "Enter your mobile number",
-    customerEmailLabel: "Email (Optional)",
-    customerEmailPlaceholder: "Enter your email address",
-    shippingAddressLabel: "Delivery Address",
-    shippingAddressPlaceholder: "Enter your full delivery address",
-    cityLabel: "City",
-    zoneLabel: "Zone",
-    areaLabel: "Area (Optional)",
-    shippingMethodLabel: "Choose Delivery Option",
-    orderNotesLabel: "Order Notes (Optional)",
-    orderNotesPlaceholder: "Any special instructions for your order?",
-    continueShoppingText: "Continue Shopping",
-    subtotalText: "Subtotal",
-    shippingText: "Shipping",
-    discountText: "Discount",
-    totalText: "Total",
-    discountCodePlaceholder: "Discount code",
-    applyDiscountText: "Apply",
-    removeDiscountText: "Remove",
-    placeOrderText: "Place Order",
-    processingText: "Processing...",
-    emptyCartText: "Your cart is empty",
-    termsText:
-      "By placing this order, you agree to our Terms of Service and Privacy Policy",
-    processingOrderTitle: "Processing Your Order",
-    processingOrderMessage: "Please wait while we process your order.",
-    requiredFieldIndicator: "*",
-  },
+  languageData: { ...ENGLISH_CHECKOUT_LANGUAGE_DATA },
   fieldVisibility: {
     showEmailField: true,
     showOrderNotesField: true,
@@ -104,6 +74,9 @@ const lang: CheckoutLanguageData = checkoutLanguageResponse || {
   isActive: true,
   isDefault: true,
 };
+const copy = lang.languageData;
+const [existingCheckoutMessageBefore, existingCheckoutMessageAfter = ""] =
+  copy.existingCheckoutMessage.split("{orderId}", 2);
 
 // Initialize error message and success state
 let errorMessage = "";
@@ -117,8 +90,7 @@ let codCartRepairState: {
 } | null = null;
 
 if (Astro.url.searchParams.get("quickBuyStorage") === "blocked") {
-  errorMessage =
-    "We could not add that item because this browser blocked temporary cart storage. Please allow site storage, then add the product again.";
+  errorMessage = copy.quickBuyStorageBlockedText;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -154,7 +126,7 @@ if (Astro.request.method === "POST" && codOnly) {
       const cartItems = formData.get("cartItems") as string;
       if (!cartItems || cartItems === "{}" || cartItems === "[]") {
         throw new Error(
-          "Your cart is empty. Please add items to your cart before placing an order.",
+          copy.cartEmptyErrorText,
         );
       }
 
@@ -201,7 +173,7 @@ if (Astro.request.method === "POST" && codOnly) {
           (typeof resultError === "string"
             ? resultError
             : resultError?.message) ||
-          "Failed to process order. Please try again.";
+          copy.orderProcessingFailedText;
         const itemIssues = extractItemIssues(
           "details" in result ? result.details : undefined,
         );
@@ -211,7 +183,7 @@ if (Astro.request.method === "POST" && codOnly) {
             message:
               itemIssues.length === 1
                 ? errorMessage
-                : `${itemIssues.length} cart items need attention before checkout.`,
+                : copy.cartItemsNeedAttentionText.replace("{count}", String(itemIssues.length)),
             issues: itemIssues,
             createdAt: Date.now(),
           };
@@ -221,7 +193,7 @@ if (Astro.request.method === "POST" && codOnly) {
   } catch (error: unknown) {
     console.error("Order creation failed:", error);
     errorMessage =
-      error instanceof Error ? error.message : "An unexpected error occurred";
+      error instanceof Error ? error.message : copy.unexpectedErrorText;
   } finally {
     isProcessing = false;
   }
@@ -229,16 +201,23 @@ if (Astro.request.method === "POST" && codOnly) {
 
 // Determine submit button label
 const submitLabel = codOnly
-  ? lang.languageData.placeOrderText
+  ? copy.placeOrderText
   : checkoutUnavailable
-    ? "Checkout temporarily unavailable"
-    : "Continue to payment";
+    ? copy.checkoutUnavailableText
+    : copy.continueToPaymentText;
 const serializedCheckoutConfig = serializeJsonForInlineScript(checkoutConfig);
 const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
 ---
 
-<Layout title={lang.languageData.pageTitle} layoutData={layoutData} noindex hideHeader hideFooter>
-  <CheckoutHeader layoutData={layoutData} />
+<Layout
+  title={copy.pageTitle}
+  layoutData={layoutData}
+  documentLanguage={checkoutLanguageBaseCode(lang.code)}
+  noindex
+  hideHeader
+  hideFooter
+>
+  <CheckoutHeader layoutData={layoutData} copy={copy} />
   <!-- Hidden checkout meta for client-side JS -->
   <script
     is:inline
@@ -282,17 +261,17 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
         class="mb-3 rounded-lg border border-border bg-muted/50 px-3 py-2 text-sm text-foreground"
         role="alert"
       >
-        Enable JavaScript to load your saved cart and continue to checkout.
+        {copy.noScriptText}
       </div>
     </noscript>
-    <CheckoutProgress current="information" paymentRequired={!codOnly} />
+    <CheckoutProgress current="information" paymentRequired={!codOnly} copy={copy} />
     {
       checkoutUnavailable && (
         <div
           class="bg-destructive/10 border border-destructive/20 text-destructive px-3 py-2 sm:px-4 sm:py-3 rounded mb-2 sm:mb-2.5 relative text-xs sm:text-sm"
           role="alert"
         >
-          <strong class="font-bold">Checkout unavailable: </strong>
+          <strong class="font-bold">{copy.checkoutUnavailableText}: </strong>
           <span class="block sm:inline">{checkoutUnavailableMessage}</span>
         </div>
       )
@@ -304,7 +283,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
           class="bg-destructive/10 border border-destructive/20 text-destructive px-3 py-2 sm:px-4 sm:py-3 rounded mb-2 sm:mb-2.5 relative text-xs sm:text-sm"
           role="alert"
         >
-          <strong class="font-bold">Error: </strong>
+          <strong class="font-bold">{copy.errorPrefixText} </strong>
           <span class="block sm:inline">{errorMessage}</span>
         </div>
       )
@@ -316,9 +295,9 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
           class="bg-primary/10 border border-primary/20 text-primary px-3 py-2 sm:px-4 sm:py-3 rounded mb-2 sm:mb-2.5 relative text-xs sm:text-sm"
           role="alert"
         >
-          <strong class="font-bold">Success! </strong>
+          <strong class="font-bold">{copy.successPrefixText} </strong>
           <span class="block sm:inline">
-            Your order has been placed successfully. Order ID: {successOrderId}
+            {copy.orderPlacedSuccessText.replace("{orderId}", successOrderId)}
           </span>
         </div>
       )
@@ -332,9 +311,9 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     >
       <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p class="text-sm font-semibold">You already have a checkout in progress</p>
+          <p class="text-sm font-semibold">{copy.existingCheckoutTitle}</p>
           <p class="mt-1 text-xs leading-5 opacity-80">
-            Order <span id="checkoutRecoveryReference" class="font-mono"></span> is waiting for payment confirmation. Your cart is still here, and a second order is blocked until you review this checkout.
+            {existingCheckoutMessageBefore}<span id="checkoutRecoveryReference" class="font-mono"></span>{existingCheckoutMessageAfter}
           </p>
         </div>
         <a
@@ -342,7 +321,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
           data-astro-prefetch="false"
           class="inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg bg-amber-950 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-amber-900 dark:bg-amber-100 dark:text-amber-950 dark:hover:bg-white"
         >
-          Continue checkout
+          {copy.reviewExistingCheckoutText}
         </a>
       </div>
     </aside>
@@ -388,7 +367,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
               class="py-8 text-center text-sm text-muted-foreground"
               role="status"
             >
-              Loading your cart…
+              {copy.cartLoadingText}
             </div>
           </div>
 
@@ -414,7 +393,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
               id="taxRow"
               class="flex justify-between gap-3 text-xs sm:text-sm text-muted-foreground"
             >
-              <span id="taxLabel">Tax</span>
+              <span id="taxLabel">{copy.taxText}</span>
               <span
                 id="taxAmount"
                 class="text-right font-medium text-foreground"
@@ -450,7 +429,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
                   id="totalLabel"
                   data-final-label={lang.languageData.totalText}
                   class="text-sm font-bold text-foreground"
-                  >Estimated total</span
+                  >{copy.estimatedTotalText}</span
                 >
                 <span
                   id="total"
@@ -534,8 +513,8 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
               </svg>
               <span class="font-medium">
                 {checkoutConfig.guestCheckoutEnabled === false
-                  ? "Sign in to checkout"
-                  : "Already have an account? Sign in for faster checkout"}
+                  ? copy.signInToCheckoutText
+                  : copy.signInPromptText}
               </span>
             </span>
             <span
@@ -596,6 +575,11 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
                   required
                   allowedCountries={checkoutConfig.allowedCountries || []}
                   allowedCountriesMode={allowedCountriesMode}
+                  requiredMessage={copy.phoneRequiredText}
+                  invalidMessage={copy.phoneInvalidText}
+                  countryNotAcceptedMessage={copy.phoneCountryNotAcceptedText}
+                  countrySelectLabel={copy.phoneCountryLabelText}
+                  languageCode={lang.code}
                 />
               </div>
 
@@ -654,6 +638,12 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
                       cityLabel={lang.languageData.cityLabel}
                       zoneLabel={lang.languageData.zoneLabel}
                       areaLabel={lang.languageData.areaLabel}
+                      cityPlaceholder={copy.selectCityPlaceholder}
+                      zonePlaceholder={copy.selectZonePlaceholder}
+                      areaPlaceholder={copy.selectAreaPlaceholder}
+                      loadingText={copy.loadingText}
+                      zonesLoadFailedText={copy.zonesLoadFailedText}
+                      areasLoadFailedText={copy.areasLoadFailedText}
                       showAreaField={lang.fieldVisibility.showAreaField}
                     />
                     <p
@@ -668,6 +658,9 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
                     client:load
                     shippingMethods={shippingMethods}
                     shippingMethodLabel={lang.languageData.shippingMethodLabel}
+                    freeText={copy.freeText}
+                    noShippingMethodsText={copy.noShippingMethodsText}
+                    waivedShippingFeeText={copy.waivedShippingFeeText}
                   />
                 </div>
               </div>
@@ -751,11 +744,19 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     writeCheckoutFormDraft,
     writeCheckoutTransferSession,
   } from "@/lib/checkout/session-state";
-  import { getShippingAddressError } from "@/lib/checkout/shipping-address";
+  import {
+    getShippingAddressError,
+    MIN_SHIPPING_ADDRESS_LENGTH,
+  } from "@/lib/checkout/shipping-address";
   import {
     hideCheckoutLoadingOverlay,
     showCheckoutLoadingOverlay,
   } from "@/lib/checkout/loading-overlay";
+  import {
+    ENGLISH_CHECKOUT_LANGUAGE_DATA,
+    formatCheckoutLanguageText,
+    type CheckoutLanguageData as CheckoutLanguageStrings,
+  } from "@scalius/shared/checkout-language";
 
   type CustomerAutofillProfile = {
     name?: string | null;
@@ -778,18 +779,16 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
   const meta = document.getElementById("checkout-meta");
   const codOnly = meta?.dataset.codOnly === "true";
   const checkoutUnavailable = meta?.dataset.checkoutUnavailable === "true";
-  const checkoutUnavailableMessage =
-    meta?.dataset.checkoutUnavailableMessage ||
-    "Checkout is temporarily unavailable. Please try again shortly.";
   const guestCheckoutEnabled = meta?.dataset.guestCheckoutEnabled !== "false"; // default true
   const checkoutLanguage = window.__CHECKOUT_LANGUAGE__ as
     | {
-        languageData?: {
-          processingOrderTitle?: string;
-          processingOrderMessage?: string;
-        };
+        languageData?: CheckoutLanguageStrings;
       }
     | undefined;
+  const checkoutCopy = checkoutLanguage?.languageData ?? ENGLISH_CHECKOUT_LANGUAGE_DATA;
+  const checkoutUnavailableMessage =
+    meta?.dataset.checkoutUnavailableMessage ||
+    checkoutCopy.checkoutUnavailableMessage;
 
   const runWhenDomReady = (callback: () => void | Promise<void>) => {
     if (document.readyState === "loading") {
@@ -1150,7 +1149,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     };
 
     const readCustomerSessionForCheckout = async () => getCustomerSession();
-    const initialSubmitText = submitButtonText?.textContent?.trim() || "Place Order";
+    const initialSubmitText = submitButtonText?.textContent?.trim() || checkoutCopy.placeOrderText;
     const checkoutFormMessage = document.getElementById("checkoutFormMessage");
     let submitAfterCustomerSessionCheck = false;
     let submitAfterCartValidation = false;
@@ -1206,16 +1205,16 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
           submitButton.classList.add("opacity-50", "cursor-not-allowed");
         else submitButton.classList.remove("opacity-50", "cursor-not-allowed");
         submitButton.title = !cartReady
-          ? "Loading your cart"
+          ? checkoutCopy.cartLoadingText
           : checkoutUnavailable
             ? checkoutUnavailableMessage
             : empty
-              ? "Your cart is empty"
+              ? checkoutCopy.emptyCartText
               : cartBlocked
                 ? window.getCartBlockedMessage?.() ||
-                  "Some cart items need attention"
+                  checkoutCopy.cartAttentionText
                 : checkoutPending
-                  ? "Review the existing checkout before placing another order"
+                  ? checkoutCopy.reviewExistingCheckoutText
                 : "";
       }
     };
@@ -1251,7 +1250,14 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     );
     const syncShippingAddressValidity = (showError: boolean) => {
       if (!shippingAddressInput) return true;
-      const message = getShippingAddressError(shippingAddressInput.value);
+      const addressError = getShippingAddressError(shippingAddressInput.value);
+      const message = !addressError
+        ? null
+        : shippingAddressInput.value.trim()
+          ? formatCheckoutLanguageText(checkoutCopy.addressIncompleteText, {
+              minimum: MIN_SHIPPING_ADDRESS_LENGTH,
+            })
+          : checkoutCopy.addressRequiredText;
       shippingAddressInput.setCustomValidity(message ?? "");
       if (shippingAddressError) {
         shippingAddressError.textContent = showError ? (message ?? "") : "";
@@ -1300,7 +1306,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
           restoreSubmitButton();
           const recoveryLink = document.getElementById("checkoutRecoveryLink") as HTMLAnchorElement | null;
           showCheckoutFormError(
-            "Review your existing order before placing another one.",
+            checkoutCopy.reviewExistingCheckoutText,
             recoveryLink ?? submitButton,
           );
           return;
@@ -1310,14 +1316,14 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
         if (!guestCheckoutEnabled && !submitAfterCustomerSessionCheck) {
           e.preventDefault();
           submitButton.disabled = true;
-          setSubmitButtonText("Checking account...");
+          setSubmitButtonText(checkoutCopy.checkingAccountText);
 
           const session = await readCustomerSessionForCheckout();
           if (session.unavailable) {
             restoreSubmitButton();
             showCheckoutFormError(
               session.error ||
-                "We could not verify your account right now. Please try again.",
+                checkoutCopy.accountUnavailableText,
               submitButton,
             );
             return;
@@ -1345,7 +1351,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
           e.preventDefault();
           restoreSubmitButton();
           showCheckoutFormError(
-            "Your cart is empty. Please add items before placing an order.",
+            checkoutCopy.cartEmptyErrorText,
             submitButton,
           );
           return;
@@ -1377,13 +1383,13 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
           const missingTarget = document.querySelector<HTMLElement>(`[name="${firstMissing}"]`);
           if (firstMissing === "customerPhone") {
             window.dispatchEvent(new CustomEvent("phone-validation-error", {
-              detail: { name: "customerPhone", message: "Enter your phone number." },
+              detail: { name: "customerPhone", message: checkoutCopy.phoneRequiredText },
             }));
             missingTarget?.focus({ preventScroll: true });
           } else {
             const missingMessage = firstMissing === "customerName"
-              ? "Enter your full name."
-              : "Enter your delivery address.";
+              ? checkoutCopy.nameRequiredText
+              : checkoutCopy.addressRequiredText;
             showCheckoutFormError(missingMessage, missingTarget);
           }
           return;
@@ -1419,7 +1425,9 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
             new CustomEvent("phone-validation-error", {
               detail: {
                 name: "customerPhone",
-                message: phoneValidation.message,
+                message: phoneValidation.message?.includes("does not accept")
+                  ? checkoutCopy.phoneCountryNotAcceptedText
+                  : checkoutCopy.phoneInvalidText,
               },
             }),
           );
@@ -1449,8 +1457,8 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
           restoreSubmitButton();
           const missingCity = !cityInput?.value?.trim();
           const message = missingCity
-            ? "Choose a city and zone to continue."
-            : "Choose a zone to continue.";
+            ? checkoutCopy.cityZoneRequiredText
+            : checkoutCopy.zoneRequiredText;
           if (shippingLocationError) {
             shippingLocationError.textContent = message;
             shippingLocationError.classList.remove("hidden");
@@ -1475,7 +1483,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
           e.preventDefault();
           restoreSubmitButton();
           if (shippingLocationError) {
-            shippingLocationError.textContent = "Choose a delivery option.";
+            shippingLocationError.textContent = checkoutCopy.deliveryRequiredText;
             shippingLocationError.classList.remove("hidden");
             shippingLocationError.scrollIntoView({ behavior: "smooth", block: "center" });
           }
@@ -1487,14 +1495,14 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
         if (!submitAfterCartValidation) {
           e.preventDefault();
           submitButton.disabled = true;
-          setSubmitButtonText("Checking cart...");
+          setSubmitButtonText(checkoutCopy.checkingCartText);
           const cartIsValid = await (window.validateCartSnapshot?.() ??
             Promise.resolve(true));
           if (!cartIsValid || window.hasCartValidationIssues?.() === true) {
             restoreSubmitButton();
             showCheckoutFormError(
               window.getCartBlockedMessage?.() ||
-                "Please review the highlighted cart items before checkout.",
+                checkoutCopy.reviewCartItemsText,
               submitButton,
             );
             return;
@@ -1579,11 +1587,11 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
           }
 
           submitButton.disabled = true;
-          setSubmitButtonText("Redirecting to payment...");
+          setSubmitButtonText(checkoutCopy.redirectingToPaymentText);
 
           showCheckoutLoadingOverlay({
-            title: "Opening payment options",
-            message: "Confirming your total and available payment methods.",
+            title: checkoutCopy.openingPaymentOptionsTitle,
+            message: checkoutCopy.openingPaymentOptionsMessage,
           });
           window.location.href = "/checkout";
           return;
@@ -1591,14 +1599,14 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
 
         // ── COD-only flow: normal form POST ──
         submitButton.disabled = true;
-        setSubmitButtonText("Processing...");
+        setSubmitButtonText(checkoutCopy.processingText);
         showCheckoutLoadingOverlay({
           title:
             checkoutLanguage?.languageData?.processingOrderTitle ||
-            "Processing your order",
+            checkoutCopy.processingOrderTitle,
           message:
             checkoutLanguage?.languageData?.processingOrderMessage ||
-            "Confirming your order details.",
+            checkoutCopy.processingOrderMessage,
         });
       },
       { signal: cartPageSignal },

@@ -1,3 +1,5 @@
+import type { CheckoutLanguageData } from "@scalius/shared/checkout-language";
+
 const DEFAULT_CHECKOUT_ERROR = "Order creation failed";
 const GENERIC_CHECKOUT_ERRORS = new Set([
   "",
@@ -83,11 +85,13 @@ export function getCheckoutErrorMessage(
 export function getCheckoutStatusErrorMessage(
   status: number | undefined,
   fallback = DEFAULT_CHECKOUT_ERROR,
+  copy?: CheckoutLanguageData,
 ): string {
   const message = fallback.trim();
   const shouldUseStatusCopy =
     GENERIC_CHECKOUT_ERRORS.has(message) ||
-    /^Order creation failed \(\d{3}\)$/.test(message);
+    /^Order creation failed \(\d{3}\)$/.test(message) ||
+    message === copy?.paymentFailedText;
 
   if (!shouldUseStatusCopy) {
     return message || DEFAULT_CHECKOUT_ERROR;
@@ -95,15 +99,15 @@ export function getCheckoutStatusErrorMessage(
 
   switch (status) {
     case 401:
-      return "Your sign-in session expired. Please sign in again or continue as a guest.";
+      return copy?.sessionExpiredText ?? "Your sign-in session expired. Please sign in again or continue as a guest.";
     case 409:
-      return "This checkout was already submitted or changed in another tab. Please review your cart and try again.";
+      return copy?.checkoutConflictText ?? "This checkout was already submitted or changed in another tab. Please review your cart and try again.";
     case 429:
-      return "Too many checkout attempts. Please wait a moment and try again.";
+      return copy?.tooManyCheckoutAttemptsText ?? "Too many checkout attempts. Please wait a moment and try again.";
     case 502:
     case 503:
     case 504:
-      return "Checkout is temporarily unavailable. Please try again shortly.";
+      return copy?.checkoutUnavailableMessage ?? "Checkout is temporarily unavailable. Please try again shortly.";
     default:
       return message || DEFAULT_CHECKOUT_ERROR;
   }

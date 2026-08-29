@@ -47,6 +47,7 @@ interface Props {
   /** Build-generated phone shell CSS used when the complete shared sheet is non-blocking. */
   criticalCss?: string;
   criticalCssMedia?: string;
+  documentLanguage?: string;
 }
 
 const {
@@ -63,6 +64,7 @@ const {
   noindex,
   criticalCss,
   criticalCssMedia,
+  documentLanguage = "en",
 } = Astro.props;
 
 // Use provided layout data when pages load it in parallel; otherwise fetch here.
@@ -287,7 +289,7 @@ const privateSessionPrefetchGuardScript =
 ---
 
 <!doctype html>
-<html lang="en" data-theme-preview={isThemePreview ? "true" : undefined}>
+<html lang={documentLanguage} data-theme-preview={isThemePreview ? "true" : undefined}>
   <head>
     <meta charset="UTF-8" />
 

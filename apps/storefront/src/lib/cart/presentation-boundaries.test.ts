@@ -33,10 +33,10 @@ const checkoutPageSource = readFileSync(
 
 describe("cart page presentation contract", () => {
   it("keeps quantity and removal controls accessible after dynamic rendering", () => {
-    expect(source).toContain('aria-label="Decrease ${safeName} quantity"');
-    expect(source).toContain('`Increase ${safeName} quantity`');
-    expect(source).toContain('`Maximum available quantity reached for ${safeName}`');
-    expect(source).toContain('aria-label="Remove ${safeName} from cart"');
+    expect(source).toContain("activeCheckoutCopy().decreaseQuantityText");
+    expect(source).toContain("activeCheckoutCopy().increaseQuantityText");
+    expect(source).toContain("activeCheckoutCopy().maximumAvailableQuantityText");
+    expect(source).toContain("activeCheckoutCopy().removeFromCartText");
     expect(source).toContain(
       'class="flex h-11 items-center overflow-hidden rounded-md ring-1',
     );
@@ -121,6 +121,19 @@ describe("cart page presentation contract", () => {
     expect(checkoutPageSource).not.toContain("Select a payment method to complete your order.");
     expect(checkoutPageSource).not.toContain("All transactions are secure and encrypted.");
     expect(cartPageSource.match(/Secure checkout/g) ?? []).toHaveLength(0);
+  });
+
+  it("uses the active locale across both checkout steps and runtime states", () => {
+    for (const page of [cartPageSource, checkoutPageSource]) {
+      expect(page).toContain("getActiveCheckoutLanguage()");
+      expect(page).toContain("window.__CHECKOUT_LANGUAGE__=");
+      expect(page).toContain("documentLanguage=");
+    }
+    expect(cartPageSource).toContain("<CheckoutProgress");
+    expect(cartPageSource).toContain("copy={copy}");
+    expect(checkoutPageSource).toContain('current="payment" copy={copy}');
+    expect(source).toContain("activeCheckoutCopy().taxText");
+    expect(source).toContain("activeCheckoutCopy().discountAppliedText");
   });
 
   it("renders exactly one native shipping radio per delivery method", () => {
