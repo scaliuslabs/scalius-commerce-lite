@@ -12,6 +12,7 @@ import {
   resolveSavedOrderLineMoney,
   resolveSavedOrderMoneySummary,
 } from "~/lib/order-tax-presentation";
+import { resolveDeliveryMethodPresentation } from "~/lib/delivery-method-presentation";
 import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
 import { ADMIN_IMAGE_PRESETS } from "~/lib/admin-image-presentation";
 
@@ -92,6 +93,7 @@ function InvoicePage() {
   const subtotal = order.totalAmount - order.shippingCharge + discount;
   const grandTotal = order.totalAmount;
   const savedSummary = resolveSavedOrderMoneySummary(order);
+  const delivery = resolveDeliveryMethodPresentation(order, savedSummary, "Shipping");
 
   const invoiceDate = toInvoiceDate(document.issuedAt ?? order.createdAt);
   const formattedDate = invoiceDate.toLocaleDateString("en-GB", {
@@ -222,7 +224,13 @@ function InvoicePage() {
               {savedSummary ? (
                 <>
                   <div className="row"><span>Subtotal</span><span>{formatSavedMinorAmount(savedSummary.subtotalMinor, savedSummary)}</span></div>
-                  <div className="row"><span>Shipping</span><span>{formatSavedMinorAmount(savedSummary.shippingMinor, savedSummary)}</span></div>
+                  <div className="row">
+                    <span>
+                      {delivery.label}
+                      {delivery.details && <small className="delivery-details">{delivery.details}</small>}
+                    </span>
+                    <span>{formatSavedMinorAmount(savedSummary.shippingMinor, savedSummary)}</span>
+                  </div>
                   <div className="row discount"><span>Discount</span><span>{savedSummary.discountMinor > 0 ? "−" : ""}{formatSavedMinorAmount(savedSummary.discountMinor, savedSummary)}</span></div>
                   <div className="row"><span>{savedSummary.taxLabel}{savedSummary.pricesIncludeTax ? " (included)" : ""}</span><span>{formatSavedMinorAmount(savedSummary.taxMinor, savedSummary)}</span></div>
                   <div className="row grand-total"><span>Grand Total</span><span>{formatSavedMinorAmount(savedSummary.totalMinor, savedSummary)}</span></div>
@@ -234,7 +242,13 @@ function InvoicePage() {
               ) : (
                 <>
                   <div className="row"><span>Subtotal</span><span>{subtotal.toLocaleString()}</span></div>
-                  <div className="row"><span>Shipping</span><span>{order.shippingCharge.toLocaleString()}</span></div>
+                  <div className="row">
+                    <span>
+                      {delivery.label}
+                      {delivery.details && <small className="delivery-details">{delivery.details}</small>}
+                    </span>
+                    <span>{order.shippingCharge.toLocaleString()}</span>
+                  </div>
                   {discount > 0 && (
                     <div className="row discount"><span>Discount</span><span>-{discount.toLocaleString()}</span></div>
                   )}
@@ -361,6 +375,7 @@ const invoiceStyles = `
 .invoice-totals { display: flex; justify-content: flex-end; margin-bottom: 32px; }
 .totals-table { width: 280px; }
 .totals-table .row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 14px; color: #374151; }
+.totals-table .delivery-details { display: block; max-width: 190px; margin-top: 2px; color: #6b7280; font-size: 11px; line-height: 1.4; }
 .totals-table .row.discount { color: #059669; }
 .totals-table .row.grand-total { border-top: 2px solid #1f2937; margin-top: 8px; padding-top: 12px; font-size: 16px; font-weight: 700; color: #111827; }
 .saved-money-note { margin-top: 8px; font-size: 11px; line-height: 1.45; color: #6b7280; }
