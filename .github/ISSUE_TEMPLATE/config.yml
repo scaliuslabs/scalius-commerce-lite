@@ -1,8 +1,5 @@
 blank_issues_enabled: false
 contact_links:
-  - name: Security vulnerability
-    url: https://github.com/scaliuslabs/scalius-commerce-lite/security/policy
-    about: Report vulnerabilities privately. Never include secrets or buyer data in a public issue.
   - name: Setup and usage help
     url: https://scalius.com/discord
     about: Ask questions and troubleshoot installations with the community.
