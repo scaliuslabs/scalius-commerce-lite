@@ -392,10 +392,21 @@ function calculateManualOrderMoney(
     );
     const normalizedShipping = roundOrderMoney(shippingCharge, currency);
     const normalizedDiscount = roundOrderMoney(discountAmount ?? 0, currency);
-    const grossAmount = roundOrderMoney(subtotal + normalizedShipping, currency);
-    if (normalizedDiscount > grossAmount) {
-        throw new ValidationError("Discount amount cannot exceed the manual order subtotal and shipping.");
+    if (normalizedDiscount > subtotal) {
+        throw new ValidationError(
+            "Discount amount cannot exceed the manual order subtotal.",
+            {
+                reason: "MANUAL_ORDER_DISCOUNT_EXCEEDS_SUBTOTAL",
+                maximumDiscountAmountMinor: toMinorUnits(
+                    subtotal,
+                    currency.decimalPlaces,
+                ),
+                currencyCode: currency.code,
+                decimalPlaces: currency.decimalPlaces,
+            },
+        );
     }
+    const grossAmount = roundOrderMoney(subtotal + normalizedShipping, currency);
     const totalAmount = roundOrderMoney(grossAmount - normalizedDiscount, currency);
 
     return {

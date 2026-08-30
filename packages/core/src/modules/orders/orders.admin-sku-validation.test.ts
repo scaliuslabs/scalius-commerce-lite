@@ -75,7 +75,11 @@ vi.mock("./admin-order-create-attempts", () => ({
     isAdminOrderCreateAttemptGuardError: createAttemptMocks.isGuardError,
 }));
 
-import { createOrder, resolveAdminOrderItemInventory } from "./orders.admin";
+import {
+    createOrder,
+    quoteManualOrder,
+    resolveAdminOrderItemInventory,
+} from "./orders.admin";
 
 beforeEach(() => {
     vi.clearAllMocks();
@@ -746,6 +750,69 @@ describe("resolveAdminOrderItemInventory", () => {
             deliveryAttempts: 0,
             codStatus: "pending",
         }));
+    });
+
+    it("returns the item subtotal boundary for an excessive manual discount", async () => {
+        const { db } = createOrderDbWithSkuRows([{
+            id: "var_untracked",
+            productId: "prod_active",
+            trackInventory: false,
+            variantDeletedAt: null,
+            productActive: true,
+            productDeletedAt: null,
+        }]);
+
+        await expect(quoteManualOrder(db, {
+            city: "city_dhaka",
+            zone: "zone_mirpur",
+            area: null,
+            items: [{
+                productId: "prod_active",
+                variantId: "var_untracked",
+                quantity: 2,
+            }],
+            shippingCharge: 60,
+            discountAmount: 200.01,
+        })).rejects.toMatchObject({
+            status: 400,
+            code: "VALIDATION_ERROR",
+            details: {
+                reason: "MANUAL_ORDER_DISCOUNT_EXCEEDS_SUBTOTAL",
+                maximumDiscountAmountMinor: 20_000,
+                currencyCode: "BDT",
+                decimalPlaces: 2,
+            },
+        });
+        expect(taxMocks.calculateStorefrontTaxQuote).not.toHaveBeenCalled();
+    });
+
+    it("allows a full item discount while keeping shipping payable", async () => {
+        const { db } = createOrderDbWithSkuRows([{
+            id: "var_untracked",
+            productId: "prod_active",
+            trackInventory: false,
+            variantDeletedAt: null,
+            productActive: true,
+            productDeletedAt: null,
+        }]);
+
+        await expect(quoteManualOrder(db, {
+            city: "city_dhaka",
+            zone: "zone_mirpur",
+            area: null,
+            items: [{
+                productId: "prod_active",
+                variantId: "var_untracked",
+                quantity: 2,
+            }],
+            shippingCharge: 60,
+            discountAmount: 200,
+        })).resolves.toMatchObject({
+            subtotalAmount: 200,
+            shippingAmount: 60,
+            discountAmount: 200,
+            totalAmount: 60,
+        });
     });
 
     it.each([
