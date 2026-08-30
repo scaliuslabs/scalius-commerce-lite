@@ -22,4 +22,8 @@ describe("admin order status policy", () => {
     expect(getAdminOrderStatusTransitions("shipped")).toEqual(["delivered"]);
     expect(getAdminOrderStatusTransitions("delivered")).toEqual(["completed"]);
   });
+
+  it("treats cancelled orders as terminal", () => {
+    expect(getAdminOrderStatusTransitions("cancelled")).toEqual([]);
+  });
 });

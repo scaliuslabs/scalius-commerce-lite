@@ -11,7 +11,7 @@ const ADMIN_STATUS_TRANSITIONS: Readonly<Partial<Record<OrderStatus, readonly Or
   shipped: ["delivered"],
   delivered: ["completed"],
   completed: [],
-  cancelled: ["pending", "confirmed"],
+  cancelled: [],
   returned: [],
   refunded: [],
   partially_refunded: [],

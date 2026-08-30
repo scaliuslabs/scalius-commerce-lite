@@ -72,7 +72,8 @@ export const orders = sqliteTable("orders", {
      * Reservation implementation for this order lineage. Existing/admin
      * orders use the legacy product-variant counter. Coordinated storefront
      * orders retain their exact lane authority until a terminal transition;
-     * a later reactivation deliberately switches the lineage to legacy.
+     * a later active-order projection repair deliberately switches the lineage
+     * to legacy.
      */
     inventoryAuthority: text("inventory_authority", {
         enum: ["legacy_counter", "checkout_lane_v1"],

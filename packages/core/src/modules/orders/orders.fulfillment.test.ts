@@ -1444,6 +1444,33 @@ describe("orders fulfillment side-effect ordering", () => {
     expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
   });
 
+  it.each([OrderStatus.PENDING, OrderStatus.CONFIRMED])(
+    "rejects cancelled-order reactivation to %s before writes or inventory work",
+    async (targetStatus) => {
+      const { db, updates } = createDbMock({
+        selectedOrder: {
+          status: OrderStatus.CANCELLED,
+          inventoryAction: "restored",
+          version: 8,
+          customerName: "Customer",
+          customerEmail: "customer@example.com",
+          paymentMethod: PaymentMethod.COD,
+          paymentStatus: PaymentStatus.UNPAID,
+          totalAmount: 100,
+          paidAmount: 0,
+          balanceDue: 100,
+        },
+        updateResults: [[{ id: "order_1" }]],
+      });
+
+      await expect(updateOrderStatus(db as never, "order_1", targetStatus))
+        .rejects.toThrow("cannot move an order from cancelled");
+
+      expect(updates).toHaveLength(0);
+      expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
+    },
+  );
+
   it("rolls back the visible admin status when inventory reconciliation fails before inventoryAction changes", async () => {
     const inventoryError = new Error("inventory transition failed");
     mocks.applyInventoryForStatusChange.mockRejectedValueOnce(inventoryError);

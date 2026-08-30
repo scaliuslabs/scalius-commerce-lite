@@ -337,18 +337,18 @@ describe("coordinated checkout lane lifecycle on D1 SQL", () => {
         ]);
     });
 
-    it("switches a cancelled aggregate to legacy authority only when re-reserved", async () => {
-        commitCheckout(sqlite, "order_reactivate");
-        sqlite.exec(`UPDATE orders SET status = 'cancelled' WHERE id = 'order_reactivate'`);
-        await applyInventoryForStatusChange(db, "order_reactivate", "cancelled");
+    it("repairs a restored active aggregate with a bounded legacy reservation", async () => {
+        commitCheckout(sqlite, "order_repair");
+        sqlite.exec(`UPDATE orders SET status = 'cancelled' WHERE id = 'order_repair'`);
+        await applyInventoryForStatusChange(db, "order_repair", "cancelled");
 
-        sqlite.exec(`UPDATE orders SET status = 'pending' WHERE id = 'order_reactivate'`);
-        await expect(applyInventoryForStatusChange(db, "order_reactivate", "pending"))
+        sqlite.exec(`UPDATE orders SET status = 'pending' WHERE id = 'order_repair'`);
+        await expect(applyInventoryForStatusChange(db, "order_repair", "pending"))
             .resolves.toBe("reserved");
 
         expect(sqlite.prepare(`
             SELECT inventory_action AS action, inventory_authority AS authority
-            FROM orders WHERE id = 'order_reactivate'
+            FROM orders WHERE id = 'order_repair'
         `).get()).toEqual({ action: "reserved", authority: "legacy_counter" });
         expect(sqlite.prepare(`
             SELECT stock, reserved_stock AS legacyReserved, stock_version AS stockVersion
@@ -356,10 +356,10 @@ describe("coordinated checkout lane lifecycle on D1 SQL", () => {
         `).get()).toEqual({ stock: 10, legacyReserved: 4, stockVersion: 2 });
 
         sqlite.exec(`UPDATE product_variants SET low_stock_threshold = 6 WHERE id = 'variant_hot'`);
-        sqlite.exec(`UPDATE orders SET status = 'cancelled' WHERE id = 'order_reactivate'`);
+        sqlite.exec(`UPDATE orders SET status = 'cancelled' WHERE id = 'order_repair'`);
         await expect(applyInventoryForStatusChangeWithImpact(
             db,
-            "order_reactivate",
+            "order_repair",
             "cancelled",
         )).resolves.toEqual({
             inventoryAction: "restored",
