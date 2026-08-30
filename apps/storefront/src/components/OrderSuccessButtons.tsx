@@ -5,6 +5,12 @@ import type {
   OrderReceiptSupportRequestAction,
   OrderReceiptSupportRequestType,
 } from "@/lib/api/types";
+import {
+  getOrderReceiptSupportActionLabel,
+  getOrderReceiptSupportRequestLabel,
+  getOrderReceiptSupportStatusMessage,
+} from "@/lib/order-success-localization";
+import type { CheckoutLanguageData } from "@scalius/shared/checkout-language";
 import { AlertCircle, CheckCircle2, HelpCircle, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -12,6 +18,7 @@ type OrderSuccessButtonsProps = {
   orderId?: string;
   supportRequests?: OrderReceiptSupportRequest[];
   supportRequestActions?: OrderReceiptSupportRequestAction[];
+  copy: CheckoutLanguageData;
 };
 
 type SubmitState =
@@ -36,45 +43,11 @@ function getSupportToneClass(severity: OrderReceiptSupportRequest["severity"]) {
   }
 }
 
-function getSupportRequestStatusMessage(request: OrderReceiptSupportRequest) {
-  switch (request.status) {
-    case "submitted":
-      return "The store received your request and will review it before making changes.";
-    case "under_review":
-      return "The store team is reviewing this request.";
-    case "approved":
-      return "The store accepted this request. Check the order status for progress.";
-    case "rejected":
-      return "The store could not accept this request. Contact the store if you still need help.";
-    case "withdrawn":
-      return "This request was withdrawn.";
-    case "completed":
-      return "This request is complete.";
-    default:
-      return request.active
-        ? "The store team is reviewing this request."
-        : "This request is settled. Contact the store if you still need help.";
-  }
-}
-
-function getApiMessage(payload: unknown, fallback: string) {
-  if (typeof payload !== "object" || payload === null) return fallback;
-  const record = payload as Record<string, unknown>;
-  if (typeof record.error === "string") return record.error;
-  if (
-    typeof record.error === "object" &&
-    record.error !== null &&
-    typeof (record.error as Record<string, unknown>).message === "string"
-  ) {
-    return (record.error as Record<string, string>).message;
-  }
-  return fallback;
-}
-
 export default function OrderSuccessButtons({
   orderId,
   supportRequests: initialSupportRequests = EMPTY_SUPPORT_REQUESTS,
   supportRequestActions: initialSupportRequestActions = EMPTY_SUPPORT_REQUEST_ACTIONS,
+  copy,
 }: OrderSuccessButtonsProps) {
   const [isCustomerAuthenticated, setIsCustomerAuthenticated] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
@@ -88,10 +61,10 @@ export default function OrderSuccessButtons({
 
   const claimOrderToAccount = useCallback(async () => {
     if (!orderId) {
-      setAccountSaveState({ status: "error", message: "This receipt is missing its order reference." });
+      setAccountSaveState({ status: "error", message: copy.orderReceiptMissingReferenceText });
       return;
     }
-    setAccountSaveState({ status: "submitting", message: "Saving this order to your account..." });
+    setAccountSaveState({ status: "submitting", message: copy.orderReceiptSavingToAccountText });
     try {
       const response = await fetch("/api/order-receipt/claim-account", {
         method: "POST",
@@ -105,21 +78,21 @@ export default function OrderSuccessButtons({
         error?: string | { message?: string };
       } | null;
       if (!response.ok || payload?.success === false) {
-        throw new Error(getApiMessage(payload, "This order could not be saved. Please try again."));
+        throw new Error("account_claim_failed");
       }
       setAccountSaveState({
         status: "success",
         message: payload?.data?.alreadyClaimed
-          ? "This order is already in your account."
-          : "Order saved. You can now track it from any signed-in device.",
+          ? copy.orderReceiptAlreadySavedText
+          : copy.orderReceiptSavedText,
       });
-    } catch (error) {
+    } catch {
       setAccountSaveState({
         status: "error",
-        message: error instanceof Error ? error.message : "This order could not be saved. Please try again.",
+        message: copy.orderReceiptSaveFailedText,
       });
     }
-  }, [orderId]);
+  }, [copy, orderId]);
 
   useEffect(() => {
     setIsCustomerAuthenticated(document.cookie.includes("cs_auth=1"));
@@ -158,8 +131,6 @@ export default function OrderSuccessButtons({
   const selectedSupportAction = selectedSupportType
     ? availableSupportActions.find((action) => action.type === selectedSupportType)
     : null;
-  const firstDisabledReason = supportRequestActions.find((action) => action.disabledReason)?.disabledReason ?? null;
-
   const handlePrintOrder = () => {
     window.print();
   };
@@ -185,8 +156,8 @@ export default function OrderSuccessButtons({
     setAccountSaveState({
       status: "idle",
       message: intent === "sign_up"
-        ? "Create your account with the phone number saved on this order."
-        : "Sign in with a phone number or email that matches this order.",
+        ? copy.orderReceiptCreateAccountPromptText
+        : copy.orderReceiptSignInPromptText,
     });
     handleOpenAuth(intent);
   };
@@ -201,7 +172,7 @@ export default function OrderSuccessButtons({
     if (!orderId || !selectedSupportType) {
       setSupportSubmitState({
         status: "error",
-        message: "This receipt is missing the browser proof needed to send a request.",
+        message: copy.orderReceiptMissingProofText,
       });
       return;
     }
@@ -209,7 +180,7 @@ export default function OrderSuccessButtons({
     if (reason.length < 3) {
       setSupportSubmitState({
         status: "error",
-        message: "Add a short reason before sending the request.",
+        message: copy.orderReceiptReasonRequiredText,
       });
       return;
     }
@@ -237,7 +208,7 @@ export default function OrderSuccessButtons({
       } | null;
 
       if (!response.ok || payload?.success === false || !payload?.data?.request) {
-        throw new Error(getApiMessage(payload, "Support request failed. Please try again."));
+        throw new Error("support_request_failed");
       }
 
       setSupportRequests(payload.data.supportRequests ?? [payload.data.request]);
@@ -246,12 +217,12 @@ export default function OrderSuccessButtons({
       setSupportReason("");
       setSupportSubmitState({
         status: "success",
-        message: "Request sent. The store team can now review it from the order.",
+        message: copy.orderReceiptRequestSentText,
       });
-    } catch (error) {
+    } catch {
       setSupportSubmitState({
         status: "error",
-        message: error instanceof Error ? error.message : "Support request failed. Please try again.",
+        message: copy.orderReceiptSupportFailedText,
       });
     }
   };
@@ -277,7 +248,7 @@ export default function OrderSuccessButtons({
               d="M10 19l-7-7m0 0l7-7m-7 7h18"
             />
           </svg>
-          Continue shopping
+          {copy.continueShoppingText}
         </a>
         <Button
           variant="outline"
@@ -298,7 +269,7 @@ export default function OrderSuccessButtons({
               d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"
             />
           </svg>
-          Print receipt
+          {copy.orderReceiptPrintText}
         </Button>
       </div>
 
@@ -306,11 +277,13 @@ export default function OrderSuccessButtons({
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
             <p className="text-sm font-semibold text-foreground">
-              {accountSaveState.status === "success" ? "Order saved to your account" : "Save this order to your account"}
+              {accountSaveState.status === "success"
+                ? copy.orderReceiptSavedAccountTitleText
+                : copy.orderReceiptSaveAccountTitleText}
             </p>
             {accountSaveState.status !== "success" && (
               <p className="mt-1 text-sm text-muted-foreground">
-                Create an account with the phone saved on this order, or sign in with a matching phone or email.
+                {copy.orderReceiptSaveAccountHelpText}
               </p>
             )}
           </div>
@@ -318,7 +291,7 @@ export default function OrderSuccessButtons({
             {authChecked && isCustomerAuthenticated ? (
               accountSaveState.status === "success" ? (
                 <Button type="button" className="min-h-11 font-medium" onClick={handleOpenAccountOrder}>
-                  View in account
+                  {copy.orderReceiptViewInAccountText}
                 </Button>
               ) : (
                 <Button
@@ -327,7 +300,9 @@ export default function OrderSuccessButtons({
                   onClick={() => handleSaveOrder("sign_in")}
                   disabled={accountSaveState.status === "submitting"}
                 >
-                  {accountSaveState.status === "submitting" ? "Saving..." : "Save to my account"}
+                  {accountSaveState.status === "submitting"
+                    ? copy.orderReceiptSavingText
+                    : copy.orderReceiptSaveToAccountText}
                 </Button>
               )
             ) : authChecked ? (
@@ -337,7 +312,7 @@ export default function OrderSuccessButtons({
                   className="min-h-11 font-medium"
                   onClick={() => handleSaveOrder("sign_up")}
                 >
-                  Create account
+                  {copy.orderReceiptCreateAccountText}
                 </Button>
                 <Button
                   type="button"
@@ -345,7 +320,7 @@ export default function OrderSuccessButtons({
                   className="min-h-11 border-border font-medium"
                   onClick={() => handleSaveOrder("sign_in")}
                 >
-                  Sign in
+                  {copy.orderReceiptSignInText}
                 </Button>
               </>
             ) : null}
@@ -367,15 +342,15 @@ export default function OrderSuccessButtons({
             {activeSupportRequest ? <CheckCircle2 className="h-5 w-5" /> : <HelpCircle className="h-5 w-5" />}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-foreground">Need help?</p>
+            <p className="text-sm font-semibold text-foreground">{copy.orderReceiptHelpText}</p>
           </div>
         </div>
 
         {latestSupportRequest ? (
           <div className={`mt-4 rounded-lg border px-3 py-2 text-sm ${getSupportToneClass(latestSupportRequest.severity)}`}>
-            <p className="font-medium">{latestSupportRequest.label}</p>
+            <p className="font-medium">{getOrderReceiptSupportRequestLabel(latestSupportRequest, copy)}</p>
             <p className="mt-1 text-xs opacity-80">
-              {getSupportRequestStatusMessage(latestSupportRequest)}
+              {getOrderReceiptSupportStatusMessage(latestSupportRequest, copy)}
             </p>
           </div>
         ) : null}
@@ -396,7 +371,7 @@ export default function OrderSuccessButtons({
                   }`}
                   onClick={() => handleSelectSupportAction(action)}
                 >
-                  <span>{action.label}</span>
+                  <span>{getOrderReceiptSupportActionLabel(action.type, copy)}</span>
                 </button>
               ))}
             </div>
@@ -405,16 +380,16 @@ export default function OrderSuccessButtons({
               <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-3">
                 <div>
                   <label htmlFor="receiptSupportReason" className="text-xs font-medium text-foreground">
-                    Reason
+                    {copy.orderReceiptReasonText}
                   </label>
                   <Textarea
                     id="receiptSupportReason"
-                    aria-label="Support request reason"
+                    aria-label={copy.orderReceiptReasonAriaText}
                     maxLength={500}
                     value={supportReason}
                     onChange={(event) => setSupportReason(event.target.value)}
                     className="mt-1 min-h-20 bg-background"
-                    placeholder={`Why do you want to ${selectedSupportAction.label.toLowerCase()}?`}
+                    placeholder={copy.orderReceiptReasonPlaceholderText}
                   />
                 </div>
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -442,7 +417,7 @@ export default function OrderSuccessButtons({
                       }}
                       disabled={supportSubmitState.status === "submitting"}
                     >
-                      Cancel
+                      {copy.orderReceiptCancelText}
                     </Button>
                     <Button
                       type="button"
@@ -450,7 +425,7 @@ export default function OrderSuccessButtons({
                       disabled={supportSubmitState.status === "submitting"}
                     >
                       {supportSubmitState.status === "submitting" && <Loader2 className="h-4 w-4 animate-spin" />}
-                       Send request
+                       {copy.orderReceiptSendRequestText}
                     </Button>
                   </div>
                 </div>
@@ -459,7 +434,7 @@ export default function OrderSuccessButtons({
           </div>
         ) : !latestSupportRequest ? (
           <p className="mt-4 rounded-lg border border-border bg-muted/20 px-3 py-2 text-sm text-muted-foreground">
-            {firstDisabledReason ?? "Support requests are not available for this order right now."}
+            {copy.orderReceiptSupportUnavailableText}
           </p>
         ) : null}
 

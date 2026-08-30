@@ -32,7 +32,8 @@ describe("order-success print layout", () => {
       expect(source).toContain("shippingMethodDescription");
       expect(source).toContain("shippingMethodBaseAmountMinor");
       expect(source).toContain("shippingFeeWaived");
-      expect(source).toContain("Delivery method was not recorded for this order.");
     }
+    expect(receipt).toContain("copy.orderReceiptDeliveryNotRecordedText");
+    expect(accountOrder).toContain("Delivery method was not recorded for this order.");
   });
 });
