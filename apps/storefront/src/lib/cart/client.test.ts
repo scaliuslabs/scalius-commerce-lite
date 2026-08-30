@@ -1,7 +1,10 @@
 // @vitest-environment happy-dom
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ENGLISH_CHECKOUT_LANGUAGE_DATA } from "@scalius/shared/checkout-language";
+import {
+  BANGLA_CHECKOUT_LANGUAGE_DATA,
+  ENGLISH_CHECKOUT_LANGUAGE_DATA,
+} from "@scalius/shared/checkout-language";
 
 import { cartStore, createCartItemKey } from "../../store/cart";
 import type { CheckoutLanguageData } from "../api/types";
@@ -79,6 +82,25 @@ describe("renderEmptyCartState", () => {
     ).toBeUndefined();
   });
 
+  it("renders the normal empty-cart explanation in the active Bangla language", () => {
+    const cartItemsContainer = document.getElementById("cartItems");
+    if (!cartItemsContainer) {
+      throw new Error("Missing cartItems container");
+    }
+
+    renderEmptyCartState(
+      cartItemsContainer,
+      checkoutLanguage(BANGLA_CHECKOUT_LANGUAGE_DATA),
+    );
+
+    expect(cartItemsContainer.textContent).toContain(
+      "আপনি এখনো কার্টে কোনো পণ্য যোগ করেননি।",
+    );
+    expect(cartItemsContainer.textContent).not.toContain(
+      "Looks like you haven't added anything",
+    );
+  });
+
   it("renders hosted payment recovery as an explicit receipt action", () => {
     const cartItemsContainer = document.getElementById("cartItems");
     if (!cartItemsContainer) {
@@ -96,7 +118,9 @@ describe("renderEmptyCartState", () => {
     );
 
     const links = [...cartItemsContainer.querySelectorAll("a")];
-    expect(cartItemsContainer.textContent).toContain("Your order was created before payment handoff");
+    expect(cartItemsContainer.textContent).toContain(
+      "Your order was created before payment opened. Review its payment status before starting another checkout.",
+    );
     expect(links[0]?.getAttribute("href")).toBe(
       "/order-success?orderId=order_1&payment=sslcommerz",
     );
@@ -105,6 +129,31 @@ describe("renderEmptyCartState", () => {
     expect(links[0]?.textContent).toBe("View payment status");
     links[0]?.dispatchEvent(new Event("click"));
     expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders hosted payment recovery in the active Bangla language", () => {
+    const cartItemsContainer = document.getElementById("cartItems");
+    if (!cartItemsContainer) {
+      throw new Error("Missing cartItems container");
+    }
+
+    renderEmptyCartState(
+      cartItemsContainer,
+      checkoutLanguage(BANGLA_CHECKOUT_LANGUAGE_DATA),
+      {
+        href: "/order-success?orderId=order_1&payment=sslcommerz",
+      },
+    );
+
+    expect(cartItemsContainer.textContent).toContain(
+      "পেমেন্ট পেজ খোলার আগেই আপনার অর্ডারটি তৈরি হয়েছে। নতুন করে চেকআউট শুরু করার আগে পেমেন্টের অবস্থা দেখুন।",
+    );
+    expect(cartItemsContainer.querySelector("a")?.textContent).toBe(
+      "পেমেন্টের অবস্থা দেখুন",
+    );
+    expect(cartItemsContainer.textContent).not.toContain(
+      "Your order was created before payment handoff",
+    );
   });
 });
 

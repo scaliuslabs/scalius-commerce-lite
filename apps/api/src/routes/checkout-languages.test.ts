@@ -178,6 +178,8 @@ describe("checkout language route boundaries", () => {
       customerNameLabel: "ক্রেতার নাম",
       paymentPageTitle: "পেমেন্ট",
       phoneCountryLabelText: "ফোন নম্বরের দেশ",
+      emptyCartDescriptionText: "আপনি এখনো কার্টে কোনো পণ্য যোগ করেননি।",
+      viewPaymentStatusText: "পেমেন্টের অবস্থা দেখুন",
     });
   });
 
