@@ -236,6 +236,8 @@ export const OrderMobileCard = React.memo(function OrderMobileCard({
         <div className="flex flex-wrap items-center gap-3 mb-3 pb-3 border-b border-[var(--border)]">
           <OrderStatusSelector
             status={order.status}
+            paymentStatus={order.paymentStatus}
+            paidAmount={order.paidAmount}
             orderId={order.id}
             isLoading={isUpdatingStatus}
             showTrashed={showTrashed}

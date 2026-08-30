@@ -29,7 +29,7 @@ import {
     noActivePaymentSessionAttemptForOrderIdCondition,
 } from "../payments/payment-session-attempts";
 
-import { sql, eq, and } from "drizzle-orm";
+import { sql, eq, and, inArray, type SQL } from "drizzle-orm";
 import { NotFoundError, ValidationError, ConflictError } from "@scalius/core/errors";
 import {
     canProcessOrderCodAction,
@@ -75,6 +75,61 @@ async function reconcileInventoryForStatus(
     const impact = await applyInventoryForStatusChangeWithImpact(db, orderId, status);
     await db.update(orders).set({ inventoryAction: impact.inventoryAction }).where(eq(orders.id, orderId));
     return impact.availabilityTransitionVariantIds;
+}
+
+const CANCELLATION_UNSAFE_PAYMENT_RECORD_STATUSES = [
+    PaymentRecordStatus.PENDING,
+    PaymentRecordStatus.CONFIRMED,
+    PaymentRecordStatus.SUCCEEDED,
+] as const;
+
+const CANCELLATION_REQUIRES_REFUND_MESSAGE =
+    "Generic cancellation requires a zero-paid order with unpaid or failed payment status. Use the refund workflow so provider and local payment state reconcile before cancellation.";
+const CANCELLATION_REQUIRES_PAYMENT_RECONCILIATION_MESSAGE =
+    "This order has pending, confirmed, or succeeded payment evidence. Complete payment reconciliation before cancellation.";
+
+function noUnsafeCancellationPaymentCondition(orderId: string): SQL {
+    return sql`
+        ${orders.paymentStatus} IN (${PaymentStatus.UNPAID}, ${PaymentStatus.FAILED})
+        AND ${orders.paidAmount} = 0
+        AND NOT EXISTS (
+            SELECT 1 FROM ${orderPayments}
+            WHERE ${orderPayments.orderId} = ${orderId}
+              AND ${orderPayments.status} IN (
+                  ${PaymentRecordStatus.PENDING},
+                  ${PaymentRecordStatus.CONFIRMED},
+                  ${PaymentRecordStatus.SUCCEEDED}
+              )
+        )
+    `;
+}
+
+async function assertGenericCancellationPaymentSafe(
+    db: Database,
+    orderId: string,
+    payment: { paymentStatus: string; paidAmount: number | null },
+): Promise<void> {
+    const hasSafeOrderPaymentStatus =
+        payment.paymentStatus === PaymentStatus.UNPAID
+        || payment.paymentStatus === PaymentStatus.FAILED;
+    if (
+        !hasSafeOrderPaymentStatus
+        || payment.paidAmount !== 0
+    ) {
+        throw new ValidationError(CANCELLATION_REQUIRES_REFUND_MESSAGE);
+    }
+
+    const unsafePayment = await db
+        .select({ id: orderPayments.id })
+        .from(orderPayments)
+        .where(and(
+            eq(orderPayments.orderId, orderId),
+            inArray(orderPayments.status, [...CANCELLATION_UNSAFE_PAYMENT_RECORD_STATUSES]),
+        ))
+        .get();
+    if (unsafePayment) {
+        throw new ValidationError(CANCELLATION_REQUIRES_PAYMENT_RECONCILIATION_MESSAGE);
+    }
 }
 
 function assertOrderCodActionAllowed(status: string, action: OrderCodAction): void {
@@ -1176,6 +1231,10 @@ export async function updateOrderStatus(db: Database, orderId: string, status: s
     // Validate the status transition before applying any side effects
     validateTransition("order", currentStatus, nextStatus);
 
+    if (nextStatus === OrderStatus.CANCELLED) {
+        await assertGenericCancellationPaymentSafe(db, orderId, existingOrder);
+    }
+
     // Optimistic locking: CAS update FIRST — only proceed with side effects
     // if we win the version check. This prevents the race condition where two
     // concurrent callers (e.g. admin + webhook) both apply inventory before
@@ -1189,6 +1248,9 @@ export async function updateOrderStatus(db: Database, orderId: string, status: s
         eq(orders.version, existingOrder.version),
         noActiveRefundAttemptForOrderIdCondition(orderId),
         noActivePaymentSessionAttemptForOrderIdCondition(orderId),
+        ...(nextStatus === OrderStatus.CANCELLED
+            ? [noUnsafeCancellationPaymentCondition(orderId)]
+            : []),
     )).returning({ id: orders.id });
 
     if (result.length === 0) {

@@ -15,6 +15,8 @@ const LazyOrderStatusSelectorMenu = lazy(() =>
 
 interface OrderStatusSelectorProps {
   status: string;
+  paymentStatus: string | null;
+  paidAmount: number;
   orderId: string;
   isLoading: boolean;
   showTrashed: boolean;
@@ -119,6 +121,8 @@ function isMenuOpenKey(key: string) {
 
 export function OrderStatusSelector({
   status,
+  paymentStatus,
+  paidAmount,
   orderId,
   isLoading,
   showTrashed,
@@ -207,6 +211,8 @@ export function OrderStatusSelector({
         <Suspense fallback={trigger}>
           <LazyOrderStatusSelectorMenu
             status={status}
+            paymentStatus={paymentStatus}
+            paidAmount={paidAmount}
             orderId={orderId}
             open={isMenuOpen}
             onOpenChange={handleOpenChange}

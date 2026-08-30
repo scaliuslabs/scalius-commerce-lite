@@ -102,6 +102,7 @@ export interface OrderListItem {
     discountAmount: number | null;
     status: string;
     paymentStatus: string;
+    paidAmount: number;
     paymentMethod: string;
     fulfillmentStatus: string;
     createdAt: Date;
@@ -126,7 +127,6 @@ export interface OrderDetails extends OrderListItem {
     notes: string | null;
     shippingAddress: string;
     customerId: string | null;
-    paidAmount: number | null;
     balanceDue: number | null;
     deletedAt: Date | null;
     currencyCode: string | null;
