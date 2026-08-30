@@ -403,6 +403,31 @@ describe("order refund recovery mutations", () => {
     expectNoInventoryProjectionInvalidations();
   });
 
+  it("reports a confirmed offline COD repayment as recorded rather than processed", () => {
+    const mutation = useRefundOrder() as MutationOptions;
+
+    mutation.onSuccess?.(
+      {
+        success: true,
+        gateway: "cod",
+        amount: 25,
+        isFullRefund: false,
+        manualSettlementRecorded: true,
+        notificationCount: 1,
+        sideEffectErrors: 0,
+      },
+      {
+        orderId: "ord_123",
+        amount: 25,
+        reason: "requested_by_customer",
+        manualSettlementConfirmed: true,
+      } as never,
+    );
+
+    expect(toastMocks.success).toHaveBeenCalledWith("Manual cash refund recorded");
+    expect(toastMocks.success).not.toHaveBeenCalledWith("Refund processed");
+  });
+
   it("invalidates order state and payments after a manual recovery check", () => {
     const mutation = useReconcileRefundAttempt() as MutationOptions;
 

@@ -514,8 +514,8 @@ export async function markCODReturned(
  * COD is fundamentally different from online gateways — there's no external
  * payment session to create and no webhooks. The "payment" is the physical
  * cash collection that happens at delivery time. This provider creates a
- * COD tracking record when `createPayment` is called, and COD "refunds"
- * are just status markers (no gateway API call).
+ * COD tracking record when `createPayment` is called. Refunds must be repaid
+ * outside Scalius and recorded through the explicit manual-settlement flow.
  */
 export class CODProvider implements PaymentProvider {
   readonly type = "cod" as const;
@@ -533,11 +533,9 @@ export class CODProvider implements PaymentProvider {
   }
 
   async createRefund(_params: RefundParams): Promise<RefundResult> {
-    // COD "refund" is a status update only — no external gateway call.
-    // The actual cash refund is handled operationally (manual process).
-    return {
-      refundId: `COD-REFUND-${Date.now()}`,
-    };
+    throw new ValidationError(
+      "COD refunds must be repaid outside Scalius before they are recorded.",
+    );
   }
 
   // COD has no webhooks — verifyWebhook is intentionally not implemented

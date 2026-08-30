@@ -131,6 +131,15 @@ function copyForStatus(
           : "The payment provider has not returned a final result yet. The merchant is verifying the refund.",
       };
     case "reconcile_required":
+      if (gateway.trim().toLowerCase() === "cod") {
+        return {
+          severity: "warning",
+          label: audience === "admin" ? "Manual refund recorded, local update pending" : "Refund recorded",
+          message: audience === "admin"
+            ? "The COD repayment was confirmed outside Scalius, but the local order still needs reconciliation. Scheduled recovery will retry automatically."
+            : "The merchant recorded the manual refund. The order status is being updated.",
+        };
+      }
       return {
         severity: "warning",
         label: audience === "admin" ? "Refund accepted, local update pending" : "Refund accepted",

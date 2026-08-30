@@ -800,9 +800,10 @@ describe("refund validation", () => {
         orderId: "ord_refund_cas",
         reason: "Customer cancelled before fulfillment",
         gateway: "cod",
-      })).rejects.toThrow("Refund payment was accepted, but local order reconciliation lost a concurrent update.");
+        manualSettlementConfirmed: true,
+      })).rejects.toThrow("Refund settlement was recorded, but local order reconciliation lost a concurrent update.");
 
-      expect(createRefund).toHaveBeenCalledOnce();
+      expect(createRefund).not.toHaveBeenCalled();
       expect(applyInventoryForStatusChange).not.toHaveBeenCalled();
     });
 

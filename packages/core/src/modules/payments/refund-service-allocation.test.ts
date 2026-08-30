@@ -128,6 +128,23 @@ function sslPayment(overrides: Partial<PaymentRow>): PaymentRow {
   };
 }
 
+function codPayment(overrides: Partial<PaymentRow>): PaymentRow {
+  return {
+    id: "pay_cod",
+    orderId: "order_1",
+    amount: 100,
+    currency: "BDT",
+    paymentMethod: "cod",
+    paymentType: "full",
+    status: PaymentRecordStatus.SUCCEEDED,
+    stripeChargeId: null,
+    sslcommerzBankTranId: null,
+    polarCheckoutId: null,
+    metadata: null,
+    ...overrides,
+  };
+}
+
 function refundRow(overrides: Partial<PaymentRow>): PaymentRow {
   return {
     id: "refund_1",
@@ -187,7 +204,9 @@ function createDbMock({
   };
 
   const acceptedRefundCount = () =>
-    updateValues.filter((values) => values.providerStatus === "accepted").length;
+    updateValues.filter((values) =>
+      values.providerStatus === "accepted" || values.providerStatus === "manual_confirmed"
+    ).length;
 
   const finalizerAttemptRows = () => {
     const acceptedUpdates = updateValues.filter((values) => values.providerStatus === "accepted");
@@ -374,8 +393,13 @@ describe("refund allocation", () => {
       }),
     ]);
     expect(db.updateValues).toContainEqual(expect.objectContaining({
-      status: "refunded",
+      status: "processing",
       providerStatus: "accepted",
+    }));
+    expect(db.updateValues).toContainEqual(expect.objectContaining({
+      status: "refunded",
+      claimId: null,
+      claimExpiresAt: null,
     }));
   });
 
@@ -515,6 +539,61 @@ describe("refund allocation", () => {
     }));
   });
 
+  it("rejects a mixed refund containing COD until manual repayment is confirmed", async () => {
+    const db = createDbMock({
+      payments: [
+        stripePayment({ id: "pay_online", amount: 60, stripeChargeId: "ch_online" }),
+        codPayment({ id: "pay_cash", amount: 40 }),
+      ],
+    });
+
+    await expect(processRefund(db as never, undefined, {
+      orderId: "order_1",
+      reason: "customer_request",
+    })).rejects.toThrow("Confirm that the customer has already received the manual COD refund");
+
+    expect(db.batch).not.toHaveBeenCalled();
+    expect(db.insertValues).toHaveLength(0);
+    expect(db.refundAttemptInsertValues).toHaveLength(0);
+    expect(mocks.createPaymentProvider).not.toHaveBeenCalled();
+    expect(mocks.providerCreateRefund).not.toHaveBeenCalled();
+  });
+
+  it("records a confirmed COD refund as manual settlement without provider dispatch", async () => {
+    const db = createDbMock({
+      orderOverrides: { paymentMethod: "cod" },
+      payments: [codPayment({})],
+    });
+
+    await expect(processRefund(db as never, undefined, {
+      orderId: "order_1",
+      reason: "customer_request",
+      gateway: "cod",
+      manualSettlementConfirmed: true,
+    })).resolves.toMatchObject({
+      success: true,
+      gateway: "cod",
+      amount: 100,
+      isFullRefund: true,
+      manualSettlementRecorded: true,
+    });
+
+    expect(mocks.createPaymentProvider).not.toHaveBeenCalled();
+    expect(mocks.providerCreateRefund).not.toHaveBeenCalled();
+    expect(db.updateValues).toContainEqual(expect.objectContaining({
+      providerRefundId: null,
+      providerStatus: "manual_confirmed",
+      responsePayload: JSON.stringify({ settlementMode: "manual_external" }),
+    }));
+    expect(JSON.parse(db.insertValues[0]?.metadata as string)).toMatchObject({
+      gateway: "cod",
+      settlementMode: "manual_external",
+      manualSettlementConfirmed: true,
+      sourceTransactionId: null,
+    });
+    expect(JSON.parse(db.insertValues[0]?.metadata as string)).not.toHaveProperty("refundId");
+  });
+
   it("rejects a gateway override when that gateway has insufficient refundable balance", async () => {
     const db = createDbMock({
       payments: [
@@ -580,7 +659,7 @@ describe("refund allocation", () => {
       gateway: "stripe",
     });
 
-    await expect(promise).rejects.toThrow("Refund partially processed: 70 was accepted by the provider, but 30 has an unknown provider outcome.");
+    await expect(promise).rejects.toThrow("Refund partially processed: 70 was completed, but 30 has an unknown provider outcome.");
     await expect(promise).rejects.toBeInstanceOf(PartialRefundProcessedError);
     await promise.catch((error: unknown) => {
       expect(error).toBeInstanceOf(PartialRefundProcessedError);
