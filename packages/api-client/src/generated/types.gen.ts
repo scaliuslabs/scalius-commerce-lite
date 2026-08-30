@@ -8030,6 +8030,11 @@ export type GetApiV1CustomerAuthOrdersResponses = {
                 paidAmount: number;
                 balanceDue: number;
                 shippingCharge: number;
+                shippingMethodId: string | null;
+                shippingMethodName: string | null;
+                shippingMethodDescription: string | null;
+                shippingMethodBaseAmountMinor: number | null;
+                shippingFeeWaived: boolean | null;
                 discountAmount: number | null;
                 paymentStatus: string;
                 paymentMethod: string;
@@ -8309,6 +8314,11 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                 currencyDecimalPlaces: number | null;
                 subtotalAmountMinor: number | null;
                 shippingAmountMinor: number | null;
+                shippingMethodId: string | null;
+                shippingMethodName: string | null;
+                shippingMethodDescription: string | null;
+                shippingMethodBaseAmountMinor: number | null;
+                shippingFeeWaived: boolean | null;
                 discountAmountMinor: number | null;
                 taxAmountMinor: number;
                 totalAmountMinor: number | null;
@@ -11671,6 +11681,11 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                 currencyDecimalPlaces: number | null;
                 subtotalAmountMinor: number | null;
                 shippingAmountMinor: number | null;
+                shippingMethodId: string | null;
+                shippingMethodName: string | null;
+                shippingMethodDescription: string | null;
+                shippingMethodBaseAmountMinor: number | null;
+                shippingFeeWaived: boolean | null;
                 discountAmountMinor: number | null;
                 taxAmountMinor: number;
                 totalAmountMinor: number | null;
@@ -11977,6 +11992,13 @@ export type PostApiV1OrdersCartValidationResponses = {
             hasFreeDeliveryProduct: boolean;
             delivery?: {
                 shippingCharge: number;
+                shippingMethod: {
+                    id: string;
+                    name: string;
+                    description: string | null;
+                    baseAmountMinor: number;
+                    feeWaived: boolean;
+                };
                 cityName: string;
                 zoneName: string;
                 areaName: string | null;
@@ -12062,6 +12084,13 @@ export type PostApiV1OrdersTaxQuoteResponses = {
             taxAmount: number;
             totalMinor: number;
             totalAmount: number;
+            shippingMethod: {
+                id: string;
+                name: string;
+                description: string | null;
+                baseAmountMinor: number;
+                feeWaived: boolean;
+            };
             items: Array<{
                 cartKey?: string | null;
                 productId: string;
@@ -39181,6 +39210,11 @@ export type GetApiV1AdminOrdersByIdInvoiceResponses = {
                 currencyDecimalPlaces: number | null;
                 subtotalAmountMinor: number | null;
                 shippingAmountMinor: number | null;
+                shippingMethodId: string | null;
+                shippingMethodName: string | null;
+                shippingMethodDescription: string | null;
+                shippingMethodBaseAmountMinor: number | null;
+                shippingFeeWaived: boolean | null;
                 discountAmountMinor: number | null;
                 taxAmountMinor: number;
                 totalAmountMinor: number | null;
@@ -39381,6 +39415,11 @@ export type PostApiV1AdminOrdersByIdInvoiceResponses = {
                 currencyDecimalPlaces: number | null;
                 subtotalAmountMinor: number | null;
                 shippingAmountMinor: number | null;
+                shippingMethodId: string | null;
+                shippingMethodName: string | null;
+                shippingMethodDescription: string | null;
+                shippingMethodBaseAmountMinor: number | null;
+                shippingFeeWaived: boolean | null;
                 discountAmountMinor: number | null;
                 taxAmountMinor: number;
                 totalAmountMinor: number | null;
@@ -41844,6 +41883,11 @@ export type GetApiV1AdminOrdersByIdResponses = {
             currencyDecimalPlaces: number | null;
             subtotalAmountMinor: number | null;
             shippingAmountMinor: number | null;
+            shippingMethodId: string | null;
+            shippingMethodName: string | null;
+            shippingMethodDescription: string | null;
+            shippingMethodBaseAmountMinor: number | null;
+            shippingFeeWaived: boolean | null;
             discountAmountMinor: number | null;
             taxAmountMinor: number;
             totalAmountMinor: number | null;

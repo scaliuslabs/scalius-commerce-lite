@@ -19,4 +19,20 @@ describe("order-success print layout", () => {
     expect(receiptStyles).not.toContain("max-height:");
     expect(receiptStyles).not.toContain("overflow: hidden");
   });
+
+  it("shows the immutable delivery-method snapshot on receipt and account order detail", () => {
+    const receipt = readFileSync(storefrontSourcePath("pages", "order-success.astro"), "utf8");
+    const accountOrder = readFileSync(
+      storefrontSourcePath("pages", "account", "orders", "[id].astro"),
+      "utf8",
+    );
+
+    for (const source of [receipt, accountOrder]) {
+      expect(source).toContain("shippingMethodName");
+      expect(source).toContain("shippingMethodDescription");
+      expect(source).toContain("shippingMethodBaseAmountMinor");
+      expect(source).toContain("shippingFeeWaived");
+      expect(source).toContain("Delivery method was not recorded for this order.");
+    }
+  });
 });

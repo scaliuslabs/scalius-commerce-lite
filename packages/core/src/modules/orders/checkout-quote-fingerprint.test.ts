@@ -57,10 +57,21 @@ const quote: TaxQuote = {
   },
 };
 
+const delivery = {
+  id: "shipping_standard",
+  name: "Standard delivery",
+  description: "Delivered within 2–3 business days",
+  baseAmountMinor: 6_000,
+  feeWaived: false,
+};
+
 describe("storefront checkout quote fingerprint", () => {
   it("is stable for the exact reviewed billable facts", async () => {
-    const first = await buildStorefrontCheckoutQuoteFingerprint(quote);
-    const second = await buildStorefrontCheckoutQuoteFingerprint(structuredClone(quote));
+    const first = await buildStorefrontCheckoutQuoteFingerprint(quote, delivery);
+    const second = await buildStorefrontCheckoutQuoteFingerprint(
+      structuredClone(quote),
+      structuredClone(delivery),
+    );
 
     expect(first).toMatch(/^taxq_[A-Za-z0-9_-]{22}$/);
     expect(second).toBe(first);
@@ -79,8 +90,24 @@ describe("storefront checkout quote fingerprint", () => {
       lines: [{ ...quote.lines[0]!, unitPriceMinor: 100_000 }],
     }],
   ])("changes when %s changes", async (_label, change) => {
-    const reviewed = await buildStorefrontCheckoutQuoteFingerprint(quote);
-    const current = await buildStorefrontCheckoutQuoteFingerprint({ ...quote, ...change });
+    const reviewed = await buildStorefrontCheckoutQuoteFingerprint(quote, delivery);
+    const current = await buildStorefrontCheckoutQuoteFingerprint({ ...quote, ...change }, delivery);
+
+    expect(current).not.toBe(reviewed);
+  });
+
+  it.each([
+    ["method identity", { id: "shipping_express" }],
+    ["method name", { name: "Express delivery" }],
+    ["service promise", { description: "Delivered next business day" }],
+    ["configured fee", { baseAmountMinor: 8_000 }],
+    ["fee waiver", { feeWaived: true }],
+  ])("changes when the selected delivery %s changes", async (_label, change) => {
+    const reviewed = await buildStorefrontCheckoutQuoteFingerprint(quote, delivery);
+    const current = await buildStorefrontCheckoutQuoteFingerprint(quote, {
+      ...delivery,
+      ...change,
+    });
 
     expect(current).not.toBe(reviewed);
   });

@@ -61,6 +61,13 @@ function quoteEnvelope(): Record<string, unknown> {
       taxAmount: 49.5,
       totalMinor: 37_950,
       totalAmount: 379.5,
+      shippingMethod: {
+        id: "ship_1",
+        name: "Standard delivery",
+        description: "Delivered within 2–3 business days",
+        baseAmountMinor: 5_000,
+        feeWaived: false,
+      },
       items: [{
         cartKey: "line_1",
         productId: "prod_1",

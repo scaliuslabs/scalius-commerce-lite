@@ -34,6 +34,13 @@ function validQuote(
     taxAmount: 49.5,
     totalMinor: 37_950,
     totalAmount: 379.5,
+    shippingMethod: {
+      id: "shipping_1",
+      name: "Standard delivery",
+      description: "Delivered within 2–3 business days",
+      baseAmountMinor: 5_000,
+      feeWaived: false,
+    },
     items: [{
       cartKey: "line:v2:prod_1:variant:var_1",
       productId: "prod_1",
@@ -126,6 +133,18 @@ describe("tax quote client contract", () => {
     })).toThrow(TaxQuoteContractError);
   });
 
+  it("preserves a bounded multiline delivery description", () => {
+    const quote = validQuote({
+      shippingMethod: {
+        ...validQuote().shippingMethod,
+        description: "Orders before noon\nusually arrive next day.",
+      },
+    });
+
+    expect(parseTaxQuoteEnvelope({ success: true, data: quote }).shippingMethod)
+      .toEqual(quote.shippingMethod);
+  });
+
   it("posts a no-store same-origin request and accepts only the strict envelope", async () => {
     const quote = validQuote();
     const fetcher = vi.fn(async () => new Response(JSON.stringify({
@@ -162,6 +181,45 @@ describe("tax quote client contract", () => {
     await expect(
       fetchAuthoritativeTaxQuote(checkoutData(), fetcher),
     ).rejects.toBeInstanceOf(TaxQuoteUnavailableError);
+  });
+
+  it("rejects a quote for a different delivery method", async () => {
+    const quote = validQuote({
+      shippingMethod: {
+        ...validQuote().shippingMethod,
+        id: "shipping_other",
+      },
+    });
+    const fetcher = vi.fn(async () => new Response(JSON.stringify({
+      success: true,
+      data: quote,
+    }), { status: 200 })) as unknown as typeof fetch;
+
+    await expect(
+      fetchAuthoritativeTaxQuote(checkoutData(), fetcher),
+    ).rejects.toBeInstanceOf(TaxQuoteUnavailableError);
+  });
+
+  it("rejects delivery snapshots whose fee semantics contradict the quote", () => {
+    expect(() => parseTaxQuoteEnvelope({
+      success: true,
+      data: validQuote({
+        shippingMethod: {
+          ...validQuote().shippingMethod,
+          baseAmountMinor: 4_000,
+        },
+      }),
+    })).toThrow(TaxQuoteContractError);
+
+    expect(() => parseTaxQuoteEnvelope({
+      success: true,
+      data: validQuote({
+        shippingMethod: {
+          ...validQuote().shippingMethod,
+          feeWaived: true,
+        },
+      }),
+    })).toThrow(TaxQuoteContractError);
   });
 
   it("does not expose upstream payload details when a quote is unavailable", async () => {

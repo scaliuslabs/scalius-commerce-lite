@@ -93,7 +93,14 @@ function authorityRows(): Record<string, unknown>[][] {
       { id: "city_1", name: "Dhaka", type: "city", parentId: null, isActive: 1, deletedAt: null },
       { id: "zone_1", name: "Mirpur", type: "zone", parentId: "city_1", isActive: 1, deletedAt: null },
     ],
-    [{ id: "shipping_1", fee: 60, isActive: 1, deletedAt: null }],
+    [{
+      id: "shipping_1",
+      name: "Standard delivery",
+      description: "Delivered within 2–3 business days",
+      fee: 60,
+      isActive: 1,
+      deletedAt: null,
+    }],
     [{
       revision: 1,
       orderChannels: null,
@@ -159,7 +166,18 @@ describe("storefront checkout authority read", () => {
       allowedCountries: { allowedCountries: ["BD"], allowedCountriesMode: "include" },
       activePaymentMethods: { enabledMethods: ["cod"], defaultMethod: "cod" },
       cartValidation: { valid: true, subtotal: 100 },
-      deliveryPreflight: { shippingCharge: 60, cityName: "Dhaka", zoneName: "Mirpur" },
+      deliveryPreflight: {
+        shippingCharge: 60,
+        shippingMethod: {
+          id: "shipping_1",
+          name: "Standard delivery",
+          description: "Delivered within 2–3 business days",
+          baseAmountMinor: 6_000,
+          feeWaived: false,
+        },
+        cityName: "Dhaka",
+        zoneName: "Mirpur",
+      },
       sideEffects: { orderCreatedNotification: false, metaPurchase: false },
     });
     expect(isTrustedStorefrontCartValidationResult(snapshot.cartValidation)).toBe(true);

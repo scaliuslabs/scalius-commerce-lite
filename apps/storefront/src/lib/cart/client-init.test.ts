@@ -84,6 +84,13 @@ function taxQuote(totalAmount: number, zone = "zone_banani"): CheckoutTaxQuote {
     taxAmount: totalAmount - 160,
     totalMinor: Math.round(totalAmount * 100),
     totalAmount,
+    shippingMethod: {
+      id: "ship_standard",
+      name: "Standard delivery",
+      description: null,
+      baseAmountMinor: 6_000,
+      feeWaived: false,
+    },
     items: [],
   };
 }

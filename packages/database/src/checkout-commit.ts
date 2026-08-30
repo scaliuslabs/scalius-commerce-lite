@@ -72,6 +72,11 @@ export interface CheckoutCommittedOrderRow {
   currencyDecimalPlaces: number;
   subtotalAmountMinor: number;
   shippingAmountMinor: number;
+  shippingMethodId: string;
+  shippingMethodName: string;
+  shippingMethodDescription: string | null;
+  shippingMethodBaseAmountMinor: number;
+  shippingFeeWaived: boolean;
   discountAmountMinor: number;
   taxAmountMinor: number;
   totalAmountMinor: number;
@@ -241,6 +246,20 @@ function validatePreparedCheckoutCommit(
   assertNonEmptyString(order.zone, `${prefix} zone`, 180);
   assertFiniteNumber(order.totalAmount, `${prefix} total amount`);
   assertFiniteNumber(order.shippingCharge, `${prefix} shipping charge`);
+  assertNonEmptyString(order.shippingMethodId, `${prefix} shipping method id`, 180);
+  assertNonEmptyString(order.shippingMethodName, `${prefix} shipping method name`, 100);
+  if (
+    order.shippingMethodDescription !== null
+    && (
+      typeof order.shippingMethodDescription !== "string"
+      || order.shippingMethodDescription.length > 255
+    )
+  ) {
+    throw new Error(`${prefix} shipping method description must be null or no longer than 255 characters.`);
+  }
+  if (typeof order.shippingFeeWaived !== "boolean") {
+    throw new Error(`${prefix} shipping fee waiver must be a boolean.`);
+  }
   assertFiniteNumber(order.discountAmount, `${prefix} discount amount`);
   assertFiniteNumber(order.paidAmount, `${prefix} paid amount`);
   assertFiniteNumber(order.balanceDue, `${prefix} balance due`);
@@ -248,6 +267,7 @@ function validatePreparedCheckoutCommit(
     currencyDecimalPlaces: order.currencyDecimalPlaces,
     subtotalAmountMinor: order.subtotalAmountMinor,
     shippingAmountMinor: order.shippingAmountMinor,
+    shippingMethodBaseAmountMinor: order.shippingMethodBaseAmountMinor,
     discountAmountMinor: order.discountAmountMinor,
     taxAmountMinor: order.taxAmountMinor,
     totalAmountMinor: order.totalAmountMinor,
@@ -269,12 +289,25 @@ function validatePreparedCheckoutCommit(
     throw new Error(`${prefix} aggregate checkout identity does not match its indexed identity.`);
   }
   const aggregatePayload = commit.aggregate.payload as {
-    orderData?: { id?: unknown; totalAmountMinor?: unknown };
+    orderData?: {
+      id?: unknown;
+      totalAmountMinor?: unknown;
+      shippingMethodId?: unknown;
+      shippingMethodName?: unknown;
+      shippingMethodDescription?: unknown;
+      shippingMethodBaseAmountMinor?: unknown;
+      shippingFeeWaived?: unknown;
+    };
   } | null;
   if (
     !aggregatePayload
     || aggregatePayload.orderData?.id !== order.id
     || aggregatePayload.orderData.totalAmountMinor !== order.totalAmountMinor
+    || aggregatePayload.orderData.shippingMethodId !== order.shippingMethodId
+    || aggregatePayload.orderData.shippingMethodName !== order.shippingMethodName
+    || aggregatePayload.orderData.shippingMethodDescription !== order.shippingMethodDescription
+    || aggregatePayload.orderData.shippingMethodBaseAmountMinor !== order.shippingMethodBaseAmountMinor
+    || aggregatePayload.orderData.shippingFeeWaived !== order.shippingFeeWaived
   ) {
     throw new Error(`${prefix} aggregate order facts do not match the indexed order row.`);
   }
@@ -566,7 +599,9 @@ export function buildCheckoutCommitStatements(
         shipping_address, city, zone, area, city_name, zone_name, area_name,
         total_amount, shipping_charge, discount_amount,
         currency_code, currency_decimal_places, subtotal_amount_minor,
-        shipping_amount_minor, discount_amount_minor, tax_amount_minor,
+        shipping_amount_minor, shipping_method_id, shipping_method_name,
+        shipping_method_description, shipping_method_base_amount_minor,
+        shipping_fee_waived, discount_amount_minor, tax_amount_minor,
         total_amount_minor, tax_label, prices_include_tax,
         status, notes, payment_method, payment_status, paid_amount, balance_due,
         fulfillment_status, inventory_pool, inventory_action,
@@ -597,6 +632,11 @@ export function buildCheckoutCommitStatements(
         CAST(json_extract(value, '$.aggregate.payload.orderData.currencyDecimalPlaces') AS INTEGER),
         CAST(json_extract(value, '$.aggregate.payload.orderData.subtotalAmountMinor') AS INTEGER),
         CAST(json_extract(value, '$.aggregate.payload.orderData.shippingAmountMinor') AS INTEGER),
+        json_extract(value, '$.aggregate.payload.orderData.shippingMethodId'),
+        json_extract(value, '$.aggregate.payload.orderData.shippingMethodName'),
+        json_extract(value, '$.aggregate.payload.orderData.shippingMethodDescription'),
+        CAST(json_extract(value, '$.aggregate.payload.orderData.shippingMethodBaseAmountMinor') AS INTEGER),
+        CAST(json_extract(value, '$.aggregate.payload.orderData.shippingFeeWaived') AS INTEGER),
         CAST(json_extract(value, '$.aggregate.payload.orderData.discountAmountMinor') AS INTEGER),
         CAST(json_extract(value, '$.aggregate.payload.orderData.taxAmountMinor') AS INTEGER),
         CAST(json_extract(value, '$.aggregate.payload.orderData.totalAmountMinor') AS INTEGER),

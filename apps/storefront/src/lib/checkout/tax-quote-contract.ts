@@ -10,6 +10,8 @@ const MAX_LOCATION_LENGTH = 180;
 const MAX_CODE_LENGTH = 100;
 const MAX_PHONE_LENGTH = 16;
 const MAX_DISPLAY_LABEL_LENGTH = 80;
+const MAX_SHIPPING_METHOD_NAME_LENGTH = 100;
+const MAX_SHIPPING_METHOD_DESCRIPTION_LENGTH = 255;
 const MAX_QUANTITY = 99;
 const MAX_MAJOR_AMOUNT = 1_000_000_000_000;
 const FINGERPRINT_PATTERN = /^taxq_[A-Za-z0-9_-]{22}$/;
@@ -47,6 +49,14 @@ export interface TaxQuoteItem {
   variantLabel: string | null;
 }
 
+export interface TaxQuoteShippingMethod {
+  id: string;
+  name: string;
+  description: string | null;
+  baseAmountMinor: number;
+  feeWaived: boolean;
+}
+
 export interface CheckoutTaxQuote {
   valid: true;
   quoteFingerprint: string;
@@ -66,6 +76,7 @@ export interface CheckoutTaxQuote {
   taxAmount: number;
   totalMinor: number;
   totalAmount: number;
+  shippingMethod: TaxQuoteShippingMethod;
   items: TaxQuoteItem[];
 }
 
@@ -113,6 +124,20 @@ function optionalString(value: unknown, maxLength: number): string | undefined {
 function nullableString(value: unknown, maxLength: number): string | null {
   if (value === null) return null;
   return requiredString(value, maxLength);
+}
+
+function nullableDescription(value: unknown, maxLength: number): string | null {
+  if (value === null) return null;
+  if (typeof value !== "string") fail();
+  const normalized = value.trim();
+  if (normalized.length === 0 || normalized.length > maxLength) fail();
+  for (const character of normalized) {
+    const code = character.charCodeAt(0);
+    if ((code <= 31 && code !== 9 && code !== 10 && code !== 13) || code === 127) {
+      fail();
+    }
+  }
+  return normalized;
 }
 
 function positiveQuantity(value: unknown): number {
@@ -260,6 +285,24 @@ export function parseTaxQuoteEnvelope(value: unknown): CheckoutTaxQuote {
   const totalMinor = nonNegativeSafeInteger(data.totalMinor);
   const totalAmount = nonNegativeAmount(data.totalAmount);
 
+  if (!isRecord(data.shippingMethod)) fail();
+  if (typeof data.shippingMethod.feeWaived !== "boolean") fail();
+  const shippingMethod: TaxQuoteShippingMethod = {
+    id: requiredString(data.shippingMethod.id, MAX_ID_LENGTH),
+    name: requiredString(
+      data.shippingMethod.name,
+      MAX_SHIPPING_METHOD_NAME_LENGTH,
+    ),
+    description: nullableDescription(
+      data.shippingMethod.description,
+      MAX_SHIPPING_METHOD_DESCRIPTION_LENGTH,
+    ),
+    baseAmountMinor: nonNegativeSafeInteger(
+      data.shippingMethod.baseAmountMinor,
+    ),
+    feeWaived: data.shippingMethod.feeWaived,
+  };
+
   assertAmountMatchesMinor(subtotalAmount, subtotalMinor, decimalPlaces);
   assertAmountMatchesMinor(shippingAmount, shippingMinor, decimalPlaces);
   assertAmountMatchesMinor(discountAmount, discountMinor, decimalPlaces);
@@ -272,6 +315,11 @@ export function parseTaxQuoteEnvelope(value: unknown): CheckoutTaxQuote {
     discountMinor +
     (data.pricesIncludeTax ? 0 : taxMinor);
   if (!Number.isSafeInteger(expectedTotalMinor) || expectedTotalMinor !== totalMinor) fail();
+  if (shippingMethod.feeWaived) {
+    if (shippingMinor !== 0) fail();
+  } else if (shippingMethod.baseAmountMinor !== shippingMinor) {
+    fail();
+  }
 
   if (!Array.isArray(data.items) || data.items.length === 0) fail();
   if (data.items.length > TAX_QUOTE_MAX_ITEMS) fail();
@@ -306,6 +354,7 @@ export function parseTaxQuoteEnvelope(value: unknown): CheckoutTaxQuote {
     taxAmount,
     totalMinor,
     totalAmount,
+    shippingMethod,
     items,
   };
 }

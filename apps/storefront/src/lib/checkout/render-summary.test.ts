@@ -99,6 +99,13 @@ function taxQuote(
     taxAmount: 0,
     totalMinor: 10_000,
     totalAmount: 100,
+    shippingMethod: {
+      id: "ship_1",
+      name: "Standard Delivery",
+      description: null,
+      baseAmountMinor: 0,
+      feeWaived: false,
+    },
     items: [{
       cartKey: "line_1",
       productId: "prod_1",
@@ -164,7 +171,7 @@ describe("renderOrderSummaryDetails", () => {
         areaName: "Dhanmondi",
         zoneName: "Dhaka South",
         cityName: "Dhaka",
-        shippingMethodName: "Standard Delivery",
+        shippingMethodName: "Stale transferred delivery name",
       },
       baseConfig,
       taxQuote({
@@ -172,6 +179,13 @@ describe("renderOrderSummaryDetails", () => {
         subtotalAmount: 500,
         totalMinor: 50_000,
         totalAmount: 500,
+        shippingMethod: {
+          id: "ship_1",
+          name: "Standard Delivery",
+          description: "Arrives in 2–3 business days",
+          baseAmountMinor: 0,
+          feeWaived: false,
+        },
         items: [
           {
             cartKey: "line_1",
@@ -200,11 +214,37 @@ describe("renderOrderSummaryDetails", () => {
     expect(details.textContent).toContain("Product Two");
     expect(details.textContent).toContain("Qty 1");
     expect(details.textContent).toContain("Standard Delivery");
+    expect(details.textContent).toContain("Arrives in 2–3 business days");
+    expect(details.textContent).not.toContain("Stale transferred delivery name");
     expect(details.textContent).toContain("Buyer Name · +8801700000000");
     expect(details.textContent).toContain("11 Example Road");
     expect(details.textContent).toContain("Dhanmondi, Dhaka South, Dhaka");
     expect(details.textContent).not.toContain("prod_1");
     expect(details.textContent).not.toContain("var_1");
+  });
+
+  it("shows the configured delivery fee when an item waives it", () => {
+    const details = document.createElement("div");
+
+    renderOrderSummaryDetails(
+      details,
+      { customerName: "Buyer" },
+      baseConfig,
+      taxQuote({
+        shippingMethod: {
+          id: "ship_1",
+          name: "Express Delivery",
+          description: null,
+          baseAmountMinor: 6_000,
+          feeWaived: true,
+        },
+      }),
+    );
+
+    expect(details.textContent).toContain("Express Delivery");
+    expect(details.textContent).toContain(
+      "Normally ৳60.00; waived by an item in your cart.",
+    );
   });
 
   it("renders customer checkout data as text, not HTML", () => {
@@ -669,6 +709,13 @@ describe("initCheckoutPage", () => {
       subtotalAmount: 500,
       shippingMinor: 6_000,
       shippingAmount: 60,
+      shippingMethod: {
+        id: "ship_1",
+        name: "Standard Delivery",
+        description: null,
+        baseAmountMinor: 6_000,
+        feeWaived: false,
+      },
       discountMinor: 2_500,
       discountAmount: 25,
       taxMinor: 8_000,

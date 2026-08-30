@@ -28472,6 +28472,26 @@
                               "shippingCharge": {
                                 "type": "number"
                               },
+                              "shippingMethodId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "shippingMethodName": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "shippingMethodDescription": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "shippingMethodBaseAmountMinor": {
+                                "type": "integer",
+                                "nullable": true
+                              },
+                              "shippingFeeWaived": {
+                                "type": "boolean",
+                                "nullable": true
+                              },
                               "discountAmount": {
                                 "type": "number",
                                 "nullable": true
@@ -28624,6 +28644,11 @@
                               "paidAmount",
                               "balanceDue",
                               "shippingCharge",
+                              "shippingMethodId",
+                              "shippingMethodName",
+                              "shippingMethodDescription",
+                              "shippingMethodBaseAmountMinor",
+                              "shippingFeeWaived",
                               "discountAmount",
                               "paymentStatus",
                               "paymentMethod",
@@ -29457,6 +29482,26 @@
                               "type": "integer",
                               "nullable": true
                             },
+                            "shippingMethodId": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "shippingMethodName": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "shippingMethodDescription": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "shippingMethodBaseAmountMinor": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "shippingFeeWaived": {
+                              "type": "boolean",
+                              "nullable": true
+                            },
                             "discountAmountMinor": {
                               "type": "integer",
                               "nullable": true
@@ -29537,6 +29582,11 @@
                             "currencyDecimalPlaces",
                             "subtotalAmountMinor",
                             "shippingAmountMinor",
+                            "shippingMethodId",
+                            "shippingMethodName",
+                            "shippingMethodDescription",
+                            "shippingMethodBaseAmountMinor",
+                            "shippingFeeWaived",
                             "discountAmountMinor",
                             "taxAmountMinor",
                             "totalAmountMinor",
@@ -42356,6 +42406,26 @@
                               "type": "integer",
                               "nullable": true
                             },
+                            "shippingMethodId": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "shippingMethodName": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "shippingMethodDescription": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "shippingMethodBaseAmountMinor": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "shippingFeeWaived": {
+                              "type": "boolean",
+                              "nullable": true
+                            },
                             "discountAmountMinor": {
                               "type": "integer",
                               "nullable": true
@@ -42628,6 +42698,11 @@
                             "currencyDecimalPlaces",
                             "subtotalAmountMinor",
                             "shippingAmountMinor",
+                            "shippingMethodId",
+                            "shippingMethodName",
+                            "shippingMethodDescription",
+                            "shippingMethodBaseAmountMinor",
+                            "shippingFeeWaived",
                             "discountAmountMinor",
                             "taxAmountMinor",
                             "totalAmountMinor",
@@ -43593,6 +43668,40 @@
                             "shippingCharge": {
                               "type": "number"
                             },
+                            "shippingMethod": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 180
+                                },
+                                "name": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 100
+                                },
+                                "description": {
+                                  "type": "string",
+                                  "nullable": true,
+                                  "maxLength": 255
+                                },
+                                "baseAmountMinor": {
+                                  "type": "integer",
+                                  "minimum": 0
+                                },
+                                "feeWaived": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "name",
+                                "description",
+                                "baseAmountMinor",
+                                "feeWaived"
+                              ]
+                            },
                             "cityName": {
                               "type": "string"
                             },
@@ -43606,6 +43715,7 @@
                           },
                           "required": [
                             "shippingCharge",
+                            "shippingMethod",
                             "cityName",
                             "zoneName",
                             "areaName"
@@ -43918,6 +44028,40 @@
                         "totalAmount": {
                           "type": "number"
                         },
+                        "shippingMethod": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 180
+                            },
+                            "name": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 100
+                            },
+                            "description": {
+                              "type": "string",
+                              "nullable": true,
+                              "maxLength": 255
+                            },
+                            "baseAmountMinor": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "feeWaived": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "name",
+                            "description",
+                            "baseAmountMinor",
+                            "feeWaived"
+                          ]
+                        },
                         "items": {
                           "type": "array",
                           "items": {
@@ -43977,6 +44121,7 @@
                         "taxAmount",
                         "totalMinor",
                         "totalAmount",
+                        "shippingMethod",
                         "items"
                       ]
                     }
@@ -141625,6 +141770,26 @@
                               "type": "number",
                               "nullable": true
                             },
+                            "shippingMethodId": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "shippingMethodName": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "shippingMethodDescription": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "shippingMethodBaseAmountMinor": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "shippingFeeWaived": {
+                              "type": "boolean",
+                              "nullable": true
+                            },
                             "discountAmountMinor": {
                               "type": "number",
                               "nullable": true
@@ -141781,6 +141946,11 @@
                             "currencyDecimalPlaces",
                             "subtotalAmountMinor",
                             "shippingAmountMinor",
+                            "shippingMethodId",
+                            "shippingMethodName",
+                            "shippingMethodDescription",
+                            "shippingMethodBaseAmountMinor",
+                            "shippingFeeWaived",
                             "discountAmountMinor",
                             "taxAmountMinor",
                             "totalAmountMinor",
@@ -142405,6 +142575,26 @@
                               "type": "number",
                               "nullable": true
                             },
+                            "shippingMethodId": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "shippingMethodName": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "shippingMethodDescription": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "shippingMethodBaseAmountMinor": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "shippingFeeWaived": {
+                              "type": "boolean",
+                              "nullable": true
+                            },
                             "discountAmountMinor": {
                               "type": "number",
                               "nullable": true
@@ -142561,6 +142751,11 @@
                             "currencyDecimalPlaces",
                             "subtotalAmountMinor",
                             "shippingAmountMinor",
+                            "shippingMethodId",
+                            "shippingMethodName",
+                            "shippingMethodDescription",
+                            "shippingMethodBaseAmountMinor",
+                            "shippingFeeWaived",
                             "discountAmountMinor",
                             "taxAmountMinor",
                             "totalAmountMinor",
@@ -151973,6 +152168,26 @@
                           "type": "integer",
                           "nullable": true
                         },
+                        "shippingMethodId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "shippingMethodName": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "shippingMethodDescription": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "shippingMethodBaseAmountMinor": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "shippingFeeWaived": {
+                          "type": "boolean",
+                          "nullable": true
+                        },
                         "discountAmountMinor": {
                           "type": "integer",
                           "nullable": true
@@ -152716,6 +152931,11 @@
                         "currencyDecimalPlaces",
                         "subtotalAmountMinor",
                         "shippingAmountMinor",
+                        "shippingMethodId",
+                        "shippingMethodName",
+                        "shippingMethodDescription",
+                        "shippingMethodBaseAmountMinor",
+                        "shippingFeeWaived",
                         "discountAmountMinor",
                         "taxAmountMinor",
                         "totalAmountMinor",

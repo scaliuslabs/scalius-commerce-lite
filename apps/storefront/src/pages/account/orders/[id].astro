@@ -820,14 +820,26 @@ const orderId = Astro.params.id ?? "";
 
     const summary = document.getElementById("orderSummary");
     if (summary) {
+      const deliveryLabel = order.shippingMethodName
+        ? `Delivery · ${order.shippingMethodName}`
+        : "Delivery";
       if (savedMoneySummary) {
         const savedAmount = (amountMinor: number) => escapeHtml(
           formatSavedMinorAmount(amountMinor, savedMoneySummary),
         );
+        const deliveryDetails = order.shippingMethodName
+          ? [
+              order.shippingMethodDescription,
+              order.shippingFeeWaived && order.shippingMethodBaseAmountMinor != null
+                ? `${formatSavedMinorAmount(order.shippingMethodBaseAmountMinor, savedMoneySummary)} fee waived`
+                : null,
+            ].filter(Boolean).join(" · ")
+          : "Delivery method was not recorded for this order.";
         summary.innerHTML = `
           <dl class="space-y-2">
             <div class="flex justify-between gap-4"><dt class="text-muted-foreground">Subtotal</dt><dd class="font-medium text-foreground">${savedAmount(savedMoneySummary.subtotalMinor)}</dd></div>
-            <div class="flex justify-between gap-4"><dt class="text-muted-foreground">Shipping</dt><dd class="font-medium text-foreground">${savedAmount(savedMoneySummary.shippingMinor)}</dd></div>
+            <div class="flex justify-between gap-4"><dt class="text-muted-foreground">${escapeHtml(deliveryLabel)}</dt><dd class="font-medium text-foreground">${savedAmount(savedMoneySummary.shippingMinor)}</dd></div>
+            ${deliveryDetails ? `<div class="text-xs text-muted-foreground">${escapeHtml(deliveryDetails)}</div>` : ""}
             <div class="flex justify-between gap-4"><dt class="text-muted-foreground">Discount</dt><dd class="font-medium text-primary">${savedMoneySummary.discountMinor > 0 ? "−" : ""}${savedAmount(savedMoneySummary.discountMinor)}</dd></div>
             <div class="flex justify-between gap-4"><dt class="text-muted-foreground">${escapeHtml(savedMoneySummary.taxLabel)}${savedMoneySummary.pricesIncludeTax ? " (included)" : ""}</dt><dd class="font-medium text-foreground">${savedAmount(savedMoneySummary.taxMinor)}</dd></div>
             <div class="flex justify-between gap-4 border-t border-border pt-2"><dt class="font-semibold text-foreground">Total</dt><dd class="font-semibold text-foreground">${savedAmount(savedMoneySummary.totalMinor)}</dd></div>
@@ -839,10 +851,14 @@ const orderId = Astro.params.id ?? "";
         const shipping = Number.isFinite(order.shippingCharge) ? order.shippingCharge : 0;
         const totalAmount = Number.isFinite(order.totalAmount) ? order.totalAmount : 0;
         const subtotal = totalAmount - shipping + discount;
+        const deliveryDetails = order.shippingMethodName
+          ? order.shippingMethodDescription || ""
+          : "Delivery method was not recorded for this order.";
         summary.innerHTML = `
           <dl class="space-y-2">
             <div class="flex justify-between gap-4"><dt class="text-muted-foreground">Subtotal</dt><dd class="font-medium text-foreground">${escapeHtml(formatMoney(subtotal))}</dd></div>
-            ${shipping > 0 ? `<div class="flex justify-between gap-4"><dt class="text-muted-foreground">Shipping</dt><dd class="font-medium text-foreground">${escapeHtml(formatMoney(shipping))}</dd></div>` : ""}
+            ${shipping > 0 || order.shippingMethodName ? `<div class="flex justify-between gap-4"><dt class="text-muted-foreground">${escapeHtml(deliveryLabel)}</dt><dd class="font-medium text-foreground">${escapeHtml(formatMoney(shipping))}</dd></div>` : ""}
+            ${deliveryDetails ? `<div class="text-xs text-muted-foreground">${escapeHtml(deliveryDetails)}</div>` : ""}
             ${discount > 0 ? `<div class="flex justify-between gap-4"><dt class="text-muted-foreground">Discount</dt><dd class="font-medium text-primary">−${escapeHtml(formatMoney(discount))}</dd></div>` : ""}
             <div class="flex justify-between gap-4 border-t border-border pt-2"><dt class="font-semibold text-foreground">Total</dt><dd class="font-semibold text-foreground">${escapeHtml(formatMoney(totalAmount))}</dd></div>
           </dl>
