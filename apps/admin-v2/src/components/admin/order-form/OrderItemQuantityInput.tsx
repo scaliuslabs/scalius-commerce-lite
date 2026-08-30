@@ -7,9 +7,12 @@ const MIN_ORDER_ITEM_QUANTITY = 1;
 const MAX_ORDER_ITEM_QUANTITY = 99;
 
 interface OrderItemQuantityInputProps {
+  id?: string;
   quantity: number;
   itemName: string;
   onQuantityChange: (quantity: number) => void;
+  onEnter?: () => void;
+  placeholder?: string;
   className?: string;
 }
 
@@ -27,9 +30,12 @@ function parseQuantityDraft(value: string): number | null {
 }
 
 export function OrderItemQuantityInput({
+  id,
   quantity,
   itemName,
   onQuantityChange,
+  onEnter,
+  placeholder,
   className,
 }: OrderItemQuantityInputProps) {
   const [draft, setDraft] = React.useState(String(quantity));
@@ -41,6 +47,7 @@ export function OrderItemQuantityInput({
 
   return (
     <Input
+      id={id}
       type="number"
       inputMode="numeric"
       min={MIN_ORDER_ITEM_QUANTITY}
@@ -48,6 +55,7 @@ export function OrderItemQuantityInput({
       step={1}
       value={draft}
       aria-label={`Quantity for ${itemName}`}
+      placeholder={placeholder}
       className={cn("h-8 w-20", className)}
       onFocus={() => {
         focusedRef.current = true;
@@ -69,6 +77,17 @@ export function OrderItemQuantityInput({
         }
         setDraft(String(nextQuantity));
         if (nextQuantity !== quantity) onQuantityChange(nextQuantity);
+      }}
+      onKeyDown={(event) => {
+        if (event.key !== "Enter") return;
+        event.preventDefault();
+        const nextQuantity = parseQuantityDraft(draft);
+        if (nextQuantity === null) {
+          setDraft(String(quantity));
+          return;
+        }
+        if (nextQuantity !== quantity) onQuantityChange(nextQuantity);
+        onEnter?.();
       }}
     />
   );
