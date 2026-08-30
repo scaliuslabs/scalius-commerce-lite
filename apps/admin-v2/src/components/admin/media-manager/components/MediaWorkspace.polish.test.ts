@@ -23,7 +23,7 @@ describe("media workspace polish boundaries", () => {
 
   it("uses a single-row folder rail on mobile and a stable sidebar on desktop", () => {
     expect(folders).toContain('className="flex w-full gap-1 overflow-x-auto p-2 md:hidden"');
-    expect(folders).toContain('className="hidden flex-1 md:block"');
+    expect(folders).toContain('className="hidden min-h-0 flex-1 space-y-0.5 overflow-y-auto p-2 md:block"');
     expect(folders).toContain('aria-current={currentFolderId === id ? "page" : undefined}');
   });
 
