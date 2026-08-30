@@ -40,7 +40,9 @@ import {
   clearAdminOrderRequestKey,
   getOrCreateAdminOrderRequestKey,
   rememberSubmittedAdminOrderRequestKey,
+  replaceSubmittedAdminOrderRequestKey,
 } from "./order-form/create-order-request-key";
+import { executeManualOrderCreateWithRecovery } from "./order-form/manual-order-create-recovery";
 import { useDebounce } from "@/hooks/use-debounce";
 import { queryKeys } from "@/lib/query-keys";
 import { getServerFnError } from "@/lib/api-mutations/shared";
@@ -265,7 +267,7 @@ export function OrderForm({
 
   // --- FORM SUBMISSION ---
 
-  const handleSubmit = useCallback<SubmitHandler<OrderFormValues>>((values) => {
+  const handleSubmit = useCallback<SubmitHandler<OrderFormValues>>(async (values) => {
     if (!isEdit && !manualQuote.isCurrent) {
       toast.error("Wait for the final tax and total before creating this order.");
       return;
@@ -306,19 +308,45 @@ export function OrderForm({
     } else {
       const requestKey = createRequestKey.current ?? getOrCreateAdminOrderRequestKey();
       createRequestKey.current = requestKey;
-      rememberSubmittedAdminOrderRequestKey(requestKey);
-      createMutation.mutate(
-        toCreateOrderInput(enrichedValues, requestKey),
-        {
-          onSuccess: (createdOrder) => {
-            clearAdminOrderRequestKey(requestKey);
-            void navigate({
-              to: "/admin/orders/$orderId",
-              params: { orderId: createdOrder.id },
-            });
-          },
+      const result = await executeManualOrderCreateWithRecovery({
+        requestKey,
+        submit: (submittedRequestKey) => {
+          rememberSubmittedAdminOrderRequestKey(submittedRequestKey);
+          return createMutation.mutateAsync(
+            toCreateOrderInput(enrichedValues, submittedRequestKey),
+          );
         },
-      );
+        replaceRequestKey: replaceSubmittedAdminOrderRequestKey,
+      });
+      createRequestKey.current = result.requestKey;
+
+      if (result.outcome === "created") {
+        clearAdminOrderRequestKey(result.requestKey);
+        void navigate({
+          to: "/admin/orders/$orderId",
+          params: { orderId: result.order.id },
+        });
+        return;
+      }
+      if (result.outcome === "open-existing") {
+        clearAdminOrderRequestKey(result.requestKey);
+        toast.info("Your earlier submission already created this order.", {
+          description: "Opening it instead of risking a duplicate order.",
+        });
+        void navigate({
+          to: "/admin/orders/$orderId",
+          params: { orderId: result.orderId },
+        });
+        return;
+      }
+      if (result.outcome === "wait") {
+        toast.warning("Your earlier submission is still finishing.", {
+          description:
+            "Your changes are preserved. Wait a moment, then create the order again.",
+        });
+        return;
+      }
+      toast.error(getServerFnError(result.error, "Failed to create order"));
     }
   }, [createMutation, defaultValues?.id, isEdit, locations, manualQuote.isCurrent, navigate, updateMutation]);
 

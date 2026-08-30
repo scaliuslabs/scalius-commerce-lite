@@ -130,8 +130,6 @@ export function useCreateOrder() {
       invalidateOrderInventoryQueries(queryClient);
       toast.success("Confirmed order created");
     },
-    onError: (err) =>
-      toast.error(getServerFnError(err, "Failed to create order")),
   });
 }
 

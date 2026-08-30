@@ -54,6 +54,21 @@ export interface SitePresentationRevisionConflict {
   currentRevision: number | null;
 }
 
+export type AdminOrderCreateRequestMismatch =
+  | {
+      state: "failed";
+      canRetryWithNewKey: true;
+    }
+  | {
+      state: "processing";
+      canRetryWithNewKey: false;
+    }
+  | {
+      state: "committed";
+      canRetryWithNewKey: false;
+      orderId: string;
+    };
+
 export interface ProductMediaSkuReferenceConflict {
   affectedCount: number;
   affectedAssociationIds: string[];
@@ -120,6 +135,46 @@ export function isAdminApiNotFoundError(error: unknown): boolean {
 
 export function isAdminApiConflictError(error: unknown): boolean {
   return readAdminApiError(error)?.status === 409;
+}
+
+export function readAdminOrderCreateRequestMismatch(
+  error: unknown,
+): AdminOrderCreateRequestMismatch | null {
+  const parsed = readAdminApiError(error);
+  if (
+    parsed?.status !== 409 ||
+    parsed.code !== "ADMIN_ORDER_CREATE_REQUEST_MISMATCH" ||
+    !parsed.details ||
+    typeof parsed.details !== "object"
+  ) {
+    return null;
+  }
+
+  const details = parsed.details as {
+    state?: unknown;
+    canRetryWithNewKey?: unknown;
+    orderId?: unknown;
+  };
+  if (details.state === "failed" && details.canRetryWithNewKey === true) {
+    return { state: "failed", canRetryWithNewKey: true };
+  }
+  if (details.state === "processing" && details.canRetryWithNewKey === false) {
+    return { state: "processing", canRetryWithNewKey: false };
+  }
+  if (
+    details.state === "committed" &&
+    details.canRetryWithNewKey === false &&
+    typeof details.orderId === "string" &&
+    details.orderId.length > 0 &&
+    details.orderId.length <= 128
+  ) {
+    return {
+      state: "committed",
+      canRetryWithNewKey: false,
+      orderId: details.orderId,
+    };
+  }
+  return null;
 }
 
 export function readProductRevisionConflict(

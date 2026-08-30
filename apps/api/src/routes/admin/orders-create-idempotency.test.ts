@@ -1,5 +1,6 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { AppError } from "@scalius/core/errors";
 import { errorResponseFromError } from "../../utils/api-response";
 
 const mocks = vi.hoisted(() => ({
@@ -102,5 +103,37 @@ describe("admin order create idempotency boundary", () => {
         });
         expect(response.status).toBe(400);
         expect(mocks.createOrder).not.toHaveBeenCalled();
+    });
+
+    it("preserves typed recovery details for the authenticated admin client", async () => {
+        mocks.createOrder.mockRejectedValueOnce(new AppError(
+            409,
+            "ADMIN_ORDER_CREATE_REQUEST_MISMATCH",
+            "The earlier manual-order submission already created an order.",
+            {
+                state: "committed",
+                canRetryWithNewKey: false,
+                orderId: "01ABCDEF23456789",
+            },
+        ));
+
+        const response = await createApp().request("/api/v1/admin/orders", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Idempotency-Key": requestKey },
+            body: JSON.stringify(createBody),
+        });
+
+        expect(response.status).toBe(409);
+        await expect(response.json()).resolves.toMatchObject({
+            success: false,
+            error: {
+                code: "ADMIN_ORDER_CREATE_REQUEST_MISMATCH",
+                details: {
+                    state: "committed",
+                    canRetryWithNewKey: false,
+                    orderId: "01ABCDEF23456789",
+                },
+            },
+        });
     });
 });
