@@ -126,11 +126,10 @@ and the no-claim rule are recorded in
 
 ```
 INCOMPLETE ──→ PENDING ──→ CONFIRMED ──→ SHIPPED ──→ DELIVERED ──→ COMPLETED
-                 │              │            │            │
-                 │              │            │            └──→ RETURNED ──→ REFUNDED
-                 │              │            └──→ RETURNED
-                 │              └──→ CANCELLED
-                 └──→ CANCELLED ──→ PENDING (admin reactivation)
+     │           │              │            │            │
+     │           │              │            │            └──→ RETURNED ──→ REFUNDED
+     │           │              │            └──→ RETURNED
+     └───────────┴──────────────┴──→ CANCELLED (terminal)
 ```
 
 **What happens at each transition:**
@@ -229,8 +228,8 @@ This is **tight coupling by design**. Payment confirmation must atomically updat
             ┌──────│ RESERVED │──────┐
             │      └────┬─────┘      │
             │           │            │
-    (cancelled)    (shipped/     (admin
-     pre-ship)      paid)      reactivates)
+    (cancelled)    (shipped/    (projection
+     pre-ship)      paid)         repair)
             │           │            │
             ↓           ↓            ↑
     ┌──────────┐  ┌──────────┐       │

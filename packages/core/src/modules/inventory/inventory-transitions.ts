@@ -282,9 +282,9 @@ export async function buildInventoryStatements(
         };
     }
 
-    // Re-reservation: when an admin reactivates a cancelled order (restored → pending/confirmed),
-    // inventory was already released during cancellation. We need to re-reserve stock so that the
-    // order items are accounted for again. This mirrors the initial storefront checkout reservation.
+    // Recovery re-reservation: if repaired data or an interrupted compensating workflow leaves an
+    // active order with restored inventory, reserve its items again. Public order transitions never
+    // leave the terminal cancelled state; this path repairs inventory projection only.
     const needsReReserve = isStockReservableStatus(newStatus) && currentAction === "restored";
     if (needsReReserve) {
         const availabilityTransitionVariantIds = await reserveOrderItems(db, order);
@@ -477,7 +477,7 @@ async function releaseOrderReservations(
 
 /**
  * Re-reserve stock for all items in an order.
- * Used when an admin reactivates a cancelled order (cancelled → pending/confirmed).
+ * Used to repair an active order whose inventory projection was previously restored.
  * Stock was released on cancellation; this re-reserves it.
  */
 async function reserveOrderItems(

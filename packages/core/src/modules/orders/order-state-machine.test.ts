@@ -57,6 +57,14 @@ describe("order state machine", () => {
             .not.toThrow();
     });
 
+    it("treats cancellation as a terminal order state", () => {
+        expect(getAvailableOrderStatusTransitions("cancelled")).toEqual([]);
+        expect(canTransitionTo("order", "cancelled", "pending")).toBe(false);
+        expect(canTransitionTo("order", "cancelled", "confirmed")).toBe(false);
+        expect(() => validateTransition("order", "cancelled", "pending"))
+            .toThrow('Allowed transitions from "cancelled": none (terminal state).');
+    });
+
     it("rejects transitions outside the shared state machine", () => {
         expect(() => validateTransition("order", "pending", "refunded"))
             .toThrow("Allowed transitions from \"pending\": processing, confirmed, cancelled.");

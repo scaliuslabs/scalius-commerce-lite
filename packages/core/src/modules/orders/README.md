@@ -33,7 +33,7 @@ confirmed  --> shipped, delivered, cancelled
 shipped    --> confirmed, delivered, returned, cancelled
 delivered  --> completed, returned, refunded, partially_refunded
 completed  --> returned, refunded, partially_refunded
-cancelled  --> pending, confirmed       (admin reactivation only)
+cancelled                              (terminal)
 returned   --> refunded
 refunded   --> (terminal)
 partially_refunded --> refunded
@@ -41,7 +41,7 @@ partially_refunded --> refunded
 
 All 11 states: `incomplete`, `pending`, `processing`, `confirmed`, `shipped`, `delivered`, `completed`, `cancelled`, `returned`, `refunded`, `partially_refunded`.
 
-**Note on CANCELLED:** The state machine allows `cancelled -> pending` and `cancelled -> confirmed` for admin reactivation. When this happens, `inventory-transitions.ts` detects `currentAction === "restored"` and re-reserves stock via `reserveOrderItems()`. The comment in the state machine explicitly says "Admin override only: merchants can reactivate cancelled orders."
+**Note on CANCELLED:** Cancellation is terminal. It may release reservations, restore stock, void payment authority, and notify the buyer, so a merchant who wants to continue the sale must create a new order with a new lifecycle identity. Archive restoration is separate and does not reopen the order lifecycle.
 
 **Note on carrier retries:** `confirmed -> delivered` is allowed for direct delivery confirmation, and `shipped -> confirmed` is allowed when a carrier delivery attempt fails and the merchant needs to retry shipment without restoring or deducting stock.
 
