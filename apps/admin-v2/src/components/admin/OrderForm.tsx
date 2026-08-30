@@ -46,6 +46,16 @@ import { executeManualOrderCreateWithRecovery } from "./order-form/manual-order-
 import { useDebounce } from "@/hooks/use-debounce";
 import { queryKeys } from "@/lib/query-keys";
 import { getServerFnError } from "@/lib/api-mutations/shared";
+import {
+  isAdminApiRetryableReadError,
+  readManualOrderDiscountLimitError,
+} from "@/lib/admin-api-error";
+import { useCurrency } from "@/hooks/use-currency";
+import { getDecimalPlaces } from "@scalius/shared/currency";
+import {
+  calculateManualOrderDiscountLimit,
+  resolveManualOrderDiscountGuidance,
+} from "./order-form/manual-order-discount";
 
 function toOrderBaseContentInput(values: OrderFormValues) {
   return {
@@ -106,6 +116,7 @@ export function OrderForm({
   isEdit = false,
 }: OrderFormProps) {
   const navigate = useNavigate();
+  const { code: currencyCode } = useCurrency();
   const orderActions = useOrderActionPermissions();
   const canSave = isEdit
     ? orderActions.canEditOrders
@@ -167,13 +178,27 @@ export function OrderForm({
     }),
     [quoteArea, quoteCity, quoteDiscount, quoteItems, quoteShipping, quoteZone],
   );
+  const currencyDecimalPlaces = getDecimalPlaces(currencyCode);
+  const localDiscountLimit = React.useMemo(
+    () => isEdit
+      ? null
+      : calculateManualOrderDiscountLimit(
+          quoteItems,
+          quoteShipping,
+          quoteDiscount,
+          currencyDecimalPlaces,
+        ),
+    [currencyDecimalPlaces, isEdit, quoteDiscount, quoteItems, quoteShipping],
+  );
   const debouncedQuoteInput = useDebounce(quoteInput, 350);
-  const canRequestQuote = !isEdit
-    && Boolean(debouncedQuoteInput.city && debouncedQuoteInput.zone)
-    && debouncedQuoteInput.items.length > 0
-    && debouncedQuoteInput.items.every((item) => Boolean(item.variantId));
   const quoteInputIsCurrent =
     JSON.stringify(quoteInput) === JSON.stringify(debouncedQuoteInput);
+  const hasQuotePrerequisites = !isEdit
+    && Boolean(quoteInput.city && quoteInput.zone)
+    && quoteInput.items.length > 0
+    && quoteInput.items.every((item) => Boolean(item.variantId));
+  const canRequestQuote = hasQuotePrerequisites
+    && quoteInputIsCurrent;
   const quoteQuery = useQuery({
     queryKey: queryKeys.orders.manualQuote(debouncedQuoteInput),
     queryFn: () => quoteManualOrder({ data: debouncedQuoteInput }),
@@ -181,27 +206,62 @@ export function OrderForm({
     retry: false,
     staleTime: 0,
   });
+  const currentQuoteError = quoteInputIsCurrent ? quoteQuery.error : null;
+  const authoritativeDiscountLimit = currentQuoteError
+    ? readManualOrderDiscountLimitError(currentQuoteError)
+    : null;
   const manualQuote = React.useMemo(
-    () => ({
-      data: quoteQuery.data ?? null,
-      isCurrent:
-        isEdit ||
-        (canRequestQuote && quoteInputIsCurrent && quoteQuery.isSuccess),
-      isLoading:
-        !isEdit &&
-        canRequestQuote &&
-        (!quoteInputIsCurrent || quoteQuery.isFetching),
-      errorMessage: quoteQuery.error
-        ? getServerFnError(
-            quoteQuery.error,
-            "Could not calculate the order total",
-          )
-        : null,
-      retry: () => {
-        void quoteQuery.refetch();
-      },
-    }),
-    [canRequestQuote, isEdit, quoteInputIsCurrent, quoteQuery],
+    () => {
+      const discountLimit = resolveManualOrderDiscountGuidance({
+        discountAmount: quoteDiscount,
+        authoritativeErrorLimit: authoritativeDiscountLimit,
+        successfulQuote: quoteInputIsCurrent
+          && quoteQuery.isSuccess
+          && quoteQuery.data
+          ? quoteQuery.data
+          : null,
+        localLimit: localDiscountLimit,
+        localCurrencyCode: currencyCode,
+        localDecimalPlaces: currencyDecimalPlaces,
+      });
+
+      return {
+        data: quoteQuery.data ?? null,
+        isCurrent:
+          isEdit ||
+          (canRequestQuote && quoteInputIsCurrent && quoteQuery.isSuccess),
+        isLoading:
+          !isEdit &&
+          hasQuotePrerequisites &&
+          (!quoteInputIsCurrent || quoteQuery.isFetching),
+        discountLimit,
+        errorMessage: currentQuoteError && !authoritativeDiscountLimit
+          ? getServerFnError(
+              currentQuoteError,
+              "Could not calculate the order total",
+            )
+          : null,
+        canRetry: currentQuoteError
+          ? isAdminApiRetryableReadError(currentQuoteError)
+          : false,
+        retry: () => {
+          void quoteQuery.refetch();
+        },
+      };
+    },
+    [
+      authoritativeDiscountLimit,
+      canRequestQuote,
+      currencyCode,
+      currencyDecimalPlaces,
+      currentQuoteError,
+      hasQuotePrerequisites,
+      isEdit,
+      localDiscountLimit,
+      quoteDiscount,
+      quoteInputIsCurrent,
+      quoteQuery,
+    ],
   );
 
   const isSubmitting = createMutation.isPending || updateMutation.isPending;

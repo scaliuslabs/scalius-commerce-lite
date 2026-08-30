@@ -75,6 +75,12 @@ export interface ProductMediaSkuReferenceConflict {
   affectedSkus: Array<{ id: string; sku: string; imageId: string }>;
 }
 
+export interface ManualOrderDiscountLimitError {
+  maximumAmount: number;
+  currencyCode: string;
+  decimalPlaces: number;
+}
+
 interface AdminApiErrorShape {
   status: number | null;
   code?: string;
@@ -135,6 +141,70 @@ export function isAdminApiNotFoundError(error: unknown): boolean {
 
 export function isAdminApiConflictError(error: unknown): boolean {
   return readAdminApiError(error)?.status === 409;
+}
+
+/** True only when retrying the same read can plausibly succeed. */
+export function isAdminApiRetryableReadError(error: unknown): boolean {
+  const parsed = readAdminApiError(error);
+  if (!parsed) return true;
+  if (parsed.status == null) {
+    const permanentCodes = [
+      "BAD_REQUEST",
+      "CONFLICT",
+      "FORBIDDEN",
+      "NOT_FOUND",
+      "UNAUTHORIZED",
+      "VALIDATION_ERROR",
+    ];
+    return !permanentCodes.includes(parsed.code ?? "")
+      && !parsed.code?.endsWith("_CONFLICT");
+  }
+  return parsed.status === 408
+    || parsed.status === 425
+    || parsed.status === 429
+    || parsed.status >= 500;
+}
+
+export function readManualOrderDiscountLimitError(
+  error: unknown,
+): ManualOrderDiscountLimitError | null {
+  const parsed = readAdminApiError(error);
+  if (
+    parsed?.status !== 400
+    || parsed.code !== "VALIDATION_ERROR"
+    || !parsed.details
+    || typeof parsed.details !== "object"
+  ) {
+    return null;
+  }
+
+  const details = parsed.details as {
+    reason?: unknown;
+    maximumDiscountAmountMinor?: unknown;
+    currencyCode?: unknown;
+    decimalPlaces?: unknown;
+  };
+  if (
+    details.reason !== "MANUAL_ORDER_DISCOUNT_EXCEEDS_GROSS"
+    || typeof details.maximumDiscountAmountMinor !== "number"
+    || !Number.isSafeInteger(details.maximumDiscountAmountMinor)
+    || details.maximumDiscountAmountMinor < 0
+    || typeof details.currencyCode !== "string"
+    || !/^[A-Z]{3}$/.test(details.currencyCode)
+    || typeof details.decimalPlaces !== "number"
+    || !Number.isInteger(details.decimalPlaces)
+    || details.decimalPlaces < 0
+    || details.decimalPlaces > 3
+  ) {
+    return null;
+  }
+
+  return {
+    maximumAmount:
+      details.maximumDiscountAmountMinor / 10 ** details.decimalPlaces,
+    currencyCode: details.currencyCode,
+    decimalPlaces: details.decimalPlaces,
+  };
 }
 
 export function readAdminOrderCreateRequestMismatch(

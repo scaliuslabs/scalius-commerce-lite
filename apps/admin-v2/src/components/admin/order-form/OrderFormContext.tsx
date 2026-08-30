@@ -6,6 +6,7 @@ import type {
   Product,
 } from "./types";
 import type { ManualOrderQuotePayload } from "@/lib/api-functions/orders";
+import type { ManualOrderDiscountGuidance } from "./manual-order-discount";
 
 // Define the shape of the context state
 interface OrderFormContextType {
@@ -37,7 +38,9 @@ interface OrderFormContextType {
     data: ManualOrderQuotePayload | null;
     isCurrent: boolean;
     isLoading: boolean;
+    discountLimit: ManualOrderDiscountGuidance | null;
     errorMessage: string | null;
+    canRetry: boolean;
     retry: () => void;
   };
   refs: {

@@ -4,7 +4,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
+} from "~/components/ui/card";
 import {
   FormControl,
   FormDescription,
@@ -12,9 +12,9 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+} from "~/components/ui/form";
+import { Input } from "~/components/ui/input";
+import { Button } from "~/components/ui/button";
 import { useState, useEffect } from "react";
 import {
   type OrderCalculation,
@@ -24,7 +24,8 @@ import {
   updateDiscountAmount,
 } from "../../../store/orderStore";
 import { useOrderForm } from "./OrderFormContext";
-import { useCurrency } from "@/hooks/use-currency";
+import { useCurrency } from "~/hooks/use-currency";
+import { getDecimalPlaces } from "@scalius/shared/currency";
 import {
   CircleCheck,
   Loader2,
@@ -35,7 +36,7 @@ import {
 
 export function SummarySection() {
   const { form, refs, handleKeyDown, isEdit, manualQuote } = useOrderForm();
-  const { symbol } = useCurrency();
+  const { symbol, code } = useCurrency();
   const [calculations, setCalculations] = useState<OrderCalculation>(
     getOrderCalculation(),
   );
@@ -45,16 +46,31 @@ export function SummarySection() {
   }, []);
 
   const quote = !isEdit && manualQuote.isCurrent ? manualQuote.data : null;
-  const decimalPlaces = quote?.decimalPlaces ?? 2;
-  const formatAmount = (amount: number) =>
+  const decimalPlaces = quote?.decimalPlaces ?? getDecimalPlaces(code);
+  const formatAmount = (amount: number, places = decimalPlaces) =>
     amount.toLocaleString(undefined, {
-      minimumFractionDigits: decimalPlaces,
-      maximumFractionDigits: decimalPlaces,
+      minimumFractionDigits: places,
+      maximumFractionDigits: places,
     });
   const subtotal = quote?.subtotalAmount ?? calculations.subtotal;
   const shipping = quote?.shippingAmount ?? calculations.shippingCharge;
   const discount = quote?.discountAmount ?? calculations.discountAmount ?? 0;
-  const total = quote?.totalAmount ?? calculations.total;
+  const discountNeedsCorrection = !isEdit
+    && manualQuote.discountLimit?.exceeded === true;
+  const total = discountNeedsCorrection
+    ? null
+    : quote?.totalAmount ?? calculations.total;
+  const discountGuidanceId = "manual-order-discount-guidance";
+  const discountErrorId = "manual-order-discount-error";
+
+  const removeDiscount = () => {
+    form.setValue("discountAmount", null, {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+    updateDiscountAmount(null);
+    refs.discountAmountRef.current?.focus();
+  };
 
   return (
     <>
@@ -110,6 +126,16 @@ export function SummarySection() {
                       type="number"
                       placeholder="0.00"
                       step="0.01"
+                      max={!isEdit
+                        ? manualQuote.discountLimit?.maximumAmount
+                        : undefined}
+                      aria-invalid={discountNeedsCorrection || undefined}
+                      aria-describedby={discountNeedsCorrection
+                        ? `${discountGuidanceId} ${discountErrorId}`
+                        : discountGuidanceId}
+                      aria-errormessage={discountNeedsCorrection
+                        ? discountErrorId
+                        : undefined}
                       {...field}
                       value={field.value ?? ""}
                       ref={(el) => {
@@ -124,9 +150,38 @@ export function SummarySection() {
                       onKeyDown={(e) => handleKeyDown(e, refs.submitButtonRef)}
                     />
                   </FormControl>
-                  <FormDescription>
+                  <FormDescription id={discountGuidanceId}>
                     Applied on top of any item-specific discounts.
                   </FormDescription>
+                  {discountNeedsCorrection && manualQuote.discountLimit && (
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p
+                        id={discountErrorId}
+                        className="text-sm font-medium text-destructive"
+                        role="alert"
+                      >
+                        Discount can’t exceed {
+                          manualQuote.discountLimit.currencyCode === code
+                            ? symbol
+                            : `${manualQuote.discountLimit.currencyCode} `
+                        }
+                        {formatAmount(
+                          manualQuote.discountLimit.maximumAmount,
+                          manualQuote.discountLimit.decimalPlaces,
+                        )} for
+                        the current items and shipping.
+                      </p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-7 shrink-0 text-xs"
+                        onClick={removeDiscount}
+                      >
+                        Remove discount
+                      </Button>
+                    </div>
+                  )}
                   <FormMessage />
                 </FormItem>
               )}
@@ -165,15 +220,17 @@ export function SummarySection() {
               <p className="min-w-0 text-xs text-destructive">
                 {manualQuote.errorMessage}
               </p>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-7 shrink-0 text-xs"
-                onClick={manualQuote.retry}
-              >
-                <RotateCcw className="mr-1.5 h-3 w-3" /> Retry
-              </Button>
+              {manualQuote.canRetry && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 shrink-0 text-xs"
+                  onClick={manualQuote.retry}
+                >
+                  <RotateCcw className="mr-1.5 h-3 w-3" /> Retry
+                </Button>
+              )}
             </div>
           )}
 
@@ -216,10 +273,16 @@ export function SummarySection() {
               )}
               <div className="flex justify-between border-t pt-2 mt-2">
                 <span className="text-base font-semibold">Total</span>
-                <span className="text-lg font-bold">
-                  {symbol}
-                  {formatAmount(total)}
-                </span>
+                {total == null ? (
+                  <span className="text-sm font-semibold text-destructive">
+                    Needs correction
+                  </span>
+                ) : (
+                  <span className="text-lg font-bold">
+                    {symbol}
+                    {formatAmount(total)}
+                  </span>
+                )}
               </div>
             </div>
           </div>
