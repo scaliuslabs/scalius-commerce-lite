@@ -5,15 +5,16 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
+} from "~/components/ui/table";
+import { Button } from "~/components/ui/button";
 import { Trash, ShoppingBag } from "lucide-react";
 import type { OrderItem } from "./types";
 import { useOrderForm } from "./OrderFormContext";
-import { updateOrderItems } from "@/store/orderStore";
-import { useCurrency } from "@/hooks/use-currency";
+import { updateOrderItems } from "~/store/orderStore";
+import { useCurrency } from "~/hooks/use-currency";
 import type { Product } from "./types";
 import { orderItemVariantLabel } from "./order-item-presentation";
+import { OrderItemQuantityInput } from "./OrderItemQuantityInput";
 
 type ProductVariant = Product["variants"][number];
 
@@ -66,6 +67,18 @@ export function OrderItemsTable({
     updateOrderItems(currentItems);
   };
 
+  const handleQuantityChange = (index: number, quantity: number) => {
+    const currentItems = [...form.getValues("items")];
+    const currentItem = currentItems[index];
+    if (!currentItem || currentItem.quantity === quantity) return;
+    currentItems[index] = { ...currentItem, quantity };
+    form.setValue("items", currentItems, {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+    updateOrderItems(currentItems);
+  };
+
   const emptyState = (
     <div className="flex flex-col items-center gap-2 px-3 py-8 text-center text-muted-foreground">
       <div className="rounded-full bg-muted p-3">
@@ -111,7 +124,14 @@ export function OrderItemsTable({
                   <TableCell>
                     {orderItemVariantLabel(variant)}
                   </TableCell>
-                  <TableCell>{item.quantity}</TableCell>
+                  <TableCell>
+                    <OrderItemQuantityInput
+                      quantity={item.quantity}
+                      itemName={product?.name ?? "item"}
+                      onQuantityChange={(quantity) =>
+                        handleQuantityChange(index, quantity)}
+                    />
+                  </TableCell>
                   <TableCell>{symbol}{unitPrice.toLocaleString()}</TableCell>
                   <TableCell className="font-medium">
                     {symbol}{lineSubtotal.toLocaleString()}
@@ -169,7 +189,14 @@ export function OrderItemsTable({
             <dl className="mt-2 grid grid-cols-3 gap-2 text-sm">
               <div>
                 <dt className="text-[11px] text-muted-foreground">Qty</dt>
-                <dd>{item.quantity}</dd>
+                <dd className="mt-1">
+                  <OrderItemQuantityInput
+                    quantity={item.quantity}
+                    itemName={product?.name ?? "item"}
+                    onQuantityChange={(quantity) =>
+                      handleQuantityChange(index, quantity)}
+                  />
+                </dd>
               </div>
               <div>
                 <dt className="text-[11px] text-muted-foreground">Unit</dt>
