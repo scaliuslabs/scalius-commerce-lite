@@ -23,6 +23,10 @@ const checkoutControllerSource = readFileSync(
   storefrontSourcePath("lib/checkout/index.ts"),
   "utf8",
 );
+const cartControllerSource = readFileSync(
+  storefrontSourcePath("lib/cart/client.ts"),
+  "utf8",
+);
 
 describe("storefront payment transition UI", () => {
   it("shares one accessible, theme-aware loading surface", () => {
@@ -66,5 +70,20 @@ describe("storefront payment transition UI", () => {
     );
     expect(checkoutControllerSource).not.toContain("Promise.race");
     expect(checkoutControllerSource).not.toContain("PAYMENT_PROCESS_TIMEOUT_MS");
+  });
+
+  it("submits only a current reviewed quote and makes changed totals require another buyer click", () => {
+    expect(cartSource).toContain('name="expectedQuoteFingerprint"');
+    expect(cartControllerSource).toContain(
+      "expectedQuoteFingerprintInput.value = quote.quoteFingerprint",
+    );
+    expect(checkoutControllerSource).toContain(
+      'result.errorCode === "STOREFRONT_CHECKOUT_QUOTE_CONFLICT"',
+    );
+    expect(checkoutControllerSource).toContain(
+      "authoritativeTaxQuote = await fetchAuthoritativeTaxQuote(checkoutData)",
+    );
+    expect(checkoutControllerSource).toContain("checkoutCopy.totalChangedReviewText");
+    expect(checkoutControllerSource).not.toContain("await processPayment()");
   });
 });

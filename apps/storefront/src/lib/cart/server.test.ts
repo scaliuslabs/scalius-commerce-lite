@@ -40,6 +40,7 @@ function buildCodFormData(): FormData {
   formData.set("area", "");
   formData.set("shippingLocation", "ship_1");
   formData.set("checkoutId", "chk_session_test_123456");
+  formData.set("expectedQuoteFingerprint", "taxq_abcdefghijklmnopqrstuv");
   formData.set("notes", "");
   formData.set("cartItems", JSON.stringify({
     line_1: {
@@ -129,6 +130,7 @@ describe("cart server order processing", () => {
     expect(mocks.createOrder).toHaveBeenCalledWith(
       expect.objectContaining({
         checkoutRequestId: "chk_session_test_123456",
+        expectedQuoteFingerprint: "taxq_abcdefghijklmnopqrstuv",
         paymentMethod: "cod",
         customerPhone: "+8801712345678",
         shippingMethodId: "ship_1",

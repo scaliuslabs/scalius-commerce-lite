@@ -808,6 +808,12 @@ export async function updateTotals() {
   const discountHiddenInput = document.getElementById(
     "discountCodeHidden",
   ) as HTMLInputElement;
+  const expectedQuoteFingerprintInput = document.getElementById(
+    "expectedQuoteFingerprint",
+  ) as HTMLInputElement | null;
+
+  if (expectedQuoteFingerprintInput) expectedQuoteFingerprintInput.value = "";
+  updateCheckoutButtonState();
 
   if (!subtotalEl || !shippingEl || !totalEl || !discountHiddenInput) return;
 
@@ -863,6 +869,10 @@ export async function updateTotals() {
   try {
     const quote = await fetchAuthoritativeTaxQuote(quoteInput);
     if (quoteSequence !== cartTaxQuoteSequence) return;
+    if (expectedQuoteFingerprintInput) {
+      expectedQuoteFingerprintInput.value = quote.quoteFingerprint;
+    }
+    updateCheckoutButtonState();
     renderAuthoritativeCartQuote(quote, {
       subtotal: subtotalEl,
       shipping: shippingEl,
@@ -882,6 +892,7 @@ export async function updateTotals() {
         activeCheckoutCopy().taxVerificationFailedText;
       taxStatusEl.classList.remove("hidden");
     }
+    updateCheckoutButtonState();
   }
 }
 
@@ -992,6 +1003,12 @@ export function updateCheckoutButtonState() {
     meta?.dataset.checkoutUnavailableMessage ||
     activeCheckoutCopy().checkoutUnavailableMessage;
   const isEmpty = Object.keys(cartStore.get().items).length === 0;
+  const expectedQuoteFingerprint = (
+    document.getElementById("expectedQuoteFingerprint") as HTMLInputElement | null
+  )?.value ?? "";
+  const quoteUnverified =
+    meta?.dataset.codOnly === "true" &&
+    !/^taxq_[A-Za-z0-9_-]{22}$/.test(expectedQuoteFingerprint);
   applyCheckoutButtonState(submitButton, {
     checkoutUnavailable,
     unavailableMessage,
@@ -999,6 +1016,8 @@ export function updateCheckoutButtonState() {
     cartBlocked: hasBlockingCartIssues(),
     cartBlockedMessage: cartBlockedMessage(),
     checkoutPending: hostedPaymentRecoverySession !== null,
+    quoteUnverified,
+    quoteUnverifiedMessage: activeCheckoutCopy().totalVerificationFailedText,
   });
 }
 

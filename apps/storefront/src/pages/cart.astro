@@ -170,9 +170,12 @@ if (Astro.request.method === "POST" && codOnly) {
         console.error("Order processing failed:", result.error);
         const resultError = result.error;
         errorMessage =
-          (typeof resultError === "string"
-            ? resultError
-            : resultError?.message) ||
+          ("errorCode" in result &&
+          result.errorCode === "STOREFRONT_CHECKOUT_QUOTE_CONFLICT"
+            ? copy.totalChangedReviewText
+            : (typeof resultError === "string"
+                ? resultError
+                : resultError?.message)) ||
           copy.orderProcessingFailedText;
         const itemIssues = extractItemIssues(
           "details" in result ? result.details : undefined,
@@ -541,6 +544,11 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
             <input type="hidden" name="formIntent" value="checkout" />
             <input type="hidden" name="cartItems" id="cartItemsInput" />
             <input type="hidden" name="checkoutId" id="checkoutIdInput" />
+            <input
+              type="hidden"
+              name="expectedQuoteFingerprint"
+              id="expectedQuoteFingerprint"
+            />
             <input
               type="hidden"
               name="discountCodeHidden"
@@ -919,6 +927,9 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     const discountCodeHidden = (
       document.getElementById("discountCodeHidden") as HTMLInputElement | null
     )?.value;
+    const expectedQuoteFingerprint = (
+      document.getElementById("expectedQuoteFingerprint") as HTMLInputElement | null
+    )?.value;
     const shippingMethodId =
       window.lastShippingEventDetail?.id || values.shippingLocation;
     const shippingMethodName = window.lastShippingEventDetail?.name;
@@ -940,6 +951,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
       ...(cartItems ? { cartItems } : {}),
       ...(checkoutId ? { checkoutId } : {}),
       ...(discountCodeHidden !== undefined ? { discountCodeHidden } : {}),
+      ...(expectedQuoteFingerprint ? { expectedQuoteFingerprint } : {}),
       ...(shippingMethodId ? { shippingMethodId } : {}),
       ...(shippingMethodName ? { shippingMethodName } : {}),
       ...(shippingCharge ? { shippingCharge } : {}),
@@ -1199,9 +1211,15 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
         const empty = isCartEmpty();
         const cartBlocked = window.hasCartValidationIssues?.() === true;
         const checkoutPending = readHostedPaymentRecoverySession() !== null;
+        const quoteUnverified =
+          codOnly &&
+          !/^taxq_[A-Za-z0-9_-]{22}$/.test(
+            (document.getElementById("expectedQuoteFingerprint") as HTMLInputElement | null)
+              ?.value ?? "",
+          );
         submitButton.disabled =
-          !cartReady || checkoutUnavailable || empty || cartBlocked || checkoutPending;
-        if (!cartReady || checkoutUnavailable || empty || cartBlocked || checkoutPending)
+          !cartReady || checkoutUnavailable || empty || cartBlocked || checkoutPending || quoteUnverified;
+        if (!cartReady || checkoutUnavailable || empty || cartBlocked || checkoutPending || quoteUnverified)
           submitButton.classList.add("opacity-50", "cursor-not-allowed");
         else submitButton.classList.remove("opacity-50", "cursor-not-allowed");
         submitButton.title = !cartReady
@@ -1215,6 +1233,8 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
                   checkoutCopy.cartAttentionText
                 : checkoutPending
                   ? checkoutCopy.reviewExistingCheckoutText
+                : quoteUnverified
+                  ? checkoutCopy.totalVerificationFailedText
                 : "";
       }
     };
@@ -1489,6 +1509,22 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
           }
           document.querySelector<HTMLButtonElement>('[role="radio"][aria-label]')
             ?.focus({ preventScroll: true });
+          return;
+        }
+
+        const expectedQuoteFingerprintInput = document.getElementById(
+          "expectedQuoteFingerprint",
+        ) as HTMLInputElement | null;
+        if (
+          codOnly &&
+          !/^taxq_[A-Za-z0-9_-]{22}$/.test(expectedQuoteFingerprintInput?.value ?? "")
+        ) {
+          e.preventDefault();
+          restoreSubmitButton();
+          showCheckoutFormError(
+            checkoutCopy.totalVerificationFailedText,
+            submitButton,
+          );
           return;
         }
 

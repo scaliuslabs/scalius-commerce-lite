@@ -704,7 +704,7 @@ function hostedRedirectMessage(methodId: string): string | null {
     : null;
 }
 
-function renderGateways(): void {
+async function renderGateways(): Promise<void> {
   if (!checkoutConfig || !checkoutData || !authoritativeTaxQuote) return;
   const container = document.getElementById("paymentMethods");
   if (!container) return;
@@ -790,7 +790,7 @@ function renderGateways(): void {
     eligibleGateways.find(
       (gateway) => gateway.id === checkoutConfig?.activeDefaultMethod,
     ) ?? eligibleGateways[0];
-  if (initialGateway) void selectMethod(initialGateway.id, initialGateway);
+  if (initialGateway) await selectMethod(initialGateway.id, initialGateway);
 }
 
 // ── Gateway selection ─────────────────────────────────────────────────────────
@@ -985,6 +985,31 @@ async function processPayment(): Promise<void> {
         setPayButton(recovery.buttonText, false);
         return;
       }
+      if (result.errorCode === "STOREFRONT_CHECKOUT_QUOTE_CONFLICT") {
+        hideCheckoutLoadingOverlay();
+        try {
+          authoritativeTaxQuote = await fetchAuthoritativeTaxQuote(checkoutData);
+        } catch (error) {
+          if (error instanceof TaxQuoteCartChangedError) {
+            redirectToCartForRepair({
+              valid: false,
+              issues: error.issues,
+              message: checkoutFreshnessMessage(error.issues),
+            });
+            return;
+          }
+          throw error;
+        }
+        checkoutData = {
+          ...checkoutData,
+          expectedQuoteFingerprint: authoritativeTaxQuote.quoteFingerprint,
+        };
+        renderSummary();
+        isProcessing = false;
+        await renderGateways();
+        showError(checkoutCopy.totalChangedReviewText);
+        return;
+      }
       throw new Error(getPaymentResultErrorMessage(result));
     }
   } catch (err: unknown) {
@@ -1038,6 +1063,10 @@ export async function initCheckoutPage(): Promise<void> {
   try {
     authoritativeTaxQuote = await fetchAuthoritativeTaxQuote(checkoutData!);
     if (currentInitVersion !== initVersion) return;
+    checkoutData = {
+      ...checkoutData!,
+      expectedQuoteFingerprint: authoritativeTaxQuote.quoteFingerprint,
+    };
   } catch (error) {
     if (error instanceof TaxQuoteCartChangedError) {
       redirectToCartForRepair({
@@ -1057,7 +1086,7 @@ export async function initCheckoutPage(): Promise<void> {
   }
 
   renderSummary();
-  renderGateways();
+  await renderGateways();
 
   const payBtn = document.getElementById("payButton");
   if (payBtn && payBtn.dataset.checkoutBound !== "true") {

@@ -8,6 +8,7 @@ export * from "./orders.ingest";
 export * from "./orders.validation";
 export * from "./order-state-machine";
 export * from "./checkout-attempts";
+export * from "./checkout-quote-fingerprint";
 export * from "./order-receipts";
 export * from "./order-payment-recovery";
 export * from "./cart-validation";
