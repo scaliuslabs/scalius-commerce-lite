@@ -352,9 +352,14 @@ describe("initCheckoutPage", () => {
     document.body.innerHTML = `
       <section id="orderSummary" class="hidden"><div id="summaryDetails"></div></section>
       <div id="errorMsg" class="hidden"></div>
-      <div id="paymentMethods"></div>
+      <a id="checkoutRecoveryAction" hidden href="/cart">Return to cart</a>
+      <div id="paymentMethods" aria-busy="true"></div>
       <div id="stripeSection" class="hidden"></div>
-      <button id="payButton" disabled><span id="payButtonText">Select a payment method</span></button>
+      <div id="paymentActionParking" class="hidden">
+        <div id="paymentActionHost" class="hidden">
+          <button id="payButton" disabled><span id="payButtonText">Select a payment method</span></button>
+        </div>
+      </div>
     `;
     (window as unknown as { __CHECKOUT_CONFIG__: CheckoutConfig }).__CHECKOUT_CONFIG__ = {
       ...baseConfig,
@@ -370,8 +375,12 @@ describe("initCheckoutPage", () => {
     );
     expect(document.getElementById("errorMsg")?.classList.contains("hidden")).toBe(false);
     expect(document.querySelector('[data-method="cod"]')).toBeNull();
-    expect((document.getElementById("payButton") as HTMLButtonElement).disabled).toBe(false);
-    expect(document.getElementById("payButtonText")?.textContent).toBe("Return to cart");
+    const recoveryAction = document.getElementById("checkoutRecoveryAction") as HTMLAnchorElement;
+    expect(recoveryAction.hidden).toBe(false);
+    expect(recoveryAction.getAttribute("href")).toBe("/cart");
+    expect(recoveryAction.tabIndex).toBe(0);
+    expect(document.getElementById("paymentMethods")?.getAttribute("aria-busy")).toBe("false");
+    expect(document.getElementById("paymentActionParking")?.classList.contains("hidden")).toBe(true);
     expect(window.location.pathname).toBe("/checkout");
   });
 
@@ -380,8 +389,13 @@ describe("initCheckoutPage", () => {
     document.body.innerHTML = `
       <section id="orderSummary" class="hidden"><div id="summaryDetails"></div></section>
       <div id="errorMsg" class="hidden"></div>
-      <div id="paymentMethods"></div>
-      <button id="payButton" disabled><span id="payButtonText">Select a payment method</span></button>
+      <a id="checkoutRecoveryAction" hidden href="/cart">Return to cart</a>
+      <div id="paymentMethods" aria-busy="true"></div>
+      <div id="paymentActionParking" class="hidden">
+        <div id="paymentActionHost" class="hidden">
+          <button id="payButton" disabled><span id="payButtonText">Select a payment method</span></button>
+        </div>
+      </div>
     `;
     sessionStorage.setItem("scalius_checkout_data", "{not-json");
     sessionStorage.setItem("scalius_checkout_gateways", '[{"id":"cod"}]');
@@ -399,8 +413,12 @@ describe("initCheckoutPage", () => {
     );
     expect(sessionStorage.getItem("scalius_checkout_data")).toBeNull();
     expect(sessionStorage.getItem("scalius_checkout_gateways")).toBeNull();
-    expect((document.getElementById("payButton") as HTMLButtonElement).disabled).toBe(false);
-    expect(document.getElementById("payButtonText")?.textContent).toBe("Return to cart");
+    const recoveryAction = document.getElementById("checkoutRecoveryAction") as HTMLAnchorElement;
+    expect(recoveryAction.hidden).toBe(false);
+    expect(recoveryAction.getAttribute("href")).toBe("/cart");
+    expect(recoveryAction.tabIndex).toBe(0);
+    expect(document.getElementById("paymentMethods")?.getAttribute("aria-busy")).toBe("false");
+    expect(document.getElementById("paymentActionParking")?.classList.contains("hidden")).toBe(true);
     expect(window.location.pathname).toBe("/checkout");
   });
 
