@@ -813,6 +813,11 @@ export async function getCustomerOrders(
             currencyDecimalPlaces: orders.currencyDecimalPlaces,
             subtotalAmountMinor: orders.subtotalAmountMinor,
             shippingAmountMinor: orders.shippingAmountMinor,
+            shippingMethodId: orders.shippingMethodId,
+            shippingMethodName: orders.shippingMethodName,
+            shippingMethodDescription: orders.shippingMethodDescription,
+            shippingMethodBaseAmountMinor: orders.shippingMethodBaseAmountMinor,
+            shippingFeeWaived: orders.shippingFeeWaived,
             discountAmountMinor: orders.discountAmountMinor,
             taxAmountMinor: orders.taxAmountMinor,
             totalAmountMinor: orders.totalAmountMinor,
@@ -847,6 +852,11 @@ export async function getCustomerOrders(
             paidAmount: number;
             balanceDue: number;
             shippingCharge: number;
+            shippingMethodId: string | null;
+            shippingMethodName: string | null;
+            shippingMethodDescription: string | null;
+            shippingMethodBaseAmountMinor: number | null;
+            shippingFeeWaived: boolean | null;
             discountAmount: number | null;
             paymentStatus: string;
             paymentMethod: string;
@@ -1016,6 +1026,11 @@ export async function getCustomerOwnedOrderForDetail(
             currencyDecimalPlaces: orders.currencyDecimalPlaces,
             subtotalAmountMinor: orders.subtotalAmountMinor,
             shippingAmountMinor: orders.shippingAmountMinor,
+            shippingMethodId: orders.shippingMethodId,
+            shippingMethodName: orders.shippingMethodName,
+            shippingMethodDescription: orders.shippingMethodDescription,
+            shippingMethodBaseAmountMinor: orders.shippingMethodBaseAmountMinor,
+            shippingFeeWaived: orders.shippingFeeWaived,
             discountAmountMinor: orders.discountAmountMinor,
             taxAmountMinor: orders.taxAmountMinor,
             totalAmountMinor: orders.totalAmountMinor,
@@ -1383,6 +1398,11 @@ export async function getCustomerOrderDetailForOrder(
             currencyDecimalPlaces: order.currencyDecimalPlaces,
             subtotalAmountMinor: order.subtotalAmountMinor,
             shippingAmountMinor: order.shippingAmountMinor,
+            shippingMethodId: order.shippingMethodId,
+            shippingMethodName: order.shippingMethodName,
+            shippingMethodDescription: order.shippingMethodDescription,
+            shippingMethodBaseAmountMinor: order.shippingMethodBaseAmountMinor,
+            shippingFeeWaived: order.shippingFeeWaived,
             discountAmountMinor: order.discountAmountMinor,
             taxAmountMinor: order.taxAmountMinor,
             totalAmountMinor: order.totalAmountMinor,

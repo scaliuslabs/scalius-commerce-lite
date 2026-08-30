@@ -1435,7 +1435,10 @@ async function prepareCheckoutIntent(
     );
     assertStorefrontCheckoutQuoteFingerprint(
       pending.command.data.expectedQuoteFingerprint,
-      await buildStorefrontCheckoutQuoteFingerprint(result.taxQuote),
+      await buildStorefrontCheckoutQuoteFingerprint(
+        result.taxQuote,
+        authority.deliveryPreflight.shippingMethod,
+      ),
     );
     const response = {
       checkoutToken: result.checkoutToken,

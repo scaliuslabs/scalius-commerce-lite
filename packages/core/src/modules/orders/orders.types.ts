@@ -133,6 +133,11 @@ export interface OrderDetails extends OrderListItem {
     currencyDecimalPlaces: number | null;
     subtotalAmountMinor: number | null;
     shippingAmountMinor: number | null;
+    shippingMethodId: string | null;
+    shippingMethodName: string | null;
+    shippingMethodDescription: string | null;
+    shippingMethodBaseAmountMinor: number | null;
+    shippingFeeWaived: boolean | null;
     discountAmountMinor: number | null;
     taxAmountMinor: number;
     totalAmountMinor: number | null;
@@ -224,6 +229,16 @@ export interface CreateStorefrontOrderResult {
     commitPayload: StorefrontOrderCommitPayload;
 }
 
+/** Immutable buyer-reviewed delivery method facts captured for a storefront order. */
+export interface StorefrontOrderShippingMethodSnapshot {
+    id: string;
+    name: string;
+    description: string | null;
+    /** Configured method fee before any product-level delivery waiver. */
+    baseAmountMinor: number;
+    feeWaived: boolean;
+}
+
 /** Prepared, server-authoritative storefront order data committed synchronously by checkout. */
 export interface StorefrontOrderCommitPayload {
     checkoutToken: string;
@@ -251,6 +266,11 @@ export interface StorefrontOrderCommitPayload {
         notes: string | null;
         totalAmount: number;
         shippingCharge: number;
+        shippingMethodId: string;
+        shippingMethodName: string;
+        shippingMethodDescription: string | null;
+        shippingMethodBaseAmountMinor: number;
+        shippingFeeWaived: boolean;
         discountAmount: number;
         currencyCode: string;
         currencyDecimalPlaces: number;

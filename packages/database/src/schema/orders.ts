@@ -43,6 +43,12 @@ export const orders = sqliteTable("orders", {
     currencyDecimalPlaces: integer("currency_decimal_places"),
     subtotalAmountMinor: integer("subtotal_amount_minor"),
     shippingAmountMinor: integer("shipping_amount_minor"),
+    /** Immutable storefront delivery-method snapshot. Null means historical/manual method unknown. */
+    shippingMethodId: text("shipping_method_id"),
+    shippingMethodName: text("shipping_method_name"),
+    shippingMethodDescription: text("shipping_method_description"),
+    shippingMethodBaseAmountMinor: integer("shipping_method_base_amount_minor"),
+    shippingFeeWaived: integer("shipping_fee_waived", { mode: "boolean" }),
     discountAmountMinor: integer("discount_amount_minor"),
     taxAmountMinor: integer("tax_amount_minor").notNull().default(0),
     totalAmountMinor: integer("total_amount_minor"),

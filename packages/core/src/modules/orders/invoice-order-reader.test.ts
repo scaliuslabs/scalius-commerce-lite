@@ -16,6 +16,11 @@ describe("invoice order projection", () => {
   });
 
   it("reads only order and item invoice facts", () => {
+    expect(source).toContain("shippingMethodId: orders.shippingMethodId");
+    expect(source).toContain("shippingMethodName: orders.shippingMethodName");
+    expect(source).toContain("shippingMethodDescription: orders.shippingMethodDescription");
+    expect(source).toContain("shippingMethodBaseAmountMinor: orders.shippingMethodBaseAmountMinor");
+    expect(source).toContain("shippingFeeWaived: orders.shippingFeeWaived");
     expect(source).not.toContain("deliveryShipments");
     expect(source).not.toContain("refundAttempt");
     expect(source).not.toContain("supportRequest");

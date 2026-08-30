@@ -161,6 +161,14 @@ const DEFAULT_TAX_QUOTE = {
   },
 };
 
+const DEFAULT_SHIPPING_METHOD_SNAPSHOT = {
+  id: "shipping_1",
+  name: "Standard delivery",
+  description: "Delivered within 2–3 business days",
+  baseAmountMinor: 6_000,
+  feeWaived: false,
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.rateLimit.mockResolvedValue({ allowed: true });
@@ -234,6 +242,7 @@ beforeEach(() => {
   });
   mocks.validateStorefrontDeliveryPreflight.mockResolvedValue({
     shippingCharge: 60,
+    shippingMethod: DEFAULT_SHIPPING_METHOD_SNAPSHOT,
     cityName: "Dhaka",
     zoneName: "Mirpur",
     areaName: null,
@@ -756,6 +765,7 @@ describe("authoritative tax quote", () => {
       taxAmount: 8,
       totalMinor: 16_800,
       totalAmount: 168,
+      shippingMethod: DEFAULT_SHIPPING_METHOD_SNAPSHOT,
       items: [{
         unitPrice: 100,
         productName: "Authoritative product",
@@ -763,6 +773,10 @@ describe("authoritative tax quote", () => {
       }],
     });
     expect(payload.data.quoteFingerprint).toMatch(/^taxq_[A-Za-z0-9_-]{22}$/);
+    expect(mocks.buildStorefrontCheckoutQuoteFingerprint).toHaveBeenCalledWith(
+      expect.objectContaining({ totalMinor: 16_800 }),
+      DEFAULT_SHIPPING_METHOD_SNAPSHOT,
+    );
     const validatedRequestItem = mocks.validateStorefrontCartItems.mock.calls[0]?.[1]?.[0];
     expect(validatedRequestItem).not.toHaveProperty("price");
     expect(mocks.calculateStorefrontTaxQuote).toHaveBeenCalledWith(
@@ -2485,6 +2499,10 @@ describe("create order commit/KV ordering", () => {
     });
     mocks.validateStorefrontDeliveryPreflight.mockResolvedValue({
       shippingCharge: 0,
+      shippingMethod: {
+        ...DEFAULT_SHIPPING_METHOD_SNAPSHOT,
+        feeWaived: true,
+      },
       cityName: "Dhaka",
       zoneName: "Mirpur",
       areaName: null,
@@ -2545,6 +2563,10 @@ describe("create order commit/KV ordering", () => {
     });
     mocks.validateStorefrontDeliveryPreflight.mockResolvedValue({
       shippingCharge: 0,
+      shippingMethod: {
+        ...DEFAULT_SHIPPING_METHOD_SNAPSHOT,
+        feeWaived: true,
+      },
       cityName: "Dhaka",
       zoneName: "Mirpur",
       areaName: null,

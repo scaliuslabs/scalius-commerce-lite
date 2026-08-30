@@ -409,17 +409,37 @@ function appendOrderItems(
 function appendDeliverySummary(
   parent: HTMLElement,
   data: Record<string, unknown>,
+  quote: CheckoutTaxQuote,
 ): void {
   const delivery = document.createElement("div");
   delivery.className = "border-t border-border pt-3 text-xs leading-5 text-muted-foreground";
 
-  const methodName = displayString(data.shippingMethodName);
-  if (methodName) {
+  appendTextElement(
+    delivery,
+    "p",
+    "font-semibold text-foreground",
+    quote.shippingMethod.name,
+  );
+  if (quote.shippingMethod.description) {
     appendTextElement(
       delivery,
       "p",
-      "font-semibold text-foreground",
-      methodName,
+      "",
+      quote.shippingMethod.description,
+    );
+  }
+  if (quote.shippingMethod.feeWaived) {
+    const baseFee = currencyFmt(
+      quote.shippingMethod.baseAmountMinor / (10 ** quote.decimalPlaces),
+      quote,
+    );
+    appendTextElement(
+      delivery,
+      "p",
+      "",
+      formatCheckoutLanguageText(checkoutCopy.waivedShippingFeeText, {
+        fee: baseFee,
+      }),
     );
   }
 
@@ -605,7 +625,7 @@ export function renderOrderSummaryDetails(
     );
   }
 
-  appendDeliverySummary(details, data);
+  appendDeliverySummary(details, data, quote);
 }
 
 function renderSummary(): void {

@@ -31137,6 +31137,26 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "type": "integer",
               "nullable": true
             },
+            "shippingMethodId": {
+              "type": "string",
+              "nullable": true
+            },
+            "shippingMethodName": {
+              "type": "string",
+              "nullable": true
+            },
+            "shippingMethodDescription": {
+              "type": "string",
+              "nullable": true
+            },
+            "shippingMethodBaseAmountMinor": {
+              "type": "integer",
+              "nullable": true
+            },
+            "shippingFeeWaived": {
+              "type": "boolean",
+              "nullable": true
+            },
             "discountAmountMinor": {
               "type": "integer",
               "nullable": true
@@ -31880,6 +31900,11 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "currencyDecimalPlaces",
             "subtotalAmountMinor",
             "shippingAmountMinor",
+            "shippingMethodId",
+            "shippingMethodName",
+            "shippingMethodDescription",
+            "shippingMethodBaseAmountMinor",
+            "shippingFeeWaived",
             "discountAmountMinor",
             "taxAmountMinor",
             "totalAmountMinor",
@@ -32064,6 +32089,26 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "type": "number",
                   "nullable": true
                 },
+                "shippingMethodId": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "shippingMethodName": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "shippingMethodDescription": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "shippingMethodBaseAmountMinor": {
+                  "type": "number",
+                  "nullable": true
+                },
+                "shippingFeeWaived": {
+                  "type": "boolean",
+                  "nullable": true
+                },
                 "discountAmountMinor": {
                   "type": "number",
                   "nullable": true
@@ -32220,6 +32265,11 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "currencyDecimalPlaces",
                 "subtotalAmountMinor",
                 "shippingAmountMinor",
+                "shippingMethodId",
+                "shippingMethodName",
+                "shippingMethodDescription",
+                "shippingMethodBaseAmountMinor",
+                "shippingFeeWaived",
                 "discountAmountMinor",
                 "taxAmountMinor",
                 "totalAmountMinor",
@@ -32528,6 +32578,26 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "type": "number",
                   "nullable": true
                 },
+                "shippingMethodId": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "shippingMethodName": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "shippingMethodDescription": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "shippingMethodBaseAmountMinor": {
+                  "type": "number",
+                  "nullable": true
+                },
+                "shippingFeeWaived": {
+                  "type": "boolean",
+                  "nullable": true
+                },
                 "discountAmountMinor": {
                   "type": "number",
                   "nullable": true
@@ -32684,6 +32754,11 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "currencyDecimalPlaces",
                 "subtotalAmountMinor",
                 "shippingAmountMinor",
+                "shippingMethodId",
+                "shippingMethodName",
+                "shippingMethodDescription",
+                "shippingMethodBaseAmountMinor",
+                "shippingFeeWaived",
                 "discountAmountMinor",
                 "taxAmountMinor",
                 "totalAmountMinor",
