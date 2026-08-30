@@ -4,7 +4,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BroadcastListener } from "better-auth/client";
-import { AdminSessionSync } from "./AdminSessionSync";
+import { AdminSessionSync, broadcastAdminSignOut } from "./AdminSessionSync";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   cleanup: vi.fn(),
   setup: vi.fn(),
   subscribe: vi.fn(),
+  post: vi.fn(),
   clearRouteContext: vi.fn(),
 }));
 
@@ -21,6 +22,7 @@ vi.mock("better-auth/client", () => ({
   getGlobalBroadcastChannel: () => ({
     subscribe: mocks.subscribe,
     setup: mocks.setup,
+    post: mocks.post,
   }),
 }));
 
@@ -38,6 +40,7 @@ describe("AdminSessionSync", () => {
     mocks.unsubscribe.mockReset();
     mocks.cleanup.mockReset();
     mocks.clearRouteContext.mockReset();
+    mocks.post.mockReset();
     mocks.subscribe.mockReset().mockImplementation((listener: BroadcastListener) => {
       mocks.listener = listener;
       return mocks.unsubscribe;
@@ -67,6 +70,16 @@ describe("AdminSessionSync", () => {
 
     expect(mocks.clearRouteContext).toHaveBeenCalledOnce();
     expect(replace).toHaveBeenCalledWith("/auth/login");
+  });
+
+  it("broadcasts a confirmed sign-out through Better Auth's session channel", () => {
+    broadcastAdminSignOut();
+
+    expect(mocks.post).toHaveBeenCalledWith({
+      event: "session",
+      data: { trigger: "signout" },
+      clientId: expect.any(String),
+    });
   });
 
   it("ignores non-sign-out updates and releases the shared listener", () => {

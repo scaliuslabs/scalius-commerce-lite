@@ -15,6 +15,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { LogOut, User, Shield, Loader2 } from "lucide-react";
 import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
 import { ADMIN_IMAGE_PRESETS } from "@/lib/admin-image-presentation";
+import { broadcastAdminSignOut } from "@/components/auth/AdminSessionSync";
 
 interface UserMenuProps {
   user: {
@@ -35,7 +36,11 @@ export function UserMenu({ user }: UserMenuProps) {
     try {
       clearAdminRouteContextCache();
       const { authClient } = await import("@/lib/auth-client");
-      await authClient.signOut();
+      const result = await authClient.signOut();
+      if (result.error) {
+        throw new Error(result.error.message || "Sign out failed");
+      }
+      broadcastAdminSignOut();
       window.location.replace("/auth/login");
     } catch (error: unknown) {
       console.error("Sign out error:", error);

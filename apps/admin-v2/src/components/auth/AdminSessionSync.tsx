@@ -5,6 +5,19 @@ import { clearAdminRouteContextCache } from "../../lib/admin-route-context";
 const ADMIN_LOGIN_PATH = "/auth/login";
 
 /**
+ * Better Auth only posts this event automatically after its reactive session
+ * atom has mounted. The admin shell uses its server-loaded route context
+ * instead, so a confirmed sign-out must publish the same event explicitly.
+ */
+export function broadcastAdminSignOut() {
+  getGlobalBroadcastChannel().post({
+    event: "session",
+    data: { trigger: "signout" },
+    clientId: crypto.randomUUID(),
+  });
+}
+
+/**
  * Keep independently rendered admin tabs aligned with Better Auth's
  * server-confirmed session lifecycle without polling or storing credentials.
  */
