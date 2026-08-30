@@ -36,7 +36,7 @@ export function UserMenu({ user }: UserMenuProps) {
       clearAdminRouteContextCache();
       const { authClient } = await import("@/lib/auth-client");
       await authClient.signOut();
-      window.location.href = "/auth/login";
+      window.location.replace("/auth/login");
     } catch (error: unknown) {
       console.error("Sign out error:", error);
       setIsLoading(false);
