@@ -26,4 +26,24 @@ describe("admin order status policy", () => {
   it("treats cancelled orders as terminal", () => {
     expect(getAdminOrderStatusTransitions("cancelled")).toEqual([]);
   });
+
+  it.each([
+    { paymentStatus: "paid", paidAmount: 100 },
+    { paymentStatus: "partial", paidAmount: 40 },
+    { paymentStatus: "unpaid", paidAmount: 1 },
+    { paymentStatus: "unpaid", paidAmount: null },
+    { paymentStatus: "unpaid", paidAmount: -1 },
+  ])("removes generic cancellation when payment value exists or is uncertain %#", (payment) => {
+    expect(getAdminOrderStatusTransitions("pending", payment)).toEqual([
+      "processing",
+      "confirmed",
+    ]);
+  });
+
+  it("keeps cancellation for an unpaid zero-paid order", () => {
+    expect(getAdminOrderStatusTransitions("pending", {
+      paymentStatus: "unpaid",
+      paidAmount: 0,
+    })).toContain("cancelled");
+  });
 });

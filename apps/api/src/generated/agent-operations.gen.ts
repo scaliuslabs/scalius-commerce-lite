@@ -33353,6 +33353,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "type": "string",
                     "nullable": true
                   },
+                  "paidAmount": {
+                    "type": "number"
+                  },
                   "paymentMethod": {
                     "type": "string",
                     "nullable": true
@@ -33704,6 +33707,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "discountAmount",
                   "status",
                   "paymentStatus",
+                  "paidAmount",
                   "paymentMethod",
                   "fulfillmentStatus",
                   "createdAt",
@@ -34903,6 +34907,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "type": "string",
                     "nullable": true
                   },
+                  "paidAmount": {
+                    "type": "number"
+                  },
                   "paymentMethod": {
                     "type": "string",
                     "nullable": true
@@ -35254,6 +35261,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "discountAmount",
                   "status",
                   "paymentStatus",
+                  "paidAmount",
                   "paymentMethod",
                   "fulfillmentStatus",
                   "createdAt",

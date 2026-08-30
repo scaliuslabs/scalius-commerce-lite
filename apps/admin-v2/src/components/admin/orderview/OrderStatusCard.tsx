@@ -17,6 +17,7 @@ import type { Order } from "./types";
 import { useUpdateOrderStatus } from "@/lib/api-mutations/orders";
 import { useOrderActionPermissions } from "@/hooks/use-order-action-permissions";
 import {
+  getAdminOrderCancellationBlockedReason,
   getAdminOrderStatusTransitions,
   isAdminOrderStatus,
 } from "@/lib/admin-order-status-policy";
@@ -33,7 +34,15 @@ export function OrderStatusCard({ order }: OrderStatusCardProps) {
   const activeRefundOperation = order.activeRefundOperation;
   const refundLocked = Boolean(activeRefundOperation?.active);
   const shipmentLocked = order.shipmentRecovery?.activeLock === true;
-  const availableTransitions = getAdminOrderStatusTransitions(order.status);
+  const paymentState = {
+    paymentStatus: order.paymentStatus,
+    paidAmount: order.paidAmount,
+  };
+  const availableTransitions = getAdminOrderStatusTransitions(order.status, paymentState);
+  const cancellationBlockedReason = getAdminOrderCancellationBlockedReason(
+    order.status,
+    paymentState,
+  );
   const isTerminalStatus = availableTransitions.length === 0;
 
   const handleStatusChange = (newStatus: string) => {
@@ -124,6 +133,11 @@ export function OrderStatusCard({ order }: OrderStatusCardProps) {
               {order.status.toLowerCase() === "cancelled"
                 ? "Cancelled orders cannot be reopened. Create a new order if the sale should continue."
                 : "This order status is terminal. Use a dedicated return or refund action when available."}
+            </p>
+          )}
+          {canChangeStatus && cancellationBlockedReason && (
+            <p className="text-sm text-muted-foreground">
+              {cancellationBlockedReason} Use <span className="font-medium">Issue Refund</span> in the Payment card; a successful full pre-fulfillment refund cancels the order safely.
             </p>
           )}
         </div>

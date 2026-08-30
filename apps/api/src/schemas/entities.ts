@@ -253,6 +253,7 @@ export const orderSummarySchema = z.object({
   discountAmount: z.number(),
   status: z.string(),
   paymentStatus: z.string().nullable(),
+  paidAmount: z.number(),
   paymentMethod: z.string().nullable(),
   fulfillmentStatus: z.string().nullable(),
   createdAt: timestampSchema,

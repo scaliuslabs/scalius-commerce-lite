@@ -148080,6 +148080,9 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "paidAmount": {
+                                "type": "number"
+                              },
                               "paymentMethod": {
                                 "type": "string",
                                 "nullable": true
@@ -148431,6 +148434,7 @@
                               "discountAmount",
                               "status",
                               "paymentStatus",
+                              "paidAmount",
                               "paymentMethod",
                               "fulfillmentStatus",
                               "createdAt",
@@ -149510,6 +149514,9 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "paidAmount": {
+                                "type": "number"
+                              },
                               "paymentMethod": {
                                 "type": "string",
                                 "nullable": true
@@ -149861,6 +149868,7 @@
                               "discountAmount",
                               "status",
                               "paymentStatus",
+                              "paidAmount",
                               "paymentMethod",
                               "fulfillmentStatus",
                               "createdAt",

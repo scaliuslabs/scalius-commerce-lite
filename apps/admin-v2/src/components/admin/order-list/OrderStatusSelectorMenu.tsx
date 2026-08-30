@@ -6,10 +6,15 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "../../ui/dropdown-menu";
-import { getAdminOrderStatusTransitions } from "@/lib/admin-order-status-policy";
+import {
+  getAdminOrderCancellationBlockedReason,
+  getAdminOrderStatusTransitions,
+} from "@/lib/admin-order-status-policy";
 
 export interface OrderStatusSelectorMenuProps {
   status: string;
+  paymentStatus: string | null;
+  paidAmount: number;
   orderId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -19,13 +24,20 @@ export interface OrderStatusSelectorMenuProps {
 
 export function OrderStatusSelectorMenu({
   status,
+  paymentStatus,
+  paidAmount,
   orderId,
   open,
   onOpenChange,
   onStatusUpdate,
   trigger,
 }: OrderStatusSelectorMenuProps) {
-  const transitions = getAdminOrderStatusTransitions(status);
+  const paymentState = { paymentStatus, paidAmount };
+  const transitions = getAdminOrderStatusTransitions(status, paymentState);
+  const cancellationBlockedReason = getAdminOrderCancellationBlockedReason(
+    status,
+    paymentState,
+  );
 
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange}>
@@ -47,6 +59,11 @@ export function OrderStatusSelectorMenu({
           {transitions.length === 0 && (
             <div className="px-2 py-1.5 text-sm text-muted-foreground">
               No transitions available (terminal state)
+            </div>
+          )}
+          {cancellationBlockedReason && (
+            <div className="border-t border-border px-2 py-2 text-xs text-muted-foreground">
+              {cancellationBlockedReason}
             </div>
           )}
         </DropdownMenuRadioGroup>

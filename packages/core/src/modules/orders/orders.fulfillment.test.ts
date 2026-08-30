@@ -1471,6 +1471,104 @@ describe("orders fulfillment side-effect ordering", () => {
     },
   );
 
+  it.each([
+    { paymentStatus: PaymentStatus.PAID, paidAmount: 100 },
+    { paymentStatus: PaymentStatus.PARTIAL, paidAmount: 40 },
+    { paymentStatus: PaymentStatus.UNPAID, paidAmount: 1 },
+    { paymentStatus: PaymentStatus.UNPAID, paidAmount: null },
+    { paymentStatus: PaymentStatus.UNPAID, paidAmount: -1 },
+  ])(
+    "rejects generic cancellation with captured or uncertain payment state %# before writes or inventory work",
+    async ({ paymentStatus, paidAmount }) => {
+      const { db, updates } = createDbMock({
+        selectedOrder: {
+          status: OrderStatus.PENDING,
+          inventoryAction: "reserved",
+          version: 8,
+          customerName: "Customer",
+          customerEmail: "customer@example.com",
+          paymentMethod: PaymentMethod.POLAR,
+          paymentStatus,
+          totalAmount: 100,
+          paidAmount,
+          balanceDue: Math.max(0, 100 - (paidAmount ?? 0)),
+        },
+        updateResults: [[{ id: "order_1" }]],
+      });
+
+      await expect(updateOrderStatus(db as never, "order_1", OrderStatus.CANCELLED))
+        .rejects.toThrow("Use the refund workflow");
+
+      expect(updates).toHaveLength(0);
+      expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    PaymentRecordStatus.PENDING,
+    PaymentRecordStatus.CONFIRMED,
+    PaymentRecordStatus.SUCCEEDED,
+  ])(
+    "rejects generic cancellation with %s payment evidence before writes or inventory work",
+    async (paymentRecordStatus) => {
+      const { db, updates } = createDbMock({
+        selectedOrder: {
+          status: OrderStatus.PENDING,
+          inventoryAction: "reserved",
+          version: 8,
+          customerName: "Customer",
+          customerEmail: "customer@example.com",
+          paymentMethod: PaymentMethod.POLAR,
+          paymentStatus: PaymentStatus.UNPAID,
+          totalAmount: 100,
+          paidAmount: 0,
+          balanceDue: 100,
+        },
+        selectedPayment: {
+          id: "payment_1",
+          status: paymentRecordStatus,
+        },
+        updateResults: [[{ id: "order_1" }]],
+      });
+
+      await expect(updateOrderStatus(db as never, "order_1", OrderStatus.CANCELLED))
+        .rejects.toThrow("payment reconciliation");
+
+      expect(updates).toHaveLength(0);
+      expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
+    },
+  );
+
+  it("allows an unpaid COD order with no payment evidence to cancel", async () => {
+    const { db, updates } = createDbMock({
+      selectedOrder: {
+        status: OrderStatus.PENDING,
+        inventoryAction: "reserved",
+        version: 8,
+        customerName: "Customer",
+        customerEmail: "customer@example.com",
+        paymentMethod: PaymentMethod.COD,
+        paymentStatus: PaymentStatus.UNPAID,
+        totalAmount: 100,
+        paidAmount: 0,
+        balanceDue: 100,
+      },
+      selectedPayment: null,
+      updateResults: [[{ id: "order_1" }]],
+    });
+
+    const result = await updateOrderStatus(db as never, "order_1", OrderStatus.CANCELLED);
+
+    expect(updates[0]).toMatchObject({ status: OrderStatus.CANCELLED, version: 9 });
+    expect(mocks.applyInventoryForStatusChange)
+      .toHaveBeenCalledWith(db, "order_1", OrderStatus.CANCELLED);
+    expect(result.notification).toMatchObject({
+      notificationType: "order_cancelled",
+      previousStatus: OrderStatus.PENDING,
+      newStatus: OrderStatus.CANCELLED,
+    });
+  });
+
   it("rolls back the visible admin status when inventory reconciliation fails before inventoryAction changes", async () => {
     const inventoryError = new Error("inventory transition failed");
     mocks.applyInventoryForStatusChange.mockRejectedValueOnce(inventoryError);
