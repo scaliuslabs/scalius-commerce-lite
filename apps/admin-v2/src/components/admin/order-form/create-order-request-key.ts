@@ -57,6 +57,21 @@ export function clearAdminOrderRequestKey(requestKey?: string): void {
   window.sessionStorage.removeItem(STORAGE_KEY);
 }
 
+/**
+ * Replace only the failed request represented by this form. If another
+ * submission already installed a newer key in this tab, preserve that key.
+ */
+export function replaceSubmittedAdminOrderRequestKey(
+  failedRequestKey: string,
+): string {
+  const current = readRecoverableRequestKey();
+  if (current && current !== failedRequestKey) return current;
+  clearAdminOrderRequestKey(failedRequestKey);
+  const replacement = crypto.randomUUID();
+  rememberSubmittedAdminOrderRequestKey(replacement);
+  return replacement;
+}
+
 export const adminOrderRequestKeyStorage = {
   key: STORAGE_KEY,
   maxRecoveryAgeMs: MAX_RECOVERY_AGE_MS,

@@ -3,6 +3,7 @@ import {
   AdminApiResponseError,
   isAdminApiNotFoundError,
   nullForAdminApiNotFound,
+  readAdminOrderCreateRequestMismatch,
   readCheckoutFlowRevisionConflict,
   readDiscountRevisionConflict,
   readPromotionRevisionConflict,
@@ -133,6 +134,39 @@ describe("admin API detail-loader errors", () => {
       409,
       "CHECKOUT_FLOW_REVISION_CONFLICT",
       { expectedRevision: 0, currentRevision: "3" },
+    ))).toBeNull();
+  });
+
+  it("extracts only bounded manual-order request mismatch states", () => {
+    expect(readAdminOrderCreateRequestMismatch(new AdminApiResponseError(
+      "Previous request failed",
+      409,
+      "ADMIN_ORDER_CREATE_REQUEST_MISMATCH",
+      { state: "failed", canRetryWithNewKey: true },
+    ))).toEqual({ state: "failed", canRetryWithNewKey: true });
+
+    expect(readAdminOrderCreateRequestMismatch(new AdminApiResponseError(
+      "Order already created",
+      409,
+      "ADMIN_ORDER_CREATE_REQUEST_MISMATCH",
+      { state: "committed", canRetryWithNewKey: false, orderId: "01ABCDEF23456789" },
+    ))).toEqual({
+      state: "committed",
+      canRetryWithNewKey: false,
+      orderId: "01ABCDEF23456789",
+    });
+
+    expect(readAdminOrderCreateRequestMismatch(new AdminApiResponseError(
+      "Malformed",
+      409,
+      "ADMIN_ORDER_CREATE_REQUEST_MISMATCH",
+      { state: "committed", canRetryWithNewKey: true, orderId: "" },
+    ))).toBeNull();
+    expect(readAdminOrderCreateRequestMismatch(new AdminApiResponseError(
+      "Generic conflict",
+      409,
+      "CONFLICT",
+      { state: "failed", canRetryWithNewKey: true },
     ))).toBeNull();
   });
 

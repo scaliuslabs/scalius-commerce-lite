@@ -6,6 +6,7 @@ import {
   clearAdminOrderRequestKey,
   getOrCreateAdminOrderRequestKey,
   rememberSubmittedAdminOrderRequestKey,
+  replaceSubmittedAdminOrderRequestKey,
 } from "./create-order-request-key";
 
 describe("manual order request key recovery", () => {
@@ -49,5 +50,16 @@ describe("manual order request key recovery", () => {
 
     clearAdminOrderRequestKey(key);
     expect(window.sessionStorage.getItem(adminOrderRequestKeyStorage.key)).toBeNull();
+  });
+
+  it("replaces a definitively failed request with one fresh persisted key", () => {
+    const failedKey = crypto.randomUUID();
+    rememberSubmittedAdminOrderRequestKey(failedKey);
+
+    const replacement = replaceSubmittedAdminOrderRequestKey(failedKey);
+
+    expect(replacement).not.toBe(failedKey);
+    expect(replacement).toMatch(/^[0-9a-f-]{36}$/i);
+    expect(getOrCreateAdminOrderRequestKey()).toBe(replacement);
   });
 });
