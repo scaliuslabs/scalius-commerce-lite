@@ -592,9 +592,11 @@ async function assertAgentStorefrontDiscountValid(
   const effectiveCustomerPhone = customerPhone?.trim()
     || await getLiveContextCustomerPhone(db, row)
     || undefined;
-  const customerId = effectiveCustomerPhone
-    ? await resolvePromotionCustomerIdByPhone(db, effectiveCustomerPhone)
-    : await getLiveContextCustomerId(db, row);
+  const contextCustomerId = await getLiveContextCustomerId(db, row);
+  const customerId = contextCustomerId
+    ?? (effectiveCustomerPhone
+      ? await resolvePromotionCustomerIdByPhone(db, effectiveCustomerPhone)
+      : null);
   const promotion = await evaluateStorefrontPromotionCode(db, {
     code: normalizedCode,
     customerId,
@@ -629,6 +631,7 @@ async function assertAgentStorefrontDiscountValid(
     effectiveCustomerPhone,
     currency.currencySymbol,
     currency.currencyCode,
+    customerId,
   );
   if (!legacy.valid) {
     throw new ValidationError(legacy.error ?? "This discount is invalid or unavailable.");
@@ -735,9 +738,11 @@ export async function quoteAgentStorefrontCheckout(
     const customerPhone = input.customerPhone?.trim()
       || await getLiveContextCustomerPhone(db, row)
       || undefined;
-    const promotionCustomerId = customerPhone
-      ? await resolvePromotionCustomerIdByPhone(db, customerPhone)
-      : await getLiveContextCustomerId(db, row);
+    const contextCustomerId = await getLiveContextCustomerId(db, row);
+    const promotionCustomerId = contextCustomerId
+      ?? (customerPhone
+        ? await resolvePromotionCustomerIdByPhone(db, customerPhone)
+        : null);
     const promotion = await evaluateStorefrontPromotionCode(db, {
       code: discountCode,
       customerId: promotionCustomerId,
@@ -778,6 +783,7 @@ export async function quoteAgentStorefrontCheckout(
         customerPhone,
         currency.currencySymbol,
         currency.currencyCode,
+        promotionCustomerId,
       );
       if (!validation.valid || !validation.discount) {
         throw new ValidationError(validation.error ?? "This discount is invalid or unavailable.");

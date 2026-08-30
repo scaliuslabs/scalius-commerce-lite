@@ -15,6 +15,18 @@ describe("agent storefront full buyer workflow boundaries", () => {
     expect(buyerSource).toContain("commitStorefrontOrderPayload");
   });
 
+  it("keeps account ownership separate from the delivery phone", () => {
+    const submitSource = buyerSource.slice(
+      buyerSource.indexOf("export async function submitAgentStorefrontCheckout"),
+      buyerSource.indexOf("export async function createAgentStorefrontContinuation"),
+    );
+
+    expect(submitSource).not.toContain("customer.phone !== input.customerPhone");
+    expect(submitSource).toContain("customer && !customer.phone");
+    expect(submitSource).toContain("customerId: customer.id");
+    expect(submitSource).toContain("customerPhone: input.customerPhone");
+  });
+
   it("rejects a changed reviewed quote before the durable checkout commit", () => {
     const submitSource = buyerSource.slice(
       buyerSource.indexOf("export async function submitAgentStorefrontCheckout"),
