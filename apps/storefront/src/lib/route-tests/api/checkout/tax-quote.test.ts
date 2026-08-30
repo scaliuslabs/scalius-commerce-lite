@@ -162,6 +162,21 @@ describe("checkout tax quote proxy", () => {
     expect(JSON.stringify(forwarded)).not.toContain("taxClass");
   });
 
+  it("forwards the private customer session so the quote uses account identity", async () => {
+    const response = await POST({
+      request: storefrontRequest(requestPayload(), {
+        Cookie: "theme=light; cs_tok=customer_session_1; locale=en",
+      }),
+    } as never);
+
+    expect(response.status).toBe(200);
+    const [, init] = mocks.fetchWithRetry.mock.calls[0];
+    expect(new Headers(init.headers).get("X-Customer-Session")).toBe(
+      "customer_session_1",
+    );
+    expect(new Headers(init.headers).get("Cookie")).toBeNull();
+  });
+
   it("returns a safe error without reflecting upstream details or buyer PII", async () => {
     mocks.fetchWithRetry.mockResolvedValueOnce(new Response(JSON.stringify({
       success: false,

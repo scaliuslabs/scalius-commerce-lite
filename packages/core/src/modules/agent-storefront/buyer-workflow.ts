@@ -345,8 +345,10 @@ export async function submitAgentStorefrontCheckout(
   const checkoutSettings = customer
     ? assertStorefrontCheckoutPolicy(input.customerPhone, input.paymentMethod, authority)
     : assertGuestStorefrontCheckoutPolicy(input.customerPhone, input.paymentMethod, authority);
-  if (customer && customer.phone !== input.customerPhone) {
-    throw new ValidationError("Checkout phone must match the authorized customer phone.");
+  if (customer && !customer.phone) {
+    throw new ValidationError(
+      "The authorized customer account is missing its required phone number.",
+    );
   }
   if (input.paymentMethod === PaymentMethod.SSLCOMMERZ && authority.currency.currencyCode !== "BDT") {
     throw new ValidationError("SSLCommerz checkout requires the store currency to be BDT.");
@@ -411,12 +413,15 @@ export async function submitAgentStorefrontCheckout(
     db,
     data,
     options.requestUrl,
-    (storeDb, code, total, items, phone) => isDiscountValid(
+    (storeDb, code, total, items, phone, customerId) => isDiscountValid(
       storeDb,
       code,
       total,
       items as DiscountCartItem[],
       phone,
+      "",
+      undefined,
+      customerId,
     ),
     (storeDb, discount, total, items, shipping, applicableIds, restricted) => calculateDiscountAmount(
       storeDb,

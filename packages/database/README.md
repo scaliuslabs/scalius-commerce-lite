@@ -221,6 +221,7 @@ these indexes without local and remote D1 `EXPLAIN QUERY PLAN` evidence.
 | `discountProducts` | Discount-product junction. `applicationType` ("get") |
 | `discountCollections` | Discount-collection junction. `applicationType` ("get") |
 | `discountUsage` | Discount usage tracking. `orderId` FK, `customerId` FK, amount discounted |
+| `discountCustomerRedemptions` | Atomic one-use identity claims keyed by discount plus immutable checkout-phone or authenticated-account identity |
 | `metaConversionsSettings` | Meta Pixel CAPI settings. `singletonKey` constraint, pixel/access token, enabled flag |
 | `metaConversionsLogs` | CAPI event log. Event identity, status, request/response JSON |
 
@@ -361,7 +362,7 @@ ledger. Every migration from 0050 onward must:
   source SHA-256 ledger row; and
 - be listed in the runtime release manifest used by `/readyz`.
 
-The current release is `0058_order_shipping_method_snapshot`. The release chain also
+The current release is `0059_checkout_delivery_phone_identity`. The release chain also
 demonstrates that the runner and its tests must handle contiguous releases
 rather than assuming the ledger contains only its bootstrap row. Release 0055
 is a forward-only PostgreSQL convergence migration: schema-54

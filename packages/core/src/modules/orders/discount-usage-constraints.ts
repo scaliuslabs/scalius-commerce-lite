@@ -3,6 +3,8 @@ import { ValidationError } from "../../errors";
 const DISCOUNT_MAX_USES_TRIGGER_CODE = "DISCOUNT_MAX_USES_EXCEEDED";
 const DISCOUNT_ONE_PER_CUSTOMER_TRIGGER_CODE = "DISCOUNT_ONE_PER_CUSTOMER_EXCEEDED";
 const DISCOUNT_CUSTOMER_KEY_REQUIRED_TRIGGER_CODE = "DISCOUNT_CUSTOMER_KEY_REQUIRED";
+const DISCOUNT_CUSTOMER_REDEMPTION_UNIQUE_CONSTRAINT =
+    "discount_customer_redemptions_discount_id_customer_key_pk";
 
 function collectErrorText(error: unknown, depth = 0): string {
     if (depth > 3 || error === null || error === undefined) return "";
@@ -33,6 +35,15 @@ export function getDiscountUsageConstraintError(error: unknown): ValidationError
         return new ValidationError("Discount code has reached its usage limit");
     }
     if (errorText.includes(DISCOUNT_ONE_PER_CUSTOMER_TRIGGER_CODE)) {
+        return new ValidationError("Discount already used by this customer");
+    }
+    if (
+        errorText.includes(DISCOUNT_CUSTOMER_REDEMPTION_UNIQUE_CONSTRAINT)
+        || (
+            errorText.includes("discount_customer_redemptions.discount_id")
+            && errorText.includes("discount_customer_redemptions.customer_key")
+        )
+    ) {
         return new ValidationError("Discount already used by this customer");
     }
     if (errorText.includes(DISCOUNT_CUSTOMER_KEY_REQUIRED_TRIGGER_CODE)) {
