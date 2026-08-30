@@ -473,6 +473,11 @@ export interface OrderReceipt {
   currencyDecimalPlaces?: number | null;
   subtotalAmountMinor?: number | null;
   shippingAmountMinor?: number | null;
+  shippingMethodId?: string | null;
+  shippingMethodName?: string | null;
+  shippingMethodDescription?: string | null;
+  shippingMethodBaseAmountMinor?: number | null;
+  shippingFeeWaived?: boolean | null;
   discountAmountMinor?: number | null;
   taxAmountMinor?: number;
   totalAmountMinor?: number | null;

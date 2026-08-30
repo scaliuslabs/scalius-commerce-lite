@@ -407,6 +407,13 @@
       "when": 1786701960250,
       "tag": "0057_agent_browser_handoffs",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "6",
+      "when": 1788072138633,
+      "tag": "0058_order_shipping_method_snapshot",
+      "breakpoints": true
     }
   ]
 }

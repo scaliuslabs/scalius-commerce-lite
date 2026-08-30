@@ -199,6 +199,17 @@ const formatReceiptAmount = (amount: number) => formatPrice(amount, {
 const legacySubtotal = order
   ? order.totalAmount - order.shippingCharge + (order.discountAmount ?? 0)
   : 0;
+const receiptDeliveryLabel = order?.shippingMethodName
+  ? `Delivery · ${order.shippingMethodName}`
+  : "Delivery";
+const receiptDeliveryDetails = order?.shippingMethodName
+  ? [
+      order.shippingMethodDescription,
+      order.shippingFeeWaived && savedMoneySummary && order.shippingMethodBaseAmountMinor != null
+        ? `${formatSavedMinorAmount(order.shippingMethodBaseAmountMinor, savedMoneySummary)} fee waived`
+        : null,
+    ].filter(Boolean).join(" · ")
+  : "Delivery method was not recorded for this order.";
 const deliveryLocality = order
   ? [order.areaName || order.area, order.zoneName || order.zone, order.cityName || order.city]
       .filter((value): value is string => Boolean(value))
@@ -395,9 +406,10 @@ const orderPlacedAt = order?.createdAt
                 <span class="font-medium">{formatSavedMinorAmount(savedMoneySummary.subtotalMinor, savedMoneySummary)}</span>
               </div>
               <div class="flex justify-between">
-                <span class="text-gray-600">Shipping</span>
+                <span class="text-gray-600">{receiptDeliveryLabel}</span>
                 <span class="font-medium">{savedMoneySummary.shippingMinor === 0 ? "Free" : formatSavedMinorAmount(savedMoneySummary.shippingMinor, savedMoneySummary)}</span>
               </div>
+              {receiptDeliveryDetails && <p class="text-xs leading-relaxed text-gray-500">{receiptDeliveryDetails}</p>}
               {savedMoneySummary.discountMinor > 0 && <div class="flex justify-between gap-4">
                 <span class="text-gray-600">Discount</span>
                 <span class="font-medium text-primary">
@@ -419,12 +431,13 @@ const orderPlacedAt = order?.createdAt
                 <span class="text-gray-600">Subtotal</span>
                 <span class="font-medium">{formatReceiptAmount(legacySubtotal)}</span>
               </div>
-              {order.shippingCharge > 0 && (
+              {(order.shippingCharge > 0 || order.shippingMethodName) && (
                 <div class="flex justify-between gap-4">
-                  <span class="text-gray-600">Shipping</span>
+                  <span class="text-gray-600">{receiptDeliveryLabel}</span>
                   <span class="font-medium">{formatReceiptAmount(order.shippingCharge)}</span>
                 </div>
               )}
+              {receiptDeliveryDetails && <p class="text-xs leading-relaxed text-gray-500">{receiptDeliveryDetails}</p>}
               {(order.discountAmount ?? 0) > 0 && (
                 <div class="flex justify-between">
                   <span class="text-gray-600">Discount</span>

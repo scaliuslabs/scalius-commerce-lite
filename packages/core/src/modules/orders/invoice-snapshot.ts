@@ -43,6 +43,11 @@ export interface InvoiceOrderSnapshot {
   currencyDecimalPlaces: number | null;
   subtotalAmountMinor: number | null;
   shippingAmountMinor: number | null;
+  shippingMethodId: string | null;
+  shippingMethodName: string | null;
+  shippingMethodDescription: string | null;
+  shippingMethodBaseAmountMinor: number | null;
+  shippingFeeWaived: boolean | null;
   discountAmountMinor: number | null;
   taxAmountMinor: number;
   totalAmountMinor: number | null;
@@ -142,6 +147,11 @@ export function snapshotInvoiceOrder(
     currencyDecimalPlaces: order.currencyDecimalPlaces,
     subtotalAmountMinor: order.subtotalAmountMinor,
     shippingAmountMinor: order.shippingAmountMinor,
+    shippingMethodId: order.shippingMethodId ?? null,
+    shippingMethodName: order.shippingMethodName ?? null,
+    shippingMethodDescription: order.shippingMethodDescription ?? null,
+    shippingMethodBaseAmountMinor: order.shippingMethodBaseAmountMinor ?? null,
+    shippingFeeWaived: order.shippingFeeWaived ?? null,
     discountAmountMinor: order.discountAmountMinor,
     taxAmountMinor: order.taxAmountMinor,
     totalAmountMinor: order.totalAmountMinor,
@@ -192,16 +202,17 @@ export function invoiceSnapshotToDocument(
   snapshot: StoredInvoiceSnapshot,
   contentHash: string,
 ): InvoiceDocument {
+  const order = snapshotInvoiceOrder(snapshot.order);
   return {
     status: "issued",
-    order: snapshot.order,
+    order,
     invoiceNumber: snapshot.formattedNumber,
     invoiceNum: snapshot.invoiceNumber,
     businessInfo: snapshot.businessInfo,
     issuedAt: snapshot.issuedAt,
     contentHash,
     renderVersion: snapshot.renderVersion,
-    orderVersion: snapshot.order.version,
+    orderVersion: order.version,
   };
 }
 

@@ -2,7 +2,11 @@
 // Storefront order creation — validates and prepares orders for queue dispatch.
 
 import { safeBatch, type Database } from "@scalius/database/client";
-import { DEFAULT_CURRENCY, normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
+import {
+    DEFAULT_CURRENCY,
+    getDecimalPlaces,
+    normalizeSupportedCurrencyCode,
+} from "@scalius/shared/currency";
 import { roundPrice } from "@scalius/shared/price-utils";
 import {
     buildStorefrontTaxAllocationLineId,
@@ -36,6 +40,7 @@ import type {
     CreateStorefrontOrderIdentity,
     CreateStorefrontOrderInput,
     CreateStorefrontOrderResult,
+    StorefrontOrderShippingMethodSnapshot,
 } from "./orders.types";
 import {
     isTrustedStorefrontCartValidationResult,
@@ -51,6 +56,8 @@ import { MAX_ORDER_LINE_ITEMS } from "./orders.validation";
 
 export interface StorefrontShippingMethodRow {
     id: string;
+    name: string;
+    description: string | null;
     fee: number;
     isActive: boolean;
     deletedAt: Date | number | null;
@@ -66,6 +73,7 @@ export interface StorefrontDeliveryPreflightInput {
 
 export interface StorefrontDeliveryPreflightResult {
     shippingCharge: number;
+    shippingMethod: StorefrontOrderShippingMethodSnapshot;
     cityName: string;
     zoneName: string;
     areaName: string | null;
@@ -156,6 +164,8 @@ export function selectActiveStorefrontShippingMethodRowsByIds(
     const query = storefrontDb
         .select({
             id: shippingMethods.id,
+            name: shippingMethods.name,
+            description: shippingMethods.description,
             fee: shippingMethods.fee,
             isActive: shippingMethods.isActive,
             deletedAt: shippingMethods.deletedAt,
@@ -180,28 +190,51 @@ export function resolveStorefrontDeliveryPreflightFromRows(
     const currencyCode = normalizeSupportedCurrencyCode(data.currencyCode) ?? DEFAULT_CURRENCY.code;
     const locationNames = resolveActiveDeliveryLocationNamesFromRows(data, [...locationRows]);
 
-    let shippingCharge = 0;
-    if (!cartValidation.hasFreeDeliveryProduct) {
-        const shippingMethod = shippingMethodRows[0] ?? null;
-        const shippingMethodIsUsable =
-            shippingMethod
-            && shippingMethod.isActive === true
-            && shippingMethod.deletedAt == null;
+    const shippingMethod = shippingMethodRows[0] ?? null;
+    const shippingMethodIsUsable =
+        shippingMethod
+        && shippingMethod.id === data.shippingMethodId
+        && shippingMethod.isActive === true
+        && shippingMethod.deletedAt == null;
 
-        if (!shippingMethodIsUsable) {
-            throw new ValidationError("A valid active shipping method is required for this order.");
-        }
-
-        const methodFee = Number(shippingMethod.fee);
-        if (!Number.isFinite(methodFee) || methodFee < 0) {
-            throw new ValidationError("Selected shipping method is misconfigured.");
-        }
-
-        shippingCharge = roundPrice(methodFee, currencyCode);
+    if (!shippingMethodIsUsable) {
+        throw new ValidationError("A valid active shipping method is required for this order.");
     }
+
+    const methodFee = Number(shippingMethod.fee);
+    const methodName = typeof shippingMethod.name === "string"
+        ? shippingMethod.name.trim()
+        : "";
+    const methodDescription = shippingMethod.description == null
+        ? null
+        : typeof shippingMethod.description === "string"
+            ? shippingMethod.description.trim() || null
+            : null;
+    if (
+        !Number.isFinite(methodFee)
+        || methodFee < 0
+        || !methodName
+        || methodName.length > 100
+        || (methodDescription?.length ?? 0) > 255
+    ) {
+        throw new ValidationError("Selected shipping method is misconfigured.");
+    }
+    const roundedMethodFee = roundPrice(methodFee, currencyCode);
+    const shippingFeeWaived = cartValidation.hasFreeDeliveryProduct;
+    const shippingCharge = shippingFeeWaived ? 0 : roundedMethodFee;
 
     return markTrustedStorefrontDeliveryPreflightResult({
         shippingCharge,
+        shippingMethod: {
+            id: shippingMethod.id,
+            name: methodName,
+            description: methodDescription,
+            baseAmountMinor: toMinorUnits(
+                roundedMethodFee,
+                getDecimalPlaces(currencyCode),
+            ),
+            feeWaived: shippingFeeWaived,
+        },
         cityName: locationNames.cityName,
         zoneName: locationNames.zoneName,
         areaName: locationNames.areaName,
@@ -554,6 +587,11 @@ export async function createStorefrontOrder(
             notes: data.notes,
             totalAmount,
             shippingCharge: verifiedShippingCharge,
+            shippingMethodId: deliveryPreflight.shippingMethod.id,
+            shippingMethodName: deliveryPreflight.shippingMethod.name,
+            shippingMethodDescription: deliveryPreflight.shippingMethod.description,
+            shippingMethodBaseAmountMinor: deliveryPreflight.shippingMethod.baseAmountMinor,
+            shippingFeeWaived: deliveryPreflight.shippingMethod.feeWaived,
             discountAmount: normalizedDiscountAmount,
             currencyCode: taxQuote.currencyCode,
             currencyDecimalPlaces: taxQuote.decimalPlaces,

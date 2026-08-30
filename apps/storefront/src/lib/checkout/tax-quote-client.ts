@@ -134,6 +134,9 @@ export async function fetchAuthoritativeTaxQuote(
       throw new TaxQuoteUnavailableError();
     }
     const quote = parseTaxQuoteEnvelope(await response.json());
+    if (quote.shippingMethod.id !== request.shippingMethodId) {
+      throw new TaxQuoteUnavailableError();
+    }
     if (quote.items.length !== request.items.length) {
       throw new TaxQuoteUnavailableError();
     }

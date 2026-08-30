@@ -695,6 +695,11 @@ const orderReceiptSchema = z.object({
   currencyDecimalPlaces: z.number().int().nullable(),
   subtotalAmountMinor: z.number().int().nullable(),
   shippingAmountMinor: z.number().int().nullable(),
+  shippingMethodId: z.string().nullable(),
+  shippingMethodName: z.string().nullable(),
+  shippingMethodDescription: z.string().nullable(),
+  shippingMethodBaseAmountMinor: z.number().int().nullable(),
+  shippingFeeWaived: z.boolean().nullable(),
   discountAmountMinor: z.number().int().nullable(),
   taxAmountMinor: z.number().int(),
   totalAmountMinor: z.number().int().nullable(),
@@ -935,6 +940,11 @@ app.openapi(getOrderReceiptRoute, async (c) => {
       currencyDecimalPlaces: orders.currencyDecimalPlaces,
       subtotalAmountMinor: orders.subtotalAmountMinor,
       shippingAmountMinor: orders.shippingAmountMinor,
+      shippingMethodId: orders.shippingMethodId,
+      shippingMethodName: orders.shippingMethodName,
+      shippingMethodDescription: orders.shippingMethodDescription,
+      shippingMethodBaseAmountMinor: orders.shippingMethodBaseAmountMinor,
+      shippingFeeWaived: orders.shippingFeeWaived,
       discountAmountMinor: orders.discountAmountMinor,
       taxAmountMinor: orders.taxAmountMinor,
       totalAmountMinor: orders.totalAmountMinor,
@@ -999,6 +1009,11 @@ app.openapi(getOrderReceiptRoute, async (c) => {
       currencyDecimalPlaces: order.currencyDecimalPlaces,
       subtotalAmountMinor: order.subtotalAmountMinor,
       shippingAmountMinor: order.shippingAmountMinor,
+      shippingMethodId: order.shippingMethodId,
+      shippingMethodName: order.shippingMethodName,
+      shippingMethodDescription: order.shippingMethodDescription,
+      shippingMethodBaseAmountMinor: order.shippingMethodBaseAmountMinor,
+      shippingFeeWaived: order.shippingFeeWaived,
       discountAmountMinor: order.discountAmountMinor,
       taxAmountMinor: order.taxAmountMinor,
       totalAmountMinor: order.totalAmountMinor,
@@ -1154,6 +1169,14 @@ const taxQuoteItemSchema = z.object({
   variantLabel: z.string().max(200).optional().nullable(),
 });
 
+const storefrontShippingMethodSnapshotSchema = z.object({
+  id: z.string().min(1).max(180),
+  name: z.string().min(1).max(100),
+  description: z.string().max(255).nullable(),
+  baseAmountMinor: z.number().int().nonnegative(),
+  feeWaived: z.boolean(),
+});
+
 const taxQuoteResponseSchema = z.object({
   valid: z.literal(true),
   quoteFingerprint: z.string(),
@@ -1173,6 +1196,7 @@ const taxQuoteResponseSchema = z.object({
   taxAmount: z.number(),
   totalMinor: z.number().int(),
   totalAmount: z.number(),
+  shippingMethod: storefrontShippingMethodSnapshotSchema,
   items: z.array(z.object({
     cartKey: z.string().nullable().optional(),
     productId: z.string(),
@@ -1271,6 +1295,7 @@ const cartValidationRoute = createRoute({
             hasFreeDeliveryProduct: z.boolean(),
             delivery: z.object({
               shippingCharge: z.number(),
+              shippingMethod: storefrontShippingMethodSnapshotSchema,
               cityName: z.string(),
               zoneName: z.string(),
               areaName: z.string().nullable(),
@@ -1488,7 +1513,10 @@ app.openapi(taxQuoteRoute, async (c) => {
   const toAmount = (minor: number) => fromMinorUnits(minor, quote.decimalPlaces);
   return ok(c, {
     valid: true as const,
-    quoteFingerprint: await buildStorefrontCheckoutQuoteFingerprint(quote),
+    quoteFingerprint: await buildStorefrontCheckoutQuoteFingerprint(
+      quote,
+      delivery.shippingMethod,
+    ),
     displayLabel: quote.displayLabel,
     pricesIncludeTax: quote.pricesIncludeTax,
     shippingTaxed: quote.shippingTaxed,
@@ -1505,6 +1533,7 @@ app.openapi(taxQuoteRoute, async (c) => {
     taxAmount: toAmount(quote.taxMinor),
     totalMinor: quote.totalMinor,
     totalAmount: toAmount(quote.totalMinor),
+    shippingMethod: delivery.shippingMethod,
     items: cartValidation.items.map((item) => ({
       cartKey: item.cartKey ?? null,
       productId: item.productId,
@@ -1986,7 +2015,10 @@ app.openapi(createOrderRoute, async (c) => {
 
     assertStorefrontCheckoutQuoteFingerprint(
       data.expectedQuoteFingerprint,
-      await buildStorefrontCheckoutQuoteFingerprint(result.taxQuote),
+      await buildStorefrontCheckoutQuoteFingerprint(
+        result.taxQuote,
+        deliveryPreflight.shippingMethod,
+      ),
     );
 
     assertSSLCommerzPrecommitReadiness(

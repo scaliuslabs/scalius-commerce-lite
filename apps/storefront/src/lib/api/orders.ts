@@ -78,6 +78,13 @@ export type CartValidationResult = {
   hasFreeDeliveryProduct: boolean;
   delivery?: {
     shippingCharge: number;
+    shippingMethod: {
+      id: string;
+      name: string;
+      description: string | null;
+      baseAmountMinor: number;
+      feeWaived: boolean;
+    };
     cityName: string;
     zoneName: string;
     areaName: string | null;

@@ -126,6 +126,20 @@ const SummaryRow = ({
 export function OrderItemsCard({ order }: OrderItemsCardProps) {
   const { symbol } = useCurrency();
   const savedSummary = resolveSavedOrderMoneySummary(order);
+  const deliveryLabel = order.shippingMethodName
+    ? `Delivery · ${order.shippingMethodName}`
+    : "Delivery";
+  const deliveryBaseAmount = savedSummary && order.shippingMethodBaseAmountMinor != null
+    ? formatSavedMinorAmount(order.shippingMethodBaseAmountMinor, savedSummary)
+    : null;
+  const deliveryDetails = [
+    order.shippingMethodDescription,
+    order.shippingFeeWaived
+      ? deliveryBaseAmount
+        ? `Configured fee ${deliveryBaseAmount} was waived.`
+        : "Delivery fee was waived."
+      : null,
+  ].filter((value): value is string => Boolean(value)).join(" ");
   // totalAmount is the GRAND TOTAL (items + shipping - discount), computed server-side.
   // Reverse-engineer subtotal for display: subtotal = totalAmount - shipping + discount
   const subtotal = order.totalAmount - order.shippingCharge + (order.discountAmount ?? 0);
@@ -181,7 +195,14 @@ export function OrderItemsCard({ order }: OrderItemsCardProps) {
             {savedSummary ? (
               <>
                 <SummaryRow label="Subtotal" value={formatSavedMinorAmount(savedSummary.subtotalMinor, savedSummary)} />
-                <SummaryRow label="Shipping" value={formatSavedMinorAmount(savedSummary.shippingMinor, savedSummary)} />
+                <SummaryRow label={deliveryLabel} value={formatSavedMinorAmount(savedSummary.shippingMinor, savedSummary)} />
+                {deliveryDetails ? (
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    {deliveryDetails}
+                  </p>
+                ) : !order.shippingMethodName ? (
+                  <p className="text-xs text-muted-foreground">Delivery method was not recorded for this order.</p>
+                ) : null}
                 <SummaryRow
                   label="Discount"
                   value={`${savedSummary.discountMinor > 0 ? "−" : ""}${formatSavedMinorAmount(savedSummary.discountMinor, savedSummary)}`}
@@ -208,12 +229,19 @@ export function OrderItemsCard({ order }: OrderItemsCardProps) {
                   label="Subtotal"
                   value={`${symbol}${formatOrderAmount(subtotal)}`}
                 />
-                {order.shippingCharge > 0 && (
+                {(order.shippingCharge > 0 || order.shippingMethodName) && (
               <SummaryRow
-                label="Shipping"
+                label={deliveryLabel}
                 value={`${symbol}${formatOrderAmount(order.shippingCharge)}`}
               />
                 )}
+                {deliveryDetails ? (
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    {deliveryDetails}
+                  </p>
+                ) : !order.shippingMethodName ? (
+                  <p className="text-xs text-muted-foreground">Delivery method was not recorded for this order.</p>
+                ) : null}
                 {(order.discountAmount ?? 0) > 0 && (
               <SummaryRow
                 label="Discount"
