@@ -5,7 +5,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { FormLabel } from "@/components/ui/form";
@@ -13,6 +12,7 @@ import { Plus } from "lucide-react";
 import type { Product } from "./types";
 import { useOrderForm } from "./OrderFormContext";
 import { useCurrency } from "@/hooks/use-currency";
+import { OrderItemQuantityInput } from "./OrderItemQuantityInput";
 
 interface ItemSelectionProps {
   selectedProduct: Product;
@@ -136,21 +136,17 @@ export function ItemSelection({
         <FormLabel htmlFor="quantity-input" className="mb-2 block">
           Quantity
         </FormLabel>
-        <Input
+        <OrderItemQuantityInput
           id="quantity-input"
-          type="number"
-          min="1"
-          value={quantity}
-          onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              refs.addItemButtonRef.current?.focus();
-              // A slight delay ensures the focus-then-click works reliably
-              setTimeout(() => {
-                handleAddItem();
-              }, 100);
-            }
+          quantity={quantity}
+          itemName={selectedProduct.name}
+          onQuantityChange={setQuantity}
+          onEnter={() => {
+            refs.addItemButtonRef.current?.focus();
+            // A slight delay ensures the focus-then-click works reliably.
+            setTimeout(() => {
+              handleAddItem();
+            }, 100);
           }}
           placeholder="Quantity"
           className="w-full"

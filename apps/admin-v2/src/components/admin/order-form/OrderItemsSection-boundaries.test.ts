@@ -10,6 +10,10 @@ const searchSource = readFileSync(
   fileURLToPath(new URL("./ProductSearch.tsx", import.meta.url)),
   "utf8",
 );
+const itemSelectionSource = readFileSync(
+  fileURLToPath(new URL("./ItemSelection.tsx", import.meta.url)),
+  "utf8",
+);
 const querySource = readFileSync(
   fileURLToPath(new URL("../../../lib/api-query-options/orders.ts", import.meta.url)),
   "utf8",
@@ -40,5 +44,12 @@ describe("manual-order catalog boundaries", () => {
     expect(itemsSource).toContain("resolvedVariantsById");
     expect(itemsSource).toContain("[product.id]: product");
     expect(itemsSource).toContain("[variant.id]: variant");
+  });
+
+  it("keeps add-item quantity editing on the shared valid-draft control", () => {
+    expect(itemSelectionSource).toContain("<OrderItemQuantityInput");
+    expect(itemSelectionSource).toContain("onQuantityChange={setQuantity}");
+    expect(itemSelectionSource).toContain("onEnter={() => {");
+    expect(itemSelectionSource).not.toContain("parseInt(e.target.value) || 1");
   });
 });

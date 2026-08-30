@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { act } from "react";
+import { act, type FormEvent } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -120,5 +120,52 @@ describe("OrderItemQuantityInput", () => {
 
     expect(host.querySelector<HTMLInputElement>("input")?.value).toBe("7");
   });
-});
 
+  it("runs Enter only for a valid visible draft and prevents form submission", async () => {
+    const onQuantityChange = vi.fn();
+    const onEnter = vi.fn();
+    const onSubmit = vi.fn((event: FormEvent<HTMLFormElement>) =>
+      event.preventDefault());
+    await act(async () => root.render(
+      <form onSubmit={onSubmit}>
+        <OrderItemQuantityInput
+          id="quantity-input"
+          quantity={4}
+          itemName="Studio Lamp"
+          onQuantityChange={onQuantityChange}
+          onEnter={onEnter}
+          placeholder="Quantity"
+        />
+      </form>,
+    ));
+
+    const input = host.querySelector<HTMLInputElement>("#quantity-input");
+    if (!input) throw new Error("Expected quantity input");
+    expect(input.placeholder).toBe("Quantity");
+
+    await act(async () => input.focus());
+    await act(async () => setInputValue(input, ""));
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent("keydown", {
+        key: "Enter",
+        bubbles: true,
+        cancelable: true,
+      }));
+    });
+    expect(input.value).toBe("4");
+    expect(onEnter).not.toHaveBeenCalled();
+    expect(onSubmit).not.toHaveBeenCalled();
+
+    await act(async () => setInputValue(input, "6"));
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent("keydown", {
+        key: "Enter",
+        bubbles: true,
+        cancelable: true,
+      }));
+    });
+    expect(onQuantityChange).toHaveBeenLastCalledWith(6);
+    expect(onEnter).toHaveBeenCalledOnce();
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+});
