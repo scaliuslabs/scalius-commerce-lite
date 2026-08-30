@@ -22,7 +22,19 @@ import {
   PaymentRecordStatus,
   PaymentStatus,
 } from "@scalius/database/schema";
-import { markCODReturned, recordCODCollection, validateCODCollectionDetails } from "./cod";
+import { CODProvider, markCODReturned, recordCODCollection, validateCODCollectionDetails } from "./cod";
+
+describe("CODProvider refund boundary", () => {
+  it("refuses to fabricate a provider refund for an externally settled cash repayment", async () => {
+    const provider = new CODProvider({} as Database);
+
+    await expect(provider.createRefund({
+      transactionId: "COD-order_1",
+      amount: 100,
+      reason: "customer_request",
+    })).rejects.toThrow("COD refunds must be repaid outside Scalius");
+  });
+});
 
 function createCodDbMock({
   selectedOrder,

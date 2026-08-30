@@ -31,6 +31,7 @@ const refundResultSchema = z.object({
     refundId: z.string().optional(),
     amount: z.number(),
     isFullRefund: z.boolean(),
+    manualSettlementRecorded: z.boolean().optional(),
     notificationCount: z.number(),
     sideEffectErrors: z.number(),
     error: z.string().optional(),
@@ -276,7 +277,8 @@ const refundOrderRoute = createRoute({
                     schema: z.object({
                         amount: z.number().optional(),
                         reason: z.string().optional(),
-                        gateway: z.enum(["stripe", "sslcommerz", "polar", "cod"]).optional()
+                        gateway: z.enum(["stripe", "sslcommerz", "polar", "cod"]).optional(),
+                        manualSettlementConfirmed: z.boolean().optional(),
                     })
                 }
             }
@@ -302,7 +304,13 @@ app.openapi(refundOrderRoute, async (c) => {
         result = await processRefund(
             db,
             envCache,
-            { orderId, amount: data.amount, reason: data.reason ?? "Refund requested", gateway: data.gateway },
+            {
+                orderId,
+                amount: data.amount,
+                reason: data.reason ?? "Refund requested",
+                gateway: data.gateway,
+                manualSettlementConfirmed: data.manualSettlementConfirmed,
+            },
             encryptionKey,
         );
     } catch (error: unknown) {

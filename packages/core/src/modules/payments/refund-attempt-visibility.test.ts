@@ -72,6 +72,25 @@ describe("refund attempt visibility", () => {
     expect(JSON.stringify(view)).not.toContain("local CAS lost");
   });
 
+  it("describes COD reconciliation as a confirmed manual settlement, not provider acceptance", () => {
+    const manualRow: RefundAttemptVisibilityRow = {
+      ...row,
+      gateway: "cod",
+      providerStatus: "manual_confirmed",
+      providerRefundId: null,
+      providerCorrelationId: null,
+      sourceTransactionId: null,
+    };
+
+    const adminView = formatRefundAttemptForVisibility(manualRow, "admin");
+    const customerView = formatRefundAttemptForVisibility(manualRow, "customer");
+
+    expect(adminView.label).toBe("Manual refund recorded, local update pending");
+    expect(adminView.message).toContain("confirmed outside Scalius");
+    expect(adminView.message).not.toContain("provider accepted");
+    expect(customerView.message).toContain("merchant recorded the manual refund");
+  });
+
   it("summarizes active attempts without losing the customer-safe status", () => {
     const customerView = formatRefundAttemptForVisibility(row, "customer");
     const summary = summarizeActiveRefundOperation([customerView], "customer");

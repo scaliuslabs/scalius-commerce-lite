@@ -94,7 +94,7 @@ export interface PaymentProvider {
 
   /**
    * Process a refund for a previous payment.
-   * Not all gateways support refunds (COD refunds are just status changes).
+   * Providers without a programmatic refund capability must reject this call.
    */
   createRefund(params: RefundParams): Promise<RefundResult>;
 

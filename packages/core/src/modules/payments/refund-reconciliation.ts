@@ -1135,7 +1135,11 @@ export async function reconcileRefundAttemptById(
   }
 
   const outcome = attempt.status === "reconcile_required"
-    ? { outcome: "accepted", providerRefundId: attempt.providerRefundId, providerStatus: "accepted" } satisfies ProviderProbeOutcome
+    ? {
+        outcome: "accepted",
+        providerRefundId: attempt.providerRefundId,
+        providerStatus: attempt.gateway === "cod" ? "manual_confirmed" : "accepted",
+      } satisfies ProviderProbeOutcome
     : await probeProviderRefund(db, kv, attempt, context, options.encryptionKey);
 
   if (outcome.outcome === "accepted") {

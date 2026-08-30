@@ -36228,6 +36228,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "polar",
                     "cod"
                   ]
+                },
+                "manualSettlementConfirmed": {
+                  "type": "boolean"
                 }
               }
             }
@@ -36261,6 +36264,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "type": "number"
             },
             "isFullRefund": {
+              "type": "boolean"
+            },
+            "manualSettlementRecorded": {
               "type": "boolean"
             },
             "notificationCount": {

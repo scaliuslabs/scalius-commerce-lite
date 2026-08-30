@@ -141081,6 +141081,9 @@
                       "polar",
                       "cod"
                     ]
+                  },
+                  "manualSettlementConfirmed": {
+                    "type": "boolean"
                   }
                 }
               }
@@ -141118,6 +141121,9 @@
                           "type": "number"
                         },
                         "isFullRefund": {
+                          "type": "boolean"
+                        },
+                        "manualSettlementRecorded": {
                           "type": "boolean"
                         },
                         "notificationCount": {
