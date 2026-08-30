@@ -52,7 +52,7 @@ export const ORDER_STATUS_TRANSITIONS: Record<
   shipped: ["confirmed", "delivered", "returned", "cancelled"],
   delivered: ["completed", "returned", "refunded", "partially_refunded"],
   completed: ["returned", "refunded", "partially_refunded"],
-  cancelled: ["pending", "confirmed"],
+  cancelled: [],
   returned: ["refunded"],
   refunded: [],
   partially_refunded: ["refunded"],

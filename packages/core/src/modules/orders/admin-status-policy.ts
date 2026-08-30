@@ -14,7 +14,7 @@ const GENERIC_ADMIN_STATUS_TRANSITIONS: Readonly<Record<string, readonly string[
   [OrderStatus.SHIPPED]: [OrderStatus.DELIVERED],
   [OrderStatus.DELIVERED]: [OrderStatus.COMPLETED],
   [OrderStatus.COMPLETED]: [],
-  [OrderStatus.CANCELLED]: [OrderStatus.PENDING, OrderStatus.CONFIRMED],
+  [OrderStatus.CANCELLED]: [],
   [OrderStatus.RETURNED]: [],
   [OrderStatus.REFUNDED]: [],
   [OrderStatus.PARTIALLY_REFUNDED]: [],

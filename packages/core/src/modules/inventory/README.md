@@ -35,7 +35,7 @@ Stock follows a clear lifecycle driven by order status transitions. The order-le
              │
              └──> restored (cancelled pre-payment)
                     │
-                    └──> reserved (admin reactivation)
+                    └──> reserved (active-order projection repair)
 ```
 
 | `inventoryAction` | Meaning                                                              |

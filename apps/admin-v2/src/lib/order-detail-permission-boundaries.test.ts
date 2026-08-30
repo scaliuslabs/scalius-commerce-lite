@@ -76,6 +76,8 @@ describe("order detail permission boundaries", () => {
     expect(headerSource).not.toContain('<SelectItem value="complete">');
 
     expect(statusSource).toContain("orderActions.canChangeOrderStatus");
+    expect(statusSource).toContain("availableTransitions.length === 0");
+    expect(statusSource).toContain("Cancelled orders cannot be reopened");
     expect(statusSource).not.toContain("canRefundOrders");
     expect(statusSource).toContain('aria-label="Order status"');
 

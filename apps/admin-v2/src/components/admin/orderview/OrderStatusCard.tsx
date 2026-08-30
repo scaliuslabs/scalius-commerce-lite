@@ -33,6 +33,8 @@ export function OrderStatusCard({ order }: OrderStatusCardProps) {
   const activeRefundOperation = order.activeRefundOperation;
   const refundLocked = Boolean(activeRefundOperation?.active);
   const shipmentLocked = order.shipmentRecovery?.activeLock === true;
+  const availableTransitions = getAdminOrderStatusTransitions(order.status);
+  const isTerminalStatus = availableTransitions.length === 0;
 
   const handleStatusChange = (newStatus: string) => {
     if (!isAdminOrderStatus(newStatus)) {
@@ -71,7 +73,13 @@ export function OrderStatusCard({ order }: OrderStatusCardProps) {
           <Select
             value={order.status.toLowerCase()}
             onValueChange={handleStatusChange}
-            disabled={statusMutation.isPending || refundLocked || shipmentLocked || !canChangeStatus}
+            disabled={
+              statusMutation.isPending
+              || refundLocked
+              || shipmentLocked
+              || !canChangeStatus
+              || isTerminalStatus
+            }
           >
             <SelectTrigger
               aria-label="Order status"
@@ -95,7 +103,7 @@ export function OrderStatusCard({ order }: OrderStatusCardProps) {
                 {order.status.toLowerCase().replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}
               </SelectItem>
               {/* Valid transitions from current status */}
-              {getAdminOrderStatusTransitions(order.status).map((status) => (
+              {availableTransitions.map((status) => (
                 <SelectItem
                   key={status}
                   value={status}
@@ -109,6 +117,13 @@ export function OrderStatusCard({ order }: OrderStatusCardProps) {
           {!canChangeStatus && (
             <p className="text-sm text-muted-foreground">
               Status changes require order status permission.
+            </p>
+          )}
+          {canChangeStatus && isTerminalStatus && (
+            <p className="text-sm text-muted-foreground">
+              {order.status.toLowerCase() === "cancelled"
+                ? "Cancelled orders cannot be reopened. Create a new order if the sale should continue."
+                : "This order status is terminal. Use a dedicated return or refund action when available."}
             </p>
           )}
         </div>

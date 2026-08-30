@@ -29,4 +29,12 @@ describe("generic admin order status policy", () => {
     expect(isGenericAdminOrderStatusTransitionAllowed(OrderStatus.CONFIRMED, OrderStatus.CANCELLED)).toBe(true);
     expect(isGenericAdminOrderStatusTransitionAllowed(OrderStatus.DELIVERED, OrderStatus.COMPLETED)).toBe(true);
   });
+
+  it("does not reopen a cancelled order through the generic editor", () => {
+    for (const target of [OrderStatus.PENDING, OrderStatus.CONFIRMED]) {
+      expect(isGenericAdminOrderStatusTransitionAllowed(OrderStatus.CANCELLED, target)).toBe(false);
+      expect(() => assertGenericAdminOrderStatusTransition(OrderStatus.CANCELLED, target))
+        .toThrow("cannot move an order from cancelled");
+    }
+  });
 });

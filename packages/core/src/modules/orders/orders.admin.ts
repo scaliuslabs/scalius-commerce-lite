@@ -2668,10 +2668,12 @@ export async function updateOrder(
                 db,
                 toReservationBatchItems(newEntries, id),
                 pool,
+                // This legacy purpose is a durable idempotency identity. The path repairs an
+                // active aggregate whose inventory projection was previously restored.
                 { reservationKey: adminOrderInventoryClaimKey(id, expectedVersion, "reserve-reactivation") },
             );
             if (!reserveResult.success) {
-                throw new ValidationError(reserveResult.error ?? "Insufficient stock to reactivate order");
+                throw new ValidationError(reserveResult.error ?? "Insufficient stock to repair the order reservation");
             }
             acquiredReservations = newEntries;
         }
