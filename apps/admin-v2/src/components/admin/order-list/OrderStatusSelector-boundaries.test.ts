@@ -19,6 +19,9 @@ describe("OrderStatusSelector boundaries", () => {
     expect(menuSource).toContain("../../ui/dropdown-menu");
     expect(menuSource).toContain("DropdownMenuContent");
     expect(menuSource).toContain("getAdminOrderStatusTransitions");
+    expect(menuSource).toContain("getAdminOrderCancellationBlockedReason");
+    expect(selectorSource).toContain("paymentStatus={paymentStatus}");
+    expect(selectorSource).toContain("paidAmount={paidAmount}");
 
     expect(selectorSource).not.toContain("../../ui/dropdown-menu");
     expect(selectorSource).not.toContain("DropdownMenuContent");

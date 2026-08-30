@@ -83,7 +83,7 @@ describe("order list response projection", () => {
     });
     expect(result.orders[0]).not.toHaveProperty("shipmentClaimId");
     expect(result.orders[0]).not.toHaveProperty("shipmentClaimExpiresAt");
-    expect(result.orders[0]).not.toHaveProperty("paidAmount");
+    expect(result.orders[0]).toHaveProperty("paidAmount", 0);
     expect(result.orders[0]).not.toHaveProperty("hasTaxSnapshot");
     expect(result.orders[0]?.latestShipment?.updatedAt).toBeInstanceOf(Date);
   });
