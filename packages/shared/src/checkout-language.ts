@@ -29,6 +29,10 @@ export const ENGLISH_CHECKOUT_LANGUAGE_DATA = {
   placeOrderText: "Place order",
   processingText: "Processing…",
   emptyCartText: "Your cart is empty",
+  emptyCartDescriptionText: "You haven't added anything to your cart yet.",
+  paymentRecoveryMessageText:
+    "Your order was created before payment opened. Review its payment status before starting another checkout.",
+  viewPaymentStatusText: "View payment status",
   termsText:
     "By placing this order, you agree to our Terms of Service and Privacy Policy.",
   processingOrderTitle: "Processing your order",
@@ -201,6 +205,10 @@ export const BANGLA_CHECKOUT_LANGUAGE_DATA: CheckoutLanguageData = {
   placeOrderText: "অর্ডার করুন",
   processingText: "প্রক্রিয়া চলছে…",
   emptyCartText: "আপনার কার্ট খালি",
+  emptyCartDescriptionText: "আপনি এখনো কার্টে কোনো পণ্য যোগ করেননি।",
+  paymentRecoveryMessageText:
+    "পেমেন্ট পেজ খোলার আগেই আপনার অর্ডারটি তৈরি হয়েছে। নতুন করে চেকআউট শুরু করার আগে পেমেন্টের অবস্থা দেখুন।",
+  viewPaymentStatusText: "পেমেন্টের অবস্থা দেখুন",
   termsText:
     "অর্ডারটি নিশ্চিত করলে আপনি আমাদের পরিষেবার শর্তাবলি ও গোপনীয়তা নীতিতে সম্মত হচ্ছেন।",
   processingOrderTitle: "আপনার অর্ডার প্রক্রিয়া করা হচ্ছে",
@@ -341,6 +349,8 @@ export const CHECKOUT_LANGUAGE_KEYS = Object.freeze(
 
 export const CHECKOUT_LANGUAGE_LONG_TEXT_KEYS = new Set<CheckoutLanguageKey>([
   "termsText",
+  "emptyCartDescriptionText",
+  "paymentRecoveryMessageText",
   "checkoutUnavailableMessage",
   "existingCheckoutMessage",
   "noScriptText",
