@@ -3,8 +3,7 @@ import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-or
 import { createApiUrl, fetchWithRetry } from "@/lib/api/client";
 
 const PAYMENT_RECOVERY_TIMEOUT_MS = 8_000;
-const GENERIC_MESSAGE =
-  "If this order is eligible for payment recovery, a verification code will be sent to the buyer contact.";
+const ACCEPTED_RESULT_CODE = "PAYMENT_RECOVERY_CODE_REQUEST_ACCEPTED";
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -25,21 +24,28 @@ function stringField(payload: Record<string, unknown>, key: string): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function apiErrorCode(payload: unknown, fallback: string): string {
+  if (!isRecord(payload) || !isRecord(payload.error)) return fallback;
+  return typeof payload.error.code === "string" && payload.error.code.trim()
+    ? payload.error.code.trim()
+    : fallback;
+}
+
 export const POST: APIRoute = async ({ request }) => {
   if (shouldRejectCrossOriginCookieRequest(request)) {
-    return jsonResponse({ success: false, error: "Cross-origin cookie request denied" }, 403);
+    return jsonResponse({ success: false, errorCode: "PAYMENT_RECOVERY_REQUEST_DENIED" }, 403);
   }
 
   try {
     const payload = await request.json().catch(() => null);
     if (!isRecord(payload)) {
-      return jsonResponse({ success: false, error: "Invalid recovery request." }, 400);
+      return jsonResponse({ success: false, errorCode: "PAYMENT_RECOVERY_INVALID_REQUEST" }, 400);
     }
 
     const orderId = stringField(payload, "orderId");
     const channel = stringField(payload, "channel");
     if (!orderId) {
-      return jsonResponse({ success: true, message: GENERIC_MESSAGE });
+      return jsonResponse({ success: true, resultCode: ACCEPTED_RESULT_CODE });
     }
 
     const response = await fetchWithRetry(
@@ -60,15 +66,15 @@ export const POST: APIRoute = async ({ request }) => {
 
     const json = await response.json().catch(() => ({}) as Record<string, unknown>);
     if (!response.ok) {
-      const error = isRecord(json.error) && typeof json.error.message === "string"
-        ? json.error.message
-        : "Could not request a verification code. Please try again.";
-      return jsonResponse({ success: false, error }, response.status);
+      return jsonResponse({
+        success: false,
+        errorCode: apiErrorCode(json, "PAYMENT_RECOVERY_SEND_FAILED"),
+      }, response.status);
     }
 
-    return jsonResponse({ success: true, message: GENERIC_MESSAGE });
+    return jsonResponse({ success: true, resultCode: ACCEPTED_RESULT_CODE });
   } catch (error) {
     console.error("[payment-recovery/send-code] Error:", error);
-    return jsonResponse({ success: false, error: "Could not request a verification code. Please try again." }, 500);
+    return jsonResponse({ success: false, errorCode: "PAYMENT_RECOVERY_SEND_FAILED" }, 500);
   }
 };
