@@ -38908,6 +38908,7 @@ export type PostApiV1AdminOrdersByIdRefundData = {
         amount?: number;
         reason?: string;
         gateway?: 'stripe' | 'sslcommerz' | 'polar' | 'cod';
+        manualSettlementConfirmed?: boolean;
     };
     path: {
         id: string;
@@ -38999,6 +39000,7 @@ export type PostApiV1AdminOrdersByIdRefundResponses = {
             refundId?: string;
             amount: number;
             isFullRefund: boolean;
+            manualSettlementRecorded?: boolean;
             notificationCount: number;
             sideEffectErrors: number;
             error?: string;

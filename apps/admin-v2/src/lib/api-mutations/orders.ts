@@ -270,7 +270,11 @@ export function useRefundOrder() {
       if (result.isFullRefund) {
         invalidateOrderInventoryQueries(queryClient);
       }
-      toast.success("Refund processed");
+      toast.success(
+        result.manualSettlementRecorded
+          ? "Manual cash refund recorded"
+          : "Refund processed",
+      );
       if (result.sideEffectErrors > 0) {
         toast.warning("Refund saved; follow-up needs attention", {
           description: "The financial refund is complete, but cache refresh or customer notification should be checked.",
