@@ -15,6 +15,10 @@ import { useCurrency } from "~/hooks/use-currency";
 import type { Product } from "./types";
 import { orderItemVariantLabel } from "./order-item-presentation";
 import { OrderItemQuantityInput } from "./OrderItemQuantityInput";
+import {
+  exceededStockMessage,
+  remainingStockForNewOrderLine,
+} from "./manual-order-stock";
 
 type ProductVariant = Product["variants"][number];
 
@@ -49,6 +53,9 @@ export function OrderItemsTable({
           && line.variantId === item.variantId
           && line.quantity === item.quantity)
       : undefined;
+    const maximumQuantity = isEdit
+      ? null
+      : remainingStockForNewOrderLine(variant, items as OrderItem[], index);
 
     return {
       item,
@@ -57,6 +64,7 @@ export function OrderItemsTable({
       variant,
       unitPrice: quotedLine?.unitPrice ?? item.price,
       lineSubtotal: quotedLine?.lineSubtotal ?? item.price * item.quantity,
+      maximumQuantity,
     };
   });
 
@@ -116,7 +124,15 @@ export function OrderItemsTable({
               </TableCell>
             </TableRow>
           ) : (
-            rows.map(({ item, index, product, variant, unitPrice, lineSubtotal }) => (
+            rows.map(({
+              item,
+              index,
+              product,
+              variant,
+              unitPrice,
+              lineSubtotal,
+              maximumQuantity,
+            }) => (
                 <TableRow key={`${item.productId}-${item.variantId ?? "sku"}-${index}`}>
                   <TableCell className="font-medium">
                     {product?.name ?? "Unknown Product"}
@@ -130,6 +146,10 @@ export function OrderItemsTable({
                       itemName={product?.name ?? "item"}
                       onQuantityChange={(quantity) =>
                         handleQuantityChange(index, quantity)}
+                      maxQuantity={maximumQuantity ?? undefined}
+                      maximumExceededMessage={maximumQuantity === null
+                        ? undefined
+                        : exceededStockMessage(maximumQuantity)}
                     />
                   </TableCell>
                   <TableCell>{symbol}{unitPrice.toLocaleString()}</TableCell>
@@ -162,6 +182,7 @@ export function OrderItemsTable({
           variant,
           unitPrice,
           lineSubtotal,
+          maximumQuantity,
         }) => (
           <div
             key={`${item.productId}-${item.variantId ?? "sku"}-${index}`}
@@ -195,6 +216,10 @@ export function OrderItemsTable({
                     itemName={product?.name ?? "item"}
                     onQuantityChange={(quantity) =>
                       handleQuantityChange(index, quantity)}
+                    maxQuantity={maximumQuantity ?? undefined}
+                    maximumExceededMessage={maximumQuantity === null
+                      ? undefined
+                      : exceededStockMessage(maximumQuantity)}
                   />
                 </dd>
               </div>

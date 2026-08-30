@@ -1,3 +1,4 @@
+import * as React from "react";
 import {
   Select,
   SelectContent,
@@ -13,6 +14,12 @@ import type { Product } from "./types";
 import { useOrderForm } from "./OrderFormContext";
 import { useCurrency } from "@/hooks/use-currency";
 import { OrderItemQuantityInput } from "./OrderItemQuantityInput";
+import {
+  exceededStockMessage,
+  remainingStockForNewOrderLine,
+  remainingStockMessage,
+  stagedVariantQuantity,
+} from "./manual-order-stock";
 
 interface ItemSelectionProps {
   selectedProduct: Product;
@@ -35,11 +42,29 @@ export function ItemSelection({
   calculateDiscountedPrice,
   isLoadingVariants = false,
 }: ItemSelectionProps) {
-  const { refs } = useOrderForm();
+  const { refs, form, isEdit } = useOrderForm();
   const { symbol } = useCurrency();
+  const items = form.watch("items");
+  const [isQuantityDraftValid, setIsQuantityDraftValid] = React.useState(true);
   const hasSkus = selectedProduct.variants.length > 0;
   const needsSkuSelection = selectedProduct.variants.length > 1 && !selectedVariant;
-  const addDisabled = isLoadingVariants || !hasSkus || needsSkuSelection;
+  const effectiveVariant = selectedVariant
+    ? selectedProduct.variants.find((variant) => variant.id === selectedVariant)
+    : selectedProduct.variants.length === 1
+      ? selectedProduct.variants[0]
+      : null;
+  const remainingStock = isEdit
+    ? null
+    : remainingStockForNewOrderLine(effectiveVariant, items);
+  const alreadyStaged = effectiveVariant
+    ? stagedVariantQuantity(items, effectiveVariant.id)
+    : 0;
+  const stockGuidanceId = "new-order-item-stock-guidance";
+  const addDisabled = isLoadingVariants
+    || !hasSkus
+    || needsSkuSelection
+    || !isQuantityDraftValid
+    || remainingStock === 0;
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4 p-4 border rounded-md bg-muted/20 items-end">
@@ -141,6 +166,7 @@ export function ItemSelection({
           quantity={quantity}
           itemName={selectedProduct.name}
           onQuantityChange={setQuantity}
+          onValidityChange={setIsQuantityDraftValid}
           onEnter={() => {
             refs.addItemButtonRef.current?.focus();
             // A slight delay ensures the focus-then-click works reliably.
@@ -149,8 +175,24 @@ export function ItemSelection({
             }, 100);
           }}
           placeholder="Quantity"
+          maxQuantity={remainingStock ?? undefined}
+          maximumExceededMessage={remainingStock === null
+            ? undefined
+            : exceededStockMessage(remainingStock)}
+          describedBy={remainingStock === null ? undefined : stockGuidanceId}
+          disabled={remainingStock === 0}
           className="w-full"
         />
+        {remainingStock !== null ? (
+          <p
+            id={stockGuidanceId}
+            className={remainingStock === 0
+              ? "mt-1 text-xs text-destructive"
+              : "mt-1 text-xs text-muted-foreground"}
+          >
+            {remainingStockMessage(remainingStock, alreadyStaged)}
+          </p>
+        ) : null}
       </div>
 
       <div className="self-end">

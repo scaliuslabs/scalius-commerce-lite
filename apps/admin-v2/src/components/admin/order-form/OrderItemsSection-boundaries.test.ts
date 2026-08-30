@@ -50,6 +50,9 @@ describe("manual-order catalog boundaries", () => {
     expect(itemSelectionSource).toContain("<OrderItemQuantityInput");
     expect(itemSelectionSource).toContain("onQuantityChange={setQuantity}");
     expect(itemSelectionSource).toContain("onEnter={() => {");
+    expect(itemSelectionSource).toContain("remainingStockForNewOrderLine");
+    expect(itemSelectionSource).toContain("maximumExceededMessage");
+    expect(itemsSource).toContain("remainingStockForNewOrderLine(variant, currentItems)");
     expect(itemSelectionSource).not.toContain("parseInt(e.target.value) || 1");
   });
 });

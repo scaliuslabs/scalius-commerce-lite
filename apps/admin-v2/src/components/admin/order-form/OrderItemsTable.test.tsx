@@ -144,4 +144,48 @@ describe("OrderItemsTable", () => {
     });
     expect(testState.updateOrderItems).toHaveBeenCalledWith(expectedItems);
   });
+
+  it("does not let a staged line exceed the tracked SKU snapshot", async () => {
+    await act(async () => root.render(
+      <OrderItemsTable
+        resolvedProductsById={{
+          prod_1: {
+            id: "prod_1",
+            name: "Studio Lamp",
+            price: 100,
+            discountPercentage: null,
+            variants: [],
+          },
+        }}
+        resolvedVariantsById={{
+          var_1: {
+            id: "var_1",
+            optionCombinationKey: null,
+            selectedOptions: [{ name: "Finish", value: "Black" }],
+            weight: null,
+            sku: "LAMP-BLACK",
+            price: 100,
+            stock: 8,
+            reservedStock: 1,
+            trackInventory: true,
+          },
+        }}
+      />,
+    ));
+
+    const input = host.querySelector<HTMLInputElement>(
+      'input[aria-label="Quantity for Studio Lamp"]',
+    );
+    if (!input) throw new Error("Expected quantity input");
+    expect(input.max).toBe("7");
+
+    await act(async () => input.focus());
+    await act(async () => setInputValue(input, "8"));
+
+    expect(testState.setValue).not.toHaveBeenCalled();
+    expect(testState.updateOrderItems).not.toHaveBeenCalled();
+    expect(host.textContent).toContain(
+      "Only 7 units are available for this order.",
+    );
+  });
 });

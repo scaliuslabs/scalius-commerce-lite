@@ -18,6 +18,10 @@ import { orderCatalogProductsQueryOptions } from "@/lib/api-query-options/orders
 import { useDebounce } from "@/hooks/use-debounce";
 import type { ProductListItemDto } from "@/lib/api-functions/products";
 import type { Product } from "./types";
+import {
+  exceededStockMessage,
+  remainingStockForNewOrderLine,
+} from "./manual-order-stock";
 
 const ORDER_CATALOG_PAGE_SIZE = 10;
 const ORDER_CATALOG_SEARCH_DEBOUNCE_MS = 300;
@@ -72,7 +76,7 @@ function normalizeCatalogProduct(product: ProductListItemDto): Product {
 }
 
 export function OrderItemsSection() {
-  const { form, refs } = useOrderForm();
+  const { form, refs, isEdit } = useOrderForm();
   const queryClient = useQueryClient();
 
   const [searchTerm, setSearchTerm] = React.useState("");
@@ -228,6 +232,14 @@ export function OrderItemsSection() {
       );
       return;
     }
+    const currentItems = form.getValues("items");
+    const remainingStock = isEdit
+      ? null
+      : remainingStockForNewOrderLine(variant, currentItems);
+    if (remainingStock !== null && quantity > remainingStock) {
+      toast.error(exceededStockMessage(remainingStock));
+      return;
+    }
     let basePrice = variant.price;
 
     // Variant discount overrides product discount
@@ -249,7 +261,7 @@ export function OrderItemsSection() {
     }
 
     const newItems = [
-      ...form.getValues("items"),
+      ...currentItems,
       {
         productId: selectedProduct.id,
         variantId: variant.id,

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { act, type FormEvent } from "react";
+import { act, type FormEvent, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -99,6 +99,102 @@ describe("OrderItemQuantityInput", () => {
     await act(async () => input.blur());
     expect(input.value).toBe("3");
     expect(onQuantityChange).not.toHaveBeenCalled();
+  });
+
+  it("explains and rejects quantities above the known stock snapshot", async () => {
+    const onQuantityChange = vi.fn();
+    const onValidityChange = vi.fn();
+    await act(async () => root.render(
+      <OrderItemQuantityInput
+        quantity={3}
+        itemName="Studio Lamp"
+        onQuantityChange={onQuantityChange}
+        onValidityChange={onValidityChange}
+        maxQuantity={5}
+        maximumExceededMessage="Only 5 units are available for this order."
+      />,
+    ));
+
+    const input = host.querySelector<HTMLInputElement>("input");
+    if (!input) throw new Error("Expected quantity input");
+    expect(input.max).toBe("5");
+
+    await act(async () => input.focus());
+    await act(async () => setInputValue(input, "8"));
+    expect(input.value).toBe("8");
+    expect(input.getAttribute("aria-invalid")).toBe("true");
+    expect(host.textContent).toContain(
+      "Only 5 units are available for this order.",
+    );
+    expect(onQuantityChange).not.toHaveBeenCalled();
+    expect(onValidityChange).toHaveBeenLastCalledWith(false);
+
+    await act(async () => input.blur());
+    expect(input.value).toBe("3");
+    expect(onQuantityChange).not.toHaveBeenCalled();
+
+    await act(async () => input.focus());
+    await act(async () => setInputValue(input, "5"));
+    expect(onQuantityChange).toHaveBeenLastCalledWith(5);
+    expect(onValidityChange).toHaveBeenLastCalledWith(true);
+  });
+
+  it("restores the pre-edit quantity instead of a valid multi-digit prefix", async () => {
+    const onQuantityChange = vi.fn();
+    function ControlledQuantity() {
+      const [quantity, setQuantity] = useState(20);
+      return (
+        <OrderItemQuantityInput
+          quantity={quantity}
+          itemName="Studio Lamp"
+          maxQuantity={20}
+          maximumExceededMessage="Only 20 units are available for this order."
+          onQuantityChange={(nextQuantity) => {
+            onQuantityChange(nextQuantity);
+            setQuantity(nextQuantity);
+          }}
+        />
+      );
+    }
+    await act(async () => root.render(<ControlledQuantity />));
+
+    const input = host.querySelector<HTMLInputElement>("input");
+    if (!input) throw new Error("Expected quantity input");
+    await act(async () => input.focus());
+
+    await act(async () => setInputValue(input, "2"));
+    expect(onQuantityChange).toHaveBeenLastCalledWith(2);
+
+    await act(async () => setInputValue(input, "21"));
+    expect(input.value).toBe("21");
+    expect(onQuantityChange).toHaveBeenLastCalledWith(20);
+    expect(host.textContent).toContain(
+      "Only 20 units are available for this order.",
+    );
+
+    await act(async () => input.blur());
+    expect(input.value).toBe("20");
+    expect(onQuantityChange).toHaveBeenLastCalledWith(20);
+  });
+
+  it("leaves out-of-stock explanation to the disabled field guidance", async () => {
+    await act(async () => root.render(
+      <OrderItemQuantityInput
+        quantity={1}
+        itemName="Studio Lamp"
+        maxQuantity={0}
+        maximumExceededMessage="This SKU is out of stock."
+        disabled
+        onQuantityChange={vi.fn()}
+      />,
+    ));
+
+    const input = host.querySelector<HTMLInputElement>("input");
+    if (!input) throw new Error("Expected quantity input");
+    expect(input.disabled).toBe(true);
+    expect(input.max).toBe("0");
+    expect(input.getAttribute("aria-invalid")).toBeNull();
+    expect(host.querySelector('[role="alert"]')).toBeNull();
   });
 
   it("synchronizes an external quantity change while idle", async () => {
