@@ -61,6 +61,8 @@ export interface RefundRequest {
     reason: string;
     /** Override gateway detection (useful for multi-gateway orders) */
     gateway?: "stripe" | "sslcommerz" | "polar" | "cod";
+    /** Required when any allocation records an already-completed external COD repayment. */
+    manualSettlementConfirmed?: boolean;
 }
 
 export interface RefundResult {
@@ -69,6 +71,8 @@ export interface RefundResult {
     refundId?: string;
     amount: number;
     isFullRefund: boolean;
+    /** True when at least one allocation records a confirmed off-platform COD repayment. */
+    manualSettlementRecorded?: boolean;
     error?: string;
     /** Internal cache signal; API responses must not expose this field. */
     availabilityTransitionVariantIds: string[];
@@ -370,6 +374,7 @@ async function buildRefundRequestHash(params: {
         amount: params.refundAmount,
         reason: params.request.reason,
         gateway: params.request.gateway ?? null,
+        manualSettlementConfirmed: params.request.manualSettlementConfirmed === true,
         currency: params.currency,
         allocations: params.allocations.map((allocation) => ({
             sourcePaymentId: allocation.sourcePayment.id,
@@ -615,7 +620,7 @@ export async function finalizeAcceptedRefundAttemptIds(
         )).returning({ id: orders.id });
 
         if (updateResult.length === 0) {
-            throw new ConflictError("Refund payment was accepted, but local order reconciliation lost a concurrent update.");
+            throw new ConflictError("Refund settlement was recorded, but local order reconciliation lost a concurrent update.");
         }
 
         if (shouldReleaseInventory) {
@@ -652,7 +657,6 @@ export async function finalizeAcceptedRefundAttemptIds(
 
     await db.update(refundAttempts).set({
         status: "refunded",
-        providerStatus: "accepted",
         claimId: null,
         claimExpiresAt: null,
         refundedAt: sql`unixepoch()`,
@@ -684,29 +688,33 @@ function buildRefundMetadata(params: {
         : params.error == null
             ? undefined
             : String(params.error);
+    const isManualSettlement = params.allocation.sourcePayment.paymentMethod === "cod";
 
     return JSON.stringify({
         reason: params.request.reason,
         gateway: params.allocation.sourcePayment.paymentMethod,
         sourcePaymentId: params.allocation.sourcePayment.id,
         sourcePaymentType: params.allocation.sourcePayment.paymentType,
-        sourceTransactionId: getTransactionId(
-            params.allocation.sourcePayment.paymentMethod,
-            params.allocation.sourcePayment,
-        ),
+        sourceTransactionId: getRefundAttemptSourceTransactionId(params.allocation),
         refundGroupId: params.groupId,
         allocationIndex: params.allocation.index,
         allocationCount: params.allocationCount,
         providerIdempotencyKey: params.allocation.idempotencyKey,
         refundReference: params.allocation.refundReference,
         claimVersion: params.claimVersion,
-        providerOutcome: params.providerOutcome ?? (
-            params.status === "refunded"
-                ? "accepted"
-                : params.status === "failed"
-                    ? "rejected"
-                    : "not_dispatched"
-        ),
+        ...(isManualSettlement ? {
+            settlementMode: "manual_external",
+            manualSettlementConfirmed: params.request.manualSettlementConfirmed === true,
+            manualSettlementOutcome: params.status === "refunded" ? "confirmed" : params.status,
+        } : {
+            providerOutcome: params.providerOutcome ?? (
+                params.status === "refunded"
+                    ? "accepted"
+                    : params.status === "failed"
+                        ? "rejected"
+                        : "not_dispatched"
+            ),
+        }),
         ...(params.refundId ? { refundId: params.refundId, providerRefundId: params.refundId } : {}),
         ...(params.status === "pending" ? { claimedAt: new Date().toISOString() } : {}),
         ...(params.status === "pending" && params.providerOutcome === "unknown" ? {
@@ -725,9 +733,14 @@ function buildRefundAttemptMetadata(params: {
     claimVersion: number;
     allocationCount: number;
 }): string {
+    const isManualSettlement = params.allocation.sourcePayment.paymentMethod === "cod";
     return JSON.stringify({
         reason: params.request.reason,
         gateway: params.allocation.sourcePayment.paymentMethod,
+        ...(isManualSettlement ? {
+            settlementMode: "manual_external",
+            manualSettlementConfirmed: params.request.manualSettlementConfirmed === true,
+        } : {}),
         refundGroupId: params.groupId,
         claimVersion: params.claimVersion,
         sourcePaymentId: params.allocation.sourcePayment.id,
@@ -794,15 +807,18 @@ async function markRefundAttemptProcessing(
     }).where(eq(refundAttempts.id, getRefundAttemptId(allocation)));
 }
 
-async function markRefundAttemptProviderAccepted(
+async function markRefundAttemptAccepted(
     db: Database,
     allocation: CompletedRefundAllocation,
 ): Promise<void> {
+    const isManualSettlement = allocation.sourcePayment.paymentMethod === "cod";
     await db.update(refundAttempts).set({
         status: "processing",
         providerRefundId: allocation.refundId ?? null,
-        providerStatus: "accepted",
-        responsePayload: JSON.stringify({ refundId: allocation.refundId ?? null }),
+        providerStatus: isManualSettlement ? "manual_confirmed" : "accepted",
+        responsePayload: isManualSettlement
+            ? JSON.stringify({ settlementMode: "manual_external" })
+            : JSON.stringify({ refundId: allocation.refundId ?? null }),
         updatedAt: sql`unixepoch()`,
     }).where(eq(refundAttempts.id, getRefundAttemptId(allocation)));
 }
@@ -817,7 +833,9 @@ async function markRefundAttemptsReconcileRequired(
     await db.batch(allocations.map((allocation) =>
         db.update(refundAttempts).set({
             status: "reconcile_required",
-            providerStatus: "accepted",
+            providerStatus: allocation.sourcePayment.paymentMethod === "cod"
+                ? "manual_confirmed"
+                : "accepted",
             providerRefundId: allocation.refundId ?? null,
             claimId: null,
             claimExpiresAt: null,
@@ -941,7 +959,7 @@ function getTransactionId(
             return payment.polarCheckoutId;
         }
         case "cod":
-            return `COD-${Date.now()}`;
+            throw new ValidationError("COD refunds do not have a provider transaction ID");
         default:
             throw new ValidationError(`Unsupported payment gateway: ${gateway}`);
     }
@@ -982,7 +1000,7 @@ async function resolveProvider(
             return createPaymentProvider({ type: "polar", settings });
         }
         case "cod":
-            return createPaymentProvider({ type: "cod", db });
+            throw new ValidationError("COD refunds must be recorded as confirmed manual settlements");
         default:
             throw new ValidationError(`Unsupported payment gateway: ${gateway}`);
     }
@@ -999,7 +1017,7 @@ async function resolveProvider(
  * Amount conventions per gateway (matching RefundParams contract):
  *   - Stripe & Polar: smallest currency unit (cents/paisa)
  *   - SSLCommerz: major units (the provider passes through to SSLCommerz API)
- *   - COD: no external amount needed
+ *   - COD: no provider dispatch; the caller has already confirmed external repayment
  */
 async function dispatchRefund(
     db: Database,
@@ -1012,6 +1030,9 @@ async function dispatchRefund(
     providerMetadata: Record<string, string>,
     encryptionKey?: string,
 ): Promise<string | undefined> {
+    if (gateway === "cod") {
+        return undefined;
+    }
     const transactionId = getTransactionId(gateway, payment);
     const provider = await resolveProvider(db, gateway, encryptionKey);
 
@@ -1035,7 +1056,7 @@ async function dispatchRefund(
             },
         ).amountMinor;
     } else {
-        // SSLCommerz and COD: always pass the explicit amount in major units
+        // SSLCommerz always receives the explicit amount in major units.
         providerAmount = refundAmount;
     }
 
@@ -1048,11 +1069,8 @@ async function dispatchRefund(
 
     let result: ProviderRefundResult;
     try {
-        result = gateway === "cod"
-            ? await provider.createRefund(refundParams)
-            : await callProviderRefundWithDeadline(provider, refundParams);
+        result = await callProviderRefundWithDeadline(provider, refundParams);
     } catch (error: unknown) {
-        if (gateway === "cod") throw error;
         throw new ProviderRefundOutcomeUnknownError(error);
     }
 
@@ -1259,6 +1277,14 @@ export async function processRefund(
         refundRows: priorRefundRows,
         currency,
     });
+    const hasManualCodAllocation = allocations.some(
+        (allocation) => allocation.sourcePayment.paymentMethod === "cod",
+    );
+    if (hasManualCodAllocation && params.manualSettlementConfirmed !== true) {
+        throw new ValidationError(
+            "Confirm that the customer has already received the manual COD refund before recording it.",
+        );
+    }
     const refundRequestHash = await buildRefundRequestHash({
         request: params,
         refundAmount,
@@ -1381,7 +1407,7 @@ export async function processRefund(
                 }),
                 updatedAt: sql`unixepoch()`,
             }).where(eq(orderPayments.id, allocation.id));
-            await markRefundAttemptProviderAccepted(db, completedAllocation);
+            await markRefundAttemptAccepted(db, completedAllocation);
         }
     } catch (error: unknown) {
         const completedIds = new Set(completedAllocations.map((allocation) => allocation.id));
@@ -1421,7 +1447,7 @@ export async function processRefund(
             } catch (finalizeError: unknown) {
                 await markRefundAttemptsReconcileRequired(db, completedAllocations, finalizeError);
                 throw new ServiceUnavailableError(
-                    `Refund partially processed: ${completedAmount} was accepted by the provider, but local order reconciliation failed. Please review before retrying.`,
+                    `Refund partially processed: ${completedAmount} was completed, but local order reconciliation failed. Please review before retrying.`,
                 );
             }
             const remainingAmount = roundOrderMoney(refundAmount - completedAmount, currency);
@@ -1440,7 +1466,7 @@ export async function processRefund(
                     }));
                 }
                 throw new PartialRefundProcessedError(
-                    `Refund partially processed: ${completedAmount} was accepted by the provider, but ${remainingAmount} has an unknown provider outcome. Do not retry until the pending refund is reconciled.`,
+                    `Refund partially processed: ${completedAmount} was completed, but ${remainingAmount} has an unknown provider outcome. Do not retry until the pending refund is reconciled.`,
                     {
                         affectedOrderIds,
                         gateway: resultGateway,
@@ -1460,7 +1486,7 @@ export async function processRefund(
                 }));
             }
             throw new PartialRefundProcessedError(
-                `Refund partially processed: ${completedAmount} was accepted by the provider, but ${remainingAmount} could not be completed. Please review before retrying.`,
+                `Refund partially processed: ${completedAmount} was completed, but ${remainingAmount} could not be completed. Please review before retrying.`,
                 {
                     affectedOrderIds,
                     gateway: resultGateway,
@@ -1504,6 +1530,7 @@ export async function processRefund(
         refundId: getCompletedRefundIds(completedAllocations),
         amount: refundAmount,
         isFullRefund,
+        manualSettlementRecorded: hasManualCodAllocation,
         availabilityTransitionVariantIds,
         refundNotification: {
             notificationType: refundNotification.notificationType,

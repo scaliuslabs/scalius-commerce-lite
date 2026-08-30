@@ -119,9 +119,9 @@ describe("finalizeAcceptedRefundAttemptIds", () => {
     );
     expect(updateSets[2]).toMatchObject({
       status: "refunded",
-      providerStatus: "accepted",
       claimId: null,
       claimExpiresAt: null,
     });
+    expect(updateSets[2]).not.toHaveProperty("providerStatus");
   });
 });

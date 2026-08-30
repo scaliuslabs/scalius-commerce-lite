@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -374,6 +375,7 @@ export function PaymentCard({ order }: PaymentCardProps) {
   const [isRefundDialogOpen, setIsRefundDialogOpen] = React.useState(false);
   const [refundAmount, setRefundAmount] = React.useState("");
   const [refundReason, setRefundReason] = React.useState("requested_by_customer");
+  const [manualSettlementConfirmed, setManualSettlementConfirmed] = React.useState(false);
 
   // COD modal state
   const [codAction, setCodAction] = React.useState<"collected" | "failed" | "returned" | null>(null);
@@ -417,6 +419,12 @@ export function PaymentCard({ order }: PaymentCardProps) {
     : null;
   const paymentHistoryFetching = isHydrated && paymentsFetching;
   const payments = paymentsResult?.payments ?? [];
+  const requiresManualSettlementConfirmation = isCOD || payments.some(
+    (payment) =>
+      payment.paymentMethod === "cod"
+      && payment.paymentType !== "refund"
+      && payment.status === "succeeded",
+  );
   const plan = paymentsResult?.plan ?? null;
   const hasCashBalanceDueOnDelivery = Boolean(
     plan?.status === "deposit_paid"
@@ -560,9 +568,20 @@ export function PaymentCard({ order }: PaymentCardProps) {
       toast.error("Error", { description: "Refund reason is required." });
       return;
     }
+    if (requiresManualSettlementConfirmation && !manualSettlementConfirmed) {
+      toast.error("Confirm manual repayment", {
+        description: "Return the COD money to the customer before recording the refund.",
+      });
+      return;
+    }
 
     refundMutation.mutate(
-      { orderId: order.id, amount, reason: refundReason },
+      {
+        orderId: order.id,
+        amount,
+        reason: refundReason,
+        manualSettlementConfirmed: requiresManualSettlementConfirmation ? true : undefined,
+      },
       {
         onSuccess: async () => {
           setIsRefundDialogOpen(false);
@@ -1112,11 +1131,16 @@ export function PaymentCard({ order }: PaymentCardProps) {
                   if (isRefundLocked) return;
                   setRefundAmount(String(order.paidAmount));
                   setRefundReason("requested_by_customer");
+                  setManualSettlementConfirmed(false);
                   setIsRefundDialogOpen(true);
                 }}
               >
                 <RefreshCw className="h-3.5 w-3.5 mr-2" />
-                {isRefundLocked ? "Refund locked" : "Issue Refund"}
+                {isRefundLocked
+                  ? "Refund locked"
+                  : requiresManualSettlementConfirmation
+                    ? "Record cash refund"
+                    : "Issue Refund"}
               </Button>
             </div>
           )}
@@ -1399,12 +1423,22 @@ export function PaymentCard({ order }: PaymentCardProps) {
       </Dialog>
 
       {/* Refund Dialog */}
-      <Dialog open={isRefundDialogOpen} onOpenChange={setIsRefundDialogOpen}>
+      <Dialog
+        open={isRefundDialogOpen}
+        onOpenChange={(open) => {
+          setIsRefundDialogOpen(open);
+          if (!open) setManualSettlementConfirmed(false);
+        }}
+      >
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Issue Refund</DialogTitle>
+            <DialogTitle>
+              {requiresManualSettlementConfirmation ? "Record manual cash refund" : "Issue Refund"}
+            </DialogTitle>
             <DialogDescription>
-              Return money through the recorded payment method. A completed financial refund does not receive returned stock.
+              {requiresManualSettlementConfirmation
+                ? "Scalius will not transfer money for a cash-on-delivery refund. Return the money first, then record it here. A completed financial refund does not receive returned stock."
+                : "Return money through the recorded payment method. A completed financial refund does not receive returned stock."}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
@@ -1446,6 +1480,22 @@ export function PaymentCard({ order }: PaymentCardProps) {
                 </SelectContent>
               </Select>
             </div>
+
+            {requiresManualSettlementConfirmation ? (
+              <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100">
+                <div className="flex items-start gap-3">
+                  <Checkbox
+                    id="manualSettlementConfirmed"
+                    checked={manualSettlementConfirmed}
+                    onCheckedChange={(checked) => setManualSettlementConfirmed(checked === true)}
+                    className="mt-0.5"
+                  />
+                  <Label htmlFor="manualSettlementConfirmed" className="cursor-pointer text-sm font-medium leading-5">
+                    I confirm the customer has already received the COD refund outside Scalius.
+                  </Label>
+                </div>
+              </div>
+            ) : null}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsRefundDialogOpen(false)} disabled={refundMutation.isPending}>
@@ -1453,10 +1503,14 @@ export function PaymentCard({ order }: PaymentCardProps) {
             </Button>
             <Button
               onClick={handleIssueRefund}
-              disabled={refundMutation.isPending || isRefundLocked}
+              disabled={
+                refundMutation.isPending
+                || isRefundLocked
+                || (requiresManualSettlementConfirmation && !manualSettlementConfirmed)
+              }
             >
               {refundMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-              Submit Refund
+              {requiresManualSettlementConfirmation ? "Record manual cash refund" : "Submit Refund"}
             </Button>
           </DialogFooter>
         </DialogContent>

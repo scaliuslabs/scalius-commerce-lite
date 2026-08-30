@@ -162,6 +162,43 @@ describe("admin refund notification routes", () => {
         expect(body.data).toMatchObject({ notificationCount: 1, sideEffectErrors: 0 });
     });
 
+    it("forwards explicit manual-settlement confirmation to the refund authority", async () => {
+        mocks.processRefund.mockResolvedValue({
+            success: true,
+            gateway: "cod",
+            amount: 40,
+            isFullRefund: false,
+            manualSettlementRecorded: true,
+            availabilityTransitionVariantIds: [],
+        });
+        const { app, env } = createTestApp();
+
+        const response = await app.request("/api/v1/admin/orders/order_1/refund", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                amount: 40,
+                reason: "requested_by_customer",
+                gateway: "cod",
+                manualSettlementConfirmed: true,
+            }),
+        }, env);
+
+        expect(response.status).toBe(200);
+        expect(mocks.processRefund).toHaveBeenCalledWith(
+            db,
+            env.CACHE,
+            {
+                orderId: "order_1",
+                amount: 40,
+                reason: "requested_by_customer",
+                gateway: "cod",
+                manualSettlementConfirmed: true,
+            },
+            "credential-key",
+        );
+    });
+
     it("returns committed success when cache and notification follow-up both fail", async () => {
         mocks.processRefund.mockResolvedValue({
             success: true,
