@@ -10,6 +10,7 @@ import {
   resolveSavedOrderMoneySummary,
   type SavedOrderMoneySummary,
 } from "@/lib/order-tax-presentation";
+import { resolveDeliveryMethodPresentation } from "@/lib/delivery-method-presentation";
 import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
 
 interface OrderItemsCardProps {
@@ -126,6 +127,7 @@ const SummaryRow = ({
 export function OrderItemsCard({ order }: OrderItemsCardProps) {
   const { symbol } = useCurrency();
   const savedSummary = resolveSavedOrderMoneySummary(order);
+  const delivery = resolveDeliveryMethodPresentation(order, savedSummary);
   // totalAmount is the GRAND TOTAL (items + shipping - discount), computed server-side.
   // Reverse-engineer subtotal for display: subtotal = totalAmount - shipping + discount
   const subtotal = order.totalAmount - order.shippingCharge + (order.discountAmount ?? 0);
@@ -181,7 +183,14 @@ export function OrderItemsCard({ order }: OrderItemsCardProps) {
             {savedSummary ? (
               <>
                 <SummaryRow label="Subtotal" value={formatSavedMinorAmount(savedSummary.subtotalMinor, savedSummary)} />
-                <SummaryRow label="Shipping" value={formatSavedMinorAmount(savedSummary.shippingMinor, savedSummary)} />
+                <SummaryRow label={delivery.label} value={formatSavedMinorAmount(savedSummary.shippingMinor, savedSummary)} />
+                {delivery.details ? (
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    {delivery.details}
+                  </p>
+                ) : !order.shippingMethodName ? (
+                  <p className="text-xs text-muted-foreground">Delivery method was not recorded for this order.</p>
+                ) : null}
                 <SummaryRow
                   label="Discount"
                   value={`${savedSummary.discountMinor > 0 ? "−" : ""}${formatSavedMinorAmount(savedSummary.discountMinor, savedSummary)}`}
@@ -208,12 +217,19 @@ export function OrderItemsCard({ order }: OrderItemsCardProps) {
                   label="Subtotal"
                   value={`${symbol}${formatOrderAmount(subtotal)}`}
                 />
-                {order.shippingCharge > 0 && (
+                {(order.shippingCharge > 0 || order.shippingMethodName) && (
               <SummaryRow
-                label="Shipping"
+                label={delivery.label}
                 value={`${symbol}${formatOrderAmount(order.shippingCharge)}`}
               />
                 )}
+                {delivery.details ? (
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    {delivery.details}
+                  </p>
+                ) : !order.shippingMethodName ? (
+                  <p className="text-xs text-muted-foreground">Delivery method was not recorded for this order.</p>
+                ) : null}
                 {(order.discountAmount ?? 0) > 0 && (
               <SummaryRow
                 label="Discount"

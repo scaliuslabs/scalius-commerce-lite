@@ -44,7 +44,7 @@ type CheckoutSideEffectQueueMessage =
   | OrderNotificationQueueMessage
   | MetaPurchaseQueueMessage;
 
-const INTENT_QUOTE_FINGERPRINT = "taxq_WP8u3HfV0BFJox0aCCPMmG";
+const INTENT_QUOTE_FINGERPRINT = "taxq_UgQA7XI9P6ehT6OIpL1bxu";
 
 const migrationDirectory = fileURLToPath(new URL(
   "../../../packages/database/migrations/",
@@ -285,6 +285,11 @@ function order(id: string, inventoryAction = "reserved"): CheckoutCommittedOrder
     currencyDecimalPlaces: 2,
     subtotalAmountMinor: 10_000,
     shippingAmountMinor: 0,
+    shippingMethodId: "shipping_standard",
+    shippingMethodName: "Standard delivery",
+    shippingMethodDescription: null,
+    shippingMethodBaseAmountMinor: 0,
+    shippingFeeWaived: false,
     discountAmountMinor: 0,
     taxAmountMinor: 0,
     totalAmountMinor: 10_000,

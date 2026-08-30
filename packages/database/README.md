@@ -361,7 +361,7 @@ ledger. Every migration from 0050 onward must:
   source SHA-256 ledger row; and
 - be listed in the runtime release manifest used by `/readyz`.
 
-The current release is `0057_agent_browser_handoffs`. The release chain also
+The current release is `0058_order_shipping_method_snapshot`. The release chain also
 demonstrates that the runner and its tests must handle contiguous releases
 rather than assuming the ledger contains only its bootstrap row. Release 0055
 is a forward-only PostgreSQL convergence migration: schema-54
@@ -369,8 +369,9 @@ upgrades created 32-bit cache-generation counters while fresh PostgreSQL imports
 correctly used 64-bit counters, so the sidecar widens existing targets and the
 SQLite migration records the same release without changing SQLite's
 integer-affinity schema. Release 0056 adds the shared Agent Access authority,
-and release 0057 adds encrypted, short-lived, single-use browser handoffs for
-MCP continuations across D1, TursoDB, and PostgreSQL.
+release 0057 adds encrypted, short-lived, single-use browser handoffs for MCP
+continuations, and release 0058 adds immutable selected-delivery-method facts to
+orders across D1, TursoDB, and PostgreSQL.
 
 Do not delete or squash historical migrations after a release. Existing D1
 installations depend on Wrangler's migration history, while existing Turso and

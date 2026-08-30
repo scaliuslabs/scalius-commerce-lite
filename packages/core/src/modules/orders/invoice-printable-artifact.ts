@@ -48,6 +48,15 @@ export function renderPrintableInvoice(document: InvoiceDocument): string {
     <td>${formatMoney(itemTotal(item, decimals), order.currencyCode, decimals, true)}</td></tr>`).join("");
   const subtotalMinor = order.subtotalAmountMinor ?? Math.round((order.totalAmount - order.shippingCharge + (order.discountAmount ?? 0)) * (10 ** decimals));
   const shippingMinor = order.shippingAmountMinor ?? Math.round(order.shippingCharge * (10 ** decimals));
+  const shippingLabel = order.shippingMethodName
+    ? `Delivery — ${order.shippingMethodName}`
+    : "Shipping";
+  const shippingDetails = [
+    order.shippingMethodDescription,
+    order.shippingFeeWaived === true && order.shippingMethodBaseAmountMinor !== null
+      ? `${formatMoney(order.shippingMethodBaseAmountMinor, order.currencyCode, decimals, true)} fee waived`
+      : null,
+  ].filter((value): value is string => Boolean(value)).join(" · ");
   const discountMinor = order.discountAmountMinor ?? Math.round((order.discountAmount ?? 0) * (10 ** decimals));
   const totalMinor = order.totalAmountMinor ?? Math.round(order.totalAmount * (10 ** decimals));
 
@@ -59,7 +68,7 @@ export function renderPrintableInvoice(document: InvoiceDocument): string {
 <div><strong>${html(document.invoiceNumber ?? "Draft")}</strong><p>${date}</p><p>Order ${html(order.id)}</p></div></header>
 <section class="meta"><div><strong>Bill to</strong><p>${html(order.customerName)}</p><p>${html(order.customerPhone)}</p><p>${html(order.customerEmail)}</p></div><div><strong>Ship to</strong><p>${address}</p><p>Payment: ${html(order.paymentMethod?.toUpperCase())} (${html(order.paymentStatus)})</p></div></section>
 <table><thead><tr><th>Item</th><th>Qty</th><th>Unit price</th><th>Amount</th></tr></thead><tbody>${rows}</tbody></table>
-<section class="totals"><div><span>Subtotal</span><span>${formatMoney(subtotalMinor, order.currencyCode, decimals, true)}</span></div><div><span>Shipping</span><span>${formatMoney(shippingMinor, order.currencyCode, decimals, true)}</span></div>${discountMinor > 0 ? `<div><span>Discount</span><span>-${formatMoney(discountMinor, order.currencyCode, decimals, true)}</span></div>` : ""}<div><span>${html(order.taxLabel || "Tax")}</span><span>${formatMoney(order.taxAmountMinor, order.currencyCode, decimals, true)}</span></div><div class="total"><span>Total</span><span>${formatMoney(totalMinor, order.currencyCode, decimals, true)}</span></div></section>
+<section class="totals"><div><span>Subtotal</span><span>${formatMoney(subtotalMinor, order.currencyCode, decimals, true)}</span></div><div><span>${html(shippingLabel)}${shippingDetails ? `<small>${html(shippingDetails)}</small>` : ""}</span><span>${formatMoney(shippingMinor, order.currencyCode, decimals, true)}</span></div>${discountMinor > 0 ? `<div><span>Discount</span><span>-${formatMoney(discountMinor, order.currencyCode, decimals, true)}</span></div>` : ""}<div><span>${html(order.taxLabel || "Tax")}</span><span>${formatMoney(order.taxAmountMinor, order.currencyCode, decimals, true)}</span></div><div class="total"><span>Total</span><span>${formatMoney(totalMinor, order.currencyCode, decimals, true)}</span></div></section>
 <footer><p>${html(businessInfo.invoiceFooterText)}</p><p>This is a computer-generated invoice and does not require a signature.</p></footer></main></body></html>`;
 
   if (new TextEncoder().encode(output).byteLength > MAX_PRINTABLE_INVOICE_BYTES) {

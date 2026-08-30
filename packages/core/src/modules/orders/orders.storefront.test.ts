@@ -118,6 +118,8 @@ interface VariantRow {
 
 interface ShippingMethodRow {
   id: string;
+  name: string;
+  description: string | null;
   fee: number;
   isActive: boolean;
   deletedAt: Date | null;
@@ -174,6 +176,8 @@ function createVariant(overrides: Partial<VariantRow> = {}): VariantRow {
 function createShippingMethod(overrides: Partial<ShippingMethodRow> = {}): ShippingMethodRow {
   return {
     id: "ship_standard",
+    name: "Standard delivery",
+    description: "Delivered within 2–3 business days",
     fee: 60,
     isActive: true,
     deletedAt: null,
@@ -1138,6 +1142,13 @@ describe("createStorefrontOrder shipping verification", () => {
     });
 
     expect(result.commitPayload.orderData.shippingCharge).toBe(75);
+    expect(result.commitPayload.orderData).toMatchObject({
+      shippingMethodId: "ship_standard",
+      shippingMethodName: "Standard delivery",
+      shippingMethodDescription: "Delivered within 2–3 business days",
+      shippingMethodBaseAmountMinor: 7_500,
+      shippingFeeWaived: false,
+    });
     expect(result.totalAmount).toBe(200);
   });
 
@@ -1166,6 +1177,13 @@ describe("createStorefrontOrder shipping verification", () => {
     );
 
     expect(result.shippingCharge).toBe(1.235);
+    expect(result.shippingMethod).toEqual({
+      id: "ship_standard",
+      name: "Standard delivery",
+      description: "Delivered within 2–3 business days",
+      baseAmountMinor: 1_235,
+      feeWaived: false,
+    });
   });
 
   it("rejects missing or unknown shipping methods when shipping applies", async () => {
@@ -1204,18 +1222,37 @@ describe("createStorefrontOrder shipping verification", () => {
     ).rejects.toThrow("A valid active shipping method is required for this order.");
   });
 
-  it("preserves free-delivery item behavior by waiving method requirement and caller charge", async () => {
+  it("requires an active method for free delivery and snapshots the waived fee", async () => {
     const result = await placeOrder({
       inputOverrides: {
-        shippingMethodId: null,
         shippingCharge: 999,
       },
       products: [createProduct({ freeDelivery: true })],
-      shippingMethods: [],
+      shippingMethods: [createShippingMethod({ fee: 90 })],
     });
 
     expect(result.commitPayload.orderData.shippingCharge).toBe(0);
+    expect(result.commitPayload.orderData).toMatchObject({
+      shippingMethodId: "ship_standard",
+      shippingMethodName: "Standard delivery",
+      shippingMethodDescription: "Delivered within 2–3 business days",
+      shippingMethodBaseAmountMinor: 9_000,
+      shippingFeeWaived: true,
+    });
     expect(result.totalAmount).toBe(125);
+  });
+
+  it("rejects missing or inactive methods even when delivery is waived", async () => {
+    await expect(placeOrder({
+      inputOverrides: { shippingMethodId: null },
+      products: [createProduct({ freeDelivery: true })],
+      shippingMethods: [],
+    })).rejects.toThrow("A valid active shipping method is required for this order.");
+
+    await expect(placeOrder({
+      products: [createProduct({ freeDelivery: true })],
+      shippingMethods: [createShippingMethod({ isActive: false })],
+    })).rejects.toThrow("A valid active shipping method is required for this order.");
   });
 });
 
@@ -1408,6 +1445,13 @@ describe("createStorefrontOrder prevalidated input trust", () => {
         undefined,
         {
           shippingCharge: 0,
+          shippingMethod: {
+            id: "forged_shipping",
+            name: "Forged delivery",
+            description: null,
+            baseAmountMinor: 0,
+            feeWaived: false,
+          },
           cityName: "Forged City",
           zoneName: "Forged Zone",
           areaName: "Forged Area",

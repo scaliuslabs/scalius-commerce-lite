@@ -1,5 +1,6 @@
 import { AppError } from "@scalius/core/errors";
 import type { TaxQuote } from "@scalius/core/modules/tax";
+import type { StorefrontOrderShippingMethodSnapshot } from "./orders.types";
 
 export const STOREFRONT_CHECKOUT_QUOTE_FINGERPRINT_PATTERN =
   /^taxq_[A-Za-z0-9_-]{22}$/;
@@ -17,6 +18,7 @@ function encodeBase64Url(bytes: Uint8Array): string {
  */
 export async function buildStorefrontCheckoutQuoteFingerprint(
   quote: TaxQuote,
+  shippingMethod: StorefrontOrderShippingMethodSnapshot,
 ): Promise<string> {
   const identity = {
     calculationVersion: quote.calculationVersion,
@@ -29,6 +31,13 @@ export async function buildStorefrontCheckoutQuoteFingerprint(
     discountMinor: quote.discountMinor,
     taxMinor: quote.taxMinor,
     totalMinor: quote.totalMinor,
+    shippingMethod: [
+      shippingMethod.id,
+      shippingMethod.name,
+      shippingMethod.description,
+      shippingMethod.baseAmountMinor,
+      shippingMethod.feeWaived,
+    ],
     lines: quote.lines.map((line) => [
       line.productId,
       line.variantId,
