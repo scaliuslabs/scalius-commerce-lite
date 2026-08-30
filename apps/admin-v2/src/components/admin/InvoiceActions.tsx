@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Printer, Download, Loader2 } from "lucide-react";
+import { Printer, Download, Loader2, AlertCircle } from "lucide-react";
 
 interface InvoiceActionsProps {
   orderId: string;
@@ -44,6 +44,7 @@ body { font-family: system-ui, -apple-system, sans-serif; color: #374151; backgr
 
 export function InvoiceActions({ orderId, invoiceNumber }: InvoiceActionsProps) {
   const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
 
   const handleDownloadPrintableHtml = () => {
     window.open(
@@ -55,10 +56,13 @@ export function InvoiceActions({ orderId, invoiceNumber }: InvoiceActionsProps) 
 
   const handleDownloadPdf = async () => {
     setDownloading(true);
+    setDownloadError(null);
     try {
-      const { default: html2pdf } = await import("html2pdf.js");
       const element = document.getElementById("invoice-document");
-      if (!element) return;
+      if (!element) {
+        throw new Error("Invoice document is unavailable");
+      }
+      const { default: html2pdf } = await import("html2pdf.js");
       await html2pdf().set({
         margin: [10, 12, 10, 12],
         filename: `invoice-${invoiceNumber}.pdf`,
@@ -86,6 +90,9 @@ export function InvoiceActions({ orderId, invoiceNumber }: InvoiceActionsProps) 
       }).from(element).save();
     } catch (err) {
       if (import.meta.env.DEV) console.error("PDF generation failed:", err);
+      setDownloadError(
+        "PDF could not be generated. Try again or use Printable HTML.",
+      );
     } finally {
       setDownloading(false);
     }
@@ -105,11 +112,31 @@ export function InvoiceActions({ orderId, invoiceNumber }: InvoiceActionsProps) 
       }}
       className="print:hidden"
     >
-      <div style={{ maxWidth: "210mm", margin: "0 auto", padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <span style={{ fontSize: "14px", fontWeight: 500, color: "#374151" }}>
-          Invoice {invoiceNumber}
-        </span>
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+      <div style={{ maxWidth: "210mm", margin: "0 auto", padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
+        <div style={{ display: "flex", minWidth: 0, flexDirection: "column", gap: "2px" }}>
+          <span style={{ fontSize: "14px", fontWeight: 500, color: "#374151" }}>
+            Invoice {invoiceNumber}
+          </span>
+          {downloadError ? (
+            <span
+              role="alert"
+              aria-atomic="true"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "5px",
+                maxWidth: "420px",
+                color: "#b91c1c",
+                fontSize: "12px",
+                lineHeight: 1.4,
+              }}
+            >
+              <AlertCircle aria-hidden="true" style={{ width: 14, height: 14, flexShrink: 0 }} />
+              {downloadError}
+            </span>
+          ) : null}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "8px", flexWrap: "wrap" }}>
           <button
             onClick={handleDownloadPrintableHtml}
             type="button"
