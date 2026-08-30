@@ -44,6 +44,8 @@ type CheckoutSideEffectQueueMessage =
   | OrderNotificationQueueMessage
   | MetaPurchaseQueueMessage;
 
+const INTENT_QUOTE_FINGERPRINT = "taxq_WP8u3HfV0BFJox0aCCPMmG";
+
 const migrationDirectory = fileURLToPath(new URL(
   "../../../packages/database/migrations/",
   import.meta.url,
@@ -345,7 +347,10 @@ function command(
 
 function intent(
   index: number,
-  options: { customerEmail?: string | null } = {},
+  options: {
+    customerEmail?: string | null;
+    expectedQuoteFingerprint?: string;
+  } = {},
 ): CheckoutIntentCommand {
   const suffix = String(index).padStart(4, "0");
   return {
@@ -362,6 +367,8 @@ function intent(
     requestUrl: "https://api.example.test/api/v1/orders",
     data: {
       checkoutRequestId: `checkout_intent_${suffix}`,
+      expectedQuoteFingerprint:
+        options.expectedQuoteFingerprint ?? INTENT_QUOTE_FINGERPRINT,
       customerName: `Intent Buyer ${suffix}`,
       customerPhone: "+8801700000000",
       customerEmail: options.customerEmail ?? null,
@@ -780,6 +787,42 @@ describe("production checkout coordinator engine", () => {
       projected: 16,
       notifications: 0,
       metaPurchases: 0,
+    });
+  });
+
+  it("rejects a changed reviewed quote before preparing or committing durable commerce writes", async () => {
+    installIntentCheckoutFixtures(database);
+    const waitUntilTasks: Promise<unknown>[] = [];
+    const waitUntil = (task: Promise<unknown>) => waitUntilTasks.push(task);
+    const commitEngine = new CheckoutCoordinatorEngine(
+      sqliteTransport(database),
+      waitUntil,
+    );
+    const ingress = new CheckoutIntentCoordinatorEngine(
+      drizzleDatabase(database),
+      undefined,
+      commitEngine,
+      waitUntil,
+    );
+
+    await expect(ingress.submit(intent(50, {
+      expectedQuoteFingerprint: "taxq_vutsrqponmlkjihgfedcba",
+    }))).resolves.toMatchObject({
+      ok: false,
+      code: "CHECKOUT_REJECTED",
+      status: 409,
+      errorCode: "STOREFRONT_CHECKOUT_QUOTE_CONFLICT",
+      message: expect.stringContaining("Review the refreshed total"),
+    });
+
+    expect(database.prepare("SELECT COUNT(*) AS count FROM orders").get()).toEqual({
+      count: 0,
+    });
+    expect(database.prepare("SELECT COUNT(*) AS count FROM checkout_attempts").get()).toEqual({
+      count: 0,
+    });
+    expect(database.prepare("SELECT COUNT(*) AS count FROM inventory_movements").get()).toEqual({
+      count: 0,
     });
   });
 

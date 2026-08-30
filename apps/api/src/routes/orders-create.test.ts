@@ -13,9 +13,11 @@ import {
 
 const DEFAULT_STATUS_REQUEST_KEY = `checkout_submit:v1:${"a".repeat(64)}`;
 const DEFAULT_STATUS_TOKEN = buildCheckoutStatusTokenFromRequestKey(DEFAULT_STATUS_REQUEST_KEY);
+const DEFAULT_QUOTE_FINGERPRINT = "taxq_abcdefghijklmnopqrstuv";
 
 const mocks = vi.hoisted(() => ({
   createStorefrontOrder: vi.fn(),
+  buildStorefrontCheckoutQuoteFingerprint: vi.fn(),
   loadStorefrontCheckoutAuthority: vi.fn(),
   buildCheckoutAttemptIdentity: vi.fn(),
   resolveExistingCheckoutAttempt: vi.fn(),
@@ -55,6 +57,7 @@ vi.mock("@scalius/core/modules/orders", async (importOriginal) => {
     prepareCheckoutCommitCommand: mocks.prepareCheckoutCommitCommand,
     createReceiptOrderSupportRequest: mocks.createReceiptOrderSupportRequest,
     createStorefrontOrder: mocks.createStorefrontOrder,
+    buildStorefrontCheckoutQuoteFingerprint: mocks.buildStorefrontCheckoutQuoteFingerprint,
     loadStorefrontCheckoutAuthority: mocks.loadStorefrontCheckoutAuthority,
     getOrderSupportRequestStatusLabel: mocks.getOrderSupportRequestStatusLabel,
     getReceiptOrderSupportRequestState: mocks.getReceiptOrderSupportRequestState,
@@ -185,6 +188,7 @@ beforeEach(() => {
     taxQuote: DEFAULT_TAX_QUOTE,
     commitPayload: { orderData: { id: "order_1" } },
   });
+  mocks.buildStorefrontCheckoutQuoteFingerprint.mockResolvedValue(DEFAULT_QUOTE_FINGERPRINT);
   mocks.buildCheckoutAttemptIdentity.mockResolvedValue({
     requestKey: "checkout_submit:v1:test",
     requestHash: "request_hash_1",
@@ -238,6 +242,7 @@ beforeEach(() => {
 
 const validOrderBody = {
   checkoutRequestId: "checkout_req_123456",
+  expectedQuoteFingerprint: DEFAULT_QUOTE_FINGERPRINT,
   customerName: "Queue Customer",
   customerPhone: "+8801712345678",
   customerEmail: null,
@@ -1307,6 +1312,53 @@ describe("create order currency parity", () => {
 });
 
 describe("create order commit/KV ordering", () => {
+  it("rejects a changed authoritative quote before rate limiting or durable checkout writes", async () => {
+    const { app, kv } = createTestApp();
+    const response = await app.request(
+      "/api/v1/orders",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...validOrderBody,
+          expectedQuoteFingerprint: "taxq_vutsrqponmlkjihgfedcba",
+        }),
+      },
+      { CACHE: kv } as never,
+    );
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({
+      success: false,
+      error: {
+        code: "STOREFRONT_CHECKOUT_QUOTE_CONFLICT",
+        message: expect.stringContaining("Review the refreshed total"),
+      },
+    });
+    expect(mocks.createStorefrontOrder).toHaveBeenCalledOnce();
+    expect(mocks.rateLimit).not.toHaveBeenCalled();
+    expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
+  });
+
+  it("requires the quote fingerprint that the buyer reviewed", async () => {
+    const { expectedQuoteFingerprint: _omitted, ...body } = validOrderBody;
+    const { app, kv } = createTestApp();
+    const response = await app.request(
+      "/api/v1/orders",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
+      { CACHE: kv } as never,
+    );
+
+    expect(response.status).toBe(400);
+    expect(mocks.buildCheckoutAttemptIdentity).not.toHaveBeenCalled();
+    expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
+    expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
+  });
+
   it("does not couple coordinated checkout throughput to cache purges", async () => {
     const commitPayload = { orderData: { id: "order_1" }, marker: "coordinated" };
     const coordinatedResponse = {

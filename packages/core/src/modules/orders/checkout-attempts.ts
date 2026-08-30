@@ -349,7 +349,8 @@ function normalizeCheckoutRequestId(value: string): string {
 
 function normalizeCheckoutRequest(input: CreateStorefrontOrderInput): Record<string, unknown> {
   return {
-    version: 1,
+    version: 2,
+    expectedQuoteFingerprint: input.expectedQuoteFingerprint,
     customerName: input.customerName.trim(),
     customerPhone: input.customerPhone.trim(),
     customerEmail: input.customerEmail?.trim().toLowerCase() ?? null,

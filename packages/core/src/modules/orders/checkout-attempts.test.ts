@@ -36,6 +36,16 @@ describe("atomic checkout attempts", () => {
     expect(getCheckoutAttemptRequestKeyFromStatusToken("chk_secret_receipt")).toBeNull();
   });
 
+  it("binds idempotency meaning to the exact quote the buyer reviewed", async () => {
+    const first = await buildCheckoutAttemptIdentity(buildInput());
+    const changed = await buildCheckoutAttemptIdentity(buildInput({
+      expectedQuoteFingerprint: "taxq_vutsrqponmlkjihgfedcba",
+    }));
+
+    expect(changed.requestKey).toBe(first.requestKey);
+    expect(changed.requestHash).not.toBe(first.requestHash);
+  });
+
   it("creates a memory-only candidate for the authoritative order transaction", async () => {
     const identity = await buildCheckoutAttemptIdentity(buildInput());
     const attempt = createAtomicCheckoutAttempt(identity);
@@ -362,6 +372,7 @@ function executeAtomicCheckoutTestTransaction(
 function buildInput(overrides: Partial<CreateStorefrontOrderInput> = {}): CreateStorefrontOrderInput {
   return {
     checkoutRequestId: "chkreq_test_1234567890",
+    expectedQuoteFingerprint: "taxq_abcdefghijklmnopqrstuv",
     customerName: "Test Buyer",
     customerPhone: "+8801712345678",
     customerEmail: null,

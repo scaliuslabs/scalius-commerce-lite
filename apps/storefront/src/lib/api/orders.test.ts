@@ -22,6 +22,7 @@ beforeEach(() => {
 function buildOrderPayload() {
   return {
     checkoutRequestId: "checkout_req_123456",
+    expectedQuoteFingerprint: "taxq_abcdefghijklmnopqrstuv",
     customerName: "Test Customer",
     customerPhone: "+8801712345678",
     customerEmail: null,
@@ -301,6 +302,7 @@ describe("storefront orders API client", () => {
 
     const result = await createOrder({
       checkoutRequestId: "checkout_req_123456",
+      expectedQuoteFingerprint: "taxq_abcdefghijklmnopqrstuv",
       customerName: "Test Customer",
       customerPhone: "+8801712345678",
       customerEmail: null,
