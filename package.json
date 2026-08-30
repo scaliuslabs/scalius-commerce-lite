@@ -51,6 +51,7 @@
     "generate:sdk": "pnpm generate:agent-contract && node scripts/turbo-run.mjs generate --filter=@scalius/api-client",
     "lint": "node scripts/turbo-run.mjs lint --filter=!@scalius/tsconfig",
     "test": "vitest run --passWithNoTests",
+    "test:ci": "vitest run --passWithNoTests --exclude packages/database/__tests__/export-turso-portable.test.ts --exclude packages/database/__tests__/prepare-live-checkout-target.test.ts --exclude packages/database/__tests__/turso-upload-bundle.test.ts && vitest run --passWithNoTests --maxWorkers=1 packages/database/__tests__/export-turso-portable.test.ts packages/database/__tests__/prepare-live-checkout-target.test.ts packages/database/__tests__/turso-upload-bundle.test.ts",
     "test:watch": "vitest"
   },
   "devDependencies": {
