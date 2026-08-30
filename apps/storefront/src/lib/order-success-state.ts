@@ -150,10 +150,13 @@ export function getPaymentStatusBadgeClass(value: string | null | undefined): st
 }
 
 function getReceiptPaymentStatusLabel(
-  order: Pick<OrderReceipt, "paymentMethod" | "paymentStatus">,
+  order: Pick<OrderReceipt, "status" | "paymentMethod" | "paymentStatus">,
   copy: CheckoutLanguageData,
 ): string {
   if (normalize(order.paymentMethod) === "cod" && normalize(order.paymentStatus) === "unpaid") {
+    if (CLOSED_ORDER_STATUSES.has(normalize(order.status))) {
+      return copy.orderReceiptPaymentStatusNoPaymentDueText;
+    }
     return copy.dueOnDeliveryText;
   }
   return formatOrderSuccessLabel(order.paymentStatus, copy);

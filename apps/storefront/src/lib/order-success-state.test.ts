@@ -68,6 +68,24 @@ describe("order success state", () => {
     });
   });
 
+  it.each(["cancelled", "returned", "refunded", "partially_refunded"])(
+    "does not tell buyers to pay a closed %s COD order",
+    (status) => {
+      const order = makeOrder({
+        paymentMethod: "cod",
+        paymentStatus: "unpaid",
+        status,
+        balanceDue: 1200,
+      });
+
+      expect(getOrderSuccessViewState(order, ENGLISH_CHECKOUT_LANGUAGE_DATA)).toMatchObject({
+        kind: "order_updated",
+        paymentStatusLabel: "No payment due",
+      });
+      expect(getOrderSuccessVisibleBalanceDue(order)).toBe(0);
+    },
+  );
+
   it.each(["stripe", "sslcommerz", "polar"])(
     "holds %s orders in pending while local payment state is incomplete",
     (paymentMethod) => {
@@ -223,7 +241,7 @@ describe("order success state", () => {
     ["shipped", "paid", "stripe", "অর্ডার পাঠানো হয়েছে", "পরিশোধিত"],
     ["delivered", "paid", "stripe", "অর্ডার ডেলিভারি হয়েছে", "পরিশোধিত"],
     ["completed", "paid", "stripe", "অর্ডার সম্পন্ন হয়েছে", "পরিশোধিত"],
-    ["cancelled", "unpaid", "cod", "অর্ডার বাতিল হয়েছে", "ডেলিভারির সময় পরিশোধযোগ্য"],
+    ["cancelled", "unpaid", "cod", "অর্ডার বাতিল হয়েছে", "কোনো পেমেন্ট বাকি নেই"],
     ["refunded", "refunded", "stripe", "অর্ডারের টাকা ফেরত হয়েছে", "টাকা ফেরত হয়েছে"],
     ["returned", "paid", "cod", "অর্ডার ফেরত এসেছে", "পরিশোধিত"],
     ["partially_refunded", "partial", "stripe", "অর্ডারের কিছু টাকা ফেরত হয়েছে", "আংশিক পরিশোধিত"],
