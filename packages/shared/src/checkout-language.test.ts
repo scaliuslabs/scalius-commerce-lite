@@ -83,6 +83,7 @@ describe("checkout language presets", () => {
 
     expect(resolved.orderReceiptPlacedTitleText).toBe("অর্ডার দেওয়া হয়েছে");
     expect(resolved.orderReceiptCancelledMessageText).toContain("বাতিল করা হয়েছে");
+    expect(resolved.orderReceiptPaymentStatusNoPaymentDueText).toBe("কোনো পেমেন্ট বাকি নেই");
     expect(resolved.orderReceiptCheckingPaymentText).toContain("যাচাই করা হচ্ছে");
     expect(resolved.orderReceiptSaveAccountTitleText).toContain("অ্যাকাউন্টে");
     expect(resolved.orderReceiptCancelRequestActionText).toBe("বাতিলের অনুরোধ করুন");
