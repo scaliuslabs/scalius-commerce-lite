@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   AdminApiResponseError,
+  isAdminApiRetryableReadError,
   isAdminApiNotFoundError,
   nullForAdminApiNotFound,
   readAdminOrderCreateRequestMismatch,
@@ -10,6 +11,7 @@ import {
   readProductMediaSkuReferenceConflict,
   readProductRevisionConflict,
   readHeroSliderRevisionConflict,
+  readManualOrderDiscountLimitError,
   readSitePresentationRevisionConflict,
 } from "./admin-api-error";
 
@@ -37,6 +39,84 @@ describe("admin API detail-loader errors", () => {
   it("does not disguise untyped network failures as absence", () => {
     const timeout = new Error("request timed out");
     expect(() => nullForAdminApiNotFound(timeout)).toThrow(timeout);
+  });
+
+  it("retries only failures that can plausibly change without edited input", () => {
+    expect(isAdminApiRetryableReadError(new Error("network unavailable"))).toBe(true);
+    expect(isAdminApiRetryableReadError(new AdminApiResponseError(
+      "Service unavailable",
+      503,
+      "SERVICE_UNAVAILABLE",
+    ))).toBe(true);
+    expect(isAdminApiRetryableReadError(new AdminApiResponseError(
+      "Try later",
+      429,
+      "RATE_LIMIT",
+    ))).toBe(true);
+    expect(isAdminApiRetryableReadError(new AdminApiResponseError(
+      "Invalid input",
+      400,
+      "VALIDATION_ERROR",
+    ))).toBe(false);
+    expect(isAdminApiRetryableReadError(new AdminApiResponseError(
+      "Not signed in",
+      401,
+      "UNAUTHORIZED",
+    ))).toBe(false);
+    expect(isAdminApiRetryableReadError({ code: "UNAUTHORIZED" })).toBe(false);
+    expect(isAdminApiRetryableReadError({ code: "SERVICE_UNAVAILABLE" })).toBe(true);
+  });
+
+  it("extracts only authoritative manual-order discount boundaries", () => {
+    const error = new AdminApiResponseError(
+      "Discount exceeds the order",
+      400,
+      "VALIDATION_ERROR",
+      {
+        reason: "MANUAL_ORDER_DISCOUNT_EXCEEDS_SUBTOTAL",
+        maximumDiscountAmountMinor: 22_900,
+        currencyCode: "BDT",
+        decimalPlaces: 2,
+      },
+    );
+    expect(readManualOrderDiscountLimitError(error)).toEqual({
+      maximumAmount: 229,
+      currencyCode: "BDT",
+      decimalPlaces: 2,
+    });
+    expect(readManualOrderDiscountLimitError({
+      cause: {
+        statusCode: 400,
+        code: "VALIDATION_ERROR",
+        details: {
+          reason: "MANUAL_ORDER_DISCOUNT_EXCEEDS_SUBTOTAL",
+          maximumDiscountAmountMinor: 2_472,
+          currencyCode: "KWD",
+          decimalPlaces: 3,
+        },
+      },
+    })).toEqual({
+      maximumAmount: 2.472,
+      currencyCode: "KWD",
+      decimalPlaces: 3,
+    });
+    expect(readManualOrderDiscountLimitError(new AdminApiResponseError(
+      "Malformed",
+      400,
+      "VALIDATION_ERROR",
+      {
+        reason: "MANUAL_ORDER_DISCOUNT_EXCEEDS_SUBTOTAL",
+        maximumDiscountAmountMinor: -1,
+        currencyCode: "BDT",
+        decimalPlaces: 2,
+      },
+    ))).toBeNull();
+    expect(readManualOrderDiscountLimitError(new AdminApiResponseError(
+      "Different validation",
+      400,
+      "VALIDATION_ERROR",
+      { reason: "SKU_UNAVAILABLE" },
+    ))).toBeNull();
   });
 
   it("extracts only a typed product revision conflict with valid details", () => {
