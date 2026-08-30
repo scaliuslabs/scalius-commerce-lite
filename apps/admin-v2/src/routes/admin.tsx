@@ -11,6 +11,7 @@ import { AdminNavigationProgress } from "@/components/admin/layout/AdminNavigati
 import { ThemeProvider } from "@/components/admin/layout/ThemeProvider";
 import { PermissionProvider } from "@/contexts/PermissionContext";
 import { DeferredToaster } from "@/components/ui/deferred-toaster";
+import { AdminSessionSync } from "@/components/auth/AdminSessionSync";
 import {
   getAdminRouteContext,
   primeAdminRouteContextCache,
@@ -49,6 +50,7 @@ function AdminLayout() {
 
   return (
     <ThemeProvider>
+      <AdminSessionSync />
       <PermissionProvider permissions={permissions} isSuperAdmin={isSuperAdmin}>
         <SidebarProvider>
           <AppSidebar />
