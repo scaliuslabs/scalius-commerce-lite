@@ -19,7 +19,7 @@ const folders: MediaFolder[] = [
   },
 ];
 
-describe("FolderBrowser compact rail", () => {
+describe("FolderBrowser layout", () => {
   let host: HTMLDivElement;
   let root: Root;
   const scrollIntoView = vi.fn();
@@ -57,5 +57,38 @@ describe("FolderBrowser compact rail", () => {
     const currentButton = host.querySelector('button[aria-current="page"]');
     expect(currentButton?.textContent).toContain("A long active folder");
     expect(currentButton?.parentElement?.querySelector('button[aria-label="Actions for A long active folder"]')).toBeTruthy();
+  });
+
+  it("keeps folder actions from shrinking behind long labels", () => {
+    act(() => root.render(
+      <FolderBrowser
+        folders={folders}
+        currentFolderId="all"
+        onFolderSelect={vi.fn()}
+        onFolderCreate={vi.fn()}
+        onFolderRename={vi.fn()}
+        onFolderDelete={vi.fn()}
+      />,
+    ));
+
+    const actionButtons = host.querySelectorAll(
+      'button[aria-label="Actions for A long active folder"]',
+    );
+
+    expect(actionButtons).toHaveLength(2);
+    actionButtons.forEach((button) => {
+      expect(button.classList.contains("shrink-0")).toBe(true);
+    });
+
+    const desktopNavigation = host.querySelectorAll(
+      'nav[aria-label="Media folders"]',
+    )[1];
+    const desktopAction = desktopNavigation?.querySelector(
+      'button[aria-label="Actions for A long active folder"]',
+    );
+
+    expect(desktopNavigation?.classList.contains("overflow-y-auto")).toBe(true);
+    expect(desktopAction?.parentElement?.classList.contains("min-w-0")).toBe(true);
+    expect(desktopAction?.parentElement?.classList.contains("w-full")).toBe(true);
   });
 });
