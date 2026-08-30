@@ -1,4 +1,13 @@
 import type { OrderItem, OrderReceipt } from "./api/types";
+import {
+  formatOrderSuccessLabel,
+} from "./order-success-localization";
+import {
+  formatCheckoutLanguageText,
+  type CheckoutLanguageData,
+} from "@scalius/shared/checkout-language";
+
+export { formatOrderSuccessLabel, formatOrderSuccessPaymentMethod } from "./order-success-localization";
 
 const ONLINE_PAYMENT_METHODS = new Set(["stripe", "sslcommerz", "polar"]);
 const NON_FINAL_ORDER_STATUSES = new Set(["incomplete"]);
@@ -20,13 +29,6 @@ const CLOSED_ORDER_STATUSES = new Set([
 ]);
 const ACCEPTED_PAYMENT_STATUSES = new Set(["paid", "partial"]);
 const FAILED_PAYMENT_STATUSES = new Set(["failed"]);
-const PAYMENT_METHOD_LABELS: Record<string, string> = {
-  cod: "Cash on Delivery",
-  polar: "Polar",
-  sslcommerz: "SSLCommerz",
-  stripe: "Stripe",
-};
-
 export type OrderSuccessStateKind =
   | "order_placed"
   | "order_updated"
@@ -108,32 +110,6 @@ export function getOrderSuccessStateKind(
   return "order_placed";
 }
 
-export function formatOrderSuccessLabel(value: string | null | undefined): string {
-  const normalized = normalize(value);
-  if (!normalized) return "Not available";
-  const knownPaymentMethod = PAYMENT_METHOD_LABELS[normalized];
-  if (knownPaymentMethod) return knownPaymentMethod;
-  return normalized
-    .split("_")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-}
-
-export function formatOrderSuccessPaymentMethod(value: string | null | undefined): string {
-  switch (normalize(value)) {
-    case "cod":
-      return "Cash on delivery";
-    case "stripe":
-      return "Card (Stripe)";
-    case "sslcommerz":
-      return "Online payment (SSLCommerz)";
-    case "polar":
-      return "Online payment (Polar)";
-    default:
-      return formatOrderSuccessLabel(value);
-  }
-}
-
 export function getOrderSuccessVisibleBalanceDue(
   order: Pick<OrderReceipt, "status" | "paymentStatus" | "totalAmount" | "paidAmount" | "balanceDue">,
 ): number {
@@ -175,11 +151,12 @@ export function getPaymentStatusBadgeClass(value: string | null | undefined): st
 
 function getReceiptPaymentStatusLabel(
   order: Pick<OrderReceipt, "paymentMethod" | "paymentStatus">,
+  copy: CheckoutLanguageData,
 ): string {
   if (normalize(order.paymentMethod) === "cod" && normalize(order.paymentStatus) === "unpaid") {
-    return "Due on delivery";
+    return copy.dueOnDeliveryText;
   }
-  return formatOrderSuccessLabel(order.paymentStatus);
+  return formatOrderSuccessLabel(order.paymentStatus, copy);
 }
 
 function getReceiptPaymentBadgeClass(
@@ -193,6 +170,7 @@ function getReceiptPaymentBadgeClass(
 
 export function getOrderSuccessViewState(
   order: OrderReceipt,
+  copy: CheckoutLanguageData,
   callbackResult?: string | null,
 ): OrderSuccessViewState {
   const durableKind = getOrderSuccessStateKind(order);
@@ -203,11 +181,10 @@ export function getOrderSuccessViewState(
     return {
       kind,
       shouldFinalizeClientSide: false,
-      title: "Payment not completed",
-      message:
-        `Order #${order.id} is saved. Retry payment below instead of placing another order.`,
-      orderStatusLabel: formatOrderSuccessLabel(order.status),
-      paymentStatusLabel: getReceiptPaymentStatusLabel(order),
+      title: copy.orderReceiptPaymentIssueTitleText,
+      message: formatCheckoutLanguageText(copy.orderReceiptPaymentIssueMessageText, { orderId: order.id }),
+      orderStatusLabel: formatOrderSuccessLabel(order.status, copy),
+      paymentStatusLabel: getReceiptPaymentStatusLabel(order, copy),
       orderBadgeClass: getOrderStatusBadgeClass(order.status),
       paymentBadgeClass: getReceiptPaymentBadgeClass(order),
     };
@@ -217,11 +194,10 @@ export function getOrderSuccessViewState(
     return {
       kind,
       shouldFinalizeClientSide: false,
-      title: "Confirming payment",
-      message:
-        `Order #${order.id} is saved. Do not place it again while we check the payment.`,
-      orderStatusLabel: formatOrderSuccessLabel(order.status),
-      paymentStatusLabel: getReceiptPaymentStatusLabel(order),
+      title: copy.orderReceiptPaymentPendingTitleText,
+      message: formatCheckoutLanguageText(copy.orderReceiptPaymentPendingMessageText, { orderId: order.id }),
+      orderStatusLabel: formatOrderSuccessLabel(order.status, copy),
+      paymentStatusLabel: getReceiptPaymentStatusLabel(order, copy),
       orderBadgeClass: "bg-amber-100 text-amber-800",
       paymentBadgeClass: getReceiptPaymentBadgeClass(order),
     };
@@ -231,58 +207,59 @@ export function getOrderSuccessViewState(
     const orderStatus = normalize(order.status);
     const updatedCopy: Record<string, { title: string; message: string }> = {
       confirmed: {
-        title: "Order confirmed",
-        message: `Order #${order.id} is confirmed and being prepared.`,
+        title: copy.orderReceiptConfirmedTitleText,
+        message: copy.orderReceiptConfirmedMessageText,
       },
       processing: {
-        title: "Order processing",
-        message: `Order #${order.id} is being prepared.`,
+        title: copy.orderReceiptProcessingTitleText,
+        message: copy.orderReceiptProcessingMessageText,
       },
       shipped: {
-        title: "Order shipped",
-        message: `Order #${order.id} is on the way.`,
+        title: copy.orderReceiptShippedTitleText,
+        message: copy.orderReceiptShippedMessageText,
       },
       delivered: {
-        title: "Order delivered",
-        message: `Order #${order.id} has been delivered.`,
+        title: copy.orderReceiptDeliveredTitleText,
+        message: copy.orderReceiptDeliveredMessageText,
       },
       completed: {
-        title: "Order completed",
-        message: `Order #${order.id} is complete.`,
+        title: copy.orderReceiptCompletedTitleText,
+        message: copy.orderReceiptCompletedMessageText,
       },
       cancelled: {
-        title: "Order cancelled",
-        message: `Order #${order.id} was cancelled.`,
+        title: copy.orderReceiptCancelledTitleText,
+        message: copy.orderReceiptCancelledMessageText,
       },
       refunded: {
-        title: "Order refunded",
-        message: `The refund for order #${order.id} has been recorded.`,
+        title: copy.orderReceiptRefundedTitleText,
+        message: copy.orderReceiptRefundedMessageText,
       },
       returned: {
-        title: "Order returned",
-        message: `The return for order #${order.id} has been recorded.`,
+        title: copy.orderReceiptReturnedTitleText,
+        message: copy.orderReceiptReturnedMessageText,
       },
       partially_refunded: {
-        title: "Order partially refunded",
-        message: `A partial refund for order #${order.id} has been recorded.`,
+        title: copy.orderReceiptPartiallyRefundedTitleText,
+        message: copy.orderReceiptPartiallyRefundedMessageText,
       },
     };
-    const copy = paymentStatus === "refunded" && !CLOSED_ORDER_STATUSES.has(orderStatus)
+    const stateCopy = paymentStatus === "refunded" && !CLOSED_ORDER_STATUSES.has(orderStatus)
       ? {
-          title: "Order refunded",
-          message: `The refund for order #${order.id} has been recorded.`,
+          title: copy.orderReceiptRefundedTitleText,
+          message: copy.orderReceiptRefundedMessageText,
         }
       : updatedCopy[orderStatus] ?? {
-          title: "Order updated",
-          message: `Order #${order.id} has been updated.`,
+          title: copy.orderReceiptUpdatedTitleText,
+          message: copy.orderReceiptUpdatedMessageText,
         };
 
     return {
       kind,
       shouldFinalizeClientSide: false,
-      ...copy,
-      orderStatusLabel: formatOrderSuccessLabel(order.status),
-      paymentStatusLabel: getReceiptPaymentStatusLabel(order),
+      title: stateCopy.title,
+      message: formatCheckoutLanguageText(stateCopy.message, { orderId: order.id }),
+      orderStatusLabel: formatOrderSuccessLabel(order.status, copy),
+      paymentStatusLabel: getReceiptPaymentStatusLabel(order, copy),
       orderBadgeClass: getOrderStatusBadgeClass(order.status),
       paymentBadgeClass: getReceiptPaymentBadgeClass(order),
     };
@@ -291,12 +268,13 @@ export function getOrderSuccessViewState(
   return {
     kind,
     shouldFinalizeClientSide: true,
-    title: "Order placed",
-    message: `We received order #${order.id}.`,
+    title: copy.orderReceiptPlacedTitleText,
+    message: formatCheckoutLanguageText(copy.orderReceiptPlacedMessageText, { orderId: order.id }),
     orderStatusLabel: formatOrderSuccessLabel(
       order.status === "incomplete" ? "processing" : order.status,
+      copy,
     ),
-    paymentStatusLabel: getReceiptPaymentStatusLabel(order),
+    paymentStatusLabel: getReceiptPaymentStatusLabel(order, copy),
     orderBadgeClass: getOrderStatusBadgeClass(order.status),
     paymentBadgeClass: getReceiptPaymentBadgeClass(order),
   };

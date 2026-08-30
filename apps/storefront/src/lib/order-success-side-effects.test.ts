@@ -26,7 +26,8 @@ describe("order success side effects", () => {
     expect(pageSource).toContain("preserveFormDraft: true");
     expect(pageSource).not.toContain("currentCheckoutFinalize || matchingHostedCheckout");
     expect(pageSource).not.toContain("private receipt cookie");
-    expect(pageSource).toContain("This receipt can only be opened in the browser used at checkout.");
+    expect(pageSource).toContain("copy.orderReceiptBrowserOnlyMessageText");
+    expect(pageSource).not.toContain("This receipt can only be opened in the browser used at checkout.");
   });
 
   it("keeps hosted redirects from clearing the cart before authoritative receipt finalization", () => {
@@ -67,15 +68,15 @@ describe("order success side effects", () => {
     expect(pageSource).toContain("orderId={order.id}");
     expect(pageSource).toContain("supportRequests={order.supportRequests}");
     expect(pageSource).toContain("supportRequestActions={order.supportRequestActions}");
-    expect(buttonsSource).toContain("Save this order to your account");
-    expect(buttonsSource).toContain("Create an account with the phone saved on this order");
-    expect(buttonsSource).toContain("sign in with a matching phone or email");
+    expect(pageSource).toContain("copy={copy}");
+    expect(buttonsSource).toContain("copy.orderReceiptSaveAccountTitleText");
+    expect(buttonsSource).toContain("copy.orderReceiptSaveAccountHelpText");
     expect(buttonsSource).not.toContain("navigator.clipboard");
     expect(buttonsSource).not.toContain("opacity-0");
     expect(buttonsSource).toContain('href="/"');
     expect(buttonsSource).toContain("/api/order-receipt/claim-account");
-    expect(buttonsSource).toContain("Create account");
-    expect(buttonsSource).toContain("Sign in");
+    expect(buttonsSource).toContain("copy.orderReceiptCreateAccountText");
+    expect(buttonsSource).toContain("copy.orderReceiptSignInText");
     expect(buttonsSource.match(/className="min-h-11[^"]*font-medium"/g)).toHaveLength(4);
     expect(buttonsSource).toContain("open-auth-modal");
     expect(buttonsSource).toContain("/account/orders/${encodeURIComponent(orderId)}");
@@ -91,7 +92,7 @@ describe("order success side effects", () => {
       "utf8",
     );
 
-    expect(buttonsSource).toContain("Need help?");
+    expect(buttonsSource).toContain("copy.orderReceiptHelpText");
     expect(buttonsSource).toContain("/api/order-support/receipt-request");
     expect(buttonsSource).toContain("setSupportRequests(payload.data.supportRequests");
     expect(buttonsSource).not.toContain("supportRequestIntro: initialSupportRequestIntro =");
@@ -116,9 +117,10 @@ describe("order success side effects", () => {
     expect(retryScript).toContain('replaceExistingAttempt: paymentType !== "balance"');
     expect(retryScript).not.toContain("clearCart");
     expect(retryScript).not.toContain("trackFbPurchase");
-    expect(retryScript).toContain("Retrying in ${event.retryAfterSeconds}s");
+    expect(retryScript).toContain("copy.orderReceiptPaymentProcessingRetryText");
+    expect(retryScript).not.toContain("event.message");
     expect(retryScript.indexOf("fetchPaymentSessionWithProcessingRetry"))
-      .toBeLessThan(retryScript.indexOf("Payment gateway did not return a redirect URL."));
+      .toBeLessThan(retryScript.indexOf("copy.orderReceiptGatewayRedirectFailedText"));
   });
 
   it("uses canonical gateway identity and filters receipt retries by the exact payable amount", () => {
