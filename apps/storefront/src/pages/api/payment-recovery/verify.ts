@@ -24,6 +24,13 @@ function stringField(payload: Record<string, unknown>, key: string): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function apiErrorCode(payload: unknown, fallback: string): string {
+  if (!isRecord(payload) || !isRecord(payload.error)) return fallback;
+  return typeof payload.error.code === "string" && payload.error.code.trim()
+    ? payload.error.code.trim()
+    : fallback;
+}
+
 function buildCleanReceiptUrl(orderId: string, redirectParams: Record<string, unknown> | undefined): string {
   const params = new URLSearchParams({ orderId });
   const payment = typeof redirectParams?.payment === "string" ? redirectParams.payment : "";
@@ -43,20 +50,20 @@ function buildCleanReceiptUrl(orderId: string, redirectParams: Record<string, un
 
 export const POST: APIRoute = async ({ request }) => {
   if (shouldRejectCrossOriginCookieRequest(request)) {
-    return jsonResponse({ success: false, error: "Cross-origin cookie request denied" }, 403);
+    return jsonResponse({ success: false, errorCode: "PAYMENT_RECOVERY_REQUEST_DENIED" }, 403);
   }
 
   try {
     const payload = await request.json().catch(() => null);
     if (!isRecord(payload)) {
-      return jsonResponse({ success: false, error: "Invalid recovery verification." }, 400);
+      return jsonResponse({ success: false, errorCode: "PAYMENT_RECOVERY_INVALID_VERIFICATION" }, 400);
     }
 
     const orderId = stringField(payload, "orderId");
     const channel = stringField(payload, "channel");
     const code = stringField(payload, "code");
     if (!orderId || !channel || !code) {
-      return jsonResponse({ success: false, error: "Enter the verification code to continue." }, 400);
+      return jsonResponse({ success: false, errorCode: "PAYMENT_RECOVERY_INVALID_VERIFICATION" }, 400);
     }
 
     const response = await fetchWithRetry(
@@ -75,10 +82,10 @@ export const POST: APIRoute = async ({ request }) => {
     const json = await response.json().catch(() => ({}) as Record<string, unknown>);
     const data = isRecord(json.data) ? json.data : json;
     if (!response.ok || !isRecord(data)) {
-      const error = isRecord(json.error) && typeof json.error.message === "string"
-        ? json.error.message
-        : "Verification failed. Please request a new code and try again.";
-      return jsonResponse({ success: false, error }, response.status);
+      return jsonResponse({
+        success: false,
+        errorCode: apiErrorCode(json, "PAYMENT_RECOVERY_VERIFICATION_FAILED"),
+      }, response.status);
     }
 
     const receiptToken = typeof data.receiptToken === "string" ? data.receiptToken : "";
@@ -86,7 +93,7 @@ export const POST: APIRoute = async ({ request }) => {
     if (!receiptToken || recoveredOrderId !== orderId) {
       return jsonResponse({
         success: false,
-        error: "Receipt recovery could not be completed. Please request a new code.",
+        errorCode: "PAYMENT_RECOVERY_RECEIPT_UNAVAILABLE",
       }, 502);
     }
 
@@ -103,6 +110,6 @@ export const POST: APIRoute = async ({ request }) => {
     });
   } catch (error) {
     console.error("[payment-recovery/verify] Error:", error);
-    return jsonResponse({ success: false, error: "Verification failed. Please try again." }, 500);
+    return jsonResponse({ success: false, errorCode: "PAYMENT_RECOVERY_VERIFICATION_FAILED" }, 500);
   }
 };
