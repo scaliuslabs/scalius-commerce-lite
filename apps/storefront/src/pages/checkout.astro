@@ -92,6 +92,15 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(checkoutLanguage
           aria-live="assertive"
         ></div>
 
+        <a
+          id="checkoutRecoveryAction"
+          href="/cart"
+          hidden
+          class="mb-4 inline-flex min-h-11 w-fit items-center justify-center rounded-lg border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground shadow-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        >
+          {copy.returnToCartText}
+        </a>
+
         <div
           id="paymentMethods"
           class="space-y-2"
