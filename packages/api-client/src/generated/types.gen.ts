@@ -4839,6 +4839,10 @@ export type PostApiV1StorefrontAgentContextsByContextIdCheckoutQuoteResponse = P
 export type PostApiV1StorefrontAgentContextsByContextIdCheckoutSubmitData = {
     body: {
         expectedRevision: number;
+        /**
+         * Exact quote fingerprint reviewed and confirmed by the buyer before this submit.
+         */
+        expectedQuoteFingerprint: string;
         idempotencyKey?: string;
         customerName: string;
         /**

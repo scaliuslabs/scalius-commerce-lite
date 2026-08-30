@@ -7,7 +7,10 @@ type Operation = {
   parameters?: Array<{ in?: string; name?: string; required?: boolean }>;
   requestBody?: {
     required?: boolean;
-    content?: { "application/json"?: { schema?: { properties?: Record<string, { description?: string; example?: string }> } } };
+    content?: { "application/json"?: { schema?: {
+      properties?: Record<string, { description?: string; example?: string }>;
+      required?: string[];
+    } } };
   };
 };
 
@@ -95,6 +98,15 @@ describe("storefront agent context OpenAPI contract", () => {
       name: "idempotency-key",
       required: false,
     }));
+  });
+
+  it("requires the exact buyer-reviewed quote on checkout submit", () => {
+    const schema = buildSpec().paths?.[
+      "/api/v1/storefront/agent-contexts/{contextId}/checkout/submit"
+    ]?.post?.requestBody?.content?.["application/json"]?.schema;
+
+    expect(schema?.required).toContain("expectedQuoteFingerprint");
+    expect(schema?.properties?.expectedQuoteFingerprint?.description).toContain("reviewed");
   });
 
   it("teaches agents to send unambiguous international phone numbers", () => {

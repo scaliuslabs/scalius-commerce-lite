@@ -193,6 +193,10 @@ const startedContinuationSchema = continuationViewSchema.extend({
 
 const checkoutSubmitSchema = z.object({
   expectedRevision: revisionSchema,
+  expectedQuoteFingerprint: z.string().regex(/^taxq_[A-Za-z0-9_-]{22}$/).openapi({
+    description: "Exact quote fingerprint reviewed and confirmed by the buyer before this submit.",
+    example: "taxq_abcdefghijklmnopqrstuv",
+  }),
   idempotencyKey: checkoutIdempotencyKeySchema.optional(),
   customerName: z.string().trim().min(3).max(100),
   customerPhone: agentCustomerPhoneSchema,
