@@ -7,39 +7,35 @@ import {
 } from "./manual-order-discount";
 
 describe("manual-order discount guidance", () => {
-  it("matches the staged items-plus-shipping boundary", () => {
+  it("matches the staged item subtotal and keeps shipping outside the discount", () => {
     expect(calculateManualOrderDiscountLimit(
       [
         { productId: "prod_1", variantId: "var_1", quantity: 2, price: 100 },
         { productId: "prod_2", variantId: "var_2", quantity: 1, price: 49.99 },
       ],
-      60,
-      309.99,
+      249.99,
       2,
-    )).toEqual({ maximumAmount: 309.99, exceeded: false });
+    )).toEqual({ maximumAmount: 249.99, exceeded: false });
 
     expect(calculateManualOrderDiscountLimit(
       [{ productId: "prod_1", variantId: "var_1", quantity: 2, price: 100 }],
-      60,
-      260.01,
+      200.01,
       2,
-    )).toEqual({ maximumAmount: 260, exceeded: true });
+    )).toEqual({ maximumAmount: 200, exceeded: true });
   });
 
   it("uses the active currency precision before comparing", () => {
     expect(calculateManualOrderDiscountLimit(
       [{ productId: "prod_1", variantId: "var_1", quantity: 2, price: 100.49 }],
-      1.6,
-      202,
+      200,
       0,
-    )).toEqual({ maximumAmount: 202, exceeded: false });
+    )).toEqual({ maximumAmount: 200, exceeded: false });
 
     expect(calculateManualOrderDiscountLimit(
       [{ productId: "prod_1", variantId: "var_1", quantity: 2, price: 1.2346 }],
-      0.0016,
-      2.473,
+      2.471,
       3,
-    )).toEqual({ maximumAmount: 2.472, exceeded: true });
+    )).toEqual({ maximumAmount: 2.47, exceeded: true });
   });
 
   it("compares an authoritative server boundary at its currency precision", () => {
@@ -48,13 +44,12 @@ describe("manual-order discount guidance", () => {
   });
 
   it("provides a zero boundary before items are staged and fails closed on bad inputs", () => {
-    expect(calculateManualOrderDiscountLimit([], 0, 1, 2)).toEqual({
+    expect(calculateManualOrderDiscountLimit([], 1, 2)).toEqual({
       maximumAmount: 0,
       exceeded: true,
     });
     expect(calculateManualOrderDiscountLimit(
       [{ productId: "prod_1", variantId: "var_1", quantity: 0, price: 100 }],
-      0,
       0,
       2,
     )).toBeNull();
@@ -77,8 +72,8 @@ describe("manual-order discount guidance", () => {
         decimalPlaces: 2,
       },
     })).toEqual({
-      maximumAmount: 130,
-      exceeded: false,
+      maximumAmount: 100,
+      exceeded: true,
       source: "server",
       currencyCode: "BDT",
       decimalPlaces: 2,
@@ -93,7 +88,7 @@ describe("manual-order discount guidance", () => {
         currencyCode: "BDT",
         decimalPlaces: 2,
       },
-    })?.maximumAmount).toBe(0.3);
+    })?.maximumAmount).toBe(0.1);
     expect(resolveManualOrderDiscountGuidance({
       ...common,
       authoritativeErrorLimit: {

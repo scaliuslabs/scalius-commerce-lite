@@ -73,7 +73,7 @@ describe("admin API detail-loader errors", () => {
       400,
       "VALIDATION_ERROR",
       {
-        reason: "MANUAL_ORDER_DISCOUNT_EXCEEDS_GROSS",
+        reason: "MANUAL_ORDER_DISCOUNT_EXCEEDS_SUBTOTAL",
         maximumDiscountAmountMinor: 22_900,
         currencyCode: "BDT",
         decimalPlaces: 2,
@@ -89,7 +89,7 @@ describe("admin API detail-loader errors", () => {
         statusCode: 400,
         code: "VALIDATION_ERROR",
         details: {
-          reason: "MANUAL_ORDER_DISCOUNT_EXCEEDS_GROSS",
+          reason: "MANUAL_ORDER_DISCOUNT_EXCEEDS_SUBTOTAL",
           maximumDiscountAmountMinor: 2_472,
           currencyCode: "KWD",
           decimalPlaces: 3,
@@ -105,7 +105,7 @@ describe("admin API detail-loader errors", () => {
       400,
       "VALIDATION_ERROR",
       {
-        reason: "MANUAL_ORDER_DISCOUNT_EXCEEDS_GROSS",
+        reason: "MANUAL_ORDER_DISCOUNT_EXCEEDS_SUBTOTAL",
         maximumDiscountAmountMinor: -1,
         currencyCode: "BDT",
         decimalPlaces: 2,

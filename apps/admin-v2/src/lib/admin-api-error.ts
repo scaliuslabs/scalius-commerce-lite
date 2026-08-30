@@ -185,7 +185,7 @@ export function readManualOrderDiscountLimitError(
     decimalPlaces?: unknown;
   };
   if (
-    details.reason !== "MANUAL_ORDER_DISCOUNT_EXCEEDS_GROSS"
+    details.reason !== "MANUAL_ORDER_DISCOUNT_EXCEEDS_SUBTOTAL"
     || typeof details.maximumDiscountAmountMinor !== "number"
     || !Number.isSafeInteger(details.maximumDiscountAmountMinor)
     || details.maximumDiscountAmountMinor < 0

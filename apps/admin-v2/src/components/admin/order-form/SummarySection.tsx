@@ -168,8 +168,7 @@ export function SummarySection() {
                         {formatAmount(
                           manualQuote.discountLimit.maximumAmount,
                           manualQuote.discountLimit.decimalPlaces,
-                        )} for
-                        the current items and shipping.
+                        )} for the current items.
                       </p>
                       <Button
                         type="button"

@@ -51,7 +51,6 @@ export function manualOrderDiscountExceedsLimit(
  */
 export function calculateManualOrderDiscountLimit(
   items: OrderItem[],
-  shippingCharge: number,
   discountAmount: number | null,
   decimalPlaces: number,
 ): ManualOrderDiscountLimit | null {
@@ -59,7 +58,6 @@ export function calculateManualOrderDiscountLimit(
     !Number.isInteger(decimalPlaces)
     || decimalPlaces < 0
     || decimalPlaces > 3
-    || !Number.isFinite(shippingCharge)
     || items.some((item) =>
       !Number.isFinite(item.price)
       || !Number.isInteger(item.quantity)
@@ -75,10 +73,7 @@ export function calculateManualOrderDiscountLimit(
     ),
     decimalPlaces,
   ), 0);
-  const maximumAmount = roundPriceToPrecision(
-    subtotal + roundPriceToPrecision(Math.max(0, shippingCharge), decimalPlaces),
-    decimalPlaces,
-  );
+  const maximumAmount = subtotal;
   return {
     maximumAmount,
     exceeded: manualOrderDiscountExceedsLimit(
@@ -107,8 +102,7 @@ export function resolveManualOrderDiscountGuidance(input: {
 
   if (input.successfulQuote) {
     const maximumAmount = roundPriceToPrecision(
-      input.successfulQuote.subtotalAmount
-        + input.successfulQuote.shippingAmount,
+      input.successfulQuote.subtotalAmount,
       input.successfulQuote.decimalPlaces,
     );
     return {

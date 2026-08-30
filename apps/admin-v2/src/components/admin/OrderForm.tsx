@@ -184,11 +184,10 @@ export function OrderForm({
       ? null
       : calculateManualOrderDiscountLimit(
           quoteItems,
-          quoteShipping,
           quoteDiscount,
           currencyDecimalPlaces,
         ),
-    [currencyDecimalPlaces, isEdit, quoteDiscount, quoteItems, quoteShipping],
+    [currencyDecimalPlaces, isEdit, quoteDiscount, quoteItems],
   );
   const debouncedQuoteInput = useDebounce(quoteInput, 350);
   const quoteInputIsCurrent =

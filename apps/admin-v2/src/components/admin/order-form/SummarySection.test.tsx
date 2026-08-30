@@ -19,7 +19,7 @@ const testState = vi.hoisted(() => ({
     isCurrent: false,
     isLoading: false,
     discountLimit: {
-      maximumAmount: 110,
+      maximumAmount: 100,
       exceeded: true,
       source: "local" as const,
       currencyCode: "BDT",
@@ -146,7 +146,7 @@ describe("manual-order summary discount recovery", () => {
     testState.manualQuote.isCurrent = false;
     testState.manualQuote.isLoading = false;
     testState.manualQuote.discountLimit = {
-      maximumAmount: 110,
+      maximumAmount: 100,
       exceeded: true,
       source: "local",
       currencyCode: "BDT",
@@ -174,10 +174,10 @@ describe("manual-order summary discount recovery", () => {
       'input[name="discountAmount"]',
     );
     if (!discountInput) throw new Error("Expected discount input");
-    expect(discountInput.max).toBe("110");
+    expect(discountInput.max).toBe("100");
     expect(discountInput.getAttribute("aria-invalid")).toBe("true");
     expect(host.textContent).toContain(
-      "Discount can’t exceed ৳110.00 for the current items and shipping.",
+      "Discount can’t exceed ৳100.00 for the current items.",
     );
     expect(host.textContent).toContain("Needs correction");
     expect(host.textContent).not.toContain("৳-90.00");
@@ -195,15 +195,15 @@ describe("manual-order summary discount recovery", () => {
     expect(testState.updateDiscountAmount).toHaveBeenCalledWith(null);
   });
 
-  it("accepts the exact boundary and shows the zero payable total", async () => {
-    testState.discountValue = 110;
+  it("accepts the exact item boundary while preserving shipping due", async () => {
+    testState.discountValue = 100;
     testState.calculations = {
       ...testState.calculations,
-      discountAmount: 110,
-      total: 0,
+      discountAmount: 100,
+      total: 10,
     };
     testState.manualQuote.discountLimit = {
-      maximumAmount: 110,
+      maximumAmount: 100,
       exceeded: false,
       source: "local",
       currencyCode: "BDT",
@@ -212,7 +212,7 @@ describe("manual-order summary discount recovery", () => {
 
     await act(async () => root.render(<SummarySection />));
     expect(host.textContent).not.toContain("Needs correction");
-    expect(host.textContent).toContain("৳0.00");
+    expect(host.textContent).toContain("৳10.00");
   });
 
   it("keeps Retry only for a failure that may succeed unchanged", async () => {
