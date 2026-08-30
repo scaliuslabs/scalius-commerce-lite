@@ -32,8 +32,8 @@ export function renderEmptyCartState(
   const message = document.createElement("p");
   message.className = "mt-1 text-sm text-muted-foreground";
   message.textContent = recoveryAction
-    ? "Your order was created before payment handoff. Continue to payment status from the receipt page."
-    : "Looks like you haven't added anything to your cart yet.";
+    ? lang.languageData.paymentRecoveryMessageText
+    : lang.languageData.emptyCartDescriptionText;
 
   const actionWrapper = document.createElement("div");
   actionWrapper.className = "mt-6 flex flex-col items-center justify-center gap-2 sm:flex-row";
@@ -58,7 +58,7 @@ export function renderEmptyCartState(
     recoveryLink.dataset.astroPrefetch = "false";
     recoveryLink.className =
       "inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-primary-foreground bg-primary hover:bg-primary/90";
-    recoveryLink.textContent = "View payment status";
+    recoveryLink.textContent = lang.languageData.viewPaymentStatusText;
     if (recoveryAction.onClick) {
       recoveryLink.addEventListener("click", recoveryAction.onClick);
     }
