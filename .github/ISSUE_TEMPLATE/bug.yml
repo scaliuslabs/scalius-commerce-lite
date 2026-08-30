@@ -1,5 +1,5 @@
 name: Bug report
-description: Report a reproducible defect in merchant, employee, buyer, or platform behavior.
+description: Tell us about something that is not working as expected.
 labels:
   - "status: needs-triage"
 type: Bug
@@ -7,120 +7,60 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thank you for helping improve Scalius Commerce. Please report one independently verifiable problem per issue.
+        Thanks for reporting this. A short, clear description is enough; maintainers can ask follow-up questions.
 
-        Do not include passwords, API keys, OTPs, receipt proofs, session tokens, raw buyer data, or other sensitive information. Report security vulnerabilities through the private security link in the issue chooser.
+        Never include passwords, API keys, OTPs, receipt links or proofs, session tokens, or private customer/order data. Use GitHub's private vulnerability report for security issues.
+
+  - type: textarea
+    id: details
+    attributes:
+      label: What happened?
+      description: Tell us what went wrong, what you expected, and how to reproduce it if you know how.
+      placeholder: I tried to ...; instead ...
+    validations:
+      required: true
 
   - type: dropdown
     id: affected-workflow
     attributes:
-      label: Affected workflow
-      description: Choose the product workflow where the problem is visible. Maintainers will apply the corresponding area label during triage.
+      label: Where did this happen?
       options:
-        - Checkout and payments
-        - Orders and fulfillment
-        - Catalog and inventory
-        - Customers and authentication
+        - Not sure
+        - Checkout or payments
+        - Orders or fulfillment
+        - Catalog, inventory, or media
+        - Customers or sign-in
         - Promotions
-        - Content and discovery
-        - Media
-        - Settings and setup
-        - Storefront experience
-        - Admin experience
+        - Content or discovery
+        - Settings or setup
+        - Storefront
+        - Admin
         - API, data, or operations
-        - Other or cross-cutting
     validations:
-      required: true
-
-  - type: textarea
-    id: observed-behavior
-    attributes:
-      label: What happened?
-      description: Describe the observable result and its impact. Remove or mask any sensitive values.
-      placeholder: The user did X, the system returned Y, and this prevented or risked Z.
-    validations:
-      required: true
-
-  - type: textarea
-    id: reproduction
-    attributes:
-      label: Reproduction steps
-      description: Give the shortest reliable path from a clean starting state to the problem.
-      placeholder: |
-        1. Open ...
-        2. Configure ...
-        3. Submit ...
-        4. Observe ...
-    validations:
-      required: true
-
-  - type: textarea
-    id: expected-behavior
-    attributes:
-      label: Expected behavior
-      description: State the outcome the user should receive, not only a preferred implementation.
-      placeholder: The system should ... because ...
-    validations:
-      required: true
-
-  - type: dropdown
-    id: frequency
-    attributes:
-      label: Reproduction frequency
-      options:
-        - Every time
-        - Intermittent
-        - Happened once
-        - Not yet reproduced independently
-    validations:
-      required: true
-
-  - type: input
-    id: version
-    attributes:
-      label: Version or commit
-      description: Provide the deployed version, release, commit SHA, or date observed when known.
-      placeholder: Commit SHA, release, or "unknown"
-    validations:
-      required: true
+      required: false
 
   - type: input
     id: environment
     attributes:
-      label: Environment
-      description: Include deployment, browser/OS, database provider, or device details that affect reproduction.
-      placeholder: Production storefront, Chrome 140, Android 16
+      label: Device or environment (optional)
+      description: Browser, device, deployment, or version—only when it may help reproduce the problem.
+      placeholder: Chrome on Android; production storefront; commit SHA
     validations:
-      required: true
+      required: false
 
   - type: textarea
     id: evidence
     attributes:
-      label: Evidence
-      description: Add sanitized screenshots, recordings, request IDs, or logs. Explain if none are available.
-      placeholder: Drag files here or paste sanitized evidence. Do not paste private order or customer data.
-    validations:
-      required: true
-
-  - type: textarea
-    id: regression
-    attributes:
-      label: Regression information
-      description: If this worked before, identify the last known-good version or approximate date.
-      placeholder: Worked on ...; first failed on ...; or "unknown"
+      label: Screenshots or logs (optional)
+      description: Add sanitized evidence if useful. Remove all secrets and private customer/order data first.
+      placeholder: Drag sanitized files here or paste a short log excerpt.
     validations:
       required: false
 
   - type: checkboxes
-    id: confirmation
+    id: safety
     attributes:
-      label: Submission checklist
+      label: Sensitive information
       options:
-        - label: I searched open and closed issues for the same problem.
-          required: true
-        - label: This report contains one independently verifiable problem.
-          required: true
-        - label: I removed secrets, credentials, OTPs, receipt proofs, and buyer personal data.
-          required: true
-        - label: This is not a security vulnerability that should be reported privately.
+        - label: I have removed secrets and private customer/order data from this public report.
           required: true
