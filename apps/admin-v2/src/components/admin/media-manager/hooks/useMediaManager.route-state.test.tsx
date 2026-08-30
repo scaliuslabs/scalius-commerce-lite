@@ -10,6 +10,9 @@ import { useMediaManager } from "./useMediaManager";
 
 const mocks = vi.hoisted(() => ({
   loadFiles: vi.fn(),
+  setFiles: vi.fn(),
+  refresh: vi.fn(),
+  onUploadComplete: null as null | ((files: unknown[]) => void),
   onStateChange: vi.fn(),
   folderLoadError: null as string | null,
 }));
@@ -19,7 +22,7 @@ vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 vi.mock(".", () => ({
   useMediaFiles: () => ({
     files: [],
-    setFiles: vi.fn(),
+    setFiles: mocks.setFiles,
     isLoading: false,
     isLoadingMore: false,
     nextCursor: null,
@@ -29,7 +32,7 @@ vi.mock(".", () => ({
     loadFiles: mocks.loadFiles,
     loadMore: vi.fn(),
     applyFilters: vi.fn(),
-    refresh: vi.fn(),
+    refresh: mocks.refresh,
   }),
   useFolders: () => ({
     folders: [{ id: "folder_campaign", name: "Campaign", version: 1 }],
@@ -42,14 +45,17 @@ vi.mock(".", () => ({
     deleteFolder: vi.fn(),
     moveToFolder: vi.fn(),
   }),
-  useMediaUpload: () => ({
-    queue: [],
-    uploadFiles: vi.fn(),
-    pause: vi.fn(),
-    resume: vi.fn(),
-    cancel: vi.fn(),
-    clearFinished: vi.fn(),
-  }),
+  useMediaUpload: (options: { onUploadComplete?: (files: unknown[]) => void }) => {
+    mocks.onUploadComplete = options.onUploadComplete ?? null;
+    return {
+      queue: [],
+      uploadFiles: vi.fn(),
+      pause: vi.fn(),
+      resume: vi.fn(),
+      cancel: vi.fn(),
+      clearFinished: vi.fn(),
+    };
+  },
 }));
 
 let latest: ReturnType<typeof useMediaManager>;
@@ -72,6 +78,9 @@ describe("useMediaManager route authority", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     mocks.loadFiles.mockReset().mockResolvedValue(undefined);
+    mocks.setFiles.mockReset();
+    mocks.refresh.mockReset();
+    mocks.onUploadComplete = null;
     mocks.onStateChange.mockReset();
     mocks.folderLoadError = null;
     state = {
@@ -147,5 +156,46 @@ describe("useMediaManager route authority", () => {
       { folderId: "all" },
       { replace: true },
     );
+  });
+
+  it("shows a completed upload immediately and reconciles without a timer", () => {
+    const uploaded = {
+      id: "media_uploaded",
+      url: "https://cloud.example.test/media/uploaded.png",
+      objectKey: "media/uploaded.png",
+      filename: "uploaded.png",
+      kind: "image" as const,
+      size: 100,
+      mimeType: "image/png",
+      altText: null,
+      caption: null,
+      width: 100,
+      height: 100,
+      durationMs: null,
+      posterMediaId: null,
+      posterUrl: null,
+      folderId: null,
+      status: "ready" as const,
+      version: 1,
+      createdAt: new Date("2026-08-30T00:00:00.000Z"),
+      updatedAt: new Date("2026-08-30T00:00:00.000Z"),
+      trashedAt: null,
+      deletedAt: null,
+    };
+
+    act(() => mocks.onUploadComplete?.([uploaded]));
+
+    expect(mocks.setFiles).toHaveBeenCalledOnce();
+    const update = mocks.setFiles.mock.calls[0]?.[0] as (current: unknown[]) => unknown[];
+    expect(update([])).toEqual([uploaded]);
+    expect(mocks.loadFiles).toHaveBeenLastCalledWith(undefined, {
+      search: "",
+      sortBy: "createdAt",
+      sortOrder: "desc",
+      kind: undefined,
+      folderId: undefined,
+      view: "ready",
+    });
+    expect(vi.getTimerCount()).toBe(0);
   });
 });
