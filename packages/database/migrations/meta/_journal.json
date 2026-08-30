@@ -414,6 +414,13 @@
       "when": 1788072138633,
       "tag": "0058_order_shipping_method_snapshot",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "6",
+      "when": 1788096000000,
+      "tag": "0059_checkout_delivery_phone_identity",
+      "breakpoints": true
     }
   ]
 }

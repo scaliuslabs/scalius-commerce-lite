@@ -9,6 +9,7 @@ import {
   TAX_QUOTE_MAX_RESPONSE_BYTES,
 } from "@/lib/checkout/tax-quote-contract";
 import { parseTaxQuoteCartIssues } from "@/lib/checkout/tax-quote-error-contract";
+import { getCustomerSessionTokenFromCookie } from "../../../lib/customer-session-cookie";
 
 export const prerender = false;
 
@@ -122,6 +123,9 @@ export const POST: APIRoute = async ({ request }) => {
   }
 
   try {
+    const customerSessionToken = getCustomerSessionTokenFromCookie(
+      request.headers.get("cookie"),
+    );
     const upstream = await fetchWithRetry(
       createApiUrl(TAX_QUOTE_API_PATH),
       {
@@ -129,6 +133,9 @@ export const POST: APIRoute = async ({ request }) => {
         headers: {
           Accept: "application/json",
           "Content-Type": "application/json",
+          ...(customerSessionToken
+            ? { "X-Customer-Session": customerSessionToken }
+            : {}),
         },
         body: JSON.stringify(normalizedRequest),
         cache: "no-store",
