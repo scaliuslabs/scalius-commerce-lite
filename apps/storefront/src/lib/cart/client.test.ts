@@ -487,4 +487,20 @@ describe("updateCheckoutButtonState", () => {
     expect(submitButton.classList.contains("cursor-not-allowed")).toBe(true);
     expect(submitButton.title).toBe("Checkout setup is incomplete.");
   });
+
+  it("keeps COD submit disabled until an authoritative quote is current", () => {
+    const submitButton = document.getElementById(
+      "submitButton",
+    ) as HTMLButtonElement;
+    applyCheckoutButtonState(submitButton, {
+      checkoutUnavailable: false,
+      unavailableMessage: "",
+      isEmpty: false,
+      quoteUnverified: true,
+      quoteUnverifiedMessage: "Confirming current total.",
+    });
+
+    expect(submitButton.disabled).toBe(true);
+    expect(submitButton.title).toBe("Confirming current total.");
+  });
 });

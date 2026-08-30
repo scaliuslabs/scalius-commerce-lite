@@ -433,6 +433,101 @@ describe("initCheckoutPage", () => {
     expect((codMethod as HTMLButtonElement).tabIndex).toBe(-1);
   });
 
+  it("renders a refreshed quote after a typed conflict without resubmitting the order", async () => {
+    const refreshedQuote = taxQuote({
+      quoteFingerprint: "taxq_vutsrqponmlkjihgfedcba",
+      subtotalMinor: 12_000,
+      subtotalAmount: 120,
+      totalMinor: 12_000,
+      totalAmount: 120,
+      items: [{
+        cartKey: "line_1",
+        productId: "prod_1",
+        variantId: "var_1",
+        quantity: 1,
+        unitPrice: 120,
+        productName: "Product",
+        variantLabel: null,
+      }],
+    });
+    let quoteCalls = 0;
+    let orderCalls = 0;
+    vi.stubGlobal("fetch", vi.fn(async (input, init) => {
+      const url = String(input);
+      if (url === "/api/checkout/tax-quote") {
+        quoteCalls += 1;
+        const quote = quoteCalls === 1 ? taxQuote() : refreshedQuote;
+        return new Response(JSON.stringify({ success: true, data: quote }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (url === "/api/checkout/create-order") {
+        orderCalls += 1;
+        const body = JSON.parse(String(init?.body)) as {
+          expectedQuoteFingerprint?: string;
+        };
+        expect(body.expectedQuoteFingerprint).toBe("taxq_abcdefghijklmnopqrstuv");
+        return new Response(JSON.stringify({
+          success: false,
+          error: "Your order total or checkout terms changed.",
+          errorCode: "STOREFRONT_CHECKOUT_QUOTE_CONFLICT",
+        }), {
+          status: 409,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ success: true, data: {} }));
+    }));
+    document.body.innerHTML = `
+      <section id="orderSummary" class="hidden"><div id="summaryDetails"></div></section>
+      <div id="errorMsg" class="hidden"></div>
+      <div id="paymentMethods"></div>
+      <div id="stripeSection" class="hidden"></div>
+      <button id="payButton" disabled><span id="payButtonText">Select a payment method</span></button>
+    `;
+    sessionStorage.setItem("scalius_checkout_data", JSON.stringify({
+      checkoutId: "checkout_conflict_test_123456",
+      cartItems: JSON.stringify({
+        line_1: {
+          id: "prod_1",
+          variantId: "var_1",
+          price: 100,
+          quantity: 1,
+          name: "Product",
+        },
+      }),
+      shippingCharge: "0",
+      discountAmount: "0",
+      customerName: "Buyer",
+      customerPhone: "+8801700000000",
+      shippingAddress: "House 1, Dhaka",
+      city: "city_1",
+      zone: "zone_1",
+      shippingMethodId: "ship_1",
+    }));
+    (window as unknown as { __CHECKOUT_CONFIG__: CheckoutConfig }).__CHECKOUT_CONFIG__ = {
+      ...baseConfig,
+      activeDefaultMethod: "cod",
+      gateways: [{ id: "cod", name: "Cash on Delivery" }],
+    };
+
+    await initCheckoutPage();
+    (document.getElementById("payButton") as HTMLButtonElement).click();
+
+    await vi.waitFor(() => {
+      expect(document.getElementById("errorMsg")?.textContent).toContain(
+        "Review the refreshed total",
+      );
+    });
+    expect(document.getElementById("summaryDetails")?.textContent).toContain("৳120");
+    expect(quoteCalls).toBe(2);
+    expect(orderCalls).toBe(1);
+    expect((document.getElementById("payButton") as HTMLButtonElement).disabled).toBe(false);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(orderCalls).toBe(1);
+  });
+
   it("renders unknown gateway labels as text instead of executable markup", async () => {
     document.body.innerHTML = `
       <section id="orderSummary" class="hidden"><div id="summaryDetails"></div></section>

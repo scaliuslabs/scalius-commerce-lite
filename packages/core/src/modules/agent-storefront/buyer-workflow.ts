@@ -354,6 +354,7 @@ export async function submitAgentStorefrontCheckout(
 
   const data = {
     checkoutRequestId: requestId,
+    expectedQuoteFingerprint: input.expectedQuoteFingerprint,
     customerName: input.customerName.trim(),
     customerPhone: input.customerPhone,
     customerEmail: input.customerEmail?.trim().toLowerCase() ?? null,

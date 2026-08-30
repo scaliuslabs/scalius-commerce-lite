@@ -12080,6 +12080,10 @@ export type PostApiV1OrdersTaxQuoteResponse = PostApiV1OrdersTaxQuoteResponses[k
 export type PostApiV1OrdersData = {
     body?: {
         checkoutRequestId: string;
+        /**
+         * Exact authoritative quote fingerprint reviewed by the buyer before submitting the order.
+         */
+        expectedQuoteFingerprint: string;
         customerName: string;
         customerPhone: string;
         customerEmail: string | null;

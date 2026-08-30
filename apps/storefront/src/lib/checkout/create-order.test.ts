@@ -6,6 +6,7 @@ import { CheckoutOrderError, createOrder } from "./create-order";
 
 const checkoutData = {
   checkoutRequestId: "checkout_req_test",
+  expectedQuoteFingerprint: "taxq_abcdefghijklmnopqrstuv",
   customerName: "Test Customer",
   customerPhone: "+8801700000000",
   customerEmail: "customer@example.com",
@@ -50,9 +51,11 @@ describe("createOrder", () => {
     const [, init] = fetchMock.mock.calls[0];
     const body = JSON.parse(String(init?.body)) as {
       initialPaymentSession?: boolean;
+      expectedQuoteFingerprint?: string;
       items: Array<Record<string, unknown>>;
     };
     expect(body).not.toHaveProperty("initialPaymentSession");
+    expect(body.expectedQuoteFingerprint).toBe("taxq_abcdefghijklmnopqrstuv");
     expect(body.items).toEqual([
       expect.objectContaining({
         cartKey: "line:v2:prod_1:variant:var_1",
@@ -82,6 +85,20 @@ describe("createOrder", () => {
         ...checkoutData,
         cartItems: JSON.stringify({ line_1: item }),
       }, "cod")).rejects.toThrow("A checkout cart item is missing its saved product variant.");
+      expect(fetchMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([undefined, "", "taxq_invalid"])(
+    "rejects a missing or malformed reviewed quote fingerprint (%s) before the order proxy",
+    async (expectedQuoteFingerprint) => {
+      const fetchMock = vi.fn();
+      vi.stubGlobal("fetch", fetchMock);
+
+      await expect(createOrder({
+        ...checkoutData,
+        expectedQuoteFingerprint,
+      }, "cod")).rejects.toThrow("order total is no longer verified");
       expect(fetchMock).not.toHaveBeenCalled();
     },
   );

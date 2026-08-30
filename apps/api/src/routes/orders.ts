@@ -30,6 +30,8 @@ import { getCurrencySettings } from "@scalius/core/modules/settings/site-setting
 import {
   deleteOrderPaymentRecoveryChallenge,
   createReceiptOrderSupportRequest,
+  assertStorefrontCheckoutQuoteFingerprint,
+  buildStorefrontCheckoutQuoteFingerprint,
   CUSTOMER_ORDER_SUPPORT_REQUEST_TYPES,
   getOrderSupportRequestStatusLabel,
   getReceiptOrderSupportRequestStateForOrder,
@@ -1455,30 +1457,6 @@ async function resolveAuthoritativeTaxQuote(
   });
 }
 
-function encodeBase64Url(bytes: Uint8Array): string {
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-}
-
-async function taxQuoteFingerprint(quote: TaxQuote): Promise<string> {
-  const safeIdentity = JSON.stringify({
-    calculationVersion: quote.calculationVersion,
-    settingsVersion: quote.settingsVersion,
-    currencyCode: quote.currencyCode,
-    decimalPlaces: quote.decimalPlaces,
-    destination: quote.destination,
-    subtotalMinor: quote.subtotalMinor,
-    shippingMinor: quote.shippingMinor,
-    discountMinor: quote.discountMinor,
-    taxMinor: quote.taxMinor,
-    totalMinor: quote.totalMinor,
-    lines: quote.lines.map((line) => [line.productId, line.variantId, line.quantity, line.unitPriceMinor]),
-  });
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(safeIdentity));
-  return `taxq_${encodeBase64Url(new Uint8Array(digest)).slice(0, 22)}`;
-}
-
 app.openapi(taxQuoteRoute, async (c) => {
   const db = c.get("db");
   const data = c.req.valid("json");
@@ -1510,7 +1488,7 @@ app.openapi(taxQuoteRoute, async (c) => {
   const toAmount = (minor: number) => fromMinorUnits(minor, quote.decimalPlaces);
   return ok(c, {
     valid: true as const,
-    quoteFingerprint: await taxQuoteFingerprint(quote),
+    quoteFingerprint: await buildStorefrontCheckoutQuoteFingerprint(quote),
     displayLabel: quote.displayLabel,
     pricesIncludeTax: quote.pricesIncludeTax,
     shippingTaxed: quote.shippingTaxed,
@@ -1546,6 +1524,12 @@ const createOrderSchema = z.object({
     .min(16, "Checkout request id is required")
     .max(128, "Checkout request id is too long")
     .regex(/^[A-Za-z0-9:_-]+$/, "Checkout request id contains unsupported characters"),
+  expectedQuoteFingerprint: z
+    .string()
+    .regex(/^taxq_[A-Za-z0-9_-]{22}$/, "A current reviewed checkout quote is required")
+    .openapi({
+      description: "Exact authoritative quote fingerprint reviewed by the buyer before submitting the order.",
+    }),
   customerName: z
     .string()
     .min(3, "Customer name must be at least 3 characters")
@@ -1998,6 +1982,11 @@ app.openapi(createOrderRoute, async (c) => {
         metaPurchaseEnabled: checkoutAuthority.sideEffects.metaPurchase,
       }),
       checkoutAuthority.taxAuthority,
+    );
+
+    assertStorefrontCheckoutQuoteFingerprint(
+      data.expectedQuoteFingerprint,
+      await buildStorefrontCheckoutQuoteFingerprint(result.taxQuote),
     );
 
     assertSSLCommerzPrecommitReadiness(

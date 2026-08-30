@@ -196,6 +196,7 @@ function createLocation(overrides: Partial<LocationRow> = {}): LocationRow {
 function createOrderInput(overrides: Partial<CreateStorefrontOrderInput> = {}): CreateStorefrontOrderInput {
   return {
     checkoutRequestId: "checkout_req_storefront_test",
+    expectedQuoteFingerprint: "taxq_abcdefghijklmnopqrstuv",
     customerName: "Test Customer",
     customerPhone: "+8801700000000",
     customerEmail: "customer@example.com",

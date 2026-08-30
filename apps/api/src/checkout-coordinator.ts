@@ -30,7 +30,9 @@ import {
   type DatabaseProvider,
 } from "@scalius/database/client";
 import {
+  assertStorefrontCheckoutQuoteFingerprint,
   assertGuestStorefrontCheckoutPolicy,
+  buildStorefrontCheckoutQuoteFingerprint,
   createStorefrontCheckoutAuthorityBatchReadPlan,
   createStorefrontOrder,
   createTrustedStorefrontCheckoutPolicySnapshot,
@@ -1283,6 +1285,8 @@ function isCheckoutIntentCommand(value: unknown): value is CheckoutIntentCommand
     || value.requestUrl.length > 4_096
     || data.paymentMethod !== "cod"
     || data.inventoryPool !== "regular"
+    || typeof data.expectedQuoteFingerprint !== "string"
+    || !/^taxq_[A-Za-z0-9_-]{22}$/.test(data.expectedQuoteFingerprint)
     || (typeof data.discountCode === "string" && data.discountCode.trim().length > 0)
     || !Array.isArray(data.items)
     || data.items.length < 1
@@ -1428,6 +1432,10 @@ async function prepareCheckoutIntent(
         metaPurchaseEnabled: authority.sideEffects.metaPurchase,
       }),
       authority.taxAuthority,
+    );
+    assertStorefrontCheckoutQuoteFingerprint(
+      pending.command.data.expectedQuoteFingerprint,
+      await buildStorefrontCheckoutQuoteFingerprint(result.taxQuote),
     );
     const response = {
       checkoutToken: result.checkoutToken,

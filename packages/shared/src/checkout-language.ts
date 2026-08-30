@@ -122,6 +122,8 @@ export const ENGLISH_CHECKOUT_LANGUAGE_DATA = {
   sessionExpiredText:
     "Your sign-in session expired. Your checkout details are safe. Continue as a guest, or sign in again.",
   checkoutConflictText: "This checkout was already submitted or changed in another tab. Review your cart and try again.",
+  totalChangedReviewText:
+    "Your order total or checkout terms changed. Review the refreshed total, then confirm the order again.",
   tooManyCheckoutAttemptsText: "Too many checkout attempts. Wait a moment and try again.",
   paymentFailedText: "Payment failed",
   noPaymentMethodsText:
@@ -291,6 +293,8 @@ export const BANGLA_CHECKOUT_LANGUAGE_DATA: CheckoutLanguageData = {
   sessionExpiredText:
     "আপনার সাইন-ইন সেশন শেষ হয়েছে। চেকআউটের তথ্য নিরাপদ আছে। অতিথি হিসেবে এগিয়ে যান অথবা আবার সাইন ইন করুন।",
   checkoutConflictText: "এই চেকআউটটি ইতিমধ্যে জমা হয়েছে অথবা অন্য ট্যাবে পরিবর্তিত হয়েছে। কার্ট দেখে আবার চেষ্টা করুন।",
+  totalChangedReviewText:
+    "আপনার অর্ডারের মোট টাকা বা চেকআউটের শর্ত বদলেছে। হালনাগাদ মোট টাকা দেখে অর্ডারটি আবার নিশ্চিত করুন।",
   tooManyCheckoutAttemptsText: "খুব বেশি চেকআউট চেষ্টা হয়েছে। কিছুক্ষণ অপেক্ষা করে আবার চেষ্টা করুন।",
   paymentFailedText: "পেমেন্ট ব্যর্থ হয়েছে",
   noPaymentMethodsText:

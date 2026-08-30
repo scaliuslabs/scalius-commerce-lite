@@ -44110,6 +44110,11 @@
                     "maxLength": 128,
                     "pattern": "^[A-Za-z0-9:_-]+$"
                   },
+                  "expectedQuoteFingerprint": {
+                    "type": "string",
+                    "pattern": "^taxq_[A-Za-z0-9_-]{22}$",
+                    "description": "Exact authoritative quote fingerprint reviewed by the buyer before submitting the order."
+                  },
                   "customerName": {
                     "type": "string",
                     "minLength": 3,
@@ -44246,6 +44251,7 @@
                 },
                 "required": [
                   "checkoutRequestId",
+                  "expectedQuoteFingerprint",
                   "customerName",
                   "customerPhone",
                   "customerEmail",

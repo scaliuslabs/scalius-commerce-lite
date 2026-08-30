@@ -137,6 +137,7 @@ function renderCartDom() {
           <input id="customerPhone-input" value="" />
           <input id="customerPhone" name="customerPhone" value="01700000000" />
           <input id="checkoutIdInput" name="checkoutId" type="hidden" />
+          <input id="expectedQuoteFingerprint" name="expectedQuoteFingerprint" type="hidden" />
           <input id="cartItemsInput" name="cartItems" type="hidden" />
           <input id="discountCodeHidden" name="discountCode" type="hidden" />
           <button id="submitButton" type="submit" disabled>Place Order</button>
@@ -475,6 +476,8 @@ describe("initCartFunctionality", () => {
     expect(document.getElementById("totalLabel")?.textContent).toBe("Total");
     expect(document.getElementById("total")?.textContent).toBe("৳171.20");
     expect(document.getElementById("taxStatus")?.classList).toContain("hidden");
+    expect((document.getElementById("expectedQuoteFingerprint") as HTMLInputElement).value)
+      .toBe("taxq_1234567890123456789012");
   });
 
   it("omits an incomplete display-only calling code and still requests the location quote", async () => {
@@ -544,10 +547,14 @@ describe("initCartFunctionality", () => {
     resolveSecond?.(taxQuote(175, "zone_akhaura"));
     await Promise.resolve();
     expect(document.getElementById("total")?.textContent).toBe("৳175");
+    expect((document.getElementById("expectedQuoteFingerprint") as HTMLInputElement).value)
+      .toBe("taxq_zone_akhaura0000000000");
 
     resolveFirst?.(taxQuote(170, "zone_bajua"));
     await Promise.resolve();
     expect(document.getElementById("total")?.textContent).toBe("৳175");
+    expect((document.getElementById("expectedQuoteFingerprint") as HTMLInputElement).value)
+      .toBe("taxq_zone_akhaura0000000000");
   });
 
   it("does not present a provisional amount as final when tax cannot be verified", async () => {
@@ -577,6 +584,8 @@ describe("initCartFunctionality", () => {
     expect(document.getElementById("taxStatus")?.textContent).toContain(
       "Change the destination or try again",
     );
+    expect((document.getElementById("expectedQuoteFingerprint") as HTMLInputElement).value)
+      .toBe("");
   });
 
   it("keeps operational panels hidden when hydration resolves to an empty cart", async () => {

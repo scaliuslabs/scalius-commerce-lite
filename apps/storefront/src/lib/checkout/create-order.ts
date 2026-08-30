@@ -40,6 +40,8 @@ type ErrorPayload = {
   details?: unknown;
 };
 
+const QUOTE_FINGERPRINT_PATTERN = /^taxq_[A-Za-z0-9_-]{22}$/;
+
 export class CheckoutOrderError extends Error {
   readonly status: number;
   readonly errorCode?: string;
@@ -169,9 +171,18 @@ export async function createOrder(
   if (!checkoutRequestId) {
     throw new Error("Checkout session expired. Please refresh checkout and try again.");
   }
+  const expectedQuoteFingerprint = readString(
+    checkoutData.expectedQuoteFingerprint,
+  ).trim();
+  if (!QUOTE_FINGERPRINT_PATTERN.test(expectedQuoteFingerprint)) {
+    throw new Error(
+      "Your order total is no longer verified. Refresh the checkout total and try again.",
+    );
+  }
 
   const payload: CreateOrderPayload = {
     checkoutRequestId,
+    expectedQuoteFingerprint,
     customerName: readString(checkoutData.customerName),
     customerPhone: readString(checkoutData.customerPhone),
     customerEmail: readOptionalString(checkoutData.customerEmail),

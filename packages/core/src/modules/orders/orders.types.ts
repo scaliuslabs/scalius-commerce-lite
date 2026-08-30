@@ -184,6 +184,7 @@ export interface StorefrontOrderItem {
 
 export interface CreateStorefrontOrderInput {
     checkoutRequestId: string;
+    expectedQuoteFingerprint: string;
     customerName: string;
     customerPhone: string;
     customerEmail: string | null;

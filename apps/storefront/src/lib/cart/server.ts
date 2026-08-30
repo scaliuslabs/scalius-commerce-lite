@@ -180,9 +180,15 @@ export async function processOrder(
     const discountJson = formData.get("discountCodeHidden") as string;
     const checkoutId = formData.get("checkoutId") as string | null;
     const checkoutRequestId = checkoutId?.trim();
+    const expectedQuoteFingerprint = (
+      formData.get("expectedQuoteFingerprint") as string | null
+    )?.trim();
 
     if (!checkoutRequestId) {
       throw new Error("Checkout session expired. Please refresh checkout and try again.");
+    }
+    if (!expectedQuoteFingerprint) {
+      throw new Error("Your order total is no longer verified. Refresh the checkout total and try again.");
     }
 
     const cartItems = JSON.parse(cartItemsJson);
@@ -292,6 +298,7 @@ export async function processOrder(
 
     const payload: CreateOrderPayload = {
       checkoutRequestId,
+      expectedQuoteFingerprint,
       customerName,
       customerPhone,
       customerEmail,
