@@ -38,6 +38,20 @@ describe("checkout language presets", () => {
     expect(resolved.processingText).toBe("প্রক্রিয়া চলছে…");
   });
 
+  it("fills newly required empty-cart recovery copy from the locale preset", () => {
+    const resolved = resolveCheckoutLanguageData("bn", {
+      emptyCartText: "আপনার কার্ট খালি",
+    });
+
+    expect(resolved.emptyCartDescriptionText).toBe(
+      "আপনি এখনো কার্টে কোনো পণ্য যোগ করেননি।",
+    );
+    expect(resolved.paymentRecoveryMessageText).toBe(
+      "পেমেন্ট পেজ খোলার আগেই আপনার অর্ডারটি তৈরি হয়েছে। নতুন করে চেকআউট শুরু করার আগে পেমেন্টের অবস্থা দেখুন।",
+    );
+    expect(resolved.viewPaymentStatusText).toBe("পেমেন্টের অবস্থা দেখুন");
+  });
+
   it("preserves genuine merchant overrides", () => {
     const resolved = resolveCheckoutLanguageData("bn", {
       pageTitle: "দ্রুত চেকআউট",
