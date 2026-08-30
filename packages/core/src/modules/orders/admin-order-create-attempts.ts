@@ -2,7 +2,7 @@ import type { Database } from "@scalius/database/client";
 import { buildBatchGuard, isBatchGuardError } from "@scalius/database/client";
 import { adminOrderCreateAttempts } from "@scalius/database/schema";
 import { and, eq, isNull, lte, or, sql } from "drizzle-orm";
-import { ConflictError, ServiceUnavailableError } from "@scalius/core/errors";
+import { AppError, ServiceUnavailableError } from "@scalius/core/errors";
 import { generateOrderId } from "@scalius/shared/order-utils";
 import type { CreateOrderInput } from "./orders.validation";
 
@@ -29,6 +29,22 @@ export type AdminOrderCreateAttemptResult<TResponse> =
 const ADMIN_CREATE_ATTEMPT_LEASE_SECONDS = 5 * 60;
 const MAX_ATTEMPT_ERROR_LENGTH = 500;
 const ADMIN_CREATE_ATTEMPT_GUARD_MARKER = "ADMIN_ORDER_CREATE_ATTEMPT_CONFLICT";
+export const ADMIN_ORDER_CREATE_REQUEST_MISMATCH = "ADMIN_ORDER_CREATE_REQUEST_MISMATCH";
+
+export type AdminOrderCreateRequestMismatchDetails =
+  | {
+      state: "failed";
+      canRetryWithNewKey: true;
+    }
+  | {
+      state: "processing";
+      canRetryWithNewKey: false;
+    }
+  | {
+      state: "committed";
+      canRetryWithNewKey: false;
+      orderId: string;
+    };
 
 type AdminOrderCreateAttemptRow = typeof adminOrderCreateAttempts.$inferSelect;
 
@@ -88,7 +104,7 @@ export async function claimAdminOrderCreateAttempt<TResponse>(
   }
 
   const existing = await selectAttemptByKey(db, identity.requestKeyHash);
-  assertSameRequest(existing, identity);
+  await assertSameRequest(db, existing, identity);
   const replay = replayAttempt<TResponse>(existing);
   if (replay) return replay;
   if (existing && isFreshProcessingAttempt(existing)) {
@@ -140,7 +156,7 @@ export async function claimAdminOrderCreateAttempt<TResponse>(
   }
 
   const latest = await selectAttemptByKey(db, identity.requestKeyHash);
-  assertSameRequest(latest, identity);
+  await assertSameRequest(db, latest, identity);
   const latestReplay = replayAttempt<TResponse>(latest);
   if (latestReplay) return latestReplay;
   if (!latest) {
@@ -156,7 +172,7 @@ export async function resolveAdminOrderCreateAttempt<TResponse>(
   identity: AdminOrderCreateAttemptIdentity,
 ): Promise<{ status: "replay"; response: TResponse } | null> {
   const existing = await selectAttemptByKey(db, identity.requestKeyHash);
-  assertSameRequest(existing, identity);
+  await assertSameRequest(db, existing, identity);
   return replayAttempt<TResponse>(existing);
 }
 
@@ -257,13 +273,78 @@ function replayAttempt<TResponse>(
   }
 }
 
-function assertSameRequest(
+async function assertSameRequest(
+  db: Database,
   row: AdminOrderCreateAttemptRow | undefined,
   identity: AdminOrderCreateAttemptIdentity,
-): void {
+): Promise<void> {
   if (!row || row.requestHash === identity.requestHash) return;
-  throw new ConflictError(
-    "This manual-order request was already used for different details. Discard this form and start a new order.",
+
+  let authoritativeRow = row;
+  if (isStaleProcessingAttempt(authoritativeRow)) {
+    // Expiring a lease does not itself fence the old worker: the batch guard is
+    // claim-id based. Move the exact stale claim to failed before authorizing a
+    // new browser key, so an overdue worker cannot commit a duplicate order.
+    await db
+      .update(adminOrderCreateAttempts)
+      .set({
+        status: "failed",
+        claimId: null,
+        claimExpiresAt: null,
+        lastError: "Superseded after the manual-order creation lease expired.",
+        updatedAt: sql`unixepoch()`,
+      })
+      .where(
+        and(
+          eq(adminOrderCreateAttempts.requestKeyHash, identity.requestKeyHash),
+          eq(adminOrderCreateAttempts.requestHash, authoritativeRow.requestHash),
+          eq(adminOrderCreateAttempts.status, "processing"),
+          or(
+            isNull(adminOrderCreateAttempts.claimExpiresAt),
+            lte(adminOrderCreateAttempts.claimExpiresAt, sql`unixepoch()`),
+          ),
+        ),
+      );
+    const latest = await selectAttemptByKey(db, identity.requestKeyHash);
+    if (!latest) {
+      throw new ServiceUnavailableError(
+        "Manual order request state is unavailable. Retry with the same order form.",
+      );
+    }
+    authoritativeRow = latest;
+  }
+
+  throw buildRequestMismatchError(authoritativeRow);
+}
+
+function buildRequestMismatchError(row: AdminOrderCreateAttemptRow): AppError {
+  let message: string;
+  let details: AdminOrderCreateRequestMismatchDetails;
+  if (row.status === "committed") {
+    message = "The earlier manual-order submission already created an order.";
+    details = {
+      state: "committed",
+      canRetryWithNewKey: false,
+      orderId: row.orderId,
+    };
+  } else if (row.status === "processing") {
+    message = "The earlier manual-order submission is still being created.";
+    details = {
+      state: "processing",
+      canRetryWithNewKey: false,
+    };
+  } else {
+    message = "The earlier manual-order submission failed. The corrected details can be retried safely.";
+    details = {
+      state: "failed",
+      canRetryWithNewKey: true,
+    };
+  }
+  return new AppError(
+    409,
+    ADMIN_ORDER_CREATE_REQUEST_MISMATCH,
+    message,
+    details,
   );
 }
 
@@ -274,6 +355,14 @@ function isFreshProcessingAttempt(
   return row.status === "processing" &&
     row.claimExpiresAt !== null &&
     row.claimExpiresAt > nowSeconds;
+}
+
+function isStaleProcessingAttempt(
+  row: AdminOrderCreateAttemptRow,
+  nowSeconds = Math.floor(Date.now() / 1000),
+): boolean {
+  return row.status === "processing" &&
+    (row.claimExpiresAt === null || row.claimExpiresAt <= nowSeconds);
 }
 
 function normalizeAdminOrderCreateRequest(input: CreateOrderInput): Record<string, unknown> {

@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { Database } from "@scalius/database/client";
-import { ConflictError } from "@scalius/core/errors";
 import type { CreateOrderInput } from "./orders.validation";
 import {
+  ADMIN_ORDER_CREATE_REQUEST_MISMATCH,
   buildAdminOrderCreateAttemptCommit,
   buildAdminOrderCreateAttemptIdentity,
   claimAdminOrderCreateAttempt,
@@ -92,7 +92,7 @@ describe("admin order create attempts", () => {
     expect(fake.rows[0]?.lastError).toBeNull();
   });
 
-  it("rejects reuse of a request key for changed order details", async () => {
+  it("reports a committed changed request so the client can open the existing order", async () => {
     const fake = createFakeAttemptDb();
     const requestKey = crypto.randomUUID();
     const first = await buildAdminOrderCreateAttemptIdentity(
@@ -103,11 +103,94 @@ describe("admin order create attempts", () => {
       buildInput({ requestKey, shippingCharge: 80 }),
       "admin_1",
     );
+    const claimed = await claimAdminOrderCreateAttempt<{ id: string }>(fake.db, first);
+    if (claimed.status !== "claimed") throw new Error("expected first claim");
+    await buildAdminOrderCreateAttemptCommit(fake.db, claimed.attempt, {
+      id: claimed.attempt.orderId,
+    });
+
+    await expect(claimAdminOrderCreateAttempt(fake.db, changed)).rejects.toMatchObject({
+      status: 409,
+      code: ADMIN_ORDER_CREATE_REQUEST_MISMATCH,
+      details: {
+        state: "committed",
+        canRetryWithNewKey: false,
+        orderId: claimed.attempt.orderId,
+      },
+    });
+    await expect(resolveAdminOrderCreateAttempt(fake.db, changed)).rejects.toMatchObject({
+      code: ADMIN_ORDER_CREATE_REQUEST_MISMATCH,
+      details: { state: "committed", orderId: claimed.attempt.orderId },
+    });
+    expect(fake.rows).toHaveLength(1);
+  });
+
+  it("reports an active changed request without authorizing a second order", async () => {
+    const fake = createFakeAttemptDb();
+    const requestKey = crypto.randomUUID();
+    const first = await buildAdminOrderCreateAttemptIdentity(buildInput({ requestKey }), "admin_1");
+    const changed = await buildAdminOrderCreateAttemptIdentity(
+      buildInput({ requestKey, shippingCharge: 80 }),
+      "admin_1",
+    );
     await claimAdminOrderCreateAttempt(fake.db, first);
 
-    await expect(claimAdminOrderCreateAttempt(fake.db, changed)).rejects.toBeInstanceOf(ConflictError);
-    await expect(resolveAdminOrderCreateAttempt(fake.db, changed)).rejects.toBeInstanceOf(ConflictError);
-    expect(fake.rows).toHaveLength(1);
+    await expect(resolveAdminOrderCreateAttempt(fake.db, changed)).rejects.toMatchObject({
+      status: 409,
+      code: ADMIN_ORDER_CREATE_REQUEST_MISMATCH,
+      details: {
+        state: "processing",
+        canRetryWithNewKey: false,
+      },
+    });
+    expect(fake.rows[0]?.status).toBe("processing");
+  });
+
+  it("authorizes a fresh key after the original changed request definitively failed", async () => {
+    const fake = createFakeAttemptDb();
+    const requestKey = crypto.randomUUID();
+    const first = await buildAdminOrderCreateAttemptIdentity(buildInput({ requestKey }), "admin_1");
+    const changed = await buildAdminOrderCreateAttemptIdentity(
+      buildInput({ requestKey, shippingCharge: 80 }),
+      "admin_1",
+    );
+    const claimed = await claimAdminOrderCreateAttempt(fake.db, first);
+    if (claimed.status !== "claimed") throw new Error("expected first claim");
+    await markAdminOrderCreateAttemptFailed(fake.db, claimed.attempt, new Error("invalid order"));
+
+    await expect(resolveAdminOrderCreateAttempt(fake.db, changed)).rejects.toMatchObject({
+      status: 409,
+      code: ADMIN_ORDER_CREATE_REQUEST_MISMATCH,
+      details: {
+        state: "failed",
+        canRetryWithNewKey: true,
+      },
+    });
+  });
+
+  it("fences an expired changed request before authorizing a fresh key", async () => {
+    const fake = createFakeAttemptDb();
+    const requestKey = crypto.randomUUID();
+    const first = await buildAdminOrderCreateAttemptIdentity(buildInput({ requestKey }), "admin_1");
+    const changed = await buildAdminOrderCreateAttemptIdentity(
+      buildInput({ requestKey, shippingCharge: 80 }),
+      "admin_1",
+    );
+    await claimAdminOrderCreateAttempt(fake.db, first);
+    fake.rows[0]!.claimExpiresAt = Math.floor(Date.now() / 1_000) - 1;
+
+    await expect(resolveAdminOrderCreateAttempt(fake.db, changed)).rejects.toMatchObject({
+      code: ADMIN_ORDER_CREATE_REQUEST_MISMATCH,
+      details: {
+        state: "failed",
+        canRetryWithNewKey: true,
+      },
+    });
+    expect(fake.rows[0]).toMatchObject({
+      status: "failed",
+      claimId: null,
+      claimExpiresAt: null,
+    });
   });
 });
 
