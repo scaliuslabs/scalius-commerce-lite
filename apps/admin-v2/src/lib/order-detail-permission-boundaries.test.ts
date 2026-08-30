@@ -30,10 +30,10 @@ describe("order detail permission boundaries", () => {
     expect(adminTypesSource).not.toContain("ORDER_STATUS_TRANSITIONS");
     expect(adminPolicySource).toContain("WORKFLOW_OWNED_ORDER_STATUSES");
     expect(adminPolicySource).toContain('shipped: ["delivered"]');
-    expect(statusCardSource).toContain("getAdminOrderStatusTransitions(order.status)");
+    expect(statusCardSource).toContain("getAdminOrderStatusTransitions(order.status, paymentState)");
     expect(listSelectorSource).toContain('import("./OrderStatusSelectorMenu")');
     expect(listSelectorSource).not.toContain("getAvailableTransitions(status)");
-    expect(listSelectorMenuSource).toContain("getAdminOrderStatusTransitions(status)");
+    expect(listSelectorMenuSource).toContain("getAdminOrderStatusTransitions(status, paymentState)");
   });
 
   it("keeps order detail mutation controls aligned with granular order permissions", () => {
@@ -78,6 +78,7 @@ describe("order detail permission boundaries", () => {
     expect(statusSource).toContain("orderActions.canChangeOrderStatus");
     expect(statusSource).toContain("availableTransitions.length === 0");
     expect(statusSource).toContain("Cancelled orders cannot be reopened");
+    expect(statusSource).toContain("Use <span className=\"font-medium\">Issue Refund</span>");
     expect(statusSource).not.toContain("canRefundOrders");
     expect(statusSource).toContain('aria-label="Order status"');
 
@@ -89,6 +90,8 @@ describe("order detail permission boundaries", () => {
     expect(paymentSource).toContain("paymentRecovery?.canIssueRecoveryLink === true");
     expect(paymentSource).toContain("Copy verification link");
     expect(paymentSource).toContain("copyRecoveryUrlToClipboard(recoveryLink.url)");
+    expect(paymentSource).toContain("paymentPresentation.amountDueLabel");
+    expect(paymentSource).toContain("paymentPresentation.cashCollectionLabel");
     expect(orderDetailRouteSource).toContain("paymentRecovery: order.paymentRecovery");
 
     expect(shipmentSource).toContain("useOrderActionPermissions");

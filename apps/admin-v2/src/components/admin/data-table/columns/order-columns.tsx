@@ -242,6 +242,8 @@ export function getOrderColumns(
         return (
           <OrderStatusSelector
             status={order.status}
+            paymentStatus={order.paymentStatus}
+            paidAmount={order.paidAmount}
             orderId={order.id}
             isLoading={opts.updatingStatusIds.has(order.id)}
             showTrashed={opts.showTrashed}

@@ -66,6 +66,7 @@ import {
   resolveSavedOrderMoneySummary,
 } from "@/lib/order-tax-presentation";
 import { canProcessOrderCodAction } from "@scalius/shared/order-state";
+import { buildOrderPaymentPresentation } from "@/lib/order-payment-presentation";
 
 type CodFailureReason = Extract<
   UpdateOrderCodInput,
@@ -631,6 +632,11 @@ export function PaymentCard({ order }: PaymentCardProps) {
 
   const paymentStatusCfg = PAYMENT_STATUS_CONFIG[order.paymentStatus ?? "unpaid"] ?? PAYMENT_STATUS_CONFIG.unpaid;
   const PaymentStatusIcon = paymentStatusCfg.icon;
+  const paymentPresentation = buildOrderPaymentPresentation({
+    orderStatus: order.status,
+    balanceDue: order.balanceDue,
+    codStatus: codTracking?.codStatus,
+  });
 
   return (
     <>
@@ -704,32 +710,39 @@ export function PaymentCard({ order }: PaymentCardProps) {
                 </span>
               </div>
             )}
-            {(order.balanceDue ?? 0) > 0 && (
+            {paymentPresentation.collectionClosed ? (
+              <div className="flex justify-between border-t border-border pt-1.5 font-medium text-muted-foreground">
+                <span>{paymentPresentation.amountDueLabel}</span>
+                <span>Order {order.status.replace(/_/g, " ")}</span>
+              </div>
+            ) : paymentPresentation.amountDue > 0 ? (
               <div className="flex justify-between border-t border-border pt-1.5 text-amber-600 font-medium">
-                <span>Balance due</span>
+                <span>{paymentPresentation.amountDueLabel}</span>
                 <span>
                   {savedSummary
-                    ? formatSavedMajorAmount(order.balanceDue ?? 0, savedSummary)
-                    : `${symbol}${formatOrderAmount(order.balanceDue ?? 0)}`}
+                    ? formatSavedMajorAmount(paymentPresentation.amountDue, savedSummary)
+                    : `${symbol}${formatOrderAmount(paymentPresentation.amountDue)}`}
                 </span>
               </div>
-            )}
+            ) : null}
           </div>
 
           {/* Payment plan */}
           {plan && (
             <div className="text-sm space-y-1 rounded-lg border border-border p-3">
-              <div className="font-medium text-xs text-muted-foreground uppercase tracking-wide mb-2">Payment Plan</div>
+              <div className="font-medium text-xs text-muted-foreground uppercase tracking-wide mb-2">
+                {paymentPresentation.collectionClosed ? "Payment plan history" : "Payment Plan"}
+              </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Deposit</span>
                 <span className={plan.depositPaidAt ? "text-green-600" : "text-amber-600"}>
-                  {symbol}{formatOrderAmount(plan.depositAmount)} {plan.depositPaidAt ? "✓" : "(pending)"}
+                  {symbol}{formatOrderAmount(plan.depositAmount)} {plan.depositPaidAt ? "✓" : paymentPresentation.collectionClosed ? "(closed)" : "(pending)"}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Balance</span>
                 <span className={plan.balancePaidAt ? "text-green-600" : "text-amber-600"}>
-                  {symbol}{formatOrderAmount(plan.balanceDue)} {plan.balancePaidAt ? "✓" : plan.balanceDueDate ? `due ${plan.balanceDueDate}` : "(pending)"}
+                  {symbol}{formatOrderAmount(plan.balanceDue)} {plan.balancePaidAt ? "✓" : paymentPresentation.collectionClosed ? "(closed)" : plan.balanceDueDate ? `due ${plan.balanceDueDate}` : "(pending)"}
                 </span>
               </div>
             </div>
@@ -988,12 +1001,27 @@ export function PaymentCard({ order }: PaymentCardProps) {
                 <div className="text-sm space-y-1 rounded-lg bg-muted/30 p-3">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                      {hasCashBalanceDueOnDelivery ? "Cash balance on delivery" : "COD status"}
+                      {paymentPresentation.collectionClosed
+                        ? "COD collection"
+                        : hasCashBalanceDueOnDelivery
+                          ? "Cash balance on delivery"
+                          : "COD status"}
                     </span>
-                    <Badge variant={COD_STATUS_CONFIG[codTracking.codStatus]?.variant ?? "secondary"} className="text-xs">
-                      {COD_STATUS_CONFIG[codTracking.codStatus]?.label ?? codTracking.codStatus}
+                    <Badge
+                      variant={paymentPresentation.collectionClosed
+                        ? "outline"
+                        : COD_STATUS_CONFIG[codTracking.codStatus]?.variant ?? "secondary"}
+                      className="text-xs"
+                    >
+                      {paymentPresentation.cashCollectionLabel}
                     </Badge>
                   </div>
+                  {paymentPresentation.recordedCodStatusLabel && (
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Last recorded status</span>
+                      <span>{paymentPresentation.recordedCodStatusLabel}</span>
+                    </div>
+                  )}
                   {codTracking.deliveryAttempts > 0 && (
                     <div className="flex justify-between text-muted-foreground">
                       <span>Delivery attempts</span>

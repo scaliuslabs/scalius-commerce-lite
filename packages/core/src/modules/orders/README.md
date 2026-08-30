@@ -41,7 +41,7 @@ partially_refunded --> refunded
 
 All 11 states: `incomplete`, `pending`, `processing`, `confirmed`, `shipped`, `delivered`, `completed`, `cancelled`, `returned`, `refunded`, `partially_refunded`.
 
-**Note on CANCELLED:** Cancellation is terminal. It may release reservations, restore stock, void payment authority, and notify the buyer, so a merchant who wants to continue the sale must create a new order with a new lifecycle identity. Archive restoration is separate and does not reopen the order lifecycle.
+**Note on CANCELLED:** Cancellation is terminal. Generic admin cancellation is limited to an order with an exact numeric zero paid amount, `unpaid` or `failed` payment status, no pending/confirmed/succeeded payment ledger row, and no active payment/refund setup. Captured, partially captured, or payment-uncertain orders must use the dedicated refund workflow; a successful full pre-fulfillment refund owns the safe transition to `cancelled` after provider and local reconciliation. Cancellation releases or restores inventory and notifies the buyer, while a merchant who wants to continue the sale must create a new order with a new lifecycle identity. Archive restoration is separate and does not reopen the order lifecycle.
 
 **Note on carrier retries:** `confirmed -> delivered` is allowed for direct delivery confirmation, and `shipped -> confirmed` is allowed when a carrier delivery attempt fails and the merchant needs to retry shipment without restoring or deducting stock.
 

@@ -40800,6 +40800,7 @@ export type GetApiV1AdminOrdersResponses = {
                 discountAmount: number;
                 status: string;
                 paymentStatus: string | null;
+                paidAmount: number;
                 paymentMethod: string | null;
                 fulfillmentStatus: string | null;
                 createdAt: string | number;
@@ -41221,6 +41222,7 @@ export type GetApiV1AdminOrdersPaymentRecoveryResponses = {
                 discountAmount: number;
                 status: string;
                 paymentStatus: string | null;
+                paidAmount: number;
                 paymentMethod: string | null;
                 fulfillmentStatus: string | null;
                 createdAt: string | number;
