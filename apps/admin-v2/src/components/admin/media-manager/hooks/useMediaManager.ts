@@ -12,6 +12,7 @@ import {
   type MediaWorkspaceRouteUpdateOptions,
 } from "../types";
 import { resolveSelectedMedia, selectAllVisibleMedia, updateMediaSelection } from "../utils/selection";
+import { mergeUploadedFiles } from "../utils/uploaded-files";
 
 interface UseMediaManagerOptions {
   autoLoad: boolean;
@@ -63,7 +64,6 @@ export function useMediaManager({
   const [viewState, setViewState] = useState<MediaLibraryView>("ready");
   const [isMutating, setIsMutating] = useState(false);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const uploadRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const selectionAnchorId = useRef<string | null>(null);
   const unavailableFileIdSet = useMemo(
     () => new Set(unavailableFileIds.map((id) => id.replace(/^temp_/, ""))),
@@ -76,19 +76,6 @@ export function useMediaManager({
   const routeControlled = workspaceState !== undefined && onWorkspaceStateChange !== undefined;
   const view = routeControlled ? workspaceState.view : viewState;
   const currentFolderId = routeControlled ? workspaceState.folderId : folders.currentFolderId;
-
-  const upload = useMediaUpload({
-    capability,
-    folderId: currentFolderId === "all" ? null : currentFolderId,
-    onUploadComplete: (uploaded) => {
-      if (onSelectMultiple) {
-        setSelectedFileIds((current) => [...new Set([...current, ...uploaded.map((file) => file.id)])]);
-        setSelectionMode(true);
-      }
-      if (uploadRefreshTimer.current) clearTimeout(uploadRefreshTimer.current);
-      uploadRefreshTimer.current = setTimeout(() => void media.refresh(), 350);
-    },
-  });
 
   const baseFilters = useMemo(() => ({
     kind: capabilityKind(capability),
@@ -107,6 +94,23 @@ export function useMediaManager({
       view: workspaceState.view,
     };
   }, [capability, media.filters, routeControlled, workspaceState]);
+  const activeFiltersRef = useRef(filters);
+  activeFiltersRef.current = filters;
+
+  const upload = useMediaUpload({
+    capability,
+    folderId: currentFolderId === "all" ? null : currentFolderId,
+    onUploadComplete: (uploaded) => {
+      if (onSelectMultiple) {
+        setSelectedFileIds((current) => [...new Set([...current, ...uploaded.map((file) => file.id)])]);
+        setSelectionMode(true);
+      }
+
+      const activeFilters = activeFiltersRef.current;
+      media.setFiles((current) => mergeUploadedFiles(current, uploaded, activeFilters));
+      void media.loadFiles(undefined, activeFilters);
+    },
+  });
 
   useEffect(() => {
     setSelectedFileIds([]);
@@ -153,7 +157,6 @@ export function useMediaManager({
 
   useEffect(() => () => {
     if (searchTimer.current) clearTimeout(searchTimer.current);
-    if (uploadRefreshTimer.current) clearTimeout(uploadRefreshTimer.current);
   }, []);
 
   const load = useCallback(
