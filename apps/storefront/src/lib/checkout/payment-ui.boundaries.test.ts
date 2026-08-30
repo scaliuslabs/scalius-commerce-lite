@@ -56,6 +56,14 @@ describe("storefront payment transition UI", () => {
     expect(cartSource).toContain("border border-border bg-background");
   });
 
+  it("keeps a localized cart recovery action available for an unreadable payment handoff", () => {
+    expect(checkoutSource).toContain('id="checkoutRecoveryAction"');
+    expect(checkoutSource).toContain('href="/cart"');
+    expect(checkoutSource).toContain("{copy.returnToCartText}");
+    expect(checkoutSource).toContain("hidden\n          class=");
+    expect(checkoutControllerSource).toContain("showReturnToCartAction()");
+  });
+
   it("finalizes COD-only carts against the exact submitted cart snapshot", () => {
     expect(cartSource).toContain(
       "cartFingerprintHash: await hashCheckoutCartFingerprint(cartItems)",

@@ -116,20 +116,21 @@ function setPaymentControlsDisabled(disabled: boolean): void {
     });
 }
 
-function setReturnToCartButton(): void {
-  const btn = document.getElementById("payButton") as HTMLButtonElement | null;
-  const span = document.getElementById("payButtonText");
-  if (!btn) return;
-  btn.disabled = false;
-  btn.onclick = () => {
-    window.location.href = "/cart";
-  };
-  if (span) span.textContent = checkoutCopy.returnToCartText;
+function showReturnToCartAction(): void {
+  const action = document.getElementById("checkoutRecoveryAction") as HTMLAnchorElement | null;
+  if (action) action.hidden = false;
+}
+
+function hideReturnToCartAction(): void {
+  const action = document.getElementById("checkoutRecoveryAction") as HTMLAnchorElement | null;
+  if (action) action.hidden = true;
 }
 
 function clearCheckoutPresentation(): void {
   resetStripePaymentElement();
-  document.getElementById("paymentMethods")?.replaceChildren();
+  const paymentMethods = document.getElementById("paymentMethods");
+  paymentMethods?.replaceChildren();
+  paymentMethods?.setAttribute("aria-busy", "false");
   document.getElementById("summaryDetails")?.replaceChildren();
   document.getElementById("orderSummary")?.classList.add("hidden");
   document.getElementById("stripeSection")?.classList.add("hidden");
@@ -522,7 +523,7 @@ function loadCheckoutData(): boolean {
   const fail = (message: string) => {
     clearCheckoutPresentation();
     showError(message);
-    setReturnToCartButton();
+    showReturnToCartAction();
     clearCheckoutTransferSession();
     return false;
   };
@@ -1070,6 +1071,7 @@ export async function initCheckoutPage(): Promise<void> {
   };
   if (!checkoutConfig) return;
 
+  hideReturnToCartAction();
   installOrderSummaryToggle();
 
   if (!loadCheckoutData()) return;
