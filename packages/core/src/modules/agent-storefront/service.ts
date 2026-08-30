@@ -40,6 +40,7 @@ import {
   type AgentStorefrontCartLine,
   type AgentStorefrontDeliverySelection,
 } from "./state";
+import { buildAgentStorefrontCheckoutQuoteFingerprint } from "./quote-fingerprint";
 
 export const AGENT_STOREFRONT_CONTEXT_TTL_SECONDS = 24 * 60 * 60;
 
@@ -711,20 +712,6 @@ function buildPromotionAllocation(
   };
 }
 
-function encodeBase64Url(bytes: Uint8Array): string {
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-}
-
-async function quoteFingerprint(value: unknown): Promise<string> {
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(JSON.stringify(value)),
-  );
-  return `taxq_${encodeBase64Url(new Uint8Array(digest)).slice(0, 22)}`;
-}
-
 export async function quoteAgentStorefrontCheckout(
   db: Database,
   grantId: string,
@@ -847,25 +834,16 @@ export async function quoteAgentStorefrontCheckout(
     currency: { code: currency.currencyCode, decimalPlaces },
   });
   const toAmount = (minor: number) => fromMinorUnits(minor, quote.decimalPlaces);
-  const identity = {
+  const currentQuoteFingerprint = await buildAgentStorefrontCheckoutQuoteFingerprint({
     contextRevision: row.revision,
-    shippingMethodId: destination.shippingMethodId,
+    shippingMethodId: destination.shippingMethodId!,
     discountCode,
-    calculationVersion: quote.calculationVersion,
-    settingsVersion: quote.settingsVersion,
-    currencyCode: quote.currencyCode,
-    destination: quote.destination,
-    subtotalMinor: quote.subtotalMinor,
-    shippingMinor: quote.shippingMinor,
-    discountMinor: quote.discountMinor,
-    taxMinor: quote.taxMinor,
-    totalMinor: quote.totalMinor,
-    lines: quote.lines.map((line) => [line.productId, line.variantId, line.quantity, line.unitPriceMinor]),
-  };
+    quote,
+  });
   return {
     valid: true,
     contextRevision: row.revision,
-    quoteFingerprint: await quoteFingerprint(identity),
+    quoteFingerprint: currentQuoteFingerprint,
     displayLabel: quote.displayLabel,
     pricesIncludeTax: quote.pricesIncludeTax,
     shippingTaxed: quote.shippingTaxed,

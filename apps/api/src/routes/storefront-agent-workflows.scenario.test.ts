@@ -121,6 +121,7 @@ async function request(path: string, init?: RequestInit): Promise<Record<string,
 function checkoutBody(idempotencyKey?: string): Record<string, unknown> {
   return {
     expectedRevision: 2,
+    expectedQuoteFingerprint: "taxq_abcdefghijklmnopqrstuv",
     ...(idempotencyKey ? { idempotencyKey } : {}),
     customerName: "Scenario Buyer",
     customerPhone: "+8801700000000",
@@ -213,7 +214,10 @@ describe("storefront agent buyer workflow scenarios", () => {
         expect.anything(),
         "agr_test",
         contextId,
-        expect.objectContaining({ paymentMethod }),
+        expect.objectContaining({
+          paymentMethod,
+          expectedQuoteFingerprint: "taxq_abcdefghijklmnopqrstuv",
+        }),
         expect.anything(),
       );
     },
@@ -266,6 +270,22 @@ describe("storefront agent buyer workflow scenarios", () => {
         message: "Idempotency-Key header must match body.idempotencyKey.",
       },
     });
+    expect(mocks.submit).not.toHaveBeenCalled();
+  });
+
+  it("rejects submit when no buyer-reviewed quote fingerprint is provided", async () => {
+    const body = checkoutBody("scenario_missing_quote_0001");
+    delete body.expectedQuoteFingerprint;
+    const response = await rawRequest(
+      `/storefront/agent-contexts/${contextId}/checkout/submit`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
+    );
+
+    expect(response.status).toBe(400);
     expect(mocks.submit).not.toHaveBeenCalled();
   });
 
