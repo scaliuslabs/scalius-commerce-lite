@@ -148,4 +148,36 @@ describe("ShippingLocationSelector hydration", () => {
     ]);
     window.removeEventListener("shippingLocationChange", trackPublishedMethod);
   });
+
+  it("falls back to the first active method when the saved method is unavailable", async () => {
+    const methods = [
+      shippingMethods[0],
+      { ...shippingMethods[0], id: "express", name: "Express delivery", fee: 200 },
+    ];
+    writeCheckoutFormDraft({ shippingLocation: "retired-method" });
+    const publishedMethods: Array<{ id: string; name?: string }> = [];
+    const trackPublishedMethod = (event: Event) => {
+      publishedMethods.push((event as CustomEvent<{ id: string; name?: string }>).detail);
+    };
+    window.addEventListener("shippingLocationChange", trackPublishedMethod);
+
+    const container = document.createElement("div");
+    document.body.append(container);
+
+    await act(async () => {
+      root = createRoot(container);
+      root.render(<ShippingLocationSelector shippingMethods={methods} />);
+      await Promise.resolve();
+    });
+
+    expect(
+      container.querySelector<HTMLInputElement>(
+        'input[name="shippingLocation"][value="standard"]',
+      )?.checked,
+    ).toBe(true);
+    expect(publishedMethods).toEqual([
+      expect.objectContaining({ id: "standard", name: "Standard delivery" }),
+    ]);
+    window.removeEventListener("shippingLocationChange", trackPublishedMethod);
+  });
 });

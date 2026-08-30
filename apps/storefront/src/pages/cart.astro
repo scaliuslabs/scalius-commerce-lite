@@ -752,6 +752,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     writeCheckoutFormDraft,
     writeCheckoutTransferSession,
   } from "@/lib/checkout/session-state";
+  import { findNamedCheckoutControl } from "@/lib/checkout/form-controls";
   import {
     getShippingAddressError,
     MIN_SHIPPING_ADDRESS_LENGTH,
@@ -892,9 +893,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     const draft = readCheckoutFormDraft();
     const values: Record<string, string> = {};
     for (const field of checkoutDraftFields) {
-      const input = document.querySelector<HTMLInputElement | HTMLTextAreaElement>(
-        `[name="${field}"]`,
-      );
+      const input = findNamedCheckoutControl(document, field);
       const inputValue =
         field === "customerPhone" &&
         input instanceof HTMLInputElement &&
@@ -1496,8 +1495,9 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
           return;
         }
 
-        const shippingLocationInput = document.querySelector<HTMLInputElement>(
-          '[name="shippingLocation"]',
+        const shippingLocationInput = findNamedCheckoutControl(
+          document,
+          "shippingLocation",
         );
         if (!shippingLocationInput?.value?.trim()) {
           e.preventDefault();
@@ -1578,9 +1578,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
             "areaName",
           ];
           for (const f of fields) {
-            const el = document.querySelector(
-              `[name="${f}"]`,
-            ) as HTMLInputElement | null;
+            const el = findNamedCheckoutControl(document, f);
             if (el) checkoutData[f] = el.value;
           }
 
