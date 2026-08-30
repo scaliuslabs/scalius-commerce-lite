@@ -1,0 +1,103 @@
+name: Product improvement
+description: Propose a new capability or a measurable workflow improvement.
+labels:
+  - "status: needs-triage"
+type: Feature
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Strong proposals start with a user problem and desired outcome. A preferred UI or implementation may be useful evidence, but it is not the requirement by itself.
+
+        Please keep the proposal free of secrets, private order information, and buyer personal data.
+
+  - type: dropdown
+    id: primary-user
+    attributes:
+      label: Primary user
+      options:
+        - Merchant or store owner
+        - Employee or operator
+        - Buyer or customer
+        - Developer or platform operator
+        - More than one group
+    validations:
+      required: true
+
+  - type: dropdown
+    id: affected-workflow
+    attributes:
+      label: Affected workflow
+      description: Choose the closest product workflow. Maintainers will apply the corresponding area label during triage.
+      options:
+        - Checkout and payments
+        - Orders and fulfillment
+        - Catalog and inventory
+        - Customers and authentication
+        - Promotions
+        - Content and discovery
+        - Media
+        - Settings and setup
+        - Storefront experience
+        - Admin experience
+        - API, data, or operations
+        - Other or cross-cutting
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: User problem
+      description: Describe the current workflow, who is affected, and the cost or risk. Avoid prescribing the solution here.
+      placeholder: When ..., the user must ..., which causes ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: Describe what should become faster, safer, clearer, or possible and how success can be observed.
+      placeholder: A successful change would let ... while preserving ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence and precedent
+      description: Include workflow measurements, customer feedback, screenshots, or relevant behavior in established commerce platforms when available.
+      placeholder: Current steps/time/error rate, user feedback, or links to documented precedent
+    validations:
+      required: false
+
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Business rules and constraints
+      description: Identify inventory, payment, privacy, accounting, localization, permissions, or scale requirements that must remain true.
+      placeholder: The outcome must preserve ...
+    validations:
+      required: false
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Note existing workarounds and why they do not adequately solve the problem.
+      placeholder: Today users can ..., but ...
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: confirmation
+    attributes:
+      label: Submission checklist
+      options:
+        - label: I searched open and closed issues for the same request.
+          required: true
+        - label: This proposal describes one user problem and a measurable outcome.
+          required: true
+        - label: I removed secrets and private customer or order information.
+          required: true

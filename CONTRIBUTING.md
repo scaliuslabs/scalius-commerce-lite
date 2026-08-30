@@ -4,18 +4,20 @@ Thank you for your interest in Scalius Commerce Lite!
 
 ## Issues Welcome
 
-We welcome **bug reports** and **feature requests** via [GitHub Issues](https://github.com/scaliuslabs/scalius-commerce-lite/issues). Please include:
+We welcome reproducible bug reports and outcome-focused product proposals through the repository's [structured issue forms](https://github.com/scaliuslabs/scalius-commerce-lite/issues/new/choose).
 
-- Clear description of the problem or request
-- Steps to reproduce (for bugs)
-- Expected vs. actual behavior
-- Screenshots (for UI issues)
+- Search open and closed issues before filing a new one.
+- Report one independently deliverable problem per issue.
+- Describe the affected user, observed behavior, expected outcome, and evidence. A preferred implementation by itself is not a product requirement.
+- Never post passwords, API keys, OTPs, receipt proofs, session tokens, raw buyer data, or other sensitive information.
+
+Maintainers classify work with a native GitHub issue type plus status, priority, and product-area labels. The definitions and triage rules live in [`.github/LABELS.md`](./.github/LABELS.md).
 
 ## Code Contributions
 
-**We are not accepting pull requests at this time.** The codebase is under active development and the architecture is evolving. We may open contributions in the future.
+**We are not accepting unsolicited pull requests at this time.** The codebase is under active development and the architecture is evolving. We may open contributions in the future.
 
-If you have a specific fix in mind, please open an issue first to discuss the approach.
+If a maintainer invites a contribution, work from the repository default branch, link the accepted issue, follow the pull request template, and keep the change scoped to the agreed outcome.
 
 ## License
 
