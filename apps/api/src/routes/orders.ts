@@ -413,8 +413,10 @@ async function assertCheckoutOrderPolicy(
     throw new UnauthorizedError("Please sign in before checkout.");
   }
 
-  if (!session.phone || session.phone !== customerPhone) {
-    throw new ValidationError("Checkout phone must match the signed-in customer phone.");
+  if (!session.phone) {
+    throw new ValidationError(
+      "Your signed-in account is missing its required phone number. Update your profile and try again.",
+    );
   }
 
   return {
@@ -1343,6 +1345,7 @@ async function resolveAuthoritativeTaxQuote(
   input: {
     discountCode?: string | null;
     customerPhone?: string | null;
+    customerId?: string | null;
   },
   cartValidation: TaxQuoteCartValidationResult,
   delivery: TaxQuoteDeliveryResult,
@@ -1369,7 +1372,8 @@ async function resolveAuthoritativeTaxQuote(
       variantId: item.variantId,
       freeDelivery: item.freeDelivery,
     }));
-    const promotionCustomerId = await resolvePromotionCustomerIdByPhone(db, input.customerPhone);
+    const promotionCustomerId = input.customerId
+      ?? await resolvePromotionCustomerIdByPhone(db, input.customerPhone);
     const promotionResolution = await evaluateStorefrontPromotionCode(db, {
       code: normalizedDiscountCode,
       customerId: promotionCustomerId,
@@ -1419,6 +1423,7 @@ async function resolveAuthoritativeTaxQuote(
         input.customerPhone,
         "",
         currencyCode,
+        input.customerId ?? undefined,
       ) as {
       valid?: unknown;
       discount?: {
@@ -1485,6 +1490,14 @@ async function resolveAuthoritativeTaxQuote(
 app.openapi(taxQuoteRoute, async (c) => {
   const db = c.get("db");
   const data = c.req.valid("json");
+  const customerSessionToken = getCustomerSessionTokenFromRequest(c);
+  const sessionCustomer = customerSessionToken && data.discountCode?.trim()
+    ? await getCustomerBySession(
+        db,
+        customerSessionToken,
+        getCustomerSessionHashKey(c.env as unknown as Record<string, unknown>),
+      )
+    : null;
   const currency = await getCurrencySettings(db);
   const cartValidation = await validateStorefrontCartItems(db, data.items, {
     inventoryPool: data.inventoryPool,
@@ -1504,7 +1517,11 @@ app.openapi(taxQuoteRoute, async (c) => {
   }, cartValidation);
   const quote = await resolveAuthoritativeTaxQuote(
     db,
-    { discountCode: data.discountCode, customerPhone: data.customerPhone },
+    {
+      discountCode: data.discountCode,
+      customerPhone: data.customerPhone,
+      customerId: sessionCustomer?.customerId ?? null,
+    },
     cartValidation,
     delivery,
     data,
@@ -1980,7 +1997,16 @@ app.openapi(createOrderRoute, async (c) => {
       db,
       data,
       requestUrl,
-      (db, code, total, items, customerPhone) => isDiscountValid(db, code, total, items as CartItem[], customerPhone),
+      (db, code, total, items, customerPhone, customerId) => isDiscountValid(
+        db,
+        code,
+        total,
+        items as CartItem[],
+        customerPhone,
+        "",
+        undefined,
+        customerId,
+      ),
       (db, discount, total, items, shippingCost, applicableProductIds, hasProductRestrictions) => calculateDiscountAmount(
         db,
         discount as { id: string; type: string; valueType: string; discountValue: number },

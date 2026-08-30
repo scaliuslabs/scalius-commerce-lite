@@ -156,6 +156,12 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 6,
         postgresStatements: 6,
       },
+      {
+        version: 59,
+        name: "0059_checkout_delivery_phone_identity",
+        sqliteStatements: 6,
+        postgresStatements: 10,
+      },
     ]);
   });
 
@@ -282,6 +288,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 56, name: "0056_agent_access" },
           { version: 57, name: "0057_agent_browser_handoffs" },
           { version: 58, name: "0058_order_shipping_method_snapshot" },
+          { version: 59, name: "0059_checkout_delivery_phone_identity" },
         ],
       });
     } finally {
@@ -426,16 +433,12 @@ describe("provider-neutral schema upgrades", () => {
       { version: 50, name: artifacts[0]!.name, sourceSha256: "b".repeat(64) },
     ], artifacts)).toThrow(/diverges at version 50/i);
     expect(() => validateAppliedSchemaMigrations([
-      { version: 50, name: artifacts[0]!.name, sourceSha256: artifacts[0]!.sourceSha256 },
-      { version: 51, name: artifacts[1]!.name, sourceSha256: artifacts[1]!.sourceSha256 },
-      { version: 52, name: artifacts[2]!.name, sourceSha256: artifacts[2]!.sourceSha256 },
-      { version: 53, name: artifacts[3]!.name, sourceSha256: artifacts[3]!.sourceSha256 },
-      { version: 54, name: artifacts[4]!.name, sourceSha256: artifacts[4]!.sourceSha256 },
-      { version: 55, name: artifacts[5]!.name, sourceSha256: artifacts[5]!.sourceSha256 },
-      { version: 56, name: artifacts[6]!.name, sourceSha256: artifacts[6]!.sourceSha256 },
-      { version: 57, name: artifacts[7]!.name, sourceSha256: artifacts[7]!.sourceSha256 },
-      { version: 58, name: artifacts[8]!.name, sourceSha256: artifacts[8]!.sourceSha256 },
-      { version: 59, name: "0059_future", sourceSha256: "c".repeat(64) },
+      ...artifacts.map((artifact) => ({
+        version: artifact.version,
+        name: artifact.name,
+        sourceSha256: artifact.sourceSha256,
+      })),
+      { version: 60, name: "0060_future", sourceSha256: "c".repeat(64) },
     ], artifacts)).toThrow(/future row/i);
   });
 

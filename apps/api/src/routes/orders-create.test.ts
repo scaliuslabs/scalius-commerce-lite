@@ -907,6 +907,15 @@ describe("authoritative tax quote", () => {
   );
 
   it("passes validated product discount scope to the shared quote service", async () => {
+    mocks.getCustomerBySession.mockResolvedValue({
+      token: "session_quote_owner",
+      email: "buyer@example.com",
+      name: "Signed In Buyer",
+      phone: "+8801812345678",
+      customerId: "customer_quote_owner",
+      createdAt: Date.now(),
+      expiresAt: Date.now() + 86_400_000,
+    });
     mocks.validateStorefrontCartItems.mockResolvedValue({
       valid: true,
       issues: [],
@@ -945,7 +954,10 @@ describe("authoritative tax quote", () => {
       "/api/v1/orders/tax-quote",
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "X-Customer-Session": "session_quote_owner",
+        },
         body: JSON.stringify({
           items: [{ productId: "product_1", variantId: "variant_1", quantity: 1 }],
           city: "city_1",
@@ -975,6 +987,12 @@ describe("authoritative tax quote", () => {
       "+8801712345678",
       "",
       "BDT",
+      "customer_quote_owner",
+    );
+    expect(mocks.getCustomerBySession).toHaveBeenCalledWith(
+      expect.anything(),
+      "session_quote_owner",
+      undefined,
     );
     expect(mocks.calculateDiscountAmount).toHaveBeenCalledWith(
       expect.anything(),
@@ -2158,7 +2176,7 @@ describe("create order commit/KV ordering", () => {
     expect(mocks.createStorefrontOrder).toHaveBeenCalledOnce();
   });
 
-  it("rejects signed-in checkout with a mismatched phone even when guest checkout is enabled", async () => {
+  it("keeps signed-in ownership when the buyer uses a different delivery phone", async () => {
     mocks.getCustomerBySession.mockResolvedValue({
       token: "session_guest_enabled_mismatch",
       email: "buyer@example.com",
@@ -2183,18 +2201,27 @@ describe("create order commit/KV ordering", () => {
       { CACHE: kv } as never,
     );
 
-    expect(response.status).toBe(400);
-    expect(await response.json()).toMatchObject({
-      success: false,
-      error: {
-        message: "Checkout phone must match the signed-in customer phone.",
-      },
-    });
+    expect(response.status, await response.clone().text()).toBe(201);
     expect(mocks.getCustomerBySession).toHaveBeenCalledWith(db, "session_guest_enabled_mismatch", undefined);
-    expect(mocks.rateLimit).not.toHaveBeenCalled();
-    expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
-    expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
-    expect(kv.put).not.toHaveBeenCalled();
+    expect(mocks.createStorefrontOrder).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ customerPhone: "+8801712345678" }),
+      expect.any(String),
+      expect.any(Function),
+      expect.any(Function),
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      {
+        customerId: "customer_signed_in",
+        source: "authenticated",
+      },
+      expect.anything(),
+      undefined,
+      expect.anything(),
+      expect.anything(),
+    );
+    expect(mocks.commitStorefrontOrderPayload).toHaveBeenCalledOnce();
   });
 
   it("rejects stale customer sessions with a recoverable code when guest checkout is enabled", async () => {
@@ -2289,7 +2316,7 @@ describe("create order commit/KV ordering", () => {
     expect(mocks.commitStorefrontOrderPayload).toHaveBeenCalledOnce();
   });
 
-  it("rejects authenticated checkout if the forwarded session phone differs from order phone", async () => {
+  it("allows a different delivery phone when signed-in checkout is required", async () => {
     mocks.getCustomerBySession.mockResolvedValue({
       token: "session_2",
       email: "",
@@ -2314,10 +2341,26 @@ describe("create order commit/KV ordering", () => {
       { CACHE: kv } as never,
     );
 
-    expect(response.status).toBe(400);
-    expect(mocks.rateLimit).not.toHaveBeenCalled();
-    expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
-    expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
+    expect(response.status, await response.clone().text()).toBe(201);
+    expect(mocks.createStorefrontOrder).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ customerPhone: "+8801712345678" }),
+      expect.any(String),
+      expect.any(Function),
+      expect.any(Function),
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      {
+        customerId: "customer_2",
+        source: "authenticated",
+      },
+      expect.anything(),
+      undefined,
+      expect.anything(),
+      expect.anything(),
+    );
+    expect(mocks.commitStorefrontOrderPayload).toHaveBeenCalledOnce();
   });
 
   it("rejects authenticated checkout if the customer session has no phone proof", async () => {
@@ -2345,6 +2388,12 @@ describe("create order commit/KV ordering", () => {
     );
 
     expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      success: false,
+      error: {
+        message: "Your signed-in account is missing its required phone number. Update your profile and try again.",
+      },
+    });
     expect(mocks.rateLimit).not.toHaveBeenCalled();
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
   });

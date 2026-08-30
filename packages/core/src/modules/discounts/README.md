@@ -100,7 +100,7 @@ Checks performed in order:
 3. Minimum purchase amount met (merchandise subtotal; eligible lines only for product scope)
 4. Minimum quantity met (eligible lines only for product scope)
 5. Total usage limit not exceeded (`maxUses` vs `discountUsage` count; advisory before checkout commit)
-6. Per-customer limit via immutable `discountCustomerRedemptions` phone claim (advisory before checkout commit)
+6. Per-customer limit via immutable `discountCustomerRedemptions` identity claims (advisory before checkout commit): every checkout claims `phone:{checkoutPhone}`, and authenticated checkout also checks/claims `customer:{accountOwnerCustomerId}`
 
 Returns `applicableProductIds` set for downstream use by `calculateDiscountAmount`.
 
@@ -114,11 +114,12 @@ does not trust the browser's discount amount, shipping amount, or earlier quote.
 Cart and API validation are buyer-friendly prechecks, not the concurrency authority. Final redemption is enforced when checkout inserts `discount_usage` in the synchronous order commit batch:
 
 - `discount_usage_max_uses_guard` aborts the insert with `DISCOUNT_MAX_USES_EXCEEDED` when `maxUses` has already been reached.
-- `discount_usage_one_per_customer_guard` aborts with `DISCOUNT_ONE_PER_CUSTOMER_EXCEEDED` when the checkout phone proof already has an immutable redemption claim for that discount.
-- `discount_customer_redemptions` stores the immutable per-customer claim as `phone:{checkoutPhone}` at redemption time, so later admin corrections to `orders.customerPhone` do not reopen a one-per-customer coupon.
-- `commitStorefrontOrderPayload()` maps those trigger aborts back to normal checkout `ValidationError`s and releases reserved stock before returning the failure.
+- `discount_usage_customer_identity_guard` rejects a one-use redemption when the committed order has no canonical checkout phone.
+- `discount_usage_one_per_customer_guard` aborts with `DISCOUNT_ONE_PER_CUSTOMER_EXCEEDED` when either the checkout-phone claim or authenticated account-owner claim already exists for that discount.
+- `discount_usage_customer_redemption_claim` stores `phone:{checkoutPhone}` for every redemption and also stores `customer:{accountOwnerCustomerId}` for authenticated checkout. The migration backfills account claims while retaining historical phone claims, so changing a delivery phone, changing a profile phone, or retrying as a guest cannot reopen a consumed one-use coupon.
+- `commitStorefrontOrderPayload()` maps those trigger/unique-key aborts back to normal checkout `ValidationError`s; the authoritative batch rolls the order, discount, and stock reservation back together.
 
-The D1 triggers close concurrent total-usage and phone-redemption races. Other
+The D1/Turso/PostgreSQL guards and unique claim key close concurrent total-usage and identity-redemption races. Other
 rule edits (schedule, scope, and minimum changes between final validation and
 the order batch) still require the planned revisioned promotion allocation
 model; public validation is not represented as a durable reservation.
