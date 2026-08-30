@@ -52,6 +52,20 @@ describe("checkout language presets", () => {
     expect(resolved.viewPaymentStatusText).toBe("পেমেন্টের অবস্থা দেখুন");
   });
 
+  it("fills the buyer-verified payment recovery workflow from the locale preset", () => {
+    const resolved = resolveCheckoutLanguageData("bn", {
+      paymentRecoveryMessageText:
+        "পেমেন্ট পেজ খোলার আগেই আপনার অর্ডারটি তৈরি হয়েছে। নতুন করে চেকআউট শুরু করার আগে পেমেন্টের অবস্থা দেখুন।",
+    });
+
+    expect(resolved.paymentRecoveryPageTitleText).toBe("পেমেন্ট পুনরুদ্ধার");
+    expect(resolved.paymentRecoveryHeadingText).toBe("অর্ডারটি যাচাই করুন");
+    expect(resolved.paymentRecoverySmsChannelText).toBe("অর্ডারের ফোনে SMS");
+    expect(resolved.paymentRecoveryCodeSentText).toContain("যাচাইকরণ কোড");
+    expect(resolved.paymentRecoveryMissingOrderText).toContain("অর্ডার রেফারেন্স");
+    expect(resolved.paymentRecoveryVerificationFailedText).toContain("নতুন কোড");
+  });
+
   it("preserves genuine merchant overrides", () => {
     const resolved = resolveCheckoutLanguageData("bn", {
       pageTitle: "দ্রুত চেকআউট",

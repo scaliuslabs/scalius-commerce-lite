@@ -33,6 +33,34 @@ export const ENGLISH_CHECKOUT_LANGUAGE_DATA = {
   paymentRecoveryMessageText:
     "Your order was created before payment opened. Review its payment status before starting another checkout.",
   viewPaymentStatusText: "View payment status",
+  paymentRecoveryPageTitleText: "Payment recovery",
+  paymentRecoveryEyebrowText: "Hosted payment recovery",
+  paymentRecoveryHeadingText: "Verify this order",
+  paymentRecoveryIntroText:
+    "This link does not open private receipt details by itself. Verify the buyer contact to continue payment from this browser.",
+  paymentRecoverySmsChannelText: "SMS to order phone",
+  paymentRecoveryWhatsappChannelText: "WhatsApp to order phone",
+  paymentRecoveryEmailChannelText: "Email on order",
+  paymentRecoveryOrderReferenceText: "Order reference",
+  paymentRecoveryVerificationChannelText: "Verification channel",
+  paymentRecoverySendCodeText: "Send code",
+  paymentRecoveryVerificationCodeText: "Verification code",
+  paymentRecoveryContinueToReceiptText: "Continue to receipt",
+  paymentRecoveryUnavailableText:
+    "Payment recovery is not available right now. Sign in to check account orders or contact the store.",
+  paymentRecoveryMissingOrderText:
+    "This recovery link is missing an order reference. Ask the store to send a fresh payment recovery link.",
+  paymentRecoveryViewAccountOrdersText: "View account orders",
+  paymentRecoverySendingCodeText: "Sending verification code…",
+  paymentRecoveryCodeSentText:
+    "If this order is eligible for payment recovery, a verification code will be sent to the buyer contact.",
+  paymentRecoverySendFailedText: "Could not send a verification code. Please try again.",
+  paymentRecoveryEnterCodeText: "Enter the verification code to continue.",
+  paymentRecoveryVerifyingCodeText: "Verifying code…",
+  paymentRecoveryVerificationFailedText:
+    "Verification failed. Please request a new code and try again.",
+  paymentRecoveryRateLimitedText:
+    "Too many verification attempts. Wait a moment and try again.",
   termsText:
     "By placing this order, you agree to our Terms of Service and Privacy Policy.",
   processingOrderTitle: "Processing your order",
@@ -209,6 +237,34 @@ export const BANGLA_CHECKOUT_LANGUAGE_DATA: CheckoutLanguageData = {
   paymentRecoveryMessageText:
     "পেমেন্ট পেজ খোলার আগেই আপনার অর্ডারটি তৈরি হয়েছে। নতুন করে চেকআউট শুরু করার আগে পেমেন্টের অবস্থা দেখুন।",
   viewPaymentStatusText: "পেমেন্টের অবস্থা দেখুন",
+  paymentRecoveryPageTitleText: "পেমেন্ট পুনরুদ্ধার",
+  paymentRecoveryEyebrowText: "নিরাপদ পেমেন্ট পুনরুদ্ধার",
+  paymentRecoveryHeadingText: "অর্ডারটি যাচাই করুন",
+  paymentRecoveryIntroText:
+    "এই লিংকটি নিজে থেকে ব্যক্তিগত রসিদের তথ্য খোলে না। এই ব্রাউজার থেকে পেমেন্ট চালিয়ে যেতে ক্রেতার যোগাযোগের মাধ্যম যাচাই করুন।",
+  paymentRecoverySmsChannelText: "অর্ডারের ফোনে SMS",
+  paymentRecoveryWhatsappChannelText: "অর্ডারের ফোনে WhatsApp",
+  paymentRecoveryEmailChannelText: "অর্ডারের ইমেইলে",
+  paymentRecoveryOrderReferenceText: "অর্ডার রেফারেন্স",
+  paymentRecoveryVerificationChannelText: "যাচাইকরণের মাধ্যম",
+  paymentRecoverySendCodeText: "কোড পাঠান",
+  paymentRecoveryVerificationCodeText: "যাচাইকরণ কোড",
+  paymentRecoveryContinueToReceiptText: "রসিদে এগিয়ে যান",
+  paymentRecoveryUnavailableText:
+    "এই মুহূর্তে পেমেন্ট পুনরুদ্ধার করা যাচ্ছে না। অ্যাকাউন্টের অর্ডার দেখতে সাইন ইন করুন অথবা দোকানের সঙ্গে যোগাযোগ করুন।",
+  paymentRecoveryMissingOrderText:
+    "এই পুনরুদ্ধার লিংকে অর্ডার রেফারেন্স নেই। দোকানের কাছে নতুন পেমেন্ট পুনরুদ্ধার লিংক চান।",
+  paymentRecoveryViewAccountOrdersText: "অ্যাকাউন্টের অর্ডার দেখুন",
+  paymentRecoverySendingCodeText: "যাচাইকরণ কোড পাঠানো হচ্ছে…",
+  paymentRecoveryCodeSentText:
+    "অর্ডারটি পেমেন্ট পুনরুদ্ধারের উপযোগী হলে ক্রেতার যোগাযোগের মাধ্যমে যাচাইকরণ কোড পাঠানো হবে।",
+  paymentRecoverySendFailedText: "যাচাইকরণ কোড পাঠানো যায়নি। আবার চেষ্টা করুন।",
+  paymentRecoveryEnterCodeText: "এগিয়ে যেতে যাচাইকরণ কোড লিখুন।",
+  paymentRecoveryVerifyingCodeText: "কোড যাচাই করা হচ্ছে…",
+  paymentRecoveryVerificationFailedText:
+    "যাচাইকরণ ব্যর্থ হয়েছে। নতুন কোড নিয়ে আবার চেষ্টা করুন।",
+  paymentRecoveryRateLimitedText:
+    "খুব বেশি যাচাইয়ের চেষ্টা হয়েছে। কিছুক্ষণ অপেক্ষা করে আবার চেষ্টা করুন।",
   termsText:
     "অর্ডারটি নিশ্চিত করলে আপনি আমাদের পরিষেবার শর্তাবলি ও গোপনীয়তা নীতিতে সম্মত হচ্ছেন।",
   processingOrderTitle: "আপনার অর্ডার প্রক্রিয়া করা হচ্ছে",
@@ -351,6 +407,11 @@ export const CHECKOUT_LANGUAGE_LONG_TEXT_KEYS = new Set<CheckoutLanguageKey>([
   "termsText",
   "emptyCartDescriptionText",
   "paymentRecoveryMessageText",
+  "paymentRecoveryIntroText",
+  "paymentRecoveryUnavailableText",
+  "paymentRecoveryMissingOrderText",
+  "paymentRecoveryCodeSentText",
+  "paymentRecoveryVerificationFailedText",
   "checkoutUnavailableMessage",
   "existingCheckoutMessage",
   "noScriptText",

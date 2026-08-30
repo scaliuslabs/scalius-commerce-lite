@@ -1,18 +1,47 @@
 ---
 import Layout from "@/layouts/Layout.astro";
-import { getLayoutData, type LayoutData } from "@/lib/api";
+import {
+  getActiveCheckoutLanguage,
+  getLayoutData,
+  type CheckoutLanguageData,
+  type LayoutData,
+} from "@/lib/api";
 import { getCheckoutConfig } from "@/lib/api/checkout";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
+import { serializeJsonForInlineScript } from "@/lib/safe-json";
+import {
+  ENGLISH_CHECKOUT_LANGUAGE_DATA,
+  checkoutLanguageBaseCode,
+} from "@scalius/shared/checkout-language";
 
 const orderId = Astro.url.searchParams.get("orderId")?.trim() ?? "";
-const [layoutData, checkoutConfig]: [LayoutData | null, Awaited<ReturnType<typeof getCheckoutConfig>>] = await Promise.all([
+const [layoutData, checkoutConfig, checkoutLanguageResponse]: [
+  LayoutData | null,
+  Awaited<ReturnType<typeof getCheckoutConfig>>,
+  CheckoutLanguageData | null,
+] = await Promise.all([
   getLayoutData(),
   getCheckoutConfig(),
+  getActiveCheckoutLanguage(),
 ]);
+const checkoutLanguage: CheckoutLanguageData = checkoutLanguageResponse ?? {
+  id: "fallback",
+  name: "English (Fallback)",
+  code: "en",
+  languageData: { ...ENGLISH_CHECKOUT_LANGUAGE_DATA },
+  fieldVisibility: {
+    showEmailField: true,
+    showOrderNotesField: true,
+    showAreaField: true,
+  },
+  isActive: true,
+  isDefault: true,
+};
+const copy = checkoutLanguage.languageData;
 const recoveryChannelLabels = {
-  sms: "SMS to order phone",
-  whatsapp: "WhatsApp to order phone",
-  email: "Email on order",
+  sms: copy.paymentRecoverySmsChannelText,
+  whatsapp: copy.paymentRecoveryWhatsappChannelText,
+  email: copy.paymentRecoveryEmailChannelText,
 } as const;
 const recoveryChannels = (checkoutConfig.customerAuthPolicy?.otpChannels ?? [])
   .filter((channel): channel is keyof typeof recoveryChannelLabels => channel in recoveryChannelLabels);
@@ -20,17 +49,22 @@ const defaultRecoveryChannel = checkoutConfig.customerAuthPolicy?.defaultOtpChan
 const orderedRecoveryChannels = defaultRecoveryChannel && recoveryChannels.includes(defaultRecoveryChannel)
   ? [defaultRecoveryChannel, ...recoveryChannels.filter((channel) => channel !== defaultRecoveryChannel)]
   : recoveryChannels;
+const serializedCheckoutLanguage = serializeJsonForInlineScript(checkoutLanguage);
 ---
 
-<Layout title="Payment Recovery" layoutData={layoutData} noindex>
+<Layout
+  title={copy.paymentRecoveryPageTitleText}
+  layoutData={layoutData}
+  documentLanguage={checkoutLanguageBaseCode(checkoutLanguage.code)}
+>
   <meta slot="head" name="robots" content="noindex,nofollow" />
   <section class="container mx-auto flex min-h-[60vh] items-center px-4 py-10">
     <div class="mx-auto w-full max-w-xl rounded-xl border border-border bg-background p-5 shadow-sm sm:p-6">
       <div class="mb-5">
-        <p class="text-sm font-medium uppercase text-muted-foreground">Hosted payment recovery</p>
-        <h1 class="mt-1 text-2xl font-semibold tracking-normal text-foreground">Verify this order</h1>
+        <p class="text-sm font-medium uppercase text-muted-foreground">{copy.paymentRecoveryEyebrowText}</p>
+        <h1 class="mt-1 text-2xl font-semibold tracking-normal text-foreground">{copy.paymentRecoveryHeadingText}</h1>
         <p class="mt-2 text-sm leading-6 text-muted-foreground">
-          This link does not open private receipt details by itself. Verify the buyer contact to continue payment from this browser.
+          {copy.paymentRecoveryIntroText}
         </p>
       </div>
 
@@ -39,12 +73,12 @@ const orderedRecoveryChannels = defaultRecoveryChannel && recoveryChannels.inclu
           <input type="hidden" id="paymentRecoveryOrderId" name="orderId" value={orderId} />
 
           <div class="rounded-lg border border-border bg-muted/20 px-3 py-2 text-sm">
-            <span class="text-muted-foreground">Order reference</span>
+            <span class="text-muted-foreground">{copy.paymentRecoveryOrderReferenceText}</span>
             <span class="ml-2 font-mono font-medium text-foreground">{orderId}</span>
           </div>
 
           <div class="grid gap-2">
-            <label for="paymentRecoveryChannel" class="text-sm font-medium text-foreground">Verification channel</label>
+            <label for="paymentRecoveryChannel" class="text-sm font-medium text-foreground">{copy.paymentRecoveryVerificationChannelText}</label>
             <select
               id="paymentRecoveryChannel"
               name="channel"
@@ -62,12 +96,12 @@ const orderedRecoveryChannels = defaultRecoveryChannel && recoveryChannels.inclu
               id="paymentRecoverySendCode"
               class="inline-flex min-h-11 flex-1 items-center justify-center rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Send code
+              {copy.paymentRecoverySendCodeText}
             </button>
           </div>
 
           <div class="grid gap-2">
-            <label for="paymentRecoveryCode" class="text-sm font-medium text-foreground">Verification code</label>
+            <label for="paymentRecoveryCode" class="text-sm font-medium text-foreground">{copy.paymentRecoveryVerificationCodeText}</label>
             <input
               id="paymentRecoveryCode"
               name="code"
@@ -84,31 +118,58 @@ const orderedRecoveryChannels = defaultRecoveryChannel && recoveryChannels.inclu
             id="paymentRecoveryVerify"
             class="inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-foreground px-4 text-sm font-semibold text-background transition-colors hover:bg-foreground/90 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Continue to receipt
+            {copy.paymentRecoveryContinueToReceiptText}
           </button>
 
           <p id="paymentRecoveryMessage" class="min-h-5 text-sm text-muted-foreground" aria-live="polite"></p>
         </form>
       ) : orderId ? (
         <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-          Payment recovery is not available right now. Sign in to check account orders or contact the store.
+          {copy.paymentRecoveryUnavailableText}
         </div>
       ) : (
         <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-          This recovery link is missing an order reference. Ask the store to send a fresh payment recovery link.
+          {copy.paymentRecoveryMissingOrderText}
         </div>
       )}
 
       <div class="mt-5 flex flex-wrap gap-2 border-t border-border pt-4 text-sm">
-        <a href="/account" data-astro-prefetch={getStorefrontPrefetchAttribute("/account", Astro.url)} class="text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">View account orders</a>
+        <a href="/account" data-astro-prefetch={getStorefrontPrefetchAttribute("/account", Astro.url)} class="text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">{copy.paymentRecoveryViewAccountOrdersText}</a>
         <span class="text-muted-foreground">/</span>
-        <a href="/" class="text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">Continue shopping</a>
+        <a href="/" class="text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">{copy.continueShoppingText}</a>
       </div>
     </div>
   </section>
+
+  <script
+    is:inline
+    set:html={`window.__CHECKOUT_LANGUAGE__=${serializedCheckoutLanguage};`}
+  ></script>
 </Layout>
 
 <script>
+  import {
+    ENGLISH_CHECKOUT_LANGUAGE_DATA,
+    type CheckoutLanguageData,
+  } from "@scalius/shared/checkout-language";
+  import { getPaymentRecoveryFailureText } from "@/lib/payment-recovery-messages";
+
+  class PaymentRecoveryRequestError extends Error {
+    readonly errorCode?: string;
+    readonly status: number;
+
+    constructor(status: number, errorCode?: string) {
+      super("Payment recovery request failed");
+      this.name = "PaymentRecoveryRequestError";
+      this.status = status;
+      this.errorCode = errorCode;
+    }
+  }
+
+  const activeLanguage = window.__CHECKOUT_LANGUAGE__ as
+    | { languageData?: CheckoutLanguageData }
+    | undefined;
+  const copy = activeLanguage?.languageData ?? ENGLISH_CHECKOUT_LANGUAGE_DATA;
   const form = document.getElementById("paymentRecoveryForm") as HTMLFormElement | null;
   const orderInput = document.getElementById("paymentRecoveryOrderId") as HTMLInputElement | null;
   const channelInput = document.getElementById("paymentRecoveryChannel") as HTMLSelectElement | null;
@@ -134,8 +195,10 @@ const orderedRecoveryChannels = defaultRecoveryChannel && recoveryChannels.inclu
     });
     const data = await response.json().catch(() => ({} as Record<string, unknown>));
     if (!response.ok || data.success === false) {
-      const error = typeof data.error === "string" ? data.error : "Request failed. Please try again.";
-      throw new Error(error);
+      throw new PaymentRecoveryRequestError(
+        response.status,
+        typeof data.errorCode === "string" ? data.errorCode : undefined,
+      );
     }
     return data;
   }
@@ -148,21 +211,28 @@ const orderedRecoveryChannels = defaultRecoveryChannel && recoveryChannels.inclu
     const orderId = orderInput?.value.trim() ?? "";
     const channel = channelInput?.value ?? "sms";
     if (!orderId) {
-      setMessage("This recovery link is missing an order reference.", "danger");
+      setMessage(copy.paymentRecoveryMissingOrderText, "danger");
       return;
     }
 
     sendButton.disabled = true;
-    setMessage("Sending verification code...");
+    setMessage(copy.paymentRecoverySendingCodeText);
     try {
-      const data = await postJson("/api/payment-recovery/send-code", { orderId, channel });
-      const successMessage = typeof data.message === "string"
-        ? data.message
-        : "If this order is eligible, a verification code will be sent.";
-      setMessage(successMessage, "success");
+      await postJson("/api/payment-recovery/send-code", { orderId, channel });
+      setMessage(copy.paymentRecoveryCodeSentText, "success");
       codeInput?.focus();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not send code. Please try again.", "danger");
+      setMessage(
+        error instanceof PaymentRecoveryRequestError
+          ? getPaymentRecoveryFailureText({
+              copy,
+              operation: "send",
+              errorCode: error.errorCode,
+              status: error.status,
+            })
+          : copy.paymentRecoverySendFailedText,
+        "danger",
+      );
     } finally {
       sendButton.disabled = false;
     }
@@ -173,19 +243,29 @@ const orderedRecoveryChannels = defaultRecoveryChannel && recoveryChannels.inclu
     const channel = channelInput?.value ?? "sms";
     const code = codeInput?.value.trim() ?? "";
     if (!orderId || !code) {
-      setMessage("Enter the verification code to continue.", "danger");
+      setMessage(copy.paymentRecoveryEnterCodeText, "danger");
       return;
     }
 
     verifyButton.disabled = true;
-    setMessage("Verifying code...");
+    setMessage(copy.paymentRecoveryVerifyingCodeText);
     try {
       const data = await postJson("/api/payment-recovery/verify", { orderId, channel, code });
       const redirectUrl = typeof data.redirectUrl === "string" ? data.redirectUrl : `/order-success?orderId=${encodeURIComponent(orderId)}`;
       window.location.href = redirectUrl;
     } catch (error) {
       verifyButton.disabled = false;
-      setMessage(error instanceof Error ? error.message : "Verification failed. Please try again.", "danger");
+      setMessage(
+        error instanceof PaymentRecoveryRequestError
+          ? getPaymentRecoveryFailureText({
+              copy,
+              operation: "verify",
+              errorCode: error.errorCode,
+              status: error.status,
+            })
+          : copy.paymentRecoveryVerificationFailedText,
+        "danger",
+      );
     }
   });
 </script>
