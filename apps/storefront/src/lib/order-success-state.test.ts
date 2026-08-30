@@ -10,6 +10,10 @@ import {
   shouldClearCheckoutCartForOrder,
 } from "./order-success-state";
 import type { OrderReceipt } from "./api/types";
+import {
+  BANGLA_CHECKOUT_LANGUAGE_DATA,
+  ENGLISH_CHECKOUT_LANGUAGE_DATA,
+} from "@scalius/shared/checkout-language";
 
 function makeOrder(overrides: Partial<OrderReceipt> = {}): OrderReceipt {
   return {
@@ -42,11 +46,11 @@ function makeOrder(overrides: Partial<OrderReceipt> = {}): OrderReceipt {
 
 describe("order success state", () => {
   it("uses buyer-facing payment provider labels", () => {
-    expect(formatOrderSuccessLabel("cod")).toBe("Cash on Delivery");
-    expect(formatOrderSuccessLabel("sslcommerz")).toBe("SSLCommerz");
-    expect(formatOrderSuccessLabel("partially_refunded")).toBe("Partially Refunded");
-    expect(formatOrderSuccessPaymentMethod("stripe")).toBe("Card (Stripe)");
-    expect(formatOrderSuccessPaymentMethod("sslcommerz")).toBe("Online payment (SSLCommerz)");
+    expect(formatOrderSuccessLabel("partially_refunded", ENGLISH_CHECKOUT_LANGUAGE_DATA)).toBe("Partially refunded");
+    expect(formatOrderSuccessLabel("unknown_status", ENGLISH_CHECKOUT_LANGUAGE_DATA)).toBe("Not available");
+    expect(formatOrderSuccessPaymentMethod("stripe", ENGLISH_CHECKOUT_LANGUAGE_DATA)).toBe("Card (Stripe)");
+    expect(formatOrderSuccessPaymentMethod("sslcommerz", ENGLISH_CHECKOUT_LANGUAGE_DATA)).toBe("Online payment (SSLCommerz)");
+    expect(formatOrderSuccessPaymentMethod("stripe", BANGLA_CHECKOUT_LANGUAGE_DATA)).toBe("কার্ড (Stripe)");
   });
 
   it("treats COD pending/unpaid orders as placed", () => {
@@ -57,7 +61,7 @@ describe("order success state", () => {
     });
 
     expect(getOrderSuccessStateKind(order)).toBe("order_placed");
-    expect(getOrderSuccessViewState(order)).toMatchObject({
+    expect(getOrderSuccessViewState(order, ENGLISH_CHECKOUT_LANGUAGE_DATA)).toMatchObject({
       shouldFinalizeClientSide: true,
       title: "Order placed",
       paymentStatusLabel: "Due on delivery",
@@ -75,7 +79,7 @@ describe("order success state", () => {
       });
 
       expect(getOrderSuccessStateKind(order)).toBe("payment_pending");
-      expect(getOrderSuccessViewState(order).shouldFinalizeClientSide).toBe(false);
+      expect(getOrderSuccessViewState(order, ENGLISH_CHECKOUT_LANGUAGE_DATA).shouldFinalizeClientSide).toBe(false);
     },
   );
 
@@ -109,7 +113,7 @@ describe("order success state", () => {
     });
 
     expect(getOrderSuccessStateKind(order)).toBe("order_placed");
-    expect(getOrderSuccessViewState(order).shouldFinalizeClientSide).toBe(true);
+    expect(getOrderSuccessViewState(order, ENGLISH_CHECKOUT_LANGUAGE_DATA).shouldFinalizeClientSide).toBe(true);
   });
 
   it.each(["confirmed", "processing", "shipped", "delivered", "completed"])(
@@ -123,7 +127,7 @@ describe("order success state", () => {
       });
 
       expect(getOrderSuccessStateKind(order)).toBe("payment_pending");
-      expect(getOrderSuccessViewState(order).title).toBe("Confirming payment");
+      expect(getOrderSuccessViewState(order, ENGLISH_CHECKOUT_LANGUAGE_DATA).title).toBe("Confirming payment");
     },
   );
 
@@ -135,7 +139,7 @@ describe("order success state", () => {
       paidAmount: 300,
       balanceDue: 900,
     });
-    expect(getOrderSuccessViewState(partial, "failed").kind).toBe("order_updated");
+    expect(getOrderSuccessViewState(partial, ENGLISH_CHECKOUT_LANGUAGE_DATA, "failed").kind).toBe("order_updated");
 
     const paid = makeOrder({
       paymentMethod: "sslcommerz",
@@ -144,7 +148,7 @@ describe("order success state", () => {
       paidAmount: 1200,
       balanceDue: 0,
     });
-    expect(getOrderSuccessViewState(paid, "failed").kind).toBe("order_updated");
+    expect(getOrderSuccessViewState(paid, ENGLISH_CHECKOUT_LANGUAGE_DATA, "failed").kind).toBe("order_updated");
   });
 
   it("keeps failed payments actionable without treating cancelled orders as payment failures", () => {
@@ -197,7 +201,7 @@ describe("order success state", () => {
       status: "returned",
       paidAmount: 1200,
       balanceDue: 0,
-    }));
+    }), ENGLISH_CHECKOUT_LANGUAGE_DATA);
 
     expect(view).toMatchObject({
       kind: "order_updated",
@@ -209,6 +213,34 @@ describe("order success state", () => {
     expect(view.message).toBe("The return for order #order_1 has been recorded.");
     expect(view.message).not.toContain("payment is not complete");
   });
+
+  it.each([
+    ["pending", "unpaid", "cod", "অর্ডার দেওয়া হয়েছে", "ডেলিভারির সময় পরিশোধযোগ্য"],
+    ["incomplete", "unpaid", "stripe", "পেমেন্ট নিশ্চিত করা হচ্ছে", "অপরিশোধিত"],
+    ["pending", "failed", "stripe", "পেমেন্ট সম্পন্ন হয়নি", "ব্যর্থ"],
+    ["confirmed", "paid", "stripe", "অর্ডার নিশ্চিত হয়েছে", "পরিশোধিত"],
+    ["processing", "paid", "stripe", "অর্ডার প্রস্তুত করা হচ্ছে", "পরিশোধিত"],
+    ["shipped", "paid", "stripe", "অর্ডার পাঠানো হয়েছে", "পরিশোধিত"],
+    ["delivered", "paid", "stripe", "অর্ডার ডেলিভারি হয়েছে", "পরিশোধিত"],
+    ["completed", "paid", "stripe", "অর্ডার সম্পন্ন হয়েছে", "পরিশোধিত"],
+    ["cancelled", "unpaid", "cod", "অর্ডার বাতিল হয়েছে", "ডেলিভারির সময় পরিশোধযোগ্য"],
+    ["refunded", "refunded", "stripe", "অর্ডারের টাকা ফেরত হয়েছে", "টাকা ফেরত হয়েছে"],
+    ["returned", "paid", "cod", "অর্ডার ফেরত এসেছে", "পরিশোধিত"],
+    ["partially_refunded", "partial", "stripe", "অর্ডারের কিছু টাকা ফেরত হয়েছে", "আংশিক পরিশোধিত"],
+  ])(
+    "localizes durable %s/%s receipt state in Bangla",
+    (status, paymentStatus, paymentMethod, title, paymentStatusLabel) => {
+      expect(getOrderSuccessViewState(makeOrder({
+        status,
+        paymentStatus,
+        paymentMethod,
+        paidAmount: paymentStatus === "paid" ? 1200 : paymentStatus === "partial" ? 300 : 0,
+      }), BANGLA_CHECKOUT_LANGUAGE_DATA)).toMatchObject({
+        title,
+        paymentStatusLabel,
+      });
+    },
+  );
 
   it("never presents refund or closed-order accounting as buyer debt", () => {
     for (const status of ["cancelled", "returned", "refunded", "partially_refunded"]) {

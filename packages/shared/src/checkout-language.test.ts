@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   BANGLA_CHECKOUT_LANGUAGE_DATA,
   CHECKOUT_LANGUAGE_KEYS,
+  CHECKOUT_LANGUAGE_LONG_TEXT_KEYS,
   ENGLISH_CHECKOUT_LANGUAGE_DATA,
   formatCheckoutLanguageText,
   getCheckoutLanguagePreset,
@@ -15,6 +16,15 @@ describe("checkout language presets", () => {
       Object.keys(ENGLISH_CHECKOUT_LANGUAGE_DATA),
     );
     expect(CHECKOUT_LANGUAGE_KEYS.length).toBeGreaterThan(80);
+  });
+
+  it("keeps built-in preset values within the public API projection limits", () => {
+    for (const preset of [ENGLISH_CHECKOUT_LANGUAGE_DATA, BANGLA_CHECKOUT_LANGUAGE_DATA]) {
+      for (const key of CHECKOUT_LANGUAGE_KEYS) {
+        const maximumLength = CHECKOUT_LANGUAGE_LONG_TEXT_KEYS.has(key) ? 1_000 : 120;
+        expect(preset[key].length, key).toBeLessThanOrEqual(maximumLength);
+      }
+    }
   });
 
   it("selects a preset from a regional locale code", () => {
@@ -64,6 +74,19 @@ describe("checkout language presets", () => {
     expect(resolved.paymentRecoveryCodeSentText).toContain("যাচাইকরণ কোড");
     expect(resolved.paymentRecoveryMissingOrderText).toContain("অর্ডার রেফারেন্স");
     expect(resolved.paymentRecoveryVerificationFailedText).toContain("নতুন কোড");
+  });
+
+  it("fills the complete order-receipt workflow into an older Bangla record", () => {
+    const resolved = resolveCheckoutLanguageData("bn", {
+      pageTitle: "কার্ট ও চেকআউট",
+    });
+
+    expect(resolved.orderReceiptPlacedTitleText).toBe("অর্ডার দেওয়া হয়েছে");
+    expect(resolved.orderReceiptCancelledMessageText).toContain("বাতিল করা হয়েছে");
+    expect(resolved.orderReceiptCheckingPaymentText).toContain("যাচাই করা হচ্ছে");
+    expect(resolved.orderReceiptSaveAccountTitleText).toContain("অ্যাকাউন্টে");
+    expect(resolved.orderReceiptCancelRequestActionText).toBe("বাতিলের অনুরোধ করুন");
+    expect(resolved.orderReceiptRequestApprovedText).toContain("গ্রহণ করেছে");
   });
 
   it("preserves genuine merchant overrides", () => {
