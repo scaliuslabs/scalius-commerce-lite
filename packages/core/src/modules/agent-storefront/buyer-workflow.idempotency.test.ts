@@ -8,6 +8,7 @@ import {
 
 const input: AgentStorefrontCheckoutSubmitInput = {
   expectedRevision: 3,
+  expectedQuoteFingerprint: "taxq_abcdefghijklmnopqrstuv",
   idempotencyKey: "agent-checkout-key-0001",
   customerName: " Agent Buyer ",
   customerPhone: "+8801710000012",
@@ -29,12 +30,13 @@ describe("agent storefront checkout idempotency", () => {
       notes: "Leave at reception",
     });
 
-    expect(first).toMatch(/^agent-input:v1:[a-f0-9]{64}$/);
+    expect(first).toMatch(/^agent-input:v2:[a-f0-9]{64}$/);
     expect(equivalent).toBe(first);
   });
 
   it.each([
     ["revision", { expectedRevision: 4 }],
+    ["reviewed quote", { expectedQuoteFingerprint: "taxq_vutsrqponmlkjihgfedcba" }],
     ["buyer", { customerName: "Different Buyer" }],
     ["phone", { customerPhone: "+8801710000013" }],
     ["email", { customerEmail: "other@example.com" }],
@@ -51,5 +53,13 @@ describe("agent storefront checkout idempotency", () => {
   it("keeps pre-version historical rows replayable", async () => {
     const submitted = await buildAgentStorefrontCheckoutRequestHash("asc_context", input);
     expect(() => assertAgentStorefrontCheckoutReplayHash("a".repeat(64), submitted)).not.toThrow();
+  });
+
+  it("does not treat a prior hash contract as the newly confirmed quote intent", async () => {
+    const submitted = await buildAgentStorefrontCheckoutRequestHash("asc_context", input);
+    expect(() => assertAgentStorefrontCheckoutReplayHash(
+      `agent-input:v1:${"a".repeat(64)}`,
+      submitted,
+    )).toThrow(ConflictError);
   });
 });

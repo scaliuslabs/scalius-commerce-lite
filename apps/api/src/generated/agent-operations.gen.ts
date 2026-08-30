@@ -63008,6 +63008,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "type": "integer",
                   "minimum": 1
                 },
+                "expectedQuoteFingerprint": {
+                  "type": "string",
+                  "pattern": "^taxq_[A-Za-z0-9_-]{22}$",
+                  "description": "Exact quote fingerprint reviewed and confirmed by the buyer before this submit.",
+                  "example": "taxq_abcdefghijklmnopqrstuv"
+                },
                 "idempotencyKey": {
                   "type": "string",
                   "minLength": 16,
@@ -63054,6 +63060,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               },
               "required": [
                 "expectedRevision",
+                "expectedQuoteFingerprint",
                 "customerName",
                 "customerPhone",
                 "customerEmail",

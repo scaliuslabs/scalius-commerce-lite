@@ -41,12 +41,17 @@ import {
 } from "../../errors";
 import { createAgentStorefrontBootstrap } from "./bootstrap";
 import { parseAgentStorefrontCartJson } from "./state";
+import {
+  assertAgentStorefrontCheckoutQuoteFingerprint,
+  buildAgentStorefrontCheckoutQuoteFingerprint,
+} from "./quote-fingerprint";
 
 type ContextRow = typeof agentStorefrontContexts.$inferSelect;
 
 const PAYMENT_CONTINUATION_TTL_MS = 30 * 60 * 1_000;
 const CHECKOUT_ATTEMPT_REQUEST_KEY_PREFIX = "checkout_submit:v1:";
-const AGENT_CHECKOUT_REQUEST_HASH_PREFIX = "agent-input:v1:";
+const AGENT_CHECKOUT_REQUEST_HASH_PREFIX = "agent-input:v2:";
+const VERSIONED_AGENT_CHECKOUT_REQUEST_HASH_PATTERN = /^agent-input:v\d+:/;
 
 async function withCheckoutStage<T>(
   infrastructureCode: string,
@@ -68,6 +73,7 @@ async function withCheckoutStage<T>(
 
 export interface AgentStorefrontCheckoutSubmitInput {
   expectedRevision: number;
+  expectedQuoteFingerprint: string;
   idempotencyKey: string;
   customerName: string;
   customerPhone: string;
@@ -135,6 +141,7 @@ export async function buildAgentStorefrontCheckoutRequestHash(
   const normalized = JSON.stringify({
     contextId,
     expectedRevision: input.expectedRevision,
+    expectedQuoteFingerprint: input.expectedQuoteFingerprint,
     customerName: input.customerName.trim(),
     customerPhone: input.customerPhone.trim(),
     customerEmail: input.customerEmail?.trim().toLowerCase() ?? null,
@@ -149,9 +156,9 @@ export function assertAgentStorefrontCheckoutReplayHash(
   storedHash: string,
   submittedHash: string,
 ): void {
-  // Rows committed before agent-input:v1 did not persist an ingress hash. Keep
-  // those historical orders replayable; every new agent checkout is strict.
-  if (!storedHash.startsWith(AGENT_CHECKOUT_REQUEST_HASH_PREFIX)) return;
+  // Rows committed before versioned agent-input hashes did not persist the
+  // normalized ingress meaning. Every versioned agent checkout is strict.
+  if (!VERSIONED_AGENT_CHECKOUT_REQUEST_HASH_PATTERN.test(storedHash)) return;
   if (storedHash !== submittedHash) {
     throw new ConflictError(
       "This idempotency key was already used for different checkout details. Use a new key for a changed checkout.",
@@ -437,6 +444,17 @@ export async function submitAgentStorefrontCheckout(
     }),
     authority.taxAuthority,
   ));
+
+  const currentQuoteFingerprint = await buildAgentStorefrontCheckoutQuoteFingerprint({
+    contextRevision: owned.revision,
+    shippingMethodId,
+    discountCode: owned.discountCode,
+    quote: prepared.taxQuote,
+  });
+  assertAgentStorefrontCheckoutQuoteFingerprint(
+    input.expectedQuoteFingerprint,
+    currentQuoteFingerprint,
+  );
 
   if (input.paymentMethod === PaymentMethod.SSLCOMMERZ) {
     const configuredDeposit = checkoutSettings.partialPaymentAmount;

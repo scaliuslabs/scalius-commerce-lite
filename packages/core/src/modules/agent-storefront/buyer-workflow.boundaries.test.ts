@@ -15,6 +15,20 @@ describe("agent storefront full buyer workflow boundaries", () => {
     expect(buyerSource).toContain("commitStorefrontOrderPayload");
   });
 
+  it("rejects a changed reviewed quote before the durable checkout commit", () => {
+    const submitSource = buyerSource.slice(
+      buyerSource.indexOf("export async function submitAgentStorefrontCheckout"),
+      buyerSource.indexOf("export async function createAgentStorefrontContinuation"),
+    );
+    const fingerprint = submitSource.indexOf("buildAgentStorefrontCheckoutQuoteFingerprint");
+    const assertion = submitSource.indexOf("assertAgentStorefrontCheckoutQuoteFingerprint");
+    const commit = submitSource.indexOf("commitStorefrontOrderPayload");
+
+    expect(fingerprint).toBeGreaterThan(-1);
+    expect(assertion).toBeGreaterThan(fingerprint);
+    expect(commit).toBeGreaterThan(assertion);
+  });
+
   it("atomically binds the created order before clearing the cart", () => {
     expect(ingestSource).toContain("prepareAgentStorefrontCheckoutCommit");
     expect(ingestSource).toContain("agentStorefrontOrderGrants");
