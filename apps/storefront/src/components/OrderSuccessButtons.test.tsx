@@ -4,6 +4,10 @@ import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import OrderSuccessButtons from "./OrderSuccessButtons";
+import {
+  BANGLA_CHECKOUT_LANGUAGE_DATA,
+  ENGLISH_CHECKOUT_LANGUAGE_DATA,
+} from "@scalius/shared/checkout-language";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean })
   .IS_REACT_ACT_ENVIRONMENT = true;
@@ -26,6 +30,7 @@ describe("OrderSuccessButtons customer request policy rendering", () => {
       root.render(
         <OrderSuccessButtons
           orderId="ord_1"
+          copy={ENGLISH_CHECKOUT_LANGUAGE_DATA}
           supportRequestActions={[{
             type: "cancel_pre_shipment",
             label: "Request cancellation",
@@ -43,11 +48,12 @@ describe("OrderSuccessButtons customer request policy rendering", () => {
     expect(host.textContent).not.toContain("Request return");
   });
 
-  it("renders unavailable actions as disabled with the exact reason", () => {
+  it("uses safe localized unavailability copy instead of backend prose", () => {
     act(() => {
       root.render(
         <OrderSuccessButtons
           orderId="ord_1"
+          copy={ENGLISH_CHECKOUT_LANGUAGE_DATA}
           supportRequestActions={[
             {
               type: "return",
@@ -64,7 +70,8 @@ describe("OrderSuccessButtons customer request policy rendering", () => {
     const returnButton = [...host.querySelectorAll("button")]
       .find((button) => button.textContent?.includes("Request return"));
     expect(returnButton).toBeUndefined();
-    expect(host.textContent).toContain("Return requests are available after the order ships.");
+    expect(host.textContent).toContain("Support requests are not available for this order right now.");
+    expect(host.textContent).not.toContain("Return requests are available after the order ships.");
   });
 
   it("shows accepted request progress instead of stale review copy", () => {
@@ -72,6 +79,7 @@ describe("OrderSuccessButtons customer request policy rendering", () => {
       root.render(
         <OrderSuccessButtons
           orderId="ord_1"
+          copy={ENGLISH_CHECKOUT_LANGUAGE_DATA}
           supportRequests={[{
             id: "request_1",
             orderId: "ord_1",
@@ -106,6 +114,7 @@ describe("OrderSuccessButtons customer request policy rendering", () => {
       root.render(
         <OrderSuccessButtons
           orderId="ord_1"
+          copy={ENGLISH_CHECKOUT_LANGUAGE_DATA}
           supportRequests={[{
             id: "request_1",
             orderId: "ord_1",
@@ -134,11 +143,44 @@ describe("OrderSuccessButtons customer request policy rendering", () => {
       );
     });
 
-    expect(host.textContent).toContain("Cancellation request rejected");
+    expect(host.textContent).toContain("Request cancellation · Rejected");
     expect(host.textContent).toContain("Request cancellation");
     expect(host.querySelector('a[href="/"]')?.textContent).toContain("Continue shopping");
     expect([...host.querySelectorAll("button")].some((button) =>
       button.textContent?.includes("Request cancellation") && !button.disabled
     )).toBe(true);
+  });
+
+  it("maps backend support identifiers to Bangla buyer copy", () => {
+    act(() => {
+      root.render(
+        <OrderSuccessButtons
+          orderId="ord_1"
+          copy={BANGLA_CHECKOUT_LANGUAGE_DATA}
+          supportRequests={[{
+            id: "request_1",
+            orderId: "ord_1",
+            customerId: null,
+            type: "return",
+            status: "approved",
+            active: true,
+            severity: "success",
+            label: "Return request approved",
+            actionLabel: "Request return",
+            reason: "Wrong size",
+            message: null,
+            submittedAt: "2026-07-21T00:00:00.000Z",
+            resolvedAt: null,
+            createdAt: "2026-07-21T00:00:00.000Z",
+            updatedAt: "2026-07-21T00:05:00.000Z",
+          }]}
+        />,
+      );
+    });
+
+    expect(host.textContent).toContain("সাহায্য প্রয়োজন?");
+    expect(host.textContent).toContain("ফেরতের অনুরোধ করুন · গৃহীত");
+    expect(host.textContent).toContain("দোকান অনুরোধটি গ্রহণ করেছে");
+    expect(host.textContent).not.toContain("Return request approved");
   });
 });
