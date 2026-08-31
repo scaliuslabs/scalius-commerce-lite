@@ -1,6 +1,5 @@
 // src/integrations/sms/provider.ts
-// Provider interface and registry for SMS integrations.
-// Follows the email provider pattern (packages/core/src/integrations/email/provider.ts).
+// Provider interface and supported identifiers for SMS integrations.
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -24,27 +23,6 @@ export interface SmsProvider {
   readonly name: string; // "smsnetbd" | "bdbulksms" | "mimsms" | "gennet"
   sendSms(options: SendSmsOptions): Promise<SendSmsResult>;
   validateConfig(): string | null; // null = ready, string = error message
-}
-
-// ── Provider Registry ───────────────────────────────────────────────
-
-const providers = new Map<string, SmsProvider>();
-
-/**
- * Register an SMS provider by name.
- */
-export function registerSmsProvider(
-  name: string,
-  provider: SmsProvider,
-): void {
-  providers.set(name, provider);
-}
-
-/**
- * Retrieve a provider by name.
- */
-export function getSmsProvider(name: string): SmsProvider | undefined {
-  return providers.get(name);
 }
 
 // ── Available Provider IDs ──────────────────────────────────────────

@@ -40,21 +40,6 @@ export class PathaoProvider implements DeliveryProviderInterface {
     return "pathao";
   }
 
-  // -- ProviderLifecycle --------------------------------------------------
-
-  async initialize(_settings: unknown): Promise<void> {
-    /* no-op — Pathao authenticates lazily via getAccessToken() */
-  }
-
-  async healthCheck(): Promise<{ healthy: boolean; message?: string }> {
-    const result = await this.testConnection();
-    return { healthy: result.success, message: result.message };
-  }
-
-  async dispose(): Promise<void> {
-    /* no-op */
-  }
-
   /**
    * Get a valid access token, refreshing if necessary
    */

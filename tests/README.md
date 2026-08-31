@@ -7,7 +7,6 @@ This directory is gitignored. Tests are maintained by the core team only.
 ```
 tests/
   setup.ts              # Mock factories, seed data generators
-  vitest.config.ts      # Vitest configuration
   unit/
     core/
       orders/
@@ -41,12 +40,8 @@ pnpm test:watch     # Watch mode
 
 ## Configuration
 
-`vitest.config.ts`:
-- **Globals**: enabled (`describe`, `it`, `expect` available without import)
-- **Setup**: `./tests/setup.ts` runs before all tests
-- **Include**: `tests/**/*.test.ts`
-- **Exclude**: `node_modules`, `dist`, `.wrangler`
-- **Aliases**: `@/`, `@modules/`, `@db/`, `@shared/` resolve to `../src/` paths
+The repository-root `vitest.config.ts` is authoritative. Tests in this directory
+import `tests/setup.ts` explicitly when they need its mock factories or seed data.
 
 ## Test Setup (`setup.ts`)
 

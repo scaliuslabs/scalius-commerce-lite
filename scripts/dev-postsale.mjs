@@ -211,22 +211,21 @@ export function buildFixtureSql() {
       free_delivery = 0,
       updated_at = unixepoch()`,
     `INSERT INTO product_variants (
-      id, product_id, size, color, weight, sku, price, stock, reserved_stock,
+      id, product_id, option_combination_key, image_id, weight, sku, price, stock, reserved_stock,
       preorder_stock, is_default, track_inventory, version, stock_version,
       low_stock_threshold, allow_preorder, preorder_date, preorder_message,
       allow_backorder, backorder_limit, discount_percentage, discount_type,
-      discount_amount, barcode, barcode_type, color_sort_order, size_sort_order,
-      created_at, updated_at, deleted_at
+      discount_amount, barcode, barcode_type, created_at, updated_at, deleted_at
     ) VALUES (
       ${sqlString(fixture.variantId)}, ${sqlString(fixture.productId)}, NULL, NULL, NULL,
       ${sqlString(fixture.variantSku)}, ${fixture.price}, 0, 0, 0, 1, 0, 1, 1,
-      NULL, 0, NULL, NULL, 0, 0, 0, 'percentage', 0, NULL, NULL, 0, 0,
+      NULL, 0, NULL, NULL, 0, 0, 0, 'percentage', 0, NULL, NULL,
       unixepoch(), unixepoch(), NULL
     )
     ON CONFLICT(id) DO UPDATE SET
       product_id = excluded.product_id,
-      size = NULL,
-      color = NULL,
+      option_combination_key = NULL,
+      image_id = NULL,
       weight = NULL,
       sku = excluded.sku,
       price = excluded.price,
@@ -287,6 +286,14 @@ export function buildCartValidationPayload(orderPayload) {
     zone: orderPayload.zone,
     area: orderPayload.area,
     shippingMethodId: orderPayload.shippingMethodId,
+  };
+}
+
+export function buildTaxQuotePayload(orderPayload) {
+  return {
+    ...buildCartValidationPayload(orderPayload),
+    discountCode: orderPayload.discountCode,
+    customerPhone: orderPayload.customerPhone,
   };
 }
 
@@ -441,10 +448,8 @@ export function buildPaymentReadinessFixtureSql() {
 }
 
 async function runCheckoutSmoke(config) {
-  const payload = buildCheckoutPayload({ sequence: 1 });
-  const cart = await requestJson(config, "POST", "/api/v1/orders/cart-validation", buildCartValidationPayload(payload));
-  const cartData = unwrapData(cart.body);
-  assertCondition(cartData?.valid === true, "Cart validation did not return valid=true.");
+  const draftPayload = buildCheckoutPayload({ sequence: 1 });
+  const payload = await reviewCheckoutPayload(config, draftPayload);
 
   const order = await requestJson(config, "POST", "/api/v1/orders", payload, [201]);
   const orderData = unwrapData(order.body);
@@ -491,6 +496,32 @@ async function runCheckoutSmoke(config) {
   return result;
 }
 
+async function reviewCheckoutPayload(config, payload) {
+  const cart = await requestJson(
+    config,
+    "POST",
+    "/api/v1/orders/cart-validation",
+    buildCartValidationPayload(payload),
+  );
+  const cartData = unwrapData(cart.body);
+  assertCondition(cartData?.valid === true, "Cart validation did not return valid=true.");
+  const quote = await requestJson(
+    config,
+    "POST",
+    "/api/v1/orders/tax-quote",
+    buildTaxQuotePayload(payload),
+  );
+  const quoteData = unwrapData(quote.body);
+  assertCondition(
+    typeof quoteData?.quoteFingerprint === "string" && /^taxq_[A-Za-z0-9_-]{22}$/.test(quoteData.quoteFingerprint),
+    "Tax quote did not return a current quote fingerprint.",
+  );
+  return {
+    ...payload,
+    expectedQuoteFingerprint: quoteData.quoteFingerprint,
+  };
+}
+
 async function runLoadSmoke(config) {
   const total = config.orders;
   const concurrency = Math.min(config.concurrency, total);
@@ -504,7 +535,8 @@ async function runLoadSmoke(config) {
       const sequence = next++;
       const startedAt = performance.now();
       try {
-        const payload = buildCheckoutPayload({ sequence });
+        const draftPayload = buildCheckoutPayload({ sequence });
+        const payload = await reviewCheckoutPayload(config, draftPayload);
         const response = await requestJson(config, "POST", "/api/v1/orders", payload, [201, 202, 409, 429, 500, 503]);
         const elapsed = performance.now() - startedAt;
         durations.push(elapsed);

@@ -83,38 +83,6 @@ export function ConfirmDialog({
 // Convenience presets
 // ---------------------------------------------------------------------------
 
-interface DeleteConfirmDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  /** Name shown in the dialog, e.g. "product", "order" */
-  entityName: string;
-  isLoading?: boolean;
-  onConfirm: () => void;
-}
-
-/** Soft-delete confirmation -- moves to trash, restorable. */
-export function DeleteConfirmDialog({
-  open,
-  onOpenChange,
-  entityName,
-  isLoading,
-  onConfirm,
-}: DeleteConfirmDialogProps) {
-  return (
-    <ConfirmDialog
-      open={open}
-      onOpenChange={onOpenChange}
-      title={`Delete ${entityName}?`}
-      description={`This will move the ${entityName.toLowerCase()} to trash. You can restore it later.`}
-      confirmLabel="Delete"
-      loadingLabel="Deleting..."
-      variant="destructive"
-      isLoading={isLoading}
-      onConfirm={onConfirm}
-    />
-  );
-}
-
 interface PermanentDeleteConfirmDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;

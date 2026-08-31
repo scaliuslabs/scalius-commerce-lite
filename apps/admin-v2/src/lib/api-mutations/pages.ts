@@ -5,45 +5,12 @@ import {
   bulkPublishPages,
   bulkRestorePages,
   bulkUnpublishPages,
-  createPage,
   deletePage,
   permanentDeletePage,
   restorePage,
-  updatePage,
-  type CreatePageInput,
   type PageRevisionClaim,
-  type UpdatePageInput,
 } from "../api-functions/pages";
 import { getServerFnError, queryKeys } from "./shared";
-
-export function useCreatePage() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (data: CreatePageInput) => createPage({ data }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.pages.list() });
-      toast.success("Page created");
-    },
-    onError: (err) =>
-      toast.error(getServerFnError(err, "Failed to create page")),
-  });
-}
-
-export function useUpdatePage() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (data: UpdatePageInput) => updatePage({ data }),
-    onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.pages.list() });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.pages.detail(variables.id),
-      });
-      toast.success("Page updated");
-    },
-    onError: (err) =>
-      toast.error(getServerFnError(err, "Failed to update page")),
-  });
-}
 
 export function useDeletePage(entityName = "Page") {
   const queryClient = useQueryClient();
