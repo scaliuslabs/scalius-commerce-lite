@@ -925,7 +925,6 @@ describe("admin route graph boundaries", () => {
       join(ADMIN_SRC_ROOT, "components", "admin", "FraudCheckerSettings.tsx"),
       join(ADMIN_SRC_ROOT, "components", "admin", "OrderForm.tsx"),
       join(ADMIN_SRC_ROOT, "components", "admin", "ProductForm.tsx"),
-      join(ADMIN_SRC_ROOT, "components", "admin", "ShipmentForm.tsx"),
       join(
         ADMIN_SRC_ROOT,
         "components",

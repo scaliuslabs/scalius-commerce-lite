@@ -68,49 +68,22 @@ Credential resolution order:
 
 Required fields in service account JSON: `client_email`, `private_key`, `project_id`.
 
-### `client.ts` -- Browser-Side Firebase Client
-
-Runs in the admin dashboard browser. Uses the Firebase app and messaging packages.
-
-- `initFirebaseClientNotifications(userId, config)` -- Entry point called from `FirebaseInit.astro`
-  1. Checks browser environment and notification support
-  2. Sets VAPID key from config (`config.vapidKey`)
-  3. Initializes Firebase app and messaging
-  4. Requests notification permission, obtains FCM token via `getToken()`
-  5. Sends token to server via `POST /api/v1/admin/fcm-token` with device info (browser, user agent, URL)
-  6. Sets up foreground message listener
-
-- Foreground message handler:
-  - Plays `/alert.mp3` audio alert
-  - Shows a custom toast notification (not Sonner -- uses hand-built DOM elements with CSS classes `custom-fcm-toast-*`)
-  - Toast includes order info, "View Order" link, and close button
-  - Dispatches `admin-notification` custom event on `window` for the notification dropdown
-  - All catch blocks use typed `error: unknown`
-
 ## Admin Dashboard Integration
 
-### `FirebaseInit.astro` (layout component)
+### `apps/admin-v2/src/hooks/use-firebase-init.ts`
 
-Lazy-loads Firebase initialization:
-1. Reads `window.__USER_ID__` (set by the admin layout)
-2. Fetches Firebase public config from `GET /api/v1/auth/firebase-config`
-3. Dynamically imports `initFirebaseClientNotifications` from `@scalius/core/integrations/firebase/client`
-4. Deferred via `requestIdleCallback` with 3s timeout fallback
+The admin app owns browser initialization. It fetches public configuration from
+the API, dynamically imports the Firebase browser packages, registers the service
+worker, obtains and submits the FCM token, and attaches the foreground listener.
+`NotificationDropdown` is the route-reachable consumer.
 
-### `firebase-messaging-sw.js.ts` (Astro page -> service worker)
+### `firebase-messaging-sw[.]js.tsx` (service-worker route)
 
 Generates a dynamic service worker at `/firebase-messaging-sw.js`:
-1. Fetches Firebase public config from API (with env var fallback)
+1. Fetches Firebase public config from the API
 2. Outputs a script that imports Firebase compat SDK (v9.15.0) and initializes messaging
 3. Handles `onBackgroundMessage`: Shows browser notification with order details, "View Order" link, and custom icon
 4. Handles `notificationclick`: Focuses existing admin tab or opens new window to order URL
-
-### Layout Loader (`loaders/admin/layout.ts`)
-
-`getAdminLayoutFirebaseConfig()`:
-- Fetches public config from `GET /api/v1/auth/firebase-config`
-- Merges with default config from env vars
-- Caches in in-memory `layoutCache` (invalidated when Firebase settings are saved)
 
 ## API Endpoints
 
@@ -146,7 +119,7 @@ Firebase settings in `settings` table:
 
 ## Dependencies
 
-- `@firebase/app`, `@firebase/messaging` -- Client-side SDK (imported dynamically in browser)
+- `@firebase/app`, `@firebase/messaging` -- Client-side SDKs owned and dynamically imported by the admin app
 - Web Crypto API (`crypto.subtle`) -- JWT signing on server (available in Cloudflare Workers)
 - `SHARED_AUTH_CACHE` KV namespace -- Optional, for encrypted Google OAuth token caching when `CREDENTIAL_ENCRYPTION_KEY` is configured
 

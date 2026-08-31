@@ -7,7 +7,7 @@ Multi-courier delivery management with provider factory pattern. Supports Pathao
 | File | Purpose |
 |------|---------|
 | `index.ts` | Barrel exports (delivery.service, tracking, factory, locations, types, status-mapper, provider). Excludes pathao-location-import and providers/. |
-| `provider.ts` | `DeliveryProviderInterface` -- contract all providers implement. Extends `ProviderLifecycle` from `@scalius/core/providers/types`. Methods: `getName`, `getType`, `testConnection`, `createShipment`, `checkShipmentStatus`. |
+| `provider.ts` | `DeliveryProviderInterface` -- focused contract all delivery providers implement: `getName`, `getType`, `testConnection`, `createShipment`, and `checkShipmentStatus`. |
 | `factory.ts` | `createProvider()` -- factory that strict-reads encrypted credentials with `CREDENTIAL_ENCRYPTION_KEY`, parses credentials/config JSON, then returns a `PathaoProvider` or `SteadfastProvider` based on `provider.type`. Legacy plaintext rows remain readable for migration; unreadable encrypted rows fail before provider clients are built. |
 | `types.ts` | Shared types: `ShipmentResult`, `ShipmentStatus`, `ShipmentOptions`, plus provider-specific credential/config/response types (`PathaoCredentials`, `PathaoConfig`, `SteadfastCredentials`, `SteadfastConfig`, etc.) |
 | `delivery.service.ts` | Standalone functions for provider CRUD, shipment lifecycle (insert-first creation), status checking, shipment queries |
@@ -147,7 +147,6 @@ Upsert logic: match by Pathao external ID first, then by `name+parentId`. Progre
 - `@scalius/core/errors` -- `NotFoundError`, `ValidationError`, `ServiceUnavailableError`
 - `@scalius/core/utils/credential-encryption` -- `encryptCredentials`, `readStoredCredentialStrict`
 - `@scalius/core/modules/inventory/inventory-transitions` -- `applyInventoryForStatusChange`
-- `@scalius/core/providers/types` -- `ProviderLifecycle`, `HealthCheckResult`
 - `@scalius/shared/customer-utils` -- `formatPhoneForProvider` (used by fraud-checker provider, not delivery directly)
 - `@paralleldrive/cuid2` -- ID generation for locations
 - `nanoid` -- ID generation for shipments

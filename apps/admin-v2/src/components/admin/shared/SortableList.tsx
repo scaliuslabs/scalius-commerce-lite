@@ -1,7 +1,7 @@
 // src/components/admin/shared/SortableList.tsx
 // Reusable DnD sortable list component for non-table drag-and-drop scenarios.
 // Designed to replace the boilerplate DndContext+SortableContext pattern in
-// SocialLinksSection, NavigationMenusSection, AdditionalInfoManager, etc.
+// SocialLinksSection, AdditionalInfoManager, etc.
 
 import { useCallback, useMemo, type ReactNode } from "react";
 import {

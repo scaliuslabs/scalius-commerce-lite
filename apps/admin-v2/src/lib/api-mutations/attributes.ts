@@ -2,7 +2,6 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   bulkDeleteAttributes,
-  bulkRestoreAttributes,
   createAttribute,
   deleteAttribute,
   deleteAttributePermanent,
@@ -113,21 +112,5 @@ export function useBulkDeleteAttributes() {
     },
     onError: (err) =>
       toast.error(getServerFnError(err, "Failed to delete attributes")),
-  });
-}
-
-export function useBulkRestoreAttributes() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (data: { ids: string[] }) => bulkRestoreAttributes({ data }),
-    onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.attributes.list() });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.attributes.values(),
-      });
-      toast.success(`${variables.ids.length} attribute(s) restored`);
-    },
-    onError: (err) =>
-      toast.error(getServerFnError(err, "Failed to restore attributes")),
   });
 }

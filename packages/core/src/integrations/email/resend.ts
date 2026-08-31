@@ -1,9 +1,6 @@
 // src/integrations/email/resend.ts
 // Resend email provider.
-// @deprecated Use `packages/core/src/providers/email/resend-adapter.ts` (universal provider)
-// which receives validated settings at construction time and integrates with
-// the provider registry. This file is retained for backward compatibility with
-// the email barrel (integrations/email/index.ts).
+// Active Resend implementation selected by the email integration registry.
 
 import type { EmailProvider, EmailRuntimeContext, SendEmailOptions, SendEmailResult } from "./provider";
 import { ServiceUnavailableError } from "@scalius/core/errors";

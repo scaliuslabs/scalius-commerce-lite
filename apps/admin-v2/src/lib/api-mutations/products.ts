@@ -2,18 +2,10 @@ import { useMutation, useQueryClient, type QueryClient } from "@tanstack/react-q
 import { toast } from "sonner";
 import {
   bulkDeleteProducts,
-  createProduct,
-  createProductVariant,
   deleteProduct,
-  deleteProductVariant,
   permanentDeleteProduct,
   restoreProduct,
-  updateProduct,
-  updateProductVariant,
   type BulkDeleteProductsInput,
-  type CreateProductInput,
-  type ProductVariantInput,
-  type UpdateProductInput,
   type ProductAggregateRevisionClaim,
 } from "../api-functions/products";
 import {
@@ -24,11 +16,6 @@ import {
   queryKeys,
 } from "./shared";
 import { readProductRevisionConflict } from "../admin-api-error";
-
-function toastUnlessProductRevisionConflict(error: unknown, fallback: string) {
-  if (readProductRevisionConflict(error)) return;
-  toast.error(getServerFnError(error, fallback));
-}
 
 function handleProductListMutationError(
   queryClient: QueryClient,
@@ -43,57 +30,6 @@ function handleProductListMutationError(
     return;
   }
   toast.error(getServerFnError(error, fallback));
-}
-
-function invalidateProductVariantMutationQueries(
-  queryClient: QueryClient,
-  productId: string,
-) {
-  queryClient.invalidateQueries({ queryKey: queryKeys.products.list() });
-  invalidateProductLookupQueries(queryClient);
-  invalidateProductStatsQueries(queryClient);
-  queryClient.invalidateQueries({
-    queryKey: queryKeys.products.detail(productId),
-  });
-  queryClient.invalidateQueries({
-    queryKey: queryKeys.products.variants(productId),
-  });
-  queryClient.invalidateQueries({ queryKey: queryKeys.inventory.list() });
-}
-
-export function useCreateProduct() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (data: CreateProductInput) => createProduct({ data }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.products.list() });
-      invalidateProductLookupQueries(queryClient);
-      invalidateProductStatsQueries(queryClient);
-      invalidateDashboardQueries(queryClient);
-      toast.success("Product created");
-    },
-    onError: (err) =>
-      toast.error(getServerFnError(err, "Failed to create product")),
-  });
-}
-
-export function useUpdateProduct() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (data: UpdateProductInput) => updateProduct({ data }),
-    onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.products.list() });
-      invalidateProductLookupQueries(queryClient);
-      invalidateProductStatsQueries(queryClient);
-      invalidateDashboardQueries(queryClient);
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.products.detail(variables.id),
-      });
-      toast.success("Product updated");
-    },
-    onError: (err) =>
-      toast.error(getServerFnError(err, "Failed to update product")),
-  });
 }
 
 export function useDeleteProduct() {
@@ -203,58 +139,5 @@ export function useBulkDeleteProducts() {
         err,
         "Failed to delete products",
       ),
-  });
-}
-
-export function useCreateProductVariant() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (data: {
-      productId: string;
-      variant: ProductVariantInput;
-      expectedAggregateRevision: number;
-    }) => createProductVariant({ data }),
-    onSuccess: (_data, variables) => {
-      invalidateProductVariantMutationQueries(queryClient, variables.productId);
-      toast.success("Option created");
-    },
-    onError: (err) =>
-      toastUnlessProductRevisionConflict(err, "Failed to create option"),
-  });
-}
-
-export function useUpdateProductVariant() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (data: {
-      productId: string;
-      variantId: string;
-      variant: ProductVariantInput;
-      expectedAggregateRevision: number;
-    }) => updateProductVariant({ data }),
-    onSuccess: (_data, variables) => {
-      invalidateProductVariantMutationQueries(queryClient, variables.productId);
-      toast.success("SKU saved");
-    },
-    onError: (err) =>
-      toastUnlessProductRevisionConflict(err, "Failed to save SKU"),
-  });
-}
-
-export function useDeleteProductVariant() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (data: {
-      productId: string;
-      variantId: string;
-      expectedAggregateRevision: number;
-    }) =>
-      deleteProductVariant({ data }),
-    onSuccess: (_data, variables) => {
-      invalidateProductVariantMutationQueries(queryClient, variables.productId);
-      toast.success("Option deleted");
-    },
-    onError: (err) =>
-      toastUnlessProductRevisionConflict(err, "Failed to delete option"),
   });
 }

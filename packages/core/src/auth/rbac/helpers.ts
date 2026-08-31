@@ -1,6 +1,6 @@
 // src/lib/rbac/helpers.ts
 import { eq, and, desc, inArray } from "drizzle-orm";
-import { safeBatch, type Database } from "@scalius/database/client";
+import type { Database } from "@scalius/database/client";
 import { NotFoundError } from "@scalius/core/errors";
 import { getRbacSeedCacheKey } from "./auto-seed";
 import {

@@ -12,7 +12,6 @@
     "./postgres-adapter": "./src/postgres-adapter.ts",
     "./postgres-checkout": "./src/postgres-checkout.ts",
     "./inventory-authority": "./src/inventory-authority.ts",
-    "./migration-control": "./src/migration-control.ts",
     "./migration-artifacts": "./src/migration-artifacts.ts",
     "./schema-contract": "./src/schema-contract.ts",
     "./portability": "./src/portability.ts",
@@ -52,7 +51,9 @@
     "@cloudflare/workers-types": "^5.20260808.1",
     "@scalius/tsconfig": "workspace:*",
     "@types/pg": "8.21.0",
+    "@types/pg-copy-streams": "1.2.5",
     "drizzle-kit": "^0.31.10",
+    "pg-copy-streams": "7.0.0",
     "undici": "^8.10.0"
   },
   "license": "AGPL-3.0-only"
