@@ -1,9 +1,5 @@
 // src/modules/navigation/navigation.validation.ts
 // Zod schemas for navigation config validation.
-// WIRE: api-app should import saveNavigationConfigSchema (or headerConfigSchema/footerConfigSchema)
-// in routes/admin/navigation.ts to replace the inline `z.record(z.string(), z.unknown())` at line 120.
-// Replace the local saveConfigSchema with: `import { saveNavigationConfigSchema } from "@scalius/core/modules/navigation";`
-// and delete the local `navigationItemSchema` + `NavigationItem` type (lines 101-115).
 
 import { z } from "zod";
 import { parseNavigationHref } from "@scalius/shared/navigation-href";

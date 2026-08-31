@@ -30,21 +30,6 @@ export class SteadfastProvider implements DeliveryProviderInterface {
     return "steadfast";
   }
 
-  // -- ProviderLifecycle --------------------------------------------------
-
-  async initialize(_settings: unknown): Promise<void> {
-    /* no-op — Steadfast uses API key auth, no initialization needed */
-  }
-
-  async healthCheck(): Promise<{ healthy: boolean; message?: string }> {
-    const result = await this.testConnection();
-    return { healthy: result.success, message: result.message };
-  }
-
-  async dispose(): Promise<void> {
-    /* no-op */
-  }
-
   /**
    * Test the provider credentials and connection
    */

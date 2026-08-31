@@ -5,6 +5,7 @@ import {
   buildFixtureSql,
   buildPaymentReadinessFixtureSql,
   buildReceiptLookupRequest,
+  buildTaxQuotePayload,
   getPostsaleConfig,
 } from "./dev-postsale.mjs";
 
@@ -80,6 +81,16 @@ describe("local post-sale smoke CLI", () => {
       area: "ops006_area_section_10",
       shippingMethodId: "ops006_shipping_standard",
     });
+    expect(buildTaxQuotePayload(payload)).toEqual({
+      items: payload.items,
+      inventoryPool: "regular",
+      city: "ops006_city_dhaka",
+      zone: "ops006_zone_mirpur",
+      area: "ops006_area_section_10",
+      shippingMethodId: "ops006_shipping_standard",
+      discountCode: null,
+      customerPhone: payload.customerPhone,
+    });
   });
 
   it("sends receipt proof through the header instead of the URL", () => {
@@ -101,6 +112,8 @@ describe("local post-sale smoke CLI", () => {
     expect(sql).toContain("'ops006_shipping_standard'");
     expect(sql).toContain("'ops006_product'");
     expect(sql).toContain("'ops006_variant_default'");
+    expect(sql).toContain("option_combination_key");
+    expect(sql).not.toMatch(/\bsize\b|\bcolor\b/);
     expect(sql).toContain("is_default = 1");
     expect(sql).toContain("track_inventory = 0");
   });

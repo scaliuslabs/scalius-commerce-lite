@@ -26,8 +26,6 @@ import { rateLimit } from "@scalius/shared/rate-limit";
 import { getCorsOriginContext } from "@scalius/shared/cors-helper";
 import { generateOrderId } from "@scalius/shared/order-utils";
 import { validateAndFormatPhone, phoneNumberSchema } from "@scalius/shared/customer-utils";
-import { generateEAN13, validateEAN13 } from "@scalius/shared/barcode-utils";
-import { generateBarcodeSvg } from "@scalius/shared/barcode-svg";
 import { buildStorefrontPath } from "@scalius/shared/storefront-url";
 import { escapeHtml } from "@scalius/shared/html-escape";
 import { sanitizeHtml } from "@scalius/shared/html-sanitize";
@@ -55,8 +53,6 @@ import { getStatusBadgeClass } from "@scalius/shared/status-badges";
 | `html-sanitize.ts` | Defense-in-depth XSS sanitizer for merchant-authored rich HTML | `sanitizeHtml()` -- strips executable/embedded tags, `on*` handlers, and dangerous URL schemes while preserving safe content structure |
 | `shortcodes.ts` | CMS shortcode parsing shared by storefront rendering and API cache invalidation | `parseShortcodes()`, `normalizeShortcodeAttributeQuotes()`, `ShortcodeMatch` |
 | `timestamps.ts` | Unix epoch seconds utilities, date formatting for display | `toISOString()`, `fromUnixSeconds()`, `nowUnixSeconds()`, `unixToDate()`, `formatDate()` |
-| `barcode-utils.ts` | EAN-13 barcode generation and validation (GS1 200-299 prefix) | `generateEAN13()`, `calculateEAN13CheckDigit()`, `validateEAN13()` |
-| `barcode-svg.ts` | Pure SVG barcode rendering using Code 128B encoding | `generateBarcodeSvg()`, `BarcodeSvgOptions` -- uses `escapeHtml()` for label text |
 | `storefront-url.ts` | Storefront URL path construction | `buildStorefrontPath()` |
 
 ## Dependencies

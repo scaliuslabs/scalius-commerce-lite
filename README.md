@@ -55,7 +55,7 @@ packages/
   core/           # @scalius/core — domain modules, auth, integrations, FTS5 search
   database/       # @scalius/database — Drizzle schema and migrations
   shared/         # @scalius/shared — shared utilities and rendering helpers
-  tsconfig/       # @scalius/tsconfig — Shared TypeScript configs (base, astro, worker)
+  tsconfig/       # @scalius/tsconfig — Shared TypeScript configs (base, worker)
 scripts/          # Dev setup, deploy pipeline, dev server wrapper
 ```
 

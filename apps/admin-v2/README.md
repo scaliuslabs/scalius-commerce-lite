@@ -101,7 +101,6 @@ Scanner QR token minting is a privileged same-origin admin action. It requires a
 | `src/lib/api-functions/` | Typed domain server-function slices |
 | `src/lib/api-query-options/` | Narrow domain queryOptions with staleTime tiers |
 | `src/lib/api-mutations/` | Domain mutation hooks with cache invalidation |
-| `src/lib/api.mutations.ts` | Compatibility re-export barrel for mutation hooks |
 | `src/lib/admin-api-timeout.ts` | Read-only API timeout helper shared by server functions and proxy |
 | `src/lib/api.server.ts` | HTTP transport layer (service binding / fetch) |
 | `src/lib/query-keys.ts` | Centralized query key factory |

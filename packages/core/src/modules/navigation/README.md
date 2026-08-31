@@ -1,11 +1,12 @@
 # Navigation
 
-Data layer for storefront navigation menus. Provides linkable entities (categories, pages), CRUD for saved navigation configurations, and default navigation generation.
+Normalized navigation authority plus bounded resource-picker compatibility reads.
 
 ## Files
 
-- `index.ts` -- barrel re-exports everything from `navigation.service.ts` and `navigation.validation.ts`
-- `navigation.service.ts` -- service functions for navigation items and configuration management
+- `index.ts` -- barrel re-exports the navigation services and validation modules
+- `navigation.service.ts` -- bounded legacy picker and product-count preview reads
+- `navigation.authority.service.ts` -- canonical revision-fenced menu, publication, and placement authority
 - `navigation.validation.ts` -- Zod schemas for navigation configuration
 
 ## Service Functions
@@ -37,47 +38,6 @@ Accepted input:
     freeDelivery?: "true" | "false";
     hasDiscount?: "true" | "false";
     attributeFilters?: { slug: string; value: string }[];
-}
-```
-
-### `getNavigationMenus(db)`
-
-Returns header and footer configs from the `siteSettings` singleton. Stored JSON
-is parsed and validated; malformed or unsafe persisted configuration raises an
-explicit service-unavailable error instead of returning empty menus. Legacy
-`/pages/{slug}` links normalize to the real public `/{slug}` route.
-
-### `getNavigationMenu(db, id)`
-
-Returns a single navigation config by ID. Accepts `"header"` or `"footer"` as the ID.
-
-### `saveNavigationConfig(db, data)`
-
-Validates and normalizes a navigation configuration before saving it. Internal
-and relative links remain same-store; external links must be credential-free
-HTTPS. Unsafe schemes, protocol-relative URLs, traversal, and unsafe characters
-are rejected before any database write.
-
-### `updateNavigationConfig(db, id, data)`
-
-Updates an existing navigation config by settings ID. Updates either `headerConfig` or `footerConfig` based on `data.type`.
-
-### `deleteNavigationConfig(db, id, type)`
-
-Resets a navigation config to empty. Sets the corresponding config column (headerConfig or footerConfig) to `"{}"`.
-
-### `buildDefaultNavigation(db)`
-
-Generates default navigation from categories and pages when no custom navigation is configured. Returns `NestedNavigationItem[]` with a "Home" link, a "Categories" dropdown (if categories exist), and individual page links.
-
-### `NavigationItem` interface
-
-```typescript
-interface NavigationItem {
-    id: string;
-    title: string;
-    href?: string;
-    subMenu?: NavigationItem[];
 }
 ```
 
@@ -116,7 +76,10 @@ Exported type: `SaveNavigationConfigInput`.
 
 ### Admin Side
 
-The `AddNavItemDialog` component (`apps/admin-v2/src/components/admin/navigation/AddNavItemDialog.tsx`) fetches items via `GET /api/v1/admin/navigation/items` to populate the category and page picker lists.
+The canonical `NavigationWorkspace` uses the bounded
+`GET /api/v1/admin/navigation/resources` picker and the normalized menu,
+publication, and placement operations. Header and footer builders link to this
+workspace; they do not embed a second menu editor.
 
 ### Admin API Route (`apps/api/src/routes/admin/navigation.ts`)
 
@@ -124,45 +87,37 @@ The `AddNavItemDialog` component (`apps/admin-v2/src/components/admin/navigation
 |--------|------|-------------|
 | GET | `/admin/navigation/items` | Fetch categories + pages via `getNavigationItems(db)` |
 | GET | `/admin/navigation/preview-products` | Preview storefront product count for a dynamic category/filter link via `getNavigationPreviewProductCount(db, input)` |
-| GET | `/admin/navigation` | Compatibility read for header/footer config plus independent revisions |
-| POST | `/admin/navigation` | Deprecated compatibility save; requires `expectedRevision` and delegates to the settings CAS authority |
-| PUT | `/admin/navigation/{id}` | Deprecated compatibility update through the same CAS authority |
-| DELETE | `/admin/navigation/{id}` | Deprecated compatibility reset through the same CAS authority |
+| GET | `/admin/navigation/resources` | Bounded resource picker with keyset pagination and selected-ID hydration |
+| GET/POST | `/admin/navigation/menus/*` | Normalized menu reads and revision-fenced commands |
+| GET/POST | `/admin/navigation/placements/*` | Independent placement reads and revision-fenced commands |
 
 After saving, the route invalidates the layout cache through its request-scoped
 `CACHE` binding and schedules the corresponding storefront purge.
 
 ### Public Routes (Storefront)
 
-The public `apps/api/src/routes/navigation.ts` uses this service for navigation
-menus, individual menus, and default navigation generation.
+The public `apps/api/src/routes/navigation.ts` reads immutable published menus
+and the normalized placement manifest.
 
-Two endpoints:
-- `GET /navigation` -- returns navigation by type (`header`, `footer`, or `all`). Falls back to auto-generated nav from categories + pages if no config saved. Cached 1h.
-- `GET /navigation/{id}` -- returns a specific menu by id (`"header"`, `"footer"`, or a footer menu id/title match).
+Primary endpoints:
+- `GET /navigation` -- resolves header/footer projections from published placements.
+- `GET /navigation/placements` -- returns the uncached placement manifest.
+- `GET /navigation/menus/{menuId}` -- returns one bounded immutable publication.
+- `GET /navigation/menus/{menuId}/items` -- pages large published menus by parent.
 
 ## Data Flow
 
 ```
-getNavigationItems(db)
+GET /admin/navigation/resources
     |
     v
-API: GET /admin/navigation/items  -->  Admin AddNavItemDialog (picker)
-                                       |
-                                       v
-                                  NavigationBuilder (tree editor)
-                                       |
-                                       v
-                             HeaderBuilder / FooterBuilder
-                                       |
-                                       v
-                             POST /admin/navigation (or PUT /admin/navigation/{id})
-                                       |
-                                       v
-                             siteSettings.headerConfig / footerConfig (JSON in D1)
-                                       |
-                                       v
-                             GET /header, GET /footer, GET /navigation  -->  Storefront
+NavigationWorkspace  -->  revision-fenced menu draft commands
+    |                               |
+    |                               v
+    |                      immutable publication rows
+    |                               |
+    v                               v
+placement commands  -->  GET /navigation + revision-keyed menu projections
 ```
 
 ## Dependencies

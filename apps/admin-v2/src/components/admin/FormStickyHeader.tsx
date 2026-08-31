@@ -152,17 +152,3 @@ export function FormActionBar({
   // Fallback if portal target not found (shouldn't happen in admin layout)
   return bar;
 }
-
-// Legacy export — kept for backwards compatibility
-export type FormStickyHeaderProps = FormActionBarProps & {
-  entityName?: string;
-};
-
-export function FormStickyHeader(props: FormStickyHeaderProps) {
-  return <FormActionBar {...props} />;
-}
-
-// No-op — breadcrumb removed (topbar handles navigation)
-export function FormBreadcrumb() {
-  return null;
-}

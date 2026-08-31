@@ -8,6 +8,7 @@ import { attributesQueryOptions } from "~/lib/api-query-options/attributes";
 import { warmRouteQuery } from "~/lib/route-query-warming";
 import {
   useUpdateAttribute,
+  useCreateAttribute,
   useDeleteAttribute,
   usePermanentDeleteAttribute,
   useRestoreAttribute,
@@ -26,7 +27,6 @@ import {
   AttributeValuesViewer,
   AttributeValueEditor,
 } from "~/components/admin/attributes-manager/components";
-import { useAttributeActions } from "~/components/admin/attributes-manager/hooks/useAttributeActions";
 import type { NewAttribute } from "~/components/admin/attributes-manager/types";
 import { useCatalogActionPermissions } from "~/hooks/use-catalog-action-permissions";
 
@@ -72,6 +72,7 @@ function AttributesPage() {
 
   // Mutations
   const updateMutation = useUpdateAttribute();
+  const createMutation = useCreateAttribute();
   const deleteMutation = useDeleteAttribute();
   const permanentDeleteMutation = usePermanentDeleteAttribute();
   const restoreMutation = useRestoreAttribute();
@@ -97,17 +98,6 @@ function AttributesPage() {
     ids: string[];
     permanent: boolean;
   } | null>(null);
-
-  // We need a dummy setAttributes/fetchAttributes for the create dialog hook
-  // (The create action uses the old hook; all other actions use centralized mutations)
-  const { isCreating, handleCreate } = useAttributeActions(
-    () => {
-      /* refresh handled by mutation invalidation */
-    },
-    () => {
-      /* no-op setter */
-    },
-  );
 
   // Track which IDs are currently being saved
   const savingIds = useMemo(() => {
@@ -195,9 +185,11 @@ function AttributesPage() {
 
   const handleCreateAttribute = () => {
     if (!attributeActions.canCreate) return;
-    handleCreate(newAttribute, () => {
-      setNewAttribute({ name: "", slug: "", filterable: true, options: [] });
-      setShowCreateDialog(false);
+    createMutation.mutate(newAttribute, {
+      onSuccess: () => {
+        setNewAttribute({ name: "", slug: "", filterable: true, options: [] });
+        setShowCreateDialog(false);
+      },
     });
   };
 
@@ -435,7 +427,7 @@ function AttributesPage() {
         <AttributeCreateDialog
           open={showCreateDialog}
           newAttribute={newAttribute}
-          isCreating={isCreating}
+          isCreating={createMutation.isPending}
           onOpenChange={setShowCreateDialog}
           onNameChange={handleNewAttributeNameChange}
           onSlugChange={(slug) =>

@@ -387,7 +387,7 @@ function checkProductImagesBoundary(context) {
     requireLacksMarkers(
       context,
       file,
-      [...dndMarkers, "DraggableImageGallery"],
+      dndMarkers,
       "source",
       "product media must keep the direct, accessible reorder controls instead of restoring drag tooling",
     );
@@ -439,33 +439,6 @@ function checkVariantToolBoundaries(context) {
       /(?:bulk-generator|VariantSortModal|VariantImportExport|csvHelpers|MediaManager)$/,
       "source",
       "option matrix must not restore deleted heavy variant tools",
-    );
-  });
-}
-
-function checkNavigationBuilderBoundary(context) {
-  runCheck(context, "source: NavigationBuilder keeps one bounded editor", () => {
-    const file = "apps/admin-v2/src/components/admin/navigation/NavigationBuilder.tsx";
-    requireContains(
-      context,
-      file,
-      /NAVIGATION_RENDER_BATCH_SIZE\s*=\s*80/,
-      "source",
-      "expected the navigation editor to keep its 80-row render batch.",
-    );
-    requireContains(
-      context,
-      file,
-      /outlineRows\.slice\(0,\s*renderLimit\)/,
-      "source",
-      "expected the navigation editor to render only the active row batch.",
-    );
-    requireLacksMarkers(
-      context,
-      file,
-      ["SortableNavigationEditor", "MobileNavigationTree"],
-      "source",
-      "navigation must not restore the duplicate legacy desktop/mobile editors",
     );
   });
 }
@@ -617,16 +590,12 @@ function checkProductFormClientChunk(context) {
   for (const file of files) {
     const source = readFileSync(file, "utf8");
     const imports = staticImportSpecifiers(source).map((item) => item.specifier);
-    const forbiddenStatic = imports.filter(
+    const forbidden = imports.filter(
       (specifier) =>
         /sortable|AdditionalInfoManager|TiptapEditor|prosemirror/i.test(
           specifier,
         ) && !/DeferredTiptapEditor/i.test(specifier),
     );
-    const obsoleteGalleryImports = allImportSpecifiers(source)
-      .map((item) => item.specifier)
-      .filter((specifier) => /DraggableImageGallery/i.test(specifier));
-    const forbidden = [...new Set([...forbiddenStatic, ...obsoleteGalleryImports])];
     if (forbidden.length > 0) {
       bad.push(`${relativeFromRoot(context.rootDir, file)}: ${forbidden.join(", ")}`);
     }
@@ -694,7 +663,6 @@ export function runAdminPerfCheck({ rootDir = defaultRootDir } = {}) {
   checkProductFormTiptapBoundary(context);
   checkProductImagesBoundary(context);
   checkVariantToolBoundaries(context);
-  checkNavigationBuilderBoundary(context);
   checkGeneralSettingsBoundary(context);
   checkOrderViewBoundary(context);
   checkStaticAssetCaching(context);

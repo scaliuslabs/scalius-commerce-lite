@@ -18,7 +18,6 @@ or incomplete configurations fail closed.
   "./postgres-adapter": "./src/postgres-adapter.ts",
   "./postgres-checkout": "./src/postgres-checkout.ts",
   "./inventory-authority": "./src/inventory-authority.ts",
-  "./migration-control": "./src/migration-control.ts",
   "./migration-artifacts": "./src/migration-artifacts.ts",
   "./schema-contract": "./src/schema-contract.ts",
   "./portability": "./src/portability.ts",
@@ -36,7 +35,6 @@ import { getDb, schema } from "@scalius/database/client";
 import type { Database } from "@scalius/database/client";
 
 // Operator-facing migration building blocks
-import { advanceDatabaseMigrationCheckpoint } from "@scalius/database/migration-control";
 import { compileSqliteMigrationForProvider } from "@scalius/database/migration-artifacts";
 import { readDatabaseSchemaState } from "@scalius/database/schema-contract";
 import { createSqlitePortabilityManifest } from "@scalius/database/portability";

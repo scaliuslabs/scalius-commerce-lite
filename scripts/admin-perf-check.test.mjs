@@ -130,15 +130,6 @@ function createPassingFixture({ dist = true } = {}) {
     export const visibleVariants = filteredVariants.slice(page * pageSize, (page + 1) * pageSize);
   `);
 
-  write(root, "apps/admin-v2/src/components/admin/navigation/NavigationBuilder.tsx", `
-    export const NAVIGATION_RENDER_BATCH_SIZE = 80;
-    export function NavigationBuilder() {
-      const outlineRows = [];
-      const renderLimit = NAVIGATION_RENDER_BATCH_SIZE;
-      return outlineRows.slice(0, renderLimit);
-    }
-  `);
-
   write(root, "apps/admin-v2/src/components/admin/settings/GeneralSettingsPage.tsx", `
     import { lazy, Suspense } from "react";
     import type { HeaderConfig } from "../header-builder/types";
@@ -218,9 +209,8 @@ describe("admin-perf-check", () => {
       }
     `);
     write(root, "apps/admin-v2/dist/client/assets/immutable/ProductForm-a1B2c3D4e.js", `
-      export async function restoreObsoleteGallery() {
-        return import("./DraggableImageGallery-fixture.js");
-      }
+      import { SortableContext } from "./sortable-fixture.js";
+      export const ProductForm = SortableContext;
     `);
 
     const report = runAdminPerfCheck({ rootDir: root });
@@ -234,7 +224,7 @@ describe("admin-perf-check", () => {
     expect(lines).toContain("FAIL source");
     expect(lines).toContain("FAIL dist");
     expect(lines.join("\n")).toContain("api.queries.ts exists");
-    expect(lines.join("\n")).toContain("DraggableImageGallery-fixture.js");
+    expect(lines.join("\n")).toContain("sortable-fixture.js");
   });
 
   it("fails when useServerTable omits explicit stale-aware mount refetch", () => {
@@ -279,7 +269,6 @@ describe("admin-perf-check", () => {
     const root = createPassingFixture({ dist: false });
     write(root, "apps/admin-v2/src/components/admin/product-form/ProductImagesSection.tsx", `
       import { DndContext } from "@dnd-kit/core";
-      import { DraggableImageGallery } from "../DraggableImageGallery";
       export function ProductImagesSection({ field }) {
         return <DndContext>{field.value.map((item) => <img src={item.url} />)}</DndContext>;
       }
@@ -292,25 +281,6 @@ describe("admin-perf-check", () => {
     expect(output).toContain("product media must keep the direct, accessible reorder controls");
     expect(output).toContain("cap its initial rendered tiles at 12");
     expect(output).toContain("native lazy loading");
-  });
-
-  it("fails when navigation restores duplicate editors or drops row batching", () => {
-    const root = createPassingFixture({ dist: false });
-    write(root, "apps/admin-v2/src/components/admin/navigation/NavigationBuilder.tsx", `
-      import { MobileNavigationTree } from "./MobileNavigationTree";
-      const SortableNavigationEditor = () => null;
-      export function NavigationBuilder({ outlineRows }) {
-        return <><MobileNavigationTree />{outlineRows.map((row) => row)}</>;
-      }
-    `);
-
-    const report = runAdminPerfCheck({ rootDir: root });
-    const output = formatAdminPerfCheckReport(report).join("\n");
-
-    expect(report.ok).toBe(false);
-    expect(output).toContain("80-row render batch");
-    expect(output).toContain("only the active row batch");
-    expect(output).toContain("duplicate legacy desktop/mobile editors");
   });
 
   it("fails when OrderView restores lazy panel hydration", () => {

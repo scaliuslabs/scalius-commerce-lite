@@ -2,7 +2,6 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   bulkDeleteDiscounts,
-  bulkRestoreDiscounts,
   createDiscount,
   deleteDiscount,
   permanentDeleteDiscount,
@@ -213,21 +212,5 @@ export function useBulkDeleteDiscounts() {
     },
     onError: (err) =>
       toast.error(getServerFnError(err, "Failed to delete discounts")),
-  });
-}
-
-export function useBulkRestoreDiscounts() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (data: { discountIds?: string[]; ids?: string[] }) =>
-      bulkRestoreDiscounts({
-        data: { discountIds: data.discountIds ?? data.ids ?? [] },
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.discounts.list() });
-      toast.success("Discounts restored");
-    },
-    onError: (err) =>
-      toast.error(getServerFnError(err, "Failed to restore discounts")),
   });
 }

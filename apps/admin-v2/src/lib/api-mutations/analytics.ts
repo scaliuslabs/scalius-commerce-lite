@@ -6,15 +6,12 @@ import {
 import { toast } from "sonner";
 import type { AnalyticsScriptsListResponse } from "~/types/api-responses";
 import {
-  createAnalyticsScript,
   deleteAnalyticsScript,
   permanentlyDeleteAnalyticsScript,
   restoreAnalyticsScript,
   toggleAnalyticsScript,
-  updateAnalyticsScript,
   type AnalyticsRevisionClaim,
   type ToggleAnalyticsScriptInput,
-  type UpdateAnalyticsScriptInput,
 } from "../api-functions/analytics";
 import { getServerFnError, queryKeys } from "./shared";
 
@@ -54,37 +51,6 @@ function reconcileAnalyticsLifecycleMove(queryClient: QueryClient, id: string) {
   });
   void queryClient.invalidateQueries({
     queryKey: queryKeys.analytics.providerHealth(),
-  });
-}
-
-export function useCreateAnalyticsScript() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (data: Record<string, unknown>) => createAnalyticsScript({ data }),
-    onSuccess: () => {
-      invalidateAnalytics(queryClient);
-      toast.success("Analytics draft created");
-    },
-    onError: (error) => toast.error(
-      getServerFnError(error, "Could not create the analytics draft."),
-    ),
-  });
-}
-
-export function useUpdateAnalyticsScript() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (data: UpdateAnalyticsScriptInput) => updateAnalyticsScript({ data }),
-    onSuccess: (_data, variables) => {
-      invalidateAnalytics(queryClient);
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.analytics.detail(variables.id),
-      });
-      toast.success("Analytics script saved");
-    },
-    onError: (error) => toast.error(
-      getServerFnError(error, "Could not save the analytics script. Reload before retrying."),
-    ),
   });
 }
 

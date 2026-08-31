@@ -72,10 +72,8 @@ export default defineConfig({
       noExternal: [
         /^@radix-ui\/.*/,
         "lucide-react",
-        "sonner",
         "@nanostores/react",
         "nanostores",
-        "embla-carousel-react",
         "class-variance-authority",
         "clsx",
         "tailwind-merge",

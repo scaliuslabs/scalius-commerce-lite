@@ -4,18 +4,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { errorResponseFromError } from "../utils/api-response";
 
 const mocks = vi.hoisted(() => ({
-  buildDefaultNavigation: vi.fn(),
-  getNavigationMenu: vi.fn(),
-  getNavigationMenus: vi.fn(),
   getNavigationPlacementManifest: vi.fn(),
   getPublishedNavigationMenuTree: vi.fn(),
   listPublishedNavigationMenuItems: vi.fn(),
 }));
 
 vi.mock("@scalius/core/modules/navigation", () => ({
-  buildDefaultNavigation: mocks.buildDefaultNavigation,
-  getNavigationMenu: mocks.getNavigationMenu,
-  getNavigationMenus: mocks.getNavigationMenus,
   getNavigationPlacementManifest: mocks.getNavigationPlacementManifest,
   getPublishedNavigationMenuTree: mocks.getPublishedNavigationMenuTree,
   listPublishedNavigationMenuItems: mocks.listPublishedNavigationMenuItems,

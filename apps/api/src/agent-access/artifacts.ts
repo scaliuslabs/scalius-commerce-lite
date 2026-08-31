@@ -297,11 +297,6 @@ export async function deleteAgentArtifactRecords(
   return deleted.length;
 }
 
-/** @deprecated Use deleteAgentArtifactRecords() so cleanup remains bounded. */
-export async function deleteAgentArtifactRecord(db: Database, artifactId: string): Promise<void> {
-  await deleteAgentArtifactRecords(db, [artifactId]);
-}
-
 export async function expireAgentArtifactHandles(db: Database): Promise<void> {
   const now = new Date();
   await db.update(agentArtifactHandles).set({ status: "expired", updatedAt: now }).where(and(

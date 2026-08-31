@@ -21,11 +21,6 @@ function sourceFiles(directory) {
   });
 }
 
-const mutableGlobalAllowlist = new Set([
-  // Browser Firebase SDK lifecycle; this module is not part of a Worker graph.
-  "packages/core/src/integrations/firebase/client.ts",
-]);
-
 const rules = [
   ["packages/core/src/auth/auth.ts", ["let cachedAuth", "cachedEnvSignature"]],
   ["packages/core/src/auth/rbac/auto-seed.ts", ["let seedingPromise", "let seedingChecked"]],
@@ -46,7 +41,6 @@ for (const file of [
   ...sourceFiles(resolve(root, "packages/database/src")),
 ]) {
   const relativePath = relative(root, file);
-  if (mutableGlobalAllowlist.has(relativePath)) continue;
   const sourceText = readFileSync(file, "utf8");
   const source = ts.createSourceFile(
     file,

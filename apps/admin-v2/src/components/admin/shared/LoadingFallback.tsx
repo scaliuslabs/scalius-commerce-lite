@@ -51,16 +51,3 @@ export function PanelLoadingSkeleton() {
     </div>
   );
 }
-
-/**
- * Card skeleton for dashboard/settings cards.
- */
-export function CardSkeleton({ count = 1 }: { count?: number }) {
-  return (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-      {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="h-32 animate-pulse rounded-lg bg-muted" />
-      ))}
-    </div>
-  );
-}
