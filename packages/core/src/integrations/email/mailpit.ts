@@ -30,12 +30,16 @@ export class MailpitEmailProvider implements EmailProvider {
       throw new ServiceUnavailableError(`Mailpit API error: ${response.status}`);
     }
 
-    const data = await response.json<{ ID?: string }>();
+    const data: unknown = await response.json();
+    const providerRef = typeof data === "object" && data !== null
+      && "ID" in data && typeof data.ID === "string"
+      ? data.ID
+      : undefined;
     console.log("[Email] Captured locally in Mailpit");
     return {
       success: true,
       provider: "mailpit",
-      providerRef: data.ID,
+      providerRef,
       rawStatus: "captured",
     };
   }
