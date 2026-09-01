@@ -1,4 +1,5 @@
-import { spawnSync } from "child_process";
+import { spawn, spawnSync } from "child_process";
+import { once } from "events";
 import { dirname, resolve } from "path";
 import { fileURLToPath } from "url";
 import { describe, expect, it } from "vitest";
@@ -60,5 +61,27 @@ describe("dev.sh startup planning", () => {
     expect(adminIndex).toBeGreaterThan(waitIndex);
     expect(staggerIndex).toBeGreaterThan(adminIndex);
     expect(storefrontIndex).toBeGreaterThan(staggerIndex);
+  });
+
+  it("reports an occupied app port without terminating its owner", async () => {
+    const listener = spawn(process.execPath, [
+      "-e",
+      'require("net").createServer().listen(8787, "127.0.0.1", function () { console.log(this.address().port) })',
+    ]);
+
+    try {
+      const [chunk] = await once(listener.stdout, "data");
+      const port = chunk.toString().trim();
+      const result = spawnSync("bash", ["scripts/dev.sh"], {
+        cwd: root,
+        encoding: "utf8",
+      });
+
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain(`Port ${port} is already in use by PID ${listener.pid}`);
+      expect(listener.kill(0)).toBe(true);
+    } finally {
+      listener.kill("SIGTERM");
+    }
   });
 });
