@@ -134,6 +134,9 @@ describe("local post-sale smoke CLI", () => {
 
     expect(sql).toContain("INSERT INTO site_settings");
     expect(sql).toContain("'payment_methods'");
+    expect(sql).toContain("'currency_code'");
+    expect(sql).toContain("'BDT'");
+    expect(sql).toContain("'usd_exchange_rate'");
     expect(sql).toContain("'customer_auth'");
     expect(sql).toContain("'allowed_countries'");
     expect(sql).toContain("'ops006_shipping_standard'");
@@ -163,6 +166,10 @@ describe("local post-sale smoke CLI", () => {
     expect(sql).toContain("DELETE FROM settings WHERE category IN ('stripe', 'sslcommerz', 'polar')");
     expect(sql).toContain("partial_payment_enabled = 1");
     expect(sql).toContain("partial_payment_amount = 150");
+    expect(sql).toContain("currency_code, currency_decimal_places");
+    expect(sql).toContain("subtotal_amount_minor");
+    expect(sql).toContain("total_amount_minor");
+    expect(sql).toContain("'BDT', 2, 120000, 8000, 0, 0, 128000, 'pending'");
     expect(sql).toContain("'ops006_order_stripe'");
     expect(sql).toContain("'ops006_order_sslcommerz'");
     expect(sql).toContain("'ops006_order_polar'");
