@@ -730,7 +730,7 @@ async function recoverAuthOtpAcceptedDeliveryFromHint(
     await deleteAuthOtpAcceptedHint(env, target.deliveryKey);
     console.warn(
       `[Queue] Recovered accepted OTP delivery=${target.deliveryKey} channel=${target.channel} ` +
-        `recipientHash=${target.identifierHash} status=${result}`,
+        `recipientHashPrefix=${getAuthOtpRecipientHashPrefix(target.identifierHash)} status=${result}`,
     );
     return true;
   } catch (error) {
@@ -855,7 +855,7 @@ async function archiveAuthOtpDlqMessage(
     await deleteAuthOtpAcceptedHint(env, target.deliveryKey);
     console.warn(
       `[Queue] Archived accepted auth OTP DLQ delivery=${target.deliveryKey} channel=${target.channel} ` +
-        `recipientHash=${target.identifierHash} status=${acceptedStatus}`,
+        `recipientHashPrefix=${getAuthOtpRecipientHashPrefix(target.identifierHash)} status=${acceptedStatus}`,
     );
     return { status: acceptedStatus };
   }
@@ -873,7 +873,7 @@ async function archiveAuthOtpDlqMessage(
 
   console.warn(
     `[Queue] Archived auth OTP DLQ delivery=${target.deliveryKey} channel=${target.channel} ` +
-      `recipientHash=${target.identifierHash} status=${status}`,
+      `recipientHashPrefix=${getAuthOtpRecipientHashPrefix(target.identifierHash)} status=${status}`,
   );
   return { status };
 }
@@ -1802,7 +1802,9 @@ async function sendAuthOtpEmail(
     );
   }
 
-  console.log(`[Queue] Sent OTP email delivery=${target.deliveryKey} recipientHash=${target.identifierHash}`);
+  console.log(
+    `[Queue] Sent OTP email delivery=${target.deliveryKey} recipientHashPrefix=${getAuthOtpRecipientHashPrefix(target.identifierHash)}`,
+  );
   return receiptResult;
 }
 
@@ -1880,7 +1882,9 @@ async function sendAuthOtpWhatsApp(
     });
   }
 
-  console.log(`[Queue] Sent WhatsApp OTP delivery=${target.deliveryKey} recipientHash=${target.identifierHash}`);
+  console.log(
+    `[Queue] Sent WhatsApp OTP delivery=${target.deliveryKey} recipientHashPrefix=${getAuthOtpRecipientHashPrefix(target.identifierHash)}`,
+  );
   return receiptResult;
 }
 
@@ -1955,7 +1959,7 @@ async function sendAuthOtpSms(
   }
 
   console.log(
-    `[Queue] SMS OTP sent via ${smsProvider.name} delivery=${target.deliveryKey} recipientHash=${target.identifierHash}, ref=${result.providerRef}`,
+    `[Queue] SMS OTP sent via ${smsProvider.name} delivery=${target.deliveryKey} recipientHashPrefix=${getAuthOtpRecipientHashPrefix(target.identifierHash)}, ref=${result.providerRef}`,
   );
   return receiptResult;
 }
@@ -2102,6 +2106,10 @@ function redactAuthOtpLogText(value: string): string {
     .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[email]")
     .replace(/\+?\d[\d\s().-]{8,}\d/g, "[phone]")
     .replace(/\b\d{6}\b/g, "[code]");
+}
+
+function getAuthOtpRecipientHashPrefix(identifierHash: string): string {
+  return identifierHash.slice(0, 12);
 }
 
 const AUTH_OTP_NON_RETRYABLE_PATTERNS = [
