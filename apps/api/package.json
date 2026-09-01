@@ -43,7 +43,7 @@
     "@types/jsonwebtoken": "^9.0.10",
     "tsx": "^4.23.11",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.10",
+    "vitest": "^4.1.11",
     "wrangler": "4.128.0"
   }
 }
