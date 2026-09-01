@@ -8,6 +8,8 @@ Built-in providers:
 
 - `cloudflare` -- default Cloudflare Email Service provider using the Workers `send_email` binding named `EMAIL`.
 - `resend` -- optional HTTP fallback using a dashboard-saved Resend API key.
+- `mailpit` -- loopback-only local capture through Mailpit's HTTP API.
+- Local development uses the loopback-only `LOCAL_MAILPIT_URL` from `apps/api/wrangler.local.jsonc` before either production provider. `pnpm dev` starts or reuses Mailpit at `http://127.0.0.1:8025`; production config does not expose this binding.
 
 Every email path calls `sendEmail(options, context?)`. The selector reads `email_provider` from DB settings and tries providers in this order:
 
@@ -18,7 +20,7 @@ Every email path calls `sendEmail(options, context?)`. The selector reads `email
 
 Cloudflare Email Service is the native/default option. Do not add another paid/external email provider without keeping Cloudflare available in API, runtime, UI, and docs.
 
-`getEmailProviderReadiness(context?)` is the shared readiness check for admin policy saves and customer OTP send-time preflights. Email OTP is ready only when a valid `email_sender` is saved and either the Cloudflare `EMAIL` binding is present or a Resend key decrypts with `CREDENTIAL_ENCRYPTION_KEY`. An unreadable Resend key is not considered configured, but Cloudflare remains a valid native fallback when the binding exists.
+`getEmailProviderReadiness(context?)` is the shared readiness check for admin policy saves and customer OTP send-time preflights. Email OTP is ready only when a valid `email_sender` is saved and a provider is available: the explicit loopback Mailpit URL in local development, the Cloudflare `EMAIL` binding, or a Resend key decrypted with `CREDENTIAL_ENCRYPTION_KEY`. Non-loopback Mailpit URLs are rejected. An unreadable Resend key is not considered configured, but Cloudflare remains a valid native fallback when the binding exists.
 
 ## Settings
 
@@ -55,13 +57,14 @@ The API and admin Workers declare:
 "send_email": [{ "name": "EMAIL" }]
 ```
 
-Cloudflare Email Service requires domain onboarding in the Cloudflare dashboard before arbitrary production sends. Local API config intentionally does not declare the binding; local development logs emails unless a provider is explicitly configured.
+Cloudflare Email Service requires domain onboarding in the Cloudflare dashboard before arbitrary production sends. Local API config intentionally omits that binding and declares the loopback Mailpit URL instead.
 
 ## Key Files
 
 - `provider.ts` -- provider interfaces, runtime context types, and registry.
 - `settings.ts` -- DB/runtime settings loader and Resend credential decryption.
 - `cloudflare.ts` -- Workers `EMAIL.send()` provider.
+- `mailpit.ts` -- loopback-only local Mailpit HTTP provider.
 - `resend.ts` -- Resend HTTP provider.
 - `index.ts` -- provider registration, selection/fallback logic, and convenience templates.
 

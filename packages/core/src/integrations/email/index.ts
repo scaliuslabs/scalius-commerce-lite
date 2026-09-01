@@ -15,6 +15,7 @@ export {
 } from "./provider";
 
 export { CloudflareEmailProvider } from "./cloudflare";
+export { MailpitEmailProvider } from "./mailpit";
 export { ResendEmailProvider } from "./resend";
 export { getEmailProviderReadiness, getEmailRuntimeSettings, readEmailSetting } from "./settings";
 export type { EmailProviderReadiness } from "./settings";
@@ -23,9 +24,11 @@ export type { EmailProviderReadiness } from "./settings";
 
 import { registerEmailProvider } from "./provider";
 import { CloudflareEmailProvider } from "./cloudflare";
+import { MailpitEmailProvider } from "./mailpit";
 import { ResendEmailProvider } from "./resend";
 
 registerEmailProvider("cloudflare", new CloudflareEmailProvider());
+registerEmailProvider("mailpit", new MailpitEmailProvider());
 registerEmailProvider("resend", new ResendEmailProvider());
 
 // ── Convenience functions (preserve existing public API) ────────────
@@ -91,6 +94,10 @@ export async function sendEmail(
 ): Promise<SendEmailResult> {
   const settings = await getEmailRuntimeSettings(context);
   const runtimeContext: EmailRuntimeContext = { ...context, settings };
+
+  if (settings.localMailpitUrl) {
+    return getEmailProvider("mailpit")!.sendEmail(options, runtimeContext);
+  }
 
   for (const providerName of providerOrder(settings)) {
     if (!isProviderConfigured(providerName, settings, runtimeContext)) continue;

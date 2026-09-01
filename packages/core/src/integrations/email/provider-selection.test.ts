@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { sendEmail, type EmailRuntimeSettings } from "./index";
-import { getEmailProviderReadiness, getEmailRuntimeSettings } from "./settings";
+import { getEmailProviderReadiness, getEmailRuntimeSettings, resolveLocalMailpitUrl } from "./settings";
 import { encryptCredentials } from "../../utils/credential-encryption";
 
 const baseSettings: EmailRuntimeSettings = {
@@ -11,6 +11,7 @@ const baseSettings: EmailRuntimeSettings = {
   resendApiKey: null,
   hasResendApiKey: false,
   cloudflareBindingConfigured: false,
+  localMailpitUrl: null,
 };
 
 function createEmailSettingsDb(rows: Array<{ key: string; value: string }>) {
@@ -26,6 +27,18 @@ function createEmailSettingsDb(rows: Array<{ key: string; value: string }>) {
 }
 
 describe("email provider selection", () => {
+  it.each([
+    ["http://127.0.0.1:8025", "http://127.0.0.1:8025"],
+    ["http://localhost:8025/", "http://localhost:8025"],
+    ["http://[::1]:8025", "http://[::1]:8025"],
+    ["https://127.0.0.1:8025", null],
+    ["http://127.0.0.1:8025/mail", null],
+    ["http://user@127.0.0.1:8025", null],
+    ["http://127.0.0.1.example.com:8025", null],
+  ])("accepts only loopback Mailpit origins (%s)", (value, expected) => {
+    expect(resolveLocalMailpitUrl(value)).toBe(expected);
+  });
+
   beforeEach(() => {
     vi.spyOn(console, "log").mockImplementation(() => undefined);
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
@@ -66,6 +79,50 @@ describe("email provider selection", () => {
       subject: "Order received",
       html: "<p>Thanks</p>",
       text: undefined,
+    });
+  });
+
+  it("captures local email in Mailpit before any production provider", async () => {
+    const cloudflareSend = vi.fn();
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({ ID: "mailpit_msg_1" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await sendEmail(
+      {
+        to: "buyer@example.test",
+        subject: "Verification code",
+        html: "<p>Code</p>",
+        text: "Code",
+      },
+      {
+        env: { EMAIL: { send: cloudflareSend } },
+        settings: {
+          ...baseSettings,
+          cloudflareBindingConfigured: true,
+          localMailpitUrl: "http://127.0.0.1:8025",
+        },
+      },
+    );
+
+    expect(result).toMatchObject({
+      success: true,
+      provider: "mailpit",
+      providerRef: "mailpit_msg_1",
+    });
+    expect(cloudflareSend).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledWith("http://127.0.0.1:8025/api/v1/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        From: { Email: "orders@example.com" },
+        To: [{ Email: "buyer@example.test" }],
+        Subject: "Verification code",
+        HTML: "<p>Code</p>",
+        Text: "Code",
+      }),
     });
   });
 
@@ -319,6 +376,33 @@ describe("email provider selection", () => {
       configured: false,
       senderConfigured: false,
       error: "Sender email is required before enabling email delivery.",
+    });
+  });
+
+  it("accepts Mailpit only through an explicit loopback HTTP URL", async () => {
+    const db = createEmailSettingsDb([
+      { key: "email_provider", value: "cloudflare" },
+      { key: "email_sender", value: "orders@example.test" },
+    ]);
+
+    await expect(getEmailProviderReadiness({
+      db,
+      env: { LOCAL_MAILPIT_URL: "http://127.0.0.1:8025" },
+    })).resolves.toMatchObject({
+      configured: true,
+      provider: "mailpit",
+      cloudflareBindingConfigured: false,
+      resendConfigured: false,
+      error: null,
+    });
+
+    await expect(getEmailProviderReadiness({
+      db,
+      env: { LOCAL_MAILPIT_URL: "https://mail.example.com" },
+    })).resolves.toMatchObject({
+      configured: false,
+      provider: "cloudflare",
+      error: "The selected Cloudflare Email provider requires the EMAIL binding.",
     });
   });
 });

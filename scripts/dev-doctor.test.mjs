@@ -45,13 +45,13 @@ describe("dev doctor helpers", () => {
 
   it("defaults to the full service profile", () => {
     expect(getDoctorConfig([], {}).serviceProfile).toBe("all");
-    expect(getServiceIdsForProfile("all")).toEqual(["api", "admin", "storefront"]);
+    expect(getServiceIdsForProfile("all")).toEqual(["mailbox", "api", "admin", "storefront"]);
   });
 
   it("maps partial service profiles to their expected services", () => {
-    expect(getServiceIdsForProfile("api")).toEqual(["api"]);
-    expect(getServiceIdsForProfile("admin")).toEqual(["api", "admin"]);
-    expect(getServiceIdsForProfile("storefront")).toEqual(["api", "storefront"]);
+    expect(getServiceIdsForProfile("api")).toEqual(["mailbox", "api"]);
+    expect(getServiceIdsForProfile("admin")).toEqual(["mailbox", "api", "admin"]);
+    expect(getServiceIdsForProfile("storefront")).toEqual(["mailbox", "api", "storefront"]);
   });
 
   it("rejects unknown service profiles", () => {
