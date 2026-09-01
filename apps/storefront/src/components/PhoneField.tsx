@@ -69,14 +69,7 @@ export default function PhoneField({
     },
     [countryPolicy],
   );
-  const [value, setValue] = useState(() => {
-    const draft = readCheckoutFormDraft();
-    const initialValue =
-      draft && Object.prototype.hasOwnProperty.call(draft, "customerPhone")
-        ? draft.customerPhone
-        : defaultValue;
-    return normalizePhone(initialValue);
-  });
+  const [value, setValue] = useState(() => normalizePhone(defaultValue));
   const [error, setError] = useState("");
   const errorId = useId();
   const buyerHasEdited = useRef(false);
@@ -91,6 +84,17 @@ export default function PhoneField({
     });
     syncCheckoutTransferSession({ customerPhone: phone });
   }, []);
+
+  useEffect(() => {
+    const draft = readCheckoutFormDraft();
+    if (
+      !buyerHasEdited.current &&
+      draft &&
+      Object.prototype.hasOwnProperty.call(draft, "customerPhone")
+    ) {
+      setValue(normalizePhone(draft.customerPhone));
+    }
+  }, [normalizePhone]);
 
   // Compute the effective countries list based on mode
   const effectiveCountries = useMemo(() => {
