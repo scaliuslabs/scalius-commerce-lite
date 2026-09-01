@@ -286,6 +286,14 @@ const privateSessionPrefetchGuardScript =
   buildPrivateSessionPrefetchGuardScript(
     requestBypassesPublicStorefrontCache(Astro.request.headers),
   );
+const reactRefreshPreamble = import.meta.env.DEV
+  ? `import RefreshRuntime from "/@react-refresh";
+if (!window.$RefreshReg$) {
+  RefreshRuntime.injectIntoGlobalHook(window);
+  window.$RefreshReg$ = () => {};
+  window.$RefreshSig$ = () => (type) => type;
+}`
+  : "";
 ---
 
 <!doctype html>
@@ -524,6 +532,12 @@ const privateSessionPrefetchGuardScript =
     </script>
 
     {bodyEndScripts.map((script) => <Fragment set:html={script.config} />)}
+
+    {
+      reactRefreshPreamble && (
+        <script is:inline type="module" set:html={reactRefreshPreamble} />
+      )
+    }
 
     <script>
       import { installLazyGlobalUi } from "@/scripts/lazy-global-ui";
