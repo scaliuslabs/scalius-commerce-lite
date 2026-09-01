@@ -44,4 +44,20 @@ describe("storefront Vite boundaries", () => {
 
     expect(source).toContain('include: ["astro/assets/services/noop", "astro/logger/json"]');
   });
+
+  it("installs Vite's React refresh preamble before custom lazy mounts", () => {
+    const source = readFileSync(
+      storefrontRootPath("src/layouts/Layout.astro"),
+      "utf8",
+    );
+
+    expect(source).toContain("import.meta.env.DEV");
+    expect(source).toContain('import RefreshRuntime from "/@react-refresh"');
+    expect(source).toContain("if (!window.$RefreshReg$)");
+    expect(source.indexOf("set:html={reactRefreshPreamble}")).toBeLessThan(
+      source.indexOf(
+        'import { installLazyGlobalUi } from "@/scripts/lazy-global-ui"',
+      ),
+    );
+  });
 });
