@@ -152,7 +152,7 @@ interface ExecutionContext<Props = unknown> {
   passThroughOnException(): void;
   readonly props: Props;
   readonly exports: WorkerExports;
-  readonly cache: WorkersCacheContext;
+  readonly cache?: WorkersCacheContext;
 }
 
 // Cloudflare Queue binding types

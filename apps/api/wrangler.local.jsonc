@@ -10,6 +10,13 @@
   "limits": {
     "cpu_ms": 300000
   },
+  "cache": {
+    "enabled": true
+  },
+  "exports": {
+    "default": { "type": "worker", "cache": { "enabled": false } },
+    "PublicApi": { "type": "worker", "cache": { "enabled": true } }
+  },
   "workers_dev": true,
   "observability": {
     "enabled": true
