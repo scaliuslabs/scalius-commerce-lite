@@ -95,8 +95,30 @@ export default function OrderSuccessButtons({
   }, [copy, orderId]);
 
   useEffect(() => {
-    setIsCustomerAuthenticated(document.cookie.includes("cs_auth=1"));
-    setAuthChecked(true);
+    let cancelled = false;
+    const authenticated = document.cookie.includes("cs_auth=1");
+    setIsCustomerAuthenticated(authenticated);
+
+    const checkAccountOwnership = async () => {
+      if (authenticated && orderId) {
+        try {
+          const response = await fetch(
+            `/api/customer-auth/orders/${encodeURIComponent(orderId)}`,
+            { credentials: "same-origin", cache: "no-store" },
+          );
+          if (response.ok && !cancelled) {
+            setAccountSaveState({
+              status: "success",
+              message: copy.orderReceiptAlreadySavedText,
+            });
+          }
+        } catch {
+          // Keep the receipt usable and let the explicit save action retry.
+        }
+      }
+      if (!cancelled) setAuthChecked(true);
+    };
+    void checkAccountOwnership();
 
     const handleCustomerLogin = () => {
       setIsCustomerAuthenticated(true);
@@ -107,9 +129,10 @@ export default function OrderSuccessButtons({
     };
     window.addEventListener("customer-login", handleCustomerLogin);
     return () => {
+      cancelled = true;
       window.removeEventListener("customer-login", handleCustomerLogin);
     };
-  }, [claimOrderToAccount]);
+  }, [claimOrderToAccount, copy.orderReceiptAlreadySavedText, orderId]);
 
   useEffect(() => {
     setSupportRequests(initialSupportRequests);
@@ -273,7 +296,8 @@ export default function OrderSuccessButtons({
         </Button>
       </div>
 
-      <div className="w-full max-w-xl rounded-xl border border-border bg-muted/30 p-4 text-left">
+      {authChecked && (
+        <div className="w-full max-w-xl rounded-xl border border-border bg-muted/30 p-4 text-left">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
             <p className="text-sm font-semibold text-foreground">
@@ -288,7 +312,7 @@ export default function OrderSuccessButtons({
             )}
           </div>
           <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
-            {authChecked && isCustomerAuthenticated ? (
+            {isCustomerAuthenticated ? (
               accountSaveState.status === "success" ? (
                 <Button type="button" className="min-h-11 font-medium" onClick={handleOpenAccountOrder}>
                   {copy.orderReceiptViewInAccountText}
@@ -305,7 +329,7 @@ export default function OrderSuccessButtons({
                     : copy.orderReceiptSaveToAccountText}
                 </Button>
               )
-            ) : authChecked ? (
+            ) : (
               <>
                 <Button
                   type="button"
@@ -323,7 +347,7 @@ export default function OrderSuccessButtons({
                   {copy.orderReceiptSignInText}
                 </Button>
               </>
-            ) : null}
+            )}
           </div>
         </div>
         <div aria-live="polite">
@@ -333,7 +357,8 @@ export default function OrderSuccessButtons({
             </p>
           ) : null}
         </div>
-      </div>
+        </div>
+      )}
 
       {(latestSupportRequest || supportRequestActions.length > 0) && (
         <div className="w-full max-w-xl rounded-xl border border-border bg-background p-4 text-left">
