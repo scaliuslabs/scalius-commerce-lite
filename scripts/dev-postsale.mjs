@@ -74,6 +74,10 @@ const receiptTokenHeader = "X-Receipt-Token";
 let migrationsApplied = false;
 
 export function getPostsaleConfig(rawArgs = process.argv.slice(2), env = process.env) {
+  if (rawArgs[0] === "help" || rawArgs.includes("--help") || rawArgs.includes("-h")) {
+    return { command: "help" };
+  }
+
   const positionalCommand = rawArgs[0] && !rawArgs[0].startsWith("--") ? rawArgs[0] : undefined;
   const command = positionalCommand || "checkout-smoke";
   const options = parseOptions(positionalCommand ? rawArgs.slice(1) : rawArgs);
@@ -322,6 +326,7 @@ function printHelp() {
 Local post-sale smoke helper
 
 Commands:
+  help             Show this help without touching local state
   seed             Seed the local D1 checkout fixture only
   checkout-smoke   Seed, create a COD order, replay it, verify receipt, submit support request
   load             Seed, create bounded concurrent COD orders, print latency/status summary
@@ -330,6 +335,7 @@ Commands:
                    Seed committed local online orders and verify unconfigured gateways fail closed
 
 Options:
+  --help, -h           Show this help without touching local state
   --api <url>          Local API origin (default: ${defaults.apiBaseUrl})
   --state <path>       Wrangler local state path; relative paths resolve from repo root
   --orders <n>         Number of disposable orders for load mode (default: ${defaults.orders})
