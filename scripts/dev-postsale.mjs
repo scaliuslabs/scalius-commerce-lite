@@ -71,6 +71,7 @@ const defaults = {
 
 const receiptTokenHeader = "X-Receipt-Token";
 const quoteFingerprintPattern = /^taxq_[A-Za-z0-9_-]{22}$/;
+const mailpitMessagesUrl = "http://127.0.0.1:8025/api/v1/messages";
 
 let migrationsApplied = false;
 
@@ -323,6 +324,15 @@ export function attachAuthoritativeQuote(orderPayload, responseBody) {
   return { ...orderPayload, expectedQuoteFingerprint: quoteFingerprint };
 }
 
+export function readMailpitMessageCount(responseBody) {
+  const count = responseBody?.total;
+  assertCondition(
+    Number.isSafeInteger(count) && count >= 0,
+    "Mailpit did not return a valid message count.",
+  );
+  return count;
+}
+
 export function buildReceiptLookupRequest(orderId, receiptToken) {
   return {
     path: `/api/v1/orders/receipt/${encodeURIComponent(orderId)}`,
@@ -360,7 +370,7 @@ Commands:
   seed             Seed the local D1 checkout fixture only
   checkout-smoke   Seed, create a COD order, replay it, verify receipt, submit support request
   load             Seed, create bounded concurrent COD orders, print latency/status summary
-  otp-smoke        Seed only auth settings, then exercise email OTP readiness once
+  otp-smoke        Seed only auth settings, then prove queued email delivery in Mailpit
   payment-readiness
                    Seed committed local online orders and verify unconfigured gateways fail closed
 
@@ -615,13 +625,14 @@ async function runOtpSmoke(config) {
     email: "ops006-otp@example.com",
   };
 
+  const messagesBefore = await readMailpitMessages();
   const response = await requestJson(
     config,
     "POST",
     "/api/v1/customer-auth/send-otp",
     payload,
-    [200, 503],
   );
+  const messagesAfter = await waitForMailpitMessage(messagesBefore);
 
   const challengeRow = readD1FirstRow(config, `
     SELECT COUNT(*) AS pending_challenges
@@ -632,24 +643,35 @@ async function runOtpSmoke(config) {
 
   const result = {
     status: response.status,
-    ready: response.status === 200,
-    expectedLocalProviderBlock: response.status === 503,
-    message: response.errorMessage || unwrapData(response.body)?.message || null,
+    deliveredToMailpit: true,
+    messagesAdded: messagesAfter - messagesBefore,
+    message: unwrapData(response.body)?.message || null,
     pendingChallengesLastFiveMinutes: Number(challengeRow?.pending_challenges ?? 0),
   };
 
-  if (![200, 503].includes(response.status)) {
-    throw new Error(`Unexpected OTP smoke status ${response.status}.`);
-  }
-
-  printResult(
-    config,
-    result,
-    response.status === 200
-      ? "OTP send smoke passed with a configured local provider."
-      : "OTP readiness smoke passed: local provider is unavailable and failed closed once.",
-  );
+  printResult(config, result, "OTP queue and local Mailpit delivery smoke passed.");
   return result;
+}
+
+async function readMailpitMessages() {
+  let response;
+  try {
+    response = await fetch(mailpitMessagesUrl, { signal: AbortSignal.timeout(1200) });
+  } catch {
+    throw new Error("Mailpit is not ready on http://127.0.0.1:8025. Start the API with pnpm dev:api.");
+  }
+  if (!response.ok) throw new Error(`Mailpit messages API returned ${response.status}.`);
+  return readMailpitMessageCount(await response.json());
+}
+
+async function waitForMailpitMessage(previousCount) {
+  const deadline = Date.now() + 10_000;
+  while (Date.now() < deadline) {
+    const count = await readMailpitMessages();
+    if (count > previousCount) return count;
+    await sleep(250);
+  }
+  throw new Error("OTP was accepted but no new Mailpit message arrived within 10 seconds.");
 }
 
 async function runPaymentReadinessSmoke(config) {
@@ -703,7 +725,7 @@ async function withApi(config, work) {
 
   if (!alreadyRunning) {
     if (config.noStart) {
-      throw new Error(`API is not running at ${config.apiBaseUrl}. Start it with pnpm --filter @scalius/api dev.`);
+      throw new Error(`API is not running at ${config.apiBaseUrl}. Start it with pnpm dev:api.`);
     }
     if (config.apiBaseUrl !== defaults.apiBaseUrl) {
       throw new Error(
@@ -713,13 +735,14 @@ async function withApi(config, work) {
     }
 
     ensureLocalMigrations(config);
-    console.log(`Starting temporary API worker at ${config.apiBaseUrl}...`);
-    child = spawn(pnpmExecutable, ["--filter", "@scalius/api", "dev"], {
+    console.log(`Starting temporary API worker and local mailbox at ${config.apiBaseUrl}...`);
+    child = spawn(pnpmExecutable, ["dev:api"], {
       cwd: root,
       stdio: "inherit",
       env: {
         ...process.env,
         SCALIUS_WRANGLER_STATE: config.wranglerState,
+        SCALIUS_SKIP_DEV_MIGRATIONS: "1",
       },
     });
 
@@ -745,7 +768,7 @@ async function withApi(config, work) {
     return await work();
   } finally {
     if (child && !child.killed) {
-      console.log("Stopping temporary API worker...");
+      console.log("Stopping temporary API worker and local mailbox...");
       child.kill("SIGTERM");
     }
   }
