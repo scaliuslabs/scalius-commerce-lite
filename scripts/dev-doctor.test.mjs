@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   formatTextReport,
@@ -52,6 +53,15 @@ describe("dev doctor helpers", () => {
     expect(getServiceIdsForProfile("api")).toEqual(["mailbox", "api"]);
     expect(getServiceIdsForProfile("admin")).toEqual(["mailbox", "api", "admin"]);
     expect(getServiceIdsForProfile("storefront")).toEqual(["mailbox", "api", "storefront"]);
+  });
+
+  it("allows cold UI renders longer without slowing API or mailbox failures", () => {
+    const source = readFileSync(new URL("./dev-doctor.mjs", import.meta.url), "utf8");
+
+    expect(source).toContain(
+      'service.id === "admin" || service.id === "storefront" ? 10_000 : 2500',
+    );
+    expect(source).toContain("AbortSignal.timeout(requestTimeoutMs)");
   });
 
   it("rejects unknown service profiles", () => {
