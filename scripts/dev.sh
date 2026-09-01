@@ -172,6 +172,20 @@ apply_local_migrations() {
   (cd "$ROOT_DIR" && node scripts/deploy.mjs --migrate-only --local) || exit 1
 }
 
+run_dev_preflight() {
+  echo "Checking local development readiness..."
+  if [ "$DRY_RUN" = "1" ]; then
+    echo "[dry-run] node scripts/dev-doctor.mjs --profile api"
+    return
+  fi
+
+  local report
+  if ! report="$(cd "$ROOT_DIR" && node scripts/dev-doctor.mjs --profile api 2>&1)"; then
+    printf "%s\n" "$report" >&2
+    exit 1
+  fi
+}
+
 cleanup() {
   local status=$?
   trap - EXIT SIGINT SIGTERM
@@ -191,13 +205,15 @@ cleanup() {
   exit "$status"
 }
 
-trap cleanup EXIT
-trap 'exit 130' SIGINT
-trap 'exit 143' SIGTERM
-
 if [ "$DRY_RUN" != "1" ]; then
   assert_dev_ports_available
 fi
+
+run_dev_preflight
+
+trap cleanup EXIT
+trap 'exit 130' SIGINT
+trap 'exit 143' SIGTERM
 
 validate_numeric_setting() {
   local name="$1"
