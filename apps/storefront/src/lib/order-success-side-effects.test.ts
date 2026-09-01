@@ -175,4 +175,15 @@ describe("order success side effects", () => {
     expect(pageSource).toContain('{orderSuccessView.kind === "payment_pending" && (');
     expect(pageSource).not.toContain('{(orderSuccessView.kind === "payment_pending" || orderSuccessView.kind === "payment_issue") && (');
   });
+
+  it("preserves payment option content when retry startup fails", () => {
+    const pageSource = readFileSync(
+      sourcePath("pages", "order-success.astro"),
+      "utf8",
+    );
+
+    expect(pageSource).not.toContain("retryButton.textContent =");
+    expect(pageSource).toContain('retryButton.setAttribute("aria-busy"');
+    expect(pageSource).toContain("message.textContent = copy.orderReceiptOpeningPaymentText;");
+  });
 });
