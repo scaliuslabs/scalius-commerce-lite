@@ -8,6 +8,7 @@ import {
   describeLoadTransportError,
   LOADTEST_TARGET_PURPOSE,
   percentile,
+  readCheckoutQuoteFingerprint,
   runOpenArrival,
   summarizeTimings,
 } from "../scripts/live-checkout-load-core";
@@ -219,5 +220,12 @@ describe("live checkout load safety and timing", () => {
     });
 
     expect(describeLoadTransportError(error)).toBe("TypeError:UND_ERR_SOCKET");
+  });
+
+  it("accepts only authoritative checkout quote fingerprints", () => {
+    expect(readCheckoutQuoteFingerprint({
+      data: { quoteFingerprint: "taxq_abcdefghijklmnopqrstuv" },
+    })).toBe("taxq_abcdefghijklmnopqrstuv");
+    expect(() => readCheckoutQuoteFingerprint({ data: {} })).toThrow(/valid fingerprint/);
   });
 });
