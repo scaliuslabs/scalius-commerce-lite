@@ -21,6 +21,7 @@ import {
   assertDisposableLoadTarget,
   assertTursoLoadBillingIsolation,
   describeLoadTransportError,
+  readCheckoutQuoteFingerprint,
   runOpenArrival,
   summarizeTimings,
   type LoadTargetIdentity,
@@ -731,6 +732,35 @@ function buildPayload(
   };
 }
 
+function buildTaxQuotePayload(payload: Record<string, unknown>): Record<string, unknown> {
+  return {
+    items: payload.items,
+    inventoryPool: payload.inventoryPool,
+    city: payload.city,
+    zone: payload.zone,
+    area: payload.area,
+    shippingMethodId: payload.shippingMethodId,
+    discountCode: payload.discountCode,
+    customerPhone: payload.customerPhone,
+  };
+}
+
+async function reviewCheckoutQuote(
+  options: LoadOptions,
+  payload: Record<string, unknown>,
+): Promise<string> {
+  const quote = await requestJson(
+    options,
+    "POST",
+    "/api/v1/orders/tax-quote",
+    buildTaxQuotePayload(payload),
+  );
+  if (quote.result.status !== 200) {
+    throw new Error(`Tax quote failed with HTTP ${quote.result.status}.`);
+  }
+  return readCheckoutQuoteFingerprint(quote.raw);
+}
+
 async function requestJson(
   options: LoadOptions,
   method: "GET" | "POST",
@@ -860,6 +890,7 @@ async function runSmoke(
   if (cart.result.status !== 200 || (cart.raw?.data as Record<string, unknown> | undefined)?.valid !== true) {
     throw new Error(`Cart validation failed with HTTP ${cart.result.status}.`);
   }
+  payload.expectedQuoteFingerprint = await reviewCheckoutQuote(options, payload);
   const checkoutStartedAt = performance.now();
   const first = await requestJson(options, "POST", "/api/v1/orders", payload);
   const checkoutElapsedMs = performance.now() - checkoutStartedAt;
@@ -939,6 +970,7 @@ async function runIdempotency(
   const notes = `scalius-load:${runId}:${scenario}`;
   const requestId = `${runId}_${scenario}_shared`;
   const payload = buildPayload(options.fixture, options.fixture.spread, notes, 2, requestId);
+  payload.expectedQuoteFingerprint = await reviewCheckoutQuote(options, payload);
   const startedAt = performance.now();
   const results = await runOpenArrival({
     count: options.idempotencyRequests,
@@ -993,6 +1025,16 @@ async function runSpread(
   const notes = `scalius-load:${runId}:${scenario}`;
   const before = await readVariantState(oracle, options.fixture.spread.variantId);
   if (before.trackInventory !== 0) throw new Error("Spread-test variant must have inventory tracking disabled.");
+  const expectedQuoteFingerprint = await reviewCheckoutQuote(
+    options,
+    buildPayload(
+      options.fixture,
+      options.fixture.spread,
+      notes,
+      10_001,
+      `${runId}_${scenario}_quote`,
+    ),
+  );
   const startedAt = performance.now();
   const results = await runOpenArrival({
     count: options.spreadOrders,
@@ -1005,6 +1047,7 @@ async function runSpread(
         10_000 + sequence,
         `${runId}_${scenario}_${String(sequence).padStart(7, "0")}`,
       );
+      payload.expectedQuoteFingerprint = expectedQuoteFingerprint;
       return (await requestJson(options, "POST", "/api/v1/orders", payload)).result;
     },
   });
@@ -1074,6 +1117,16 @@ async function runHot(
   if (options.hotOrders <= available) {
     throw new Error(`Hot test must submit more than the ${available} available units.`);
   }
+  const expectedQuoteFingerprint = await reviewCheckoutQuote(
+    options,
+    buildPayload(
+      options.fixture,
+      options.fixture.hot,
+      notes,
+      20_001,
+      `${runId}_${scenario}_quote`,
+    ),
+  );
   const startedAt = performance.now();
   const results = await runOpenArrival({
     count: options.hotOrders,
@@ -1086,6 +1139,7 @@ async function runHot(
         20_000 + sequence,
         `${runId}_${scenario}_${String(sequence).padStart(7, "0")}`,
       );
+      payload.expectedQuoteFingerprint = expectedQuoteFingerprint;
       return (await requestJson(options, "POST", "/api/v1/orders", payload)).result;
     },
   });
