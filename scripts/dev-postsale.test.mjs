@@ -1,3 +1,4 @@
+import { spawnSync } from "child_process";
 import { describe, expect, it } from "vitest";
 import {
   buildCartValidationPayload,
@@ -9,6 +10,22 @@ import {
 } from "./dev-postsale.mjs";
 
 describe("local post-sale smoke CLI", () => {
+  it.each(["help", "--help", "-h"])("keeps %s read-only", (helpArg) => {
+    const result = spawnSync(process.execPath, ["scripts/dev-postsale.mjs", helpArg], {
+      cwd: process.cwd(),
+      env: {
+        ...process.env,
+        LOCAL_API_BASE_URL: "https://api.scalius.com",
+        SCALIUS_PNPM_BIN: "/definitely/missing/pnpm",
+      },
+      encoding: "utf8",
+    });
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("Local post-sale smoke helper");
+    expect(result.stderr).toBe("");
+  });
+
   it("rejects non-local mutation targets", () => {
     expect(() => getPostsaleConfig(["seed", "--api", "https://api.scalius.com"], {})).toThrow(
       /known production/,
