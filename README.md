@@ -461,7 +461,7 @@ pnpm dev:storefront   # API + storefront only
 pnpm dev:doctor:all   # Verify full stack after pnpm dev
 ```
 
-The dev wrapper (`scripts/dev.sh`) applies pending local D1 migrations before starting API, kills stale processes on the Scalius dev ports, waits for API `/api/v1/setup` before starting admin/storefront, staggers admin/storefront startup to prevent Vite inspector port conflicts, and cleans up on Ctrl+C. Astro 7 can run storefront dev in background mode during non-interactive CI sessions; the wrapper streams `astro dev logs --follow` and stops the background storefront with `astro dev stop` during cleanup. Set `SCALIUS_SKIP_DEV_MIGRATIONS=1` when you intentionally want to skip the migration check. It no longer kills every `workerd` process by default; set `SCALIUS_DEV_KILL_ALL_WORKERD=1` only if you need the older aggressive cleanup.
+The dev wrapper (`scripts/dev.sh`) applies pending local D1 migrations before starting API, refuses to start when an application port is already owned, waits for API `/api/v1/setup` before starting admin/storefront, staggers admin/storefront startup to prevent Vite inspector port conflicts, and cleans up only processes it started. It never terminates an unrelated listener. Astro 7 can run storefront dev in background mode during non-interactive CI sessions; the wrapper streams `astro dev logs --follow` and stops the background storefront with `astro dev stop` during cleanup. Set `SCALIUS_SKIP_DEV_MIGRATIONS=1` when you intentionally want to skip the migration check.
 
 Use the matching doctor command after startup: `pnpm dev:doctor:api` after `pnpm dev:api`, `pnpm dev:doctor:admin` after `pnpm dev:admin`, `pnpm dev:doctor:storefront` after `pnpm dev:storefront`, and `pnpm dev:doctor:all` after the full `pnpm dev` stack. Plain `pnpm dev:doctor` remains a non-mutating broad overview and will warn when a service is intentionally stopped.
 
@@ -607,7 +607,7 @@ never be committed.
 
 | Problem | Solution |
 |---------|----------|
-| Port conflicts on startup | `lsof -tiTCP:8787 -iTCP:4322 -iTCP:4323 -iTCP:9229 -iTCP:9230 -iTCP:9231 -iTCP:9232 -iTCP:9233 -sTCP:LISTEN \| xargs kill -9` |
+| Port conflicts on startup | `pnpm dev` reports the exact occupied app port, PID, and command. Stop that specific process, then rerun the command. |
 | Forgot local admin credentials | Run `pnpm dev:admin:reset` |
 | Auth sign-in loops | Run `pnpm dev:admin:reset`; use `pnpm dev:setup --env-only` for missing local env keys, or `pnpm dev:setup --force --env-only` only when shared local secrets are out of sync |
 | D1 errors in dev | Run `pnpm dev:reset` for a clean database |
