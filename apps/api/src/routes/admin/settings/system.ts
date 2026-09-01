@@ -873,9 +873,10 @@ app.openapi(saveEmailRoute, async (c) => {
             const nextResendConfigured = typeof apiKey === "string" && apiKey !== MASKED
                 ? Boolean(apiKey.trim())
                 : currentEmailSettings.hasResendApiKey;
-            const nextProviderConfigured = nextProvider === "resend"
-                ? nextResendConfigured
-                : currentEmailSettings.cloudflareBindingConfigured;
+            const nextProviderConfigured = Boolean(currentEmailSettings.localMailpitUrl)
+                || (nextProvider === "resend"
+                    ? nextResendConfigured
+                    : currentEmailSettings.cloudflareBindingConfigured);
             if (!nextSenderConfigured || !nextProviderConfigured) {
                 throw new ValidationError(
                     "Email OTP is enabled for customer sign-in. Keep a valid sender and the selected email provider configured, or remove Email OTP first.",
