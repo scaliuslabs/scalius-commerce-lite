@@ -4,6 +4,7 @@ import {
   buildCartValidationPayload,
   buildCheckoutPayload,
   buildFixtureSql,
+  buildOtpFixtureSql,
   buildPaymentReadinessFixtureSql,
   buildReceiptLookupRequest,
   getPostsaleConfig,
@@ -118,8 +119,20 @@ describe("local post-sale smoke CLI", () => {
     expect(sql).toContain("'ops006_shipping_standard'");
     expect(sql).toContain("'ops006_product'");
     expect(sql).toContain("'ops006_variant_default'");
+    expect(sql).toContain("option_combination_key");
+    expect(sql).not.toMatch(/\b(?:size|color|size_sort_order|color_sort_order)\b/);
     expect(sql).toContain("is_default = 1");
     expect(sql).toContain("track_inventory = 0");
+  });
+
+  it("keeps OTP setup independent from catalog fixtures", () => {
+    const sql = buildOtpFixtureSql();
+
+    expect(sql).toContain("INSERT INTO site_settings");
+    expect(sql).toContain("'customer_auth'");
+    expect(sql).toContain("'email_sender'");
+    expect(sql).not.toContain("INSERT INTO products");
+    expect(sql).not.toContain("INSERT INTO product_variants");
   });
 
   it("seeds committed online orders while clearing gateway side-effect rows", () => {
