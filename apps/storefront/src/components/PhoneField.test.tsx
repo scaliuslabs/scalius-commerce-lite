@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 
 import { act } from "react";
-import { createRoot, type Root } from "react-dom/client";
+import { createRoot, hydrateRoot, type Root } from "react-dom/client";
+import { renderToString } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { writeCheckoutFormDraft } from "@/lib/checkout/session-state";
@@ -78,6 +79,41 @@ describe("PhoneField", () => {
     );
 
     expect(visibleInput?.value).toContain("17");
+    expect(canonicalInput?.value).toBe("+8801700000000");
+    expect(canonicalInput?.dataset.e164Value).toBe("+8801700000000");
+  });
+
+  it("restores a saved phone after hydrating matching server markup", async () => {
+    writeCheckoutFormDraft({ customerPhone: "+8801700000000" });
+    const browserSessionStorage = sessionStorage;
+
+    Object.defineProperty(globalThis, "sessionStorage", {
+      configurable: true,
+      value: undefined,
+    });
+    const serverMarkup = renderToString(
+      <PhoneField name="customerPhone" label="Phone number" required />,
+    );
+    Object.defineProperty(globalThis, "sessionStorage", {
+      configurable: true,
+      value: browserSessionStorage,
+    });
+
+    await act(async () => root.unmount());
+    host.innerHTML = serverMarkup;
+    const recoverableErrors: unknown[] = [];
+    await act(async () => {
+      root = hydrateRoot(
+        host,
+        <PhoneField name="customerPhone" label="Phone number" required />,
+        { onRecoverableError: (error) => recoverableErrors.push(error) },
+      );
+    });
+
+    const canonicalInput = host.querySelector<HTMLInputElement>(
+      'input[name="customerPhone"]',
+    );
+    expect(recoverableErrors).toEqual([]);
     expect(canonicalInput?.value).toBe("+8801700000000");
     expect(canonicalInput?.dataset.e164Value).toBe("+8801700000000");
   });
