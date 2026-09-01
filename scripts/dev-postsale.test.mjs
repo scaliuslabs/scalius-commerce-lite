@@ -1,12 +1,14 @@
 import { spawnSync } from "child_process";
 import { describe, expect, it } from "vitest";
 import {
+  attachAuthoritativeQuote,
   buildCartValidationPayload,
   buildCheckoutPayload,
   buildFixtureSql,
   buildOtpFixtureSql,
   buildPaymentReadinessFixtureSql,
   buildReceiptLookupRequest,
+  buildTaxQuotePayload,
   getPostsaleConfig,
 } from "./dev-postsale.mjs";
 
@@ -98,6 +100,24 @@ describe("local post-sale smoke CLI", () => {
       area: "ops006_area_section_10",
       shippingMethodId: "ops006_shipping_standard",
     });
+  });
+
+  it("submits the exact authoritative quote fingerprint reviewed by the smoke", () => {
+    const payload = buildCheckoutPayload({ sequence: 7 });
+    const quotePayload = buildTaxQuotePayload(payload);
+    const quotedPayload = attachAuthoritativeQuote(payload, {
+      success: true,
+      data: { quoteFingerprint: "taxq_abcdefghijklmnopqrstuv" },
+    });
+
+    expect(quotePayload).toMatchObject({
+      items: payload.items,
+      shippingMethodId: payload.shippingMethodId,
+      customerPhone: payload.customerPhone,
+    });
+    expect(quotedPayload.expectedQuoteFingerprint).toBe("taxq_abcdefghijklmnopqrstuv");
+    expect(payload).not.toHaveProperty("expectedQuoteFingerprint");
+    expect(() => attachAuthoritativeQuote(payload, { data: {} })).toThrow(/valid quote fingerprint/);
   });
 
   it("sends receipt proof through the header instead of the URL", () => {

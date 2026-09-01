@@ -70,6 +70,7 @@ const defaults = {
 };
 
 const receiptTokenHeader = "X-Receipt-Token";
+const quoteFingerprintPattern = /^taxq_[A-Za-z0-9_-]{22}$/;
 
 let migrationsApplied = false;
 
@@ -302,6 +303,23 @@ export function buildCartValidationPayload(orderPayload) {
   };
 }
 
+export function buildTaxQuotePayload(orderPayload) {
+  return {
+    ...buildCartValidationPayload(orderPayload),
+    discountCode: orderPayload.discountCode,
+    customerPhone: orderPayload.customerPhone,
+  };
+}
+
+export function attachAuthoritativeQuote(orderPayload, responseBody) {
+  const quoteFingerprint = unwrapData(responseBody)?.quoteFingerprint;
+  assertCondition(
+    quoteFingerprintPattern.test(quoteFingerprint ?? ""),
+    "Tax quote did not return a valid quote fingerprint.",
+  );
+  return { ...orderPayload, expectedQuoteFingerprint: quoteFingerprint };
+}
+
 export function buildReceiptLookupRequest(orderId, receiptToken) {
   return {
     path: `/api/v1/orders/receipt/${encodeURIComponent(orderId)}`,
@@ -461,10 +479,11 @@ export function buildPaymentReadinessFixtureSql() {
 }
 
 async function runCheckoutSmoke(config) {
-  const payload = buildCheckoutPayload({ sequence: 1 });
+  let payload = buildCheckoutPayload({ sequence: 1 });
   const cart = await requestJson(config, "POST", "/api/v1/orders/cart-validation", buildCartValidationPayload(payload));
   const cartData = unwrapData(cart.body);
   assertCondition(cartData?.valid === true, "Cart validation did not return valid=true.");
+  payload = await attachReviewedQuote(config, payload);
 
   const order = await requestJson(config, "POST", "/api/v1/orders", payload, [201]);
   const orderData = unwrapData(order.body);
@@ -517,6 +536,9 @@ async function runLoadSmoke(config) {
   const statusCounts = new Map();
   const durations = [];
   const failures = [];
+  const expectedQuoteFingerprint = (
+    await attachReviewedQuote(config, buildCheckoutPayload({ sequence: 1 }))
+  ).expectedQuoteFingerprint;
   let next = 1;
 
   async function worker() {
@@ -524,7 +546,7 @@ async function runLoadSmoke(config) {
       const sequence = next++;
       const startedAt = performance.now();
       try {
-        const payload = buildCheckoutPayload({ sequence });
+        const payload = { ...buildCheckoutPayload({ sequence }), expectedQuoteFingerprint };
         const response = await requestJson(config, "POST", "/api/v1/orders", payload, [201, 202, 409, 429, 500, 503]);
         const elapsed = performance.now() - startedAt;
         durations.push(elapsed);
@@ -559,6 +581,16 @@ async function runLoadSmoke(config) {
 
   printResult(config, result, "Load smoke passed.");
   return result;
+}
+
+async function attachReviewedQuote(config, payload) {
+  const quote = await requestJson(
+    config,
+    "POST",
+    "/api/v1/orders/tax-quote",
+    buildTaxQuotePayload(payload),
+  );
+  return attachAuthoritativeQuote(payload, quote.body);
 }
 
 async function runOtpSmoke(config) {
