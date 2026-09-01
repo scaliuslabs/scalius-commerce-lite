@@ -292,8 +292,13 @@ function sslCommerzBlockedReason(missingFields: SSLCommerzCheckoutRequiredField[
 }
 
 function getSSLCommerzPlaceholderCredentialErrors(
-  settings: Partial<Pick<SSLCommerzSettings, SSLCommerzCredentialField>> | null | undefined,
+  settings: Partial<Pick<SSLCommerzSettings, SSLCommerzCredentialField | "sandbox">> | null | undefined,
 ): string[] {
+  const officialSandboxAccount = settings?.sandbox === true &&
+    settings.storeId?.trim() === "testbox" &&
+    settings.storePassword?.trim() === "qwerty";
+  if (officialSandboxAccount) return [];
+
   const errors: string[] = [];
   if (isSSLCommerzPlaceholderCredential(settings?.storeId)) {
     errors.push("SSLCommerz store ID looks like a placeholder. Enter the real SSLCommerz store ID from your merchant account.");
