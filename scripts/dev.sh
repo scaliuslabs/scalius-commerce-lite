@@ -188,7 +188,8 @@ run_dev_preflight() {
 
 cleanup() {
   local status=$?
-  trap - EXIT SIGINT SIGTERM
+  trap - EXIT
+  trap '' SIGINT SIGTERM
   if [ "$DRY_RUN" = "1" ]; then
     exit "$status"
   fi

@@ -1,5 +1,6 @@
 import { spawn, spawnSync } from "child_process";
 import { once } from "events";
+import { readFileSync } from "fs";
 import { dirname, resolve } from "path";
 import { fileURLToPath } from "url";
 import { describe, expect, it } from "vitest";
@@ -20,6 +21,12 @@ function runDevSh(args = []) {
 }
 
 describe("dev.sh startup planning", () => {
+  it("protects cleanup from repeated lifecycle signals", () => {
+    expect(readFileSync(resolve(root, "scripts/dev.sh"), "utf8")).toContain(
+      "cleanup() {\n  local status=$?\n  trap - EXIT\n  trap '' SIGINT SIGTERM",
+    );
+  });
+
   it("supports an API-only startup path through the wrapper", () => {
     const result = runDevSh(["--filter=@scalius/api"]);
 
