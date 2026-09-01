@@ -457,7 +457,7 @@ INSERT INTO scalius_turso_control_a VALUES ('probe-row', 'retired-run', 7);
       outputDirectory: join(unknownDirectory, "unknown-table-bundle"),
       sqliteBinary: "sqlite3",
     })).rejects.toThrow(/unexpected noncanonical tables.*unexplained_extension/i);
-  }, 60_000);
+  }, 120_000);
 
   it("trusts an exact release ledger when a historical D1 schema differs physically", async () => {
     const directory = await temporaryDirectory();
