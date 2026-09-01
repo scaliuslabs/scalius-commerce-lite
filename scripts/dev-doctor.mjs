@@ -10,9 +10,10 @@
  */
 
 import { execFileSync } from "child_process";
-import { existsSync, readFileSync, statSync } from "fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "fs";
 import net from "net";
-import { dirname, resolve } from "path";
+import { dirname, join, resolve } from "path";
+import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "url";
 import {
   assertStringOptions,
@@ -66,6 +67,7 @@ export async function runDoctor(config = getDoctorConfig()) {
   checkPackageScripts(checks);
   checkLocalEnvFiles(checks);
   checkWranglerState(checks, config.wranglerState);
+  checkWranglerMigrationHistory(checks, config.wranglerState);
   await checkServices(checks, config);
 
   return {
@@ -345,6 +347,89 @@ function checkWranglerState(checks, wranglerState) {
     return;
   }
   warn(checks, "Wrangler local state", `No state directory at ${wranglerState}.`, "Run pnpm dev:setup or pnpm dev:reset.");
+}
+
+export function findRetiredMigrationEntries(appliedNames, currentNames) {
+  const current = new Set(currentNames);
+  const currentByVersion = new Map(currentNames.map((name) => [
+    migrationVersion(name),
+    name,
+  ]));
+
+  return appliedNames
+    .filter((name) => !current.has(name))
+    .map((applied) => ({
+      applied,
+      current: currentByVersion.get(migrationVersion(applied)) ?? null,
+    }));
+}
+
+function checkWranglerMigrationHistory(checks, wranglerState) {
+  const objectDirectory = join(
+    wranglerState,
+    "v3",
+    "d1",
+    "miniflare-D1DatabaseObject",
+  );
+  if (!existsSync(objectDirectory)) {
+    pass(checks, "Local D1 migration history", "No applied local migration history yet.");
+    return;
+  }
+
+  const currentNames = readdirSync(resolve(root, "packages", "database", "migrations"))
+    .filter((name) => /^\d+_.+\.sql$/.test(name));
+  const databasePaths = readdirSync(objectDirectory)
+    .filter((name) => name.endsWith(".sqlite") && name !== "metadata.sqlite")
+    .map((name) => join(objectDirectory, name));
+  const retired = [];
+
+  try {
+    for (const databasePath of databasePaths) {
+      const database = new DatabaseSync(databasePath, { readOnly: true });
+      try {
+        const hasHistory = database.prepare(`
+          SELECT 1
+          FROM sqlite_schema
+          WHERE type = 'table' AND name = 'd1_migrations'
+        `).get();
+        if (!hasHistory) continue;
+        const appliedNames = database.prepare(
+          "SELECT name FROM d1_migrations ORDER BY id",
+        ).all().map((row) => String(row.name));
+        retired.push(...findRetiredMigrationEntries(appliedNames, currentNames));
+      } finally {
+        database.close();
+      }
+    }
+  } catch (error) {
+    fail(
+      checks,
+      "Local D1 migration history",
+      `Could not inspect local D1 migration history: ${error instanceof Error ? error.message : String(error)}.`,
+      "Run pnpm dev:reset to recreate disposable local state.",
+    );
+    return;
+  }
+
+  if (retired.length === 0) {
+    pass(checks, "Local D1 migration history", "Applied migration filenames match the current repository.");
+    return;
+  }
+
+  const sample = retired.slice(0, 3).map(({ applied, current }) =>
+    current ? `${applied} conflicts with ${current}` : `${applied} is no longer present`,
+  ).join("; ");
+  const remainder = retired.length > 3 ? `; plus ${retired.length - 3} more` : "";
+  fail(
+    checks,
+    "Local D1 migration history",
+    `Local D1 uses retired migration filenames: ${sample}${remainder}.`,
+    "Run pnpm dev:reset to recreate disposable local state.",
+  );
+}
+
+function migrationVersion(name) {
+  return /^0*(\d+)_/.exec(name)?.[1] ?? null;
 }
 
 async function checkServices(checks, config) {

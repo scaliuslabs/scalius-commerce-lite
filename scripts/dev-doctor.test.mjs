@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   formatTextReport,
+  findRetiredMigrationEntries,
   getDoctorConfig,
   getExitCode,
   getServiceIdsForProfile,
@@ -9,6 +10,34 @@ import {
 } from "./dev-doctor.mjs";
 
 describe("dev doctor helpers", () => {
+  it("rejects retired or reused Wrangler migration filenames", () => {
+    expect(findRetiredMigrationEntries(
+      [
+        "0054_cache_invalidation_delivery.sql",
+        "0055_glossy_blue_blade.sql",
+        "0060_lumpy_switch.sql",
+      ],
+      [
+        "0054_cache_invalidation_delivery.sql",
+        "0055_cache_invalidation_postgres_bigint.sql",
+      ],
+    )).toEqual([
+      {
+        applied: "0055_glossy_blue_blade.sql",
+        current: "0055_cache_invalidation_postgres_bigint.sql",
+      },
+      { applied: "0060_lumpy_switch.sql", current: null },
+    ]);
+  });
+
+  it("accepts an applied Wrangler history owned by the current repository", () => {
+    const names = [
+      "0054_cache_invalidation_delivery.sql",
+      "0055_cache_invalidation_postgres_bigint.sql",
+    ];
+    expect(findRetiredMigrationEntries(names, names)).toEqual([]);
+  });
+
   it("summarizes check statuses", () => {
     expect(summarizeChecks([
       { status: "pass" },
