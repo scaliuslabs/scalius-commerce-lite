@@ -453,6 +453,22 @@ describe("payment gateway settings reads", () => {
     expect(isSSLCommerzPlaceholderCredential("sslcz_sandbox_store_123")).toBe(false);
   });
 
+  it("accepts SSLCommerz's published testbox account only in sandbox mode", () => {
+    expect(getSSLCommerzCheckoutReadiness({
+      storeId: "testbox",
+      storePassword: "qwerty",
+      sandbox: true,
+      enabled: true,
+    })).toMatchObject({ configured: true, usable: true, credentialErrors: [] });
+
+    expect(getSSLCommerzCheckoutReadiness({
+      storeId: "testbox",
+      storePassword: "qwerty",
+      sandbox: false,
+      enabled: true,
+    })).toMatchObject({ configured: false, usable: false });
+  });
+
   it("blocks SSLCommerz checkout readiness when credentials are placeholders", () => {
     expect(getSSLCommerzCheckoutReadiness({
       storeId: "store_id",
