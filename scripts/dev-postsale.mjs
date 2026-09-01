@@ -470,7 +470,7 @@ export function buildPaymentReadinessFixtureSql() {
           'Dhaka', 'Mirpur', 'Section 10',
           ${totalAmount}, ${fixture.shippingCharge}, 0,
           'BDT', 2, ${subtotalAmountMinor}, ${shippingAmountMinor}, 0, 0,
-          ${totalAmountMinor}, 'pending',
+          ${totalAmountMinor}, 'incomplete',
           'Disposable local payment readiness smoke order.',
           ${sqlString(gateway.gateway)}, 'unpaid', 0, ${totalAmount},
           'pending', 'regular', 'none', 1, unixepoch(), unixepoch(), NULL
@@ -693,6 +693,7 @@ async function runPaymentReadinessSmoke(config) {
     );
     results.push({
       gateway: gateway.gateway,
+      orderId: gateway.orderId,
       status: response.status,
       message: response.errorMessage,
     });
@@ -710,6 +711,7 @@ async function runPaymentReadinessSmoke(config) {
 
   const result = {
     gateways: results,
+    paymentRecoveryPath: `/payment-recovery?orderId=${paymentReadinessGateways[1].orderId}`,
     sideEffects: {
       paymentPlans: paymentPlanCount,
       paymentSessionAttempts: attemptCount,
