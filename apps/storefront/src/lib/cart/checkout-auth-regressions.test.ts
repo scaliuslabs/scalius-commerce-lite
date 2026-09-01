@@ -23,6 +23,16 @@ describe("cart checkout auth regressions", () => {
     expect(source).toContain("Astro.locals.cfContext.waitUntil");
   });
 
+  it("expires a stale COD checkout session before offering a guest retry", async () => {
+    const source = await readFile(join(storefrontRoot, "src/pages/cart.astro"), "utf8");
+
+    expect(source).toContain('result.errorCode === "CUSTOMER_SESSION_STALE"');
+    expect(source).toContain('Astro.cookies.delete("cs_tok"');
+    expect(source).toContain('Astro.cookies.delete("cs_auth"');
+    expect(source).toContain("staleCustomerSession && checkoutConfig.guestCheckoutEnabled !== false");
+    expect(source).toContain("copy.continueAsGuestText");
+  });
+
   it("sets a receipt cookie before COD-only success redirects", async () => {
     const source = await readFile(join(storefrontRoot, "src/pages/cart.astro"), "utf8");
 

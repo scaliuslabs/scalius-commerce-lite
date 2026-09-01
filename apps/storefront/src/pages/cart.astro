@@ -82,6 +82,7 @@ const [existingCheckoutMessageBefore, existingCheckoutMessageAfter = ""] =
 let errorMessage = "";
 let successOrderId = "";
 let isProcessing = false;
+let staleCustomerSession = false;
 let codCartRepairState: {
   source: "cart";
   message: string;
@@ -169,6 +170,23 @@ if (Astro.request.method === "POST" && codOnly) {
       } else {
         console.error("Order processing failed:", result.error);
         const resultError = result.error;
+        if (
+          "errorCode" in result &&
+          result.errorCode === "CUSTOMER_SESSION_STALE"
+        ) {
+          Astro.cookies.delete("cs_tok", {
+            path: "/",
+            httpOnly: true,
+            sameSite: "lax",
+            secure: true,
+          });
+          Astro.cookies.delete("cs_auth", {
+            path: "/",
+            sameSite: "lax",
+            secure: true,
+          });
+          staleCustomerSession = true;
+        }
         errorMessage =
           ("errorCode" in result &&
           result.errorCode === "STOREFRONT_CHECKOUT_QUOTE_CONFLICT"
@@ -203,11 +221,13 @@ if (Astro.request.method === "POST" && codOnly) {
 }
 
 // Determine submit button label
-const submitLabel = codOnly
-  ? copy.placeOrderText
-  : checkoutUnavailable
-    ? copy.checkoutUnavailableText
-    : copy.continueToPaymentText;
+const submitLabel = staleCustomerSession && checkoutConfig.guestCheckoutEnabled !== false
+  ? copy.continueAsGuestText
+  : codOnly
+    ? copy.placeOrderText
+    : checkoutUnavailable
+      ? copy.checkoutUnavailableText
+      : copy.continueToPaymentText;
 const serializedCheckoutConfig = serializeJsonForInlineScript(checkoutConfig);
 const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
 ---
