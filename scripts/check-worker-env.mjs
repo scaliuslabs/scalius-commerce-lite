@@ -256,6 +256,15 @@ function sorted(values) {
 const errors = [];
 let checkedEnvFileCount = 0;
 
+for (const configPath of apps[0].configs) {
+  const config = readJsonc(configPath);
+  if (config.cache?.enabled !== true ||
+    config.exports?.default?.cache?.enabled !== false ||
+    config.exports?.PublicApi?.cache?.enabled !== true) {
+    errors.push(`${configPath} must keep the default API entrypoint uncached and PublicApi Workers Caching enabled`);
+  }
+}
+
 for (const app of apps) {
   const expected = new Set();
 

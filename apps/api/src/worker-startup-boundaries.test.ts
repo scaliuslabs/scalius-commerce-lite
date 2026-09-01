@@ -94,6 +94,30 @@ describe("API Worker startup boundaries", () => {
     });
   });
 
+  it("skips public cache purges only when the runtime exposes no cache", async () => {
+    const { PublicApi } = await import("./worker");
+    const withoutCache = new PublicApi(
+      undefined as never,
+      undefined as never,
+    );
+
+    await expect(withoutCache.purgeGroups(["products"])).resolves.toBeUndefined();
+
+    const purge = vi.fn().mockResolvedValue({
+      success: false,
+      errors: [{ code: 1001, message: "failed" }],
+    });
+    const withCache = new PublicApi(
+      { cache: { purge } } as unknown as ExecutionContext,
+      undefined as never,
+    );
+
+    await expect(withCache.purgeGroups(["products"])).rejects.toThrow(
+      "Public API cache purge failed (1001)",
+    );
+    expect(purge).toHaveBeenCalledWith({ tags: ["products"] });
+  });
+
   it.each([
     ["direct", "/api/v1/health"],
     ["probe", "/api/v1/readyz"],
