@@ -100,7 +100,6 @@ export const ENGLISH_CHECKOUT_LANGUAGE_DATA = {
   orderReceiptLineTotalText: "Line total",
   orderReceiptPrintText: "Print receipt",
   orderReceiptCheckingPaymentText: "Checking payment status…",
-  orderReceiptCheckingUpdateText: "Checking for a payment update…",
   orderReceiptCheckPaymentText: "Check payment status",
   orderReceiptConfirmationDelayedText:
     "Confirmation is taking longer than usual. You can safely leave this receipt and return later.",
@@ -458,7 +457,6 @@ export const BANGLA_CHECKOUT_LANGUAGE_DATA: CheckoutLanguageData = {
   orderReceiptLineTotalText: "পণ্যটির মোট",
   orderReceiptPrintText: "রসিদ প্রিন্ট করুন",
   orderReceiptCheckingPaymentText: "পেমেন্টের অবস্থা যাচাই করা হচ্ছে…",
-  orderReceiptCheckingUpdateText: "পেমেন্টের হালনাগাদ যাচাই করা হচ্ছে…",
   orderReceiptCheckPaymentText: "পেমেন্টের অবস্থা যাচাই করুন",
   orderReceiptConfirmationDelayedText:
     "পেমেন্ট নিশ্চিত হতে স্বাভাবিকের চেয়ে বেশি সময় লাগছে। আপনি নিরাপদে এই রসিদ থেকে বের হয়ে পরে আবার দেখতে পারেন।",
