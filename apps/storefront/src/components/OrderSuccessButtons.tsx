@@ -255,6 +255,7 @@ export default function OrderSuccessButtons({
       <div className="mt-6 flex w-full max-w-md flex-col justify-center gap-2 sm:flex-row">
         <a
           href="/"
+          data-astro-prefetch="false"
           className="inline-flex min-h-10 flex-1 items-center justify-center rounded-xl bg-black px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-gray-800"
         >
           <svg
