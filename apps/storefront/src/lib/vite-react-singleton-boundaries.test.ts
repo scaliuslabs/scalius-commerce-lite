@@ -11,7 +11,7 @@ const REACT_SINGLETON_DEPS = [
   "react/jsx-dev-runtime",
 ];
 
-describe("storefront Vite React singleton boundaries", () => {
+describe("storefront Vite boundaries", () => {
   it("externalizes large shared CSS while keeping compact route CSS inline", () => {
     const source = readFileSync(storefrontRootPath("astro.config.mjs"), "utf8");
     const globalCss = readFileSync(
@@ -37,5 +37,11 @@ describe("storefront Vite React singleton boundaries", () => {
     expect(source).not.toMatch(
       /ssr:\s*{[\s\S]*optimizeDeps:\s*{[\s\S]*exclude:\s*reactSingletonDeps/,
     );
+  });
+
+  it("prebundles Astro imports needed by a cold Cloudflare dev server", () => {
+    const source = readFileSync(storefrontRootPath("astro.config.mjs"), "utf8");
+
+    expect(source).toContain('include: ["astro/assets/services/noop", "astro/logger/json"]');
   });
 });
