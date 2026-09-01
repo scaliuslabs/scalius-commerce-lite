@@ -316,12 +316,10 @@ const orderPlacedAt = formatOrderReceiptDate(order?.createdAt, checkoutLanguage.
       )}
       <h1 class="mb-2 text-2xl font-bold">{orderSuccessView.title}</h1>
       <p class="text-gray-600">{orderSuccessView.message}</p>
-      {(orderSuccessView.kind === "payment_pending" || orderSuccessView.kind === "payment_issue") && (
+      {orderSuccessView.kind === "payment_pending" && (
         <div class="mt-3 text-sm text-muted-foreground">
           <p data-payment-status-message aria-live="polite">
-            {orderSuccessView.kind === "payment_pending"
-              ? copy.orderReceiptCheckingPaymentText
-              : copy.orderReceiptCheckingUpdateText}
+            {copy.orderReceiptCheckingPaymentText}
           </p>
           <button type="button" class="mt-2 hidden min-h-11 rounded-lg border border-border px-4 py-2 font-medium text-foreground hover:bg-muted" data-payment-check-now>
             {copy.orderReceiptCheckPaymentText}

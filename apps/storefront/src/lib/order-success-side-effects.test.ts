@@ -165,4 +165,14 @@ describe("order success side effects", () => {
     expect(pageSource.indexOf('fetch("/api/checkout/stripe-reconcile"'))
       .toBeLessThan(pageSource.indexOf("/api/order-receipt/status?orderId="));
   });
+
+  it("does not present durable payment failures as pending confirmation", () => {
+    const pageSource = readFileSync(
+      sourcePath("pages", "order-success.astro"),
+      "utf8",
+    );
+
+    expect(pageSource).toContain('{orderSuccessView.kind === "payment_pending" && (');
+    expect(pageSource).not.toContain('{(orderSuccessView.kind === "payment_pending" || orderSuccessView.kind === "payment_issue") && (');
+  });
 });
