@@ -119,7 +119,7 @@ const dropdownPanelClass =
       const observer = new ResizeObserver((entries) => {
         for (const entry of entries) {
           if (entry.contentRect.width > 0) {
-            this.updateNav();
+            requestAnimationFrame(this.updateNav);
           }
         }
       });

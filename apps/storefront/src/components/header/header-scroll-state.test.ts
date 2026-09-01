@@ -55,6 +55,9 @@ describe("header scroll state", () => {
     expect(navSource).toContain("relative flex shrink-0 items-center");
     expect(navSource).toContain("if (!desktopNavMedia.matches) return");
     expect(navSource).toContain("nav.dataset.dynamicNavReady");
+    expect(
+      navSource.match(/requestAnimationFrame\(this\.updateNav\)/g),
+    ).toHaveLength(2);
     expect(navSource).not.toContain("new MutationObserver");
     expect(navSource).not.toContain(
       'window.dispatchEvent(new Event("resize"))',
