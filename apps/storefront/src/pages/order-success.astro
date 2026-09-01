@@ -208,14 +208,22 @@ const retryEligibleGateways = checkoutConfig.gateways.filter((gateway) =>
 const retryPaymentOptions = order && orderSuccessView && receiptToken && canRetryOrderSuccessPayment(order, orderSuccessView.kind, paymentResult)
   ? getOrderSuccessRetryOptions(order, orderSuccessView.kind, paymentResult, retryEligibleGateways)
       .filter((option) => retryPaymentType !== "balance" || option.current)
-      .map((option) => ({
-        ...option,
-        presentation: localizeOrderReceiptGatewayPresentation(
+      .map((option) => {
+        const presentation = localizeOrderReceiptGatewayPresentation(
           option.gateway,
           getGatewayPresentation(option.gateway, option.label),
           copy,
-        ),
-      }))
+        );
+        return {
+          ...option,
+          presentation,
+          actionLabel: orderSuccessView.kind === "payment_pending"
+            ? formatCheckoutLanguageText(copy.completeWithProviderText, {
+                provider: presentation.providerLabel ?? presentation.buyerLabel,
+              })
+            : presentation.buyerLabel,
+        };
+      })
   : [];
 const stripeRetryGateway = retryPaymentOptions.some((option) => option.gateway === "stripe")
   ? checkoutConfig.gateways.find((gateway) => gateway.id === "stripe")
@@ -327,9 +335,11 @@ const orderPlacedAt = formatOrderReceiptDate(order?.createdAt, checkoutLanguage.
               <button
                 type="button"
                 class={`inline-flex min-h-16 items-center gap-3 rounded-xl border bg-background px-4 py-3 text-left text-sm text-foreground transition-colors hover:bg-muted/40 disabled:cursor-not-allowed disabled:opacity-60 ${option.current ? "border-primary ring-1 ring-primary" : "border-border"}`}
-                aria-label={formatCheckoutLanguageText(copy.orderReceiptRetryWithProviderText, {
-                  provider: option.presentation.buyerLabel,
-                })}
+                aria-label={orderSuccessView.kind === "payment_pending"
+                  ? option.actionLabel
+                  : formatCheckoutLanguageText(copy.orderReceiptRetryWithProviderText, {
+                      provider: option.presentation.buyerLabel,
+                    })}
                 data-payment-retry-button
                 data-endpoint={option.endpoint}
                 data-gateway={option.gateway}
@@ -355,7 +365,7 @@ const orderPlacedAt = formatOrderReceiptDate(order?.createdAt, checkoutLanguage.
                   )}
                 </span>
                 <span class="min-w-0">
-                  <span class="block font-semibold">{option.presentation.buyerLabel}</span>
+                  <span class="block font-semibold">{option.actionLabel}</span>
                   {option.presentation.description && (
                     <span class="mt-0.5 block text-xs font-normal text-muted-foreground">{option.presentation.description}</span>
                   )}
