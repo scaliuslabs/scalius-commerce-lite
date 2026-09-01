@@ -49,7 +49,10 @@ export class PublicApi extends WorkerEntrypoint<Env> {
     const tags = normalizePublicApiCacheTags(groups);
     if (tags.length === 0) return;
 
-    const result = await this.ctx.cache.purge({ tags });
+    const cache = this.ctx.cache;
+    if (!cache) return;
+
+    const result = await cache.purge({ tags });
     if (!result.success) {
       const codes = result.errors.map((error) => error.code).join(",");
       throw new Error(`Public API cache purge failed (${codes || "unknown"})`);
