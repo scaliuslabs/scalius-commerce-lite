@@ -54,6 +54,20 @@ export interface TursoLoadBillingIsolation {
   productionOrganization: string | null;
 }
 
+export function readCheckoutQuoteFingerprint(
+  response: Record<string, unknown> | null,
+): string {
+  const data = response?.data as Record<string, unknown> | undefined;
+  const quoteFingerprint = data?.quoteFingerprint;
+  if (
+    typeof quoteFingerprint !== "string"
+    || !/^taxq_[A-Za-z0-9_-]{22}$/.test(quoteFingerprint)
+  ) {
+    throw new Error("Authoritative checkout quote did not return a valid fingerprint.");
+  }
+  return quoteFingerprint;
+}
+
 export function describeLoadTransportError(error: unknown): string {
   const labels: string[] = [];
   let current = error;
