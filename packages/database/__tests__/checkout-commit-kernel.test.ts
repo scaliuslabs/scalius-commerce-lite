@@ -109,11 +109,15 @@ function commit(options: {
   const receiptHash = `receipt_${options.id}`;
   const authorityRevision = options.authorityRevision ?? 3;
   const response = { orderId: options.id, receiptToken: `proof_${options.id}` };
+  const {
+    customerId: _customerId,
+    accountOwnerCustomerId: _accountOwnerCustomerId,
+    ...orderData
+  } = order;
   const payload = {
     checkoutToken: `proof_${options.id}`,
-    orderData: {
-      ...order,
-    },
+    existingCustomer: null,
+    orderData,
     items: [{
       id: `item_${options.id}`,
       taxAllocationLineId: `line_${options.id}`,
@@ -385,6 +389,35 @@ describe("checkout aggregate commit kernel", () => {
     }>(database, buildExistingCheckoutIdentityStatement(commits.map((value) => value.requestKey)));
     expect(replayRows).toHaveLength(2);
     expect(JSON.parse(replayRows[0]!.responsePayload)).toMatchObject({ orderId: "order_1" });
+  });
+
+  it("commits authenticated ownership independently from the delivery phone", () => {
+    database.prepare(`
+      INSERT INTO customers (id, name, phone, account_claimed_at)
+      VALUES ('customer_account', 'Account owner', '+8801711111111', unixepoch())
+    `).run();
+    executeRun(database, buildEnsureCheckoutReservationLanesStatement(["variant_hot"]));
+    const authenticated = commit({ id: "order_authenticated" });
+    authenticated.order.customerId = "customer_account";
+    authenticated.order.accountOwnerCustomerId = "customer_account";
+    (authenticated.aggregate.payload as {
+      existingCustomer: { id: string } | null;
+    }).existingCustomer = { id: "customer_account" };
+    authenticated.aggregate.projection!.guestCustomerId = null;
+    authenticated.aggregate.projection!.customerHistoryId = null;
+
+    executeCommitBatch(database, [authenticated], "batch_authenticated");
+
+    expect(database.prepare(`
+      SELECT customer_id AS customerId,
+             account_owner_customer_id AS accountOwnerCustomerId,
+             customer_phone AS customerPhone
+      FROM orders WHERE id = 'order_authenticated'
+    `).get()).toEqual({
+      customerId: "customer_account",
+      accountOwnerCustomerId: "customer_account",
+      customerPhone: authenticated.order.customerPhone,
+    });
   });
 
   it("binds the aggregate once and omits empty inventory lane statements", () => {

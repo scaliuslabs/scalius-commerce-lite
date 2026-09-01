@@ -277,7 +277,14 @@ export async function createStorefrontOrder(
     storefrontDb: Database,
     data: CreateStorefrontOrderInput,
     requestUrl: string,
-    isDiscountValid: (db: Database, code: string, total: number, items: unknown[], customerPhone: string) => Promise<unknown>,
+    isDiscountValid: (
+        db: Database,
+        code: string,
+        total: number,
+        items: unknown[],
+        customerPhone: string,
+        customerId?: string,
+    ) => Promise<unknown>,
     calculateDiscountAmount: (
         db: Database,
         discount: unknown,
@@ -465,6 +472,7 @@ export async function createStorefrontOrder(
                 serverItemTotal,
                 discountItems,
                 data.customerPhone,
+                accountOwnerCustomer?.id,
             );
 
             const validResult = validationResponse as Record<string, unknown> | null;

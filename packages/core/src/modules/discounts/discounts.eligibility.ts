@@ -126,6 +126,7 @@ export async function isDiscountValid(
     customerPhone?: string,
     currencySymbol: string = "",
     currencyCode?: string | null,
+    customerId?: string | null,
 ) {
     // Normalize code to uppercase — codes are stored uppercase (Shopify convention),
     // but customers may type lowercase on the storefront.
@@ -301,16 +302,17 @@ export async function isDiscountValid(
 
     if (discount.limitOnePerCustomer && customerPhone) {
         try {
+            const customerKeys = [
+                `phone:${customerPhone.trim()}`,
+                ...(customerId?.trim() ? [`customer:${customerId.trim()}`] : []),
+            ];
             const customerUsageResult = await db
                 .select({ orderId: discountCustomerRedemptions.orderId })
                 .from(discountCustomerRedemptions)
                 .where(
                     and(
                         eq(discountCustomerRedemptions.discountId, discount.id),
-                        eq(
-                            discountCustomerRedemptions.customerKey,
-                            `phone:${customerPhone.trim()}`,
-                        ),
+                        inArray(discountCustomerRedemptions.customerKey, customerKeys),
                     ),
                 )
                 .limit(1)

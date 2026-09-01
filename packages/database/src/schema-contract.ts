@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 58,
-  name: "0058_order_shipping_method_snapshot",
+  version: 59,
+  name: "0059_checkout_delivery_phone_identity",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -68,8 +68,13 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     sourceSha256: "21a478e92ac14c9b36488179f3a9c36ce847700fa99c74e85089798b709db155",
   },
   {
-    ...CURRENT_DATABASE_SCHEMA,
+    version: 58,
+    name: "0058_order_shipping_method_snapshot",
     sourceSha256: "a0c66a84c1652e000e26d37adc8f7331afef9cc5284eb3b152fe63c389545217",
+  },
+  {
+    ...CURRENT_DATABASE_SCHEMA,
+    sourceSha256: "a5759548b627414ea6cf4e687413fa07895ed225b748305f13be18d810b0a9fd",
   },
 ] as const;
 
