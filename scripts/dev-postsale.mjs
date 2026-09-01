@@ -126,40 +126,10 @@ export function getPostsaleConfig(rawArgs = process.argv.slice(2), env = process
 }
 
 export function buildFixtureSql() {
-  const customerAuthPolicy = {
-    otpChannels: ["email"],
-    requiredContactFields: ["phone"],
-    optionalContactFields: [],
-    defaultOtpChannel: "email",
-  };
-
   return [
-    `INSERT INTO site_settings (
-      id, singleton_key, site_name, site_description, header_config, footer_config,
-      storefront_url, auth_verification_method, guest_checkout_enabled, checkout_mode,
-      partial_payment_enabled, partial_payment_amount, created_at, updated_at
-    ) VALUES (
-      'ops006_site', 'default', 'Scalius Local Smoke', 'Local disposable smoke store',
-      '{}', '{}', 'http://localhost:4322', 'email', 1, 'all', 0, 0, unixepoch(), unixepoch()
-    )
-    ON CONFLICT(singleton_key) DO UPDATE SET
-      site_name = excluded.site_name,
-      site_description = excluded.site_description,
-      header_config = excluded.header_config,
-      footer_config = excluded.footer_config,
-      storefront_url = excluded.storefront_url,
-      auth_verification_method = excluded.auth_verification_method,
-      guest_checkout_enabled = excluded.guest_checkout_enabled,
-      checkout_mode = excluded.checkout_mode,
-      partial_payment_enabled = excluded.partial_payment_enabled,
-      partial_payment_amount = excluded.partial_payment_amount,
-      updated_at = unixepoch()`,
+    ...otpFixtureStatements(),
     upsertSetting("payment_methods", "enabled_methods", JSON.stringify(["cod"]), "json"),
     upsertSetting("payment_methods", "default_method", "cod", "string"),
-    upsertSetting("customer_auth", "policy", JSON.stringify(customerAuthPolicy), "json"),
-    upsertSetting("email", "email_provider", "cloudflare", "string"),
-    upsertSetting("email", "email_sender", "noreply@local.scalius.test", "string"),
-    upsertSetting("phone", "allowed_countries", JSON.stringify({ countries: ["BD"], mode: "include" }), "json"),
     `INSERT INTO shipping_methods (
       id, name, fee, description, is_active, sort_order, created_at, updated_at, deleted_at
     ) VALUES (
@@ -215,22 +185,20 @@ export function buildFixtureSql() {
       free_delivery = 0,
       updated_at = unixepoch()`,
     `INSERT INTO product_variants (
-      id, product_id, size, color, weight, sku, price, stock, reserved_stock,
+      id, product_id, option_combination_key, weight, sku, price, stock, reserved_stock,
       preorder_stock, is_default, track_inventory, version, stock_version,
       low_stock_threshold, allow_preorder, preorder_date, preorder_message,
       allow_backorder, backorder_limit, discount_percentage, discount_type,
-      discount_amount, barcode, barcode_type, color_sort_order, size_sort_order,
-      created_at, updated_at, deleted_at
+      discount_amount, barcode, barcode_type, created_at, updated_at, deleted_at
     ) VALUES (
-      ${sqlString(fixture.variantId)}, ${sqlString(fixture.productId)}, NULL, NULL, NULL,
+      ${sqlString(fixture.variantId)}, ${sqlString(fixture.productId)}, NULL, NULL,
       ${sqlString(fixture.variantSku)}, ${fixture.price}, 0, 0, 0, 1, 0, 1, 1,
-      NULL, 0, NULL, NULL, 0, 0, 0, 'percentage', 0, NULL, NULL, 0, 0,
+      NULL, 0, NULL, NULL, 0, 0, 0, 'percentage', 0, NULL, NULL,
       unixepoch(), unixepoch(), NULL
     )
     ON CONFLICT(id) DO UPDATE SET
       product_id = excluded.product_id,
-      size = NULL,
-      color = NULL,
+      option_combination_key = NULL,
       weight = NULL,
       sku = excluded.sku,
       price = excluded.price,
@@ -245,6 +213,46 @@ export function buildFixtureSql() {
       discount_amount = 0,
       updated_at = unixepoch()`,
   ].map((statement) => compactSql(statement)).join("; ");
+}
+
+export function buildOtpFixtureSql() {
+  return otpFixtureStatements().map((statement) => compactSql(statement)).join("; ");
+}
+
+function otpFixtureStatements() {
+  const customerAuthPolicy = {
+    otpChannels: ["email"],
+    requiredContactFields: ["phone"],
+    optionalContactFields: [],
+    defaultOtpChannel: "email",
+  };
+
+  return [
+    `INSERT INTO site_settings (
+      id, singleton_key, site_name, site_description, header_config, footer_config,
+      storefront_url, auth_verification_method, guest_checkout_enabled, checkout_mode,
+      partial_payment_enabled, partial_payment_amount, created_at, updated_at
+    ) VALUES (
+      'ops006_site', 'default', 'Scalius Local Smoke', 'Local disposable smoke store',
+      '{}', '{}', 'http://localhost:4322', 'email', 1, 'all', 0, 0, unixepoch(), unixepoch()
+    )
+    ON CONFLICT(singleton_key) DO UPDATE SET
+      site_name = excluded.site_name,
+      site_description = excluded.site_description,
+      header_config = excluded.header_config,
+      footer_config = excluded.footer_config,
+      storefront_url = excluded.storefront_url,
+      auth_verification_method = excluded.auth_verification_method,
+      guest_checkout_enabled = excluded.guest_checkout_enabled,
+      checkout_mode = excluded.checkout_mode,
+      partial_payment_enabled = excluded.partial_payment_enabled,
+      partial_payment_amount = excluded.partial_payment_amount,
+      updated_at = unixepoch()`,
+    upsertSetting("customer_auth", "policy", JSON.stringify(customerAuthPolicy), "json"),
+    upsertSetting("email", "email_provider", "cloudflare", "string"),
+    upsertSetting("email", "email_sender", "noreply@local.scalius.test", "string"),
+    upsertSetting("phone", "allowed_countries", JSON.stringify({ countries: ["BD"], mode: "include" }), "json"),
+  ];
 }
 
 export function buildCheckoutPayload({ sequence = 1, checkoutRequestId } = {}) {
@@ -310,7 +318,8 @@ export async function runCommand(config) {
     return seedFixture(config);
   }
   if (!config.skipSeed) {
-    seedFixture(config);
+    if (config.command === "otp-smoke") seedOtpFixture(config);
+    else seedFixture(config);
   }
   return withApi(config, async () => {
     if (config.command === "checkout-smoke") return runCheckoutSmoke(config);
@@ -330,7 +339,7 @@ Commands:
   seed             Seed the local D1 checkout fixture only
   checkout-smoke   Seed, create a COD order, replay it, verify receipt, submit support request
   load             Seed, create bounded concurrent COD orders, print latency/status summary
-  otp-smoke        Seed, exercise customer OTP readiness once without provider hammering
+  otp-smoke        Seed only auth settings, then exercise email OTP readiness once
   payment-readiness
                    Seed committed local online orders and verify unconfigured gateways fail closed
 
@@ -368,6 +377,11 @@ function seedFixture(config) {
   };
   printResult(config, result, "Local post-sale fixture seeded.");
   return result;
+}
+
+function seedOtpFixture(config) {
+  ensureLocalMigrations(config);
+  runD1Execute(config, buildOtpFixtureSql());
 }
 
 export function buildPaymentReadinessFixtureSql() {
