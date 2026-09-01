@@ -502,6 +502,10 @@ describe("createStorefrontOrder tax discount parity", () => {
         discountAmount: 9_999,
         shippingCharge: 9_999,
       },
+      customerIdentity: {
+        customerId: "customer_session_owner",
+        source: "authenticated",
+      },
       discountValidator: validator,
       discountCalculator: calculator,
     });
@@ -517,6 +521,7 @@ describe("createStorefrontOrder tax discount parity", () => {
         variantId: "var_standard",
       }],
       "+8801700000000",
+      "customer_session_owner",
     );
     expect(calculator).toHaveBeenCalledWith(
       expect.anything(),

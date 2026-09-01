@@ -657,8 +657,8 @@ export function buildCheckoutCommitStatements(
           ELSE 'legacy_counter'
         END,
         1,
-        json_extract(value, '$.aggregate.payload.orderData.customerId'),
-        json_extract(value, '$.aggregate.payload.orderData.accountOwnerCustomerId'),
+        json_extract(value, '$.aggregate.payload.existingCustomer.id'),
+        json_extract(value, '$.aggregate.payload.existingCustomer.id'),
         json_extract(value, '$.aggregate.checkout.requestKey'),
         json_extract(value, '$.aggregate.checkout.requestHash'),
         json_extract(value, '$.aggregate.checkout.receiptHash'),

@@ -9,6 +9,7 @@ import {
     customers,
     customerHistory,
     discounts,
+    discountCustomerRedemptions,
     discountUsage,
     orderItems,
     orderDiscountAllocations,
@@ -19,7 +20,7 @@ import {
     codTracking,
     promotionRedemptions,
 } from "@scalius/database/schema";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { nanoid } from "nanoid";
 
@@ -244,14 +245,19 @@ async function assertDiscountUsageStillAvailable(
         .get();
 
     if (discount?.limitOnePerCustomer && customerPhone) {
+        const customerKeys = [
+            `phone:${customerPhone.trim()}`,
+            ...(payload.existingCustomer?.id
+                ? [`customer:${payload.existingCustomer.id}`]
+                : []),
+        ];
         const customerUsage = await db
-            .select({ id: discountUsage.id })
-            .from(discountUsage)
-            .leftJoin(orders, eq(discountUsage.orderId, orders.id))
+            .select({ orderId: discountCustomerRedemptions.orderId })
+            .from(discountCustomerRedemptions)
             .where(
                 and(
-                    eq(discountUsage.discountId, discountId),
-                    eq(orders.customerPhone, customerPhone),
+                    eq(discountCustomerRedemptions.discountId, discountId),
+                    inArray(discountCustomerRedemptions.customerKey, customerKeys),
                 ),
             )
             .limit(1)

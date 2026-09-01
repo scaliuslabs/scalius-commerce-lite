@@ -230,6 +230,38 @@ describe("discount checkout enforcement", () => {
     });
   });
 
+  it("enforces a stable account redemption when the delivery phone changes", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(NOW_SECONDS * 1_000));
+    const db = createDatabase();
+    seedDiscount({
+      id: "disc_customer",
+      code: "ACCOUNT_LIMIT",
+      limitOnePerCustomer: true,
+    });
+    sqlite!.prepare(`
+      INSERT INTO discount_customer_redemptions
+        (discount_id, customer_key, order_id, customer_id, created_at)
+      VALUES ('disc_customer', 'customer:cust_account', 'order_1', 'cust_account', ?)
+    `).run(NOW_SECONDS);
+
+    await expect(
+      isDiscountValid(
+        db,
+        "ACCOUNT_LIMIT",
+        500,
+        [],
+        "+8801912345678",
+        "",
+        "BDT",
+        "cust_account",
+      ),
+    ).resolves.toMatchObject({
+      valid: false,
+      error: "This discount code can only be used once per customer",
+    });
+  });
+
   it("keeps exact product scope through calculation without subtotal fallback", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(NOW_SECONDS * 1_000));

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import OrderSuccessButtons from "./OrderSuccessButtons";
 import {
@@ -23,6 +23,36 @@ describe("OrderSuccessButtons customer request policy rendering", () => {
 
   afterEach(() => {
     act(() => root.unmount());
+    document.cookie = "cs_auth=; Max-Age=0; Path=/";
+    vi.unstubAllGlobals();
+  });
+
+  it("recognizes an authenticated order that is already in the account", async () => {
+    document.cookie = "cs_auth=1; Path=/";
+    const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(
+        <OrderSuccessButtons
+          orderId="ord_owned"
+          copy={ENGLISH_CHECKOUT_LANGUAGE_DATA}
+        />,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/customer-auth/orders/ord_owned",
+      { credentials: "same-origin", cache: "no-store" },
+    );
+    expect(host.textContent).toContain(
+      ENGLISH_CHECKOUT_LANGUAGE_DATA.orderReceiptSavedAccountTitleText,
+    );
+    expect(host.textContent).toContain(
+      ENGLISH_CHECKOUT_LANGUAGE_DATA.orderReceiptViewInAccountText,
+    );
+    expect(host.textContent).not.toContain("Save to my account");
   });
 
   it("renders only the actions returned by eligible-only policy projection", () => {

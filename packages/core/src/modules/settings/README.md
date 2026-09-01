@@ -249,7 +249,7 @@ The storefront checkout endpoint returns:
 - `currency.decimalPlaces: number` -- ISO 4217 decimal places for the configured currency
 - `checkoutReadiness.customerSignInRequired` and `hasUsableCustomerSignIn` -- buyer-access readiness alongside shipping/location readiness
 
-Storefront order creation must enforce the same effective checkout policy server-side. The API create-order route fresh-checks `guestCheckoutEnabled`, `checkoutMode`, partial-payment settings, and active payment methods before mutating orders; guest-disabled checkout requires a valid customer session whose phone matches the submitted order phone.
+Storefront order creation must enforce the same effective checkout policy server-side. The API create-order route fresh-checks `guestCheckoutEnabled`, `checkoutMode`, partial-payment settings, and active payment methods before mutating orders. Guest-disabled checkout requires a valid customer session, but the authenticated customer ID and the buyer-editable delivery/contact phone are separate authorities; the session owns account history while the validated submitted phone is stored on the order.
 
 ## Dependencies
 

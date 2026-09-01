@@ -218,8 +218,10 @@ profile selected by canonical phone; it cannot overwrite a claimed account
 profile. `customers.accountClaimedAt` distinguishes account and guest buyers.
 
 `orders.accountOwnerCustomerId` is the separate private account-ownership link.
-Checkout with an active claimed customer session whose canonical phone matches
-the submitted checkout phone may populate it immediately. Account order history
+Checkout with an active claimed customer session populates it immediately from
+the authenticated customer ID. The profile phone is only the checkout default;
+the buyer may supply a different valid delivery/contact phone without changing
+account ownership or the saved customer profile. Account order history
 and account-owned support requests authorize through this field, never the
 broader CRM link. A guest buyer may explicitly claim the order after purchase,
 but only while presenting both private receipt proof and an active customer
