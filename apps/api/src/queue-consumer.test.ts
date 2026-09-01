@@ -143,6 +143,7 @@ import { deriveCustomerAuthOtpDeliveryCode } from "@scalius/core/modules/custome
 import { encodeEncryptedCredential, encryptCredentials } from "@scalius/core/utils/credential-encryption";
 
 const otpDeliveryCredentialKey = Buffer.alloc(32, 6).toString("base64");
+const otpIdentifierHash = "0123456789abcdef".repeat(4);
 
 function createMessage(body: PaymentQueueMessage, attempts?: number): Message<PaymentQueueMessage>;
 function createMessage<T>(body: T, attempts?: number): Message<T>;
@@ -275,7 +276,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
     mocks.createAuthOtpDeliveryTarget.mockImplementation(async (input) => ({
       ...input,
       purpose: input.purpose ?? "customer_login",
-      identifierHash: "recipient_hash_1",
+      identifierHash: otpIdentifierHash,
       identifierMasked: "b***@example.com",
       otpExpiresAt: input.otpExpiresAt ?? null,
     }));
@@ -1682,6 +1683,8 @@ describe("handleQueueBatch payment confirmation retries", () => {
     expect(batchEventLogs.join("\n")).not.toContain("987654");
     expect(allQueueLogs).not.toContain("private-buyer@example.com");
     expect(allQueueLogs).not.toContain("987654");
+    expect(allQueueLogs).not.toContain(otpIdentifierHash);
+    expect(allQueueLogs).toContain(`recipientHashPrefix=${otpIdentifierHash.slice(0, 12)}`);
   });
 
   it("skips OTP email when providers fall back to local logging", async () => {
@@ -1959,7 +1962,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
       expect.objectContaining({
         deliveryKey: "otp_delivery_accept_recover",
         channel: "email",
-        identifierHash: "recipient_hash_1",
+        identifierHash: otpIdentifierHash,
       }),
       {
         deliveryKey: "otp_delivery_accept_recover",
@@ -1998,7 +2001,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
       expect.objectContaining({
         deliveryKey: "otp_delivery_dlq",
         channel: "sms",
-        identifierHash: "recipient_hash_1",
+        identifierHash: otpIdentifierHash,
       }),
       "auth_otp_dlq_terminal",
       {
@@ -2054,7 +2057,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
       expect.objectContaining({
         deliveryKey: "otp_delivery_dlq_accepted",
         channel: "whatsapp",
-        identifierHash: "recipient_hash_1",
+        identifierHash: otpIdentifierHash,
       }),
       {
         deliveryKey: "otp_delivery_dlq_accepted",
