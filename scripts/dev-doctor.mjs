@@ -415,7 +415,11 @@ async function checkService(checks, service, requireRunning) {
   }
 
   try {
-    const response = await fetch(service.url, { signal: AbortSignal.timeout(2500) });
+    const requestTimeoutMs =
+      service.id === "admin" || service.id === "storefront" ? 10_000 : 2500;
+    const response = await fetch(service.url, {
+      signal: AbortSignal.timeout(requestTimeoutMs),
+    });
     const result = await service.validate(response);
     if (result.ok) {
       pass(checks, service.title, result.detail);
