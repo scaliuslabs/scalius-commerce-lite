@@ -955,17 +955,10 @@ const orderPlacedAt = formatOrderReceiptDate(order?.createdAt, checkoutLanguage.
     const stripePayButton = document.getElementById("payButton") as HTMLButtonElement | null;
     if (buttons.length === 0) return;
 
-    const previousText = new Map(buttons.map((retryButton) => [
-      retryButton,
-      retryButton.textContent || copy.orderReceiptRetryPaymentText,
-    ]));
-
     const setRetryButtonsBusy = (busy: boolean, activeButton?: HTMLButtonElement) => {
       buttons.forEach((retryButton) => {
         retryButton.disabled = busy;
-        retryButton.textContent = busy && retryButton === activeButton
-          ? copy.orderReceiptOpeningPaymentText
-          : previousText.get(retryButton) ?? copy.orderReceiptRetryPaymentText;
+        retryButton.setAttribute("aria-busy", busy && retryButton === activeButton ? "true" : "false");
       });
     };
 
@@ -1017,7 +1010,7 @@ const orderPlacedAt = formatOrderReceiptDate(order?.createdAt, checkoutLanguage.
 
       stripeSection?.classList.add("hidden");
       setRetryButtonsBusy(true, button);
-      if (message) message.textContent = "";
+      if (message) message.textContent = copy.orderReceiptOpeningPaymentText;
 
       try {
         const payload: Record<string, unknown> = {
