@@ -129,6 +129,9 @@ export function getPostsaleConfig(rawArgs = process.argv.slice(2), env = process
 export function buildFixtureSql() {
   return [
     ...otpFixtureStatements(),
+    upsertSetting("currency", "currency_code", "BDT", "string"),
+    upsertSetting("currency", "currency_symbol", "৳", "string"),
+    upsertSetting("currency", "usd_exchange_rate", "110", "number"),
     upsertSetting("payment_methods", "enabled_methods", JSON.stringify(["cod"]), "json"),
     upsertSetting("payment_methods", "default_method", "cod", "string"),
     `INSERT INTO shipping_methods (
@@ -424,6 +427,9 @@ export function buildPaymentReadinessFixtureSql() {
     upsertSetting("payment_methods", "default_method", "cod", "string"),
     ...paymentReadinessGateways.flatMap((gateway, index) => {
       const totalAmount = fixture.price + fixture.shippingCharge;
+      const subtotalAmountMinor = fixture.price * 100;
+      const shippingAmountMinor = fixture.shippingCharge * 100;
+      const totalAmountMinor = totalAmount * 100;
       const requestKey = `ops006_payment_readiness:${gateway.gateway}`;
       const responsePayload = JSON.stringify({
         success: true,
@@ -438,7 +444,10 @@ export function buildPaymentReadinessFixtureSql() {
         `INSERT INTO orders (
           id, customer_name, customer_phone, customer_email, shipping_address,
           city, zone, area, city_name, zone_name, area_name,
-          total_amount, shipping_charge, discount_amount, status, notes,
+          total_amount, shipping_charge, discount_amount,
+          currency_code, currency_decimal_places, subtotal_amount_minor,
+          shipping_amount_minor, discount_amount_minor, tax_amount_minor,
+          total_amount_minor, status, notes,
           payment_method, payment_status, paid_amount, balance_due,
           fulfillment_status, inventory_pool, inventory_action, version,
           created_at, updated_at, deleted_at
@@ -449,7 +458,9 @@ export function buildPaymentReadinessFixtureSql() {
           'House 1, Road 10, Mirpur DOHS, Dhaka',
           ${sqlString(fixture.cityId)}, ${sqlString(fixture.zoneId)}, ${sqlString(fixture.areaId)},
           'Dhaka', 'Mirpur', 'Section 10',
-          ${totalAmount}, ${fixture.shippingCharge}, 0, 'pending',
+          ${totalAmount}, ${fixture.shippingCharge}, 0,
+          'BDT', 2, ${subtotalAmountMinor}, ${shippingAmountMinor}, 0, 0,
+          ${totalAmountMinor}, 'pending',
           'Disposable local payment readiness smoke order.',
           ${sqlString(gateway.gateway)}, 'unpaid', 0, ${totalAmount},
           'pending', 'regular', 'none', 1, unixepoch(), unixepoch(), NULL
