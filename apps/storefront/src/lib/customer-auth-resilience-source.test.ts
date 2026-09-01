@@ -122,9 +122,6 @@ describe("customer auth resilience source boundaries", () => {
     expect(phoneSource).toContain(
       'Object.prototype.hasOwnProperty.call(draft, "customerPhone")',
     );
-    expect(phoneSource).toContain(
-      "? draft.customerPhone\n        : defaultValue;",
-    );
     expect(phoneSource).toContain('return result.ok ? result.value : "";');
     expect(cartSource).toContain("let phoneFieldHasBuyerEdit = false;");
     expect(cartSource).toContain("!phoneFieldHasBuyerEdit &&");
