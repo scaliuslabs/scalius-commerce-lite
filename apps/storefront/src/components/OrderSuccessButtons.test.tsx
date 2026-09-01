@@ -176,6 +176,7 @@ describe("OrderSuccessButtons customer request policy rendering", () => {
     expect(host.textContent).toContain("Request cancellation · Rejected");
     expect(host.textContent).toContain("Request cancellation");
     expect(host.querySelector('a[href="/"]')?.textContent).toContain("Continue shopping");
+    expect(host.querySelector('a[href="/"]')?.getAttribute("data-astro-prefetch")).toBe("false");
     expect([...host.querySelectorAll("button")].some((button) =>
       button.textContent?.includes("Request cancellation") && !button.disabled
     )).toBe(true);
