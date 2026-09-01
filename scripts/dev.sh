@@ -5,16 +5,18 @@
 # 1. Inspector port race: Astro/Cloudflare dev servers fight for Vite's
 #    inspector WebSocket port. Staggered starts prevent this.
 # 2. Zombie processes: Node/workerd children survive Ctrl+C.
-#    Cleanup kills owned dev ports. Set SCALIUS_DEV_KILL_ALL_WORKERD=1 for
-#    the old aggressive workerd cleanup behavior.
+#    Cleanup terminates only processes started and tracked by this wrapper.
 
-DEV_PORTS=(8787 4322 4323 9229 9230 9231 9232 9233)
+DEV_PORTS=(8787 4322 4323)
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 DRY_RUN="${SCALIUS_DEV_DRY_RUN:-0}"
 API_READY_URL="${SCALIUS_DEV_API_READY_URL:-http://localhost:8787/api/v1/setup}"
 API_READY_TIMEOUT_SECONDS="${SCALIUS_DEV_API_READY_TIMEOUT_SECONDS:-60}"
 STAGGER_SECONDS="${SCALIUS_DEV_STAGGER_SECONDS:-3}"
 API_PID=""
+ADMIN_PID=""
+STOREFRONT_PID=""
+TURBO_PID=""
 
 resolve_pnpm_bin() {
   if [ -n "${SCALIUS_PNPM_BIN:-}" ]; then
@@ -62,24 +64,50 @@ resolve_pnpm_bin() {
 PNPM_BIN="$(resolve_pnpm_bin)"
 export SCALIUS_PNPM_BIN="$PNPM_BIN"
 
-lsof_dev_ports() {
-  local args=()
-  local port
-  for port in "${DEV_PORTS[@]}"; do
-    args+=("-iTCP:$port")
-  done
-  lsof -ti "${args[@]}" -sTCP:LISTEN 2>/dev/null
-}
+assert_dev_ports_available() {
+  if ! command -v lsof >/dev/null 2>&1; then
+    echo "lsof is required to verify local dev ports safely." >&2
+    exit 1
+  fi
 
-kill_dev_ports() {
-  lsof_dev_ports | xargs kill -9 2>/dev/null
-  if [ "${SCALIUS_DEV_KILL_ALL_WORKERD:-0}" = "1" ]; then
-    pkill -9 -f "workerd" 2>/dev/null
+  local port pids pid command conflict=0
+  for port in "${DEV_PORTS[@]}"; do
+    pids="$(lsof -nP -a -iTCP:"$port" -sTCP:LISTEN -t 2>/dev/null || true)"
+    for pid in $pids; do
+      command="$(ps -p "$pid" -o command= 2>/dev/null || true)"
+      echo "Port $port is already in use by PID $pid${command:+ ($command)}." >&2
+      conflict=1
+    done
+  done
+
+  if [ "$conflict" = "1" ]; then
+    echo "Stop or reconfigure the conflicting process, then rerun pnpm dev." >&2
+    exit 1
   fi
 }
 
+terminate_owned_process() {
+  local pid="$1"
+  local label="$2"
+  if [ -z "$pid" ] || ! kill -0 "$pid" 2>/dev/null; then
+    return
+  fi
+
+  kill -TERM "$pid" 2>/dev/null || true
+  local attempts=0
+  while kill -0 "$pid" 2>/dev/null && [ "$attempts" -lt 30 ]; do
+    sleep 0.1
+    attempts=$((attempts + 1))
+  done
+  if kill -0 "$pid" 2>/dev/null; then
+    echo "$label did not stop after SIGTERM; stopping the same owned PID." >&2
+    kill -KILL "$pid" 2>/dev/null || true
+  fi
+  wait "$pid" 2>/dev/null || true
+}
+
 stop_storefront_background() {
-  if [ "$DRY_RUN" = "1" ]; then
+  if [ "$DRY_RUN" = "1" ] || [ -z "$STOREFRONT_PID" ]; then
     return
   fi
 
@@ -111,11 +139,10 @@ cleanup() {
   echo ""
   echo "Shutting down dev servers..."
   stop_storefront_background
-  kill_dev_ports
-  sleep 1
-  # Second pass for stubborn processes
-  stop_storefront_background
-  kill_dev_ports
+  terminate_owned_process "$STOREFRONT_PID" "Storefront"
+  terminate_owned_process "$ADMIN_PID" "Admin dashboard"
+  terminate_owned_process "$API_PID" "API worker"
+  terminate_owned_process "$TURBO_PID" "Turbo dev"
   echo "Done."
   exit "$status"
 }
@@ -124,15 +151,8 @@ trap cleanup EXIT
 trap 'exit 130' SIGINT
 trap 'exit 143' SIGTERM
 
-# Clean up stale processes from previous runs
 if [ "$DRY_RUN" != "1" ]; then
-  STALE=$(lsof_dev_ports)
-  if [ -n "$STALE" ]; then
-    echo "Killing stale processes on dev ports..."
-    stop_storefront_background
-    kill_dev_ports
-    sleep 1
-  fi
+  assert_dev_ports_available
 fi
 
 validate_numeric_setting() {
@@ -151,7 +171,7 @@ start_api() {
     return
   fi
 
-  (cd "$ROOT_DIR/apps/api" && "$PNPM_BIN" dev) &
+  (cd "$ROOT_DIR/apps/api" && exec "$PNPM_BIN" dev) &
   API_PID=$!
 }
 
@@ -162,7 +182,8 @@ start_admin() {
     return
   fi
 
-  (cd "$ROOT_DIR/apps/admin-v2" && "$PNPM_BIN" dev) &
+  (cd "$ROOT_DIR/apps/admin-v2" && exec "$PNPM_BIN" dev) &
+  ADMIN_PID=$!
 }
 
 start_storefront() {
@@ -185,6 +206,7 @@ start_storefront() {
       exec "$PNPM_BIN" exec astro dev logs --follow
     fi
   ) &
+  STOREFRONT_PID=$!
 }
 
 wait_for_api_ready() {
@@ -279,7 +301,8 @@ if [ "$HAS_FILTERS" = "1" ]; then
   fi
 
   "$PNPM_BIN" exec turbo run dev "$@" &
-  wait $!
+  TURBO_PID=$!
+  wait "$TURBO_PID"
   exit 0
 fi
 
