@@ -38,12 +38,12 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20260808.1",
+    "@cloudflare/workers-types": "^5.20260831.1",
     "@scalius/tsconfig": "workspace:*",
     "@types/jsonwebtoken": "^9.0.10",
     "tsx": "^4.23.11",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10",
-    "wrangler": "4.120.0"
+    "wrangler": "4.127.1"
   }
 }
