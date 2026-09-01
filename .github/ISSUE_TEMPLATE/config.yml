@@ -1,5 +1,8 @@
 blank_issues_enabled: false
 contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/scaliuslabs/scalius-commerce-lite/security/advisories/new
+    about: Privately report a suspected security vulnerability to the maintainers.
   - name: Setup and usage help
     url: https://scalius.com/discord
     about: Ask questions and troubleshoot installations with the community.
