@@ -425,6 +425,7 @@ commands working in shells where Node is available but `pnpm` is not already on
 
 ```bash
 nvm use
+brew install mailpit # macOS; other platforms: https://mailpit.axllent.org/docs/install/
 pnpm dev:doctor
 pnpm dev:setup
 ```
@@ -461,7 +462,7 @@ pnpm dev:storefront   # API + storefront only
 pnpm dev:doctor:all   # Verify full stack after pnpm dev
 ```
 
-The dev wrapper (`scripts/dev.sh`) applies pending local D1 migrations before starting API, refuses to start when an application port is already owned, waits for API `/api/v1/setup` before starting admin/storefront, staggers admin/storefront startup to prevent Vite inspector port conflicts, and cleans up only processes it started. It never terminates an unrelated listener. Astro 7 can run storefront dev in background mode during non-interactive CI sessions; the wrapper streams `astro dev logs --follow` and stops the background storefront with `astro dev stop` during cleanup. Set `SCALIUS_SKIP_DEV_MIGRATIONS=1` when you intentionally want to skip the migration check.
+The dev wrapper (`scripts/dev.sh`) starts or reuses a loopback-only Mailpit inbox at `http://127.0.0.1:8025`, applies pending local D1 migrations, and refuses to start when an application port is already owned. It waits for API `/api/v1/setup` before starting admin/storefront, staggers their startup to prevent inspector conflicts, and cleans up only processes it started. Local email and OTP messages stay on the development machine; production continues to use Cloudflare Email or Resend. Astro 7 can run storefront dev in background mode during non-interactive CI sessions; the wrapper streams `astro dev logs --follow` and stops the background storefront with `astro dev stop` during cleanup. Set `SCALIUS_SKIP_DEV_MIGRATIONS=1` when you intentionally want to skip the migration check.
 
 Use the matching doctor command after startup: `pnpm dev:doctor:api` after `pnpm dev:api`, `pnpm dev:doctor:admin` after `pnpm dev:admin`, `pnpm dev:doctor:storefront` after `pnpm dev:storefront`, and `pnpm dev:doctor:all` after the full `pnpm dev` stack. Plain `pnpm dev:doctor` remains a non-mutating broad overview and will warn when a service is intentionally stopped.
 

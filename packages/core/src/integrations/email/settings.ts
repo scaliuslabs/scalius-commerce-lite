@@ -9,16 +9,36 @@ import type { EmailRuntimeContext, EmailRuntimeSettings } from "./provider";
 
 const DEFAULT_FROM = "noreply@example.com";
 const EMAIL_ADDRESS_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
 export interface EmailProviderReadiness {
   configured: boolean;
-  provider: EmailRuntimeSettings["provider"];
+  provider: EmailRuntimeSettings["provider"] | "mailpit";
   sender: string;
   senderConfigured: boolean;
   cloudflareBindingConfigured: boolean;
   resendConfigured: boolean;
   error: string | null;
   blockers: string[];
+}
+
+export function resolveLocalMailpitUrl(value: unknown): string | null {
+  if (typeof value !== "string" || !value.trim()) return null;
+  try {
+    const url = new URL(value.trim());
+    if (
+      url.protocol !== "http:"
+      || !LOOPBACK_HOSTS.has(url.hostname)
+      || url.username
+      || url.password
+      || (url.pathname !== "/" && url.pathname !== "")
+      || url.search
+      || url.hash
+    ) return null;
+    return url.origin;
+  } catch {
+    return null;
+  }
 }
 
 function encryptionKeyFromContext(context?: EmailRuntimeContext): string | undefined {
@@ -66,6 +86,7 @@ export async function getEmailRuntimeSettings(
         : "cloudflare";
     const rawSender = (values.get("email_sender") || "").trim();
     const senderConfigured = EMAIL_ADDRESS_PATTERN.test(rawSender);
+    const localMailpitUrl = resolveLocalMailpitUrl(context?.env?.LOCAL_MAILPIT_URL);
 
     return {
       provider,
@@ -74,10 +95,12 @@ export async function getEmailRuntimeSettings(
       resendApiKey,
       hasResendApiKey: Boolean(resendApiKey),
       cloudflareBindingConfigured: Boolean(context?.env?.EMAIL),
+      localMailpitUrl,
       resendCredentialError: resolvedResendApiKey.error ?? null,
     };
   } catch (error: unknown) {
     console.error("[Email] Failed to load email settings from DB:", error);
+    const localMailpitUrl = resolveLocalMailpitUrl(context?.env?.LOCAL_MAILPIT_URL);
     return {
       provider: context?.env?.EMAIL ? "cloudflare" : "resend",
       sender: DEFAULT_FROM,
@@ -85,6 +108,7 @@ export async function getEmailRuntimeSettings(
       resendApiKey: null,
       hasResendApiKey: false,
       cloudflareBindingConfigured: Boolean(context?.env?.EMAIL),
+      localMailpitUrl,
       resendCredentialError: null,
     };
   }
@@ -95,9 +119,10 @@ export async function getEmailProviderReadiness(
 ): Promise<EmailProviderReadiness> {
   const settings = await getEmailRuntimeSettings(context);
   const blockers: string[] = [];
-  const selectedProviderConfigured = settings.provider === "cloudflare"
-    ? settings.cloudflareBindingConfigured
-    : settings.hasResendApiKey;
+  const selectedProviderConfigured = Boolean(settings.localMailpitUrl)
+    || (settings.provider === "cloudflare"
+      ? settings.cloudflareBindingConfigured
+      : settings.hasResendApiKey);
 
   if (!settings.senderConfigured) {
     blockers.push("Sender email is required before enabling email delivery.");
@@ -114,7 +139,7 @@ export async function getEmailProviderReadiness(
 
   return {
     configured: blockers.length === 0,
-    provider: settings.provider,
+    provider: settings.localMailpitUrl ? "mailpit" : settings.provider,
     sender: settings.sender,
     senderConfigured: settings.senderConfigured,
     cloudflareBindingConfigured: settings.cloudflareBindingConfigured,

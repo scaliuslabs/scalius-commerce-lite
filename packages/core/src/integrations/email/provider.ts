@@ -12,7 +12,7 @@ export interface SendEmailOptions {
 
 export interface SendEmailResult {
   success: boolean;
-  provider: "cloudflare" | "resend" | "log";
+  provider: "cloudflare" | "resend" | "mailpit" | "log";
   providerRef?: string;
   rawStatus?: string;
 }
@@ -34,6 +34,7 @@ export interface EmailRuntimeSettings {
   resendApiKey: string | null;
   hasResendApiKey: boolean;
   cloudflareBindingConfigured: boolean;
+  localMailpitUrl: string | null;
   resendCredentialError?: string | null;
 }
 
@@ -43,6 +44,7 @@ export interface EmailRuntimeContext {
     EMAIL?: CloudflareEmailBinding;
     CREDENTIAL_ENCRYPTION_KEY?: string;
     JWT_SECRET?: string;
+    LOCAL_MAILPIT_URL?: string;
   };
   encryptionKey?: string;
   settings?: EmailRuntimeSettings;
