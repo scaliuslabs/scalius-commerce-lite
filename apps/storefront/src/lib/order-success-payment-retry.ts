@@ -56,7 +56,7 @@ export function canRetryOrderSuccessPayment(
   if (PAYMENT_BLOCKED_PAYMENT_STATUSES.has(normalize(order.paymentStatus))) return false;
   if (getOrderSuccessVisibleBalanceDue(order) <= 0) return false;
   void callbackResult;
-  return stateKind === "payment_issue";
+  return stateKind === "payment_pending" || stateKind === "payment_issue";
 }
 
 function normalizeHostedGateway(value: string | null | undefined): OrderSuccessRetryGateway | null {

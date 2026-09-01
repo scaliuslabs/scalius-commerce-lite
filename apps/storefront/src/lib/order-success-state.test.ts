@@ -145,7 +145,7 @@ describe("order success state", () => {
       });
 
       expect(getOrderSuccessStateKind(order)).toBe("payment_pending");
-      expect(getOrderSuccessViewState(order, ENGLISH_CHECKOUT_LANGUAGE_DATA).title).toBe("Confirming payment");
+      expect(getOrderSuccessViewState(order, ENGLISH_CHECKOUT_LANGUAGE_DATA).title).toBe("Payment pending");
     },
   );
 
@@ -234,7 +234,7 @@ describe("order success state", () => {
 
   it.each([
     ["pending", "unpaid", "cod", "অর্ডার দেওয়া হয়েছে", "ডেলিভারির সময় পরিশোধযোগ্য"],
-    ["incomplete", "unpaid", "stripe", "পেমেন্ট নিশ্চিত করা হচ্ছে", "অপরিশোধিত"],
+    ["incomplete", "unpaid", "stripe", "পেমেন্ট অপেক্ষমাণ", "অপরিশোধিত"],
     ["pending", "failed", "stripe", "পেমেন্ট সম্পন্ন হয়নি", "ব্যর্থ"],
     ["confirmed", "paid", "stripe", "অর্ডার নিশ্চিত হয়েছে", "পরিশোধিত"],
     ["processing", "paid", "stripe", "অর্ডার প্রস্তুত করা হচ্ছে", "পরিশোধিত"],

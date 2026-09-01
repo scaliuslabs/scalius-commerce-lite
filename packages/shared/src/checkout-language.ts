@@ -122,10 +122,10 @@ export const ENGLISH_CHECKOUT_LANGUAGE_DATA = {
     "Your existing order will be updated. This will not create another order.",
   orderReceiptPaymentIssueTitleText: "Payment not completed",
   orderReceiptPaymentIssueMessageText:
-    "Order #{orderId} is saved. Retry payment below instead of placing another order.",
-  orderReceiptPaymentPendingTitleText: "Confirming payment",
+    "Order #{orderId} is saved. Choose a payment method.",
+  orderReceiptPaymentPendingTitleText: "Payment pending",
   orderReceiptPaymentPendingMessageText:
-    "Order #{orderId} is saved. Do not place it again while we check the payment.",
+    "Order #{orderId} is saved.",
   orderReceiptConfirmedTitleText: "Order confirmed",
   orderReceiptConfirmedMessageText: "Order #{orderId} is confirmed and being prepared.",
   orderReceiptProcessingTitleText: "Order processing",
@@ -480,10 +480,10 @@ export const BANGLA_CHECKOUT_LANGUAGE_DATA: CheckoutLanguageData = {
     "আপনার বর্তমান অর্ডারটিই হালনাগাদ হবে। নতুন কোনো অর্ডার তৈরি হবে না।",
   orderReceiptPaymentIssueTitleText: "পেমেন্ট সম্পন্ন হয়নি",
   orderReceiptPaymentIssueMessageText:
-    "অর্ডার #{orderId} সংরক্ষিত আছে। নতুন অর্ডার না করে নিচে থেকে আবার পেমেন্ট করুন।",
-  orderReceiptPaymentPendingTitleText: "পেমেন্ট নিশ্চিত করা হচ্ছে",
+    "অর্ডার #{orderId} সংরক্ষিত আছে। পেমেন্ট পদ্ধতি বেছে নিন।",
+  orderReceiptPaymentPendingTitleText: "পেমেন্ট অপেক্ষমাণ",
   orderReceiptPaymentPendingMessageText:
-    "অর্ডার #{orderId} সংরক্ষিত আছে। পেমেন্ট যাচাই করার সময় অর্ডারটি আবার দেবেন না।",
+    "অর্ডার #{orderId} সংরক্ষিত আছে।",
   orderReceiptConfirmedTitleText: "অর্ডার নিশ্চিত হয়েছে",
   orderReceiptConfirmedMessageText: "অর্ডার #{orderId} নিশ্চিত হয়েছে এবং প্রস্তুত করা হচ্ছে।",
   orderReceiptProcessingTitleText: "অর্ডার প্রস্তুত করা হচ্ছে",

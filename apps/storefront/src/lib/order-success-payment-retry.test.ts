@@ -30,7 +30,7 @@ function makeRetryOrder(overrides: Partial<{
 }
 
 describe("order success payment retry", () => {
-  it("recognizes callback outcomes but requires durable failure before offering retry", () => {
+  it("recognizes callback outcomes while allowing pending hosted payment continuation", () => {
     expect(isRetryableHostedPaymentMethod("sslcommerz")).toBe(true);
     expect(isRetryableHostedPaymentMethod("polar")).toBe(true);
     expect(isRetryableHostedPaymentMethod("stripe")).toBe(true);
@@ -46,7 +46,7 @@ describe("order success payment retry", () => {
         "payment_pending",
         "cancelled",
       ),
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it("allows hosted payment-issue receipts even without a callback result", () => {
@@ -59,18 +59,18 @@ describe("order success payment retry", () => {
     ).toBe(true);
   });
 
-  it("does not offer online retry for COD or ordinary pending receipts", () => {
+  it("does not offer online retry for COD receipts", () => {
     expect(getOrderSuccessRetryEndpoint("cod")).toBeNull();
     expect(
       canRetryOrderSuccessPayment(
-        makeRetryOrder(),
+        makeRetryOrder({ paymentMethod: "cod" }),
         "payment_pending",
         null,
       ),
     ).toBe(false);
   });
 
-  it("does not trust a stale or forged cancelled query while payment is still pending", () => {
+  it("does not trust a stale or forged cancelled query to unlock alternate gateways", () => {
     expect(
       getOrderSuccessRetryOptions(
         makeRetryOrder(),
@@ -83,7 +83,15 @@ describe("order success payment retry", () => {
           { id: "cod" },
         ],
       ),
-    ).toEqual([]);
+    ).toEqual([
+      {
+        gateway: "sslcommerz",
+        endpoint: "/api/checkout/sslcommerz-session",
+        current: true,
+        label: "Pay online",
+        requiresCardForm: false,
+      },
+    ]);
   });
 
   it("returns alternate visible hosted gateways for durable payment issues", () => {
