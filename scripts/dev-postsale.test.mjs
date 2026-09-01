@@ -10,6 +10,7 @@ import {
   buildReceiptLookupRequest,
   buildTaxQuotePayload,
   getPostsaleConfig,
+  readMailpitMessageCount,
 } from "./dev-postsale.mjs";
 
 describe("local post-sale smoke CLI", () => {
@@ -118,6 +119,12 @@ describe("local post-sale smoke CLI", () => {
     expect(quotedPayload.expectedQuoteFingerprint).toBe("taxq_abcdefghijklmnopqrstuv");
     expect(payload).not.toHaveProperty("expectedQuoteFingerprint");
     expect(() => attachAuthoritativeQuote(payload, { data: {} })).toThrow(/valid quote fingerprint/);
+  });
+
+  it("reads only Mailpit aggregate counts for OTP delivery proof", () => {
+    expect(readMailpitMessageCount({ total: 3, messages: [{ subject: "not inspected" }] })).toBe(3);
+    expect(() => readMailpitMessageCount({ total: -1 })).toThrow(/valid message count/);
+    expect(() => readMailpitMessageCount({})).toThrow(/valid message count/);
   });
 
   it("sends receipt proof through the header instead of the URL", () => {
