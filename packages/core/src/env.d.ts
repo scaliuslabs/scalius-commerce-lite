@@ -51,6 +51,7 @@ interface Env {
   // Variables
   BETTER_AUTH_URL?: string;
   PUBLIC_API_BASE_URL?: string;
+  LOCAL_MAILPIT_URL?: string;
   PROJECT_CACHE_PREFIX?: string;
   STOREFRONT_URL?: string;
   CUSTOMER_AUTH_COOKIE_DOMAIN?: string;

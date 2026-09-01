@@ -160,6 +160,7 @@
     "STOREFRONT_URL": "http://localhost:4322",
     "CDN_DOMAIN_URL": "localhost:8787",
     "R2_PUBLIC_URL": "http://localhost:8787/api/v1/media",
-    "PURGE_URL": "http://localhost:4322/api/purge-cache"
+    "PURGE_URL": "http://localhost:4322/api/purge-cache",
+    "LOCAL_MAILPIT_URL": "http://127.0.0.1:8025"
   }
 }

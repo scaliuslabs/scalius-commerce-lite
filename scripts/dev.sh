@@ -17,6 +17,9 @@ API_PID=""
 ADMIN_PID=""
 STOREFRONT_PID=""
 TURBO_PID=""
+MAILPIT_PID=""
+MAILPIT_URL="http://127.0.0.1:8025"
+MAILPIT_READY_TIMEOUT_SECONDS="${SCALIUS_DEV_MAILPIT_READY_TIMEOUT_SECONDS:-10}"
 
 resolve_pnpm_bin() {
   if [ -n "${SCALIUS_PNPM_BIN:-}" ]; then
@@ -106,6 +109,46 @@ terminate_owned_process() {
   wait "$pid" 2>/dev/null || true
 }
 
+start_mailpit() {
+  echo "Starting local mailbox (port 8025)..."
+  if [ "$DRY_RUN" = "1" ]; then
+    echo "[dry-run] mailpit --listen 127.0.0.1:8025 --smtp 127.0.0.1:1025 --max 100 --max-age 24h --quiet"
+    return
+  fi
+
+  if curl -fsS --max-time 1 "$MAILPIT_URL/api/v1/info" >/dev/null 2>&1; then
+    echo "Local mailbox is already ready."
+    return
+  fi
+
+  if ! command -v mailpit >/dev/null 2>&1; then
+    echo "Mailpit is required for local email and OTP testing." >&2
+    echo "Install it with 'brew install mailpit' on macOS or follow https://mailpit.axllent.org/docs/install/." >&2
+    exit 1
+  fi
+
+  validate_numeric_setting "SCALIUS_DEV_MAILPIT_READY_TIMEOUT_SECONDS" "$MAILPIT_READY_TIMEOUT_SECONDS"
+  mailpit --listen 127.0.0.1:8025 --smtp 127.0.0.1:1025 --max 100 --max-age 24h --quiet &
+  MAILPIT_PID=$!
+
+  local waited=0
+  while [ "$waited" -lt "$MAILPIT_READY_TIMEOUT_SECONDS" ]; do
+    if curl -fsS --max-time 1 "$MAILPIT_URL/api/v1/info" >/dev/null 2>&1; then
+      echo "Local mailbox is ready."
+      return
+    fi
+    if ! kill -0 "$MAILPIT_PID" 2>/dev/null; then
+      echo "Mailpit exited before its API was ready." >&2
+      exit 1
+    fi
+    sleep 1
+    waited=$((waited + 1))
+  done
+
+  echo "Mailpit did not become ready within ${MAILPIT_READY_TIMEOUT_SECONDS}s." >&2
+  exit 1
+}
+
 stop_storefront_background() {
   if [ "$DRY_RUN" = "1" ] || [ -z "$STOREFRONT_PID" ]; then
     return
@@ -143,6 +186,7 @@ cleanup() {
   terminate_owned_process "$ADMIN_PID" "Admin dashboard"
   terminate_owned_process "$API_PID" "API worker"
   terminate_owned_process "$TURBO_PID" "Turbo dev"
+  terminate_owned_process "$MAILPIT_PID" "Mailpit"
   echo "Done."
   exit "$status"
 }
@@ -268,6 +312,10 @@ if [[ "$*" == *"--filter"* ]]; then
   [[ "$*" == *"@scalius/storefront"* ]] && HAS_STOREFRONT=1
 fi
 
+if [ "$HAS_FILTERS" = "0" ] || [ "$HAS_API" = "1" ]; then
+  start_mailpit
+fi
+
 if [ "$HAS_FILTERS" = "1" ]; then
   if [ "$HAS_API" = "1" ] && [ "$HAS_ADMIN" = "0" ] && [ "$HAS_STOREFRONT" = "0" ]; then
     apply_local_migrations
@@ -277,6 +325,7 @@ if [ "$HAS_FILTERS" = "1" ]; then
     echo "API dev server running. Ctrl+C to stop."
     echo "  API:     http://localhost:8787"
     echo "  Swagger: http://localhost:8787/api/v1/docs"
+    echo "  Mailbox: http://127.0.0.1:8025"
     echo ""
     wait
     exit 0
@@ -323,5 +372,6 @@ echo "  API:        http://localhost:8787"
 echo "  Admin:      http://localhost:4323"
 echo "  Storefront: http://localhost:4322"
 echo "  Swagger:    http://localhost:8787/api/v1/docs"
+echo "  Mailbox:    http://127.0.0.1:8025"
 echo ""
 wait

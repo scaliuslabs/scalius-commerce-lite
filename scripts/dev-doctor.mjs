@@ -31,10 +31,10 @@ const root = resolve(__dirname, "..");
 
 const CHECK_ORDER = { fail: 0, warn: 1, skip: 2, pass: 3 };
 const SERVICE_PROFILES = {
-  all: ["api", "admin", "storefront"],
-  api: ["api"],
-  admin: ["api", "admin"],
-  storefront: ["api", "storefront"],
+  all: ["mailbox", "api", "admin", "storefront"],
+  api: ["mailbox", "api"],
+  admin: ["mailbox", "api", "admin"],
+  storefront: ["mailbox", "api", "storefront"],
 };
 
 export function getServiceIdsForProfile(profile = "all") {
@@ -164,6 +164,18 @@ function checkTooling(checks) {
     pass(checks, "pnpm", `pnpm ${pnpmVersion} is available (${pnpmExecutable}).`);
   } else {
     fail(checks, "pnpm", "pnpm could not be resolved.", "Install pnpm or enable Corepack, then run pnpm dev:setup.");
+  }
+
+  const mailpitVersion = getCommandVersion("mailpit", ["version"]);
+  if (mailpitVersion) {
+    pass(checks, "Local mailbox tooling", `${mailpitVersion} is available.`);
+  } else {
+    fail(
+      checks,
+      "Local mailbox tooling",
+      "Mailpit is not available on PATH.",
+      "Install it with 'brew install mailpit' on macOS or follow https://mailpit.axllent.org/docs/install/.",
+    );
   }
 
   if (existsSync(resolve(root, "node_modules"))) {
@@ -337,6 +349,19 @@ function checkWranglerState(checks, wranglerState) {
 
 async function checkServices(checks, config) {
   const services = [
+    {
+      id: "mailbox",
+      title: "Local mailbox",
+      url: "http://127.0.0.1:8025/api/v1/info",
+      downAction: "Start it with pnpm dev:api, pnpm dev:admin, pnpm dev:storefront, or pnpm dev.",
+      validate: async (response) => {
+        const data = await safeJson(response);
+        if (response.ok && typeof data?.Version === "string") {
+          return { ok: true, detail: `Mailpit ${data.Version} responded on loopback.` };
+        }
+        return { ok: false, detail: `Mailpit info returned ${response.status}, not the expected payload.` };
+      },
+    },
     {
       id: "api",
       title: "API worker",

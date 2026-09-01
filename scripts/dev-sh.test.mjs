@@ -24,6 +24,10 @@ describe("dev.sh startup planning", () => {
     const result = runDevSh(["--filter=@scalius/api"]);
 
     expect(result.status).toBe(0);
+    expect(result.stdout).toContain("Starting local mailbox (port 8025)...");
+    expect(result.stdout.indexOf("Starting local mailbox")).toBeLessThan(
+      result.stdout.indexOf("Starting API worker"),
+    );
     expect(result.stdout).toContain("Applying local D1 migrations...");
     expect(result.stdout).toContain("Starting API worker (port 8787)...");
     expect(result.stdout).toContain("Waiting for API readiness at http://localhost:8787/api/v1/setup...");
