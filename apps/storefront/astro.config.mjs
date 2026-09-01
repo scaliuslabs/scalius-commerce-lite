@@ -59,6 +59,10 @@ export default defineConfig({
 
   vite: {
     plugins: [tailwindcss()],
+    optimizeDeps: {
+      // @astrojs/cloudflare misses these on cold Vite caches: withastro/astro#17788.
+      include: ["astro/assets/services/noop", "astro/logger/json"],
+    },
     resolve: {
       dedupe: reactSingletonDeps,
       alias:
