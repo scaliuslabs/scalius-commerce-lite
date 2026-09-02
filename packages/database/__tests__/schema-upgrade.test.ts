@@ -162,6 +162,12 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 6,
         postgresStatements: 10,
       },
+      {
+        version: 60,
+        name: "0060_better_auth_account_identity",
+        sqliteStatements: 10,
+        postgresStatements: 6,
+      },
     ]);
   });
 
@@ -289,6 +295,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 57, name: "0057_agent_browser_handoffs" },
           { version: 58, name: "0058_order_shipping_method_snapshot" },
           { version: 59, name: "0059_checkout_delivery_phone_identity" },
+          { version: 60, name: "0060_better_auth_account_identity" },
         ],
       });
     } finally {

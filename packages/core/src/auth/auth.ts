@@ -62,16 +62,8 @@ export function createAuth(env?: Env | NodeJS.ProcessEnv) {
     secret,
     baseURL,
     appName,
-    emailAndPassword: {
-      enabled: true,
-      requireEmailVerification: false,
-      minPasswordLength: AUTH_PASSWORD_MIN_LENGTH,
-      maxPasswordLength: AUTH_PASSWORD_MAX_LENGTH,
-      resetPasswordTokenExpiresIn: 60 * 60,
-      revokeSessionsOnPasswordReset: true,
-      // Email verification callback - called when user needs to verify email
+    emailVerification: {
       sendVerificationEmail: async ({ user, url }: { user: { email: string; name: string }; url: string }) => {
-        // Import dynamically to avoid circular dependencies
         const { sendEmail } = await import("../integrations/email");
         await sendEmail({
           to: user.email,
@@ -97,6 +89,14 @@ export function createAuth(env?: Env | NodeJS.ProcessEnv) {
           `,
         }, emailRuntimeContext);
       },
+    },
+    emailAndPassword: {
+      enabled: true,
+      requireEmailVerification: false,
+      minPasswordLength: AUTH_PASSWORD_MIN_LENGTH,
+      maxPasswordLength: AUTH_PASSWORD_MAX_LENGTH,
+      resetPasswordTokenExpiresIn: 60 * 60,
+      revokeSessionsOnPasswordReset: true,
       // Password reset callback
       sendResetPassword: async ({ user, token }: {
         user: { id: string; email: string; name: string };

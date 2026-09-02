@@ -265,11 +265,13 @@ describe.each(["d1", "turso"] as const)(
         const credentialRow = await db.select({
           accountId: account.accountId,
           providerId: account.providerId,
+          issuer: account.issuer,
           password: account.password,
         }).from(account).where(eq(account.id, "invited_admin_account")).get();
         expect(credentialRow).toMatchObject({
           accountId: "invited_admin",
           providerId: "credential",
+          issuer: "local:credential",
         });
         expect(await verifyPassword({
           hash: credentialRow?.password ?? "",

@@ -254,6 +254,7 @@ interface Env {
   PURGE_URL?: string;
   PURGE_TOKEN?: string;
   PROJECT_CACHE_PREFIX?: string;
+  LOCAL_MAILPIT_URL?: string;
   [key: string]: unknown;
 }
 

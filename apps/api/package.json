@@ -27,7 +27,7 @@
     "@scalius/shared": "workspace:*",
     "agents": "0.22.0",
     "bcryptjs": "^3.0.3",
-    "better-auth": "^1.6.26",
+    "better-auth": "^1.7.2",
     "drizzle-orm": "^0.45.2",
     "hono": "4.13.5",
     "jsonwebtoken": "^9.0.3",

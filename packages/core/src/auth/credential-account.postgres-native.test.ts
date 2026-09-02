@@ -96,11 +96,13 @@ describe.runIf(nativePostgresUrl)("native PostgreSQL credential conformance", ()
       const storedAccount = await db.select({
         providerId: account.providerId,
         accountId: account.accountId,
+        issuer: account.issuer,
         password: account.password,
       }).from(account).where(eq(account.id, accountId)).get();
       expect(storedAccount).toMatchObject({
         providerId: "credential",
         accountId: invitedUserId,
+        issuer: "local:credential",
       });
       expect(await verifyPassword({
         hash: storedAccount?.password ?? "",

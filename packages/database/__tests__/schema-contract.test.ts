@@ -35,10 +35,10 @@ describe("database schema contract", () => {
       sourceSha256: "a".repeat(64),
     }], /has 1 row/i],
     [[...CURRENT_DATABASE_SCHEMA_MIGRATIONS, {
-      version: 60,
-      name: "0060_future",
+      version: 61,
+      name: "0061_future",
       sourceSha256: "b".repeat(64),
-    }], /has 11 row/i],
+    }], /has 12 row/i],
     [[{
       ...CURRENT_DATABASE_SCHEMA_MIGRATIONS[0],
       name: "0050_wrong",
