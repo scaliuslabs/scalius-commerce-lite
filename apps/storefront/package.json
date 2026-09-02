@@ -32,7 +32,7 @@
     "@scalius/api-client": "workspace:*",
     "@scalius/shared": "workspace:*",
     "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.4",
+    "@types/react-dom": "^19.2.5",
     "astro": "^7.2.10",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -45,7 +45,7 @@
     "react-dom": "^19.2.8",
     "react-phone-number-input": "^3.4.18",
     "sharp": "0.35.3",
-    "sonner": "^2.0.7",
+    "sonner": "^2.0.8",
     "tailwind-merge": "^3.6.0",
     "tailwindcss": "^4.3.3"
   },
