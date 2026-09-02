@@ -45,7 +45,7 @@
   },
   "dependencies": {
     "commander": "15.0.0",
-    "open": "11.0.0"
+    "open": "11.0.2"
   },
   "devDependencies": {
     "@scalius/tsconfig": "workspace:*",
