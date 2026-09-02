@@ -2,15 +2,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Hono } from "hono";
 
 type TestPolarPayload = {
-  id?: string;
   type: string;
   data: {
     id: string;
     status: string;
-    checkout_id?: string;
-    amount?: number;
-    total_amount?: number;
-    refunded_amount?: number;
+    checkoutId?: string | null;
+    totalAmount?: number;
+    refundedAmount?: number;
     currency?: string;
     metadata?: Record<string, string>;
   };
@@ -18,13 +16,12 @@ type TestPolarPayload = {
 
 const mocks = vi.hoisted(() => ({
   payload: {
-    id: "evt_polar_1",
     type: "order.paid",
     data: {
       id: "polar_order_1",
-      checkout_id: "checkout_1",
+      checkoutId: "checkout_1",
       status: "paid",
-      total_amount: 1200,
+      totalAmount: 1200,
       currency: "usd",
       metadata: { orderId: "ord_1", paymentType: "full" },
     },
@@ -93,13 +90,12 @@ describe("Polar webhook route", () => {
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
 
     mocks.payload = {
-      id: "evt_polar_1",
       type: "order.paid",
       data: {
         id: "polar_order_1",
-        checkout_id: "checkout_1",
+        checkoutId: "checkout_1",
         status: "paid",
-        total_amount: 1200,
+        totalAmount: 1200,
         currency: "usd",
         metadata: { orderId: "ord_1", paymentType: "full" },
       },
@@ -135,7 +131,7 @@ describe("Polar webhook route", () => {
     expect(mocks.claimWebhookEvent).toHaveBeenCalledWith(
       { id: "db" },
       expect.objectContaining({
-        id: "polar:order-paid:evt_polar_1",
+        id: "polar:order-paid:polar_order_1:paid:ord_1",
         provider: "polar",
         eventType: "order.paid",
         orderId: "ord_1",
@@ -150,48 +146,19 @@ describe("Polar webhook route", () => {
     }));
     expect(mocks.markWebhookEventQueued).toHaveBeenCalledWith(
       { id: "db" },
-      "polar:order-paid:evt_polar_1",
+      "polar:order-paid:polar_order_1:paid:ord_1",
       expect.objectContaining({ eventType: "order.paid" }),
     );
     expect(mocks.markWebhookEventFailed).not.toHaveBeenCalled();
   });
 
-  it("falls back to a legacy checkout-shaped data.id and amount only when checkout_id and total_amount are absent", async () => {
+  it("does not use a Polar order id when order.paid is missing checkoutId", async () => {
     mocks.payload = {
-      id: "evt_polar_legacy_paid",
-      type: "order.paid",
-      data: {
-        id: "co_legacy_checkout",
-        status: "paid",
-        amount: 900,
-        currency: "usd",
-        metadata: { orderId: "ord_legacy", paymentType: "full" },
-      },
-    };
-    const queue = { send: vi.fn().mockResolvedValue(undefined) };
-    const app = createApp({ id: "db" }, queue);
-
-    const response = await postWebhook(app, {
-      PAYMENT_EVENTS_QUEUE: queue as unknown as Queue,
-    });
-
-    expect(response.status).toBe(200);
-    expect(queue.send).toHaveBeenCalledWith(expect.objectContaining({
-      type: "payment.polar.confirmed",
-      orderId: "ord_legacy",
-      checkoutId: "co_legacy_checkout",
-      amount: 900,
-    }));
-  });
-
-  it("does not fall back to a Polar order id when order.paid is missing checkout_id", async () => {
-    mocks.payload = {
-      id: "evt_polar_missing_checkout",
       type: "order.paid",
       data: {
         id: "polar_order_missing_checkout",
         status: "paid",
-        total_amount: 1200,
+        totalAmount: 1200,
         currency: "usd",
         metadata: { orderId: "ord_missing_checkout", paymentType: "full" },
       },
@@ -207,21 +174,20 @@ describe("Polar webhook route", () => {
     expect(queue.send).not.toHaveBeenCalled();
     expect(mocks.markWebhookEventProcessed).toHaveBeenCalledWith(
       { id: "db" },
-      "polar:order-paid:evt_polar_missing_checkout",
+      "polar:order-paid:polar_order_missing_checkout:paid:ord_missing_checkout",
       expect.objectContaining({ eventType: "order.paid", enqueued: false }),
     );
   });
 
-  it("maps Polar order refunds through checkout_id so they reconcile with the stored polarCheckoutId", async () => {
+  it("maps normalized Polar order refunds through checkoutId", async () => {
     mocks.payload = {
-      id: "evt_polar_refund_1",
       type: "order.refunded",
       data: {
         id: "polar_order_1",
-        checkout_id: "checkout_1",
+        checkoutId: "checkout_1",
         status: "refunded",
-        refunded_amount: 1200,
-        total_amount: 1200,
+        refundedAmount: 1200,
+        totalAmount: 1200,
         currency: "usd",
         metadata: { orderId: "ord_1" },
       },
@@ -294,7 +260,7 @@ describe("Polar webhook route", () => {
     expect(response.status).toBe(503);
     expect(mocks.markWebhookEventFailed).toHaveBeenCalledWith(
       { id: "db" },
-      "polar:order-paid:evt_polar_1",
+      "polar:order-paid:polar_order_1:paid:ord_1",
       expect.objectContaining({ error: "queue down" }),
     );
     expect(mocks.markWebhookEventQueued).not.toHaveBeenCalled();
@@ -305,10 +271,10 @@ describe("Polar webhook route", () => {
       type: "order.refunded",
       data: {
         id: "polar_order_1",
-        checkout_id: "checkout_1",
+        checkoutId: "checkout_1",
         status: "partially_refunded",
-        refunded_amount: 500,
-        total_amount: 1200,
+        refundedAmount: 500,
+        totalAmount: 1200,
         metadata: { orderId: "ord_1" },
       },
     });
@@ -316,10 +282,10 @@ describe("Polar webhook route", () => {
       type: "order.refunded",
       data: {
         id: "polar_order_1",
-        checkout_id: "checkout_1",
+        checkoutId: "checkout_1",
         status: "refunded",
-        refunded_amount: 1200,
-        total_amount: 1200,
+        refundedAmount: 1200,
+        totalAmount: 1200,
         metadata: { orderId: "ord_1" },
       },
     });

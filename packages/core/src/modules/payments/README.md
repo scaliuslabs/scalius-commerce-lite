@@ -52,7 +52,7 @@ COD is the exception: no external gateway, no webhook, no queue. Order is placed
 | `gateway-settings.ts` | `getStripeSettings()`, `getSSLCommerzSettings()`, `getPolarSettings()`, `getActivePaymentMethods()`, `getPaymentGatewaySettingsSnapshot()`, `upsertSetting()`, `upsertEncryptedSetting()` | Reads authoritative gateway settings from the relational provider, resolves a single request-scoped snapshot where several gateways are needed, never retains decrypted credentials in Worker-global memory or KV, encrypts provider-secret writes, and registers static metadata for all four gateways |
 | `stripe.ts` | `StripeProvider` class, `createPaymentIntent()`, `capturePaymentIntent()`, `cancelPaymentIntent()`, `createRefund()`, `retrieveStripeRefund()`, `listStripeRefundsForCharge()`, `verifyStripeWebhook()`, `getStripe()` | Stripe SDK wrapper; module-level singleton with key rotation detection |
 | `sslcommerz.ts` | `SSLCommerzProvider` class, `initSSLCommerzSession()`, `validateSSLCommerzIPN()`, `validateSSLCommerzPayment()`, `initiateSSLCommerzRefund()`, `querySSLCommerzRefundStatus()` | SSLCommerz REST API wrapper; no SDK, uses native `fetch`; sandbox/production URL switching. Uses `getDecimalPlaces()` for ISO 4217-aware amount formatting. |
-| `polar.ts` | `PolarProvider` class, `createPolarCheckout()`, `createPolarRefund()`, `listPolarRefunds()`, `verifyPolarWebhook()`, `processPolarWebhookRefund()` | Polar SDK wrapper; uses `@polar-sh/sdk` + `standardwebhooks` for signature verification. External Polar refunds reconcile cumulative provider snapshots into local refund-payment deltas. |
+| `polar.ts` | `PolarProvider` class, `createPolarCheckout()`, `createPolarRefund()`, `listPolarRefunds()`, `verifyPolarWebhook()`, `processPolarWebhookRefund()` | Polar SDK wrapper; its webhook helper verifies signatures and validates generated event schemas. External Polar refunds reconcile cumulative provider snapshots into local refund-payment deltas. |
 | `cod.ts` | `CODProvider` class, `initCODTracking()`, `recordCODCollection()`, `recordCODFailure()`, `markCODReturned()` | Cash on Delivery tracking; DB-only operations, no external gateway |
 | `process-payment.ts` | `processPaymentConfirmed()`, `processPaymentFailed()`, `releaseOrderInventory()`, `recordWebhookEvent()` | Shared post-payment business logic called by queue consumer |
 | `payment-state.ts` | `computeOrderPaymentState()`, `computePaymentStateAfterPayment()`, `computePaymentStateAfterRefund()` | Canonical order payment-state arithmetic for `paidAmount`, `balanceDue`, and `paymentStatus` |
@@ -176,10 +176,10 @@ Payment webhook handlers attach the source `webhookEventId` to queued payment me
 ### Polar
 
 - **Buyer-checkout eligibility**: Polar credentials and webhooks remain supported for existing-order reconciliation, but Polar is not returned as an active method for the current shipping-based storefront. [Polar's merchant-of-record acceptable-use policy](https://polar.sh/legal/acceptable-use-policy) prohibits physical goods. A future digital-only product/fulfillment model must be designed before enabling new Polar buyer checkouts.
-- **SDK**: `@polar-sh/sdk` (`Polar` class) + `standardwebhooks` (`Webhook` class for signature verification)
+- **SDK**: `@polar-sh/sdk` (`Polar` client plus its webhook validator)
 - **Client singleton**: Module-level `_cachedClient` keyed by access token and sandbox/production server so credential or environment rotation takes effect in warm isolates
 - **Session creation**: `createPolarCheckout()` uses ad-hoc pricing -- a Polar Product must exist but the actual amount is set per-checkout via `prices` override. Returns `checkoutUrl` (redirect) + `checkoutId`, and forwards trusted success/cancel URLs from the API route.
-- **Webhook verification**: `verifyPolarWebhook()` base64-encodes the webhook secret before passing to `standardwebhooks`. Synchronous verification (not async).
+- **Webhook verification**: `verifyPolarWebhook()` delegates signature verification, secret encoding, event-type dispatch, and runtime payload validation to `@polar-sh/sdk/webhooks`. Synchronous verification (not async).
 - **Webhook events handled**: `checkout.updated` (status failed/expired -> enqueue failed), `order.paid` (enqueue confirmed), `order.refunded` (enqueue refund -> update payment and allowed order status + pre-fulfillment inventory)
 - **Replay protection**: Durable `webhook_events` claim before queueing
 - **External refund semantics**: Polar `order.refunded.refunded_amount` is cumulative for the Polar checkout. The queue payload must preserve `polarCheckoutId`; `processPolarWebhookRefund()` resolves the local succeeded Polar payment row, calculates the target refunded amount against that source payment, records only the new local delta as a refund payment row, and derives full-vs-partial order state from the whole local payment ledger. Repeated or larger cumulative events converge instead of compounding against current `orders.paidAmount`, and a fully-refunded Polar deposit remains a partial merchant-order refund if other captured payments remain.
@@ -396,7 +396,6 @@ Normal checkout order creation does not request an attached `initialPaymentSessi
 
 - `stripe` -- Stripe SDK v17+ (Web Fetch API native)
 - `@polar-sh/sdk` -- Polar SDK
-- `standardwebhooks` -- Polar webhook signature verification
 - `@scalius/database` -- `orders`, `orderItems`, `orderPayments`, `paymentPlans`, `codTracking`, `webhookEvents`, `settings`, `siteSettings` tables
 - `@scalius/core/errors` -- `ValidationError`, `ServiceUnavailableError`, `NotFoundError`, `ConflictError`
 - `@scalius/core/modules/payments/order-currency` -- immutable order currency/precision resolution, ledger-currency assertions, and snapshot-aware rounding

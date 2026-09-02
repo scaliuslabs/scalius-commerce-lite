@@ -20,29 +20,25 @@ export const polarWebhookRoutes = new OpenAPIHono<{ Bindings: Env }>();
 type PolarWebhookData = {
     id: string;
     status?: string;
-    amount?: number;
-    total_amount?: number;
-    refunded_amount?: number;
-    checkout_id?: string;
+    totalAmount?: number;
+    refundedAmount?: number;
+    checkoutId?: string | null;
     currency?: string;
     metadata?: Record<string, string>;
     [key: string]: unknown;
 };
 
 export function getPolarSourceEventId(payload: {
-    id?: string;
     type: string;
     data: PolarWebhookData;
 }): string {
-    if (payload.id) return payload.id;
-
     if (payload.type === "order.refunded") {
         return [
             payload.data.id,
-            payload.data.checkout_id,
+            payload.data.checkoutId,
             payload.data.status,
-            payload.data.refunded_amount,
-            payload.data.total_amount,
+            payload.data.refundedAmount,
+            payload.data.totalAmount,
             payload.data.metadata?.orderId,
         ].filter((part) => part !== undefined && part !== null && part !== "").join(":");
     }
@@ -54,30 +50,14 @@ export function getPolarSourceEventId(payload: {
     ].filter((part) => part !== undefined && part !== null && part !== "").join(":");
 }
 
-const LEGACY_POLAR_CHECKOUT_ID_PATTERN = /^(?:checkout|polar_checkout|co)_[A-Za-z0-9_-]+$/;
-
-function getNonEmptyString(value: unknown): string | undefined {
-    if (typeof value !== "string") return undefined;
-    const trimmed = value.trim();
-    return trimmed ? trimmed : undefined;
-}
-
 function getPolarCheckoutIdFromOrderPayload(data: PolarWebhookData): string | undefined {
-    const checkoutId = getNonEmptyString(data.checkout_id);
-    if (checkoutId) return checkoutId;
-
-    const legacyId = getNonEmptyString(data.id);
-    return legacyId && LEGACY_POLAR_CHECKOUT_ID_PATTERN.test(legacyId)
-        ? legacyId
-        : undefined;
+    return data.checkoutId?.trim() || undefined;
 }
 
 function getPolarOrderPaidAmount(data: PolarWebhookData): number | undefined {
-    return typeof data.total_amount === "number" && Number.isFinite(data.total_amount)
-        ? data.total_amount
-        : typeof data.amount === "number" && Number.isFinite(data.amount)
-            ? data.amount
-            : undefined;
+    return typeof data.totalAmount === "number" && Number.isFinite(data.totalAmount)
+        ? data.totalAmount
+        : undefined;
 }
 
 polarWebhookRoutes.post("/", async (c) => {
@@ -182,7 +162,7 @@ polarWebhookRoutes.post("/", async (c) => {
                     if (orderId) {
                         const checkoutId = getPolarCheckoutIdFromOrderPayload(payload.data);
                         if (!checkoutId) {
-                            console.warn(`[Polar Webhook] order.paid missing checkout_id and data.id is not a legacy checkout id, skipping. orderId=${orderId}`);
+                            console.warn(`[Polar Webhook] order.paid missing checkoutId, skipping. orderId=${orderId}`);
                             break;
                         }
 
@@ -203,14 +183,10 @@ polarWebhookRoutes.post("/", async (c) => {
                 }
 
                 case "order.refunded": {
-                    // Polar order.refunded webhook data is a full Order object (snake_case).
-                    // Fields: id, status ("refunded"|"partially_refunded"), refunded_amount (cents),
-                    //         total_amount (cents), currency, metadata.orderId, checkout_id.
-                    const polarData = payload.data as Record<string, unknown>;
-                    const polarStatus = polarData.status as string | undefined;
-                    const refundedAmountCents = (polarData.refunded_amount as number) ?? 0;
-                    const totalAmountCents = (polarData.total_amount as number) ?? 0;
-                    const polarCurrency = (polarData.currency as string) ?? "usd";
+                    const polarStatus = payload.data.status;
+                    const refundedAmountCents = payload.data.refundedAmount ?? 0;
+                    const totalAmountCents = payload.data.totalAmount ?? 0;
+                    const polarCurrency = payload.data.currency ?? "usd";
                     const polarCheckoutId = getPolarCheckoutIdFromOrderPayload(payload.data);
 
                     if (orderId && polarCheckoutId && refundedAmountCents > 0) {
@@ -227,7 +203,7 @@ polarWebhookRoutes.post("/", async (c) => {
                         enqueued = true;
                         console.log(`[Polar Webhook] Enqueued payment.polar.refunded for order ${orderId} (${refundedAmountCents} ${polarCurrency} cents, status: ${polarStatus})`);
                     } else {
-                        console.warn(`[Polar Webhook] order.refunded missing orderId, checkout_id, or refundedAmount, skipping. orderId=${orderId}, checkoutId=${polarCheckoutId ?? "missing"}, refundedAmount=${refundedAmountCents}`);
+                        console.warn(`[Polar Webhook] order.refunded missing orderId, checkoutId, or refundedAmount, skipping. orderId=${orderId}, checkoutId=${polarCheckoutId ?? "missing"}, refundedAmount=${refundedAmountCents}`);
                     }
                     break;
                 }
