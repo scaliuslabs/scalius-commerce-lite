@@ -42,7 +42,11 @@ import {
   type PageIdPayload,
   type PageMutationPayload,
 } from "@/lib/api-functions/pages";
-import { pageFormSchema, type PageFormValues } from "@/lib/form-schemas";
+import {
+  pageFormSchema,
+  type PageFormInput,
+  type PageFormValues,
+} from "@/lib/form-schemas";
 import { useEntityFormSubmit } from "@/hooks/use-entity-form-submit";
 import { queryKeys } from "@/lib/query-keys";
 import { usePermissions } from "@/contexts/PermissionContext";
@@ -114,7 +118,7 @@ export function PageForm({
     setIsClient(true);
   }, []);
 
-  const form = useForm<PageFormValues>({
+  const form = useForm<PageFormInput, unknown, PageFormValues>({
     resolver: zodResolver(pageFormSchema),
     defaultValues: {
       contentType,

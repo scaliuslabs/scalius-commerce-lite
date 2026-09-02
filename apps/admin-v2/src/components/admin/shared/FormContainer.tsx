@@ -6,7 +6,10 @@ import { ErrorBoundary } from "@/components/admin/ErrorBoundary";
 import { UnsavedChangesGuard } from "./UnsavedChangesGuard";
 import { getFormEntityLabel } from "./form-copy";
 
-interface FormContainerProps<T extends FieldValues> {
+interface FormContainerProps<
+  TFieldValues extends FieldValues,
+  TTransformedValues extends FieldValues = TFieldValues,
+> {
   /** The section name shown as breadcrumb link (e.g., "Categories") */
   title: string;
   /** Accepted for older form call sites; the current bottom action bar no longer displays it. */
@@ -33,7 +36,7 @@ interface FormContainerProps<T extends FieldValues> {
   /** Custom save button label. Defaults to "Save {title}" / "Create {title}" */
   saveLabel?: string;
   /** The react-hook-form instance — used for isDirty and to provide <Form> context */
-  form: UseFormReturn<T>;
+  form: UseFormReturn<TFieldValues, unknown, TTransformedValues>;
   /** Called when the save button is clicked or the form is submitted — typically `handleSubmit(onSave)` */
   onSubmit: () => void;
   /** Form field content */
@@ -53,7 +56,10 @@ interface FormContainerProps<T extends FieldValues> {
  *
  * Layout: Breadcrumb (top) → Form content → Action bar (sticky bottom).
  */
-export function FormContainer<T extends FieldValues>({
+export function FormContainer<
+  TFieldValues extends FieldValues,
+  TTransformedValues extends FieldValues = TFieldValues,
+>({
   title,
   isEdit,
   isSubmitting,
@@ -70,7 +76,7 @@ export function FormContainer<T extends FieldValues>({
   children,
   formClassName = "-mt-4 pb-6",
   allowSamePathStateNavigation = false,
-}: FormContainerProps<T>) {
+}: FormContainerProps<TFieldValues, TTransformedValues>) {
   const entityLabel = getFormEntityLabel(title, newLabel);
 
   return (

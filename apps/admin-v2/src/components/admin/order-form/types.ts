@@ -95,13 +95,14 @@ export interface Product {
       )
       .min(1, "Add at least one sellable item"),
     discountAmount: z.coerce
-      .number()
+      .number<number>()
       .min(0, "Discount must be greater than or equal to 0")
       .nullable(),
     shippingCharge: z.coerce
-      .number()
+      .number<number>()
       .min(0, "Shipping charge must be greater than or equal to 0"),
     status: z.string().min(1, "Status is required").optional(),
   });
 
-  export type OrderFormValues = z.infer<typeof orderFormSchema>;
+  export type OrderFormInput = z.input<typeof orderFormSchema>;
+  export type OrderFormValues = z.output<typeof orderFormSchema>;

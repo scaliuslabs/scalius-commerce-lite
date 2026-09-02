@@ -25,6 +25,7 @@ import { LayoutSettingsSection } from "./LayoutSettingsSection";
 import { CollectionContentSection } from "./CollectionContentSection";
 import {
   collectionFormSchema,
+  type CollectionFormInput,
   type CollectionFormValues,
   type CollectionFormProps,
   type Product,
@@ -54,7 +55,7 @@ export function CollectionForm({
   const { collections: collectionActions } = useCatalogActionPermissions();
   const canSave = isEdit ? collectionActions.canEdit : collectionActions.canCreate;
   const [knownProducts, setKnownProducts] = React.useState<Product[]>(products);
-  const form = useForm<CollectionFormValues>({
+  const form = useForm<CollectionFormInput, unknown, CollectionFormValues>({
     resolver: zodResolver(collectionFormSchema),
     defaultValues: {
       name: "",

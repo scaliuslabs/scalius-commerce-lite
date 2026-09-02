@@ -21,13 +21,18 @@ import { SearchableSelect } from "../../ui/searchable-select";
 import { ChevronDown, ChevronUp, ImageIcon, Layers, Package, Trash2 } from "lucide-react";
 import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
 import { ADMIN_IMAGE_PRESETS } from "~/lib/admin-image-presentation";
-import type { CollectionFormValues, Category, Product } from "./types";
+import type {
+  CollectionFormInput,
+  CollectionFormValues,
+  Category,
+  Product,
+} from "./types";
 import { ProductPickerDialog } from "./ProductPickerDialog";
 
 const MAX_MEMBERSHIP_IDS = 90;
 
 interface ProductSelectionSectionProps {
-  form: UseFormReturn<CollectionFormValues>;
+  form: UseFormReturn<CollectionFormInput, unknown, CollectionFormValues>;
   selectedSource: "manual" | "dynamic";
   categories: Category[];
   selectedCategories: Category[];

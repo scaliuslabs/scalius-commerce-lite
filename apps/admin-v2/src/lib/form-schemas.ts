@@ -48,8 +48,8 @@ const mediaFileFormSchema = z.object({
   width: z.number().nullable().optional(),
   height: z.number().nullable().optional(),
   folderId: z.string().nullable().optional(),
-  createdAt: z.coerce.date(),
-  updatedAt: z.coerce.date().optional(),
+  createdAt: z.coerce.date<Date>(),
+  updatedAt: z.coerce.date<Date>().optional(),
 });
 
 // ═══════════════════════════════════════════════════════════════════
@@ -115,7 +115,8 @@ export const categoryFormSchema = z
     }
   });
 
-export type CategoryFormValues = z.infer<typeof categoryFormSchema>;
+export type CategoryFormInput = z.input<typeof categoryFormSchema>;
+export type CategoryFormValues = z.output<typeof categoryFormSchema>;
 
 // ═══════════════════════════════════════════════════════════════════
 //  PAGES
@@ -167,7 +168,7 @@ export const pageFormSchema = z
     noIndex: z.boolean(),
     excludeFromSitemap: z.boolean(),
     publicationMode: z.enum(PAGE_PUBLICATION_MODES),
-    publishedAt: z.coerce.date().nullable().optional(),
+    publishedAt: z.coerce.date<Date>().nullable().optional(),
     hideHeader: z.boolean(),
     hideFooter: z.boolean(),
     hideTitle: z.boolean(),
@@ -224,7 +225,8 @@ export const pageFormSchema = z
     }
   });
 
-export type PageFormValues = z.infer<typeof pageFormSchema>;
+export type PageFormInput = z.input<typeof pageFormSchema>;
+export type PageFormValues = z.output<typeof pageFormSchema>;
 
 // ═══════════════════════════════════════════════════════════════════
 //  CUSTOMERS
@@ -272,8 +274,8 @@ export const analyticsFormSchema = z
     allowDuplicateProvider: z.boolean().default(false),
     config: z.string().min(1, "Configuration is required"),
     location: z.enum(["head", "body_start", "body_end"]),
-    createdAt: z.coerce.date().optional(),
-    updatedAt: z.coerce.date().optional(),
+    createdAt: z.coerce.date<Date>().optional(),
+    updatedAt: z.coerce.date<Date>().optional(),
   })
   .superRefine((data, context) => {
     const configError = getActiveAnalyticsConfigError(data);
@@ -285,7 +287,8 @@ export const analyticsFormSchema = z
     });
   });
 
-export type AnalyticsFormValues = z.infer<typeof analyticsFormSchema>;
+export type AnalyticsFormInput = z.input<typeof analyticsFormSchema>;
+export type AnalyticsFormValues = z.output<typeof analyticsFormSchema>;
 
 // ═══════════════════════════════════════════════════════════════════
 //  PRODUCTS (re-export from product-form/types.ts)
@@ -302,6 +305,7 @@ export {
 
 export {
   collectionFormSchema,
+  type CollectionFormInput,
   type CollectionFormValues,
 } from "@/components/admin/collection-form/types";
 
@@ -311,6 +315,7 @@ export {
 
 export {
   orderFormSchema,
+  type OrderFormInput,
   type OrderFormValues,
 } from "@/components/admin/order-form/types";
 

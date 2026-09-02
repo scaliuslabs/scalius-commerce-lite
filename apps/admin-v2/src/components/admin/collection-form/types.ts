@@ -99,7 +99,8 @@ export const collectionFormSchema = z.object({
   }
 });
 
-export type CollectionFormValues = z.infer<typeof collectionFormSchema>;
+export type CollectionFormInput = z.input<typeof collectionFormSchema>;
+export type CollectionFormValues = z.output<typeof collectionFormSchema>;
 
 export interface CollectionFormProps {
   categories: Category[];

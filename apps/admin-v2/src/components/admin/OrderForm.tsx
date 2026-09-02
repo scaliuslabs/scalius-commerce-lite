@@ -27,6 +27,7 @@ import { quoteManualOrder } from "@/lib/api-functions/orders";
 // Imports for our new, refactored components and types
 import {
   orderFormSchema,
+  type OrderFormInput,
   type OrderFormValues,
   type DeliveryLocation,
   type OrderFormProps,
@@ -126,7 +127,7 @@ export function OrderForm({
   const createRequestKey = React.useRef<string | null>(
     isEdit ? null : getOrCreateAdminOrderRequestKey(),
   );
-  const form = useForm<OrderFormValues>({
+  const form = useForm<OrderFormInput, unknown, OrderFormValues>({
     resolver: zodResolver(orderFormSchema),
     defaultValues: {
       customerName: "",

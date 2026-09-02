@@ -27,7 +27,11 @@ import { Textarea } from "../../ui/textarea";
 import { Switch } from "../../ui/switch";
 import { X } from "lucide-react";
 import { ResourceDiscoveryReadiness } from "~/components/admin/shared/ResourceDiscoveryReadiness";
-import type { CollectionFormValues, Product } from "./types";
+import type {
+  CollectionFormInput,
+  CollectionFormValues,
+  Product,
+} from "./types";
 import { collectionPresentations } from "./types";
 import { ProductPickerPopover } from "./ProductPickerPopover";
 import { CharacterCounter } from "../../ui/character-counter";
@@ -36,7 +40,7 @@ import { CollapsibleCard } from "~/components/admin/product-form/CollapsibleCard
 const PENDING_PRODUCT_LABEL = "Loading product label...";
 
 interface LayoutSettingsSectionProps {
-  form: UseFormReturn<CollectionFormValues>;
+  form: UseFormReturn<CollectionFormInput, unknown, CollectionFormValues>;
   selectedPresentation: "grid" | "carousel";
   knownProducts: Product[];
   selectedCategoryIds: string[];

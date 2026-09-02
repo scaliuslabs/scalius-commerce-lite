@@ -29,6 +29,7 @@ import { Textarea } from "../ui/textarea";
 import { FormContainer } from "@/components/admin/shared/FormContainer";
 import {
   analyticsFormSchema,
+  type AnalyticsFormInput,
   type AnalyticsFormValues,
   type AnalyticsScriptType,
 } from "@/lib/form-schemas";
@@ -167,7 +168,7 @@ export function AnalyticsForm({
   const canToggle = hasPermission(PERMISSIONS.ANALYTICS_TOGGLE);
   const defaultType = routeSelectedType ?? defaultValues?.type ?? "cloudflare_web_analytics";
   const providerDeliveryDefaults = getAnalyticsProviderDeliveryDefaults(defaultType);
-  const form = useForm<AnalyticsFormValues>({
+  const form = useForm<AnalyticsFormInput, unknown, AnalyticsFormValues>({
     resolver: zodResolver(analyticsFormSchema),
     defaultValues: {
       name: "",
