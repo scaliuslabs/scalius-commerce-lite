@@ -74,6 +74,7 @@ export const ProductSelectionSection = React.memo(
           <FormField
             control={form.control}
             name="config.source"
+            rules={{ deps: ["config.productIds", "config.categoryIds"] }}
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Product selection</FormLabel>
