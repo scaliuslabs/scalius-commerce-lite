@@ -447,7 +447,7 @@ importers:
         version: 6.0.5(@types/node@26.2.0)(@types/react-dom@19.2.5(@types/react@19.2.18))(@types/react@19.2.18)(esbuild@0.28.1)(jiti@2.7.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(supports-color@10.2.2)(tsx@4.23.13)(yaml@2.9.0)
       '@nanostores/react':
         specifier: ^1.1.0
-        version: 1.1.0(nanostores@1.4.2)(react@19.2.8)
+        version: 1.1.0(nanostores@1.5.2)(react@19.2.8)
       '@player.style/microvideo':
         specifier: 0.2.0
         version: 0.2.0(media-chrome@4.19.2(react@19.2.8))
@@ -515,8 +515,8 @@ importers:
         specifier: ^6.0.1
         version: 6.0.1
       nanostores:
-        specifier: ^1.4.2
-        version: 1.4.2
+        specifier: ^1.5.2
+        version: 1.5.2
       react:
         specifier: ^19.2.8
         version: 19.2.8
@@ -5865,6 +5865,10 @@ packages:
     resolution: {integrity: sha512-Wxv8Roefr2nqtiRG0bnaFlpYqpIVtOEeJZHaH+4nGgOK1/7n6OHOuHCb/bhqrNQgZM8fyd0s1PqhdrJc9Ib44g==}
     engines: {node: ^20.0.0 || >=22.0.0}
 
+  nanostores@1.5.2:
+    resolution: {integrity: sha512-B0UbxzK1s0CN8Xht6r+7iT5+xV8PTaRERR1nATeplRv1Rw5YLWfVAid0hkqY3EceqpG4RjTk8GAwIxQY39Rnwg==}
+    engines: {node: ^20.0.0 || >=22.0.0}
+
   natural-compare@1.4.0:
     resolution: {integrity: sha512-OWND8ei3VtNC9h7V60qff3SVobHr996CTwgxubgyQYEpg290h9J0buyECNNJexkFm5sOajh5G116RYA1c8ZMSw==}
 
@@ -8582,9 +8586,9 @@ snapshots:
       '@modelcontextprotocol/core': 2.0.0
       zod: 4.4.3
 
-  '@nanostores/react@1.1.0(nanostores@1.4.2)(react@19.2.8)':
+  '@nanostores/react@1.1.0(nanostores@1.5.2)(react@19.2.8)':
     dependencies:
-      nanostores: 1.4.2
+      nanostores: 1.5.2
       react: 19.2.8
 
   '@napi-rs/wasm-runtime@1.2.2(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)':
@@ -12608,6 +12612,8 @@ snapshots:
   nanoid@6.0.1: {}
 
   nanostores@1.4.2: {}
+
+  nanostores@1.5.2: {}
 
   natural-compare@1.4.0: {}
 
