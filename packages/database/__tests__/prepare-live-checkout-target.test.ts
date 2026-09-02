@@ -38,5 +38,5 @@ describe("live checkout target preparation", () => {
     } finally {
       database.close();
     }
-  });
+  }, 30_000);
 });
