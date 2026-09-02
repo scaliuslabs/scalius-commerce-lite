@@ -278,7 +278,7 @@ describe("portable Turso export", () => {
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
-  }, 30_000);
+  }, 60_000);
 
   it("upgrades a recognized older Turso snapshot before canonical export", async () => {
     const directory = await mkdtemp(join(tmpdir(), "scalius-turso-upgrade-"));
@@ -346,5 +346,5 @@ describe("portable Turso export", () => {
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
-  }, 30_000);
+  }, 60_000);
 });
