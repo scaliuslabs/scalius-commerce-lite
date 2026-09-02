@@ -40,7 +40,7 @@
     "lucide-react": "^1.30.0",
     "media-chrome": "4.19.2",
     "nanoid": "^6.0.1",
-    "nanostores": "^1.4.2",
+    "nanostores": "^1.5.2",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-phone-number-input": "^3.4.18",
