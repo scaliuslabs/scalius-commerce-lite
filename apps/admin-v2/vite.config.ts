@@ -86,6 +86,10 @@ export default defineConfig(({ mode }) => ({
       cloudflare({
         viteEnvironment: { name: "ssr" },
         persistState: { path: persistStatePath },
+        config:
+          mode === "development"
+            ? { vars: { LOCAL_MAILPIT_URL: "http://127.0.0.1:8025" } }
+            : undefined,
       }),
     tanstackStart(),
     viteReact(),

@@ -78,7 +78,7 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
     setIsLoading(true);
 
     try {
-      const result = await authClient.twoFactor.enable({ password });
+      const result = await authClient.twoFactor.enable({ password, method: "totp" });
 
       if (result.error) {
         setError(result.error.message || "Failed to enable 2FA");
@@ -86,6 +86,10 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
       }
 
       if (result.data) {
+        if (result.data.method !== "totp") {
+          setError("Failed to create two-factor recovery codes");
+          return;
+        }
         setTotpUri(result.data.totpURI);
         setBackupCodes(result.data.backupCodes || []);
 

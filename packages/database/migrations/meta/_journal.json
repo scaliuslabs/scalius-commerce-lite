@@ -421,6 +421,13 @@
       "when": 1788096000000,
       "tag": "0059_checkout_delivery_phone_identity",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "6",
+      "when": 1788336788166,
+      "tag": "0060_better_auth_account_identity",
+      "breakpoints": true
     }
   ]
 }
