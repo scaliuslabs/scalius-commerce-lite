@@ -73,7 +73,7 @@ interface ExecutionContext {
       purgeGroups(groups: string[]): Promise<void>;
     };
   };
-  readonly cache: WorkersCacheContext;
+  readonly cache?: WorkersCacheContext;
 }
 
 interface WorkersCachePurgeResult {
