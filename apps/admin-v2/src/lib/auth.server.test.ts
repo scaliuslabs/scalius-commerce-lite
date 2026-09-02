@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   cfEnv: {},
   authHandler: vi.fn(),
   createAuth: vi.fn(),
+  selectGet: vi.fn(),
   updateSet: vi.fn(),
   updateWhere: vi.fn(),
 }));
@@ -16,6 +17,11 @@ vi.mock("@scalius/core/auth", () => ({
 
 vi.mock("@scalius/database/client", () => ({
   getDb: () => ({
+    select: () => ({
+      from: () => ({
+        where: () => ({ get: mocks.selectGet }),
+      }),
+    }),
     update: () => ({
       set: mocks.updateSet.mockImplementation(() => ({
         where: mocks.updateWhere,
@@ -24,10 +30,11 @@ vi.mock("@scalius/database/client", () => ({
   }),
 }));
 
-describe("admin Better Auth handler trusted-device policy", () => {
+describe("admin Better Auth handler", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.authHandler.mockResolvedValue(new Response("ok"));
+    mocks.selectGet.mockResolvedValue({ method: "email" });
     mocks.updateWhere.mockResolvedValue({ changes: 1 });
     mocks.createAuth.mockReturnValue({ handler: mocks.authHandler });
   });
@@ -132,6 +139,38 @@ describe("admin Better Auth handler trusted-device policy", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toContain("no-store");
     expect(mocks.authHandler).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ["email", ["totp", "otp"], ["otp", "totp"]],
+    ["totp", ["totp", "otp"], ["totp", "otp"]],
+    ["email", ["totp"], ["totp"]],
+  ])("orders available 2FA methods by the saved %s preference", async (
+    savedMethod,
+    availableMethods,
+    expectedMethods,
+  ) => {
+    mocks.selectGet.mockResolvedValue({ method: savedMethod });
+    mocks.authHandler.mockResolvedValue(Response.json({
+      twoFactorRedirect: true,
+      twoFactorMethods: availableMethods,
+    }));
+    const { createAuthHandler } = await import("./auth.server");
+
+    const response = await createAuthHandler()(
+      new Request("https://dashboard.scalius.com/api/auth/sign-in/email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: "Admin@Local.Scalius.Test ",
+          password: "test-password",
+        }),
+      }),
+    );
+
+    await expect(response.json()).resolves.toMatchObject({
+      twoFactorMethods: expectedMethods,
+    });
   });
 
   it("marks only a session returned by successful Better Auth 2FA verification", async () => {
