@@ -3,7 +3,7 @@
 // Pattern mirrors stripe.ts / sslcommerz.ts — thin wrappers around API calls.
 
 import { Polar } from "@polar-sh/sdk";
-import { Webhook } from "standardwebhooks";
+import { validateEvent } from "@polar-sh/sdk/webhooks";
 import { and, eq, sql } from "drizzle-orm";
 import {
     orderPayments,
@@ -393,9 +393,8 @@ export async function listPolarRefunds(
 /**
  * Verify and parse a Polar webhook payload.
  *
- * Polar uses the standardwebhooks library for signature verification.
- * The webhook secret must be base64-encoded before passing to the Webhook
- * constructor (Polar provides a raw string starting with `polar_whs_`).
+ * Polar's SDK verifies the Standard Webhooks signature and validates the
+ * parsed event against the generated runtime schema.
  */
 export function verifyPolarWebhook(
     rawBody: string,
@@ -403,10 +402,7 @@ export function verifyPolarWebhook(
     webhookSecret: string
 ): { verified: true; payload: PolarWebhookPayload } | { verified: false; error: string } {
     try {
-        // Polar docs: the secret must be base64-encoded before use
-        const base64Secret = btoa(webhookSecret);
-        const wh = new Webhook(base64Secret);
-        const payload = wh.verify(rawBody, headers) as PolarWebhookPayload;
+        const payload = validateEvent(rawBody, headers, webhookSecret) as PolarWebhookPayload;
 
         return { verified: true, payload };
     } catch (error: unknown) {
@@ -422,15 +418,15 @@ export function verifyPolarWebhook(
 // ---------------------------------------------------------------------------
 
 export interface PolarWebhookPayload {
-    id?: string;
     type: string;
     data: {
         id: string;
-        status: string;
+        status?: string;
         metadata?: Record<string, string>;
-        amount?: number;
+        totalAmount?: number;
+        refundedAmount?: number;
+        checkoutId?: string | null;
         currency?: string;
-        customer_email?: string;
         [key: string]: unknown;
     };
 }
