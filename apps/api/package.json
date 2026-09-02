@@ -33,7 +33,6 @@
     "jsonwebtoken": "^9.0.3",
     "mimetext": "^3.0.28",
     "nanoid": "^6.0.1",
-    "standardwebhooks": "^1.0.0",
     "stripe": "^22.4.0",
     "zod": "^4.4.3"
   },
