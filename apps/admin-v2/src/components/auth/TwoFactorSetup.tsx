@@ -46,7 +46,7 @@ export function TwoFactorSetup({ userEmail }: TwoFactorSetupProps) {
 
     try {
       const twoFactor = await loadTwoFactorClient();
-      const result = await twoFactor.enable({ password });
+      const result = await twoFactor.enable({ password, method: "totp" });
 
       if (result.error) {
         setError(result.error.message || "Incorrect password");
@@ -55,6 +55,10 @@ export function TwoFactorSetup({ userEmail }: TwoFactorSetupProps) {
       }
 
       if (result.data) {
+        if (result.data.method !== "totp") {
+          setError("Failed to create two-factor recovery codes");
+          return;
+        }
         setBackupCodes(result.data.backupCodes || []);
         const otpResult = await twoFactor.sendOtp();
         if (otpResult?.error) {
