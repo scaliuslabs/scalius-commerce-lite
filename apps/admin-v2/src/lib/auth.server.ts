@@ -8,7 +8,7 @@
 import { createAuth } from "@scalius/core/auth";
 import { isTransientD1Error, retryTransientD1, wait } from "@scalius/core/utils/transient-d1";
 import { getDb } from "@scalius/database/client";
-import { session as sessionTable } from "@scalius/database/schema";
+import { session as sessionTable, user as userTable } from "@scalius/database/schema";
 import { env as cfEnv } from "cloudflare:workers";
 import { and, eq } from "drizzle-orm";
 
@@ -404,6 +404,58 @@ async function runAuthHandlerWithRetry(
   throw lastError;
 }
 
+async function preferConfiguredTwoFactorMethod(
+  env: Env,
+  request: Request,
+  response: Response,
+): Promise<Response> {
+  if (!response.ok || !isSignInEmailRequest(request)) return response;
+
+  try {
+    const body = await response.clone().json() as {
+      twoFactorRedirect?: unknown;
+      twoFactorMethods?: unknown;
+      [key: string]: unknown;
+    };
+    if (body.twoFactorRedirect !== true || !Array.isArray(body.twoFactorMethods)) {
+      return response;
+    }
+
+    const input = await request.clone().json() as { email?: unknown };
+    if (typeof input.email !== "string") return response;
+
+    const preference = await getDb(env)
+      .select({ method: userTable.twoFactorMethod })
+      .from(userTable)
+      .where(eq(userTable.email, input.email.trim().toLowerCase()))
+      .get();
+    const preferredMethod = preference?.method === "email"
+      ? "otp"
+      : preference?.method === "totp"
+        ? "totp"
+        : null;
+    const preferredIndex = preferredMethod
+      ? body.twoFactorMethods.indexOf(preferredMethod)
+      : -1;
+    if (preferredIndex <= 0) return response;
+
+    const headers = new Headers(response.headers);
+    headers.delete("content-length");
+    return Response.json({
+      ...body,
+      twoFactorMethods: [
+        preferredMethod,
+        ...body.twoFactorMethods.filter((method) => method !== preferredMethod),
+      ],
+    }, {
+      status: response.status,
+      headers,
+    });
+  } catch {
+    return response;
+  }
+}
+
 /**
  * Create a Better Auth handler for the catch-all API route.
  * Returns the auth.handler function bound to the current env.
@@ -430,10 +482,11 @@ export function createAuthHandler(): (request: Request) => Promise<Response> {
       return applyAuthNoStore(trustedDeviceDisabledResponse());
     }
 
-    const response = await runAuthHandlerWithRetry(
+    let response = await runAuthHandlerWithRetry(
       (retryRequest) => auth.handler(retryRequest),
       request,
     );
+    response = await preferConfiguredTwoFactorMethod(env, request, response);
     await markSuccessfulTwoFactorVerification(env, request, response);
     return applyAuthNoStore(response);
   };
