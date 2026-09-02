@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { Editor } from "@tiptap/core";
+import { Editor, mergeAttributes } from "@tiptap/core";
 import { sanitizeHtml } from "@scalius/shared/html-sanitize";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createTiptapExtensions } from "./tiptap-extensions";
@@ -25,6 +25,14 @@ describe("rich-text editing document contract", () => {
     editor?.destroy();
     editor = null;
     vi.restoreAllMocks();
+  });
+
+  it("does not let parsed attributes replace the merged object prototype", () => {
+    const attributes = JSON.parse('{"__proto__":{"polluted":true}}');
+
+    expect(Object.getPrototypeOf(mergeAttributes({}, attributes))).toBe(
+      Object.prototype,
+    );
   });
 
   it("creates paragraphs and hard line breaks without losing adjacent text", () => {
