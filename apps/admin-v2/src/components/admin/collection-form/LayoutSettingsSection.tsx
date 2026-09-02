@@ -91,6 +91,7 @@ export const LayoutSettingsSection = React.memo(
             <FormField
               control={form.control}
               name="isActive"
+              rules={{ deps: ["config.productIds", "config.categoryIds"] }}
               render={({ field }) => (
                 <FormItem className="flex min-h-11 flex-row items-center justify-between rounded-md border px-3 py-2">
                   <FormLabel className="text-sm font-medium">Published</FormLabel>

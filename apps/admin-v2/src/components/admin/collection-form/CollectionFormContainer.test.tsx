@@ -190,7 +190,7 @@ function normalizeText(value: string | null) {
   return value?.replace(/\s+/g, " ").trim() ?? "";
 }
 
-describe("CollectionForm edit product labels", () => {
+describe("CollectionForm", () => {
   let host: HTMLDivElement;
   let appHost: HTMLDivElement;
   let root: Root;
@@ -325,6 +325,66 @@ describe("CollectionForm edit product labels", () => {
     expect(host.textContent).toContain("Save Collection");
     expect(getButton(host, "Save Collection").disabled).toBe(true);
     expect(host.querySelector("fieldset")?.hasAttribute("disabled")).toBe(true);
+  });
+
+  it("revalidates publication prerequisites when status or source changes", async () => {
+    await act(async () => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <CollectionForm
+            categories={categories}
+            products={[]}
+            defaultValues={{ name: "Draft collection" }}
+          />
+        </QueryClientProvider>,
+      );
+    });
+
+    const publishedSwitch = Array.from(
+      host.querySelectorAll<HTMLButtonElement>('button[role="switch"]'),
+    ).find((button) =>
+      normalizeText(button.parentElement?.parentElement?.textContent ?? "").includes(
+        "Published",
+      ),
+    );
+    if (!publishedSwitch) throw new Error("Expected published switch");
+
+    await act(async () => publishedSwitch.click());
+    await act(async () => getButton(host, "Save Collection").click());
+    await waitFor(() => {
+      expect(host.textContent).toContain(
+        "Add at least one product before publishing a manual collection.",
+      );
+    });
+
+    await act(async () => publishedSwitch.click());
+    await waitFor(() => {
+      expect(host.textContent).not.toContain(
+        "Add at least one product before publishing a manual collection.",
+      );
+    });
+
+    await act(async () => publishedSwitch.click());
+    await waitFor(() => {
+      expect(host.textContent).toContain(
+        "Add at least one product before publishing a manual collection.",
+      );
+    });
+
+    await act(async () => getButton(host, "Choose products").click());
+    const dynamicOption = Array.from(
+      document.querySelectorAll<HTMLElement>('[role="option"]'),
+    ).find((option) => normalizeText(option.textContent) === "Use categories");
+    if (!dynamicOption) throw new Error("Expected dynamic collection option");
+    await act(async () => dynamicOption.click());
+    await waitFor(() => {
+      expect(host.textContent).not.toContain(
+        "Add at least one product before publishing a manual collection.",
+      );
+      expect(host.textContent).toContain(
+        "Select at least one category before publishing a dynamic collection.",
+      );
+    });
   });
 
   it("reveals homepage settings immediately when placement is enabled", async () => {
