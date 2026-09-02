@@ -8,10 +8,10 @@ import {
 import { Card } from "../../ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../ui/tabs";
 import { DeferredTiptapEditor } from "../../ui/tiptap/DeferredTiptapEditor";
-import type { CollectionFormValues } from "./types";
+import type { CollectionFormInput, CollectionFormValues } from "./types";
 
 interface CollectionContentSectionProps {
-  form: UseFormReturn<CollectionFormValues>;
+  form: UseFormReturn<CollectionFormInput, unknown, CollectionFormValues>;
 }
 
 export function CollectionContentSection({ form }: CollectionContentSectionProps) {

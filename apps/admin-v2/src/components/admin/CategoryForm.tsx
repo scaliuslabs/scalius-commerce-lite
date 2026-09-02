@@ -51,7 +51,11 @@ import {
   type CategoryCreateResult,
   type CategoryMutationResult,
 } from "@/lib/api-functions/categories";
-import { categoryFormSchema, type CategoryFormValues } from "@/lib/form-schemas";
+import {
+  categoryFormSchema,
+  type CategoryFormInput,
+  type CategoryFormValues,
+} from "@/lib/form-schemas";
 import { useCatalogActionPermissions } from "@/hooks/use-catalog-action-permissions";
 import { useEntityFormSubmit } from "@/hooks/use-entity-form-submit";
 import { queryKeys } from "@/lib/query-keys";
@@ -121,7 +125,7 @@ export function CategoryForm({
     ? categoryActions.canEdit
     : categoryActions.canCreate;
 
-  const form = useForm<CategoryFormValues>({
+  const form = useForm<CategoryFormInput, unknown, CategoryFormValues>({
     resolver: zodResolver(categoryFormSchema),
     defaultValues: {
       name: "",

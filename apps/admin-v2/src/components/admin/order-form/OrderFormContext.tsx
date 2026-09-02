@@ -2,6 +2,7 @@ import React, { createContext, useContext, useRef } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import type {
   DeliveryLocation,
+  OrderFormInput,
   OrderFormValues,
   Product,
 } from "./types";
@@ -10,7 +11,7 @@ import type { ManualOrderDiscountGuidance } from "./manual-order-discount";
 
 // Define the shape of the context state
 interface OrderFormContextType {
-  form: UseFormReturn<OrderFormValues>;
+  form: UseFormReturn<OrderFormInput, unknown, OrderFormValues>;
   products: Product[];
   isEdit: boolean;
   locations: {
@@ -71,7 +72,7 @@ const OrderFormContext = createContext<OrderFormContextType | null>(null);
 // Create a provider component
 interface OrderFormProviderProps {
   children: React.ReactNode;
-  form: UseFormReturn<OrderFormValues>;
+  form: UseFormReturn<OrderFormInput, unknown, OrderFormValues>;
   products: Product[];
   isEdit: boolean;
   locations: {
