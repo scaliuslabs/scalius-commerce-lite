@@ -61,7 +61,7 @@
     "@scalius/database": "workspace:*",
     "@scalius/shared": "workspace:*",
     "bcryptjs": "^3.0.3",
-    "better-auth": "^1.6.26",
+    "better-auth": "^1.7.2",
     "currency.js": "^2.0.4",
     "drizzle-orm": "^0.45.2",
     "mimetext": "^3.0.28",

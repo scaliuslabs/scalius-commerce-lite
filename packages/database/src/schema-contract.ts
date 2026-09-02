@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 59,
-  name: "0059_checkout_delivery_phone_identity",
+  version: 60,
+  name: "0060_better_auth_account_identity",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -73,8 +73,13 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     sourceSha256: "a0c66a84c1652e000e26d37adc8f7331afef9cc5284eb3b152fe63c389545217",
   },
   {
-    ...CURRENT_DATABASE_SCHEMA,
+    version: 59,
+    name: "0059_checkout_delivery_phone_identity",
     sourceSha256: "a5759548b627414ea6cf4e687413fa07895ed225b748305f13be18d810b0a9fd",
+  },
+  {
+    ...CURRENT_DATABASE_SCHEMA,
+    sourceSha256: "ad85b0d511efec1d4b538f231cbb96503faf11f4844d36671c9c8b196aa318c8",
   },
 ] as const;
 

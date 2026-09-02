@@ -48,6 +48,7 @@ const apps = [
       "DATABASE_MIGRATION_FREEZE",
       "PURGE_TOKEN",
       "PROJECT_CACHE_PREFIX",
+      "LOCAL_MAILPIT_URL",
     ],
   },
   {

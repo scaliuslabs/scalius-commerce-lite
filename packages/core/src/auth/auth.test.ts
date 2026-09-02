@@ -216,14 +216,14 @@ describe("createAuth", () => {
       } as never);
 
       const options = mocks.betterAuth.mock.calls[0]?.[0] as {
-        emailAndPassword?: {
+        emailVerification?: {
           sendVerificationEmail?: (input: {
             user: { email: string; name: string };
             url: string;
           }) => Promise<void>;
         };
       };
-      const sendVerificationEmail = options.emailAndPassword?.sendVerificationEmail;
+      const sendVerificationEmail = options.emailVerification?.sendVerificationEmail;
       if (!sendVerificationEmail) {
         throw new Error("Expected sendVerificationEmail callback");
       }
