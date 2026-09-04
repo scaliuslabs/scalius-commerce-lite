@@ -75,24 +75,28 @@ describe("dev.sh startup planning", () => {
   });
 
   it("reports an occupied app port without terminating its owner", async () => {
-    const listener = spawn(process.execPath, [
+    const port = "8787";
+    const existingPid = spawnSync("lsof", ["-nP", "-a", `-iTCP:${port}`, "-sTCP:LISTEN", "-t"], {
+      encoding: "utf8",
+    }).stdout.trim().split(/\s+/)[0];
+    const listener = existingPid ? undefined : spawn(process.execPath, [
       "-e",
-      'require("net").createServer().listen(8787, "127.0.0.1", function () { console.log(this.address().port) })',
+      `require("net").createServer().listen(${port}, "127.0.0.1", function () { console.log(this.address().port) })`,
     ]);
 
     try {
-      const [chunk] = await once(listener.stdout, "data");
-      const port = chunk.toString().trim();
+      if (listener) await once(listener.stdout, "data");
+      const ownerPid = existingPid || String(listener.pid);
       const result = spawnSync("bash", ["scripts/dev.sh"], {
         cwd: root,
         encoding: "utf8",
       });
 
       expect(result.status).toBe(1);
-      expect(result.stderr).toContain(`Port ${port} is already in use by PID ${listener.pid}`);
-      expect(listener.kill(0)).toBe(true);
+      expect(result.stderr).toContain(`Port ${port} is already in use by PID ${ownerPid}`);
+      expect(() => process.kill(Number(ownerPid), 0)).not.toThrow();
     } finally {
-      listener.kill("SIGTERM");
+      listener?.kill("SIGTERM");
     }
   });
 });
