@@ -116,6 +116,7 @@ beforeEach(() => {
   vi.spyOn(HTMLMediaElement.prototype, "load").mockImplementation(
     () => undefined,
   );
+  vi.spyOn(RemotePlayback.prototype, "cancelWatchAvailability").mockResolvedValue(undefined);
 });
 
 afterEach(() => {
