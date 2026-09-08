@@ -179,10 +179,10 @@ export function AttributeValueEditor({
   return (
     <>
       <Dialog open={!!attributeId} onOpenChange={onClose}>
-        <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden flex flex-col">
+        <DialogContent className="max-w-3xl overflow-y-auto flex flex-col">
           <DialogHeader className="shrink-0">
-            <DialogTitle className="flex items-center gap-2">
-              <Edit3 className="h-5 w-5" />
+            <DialogTitle className="flex min-w-0 items-center gap-2 pr-8 [overflow-wrap:anywhere]">
+              <Edit3 className="h-5 w-5 shrink-0" />
               Edit Values: {attributeName}
             </DialogTitle>
             <DialogDescription>
@@ -191,30 +191,17 @@ export function AttributeValueEditor({
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 flex-1 overflow-hidden flex flex-col">
+          <div className="grid min-h-0 min-w-0 flex-1 grid-rows-[auto_auto_minmax(16rem,1fr)_auto] gap-4">
             {/* Statistics */}
-            <div className="flex gap-3 shrink-0">
-              <div className="flex-1 p-3 border rounded-lg">
-                <div className="text-sm text-muted-foreground">
-                  Unique Values
-                </div>
-                <div className="text-2xl font-bold">
-                  {isLoading || valuesQuery.isError ? "-" : totalValues}
-                </div>
-              </div>
-              <div className="flex-1 p-3 border rounded-lg">
-                <div className="text-sm text-muted-foreground">
-                  Total Products
-                </div>
-                <div className="text-2xl font-bold">
-                  {isLoading || valuesQuery.isError ? "-" : totalProducts}
-                </div>
-              </div>
-            </div>
+            <p className="text-sm text-muted-foreground">
+              Unique values: <span className="font-medium text-foreground">{isLoading || valuesQuery.isError ? "-" : totalValues}</span>
+              {" · "}
+              Products: <span className="font-medium text-foreground">{isLoading || valuesQuery.isError ? "-" : totalProducts}</span>
+            </p>
 
             {/* Add Value & Search */}
-            <div className="flex gap-2 shrink-0">
-              <div className="relative flex-1">
+            <div className="flex min-w-0 flex-col gap-2 sm:flex-row">
+              <div className="relative min-w-0 flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Search values..."
@@ -227,14 +214,15 @@ export function AttributeValueEditor({
                   aria-label="Search attribute values"
                 />
               </div>
-              <div className="flex gap-2">
+              <div className="flex min-w-0 gap-2 sm:shrink-0">
                 {isAddingNew ? (
-                  <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-5">
+                  <div className="flex min-w-0 flex-1 items-center gap-2 animate-in fade-in slide-in-from-right-5">
                     <Input
                       placeholder="New value"
+                      aria-label="New attribute value"
                       value={newValue}
                       onChange={(e) => setNewValue(e.target.value)}
-                      className="w-[200px]"
+                      className="min-w-0 flex-1 sm:w-[200px] sm:flex-none"
                       autoFocus
                       onKeyDown={(e) => {
                         if (e.key === "Enter") handleAddValue();
@@ -246,6 +234,7 @@ export function AttributeValueEditor({
                     />
                     <Button
                       size="sm"
+                      className="shrink-0"
                       onClick={handleAddValue}
                       disabled={
                         !newValue.trim() ||
@@ -259,6 +248,7 @@ export function AttributeValueEditor({
                     <Button
                       size="sm"
                       variant="ghost"
+                      className="shrink-0"
                       onClick={() => {
                         setIsAddingNew(false);
                         setNewValue("");
@@ -281,23 +271,20 @@ export function AttributeValueEditor({
             </div>
 
             {/* Values Table */}
-            <div className="border rounded-lg overflow-hidden flex-1 min-h-0 flex flex-col">
+            <div className="border rounded-lg overflow-hidden min-h-0 min-w-0 flex flex-col">
               {isLoading ? (
                 <div className="flex items-center justify-center flex-1">
                   <Loader2 className="h-6 w-6 animate-spin text-primary" />
                 </div>
               ) : valuesQuery.isError ? (
-                <div className="flex flex-col items-center justify-center flex-1 text-center px-6">
-                  <AlertTriangle className="h-10 w-10 text-destructive/70 mb-2" />
+                <div className="flex min-h-0 flex-1 flex-col items-center overflow-auto px-6 py-4 text-center [justify-content:safe_center]">
+                  <AlertTriangle className="h-10 w-10 shrink-0 text-destructive/70 mb-2" />
                   <p className="text-sm font-medium">Could not load attribute values</p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Your catalog was not changed. Retry to load the current page.
-                  </p>
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
-                    className="mt-3"
+                    className="mt-3 shrink-0"
                     onClick={() => void valuesQuery.refetch()}
                   >
                     <RefreshCw className="h-4 w-4 mr-2" />
@@ -305,7 +292,7 @@ export function AttributeValueEditor({
                   </Button>
                 </div>
               ) : values.length > 0 ? (
-                <div className="flex-1 overflow-auto">
+                <div className="min-h-0 flex-1 overflow-auto">
                   <Table>
                     <TableHeader className="sticky top-0 bg-background z-10">
                       <TableRow>
@@ -313,7 +300,7 @@ export function AttributeValueEditor({
                         <TableHead className="text-center bg-muted/50 w-24">
                           Products
                         </TableHead>
-                        <TableHead className="bg-muted/50 w-32 text-right">
+                        <TableHead className="bg-muted/50 w-24 text-right sm:w-32">
                           Actions
                         </TableHead>
                       </TableRow>
@@ -323,13 +310,14 @@ export function AttributeValueEditor({
                         <TableRow key={item.value}>
                           <TableCell>
                             {editingValue === item.value ? (
-                              <div className="flex items-center gap-2">
+                              <div className="flex min-w-32 flex-wrap items-center gap-2 sm:flex-nowrap">
                                 <Input
                                   value={editedValue}
+                                  aria-label={`New value for ${item.value}`}
                                   onChange={(e) =>
                                     setEditedValue(e.target.value)
                                   }
-                                  className="h-8"
+                                  className="h-8 min-w-0 basis-full sm:flex-1 sm:basis-auto"
                                   autoFocus
                                   onKeyDown={(e) => {
                                     if (e.key === "Enter") handleSaveEdit();
@@ -339,7 +327,7 @@ export function AttributeValueEditor({
                                 <Button
                                   size="icon"
                                   variant="ghost"
-                                  className="h-8 w-8 text-green-600"
+                                  className="h-8 w-8 shrink-0 text-green-600"
                                   onClick={handleSaveEdit}
                                   disabled={savingValue === item.value}
                                   aria-label={`Save rename for ${item.value}`}
@@ -353,7 +341,7 @@ export function AttributeValueEditor({
                                 <Button
                                   size="icon"
                                   variant="ghost"
-                                  className="h-8 w-8"
+                                  className="h-8 w-8 shrink-0"
                                   onClick={handleCancelEdit}
                                   aria-label={`Cancel rename for ${item.value}`}
                                 >
@@ -361,11 +349,11 @@ export function AttributeValueEditor({
                                 </Button>
                               </div>
                             ) : (
-                              <span className="font-medium">{item.value}</span>
+                              <span className="font-medium [overflow-wrap:anywhere]">{item.value}</span>
                             )}
                           </TableCell>
                           <TableCell className="text-center">
-                            <div className="flex justify-center gap-1">
+                            <div className="flex flex-wrap justify-center gap-1">
                               <Badge
                                 variant={
                                   item.productCount > 0
@@ -373,14 +361,14 @@ export function AttributeValueEditor({
                                     : "outline"
                                 }
                               >
-                                {item.productCount} products
+                                {item.productCount}
                               </Badge>
                               {item.isPreset && (
                                 <Badge
                                   variant="outline"
                                   className="border-primary/50 text-primary"
                                 >
-                                  Predefined
+                                  Preset
                                 </Badge>
                               )}
                             </div>
@@ -417,8 +405,8 @@ export function AttributeValueEditor({
                   </Table>
                 </div>
               ) : (
-                <div className="flex flex-col items-center justify-center flex-1 text-center">
-                  <Package className="h-10 w-10 opacity-40 mb-2" />
+                <div className="flex min-h-0 flex-1 flex-col items-center overflow-auto p-4 text-center [justify-content:safe_center]">
+                  <Package className="h-10 w-10 shrink-0 opacity-40 mb-2" />
                   <p className="text-sm text-muted-foreground">
                     {searchQuery
                       ? "No values match your search"
