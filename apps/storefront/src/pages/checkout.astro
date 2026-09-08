@@ -114,7 +114,6 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(checkoutLanguage
         </div>
 
         <div id="paymentActionParking" class="hidden">
-        <div id="paymentActionHost" class="hidden space-y-3">
           <div
             id="testModeNotice"
             class="hidden rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100"
@@ -129,16 +128,17 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(checkoutLanguage
             <div id="stripeError" class="hidden text-xs font-medium text-foreground" role="alert" aria-live="polite"></div>
           </div>
 
-          <p id="hostedRedirectNote" class="hidden text-xs leading-5 text-muted-foreground"></p>
+          <div id="paymentActionHost" class="hidden space-y-3">
+            <p id="hostedRedirectNote" class="hidden text-xs leading-5 text-muted-foreground"></p>
 
-          <button
-            id="payButton"
-            class="min-h-12 w-full rounded-lg bg-primary px-4 py-3 text-base font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-            disabled
-          >
-            <span id="payButtonText">{copy.selectPaymentMethodText}</span>
-          </button>
-        </div>
+            <button
+              id="payButton"
+              class="min-h-12 w-full rounded-lg bg-primary px-4 py-3 text-base font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled
+            >
+              <span id="payButtonText">{copy.selectPaymentMethodText}</span>
+            </button>
+          </div>
         </div>
       </section>
     </div>

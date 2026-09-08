@@ -18,6 +18,7 @@ import {
   resumeCheckoutPageFromHistory,
 } from "./index";
 import { showCheckoutLoadingOverlay } from "./loading-overlay";
+import { resetStripePaymentElement } from "./handlers/stripe";
 import { resolveCheckoutPaymentRequest, resolveExplicitCheckoutPaymentRequest } from "./payment-mode";
 import type { CheckoutConfig } from "./types";
 import type { CheckoutTaxQuote } from "./tax-quote-contract";
@@ -141,6 +142,56 @@ function successfulCheckoutFetch(quote = taxQuote()): typeof fetch {
   }) as typeof fetch;
 }
 
+function installStripePaymentFixture() {
+  document.body.innerHTML = `
+    <section id="orderSummary" class="hidden"><div id="summaryDetails"></div></section>
+    <div id="errorMsg" class="hidden"></div>
+    <div id="paymentMethods"></div>
+    <div id="paymentActionParking" class="hidden">
+      <div id="testModeNotice" class="hidden">Test mode</div>
+      <div id="stripeSection" class="hidden">
+        <div id="stripeCardElement"></div><div id="stripeError" class="hidden"></div>
+      </div>
+      <div id="paymentActionHost" class="hidden">
+        <p id="hostedRedirectNote" class="hidden"></p>
+        <button id="payButton" disabled><span id="payButtonText"></span></button>
+      </div>
+    </div>
+  `;
+  type Change = { complete?: boolean; error?: { message: string } };
+  const cards: Array<{
+    iframe: HTMLIFrameElement;
+    emit: (event: Change) => void;
+    destroy: ReturnType<typeof vi.fn>;
+  }> = [];
+  const createCard = vi.fn(() => {
+    const iframe = document.createElement("iframe");
+    let change: ((event: Change) => void) | undefined;
+    const card = {
+      iframe,
+      mount: vi.fn((selector: string) => document.querySelector(selector)!.appendChild(iframe)),
+      destroy: vi.fn(() => iframe.remove()),
+      on: vi.fn((_event: string, listener: (event: Change) => void) => { change = listener; }),
+      emit: (event: Change) => change?.(event),
+    };
+    cards.push(card);
+    return card;
+  });
+  const stripe = vi.fn(() => ({ elements: () => ({ create: createCard }), confirmCardPayment: vi.fn() }));
+  vi.stubGlobal("Stripe", stripe);
+  sessionStorage.setItem("scalius_checkout_data", JSON.stringify({
+    checkoutId: "checkout_stripe_fixture_123456",
+    cartItems: JSON.stringify({ line_1: { id: "prod_1", variantId: "var_1", price: 100, quantity: 1 } }),
+    customerName: "Buyer", customerPhone: "+8801700000000", shippingAddress: "Dhaka",
+    city: "city_1", zone: "zone_1", shippingMethodId: "ship_1",
+  }));
+  (window as unknown as { __CHECKOUT_CONFIG__: CheckoutConfig }).__CHECKOUT_CONFIG__ = {
+    ...baseConfig, activeDefaultMethod: "stripe",
+    gateways: [{ id: "stripe", publishableKey: "pk_stable_host", testMode: true }, { id: "cod" }, { id: "sslcommerz" }],
+  };
+  return { cards, createCard, stripe };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   installStorageMocks();
@@ -150,6 +201,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  resetStripePaymentElement();
   vi.unstubAllGlobals();
   sessionStorage.clear();
   localStorage.clear();
@@ -491,7 +543,7 @@ describe("initCheckoutPage", () => {
     expect((codMethod as HTMLButtonElement).tabIndex).toBe(-1);
   });
 
-  it("renders a refreshed quote after a typed conflict without resubmitting the order", async () => {
+  it.each(["cod", "stripe", "stripe becomes ineligible"])("refreshes a quote for %s without resubmitting the order", async (method) => {
     const refreshedQuote = taxQuote({
       quoteFingerprint: "taxq_vutsrqponmlkjihgfedcba",
       subtotalMinor: 12_000,
@@ -570,7 +622,15 @@ describe("initCheckoutPage", () => {
       gateways: [{ id: "cod", name: "Cash on Delivery" }],
     };
 
+    const stripe = method === "cod" ? undefined : installStripePaymentFixture();
+    if (method === "stripe becomes ineligible") {
+      (window as unknown as { __CHECKOUT_CONFIG__: CheckoutConfig }).__CHECKOUT_CONFIG__.gateways[0]!.amountLimits = {
+        currency: "BDT", min: 1, max: 110,
+      };
+    }
+
     await initCheckoutPage();
+    stripe?.cards[0]!.emit({ complete: true });
     (document.getElementById("payButton") as HTMLButtonElement).click();
 
     await vi.waitFor(() => {
@@ -581,9 +641,98 @@ describe("initCheckoutPage", () => {
     expect(document.getElementById("summaryDetails")?.textContent).toContain("৳120");
     expect(quoteCalls).toBe(2);
     expect(orderCalls).toBe(1);
-    expect((document.getElementById("payButton") as HTMLButtonElement).disabled).toBe(false);
+    expect((document.getElementById("payButton") as HTMLButtonElement).disabled).toBe(method === "stripe");
+    if (stripe) {
+      expect(stripe.cards[0]!.destroy).toHaveBeenCalledTimes(1);
+      expect(stripe.createCard).toHaveBeenCalledTimes(method === "stripe" ? 2 : 1);
+      expect(document.getElementById("stripeSection")?.parentElement?.id).toBe(
+        method === "stripe" ? "payment-details-stripe" : "paymentActionParking",
+      );
+      if (method !== "stripe") {
+        expect(document.querySelector('[data-method="cod"] .payment-method-control')?.getAttribute("aria-checked")).toBe("true");
+      }
+    }
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(orderCalls).toBe(1);
+  });
+
+  it("keeps the mounted Stripe subtree connected through selection and resets it on history restoration", async () => {
+    const { cards, createCard } = installStripePaymentFixture();
+    await initCheckoutPage();
+    const section = document.getElementById("stripeSection")!;
+    const host = document.getElementById("stripeCardElement")!;
+    const removed: Node[] = [];
+    const observer = new MutationObserver((records) => {
+      records.forEach((record) => removed.push(...record.removedNodes));
+    });
+    observer.observe(document.getElementById("paymentMethods")!, { subtree: true, childList: true });
+    const select = async (method: string) => {
+      document.querySelector<HTMLButtonElement>(`[data-method="${method}"] .payment-method-control`)!.click();
+      await vi.waitFor(() => expect(document.querySelector(`[data-method="${method}"] .payment-method-control`)?.getAttribute("aria-checked")).toBe("true"));
+    };
+    try {
+      for (const complete of [false, true]) {
+        cards[0]!.emit(complete ? { complete } : { complete, error: { message: "Invalid card number" } });
+        await select("cod");
+        expect(section.classList.contains("hidden")).toBe(true);
+        expect((document.getElementById("payButton") as HTMLButtonElement).disabled).toBe(false);
+        await select("sslcommerz");
+        expect(document.getElementById("payButtonText")?.textContent).toBe("Continue to SSLCommerz");
+        await select("stripe");
+        await select("stripe");
+        document.getElementById("payment-method-stripe")!.dispatchEvent(new KeyboardEvent("keydown", {
+          key: "ArrowDown", bubbles: true, cancelable: true,
+        }));
+        expect(document.activeElement?.id).toBe("payment-method-cod");
+        document.getElementById("payment-method-cod")!.dispatchEvent(new KeyboardEvent("keydown", {
+          key: "ArrowUp", bubbles: true, cancelable: true,
+        }));
+        await vi.waitFor(() => expect(document.getElementById("payment-method-stripe")?.getAttribute("aria-checked")).toBe("true"));
+        expect(section.parentElement?.id).toBe("payment-details-stripe");
+        expect((document.getElementById("payButton") as HTMLButtonElement).disabled).toBe(!complete);
+        expect(document.getElementById("stripeError")?.classList.contains("hidden")).toBe(complete);
+        expect(section.previousElementSibling?.id).toBe("testModeNotice");
+        expect(section.nextElementSibling?.id).toBe("paymentActionHost");
+      }
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(removed.some((node) => node === section || node.contains(host))).toBe(false);
+      expect(createCard).toHaveBeenCalledTimes(1);
+      expect(cards[0]!.destroy).not.toHaveBeenCalled();
+    } finally {
+      observer.disconnect();
+    }
+    cards[0]!.emit({ complete: false, error: { message: "Invalid card number" } });
+    await resumeCheckoutPageFromHistory();
+    expect(cards[0]!.destroy).toHaveBeenCalledTimes(1);
+    expect(createCard).toHaveBeenCalledTimes(2);
+    expect(document.getElementById("stripeSection")).toBe(section);
+    expect(section.parentElement?.id).toBe("payment-details-stripe");
+    expect(document.getElementById("stripeError")?.textContent).toBe("");
+    expect(document.getElementById("stripeError")?.classList.contains("hidden")).toBe(true);
+    expect((document.getElementById("payButton") as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("keeps a newer COD selection when the earlier Stripe script fails", async () => {
+    installStripePaymentFixture();
+    vi.stubGlobal("Stripe", undefined);
+    let script: HTMLScriptElement | undefined;
+    const append = vi.spyOn(document.head, "appendChild").mockImplementation((node) => {
+      script = node as HTMLScriptElement;
+      return node;
+    });
+    try {
+      const init = initCheckoutPage();
+      await vi.waitFor(() => expect(script).toBeDefined());
+      document.querySelector<HTMLButtonElement>('[data-method="cod"] .payment-method-control')!.click();
+      script!.dispatchEvent(new Event("error"));
+      await init;
+      expect(document.querySelector('[data-method="cod"] .payment-method-control')?.getAttribute("aria-checked")).toBe("true");
+      expect(document.getElementById("errorMsg")?.classList.contains("hidden")).toBe(true);
+      expect(document.getElementById("payButtonText")?.textContent).toBe("Place order");
+      expect((document.getElementById("payButton") as HTMLButtonElement).disabled).toBe(false);
+    } finally {
+      append.mockRestore();
+    }
   });
 
   it("renders unknown gateway labels as text instead of executable markup", async () => {
@@ -664,9 +813,9 @@ describe("initCheckoutPage", () => {
         <div id="errorMsg" class="hidden"></div>
         <div id="paymentMethods"></div>
         <div id="paymentActionParking" class="hidden">
+          <div id="testModeNotice" class="hidden"></div>
+          <div id="stripeSection" class="hidden"></div>
           <div id="paymentActionHost" class="hidden">
-            <div id="testModeNotice" class="hidden"></div>
-            <div id="stripeSection" class="hidden"></div>
             <p id="hostedRedirectNote" class="hidden"></p>
             <button id="payButton" disabled><span id="payButtonText">Select a payment method</span></button>
           </div>
