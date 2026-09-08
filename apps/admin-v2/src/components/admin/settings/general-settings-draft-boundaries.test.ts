@@ -6,6 +6,25 @@ const readSource = (name: string) =>
 
 describe("general settings draft boundaries", () => {
   it.each([
+    "BusinessSettingsBuilder.tsx", "CurrencySettingsBuilder.tsx", "AuthSettingsBuilder.tsx",
+    "MediaSettingsBuilder.tsx", "AllowedCountriesBuilder.tsx", "EmailSettingsForm.tsx",
+    "../SeoSettingsBuilder.tsx", "../StorefrontUrlBuilder.tsx", "../SecuritySettingsBuilder.tsx",
+  ])("allows retained %s drafts to navigate between settings sections", (name) => {
+    expect(readSource(name).includes("allowSamePathStateNavigation")).toBe(true);
+  });
+
+  it.each([
+    ["EmailSettingsForm.tsx", "dirty || saveMutation.isPending"],
+    ["../SecuritySettingsBuilder.tsx", "dirty || hasPendingInput || saveMutation.isPending"],
+    ["ThemeSettingsPage.tsx", "dirty || operation !== null"],
+  ])("keeps pending %s work protected when leaving the workspace", (name, dirtyExpression) => {
+    const source = readSource(name);
+    expect(source.includes(`isDirty={${dirtyExpression}}`)).toBe(true);
+    expect(source).toContain("isSubmitting={false}");
+    expect(source).toContain("allowSamePathStateNavigation");
+  });
+
+  it.each([
     "BusinessSettingsBuilder.tsx",
     "CurrencySettingsBuilder.tsx",
     "AuthSettingsBuilder.tsx",

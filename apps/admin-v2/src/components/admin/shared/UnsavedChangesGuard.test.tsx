@@ -157,6 +157,38 @@ describe("UnsavedChangesGuard", () => {
   });
 
   it.each([
+    { enabled: [false, false], internalBlocks: [true, true] },
+    { enabled: [true, true], internalBlocks: [false, false] },
+    { enabled: [true, false], internalBlocks: [false, true] },
+  ])("checks each retained guard with same-path opt-ins $enabled", async ({ enabled, internalBlocks }) => {
+    mocks.useBlocker.mockReturnValue({ status: "idle" });
+    await act(async () => {
+      root.render(<>
+        <UnsavedChangesGuard isDirty={true} isSubmitting={false} allowSamePathStateNavigation={enabled[0]} />
+        <div hidden>
+          <UnsavedChangesGuard isDirty={true} isSubmitting={false} allowSamePathStateNavigation={enabled[1]} />
+        </div>
+      </>);
+    });
+    const current = {
+      routeId: "/admin/settings/", fullPath: "/admin/settings/", pathname: "/admin/settings",
+      search: { section: "countries" },
+    };
+    expect(mocks.useBlocker).toHaveBeenCalledTimes(2);
+    const guards = mocks.useBlocker.mock.calls.map(([options]) => options);
+    expect(guards.map((guard) => guard.shouldBlockFn({
+      current, next: { ...current, search: { section: "business" } },
+    }))).toEqual(internalBlocks);
+    for (const guard of guards) {
+      expect(guard.shouldBlockFn({
+        current,
+        next: { routeId: "/admin/orders/", fullPath: "/admin/orders/", pathname: "/admin/orders" },
+      })).toBe(true);
+      expect(guard.enableBeforeUnload).toBe(true);
+    }
+  });
+
+  it.each([
     { isDirty: true, isSubmitting: false, blocks: true },
     { isDirty: false, isSubmitting: false, blocks: false },
     { isDirty: true, isSubmitting: true, blocks: false },

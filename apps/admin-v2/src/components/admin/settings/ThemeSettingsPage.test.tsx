@@ -1,11 +1,13 @@
 // @vitest-environment happy-dom
 
-import { act } from "react";
+import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_STOREFRONT_THEME_SETTINGS } from "@scalius/shared/storefront-theme";
 
 import ThemeSettingsPage from "./ThemeSettingsPage";
+import { THEME_COLOR_PALETTES } from "./theme-color-presets";
+import type { ThemeWorkspaceSection } from "./theme-workspace";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -17,6 +19,7 @@ const getThemeVersionsMock = vi.hoisted(() => vi.fn());
 const rebaseThemeDraftMock = vi.hoisted(() => vi.fn());
 const rollbackThemeMock = vi.hoisted(() => vi.fn());
 const createThemePreviewSessionMock = vi.hoisted(() => vi.fn());
+const blockerMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@tanstack/react-query", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@tanstack/react-query")>();
@@ -46,9 +49,7 @@ vi.mock("~/contexts/PermissionContext", () => ({
   usePermissions: () => ({ hasPermission: () => true }),
 }));
 
-vi.mock("../shared/UnsavedChangesGuard", () => ({
-  UnsavedChangesGuard: () => null,
-}));
+vi.mock("@tanstack/react-router", () => ({ useBlocker: blockerMock }));
 
 describe("ThemeSettingsPage read authority", () => {
   let host: HTMLDivElement;
@@ -66,6 +67,7 @@ describe("ThemeSettingsPage read authority", () => {
     rebaseThemeDraftMock.mockReset();
     rollbackThemeMock.mockReset();
     createThemePreviewSessionMock.mockReset();
+    blockerMock.mockReset().mockReturnValue({ status: "idle" });
     getThemeVersionsMock.mockResolvedValue({ versions: [] });
   });
 
@@ -308,5 +310,68 @@ describe("ThemeSettingsPage read authority", () => {
     expect(primaryActions?.textContent).toContain("Preview");
     expect(primaryActions?.textContent).not.toContain("Save");
     expect(primaryActions?.textContent).not.toContain("Publish");
+  });
+
+  it.each([false, true])("retains theme values and revisions during section navigation with saving=%s", async (saving) => {
+    const workspace = {
+      published: { theme: DEFAULT_STOREFRONT_THEME_SETTINGS, revision: 4 },
+      draft: {
+        theme: DEFAULT_STOREFRONT_THEME_SETTINGS, revision: 7, basePublishedRevision: 4, updatedAt: null,
+      },
+    };
+    getThemeWorkspaceMock.mockResolvedValueOnce(workspace);
+    const ocean = { ...DEFAULT_STOREFRONT_THEME_SETTINGS, colors: { ...THEME_COLOR_PALETTES.Ocean.colors } };
+    const saved = { ...workspace.draft, theme: ocean, revision: 8 };
+    let acknowledge!: (value: typeof saved) => void;
+    saveThemeDraftMock.mockReturnValueOnce(new Promise<typeof saved>((resolve) => { acknowledge = resolve; }));
+    function Harness() {
+      const [section, setSection] = useState<ThemeWorkspaceSection>("colors");
+      return <ThemeSettingsPage section={section} onSectionChange={setSection} />;
+    }
+    await act(async () => { root.render(<Harness />); });
+    function button(label: string) {
+      return Array.from(document.querySelectorAll("button")).find((item) => item.textContent?.trim() === label)!;
+    }
+    await act(async () => { button("Ocean").click(); });
+    if (saving) {
+      await act(async () => { host.querySelector<HTMLButtonElement>('[aria-label="Save draft"]')!.click(); });
+    }
+    const current = {
+      routeId: "/admin/settings/theme", fullPath: "/admin/settings/theme", pathname: "/admin/settings/theme",
+      search: { section: "colors" },
+    };
+    for (const [label, section] of [["Design system", "system"], ["Review & publish", "review"], ["Colors", "colors"]]) {
+      const guard = blockerMock.mock.calls.at(-1)![0];
+      expect(guard.shouldBlockFn({ current, next: { ...current, search: { section } } })).toBe(false);
+      expect(guard.shouldBlockFn({
+        current,
+        next: { routeId: "/admin/settings/", fullPath: "/admin/settings/", pathname: "/admin/settings" },
+      })).toBe(true);
+      expect(guard.enableBeforeUnload).toBe(true);
+      await act(async () => { button(label!).click(); });
+      expect(host.textContent).toContain("Published r4");
+      expect(host.textContent).toContain("Draft r7 · unsaved");
+    }
+    expect(host.querySelector<HTMLInputElement>('[aria-label="Primary color value"]')?.value).toBe(ocean.colors.primary);
+    expect(getThemeWorkspaceMock).toHaveBeenCalledTimes(1);
+    expect(publishThemeDraftMock).not.toHaveBeenCalled();
+    if (saving) {
+      expect(saveThemeDraftMock).toHaveBeenCalledTimes(1);
+      await act(async () => { acknowledge(saved); });
+      expect(host.textContent).toContain("Draft r8 · saved");
+    } else {
+      expect(saveThemeDraftMock).not.toHaveBeenCalled();
+      const more = host.querySelector<HTMLButtonElement>('[aria-label="More theme actions"]')!;
+      await act(async () => {
+        more.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+      });
+      const discard = Array.from(document.querySelectorAll<HTMLElement>('[role="menuitem"]'))
+        .find((item) => item.textContent?.trim() === "Discard tab changes")!;
+      await act(async () => { discard.click(); });
+      expect(host.querySelector<HTMLInputElement>('[aria-label="Primary color value"]')?.value)
+        .toBe(DEFAULT_STOREFRONT_THEME_SETTINGS.colors.primary ?? "");
+      expect(host.textContent).toContain("Draft r7 · saved");
+    }
+    expect(blockerMock.mock.calls.at(-1)![0].enableBeforeUnload).toBe(false);
   });
 });

@@ -156,8 +156,9 @@ export function SecuritySettingsBuilder() {
   return (
     <>
       <UnsavedChangesGuard
-        isDirty={dirty || hasPendingInput}
-        isSubmitting={saveMutation.isPending}
+        isDirty={dirty || hasPendingInput || saveMutation.isPending}
+        isSubmitting={false}
+        allowSamePathStateNavigation
       />
       <div className="max-w-4xl space-y-5">
         {!canManage && (
