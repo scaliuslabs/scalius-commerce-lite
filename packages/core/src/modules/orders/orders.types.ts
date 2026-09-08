@@ -45,6 +45,7 @@ export interface OrderShipmentRecoverySummary {
     providerType: string | null;
     canRefresh: boolean;
     canRetryCreate: boolean;
+    canRepair: boolean;
     updatedAt: Date | null;
 }
 

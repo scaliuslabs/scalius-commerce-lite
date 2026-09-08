@@ -215,7 +215,7 @@ describe("delivery shipment to order status mapping", () => {
     });
 
     await expect(updateOrderStatusFromShipment(db as never, "shipment_1", "out_for_delivery"))
-      .rejects.toThrow("active shipment creation");
+      .rejects.toThrow("Shipment creation or recovery is active");
 
     expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
   });

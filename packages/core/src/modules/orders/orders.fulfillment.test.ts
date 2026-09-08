@@ -264,7 +264,7 @@ describe("orders fulfillment side-effect ordering", () => {
       {
         orderId: "order_1",
         success: false,
-        error: "Order has an active shipment creation in progress. Please retry shortly.",
+        error: "Shipment creation or recovery is active. Check shipment history before trying again.",
       },
     ]);
     expect(mocks.createShipment).not.toHaveBeenCalled();
@@ -1609,7 +1609,7 @@ describe("orders fulfillment side-effect ordering", () => {
     });
 
     await expect(updateOrderStatus(db as never, "order_1", OrderStatus.SHIPPED))
-      .rejects.toThrow("active shipment creation");
+      .rejects.toThrow("Shipment creation or recovery is active");
 
     expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
   });

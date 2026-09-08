@@ -148271,6 +148271,9 @@
                                   "canRetryCreate": {
                                     "type": "boolean"
                                   },
+                                  "canRepair": {
+                                    "type": "boolean"
+                                  },
                                   "updatedAt": {
                                     "$ref": "#/components/schemas/NullableTimestamp"
                                   }
@@ -148286,6 +148289,7 @@
                                   "providerType",
                                   "canRefresh",
                                   "canRetryCreate",
+                                  "canRepair",
                                   "updatedAt"
                                 ]
                               },
@@ -149705,6 +149709,9 @@
                                   "canRetryCreate": {
                                     "type": "boolean"
                                   },
+                                  "canRepair": {
+                                    "type": "boolean"
+                                  },
                                   "updatedAt": {
                                     "$ref": "#/components/schemas/NullableTimestamp"
                                   }
@@ -149720,6 +149727,7 @@
                                   "providerType",
                                   "canRefresh",
                                   "canRetryCreate",
+                                  "canRepair",
                                   "updatedAt"
                                 ]
                               },
@@ -152540,6 +152548,9 @@
                             "canRetryCreate": {
                               "type": "boolean"
                             },
+                            "canRepair": {
+                              "type": "boolean"
+                            },
                             "updatedAt": {
                               "$ref": "#/components/schemas/NullableTimestamp"
                             }
@@ -152555,6 +152566,7 @@
                             "providerType",
                             "canRefresh",
                             "canRetryCreate",
+                            "canRepair",
                             "updatedAt"
                           ]
                         },
