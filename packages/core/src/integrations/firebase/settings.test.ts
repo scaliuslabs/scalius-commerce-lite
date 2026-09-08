@@ -4,8 +4,9 @@ import {
   getFirebaseServiceAccountReadiness,
   normalizeFirebaseServiceAccountJson,
   readFirebaseServiceAccountJsonFromStoredValue,
-  saveFirebaseServiceAccountJson,
 } from "./settings";
+
+import { encodeEncryptedCredential, encryptCredentials } from "../../utils/credential-encryption";
 
 const credentialKey = Buffer.alloc(32, 17).toString("base64");
 
@@ -14,24 +15,6 @@ const serviceAccountJson = JSON.stringify({
   private_key: "-----BEGIN PRIVATE KEY-----\\nkey\\n-----END PRIVATE KEY-----\\n",
   project_id: "scalius-test",
 });
-
-function createDb() {
-  let storedValue = "";
-  const db = {
-    insert: vi.fn(() => ({
-      values: vi.fn((row: { value: string }) => ({
-        onConflictDoUpdate: vi.fn(async () => {
-          storedValue = row.value;
-        }),
-      })),
-    })),
-  };
-
-  return {
-    db,
-    getStoredValue: () => storedValue,
-  };
-}
 
 function createReadinessDb(value: string | null) {
   return {
@@ -46,27 +29,6 @@ function createReadinessDb(value: string | null) {
 }
 
 describe("Firebase credential settings", () => {
-  it("stores service account JSON with an encrypted sentinel", async () => {
-    const { db, getStoredValue } = createDb();
-
-    await saveFirebaseServiceAccountJson(db as never, serviceAccountJson, credentialKey);
-
-    const storedValue = getStoredValue();
-    expect(storedValue).toMatch(/^enc:/);
-    expect(storedValue).not.toContain("private_key");
-    await expect(
-      readFirebaseServiceAccountJsonFromStoredValue(storedValue, credentialKey),
-    ).resolves.toBe(serviceAccountJson);
-  });
-
-  it("fails closed when saving a non-empty service account without an encryption key", async () => {
-    const { db } = createDb();
-
-    await expect(
-      saveFirebaseServiceAccountJson(db as never, serviceAccountJson),
-    ).rejects.toThrow("CREDENTIAL_ENCRYPTION_KEY is required");
-  });
-
   it("keeps legacy plaintext service accounts readable", async () => {
     await expect(
       readFirebaseServiceAccountJsonFromStoredValue(serviceAccountJson, credentialKey),
@@ -89,12 +51,11 @@ describe("Firebase credential settings", () => {
   });
 
   it("reports stored encrypted service account readiness", async () => {
-    const { db, getStoredValue } = createDb();
-    await saveFirebaseServiceAccountJson(db as never, serviceAccountJson, credentialKey);
+    const storedValue = encodeEncryptedCredential(await encryptCredentials(serviceAccountJson, credentialKey));
 
     await expect(
       getFirebaseServiceAccountReadiness(
-        createReadinessDb(getStoredValue()) as never,
+        createReadinessDb(storedValue) as never,
         credentialKey,
       ),
     ).resolves.toEqual({

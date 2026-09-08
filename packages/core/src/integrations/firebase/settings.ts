@@ -1,12 +1,11 @@
 import type { Database } from "@scalius/database/client";
 import { settings } from "@scalius/database/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 
-import { ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
+import { ValidationError } from "@scalius/core/errors";
 import {
   decryptCredentials,
   decryptCredentialsGraceful,
-  encryptCredentials,
 } from "../../utils/credential-encryption";
 
 const FIREBASE_SETTINGS_CATEGORY = "firebase";
@@ -173,47 +172,4 @@ export async function getFirebaseServiceAccountReadiness(
     error: "Configure Firebase service account credentials before enabling admin push notifications.",
     source: "none",
   };
-}
-
-export async function saveFirebaseServiceAccountJson(
-  db: Database,
-  value: string,
-  encryptionKey?: string,
-): Promise<void> {
-  const normalized = normalizeFirebaseServiceAccountJson(value);
-  if (!normalized) {
-    await upsertFirebaseServiceAccountValue(db, "");
-    return;
-  }
-
-  if (!encryptionKey) {
-    throw new ServiceUnavailableError(
-      "CREDENTIAL_ENCRYPTION_KEY is required to store Firebase credentials.",
-    );
-  }
-
-  const encrypted = `${ENCRYPTED_VALUE_PREFIX}${await encryptCredentials(
-    normalized,
-    encryptionKey,
-  )}`;
-  await upsertFirebaseServiceAccountValue(db, encrypted);
-}
-
-async function upsertFirebaseServiceAccountValue(
-  db: Database,
-  value: string,
-): Promise<void> {
-  await db
-    .insert(settings)
-    .values({
-      id: crypto.randomUUID(),
-      category: FIREBASE_SETTINGS_CATEGORY,
-      key: FIREBASE_SERVICE_ACCOUNT_KEY,
-      value,
-      type: "string",
-    })
-    .onConflictDoUpdate({
-      target: [settings.key, settings.category],
-      set: { value, updatedAt: sql`unixepoch()` },
-    });
 }

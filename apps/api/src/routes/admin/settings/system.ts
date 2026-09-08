@@ -10,7 +10,6 @@ import { getEmailProviderReadiness, getEmailRuntimeSettings, readEmailSetting } 
 import { getSmsProviderReadiness } from "@scalius/core/integrations/sms";
 import {
     normalizeFirebaseServiceAccountJson,
-    saveFirebaseServiceAccountJson,
 } from "@scalius/core/integrations/firebase/settings";
 import {
     firstWhatsAppPlaceholderConfigError,
@@ -55,7 +54,6 @@ import {
 } from "../../../utils/cache-invalidation";
 import {
     buildClearNotificationProviderBlocksStatement,
-    clearNotificationProviderBlocks,
 } from "@scalius/core/modules/notifications/notification-provider-health";
 import {
     normalizePlatformOrigin,
@@ -956,30 +954,32 @@ const saveFirebaseRoute = createRoute({
 app.openapi(saveFirebaseRoute, async (c) => {
     const db = c.get("db");
     const { serviceAccount, publicConfig } = c.req.valid("json");
-        const updates: Promise<unknown>[] = [];
+    const writes: SettingAggregateWrite[] = [];
+    let encryptionKey: string | undefined;
+    const credentialChanged = typeof serviceAccount === "string" && serviceAccount !== MASKED;
 
-        if (typeof serviceAccount === "string" && serviceAccount !== MASKED) {
-            const normalizedServiceAccount = normalizeFirebaseServiceAccountJson(serviceAccount);
-            const encKey = normalizedServiceAccount
-                ? requireEncryptionKey(c.env as Record<string, unknown>)
-                : undefined;
-            updates.push(saveFirebaseServiceAccountJson(db, normalizedServiceAccount, encKey));
+    if (credentialChanged) {
+        const normalizedServiceAccount = normalizeFirebaseServiceAccountJson(serviceAccount);
+        if (normalizedServiceAccount) encryptionKey = requireEncryptionKey(c.env as Record<string, unknown>);
+        writes.push({
+            category: "firebase", key: "service_account", value: normalizedServiceAccount,
+            encrypted: Boolean(normalizedServiceAccount),
+        });
+    }
+
+    if (publicConfig) {
+        writes.push({ category: "firebase", key: "public_config", value: JSON.stringify(publicConfig), type: "json" });
+    }
+
+    if (writes.length > 0) {
+        const statements = await prepareSettingAggregateStatements(db, writes, encryptionKey);
+        if (credentialChanged) {
+            statements.push(buildClearNotificationProviderBlocksStatement(db, { channel: "push" }));
         }
+        await safeBatch(db, statements);
+    }
 
-        if (publicConfig) {
-            updates.push(
-                db.insert(settings)
-                    .values({ id: `set_${nanoid(10)}`, key: "public_config", value: JSON.stringify(publicConfig), type: "json", category: "firebase" })
-                    .onConflictDoUpdate({ target: [settings.key, settings.category], set: { value: JSON.stringify(publicConfig), updatedAt: sql`(unixepoch())` } })
-            );
-        }
-
-        await Promise.all(updates);
-        if (typeof serviceAccount === "string" && serviceAccount !== MASKED) {
-            await clearNotificationProviderBlocks(db, { channel: "push" });
-        }
-
-        return ok(c, { message: "Settings saved successfully" });
+    return ok(c, { message: "Settings saved successfully" });
 });
 
 export { app as systemSettingsRoutes };
