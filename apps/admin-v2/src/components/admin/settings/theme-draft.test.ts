@@ -65,6 +65,18 @@ describe("theme color draft", () => {
     ).toBe(false);
   });
 
+  it("keeps incomplete local colors and clears when reconciling an acknowledgment", () => {
+    const base = { ...DEFAULT_STOREFRONT_THEME_SETTINGS, colors: { primary: "#111111", border: "#222222" } };
+    expect(rebaseThemeSettingsDraft({
+      base,
+      local: { ...base, colors: { primary: "#12", border: "" } },
+      latest: { ...base, density: "compact" },
+    })).toMatchObject({ colors: { primary: "#12" }, density: "compact" });
+    expect(rebaseThemeSettingsDraft({
+      base, local: { ...base, colors: { border: "" } }, latest: base,
+    }).colors).toEqual({});
+  });
+
   it("rebases semantic leaves without erasing unrelated published changes", () => {
     const base = DEFAULT_STOREFRONT_THEME_SETTINGS;
     expect(

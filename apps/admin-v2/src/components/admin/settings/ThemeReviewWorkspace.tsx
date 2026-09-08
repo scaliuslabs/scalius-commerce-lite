@@ -54,6 +54,8 @@ export function ThemeReviewWorkspace({
   onPreviewLocationChange,
   onPreview,
   previewing,
+  operationPending,
+  hasConflict,
   versions,
   historyLoading,
   historyError,
@@ -74,6 +76,8 @@ export function ThemeReviewWorkspace({
   onPreviewLocationChange: (path: string, device: ThemePreviewDevice) => void;
   onPreview: (path: string, device: ThemePreviewDevice) => void;
   previewing: boolean;
+  operationPending: boolean;
+  hasConflict: boolean;
   versions: ThemeVersionPayload[];
   historyLoading: boolean;
   historyError: string | null;
@@ -216,7 +220,7 @@ export function ThemeReviewWorkspace({
               <button
                 type="button"
                 onClick={openPreview}
-                disabled={previewing || publishBlocked || storefrontLinks.length === 0 || (!canManage && draftRevision === 0)}
+                disabled={operationPending || hasConflict || publishBlocked || storefrontLinks.length === 0 || (!canManage && draftRevision === 0)}
                 className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {previewing ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
@@ -316,7 +320,7 @@ export function ThemeReviewWorkspace({
                       <button
                         type="button"
                         onClick={() => setRestoreCandidate(version.revision)}
-                        disabled={!canManage || restoringRevision !== null}
+                        disabled={!canManage || operationPending || hasConflict}
                         className="inline-flex min-h-9 shrink-0 items-center gap-1 rounded-md px-2 text-xs font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40"
                       >
                         {restoring ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
@@ -347,6 +351,7 @@ export function ThemeReviewWorkspace({
           <AlertDialogFooter>
             <AlertDialogCancel>Keep current style</AlertDialogCancel>
             <AlertDialogAction
+              disabled={!canManage || operationPending || hasConflict}
               onClick={() => {
                 if (candidate) onRestore(candidate.revision);
                 setRestoreCandidate(null);
