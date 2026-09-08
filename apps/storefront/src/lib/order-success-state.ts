@@ -129,7 +129,7 @@ export function getOrderStatusBadgeClass(value: string | null | undefined): stri
     return "bg-emerald-100 text-emerald-800";
   }
   if (["failed"].includes(status)) {
-    return "bg-destructive/10 text-destructive";
+    return "bg-destructive text-destructive-foreground";
   }
   if (["pending"].includes(status)) {
     return "bg-amber-100 text-amber-800";
@@ -143,7 +143,7 @@ export function getOrderStatusBadgeClass(value: string | null | undefined): stri
 export function getPaymentStatusBadgeClass(value: string | null | undefined): string {
   const status = normalize(value);
   if (status === "paid") return "bg-emerald-100 text-emerald-800";
-  if (status === "failed") return "bg-destructive/10 text-destructive";
+  if (status === "failed") return "bg-destructive text-destructive-foreground";
   if (["unpaid", "pending", "processing", "partial"].includes(status)) {
     return "bg-amber-100 text-amber-800";
   }
