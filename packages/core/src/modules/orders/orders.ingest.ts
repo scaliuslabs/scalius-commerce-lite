@@ -1,11 +1,12 @@
 // src/modules/orders/orders.ingest.ts
 // Synchronous storefront order commit path used by checkout-facing APIs.
 
-import { buildBatchGuard, safeBatch, type Database } from "@scalius/database/client";
+import { buildBatchGuard, isBatchGuardError, safeBatch, type Database } from "@scalius/database/client";
 import {
     agentStorefrontContexts,
     agentStorefrontContinuations,
     agentStorefrontOrderGrants,
+    checkoutAuthority,
     customers,
     customerHistory,
     discounts,
@@ -108,6 +109,9 @@ const INVENTORY_COMMIT_BASE_BACKOFF_MS = 5;
 const ORDER_ITEM_INSERT_PARAMETERS_PER_ROW = 18;
 const ORDER_ITEM_TAX_INSERT_PARAMETERS_PER_ROW = 13;
 const ORDER_DISCOUNT_ALLOCATION_INSERT_PARAMETERS_PER_ROW = 18;
+const CHECKOUT_AUTHORITY_CHANGED = "CHECKOUT_AUTHORITY_CHANGED";
+const CHECKOUT_AUTHORITY_CHANGED_MESSAGE =
+    "Checkout details changed while the order was being placed. Please review the refreshed checkout and try again.";
 
 function isCustomerPhoneConstraintError(error: unknown): boolean {
     let current = error;
@@ -787,6 +791,18 @@ export async function commitStorefrontOrderPayload(
             };
         }
 
+        if (
+            !Number.isSafeInteger(payload.checkoutAuthorityRevision)
+            || (payload.checkoutAuthorityRevision ?? 0) < 1
+        ) {
+            throw new ValidationError("Checkout authority revision is unavailable. Please retry checkout.");
+        }
+        const authorityGuard = buildBatchGuard(db, sql`EXISTS (
+            SELECT 1 FROM ${checkoutAuthority}
+            WHERE ${checkoutAuthority.id} = 'default'
+              AND ${checkoutAuthority.revision} = ${payload.checkoutAuthorityRevision}
+        )`, CHECKOUT_AUTHORITY_CHANGED);
+
         const [customer, inventoryPlan] = await Promise.all([
             resolveCustomerForOrder(db, payload),
             prepareOrderInventory(
@@ -815,6 +831,7 @@ export async function commitStorefrontOrderPayload(
             : null;
         const orderWrites = buildOrderWriteBatch(db, payload, customer, appliedPromotion);
         const atomicWrites: SQLiteBatchItem[] = [
+            authorityGuard,
             ...(checkoutAttemptPlan?.writesBeforeOrder ?? []),
             ...(agentContextPlan?.writesBeforeOrder ?? []),
             ...inventoryPlan.statements,
@@ -836,6 +853,10 @@ export async function commitStorefrontOrderPayload(
                 };
             }
 
+            if (isBatchGuardError(error, CHECKOUT_AUTHORITY_CHANGED)) {
+                throw new ValidationError(CHECKOUT_AUTHORITY_CHANGED_MESSAGE);
+            }
+
             const discountConstraintError = getDiscountUsageConstraintError(error)
                 ?? getPromotionRedemptionConstraintError(error);
             if (discountConstraintError) throw discountConstraintError;
@@ -855,13 +876,21 @@ export async function commitStorefrontOrderPayload(
 
             const idempotentReservation = await inventoryPlan.resolveIdempotentReplay(error);
             if (idempotentReservation?.success) {
-                await safeBatch(db, [
-                    ...(checkoutAttemptPlan?.writesBeforeOrder ?? []),
-                    ...(agentContextPlan?.writesBeforeOrder ?? []),
-                    ...orderWrites,
-                    ...(checkoutAttemptPlan?.writesAfterOrder ?? []),
-                    ...(agentContextPlan?.writesAfterOrder ?? []),
-                ] as SQLiteBatchItem[]);
+                try {
+                    await safeBatch(db, [
+                        authorityGuard,
+                        ...(checkoutAttemptPlan?.writesBeforeOrder ?? []),
+                        ...(agentContextPlan?.writesBeforeOrder ?? []),
+                        ...orderWrites,
+                        ...(checkoutAttemptPlan?.writesAfterOrder ?? []),
+                        ...(agentContextPlan?.writesAfterOrder ?? []),
+                    ] as SQLiteBatchItem[]);
+                } catch (replayError) {
+                    if (isBatchGuardError(replayError, CHECKOUT_AUTHORITY_CHANGED)) {
+                        throw new ValidationError(CHECKOUT_AUTHORITY_CHANGED_MESSAGE);
+                    }
+                    throw replayError;
+                }
                 return {
                     orderId: payload.orderData.id,
                     customerId: customer.id,
