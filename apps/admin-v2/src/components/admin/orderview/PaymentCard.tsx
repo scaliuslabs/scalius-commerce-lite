@@ -7,19 +7,19 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+} from "~/components/ui/card";
+import { Badge } from "~/components/ui/badge";
+import { Button } from "~/components/ui/button";
+import { Checkbox } from "~/components/ui/checkbox";
+import { Input } from "~/components/ui/input";
+import { Label } from "~/components/ui/label";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "~/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -27,9 +27,9 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-} from "@/components/ui/dialog";
+} from "~/components/ui/dialog";
 import { toast } from "sonner";
-import { useCurrency } from "@/hooks/use-currency";
+import { useCurrency } from "~/hooks/use-currency";
 import {
   CreditCard,
   Banknote,
@@ -48,26 +48,26 @@ import { useQuery } from "@tanstack/react-query";
 import {
   orderCodQueryOptions,
   orderPaymentsQueryOptions,
-} from "@/lib/api-query-options/orders";
-import { ORDER_DETAIL_PREFETCH_STALE_MS } from "@/lib/order-detail-prefetch";
-import { resolveOrderOperationalReadState } from "@/lib/order-operational-read-state";
+} from "~/lib/api-query-options/orders";
+import { ORDER_DETAIL_PREFETCH_STALE_MS } from "~/lib/order-detail-prefetch";
+import { resolveOrderOperationalReadState } from "~/lib/order-operational-read-state";
 import {
   useReconcileRefundAttempt,
   useIssueOrderPaymentRecoveryLink,
   useRefundOrder,
   useUpdateOrderCod,
-} from "@/lib/api-mutations/orders";
-import type { UpdateOrderCodInput } from "@/lib/api-functions/orders";
-import { useOrderActionPermissions } from "@/hooks/use-order-action-permissions";
+} from "~/lib/api-mutations/orders";
+import type { UpdateOrderCodInput } from "~/lib/api-functions/orders";
+import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
 import { formatOrderAmount, formatOrderTimestamp } from "./formatters";
-import { useHydrated } from "@/hooks/use-hydrated";
+import { useHydrated } from "~/hooks/use-hydrated";
 import {
   formatSavedMajorAmount,
   formatSavedMinorAmount,
   resolveSavedOrderMoneySummary,
-} from "@/lib/order-tax-presentation";
+} from "~/lib/order-tax-presentation";
 import { canProcessOrderCodAction } from "@scalius/shared/order-state";
-import { buildOrderPaymentPresentation } from "@/lib/order-payment-presentation";
+import { buildOrderPaymentPresentation } from "~/lib/order-payment-presentation";
 
 type CodFailureReason = Extract<
   UpdateOrderCodInput,
@@ -198,7 +198,6 @@ const RECOVERY_LINK_GATEWAYS = new Set(["sslcommerz", "polar"]);
 
 function getSessionAttemptView(
   attempt: PaymentSessionAttempt,
-  orderState: Pick<Order, "status" | "paymentStatus">,
 ): {
   label: string;
   message: string;
@@ -213,38 +212,24 @@ function getSessionAttemptView(
   }
   if (attempt.staleProcessing) {
     return {
-      label: "Processing lease expired",
-      message: "The last gateway session request did not finish cleanly. A retry can reclaim it.",
+      label: "Checkout preparation unfinished",
+      message: "The session request did not finish within its processing window. Review the recorded details.",
       badgeVariant: "destructive",
     };
   }
   if (attempt.status === "created") {
-    if (attempt.gateway === "stripe") {
-      const message = orderState.paymentStatus === "refunded"
-        ? "This card payment completed and was later refunded."
-        : orderState.paymentStatus === "paid"
-          ? "This card payment completed for the order."
-          : orderState.status === "cancelled"
-            ? "This card payment belongs to a cancelled order and cannot be retried."
-            : "The buyer can retry this card payment without creating another order.";
-      return {
-        label: "Card payment created",
-        message,
-        badgeVariant: "default",
-      };
-    }
     return {
-      label: "Hosted session created",
-      message: "The buyer received or can reuse this hosted payment session.",
+      label: attempt.gateway === "stripe" ? "Card payment created" : "Hosted session created",
+      message: attempt.gateway === "stripe"
+        ? "The gateway created a card payment request."
+        : "The gateway created a hosted payment session.",
       badgeVariant: "default",
     };
   }
   if (attempt.status === "failed") {
     return {
-      label: "Session setup failed",
-      message: attempt.gateway === "stripe"
-        ? "The card payment could not be prepared. The buyer can retry from the checkout or receipt."
-        : "The platform stopped before exposing a hosted payment session to the buyer.",
+      label: "Payment attempt unsuccessful",
+      message: "Review the recorded reason and gateway details.",
       badgeVariant: "destructive",
     };
   }
@@ -911,7 +896,7 @@ export function PaymentCard({ order }: PaymentCardProps) {
                 </Button>
               </div>
               {paymentSessionAttempts.map((attempt) => {
-                const view = getSessionAttemptView(attempt, order);
+                const view = getSessionAttemptView(attempt);
                 const hasTechnicalDetails = Boolean(
                   attempt.claimExpiresAt
                     || attempt.providerSessionId
@@ -950,7 +935,7 @@ export function PaymentCard({ order }: PaymentCardProps) {
                       </details>
                     ) : null}
                     {attempt.lastError && (
-                      <p className="mt-2 truncate text-destructive">{attempt.lastError}</p>
+                      <p className="mt-2 break-words text-destructive">{attempt.lastError}</p>
                     )}
                   </div>
                 );
