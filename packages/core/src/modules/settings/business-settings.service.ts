@@ -5,7 +5,7 @@
 import { settings } from "@scalius/database/schema";
 import { eq } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
-import { upsertSetting } from "../payments/gateway-settings";
+import { saveSettingAggregate, type SettingAggregateWrite } from "./settings-write";
 
 // ─────────────────────────────────────────
 // Types
@@ -90,14 +90,14 @@ export async function saveBusinessSettings(
     db: Database,
     data: Partial<BusinessInfo>,
 ): Promise<void> {
-    const ops: Promise<void>[] = [];
+    const writes: SettingAggregateWrite[] = [];
 
     for (const [camelKey, snakeKey] of Object.entries(KEY_MAP)) {
         const value = data[camelKey as keyof BusinessInfo];
         if (typeof value === "string") {
-            ops.push(upsertSetting(db, CATEGORY, snakeKey, value.trim()));
+            writes.push({ category: CATEGORY, key: snakeKey, value: value.trim() });
         }
     }
 
-    await Promise.all(ops);
+    await saveSettingAggregate(db, writes);
 }

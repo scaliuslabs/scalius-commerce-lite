@@ -17,6 +17,7 @@ import {
 import * as schema from "@scalius/database/schema";
 
 import { prepareSettingAggregateStatements, saveSettingAggregate } from "./settings-write";
+import { getBusinessSettings, saveBusinessSettings } from "./business-settings.service";
 import { buildClearNotificationProviderBlocksStatement } from "../notifications/notification-provider-health";
 import { readFirebaseServiceAccountJsonFromStoredValue } from "../../integrations/firebase/settings";
 
@@ -157,6 +158,40 @@ describe.each([
   ["D1", createD1SettingsDatabase],
   ["TursoDB", createTursoSettingsDatabase],
 ] as const)("%s settings aggregate conformance", (_provider, createDatabase) => {
+  it.each(["company_name", "phone", "invoice_footer_text"])("rolls back the entire Business save when %s fails", async (failure) => {
+    const sqlite = createSettingsSchema();
+    const db = createDatabase(sqlite);
+    await saveBusinessSettings(db, {
+      companyName: "Original company", legalName: "Original legal name",
+      phone: "01700000000", email: "original@example.test",
+    });
+    const snapshot = () => sqlite.prepare("SELECT * FROM settings ORDER BY category, key").all();
+    const previous = snapshot();
+    const next = {
+      companyName: "  Updated company  ", addressLine2: "  New address detail  ",
+      phone: "  ", email: "  updated@example.test  ", invoiceFooterText: "  Thank you  ",
+    };
+    // Reject the first, middle, or last submitted write, including a new row.
+    sqlite.exec(`
+      CREATE TRIGGER reject_business_write BEFORE INSERT ON settings
+      WHEN NEW.category = 'business_info' AND NEW.key = '${failure}'
+      BEGIN SELECT RAISE(ABORT, 'blocked Business write'); END;
+    `);
+    await expect(saveBusinessSettings(db, next)).rejects.toThrow();
+    expect(snapshot()).toEqual(previous);
+
+    sqlite.exec("DROP TRIGGER reject_business_write");
+    await saveBusinessSettings(db, next);
+    expect(await getBusinessSettings(db)).toMatchObject({
+      companyName: "Updated company", addressLine2: "New address detail",
+      phone: "", email: "updated@example.test", invoiceFooterText: "Thank you",
+      legalName: "Original legal name", country: "Bangladesh", invoicePrefix: "INV",
+    });
+    const saved = snapshot();
+    await saveBusinessSettings(db, {});
+    expect(snapshot()).toEqual(saved);
+  });
+
   it.each(["service_account", "public_config", "push-health"])("rolls back the entire Firebase save when %s fails", async (failure) => {
     const sqlite = createSettingsSchema();
     const db = createDatabase(sqlite);
@@ -239,6 +274,30 @@ describe.each([
 });
 
 describe("PostgreSQL settings aggregate conformance", () => {
+  it("commits the actual Business form through one serializable transaction", async () => {
+    const emptyResult = { rows: [], fields: [] };
+    const query = vi.fn(() => Promise.resolve(emptyResult));
+    const transaction = vi.fn(async (queries: PromiseLike<typeof emptyResult>[]) =>
+      await Promise.all(queries));
+    const db = createPostgresDatabase(
+      "postgresql://user:secret@example.neon.tech/settings",
+      { connect: () => ({ query, transaction }) },
+    );
+
+    await saveBusinessSettings(db, {
+      companyName: "Updated company", phone: "01700000000", email: "updated@example.test",
+    });
+
+    expect(query).toHaveBeenCalledTimes(3);
+    expect(transaction).toHaveBeenCalledOnce();
+    expect(transaction).toHaveBeenCalledWith(expect.any(Array), {
+      arrayMode: true,
+      fullResults: true,
+      isolationLevel: "Serializable",
+      readOnly: false,
+    });
+  });
+
   it("submits the whole form through one serializable transaction", async () => {
     const emptyResult = { rows: [], fields: [] };
     const query = vi.fn(() => Promise.resolve(emptyResult));

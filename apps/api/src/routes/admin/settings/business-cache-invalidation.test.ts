@@ -118,6 +118,25 @@ describe("business settings cache invalidation", () => {
         );
     });
 
+    it("does not invalidate layout when the Business write fails", async () => {
+        const { app, env } = createTestApp();
+        mocks.saveBusinessSettings.mockRejectedValueOnce(new Error("Business settings write failed"));
+
+        const response = await app.request(
+            "/api/v1/admin/settings/business",
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ companyName: "Updated company", phone: "01700000000" }),
+            },
+            env,
+        );
+
+        expect(response.status).toBe(500);
+        expect(mocks.saveBusinessSettings).toHaveBeenCalledOnce();
+        expect(mocks.invalidateApiAndScheduleStorefrontGroups).not.toHaveBeenCalled();
+    });
+
     it.each([
         "http://images.example.com/logo.png",
         "//images.example.com/logo.png",
