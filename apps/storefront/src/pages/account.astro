@@ -112,26 +112,26 @@ const layoutData = await getLayoutData();
             </button>
             <div id="profileForm" class="hidden p-5 pt-0 border-t border-border mt-2 space-y-4">
               <div>
-                <label class="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Full Name</label>
+                <label for="fieldName" class="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Full Name</label>
                 <input id="fieldName" type="text" class="w-full bg-muted border-transparent focus:bg-background focus:border-input focus:ring-0 rounded-lg text-sm px-3 py-2.5 text-foreground transition-all outline-none" />
               </div>
               <div>
-                <label class="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Phone (Read-only)</label>
+                <label for="fieldPhone" class="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Phone (Read-only)</label>
                 <input id="fieldPhone" type="tel" disabled class="w-full bg-muted border-transparent text-muted-foreground rounded-lg text-sm px-3 py-2.5 cursor-not-allowed outline-none" />
               </div>
               <div>
-                <label class="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Address</label>
+                <label for="fieldAddress" class="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Address</label>
                 <input id="fieldAddress" type="text" class="w-full bg-muted border-transparent focus:bg-background focus:border-input focus:ring-0 rounded-lg text-sm px-3 py-2.5 text-foreground transition-all outline-none" placeholder="Apt, Street" />
               </div>
               <div class="grid grid-cols-2 gap-3">
                 <div>
-                  <label class="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">City</label>
+                  <label for="fieldCity" class="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">City</label>
                   <select id="fieldCity" class="w-full bg-muted border-transparent focus:bg-background focus:border-input focus:ring-0 rounded-lg text-sm px-3 py-2.5 text-foreground transition-all outline-none">
                     <option value="">City</option>
                   </select>
                 </div>
                 <div>
-                  <label class="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Zone</label>
+                  <label for="fieldZone" class="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Zone</label>
                   <select id="fieldZone" disabled class="w-full bg-muted border-transparent focus:bg-background focus:border-input focus:ring-0 rounded-lg text-sm px-3 py-2.5 text-foreground transition-all outline-none disabled:opacity-50">
                     <option value="">Zone</option>
                   </select>
