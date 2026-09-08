@@ -308,14 +308,14 @@ const orderPlacedAt = formatOrderReceiptDate(order?.createdAt, checkoutLanguage.
           </svg>
         </div>
       ) : (
-        <div class={`mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full ${orderSuccessView.kind === "payment_issue" ? "bg-destructive/10 text-destructive" : orderSuccessView.kind === "payment_pending" ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-700"}`}>
+        <div class={`mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full ${orderSuccessView.kind === "payment_issue" ? "bg-destructive text-destructive-foreground" : orderSuccessView.kind === "payment_pending" ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-700"}`}>
           <svg class="h-10 w-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d={orderSuccessView.kind === "payment_issue" ? "M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" : orderSuccessView.kind === "payment_pending" ? "M12 6v6l4 2m6-2a10 10 0 1 1-20 0 10 10 0 0 1 20 0Z" : "M12 16h.01M12 8v4m9 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"}></path>
           </svg>
         </div>
       )}
       <h1 class="mb-2 text-2xl font-bold">{orderSuccessView.title}</h1>
-      <p class="text-gray-600">{orderSuccessView.message}</p>
+      <p class="text-muted-foreground">{orderSuccessView.message}</p>
       {orderSuccessView.kind === "payment_pending" && (
         <div class="mt-3 text-sm text-muted-foreground">
           <p data-payment-status-message aria-live="polite">
@@ -409,7 +409,7 @@ const orderPlacedAt = formatOrderReceiptDate(order?.createdAt, checkoutLanguage.
       >
         <h2 class="text-lg font-medium mb-4 flex items-center">
           <svg
-            class="w-5 h-5 mr-2 text-gray-700"
+            class="w-5 h-5 mr-2 text-muted-foreground"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -425,89 +425,89 @@ const orderPlacedAt = formatOrderReceiptDate(order?.createdAt, checkoutLanguage.
         </h2>
         <div class="space-y-4">
           <div class="flex justify-between">
-            <span class="text-gray-600">{copy.orderReceiptOrderNumberText}</span>
+            <span class="text-muted-foreground">{copy.orderReceiptOrderNumberText}</span>
             <span class="break-all text-right font-medium">{order.id}</span>
           </div>
           {orderPlacedAt && <div class="flex justify-between gap-4">
-            <span class="text-gray-600">{copy.orderReceiptPlacedText}</span>
+            <span class="text-muted-foreground">{copy.orderReceiptPlacedText}</span>
             <span class="text-right font-medium">{orderPlacedAt}</span>
           </div>}
           <div class="flex justify-between">
-            <span class="text-gray-600">{copy.orderReceiptStatusText}</span>
+            <span class="text-muted-foreground">{copy.orderReceiptStatusText}</span>
             <span
               class={`rounded-full px-2 py-0.5 text-sm font-medium ${orderSuccessView.orderBadgeClass}`}
               >{orderSuccessView.orderStatusLabel}</span
             >
           </div>
           <div class="flex justify-between">
-            <span class="text-gray-600">{copy.orderReceiptPaymentText}</span>
+            <span class="text-muted-foreground">{copy.orderReceiptPaymentText}</span>
             <span class="text-right font-medium">{formatOrderSuccessPaymentMethod(order.paymentMethod, copy)}</span>
           </div>
           <div class="flex justify-between">
-            <span class="text-gray-600">{copy.orderReceiptPaymentStatusText}</span>
+            <span class="text-muted-foreground">{copy.orderReceiptPaymentStatusText}</span>
             <span
               class={`rounded-full px-2 py-0.5 text-sm font-medium ${orderSuccessView.paymentBadgeClass}`}
               >{orderSuccessView.paymentStatusLabel}</span
             >
           </div>
           {savedMoneySummary ? (
-            <div class="space-y-3 border-t border-gray-200 pt-4">
+            <div class="space-y-3 border-t border-border pt-4">
               <div class="flex justify-between gap-4">
-                <span class="text-gray-600">{copy.subtotalText}</span>
+                <span class="text-muted-foreground">{copy.subtotalText}</span>
                 <span class="font-medium">{formatSavedMinorAmount(savedMoneySummary.subtotalMinor, savedMoneySummary)}</span>
               </div>
               <div class="flex justify-between">
-                <span class="text-gray-600">{receiptDeliveryLabel}</span>
+                <span class="text-muted-foreground">{receiptDeliveryLabel}</span>
                 <span class="font-medium">{savedMoneySummary.shippingMinor === 0 ? copy.freeText : formatSavedMinorAmount(savedMoneySummary.shippingMinor, savedMoneySummary)}</span>
               </div>
-              {receiptDeliveryDetails && <p class="text-xs leading-relaxed text-gray-500">{receiptDeliveryDetails}</p>}
+              {receiptDeliveryDetails && <p class="text-xs leading-relaxed text-muted-foreground">{receiptDeliveryDetails}</p>}
               {savedMoneySummary.discountMinor > 0 && <div class="flex justify-between gap-4">
-                <span class="text-gray-600">{copy.discountText}</span>
-                <span class="font-medium text-primary">
+                <span class="text-muted-foreground">{copy.discountText}</span>
+                <span class="font-medium text-foreground">
                   −{formatSavedMinorAmount(savedMoneySummary.discountMinor, savedMoneySummary)}
                 </span>
               </div>}
               {savedMoneySummary.taxMinor > 0 && <div class="flex justify-between gap-4">
-                <span class="text-gray-600">{savedMoneySummary.taxLabel}{savedMoneySummary.pricesIncludeTax ? ` (${copy.includedText})` : ""}</span>
+                <span class="text-muted-foreground">{savedMoneySummary.taxLabel}{savedMoneySummary.pricesIncludeTax ? ` (${copy.includedText})` : ""}</span>
                 <span class="font-medium">{formatSavedMinorAmount(savedMoneySummary.taxMinor, savedMoneySummary)}</span>
               </div>}
-              <div class="flex justify-between gap-4 border-t border-gray-200 pt-3">
-                <span class="font-semibold text-gray-900">{copy.totalText}</span>
-                <span class="font-semibold text-gray-900">{formatSavedMinorAmount(savedMoneySummary.totalMinor, savedMoneySummary)}</span>
+              <div class="flex justify-between gap-4 border-t border-border pt-3">
+                <span class="font-semibold text-foreground">{copy.totalText}</span>
+                <span class="font-semibold text-foreground">{formatSavedMinorAmount(savedMoneySummary.totalMinor, savedMoneySummary)}</span>
               </div>
             </div>
           ) : (
-            <div class="space-y-3 border-t border-gray-200 pt-4">
+            <div class="space-y-3 border-t border-border pt-4">
               <div class="flex justify-between gap-4">
-                <span class="text-gray-600">{copy.subtotalText}</span>
+                <span class="text-muted-foreground">{copy.subtotalText}</span>
                 <span class="font-medium">{formatReceiptAmount(legacySubtotal)}</span>
               </div>
               {(order.shippingCharge > 0 || order.shippingMethodName) && (
                 <div class="flex justify-between gap-4">
-                  <span class="text-gray-600">{receiptDeliveryLabel}</span>
+                  <span class="text-muted-foreground">{receiptDeliveryLabel}</span>
                   <span class="font-medium">{formatReceiptAmount(order.shippingCharge)}</span>
                 </div>
               )}
-              {receiptDeliveryDetails && <p class="text-xs leading-relaxed text-gray-500">{receiptDeliveryDetails}</p>}
+              {receiptDeliveryDetails && <p class="text-xs leading-relaxed text-muted-foreground">{receiptDeliveryDetails}</p>}
               {(order.discountAmount ?? 0) > 0 && (
                 <div class="flex justify-between">
-                  <span class="text-gray-600">{copy.discountText}</span>
-                  <span class="font-medium text-primary">
+                  <span class="text-muted-foreground">{copy.discountText}</span>
+                  <span class="font-medium text-foreground">
                     −{formatReceiptAmount(order.discountAmount ?? 0)}
                   </span>
                 </div>
               )}
-              <div class="flex justify-between gap-4 border-t border-gray-200 pt-3">
-                <span class="font-semibold text-gray-900">{copy.totalText}</span>
-                <span class="font-semibold text-gray-900">{formatReceiptAmount(order.totalAmount)}</span>
+              <div class="flex justify-between gap-4 border-t border-border pt-3">
+                <span class="font-semibold text-foreground">{copy.totalText}</span>
+                <span class="font-semibold text-foreground">{formatReceiptAmount(order.totalAmount)}</span>
               </div>
             </div>
           )}
           {
             order.paidAmount > 0 && visibleBalanceDue > 0 && (
               <div class="flex justify-between">
-                <span class="text-gray-600">{copy.orderReceiptPaidText}</span>
-                <span class="font-medium text-emerald-700">
+                <span class="text-muted-foreground">{copy.orderReceiptPaidText}</span>
+                <span class="font-medium text-foreground">
                   {formatReceiptAmount(order.paidAmount)}
                 </span>
               </div>
@@ -516,7 +516,7 @@ const orderPlacedAt = formatOrderReceiptDate(order?.createdAt, checkoutLanguage.
           {
             visibleBalanceDue > 0 && (
               <div class="flex justify-between">
-                <span class="text-gray-600">{order.paymentMethod === "cod" ? copy.dueOnDeliveryText : copy.orderReceiptBalanceDueText}</span>
+                <span class="text-muted-foreground">{order.paymentMethod === "cod" ? copy.dueOnDeliveryText : copy.orderReceiptBalanceDueText}</span>
                 <span class="font-medium">
                   {formatReceiptAmount(visibleBalanceDue)}
                 </span>
@@ -531,7 +531,7 @@ const orderPlacedAt = formatOrderReceiptDate(order?.createdAt, checkoutLanguage.
       >
         <h2 class="text-lg font-medium mb-4 flex items-center">
           <svg
-            class="w-5 h-5 mr-2 text-gray-700"
+            class="w-5 h-5 mr-2 text-muted-foreground"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -562,7 +562,7 @@ const orderPlacedAt = formatOrderReceiptDate(order?.createdAt, checkoutLanguage.
       >
         <h2 class="text-lg font-medium mb-4 flex items-center">
           <svg
-            class="w-5 h-5 mr-2 text-gray-700"
+            class="w-5 h-5 mr-2 text-muted-foreground"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -580,7 +580,7 @@ const orderPlacedAt = formatOrderReceiptDate(order?.createdAt, checkoutLanguage.
             orderItemsFromApi.map((item) => {
               const savedLine = resolveSavedOrderLineMoney(item, savedMoneySummary);
               return (
-                <div class="order-success-print-item flex items-center justify-between gap-3 border-b border-gray-100 pb-3 last:border-0 last:pb-0">
+                <div class="order-success-print-item flex items-center justify-between gap-3 border-b border-border pb-3 last:border-0 last:pb-0">
                   <div class="flex min-w-0 items-center gap-3">
                     {item.productImage && (
                       <img
@@ -597,24 +597,24 @@ const orderPlacedAt = formatOrderReceiptDate(order?.createdAt, checkoutLanguage.
                       {item.productName || copy.orderReceiptProductUnavailableText}
                     </p>
                     {item.variantLabel && (
-                      <p class="text-xs text-gray-500 mt-1">
+                      <p class="text-xs text-muted-foreground mt-1">
                         {item.variantLabel}
                       </p>
                     )}
-                    <p class="text-sm text-gray-600 mt-1">
+                    <p class="text-sm text-muted-foreground mt-1">
                       {formatCheckoutLanguageText(copy.orderReceiptQuantityText, { quantity: item.quantity })} × {savedLine && savedMoneySummary
                         ? formatSavedMinorAmount(savedLine.unitPriceMinor, savedMoneySummary)
                         : formatReceiptAmount(item.price)}
                     </p>
                     {savedLine && savedMoneySummary && savedLine.discountMinor > 0 && (
-                      <p class="mt-1 text-xs text-gray-500">
+                      <p class="mt-1 text-xs text-muted-foreground">
                         {formatCheckoutLanguageText(copy.orderReceiptItemDiscountText, {
                           amount: formatSavedMinorAmount(savedLine.discountMinor, savedMoneySummary),
                         })}
                       </p>
                     )}
                     {savedLine && savedMoneySummary && savedLine.taxMinor > 0 && (
-                      <p class="mt-1 text-xs text-gray-500">
+                      <p class="mt-1 text-xs text-muted-foreground">
                         {formatCheckoutLanguageText(
                           savedMoneySummary.pricesIncludeTax
                             ? copy.orderReceiptTaxIncludedText
@@ -629,7 +629,7 @@ const orderPlacedAt = formatOrderReceiptDate(order?.createdAt, checkoutLanguage.
                     </div>
                   </div>
                   <div class="shrink-0 text-right">
-                    {savedLine && savedMoneySummary && <p class="text-xs text-gray-500">{copy.orderReceiptLineTotalText}</p>}
+                    {savedLine && savedMoneySummary && <p class="text-xs text-muted-foreground">{copy.orderReceiptLineTotalText}</p>}
                     <p class="font-medium">
                       {savedLine && savedMoneySummary
                         ? formatSavedMinorAmount(savedLine.totalMinor, savedMoneySummary)
