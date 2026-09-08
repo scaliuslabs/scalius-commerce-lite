@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   AlertTriangle,
@@ -53,6 +53,7 @@ import {
   THEME_SURFACE_CONTRAST_PAIRS,
 } from "./theme-color-presets";
 import {
+  normalizeThemeColors,
   normalizeThemeSettingsDraft,
   rebaseThemeSettingsDraft,
   themeSettingsDraftsEqual,
@@ -117,6 +118,23 @@ const COLOR_GROUPS: Array<{
 
 const CONTROL_KEYS: ColorKey[] = ["border", "input", "ring"];
 
+function getThemeColorReadiness(colors: Record<string, string>) {
+  const effectiveColors = { ...DEFAULT_THEME_COLORS, ...normalizeThemeColors(colors) };
+  const invalidKeys = COLOR_FIELDS
+    .filter((field) => getThemeColorError(colors[field.key] ?? ""))
+    .map((field) => field.key);
+  const contrastFailures = THEME_CONTRAST_PAIRS.filter(({ background, foreground }) =>
+    (background in colors || foreground in colors) &&
+    getThemeColorPairStatus(effectiveColors[foreground] ?? "", effectiveColors[background] ?? "").passes === false,
+  );
+  return { effectiveColors, invalidKeys, contrastFailures };
+}
+
+interface ThemeDraftIntent {
+  base: StorefrontThemeSettings;
+  submitted: StorefrontThemeSettings;
+}
+
 export default function ThemeSettingsPage({
   section,
   onSectionChange,
@@ -144,22 +162,31 @@ export default function ThemeSettingsPage({
   const [publishedRevision, setPublishedRevision] = useState(0);
   const [draftRevision, setDraftRevision] = useState(0);
   const [basePublishedRevision, setBasePublishedRevision] = useState(0);
-  const [conflict, setConflict] = useState<ThemeWorkspacePayload | null>(null);
+  const [conflict, setConflict] = useState<(ThemeDraftIntent & { latest: ThemeWorkspacePayload | null }) | null>(null);
   const [versions, setVersions] = useState<ThemeVersionPayload[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [operation, setOperation] = useState<
-    "saving" | "previewing" | "publishing" | "rebasing" | `restoring:${number}` | null
+    "saving" | "previewing" | "publishing" | "rebasing" | "refreshing" | `restoring:${number}` | null
   >(null);
+  const operationLabel = operation === "saving" ? "Saving…"
+    : operation === "previewing" ? "Opening…"
+    : operation === "publishing" ? "Publishing…"
+    : operation === "rebasing" ? "Rebasing…"
+    : operation === "refreshing" ? "Retrying…"
+    : operation ? "Restoring…" : null;
+  const operationInFlight = useRef(false);
   const [message, setMessage] = useState<{
     type: "success" | "error";
     text: string;
   } | null>(null);
 
-  const applyWorkspace = useCallback((workspace: ThemeWorkspacePayload) => {
-    setTheme(workspace.draft.theme);
+  const applyWorkspace = useCallback((workspace: ThemeWorkspacePayload, editorSnapshot?: StorefrontThemeSettings) => {
+    setTheme((current) => editorSnapshot
+      ? rebaseThemeSettingsDraft({ base: editorSnapshot, local: current, latest: workspace.draft.theme })
+      : workspace.draft.theme);
     setSavedDraftTheme(workspace.draft.theme);
     setPublishedTheme(workspace.published.theme);
     setPublishedRevision(workspace.published.revision);
@@ -167,6 +194,27 @@ export default function ThemeSettingsPage({
     setBasePublishedRevision(workspace.draft.basePublishedRevision);
     setConflict(null);
   }, []);
+
+  function beginOperation(next: NonNullable<typeof operation>) {
+    if (operationInFlight.current) return false;
+    operationInFlight.current = true;
+    setOperation(next);
+    setMessage(null);
+    return true;
+  }
+
+  function finishOperation() {
+    operationInFlight.current = false;
+    setOperation(null);
+  }
+
+  function acknowledgeDraft(saved: ThemeDraftPayload, editorSnapshot: StorefrontThemeSettings) {
+    setTheme((current) => rebaseThemeSettingsDraft({ base: editorSnapshot, local: current, latest: saved.theme }));
+    setSavedDraftTheme(saved.theme);
+    setDraftRevision(saved.revision);
+    setBasePublishedRevision(saved.basePublishedRevision);
+    setConflict(null);
+  }
 
   const fetchWorkspace = useCallback(async () => {
     try {
@@ -204,8 +252,8 @@ export default function ThemeSettingsPage({
 
   const storefrontUrlQuery = useQuery(storefrontUrlQueryOptions());
 
-  const effectiveColors = useMemo(
-    () => ({ ...DEFAULT_THEME_COLORS, ...theme.colors }),
+  const { effectiveColors, invalidKeys, contrastFailures } = useMemo(
+    () => getThemeColorReadiness(theme.colors),
     [theme.colors],
   );
   const dirty = useMemo(
@@ -215,23 +263,6 @@ export default function ThemeSettingsPage({
   const hasUnpublishedChanges = useMemo(
     () => !themeSettingsDraftsEqual(theme, publishedTheme),
     [publishedTheme, theme],
-  );
-  const invalidKeys = useMemo(
-    () =>
-      COLOR_FIELDS.filter((field) => getThemeColorError(theme.colors[field.key] ?? ""))
-        .map((field) => field.key),
-    [theme.colors],
-  );
-  const contrastFailures = useMemo(
-    () =>
-      THEME_CONTRAST_PAIRS.filter(({ background, foreground }) =>
-        (background in theme.colors || foreground in theme.colors) &&
-        getThemeColorPairStatus(
-          effectiveColors[foreground] ?? "",
-          effectiveColors[background] ?? "",
-        ).passes === false,
-      ),
-    [effectiveColors, theme.colors],
   );
   const publishBlocked = invalidKeys.length > 0 || contrastFailures.length > 0;
   const configuredStorefrontUrl = storefrontUrlQuery.data?.storefrontUrl;
@@ -266,66 +297,100 @@ export default function ThemeSettingsPage({
   };
 
   const handleReset = () => {
+    if (operationInFlight.current) return;
     setTheme(DEFAULT_STOREFRONT_THEME_SETTINGS);
+    setConflict((current) => current ? { ...current, base: savedDraftTheme, submitted: savedDraftTheme } : null);
     setMessage(null);
   };
 
   const handleDiscard = () => {
+    if (operationInFlight.current) return;
     setTheme(savedDraftTheme);
+    setConflict((current) => current ? { ...current, base: savedDraftTheme, submitted: savedDraftTheme } : null);
     setMessage(null);
   };
 
   const loadConflictingVersion = () => {
-    if (!conflict) return;
-    applyWorkspace(conflict);
+    if (!conflict?.latest || operationInFlight.current) return;
+    applyWorkspace(conflict.latest);
     setMessage(null);
   };
 
   const rebaseLocalChanges = async () => {
-    if (!conflict) return;
-    try {
-      setOperation("rebasing");
-      setMessage(null);
-      const rebased = rebaseThemeSettingsDraft({
-        base: savedDraftTheme,
-        local: theme,
-        latest: conflict.draft.theme,
+    if (!canManage || !conflict?.latest || operationInFlight.current) return;
+    if (publishBlocked) {
+      setMessage({ type: "error", text: "Resolve the highlighted style issues before rebasing." });
+      return;
+    }
+    const editorSnapshot = theme;
+    // Replay edits made before submission, then later edits including explicit reverts.
+    const rebased = rebaseThemeSettingsDraft({
+      base: conflict.submitted,
+      local: editorSnapshot,
+      latest: rebaseThemeSettingsDraft({
+        base: conflict.base, local: conflict.submitted, latest: conflict.latest.draft.theme,
+      }),
+    });
+    const mergedReadiness = getThemeColorReadiness(rebased.colors);
+    if (mergedReadiness.invalidKeys.length || mergedReadiness.contrastFailures.length) {
+      const fields = mergedReadiness.invalidKeys.map((key) => COLOR_FIELD_BY_KEY[key].label);
+      const pairs = mergedReadiness.contrastFailures.map(({ background, foreground }) =>
+        `${COLOR_FIELD_BY_KEY[foreground].label} / ${COLOR_FIELD_BY_KEY[background].label}`,
+      );
+      setMessage({
+        type: "error",
+        text: `Merged colors need attention: ${[...fields, ...pairs].join(", ")}. Adjust these colors before rebasing.`,
       });
+      return;
+    }
+    if (!beginOperation("rebasing")) return;
+    try {
       const saved = await rebaseThemeDraft({
         data: {
           theme: normalizeThemeSettingsDraft(rebased),
-          expectedDraftRevision: conflict.draft.revision,
-          basePublishedRevision: conflict.published.revision,
+          expectedDraftRevision: conflict.latest.draft.revision,
+          basePublishedRevision: conflict.latest.published.revision,
         },
       });
-      setTheme(saved.theme);
-      setSavedDraftTheme(saved.theme);
-      setPublishedTheme(conflict.published.theme);
-      setPublishedRevision(conflict.published.revision);
-      setDraftRevision(saved.revision);
-      setBasePublishedRevision(saved.basePublishedRevision);
-      setConflict(null);
+      acknowledgeDraft(saved, editorSnapshot);
+      setPublishedTheme(conflict.latest.published.theme);
+      setPublishedRevision(conflict.latest.published.revision);
       setMessage({ type: "success", text: "Your changes were rebased and saved." });
     } catch (error) {
-      await handleWorkspaceConflict(error, "Draft could not be rebased.");
+      await handleWorkspaceConflict(error, "Draft could not be rebased.", conflict);
     } finally {
-      setOperation(null);
+      finishOperation();
     }
   };
 
-  const handleWorkspaceConflict = async (error: unknown, fallback: string) => {
+  const handleWorkspaceConflict = async (error: unknown, fallback: string, intent: ThemeDraftIntent) => {
     if (!isAdminApiConflictError(error)) {
       setMessage({ type: "error", text: fallback });
       return;
     }
+    await readConflictingWorkspace(intent);
+  };
+
+  const readConflictingWorkspace = async (intent: ThemeDraftIntent) => {
+    setConflict({ base: intent.base, submitted: intent.submitted, latest: null });
     try {
-      setConflict(await getThemeWorkspace());
+      const latest = await getThemeWorkspace();
+      setConflict({ base: intent.base, submitted: intent.submitted, latest });
       setMessage(null);
     } catch {
       setMessage({
         type: "error",
-        text: "The storefront style changed elsewhere. Reload the workspace before continuing.",
+        text: "The latest storefront style could not be loaded. Your changes remain in this tab. Retry before continuing.",
       });
+    }
+  };
+
+  const retryConflictingVersion = async () => {
+    if (!conflict || !beginOperation("refreshing")) return;
+    try {
+      await readConflictingWorkspace(conflict);
+    } finally {
+      finishOperation();
     }
   };
 
@@ -338,27 +403,26 @@ export default function ThemeSettingsPage({
         updatedAt: null,
       };
     }
+    if (!canManage) return null;
+    const intent = { base: savedDraftTheme, submitted: theme };
     try {
       const saved = await saveThemeDraft({
         data: {
-          theme: normalizeThemeSettingsDraft(theme),
+          theme: normalizeThemeSettingsDraft(intent.submitted),
           expectedDraftRevision: draftRevision,
           basePublishedRevision,
         },
       });
-      setTheme(saved.theme);
-      setSavedDraftTheme(saved.theme);
-      setDraftRevision(saved.revision);
-      setBasePublishedRevision(saved.basePublishedRevision);
-      setConflict(null);
+      acknowledgeDraft(saved, intent.submitted);
       return saved;
     } catch (error) {
-      await handleWorkspaceConflict(error, "Draft could not be saved. Your changes remain in this tab.");
+      await handleWorkspaceConflict(error, "Draft could not be saved. Your changes remain in this tab.", intent);
       return null;
     }
   };
 
   const handleSaveDraft = async () => {
+    if (!canManage || operationInFlight.current || conflict) return;
     if (publishBlocked) {
       setMessage({
         type: "error",
@@ -369,13 +433,12 @@ export default function ThemeSettingsPage({
       });
       return;
     }
+    if (!beginOperation("saving")) return;
     try {
-      setOperation("saving");
-      setMessage(null);
       const saved = await persistDraft();
       if (saved) setMessage({ type: "success", text: `Draft revision ${saved.revision} saved.` });
     } finally {
-      setOperation(null);
+      finishOperation();
     }
   };
 
@@ -383,6 +446,7 @@ export default function ThemeSettingsPage({
     selectedPath = previewPath,
     selectedDevice = previewDevice,
   ) => {
+    if (operationInFlight.current || conflict) return;
     if (!configuredStorefrontUrl) {
       setMessage({ type: "error", text: "Configure a valid Storefront URL before previewing." });
       return;
@@ -398,14 +462,15 @@ export default function ThemeSettingsPage({
       setMessage({ type: "error", text: "Allow pop-ups for this dashboard to open the preview." });
       return;
     }
+    if (!beginOperation("previewing")) return;
+    let intent = { base: savedDraftTheme, submitted: theme };
     try {
-      setOperation("previewing");
-      setMessage(null);
       const saved = await persistDraft();
       if (!saved) {
         previewWindow.close();
         return;
       }
+      intent = { base: saved.theme, submitted: saved.theme };
       const preview = await createThemePreviewSession({
         data: {
           expectedDraftRevision: saved.revision,
@@ -421,13 +486,14 @@ export default function ThemeSettingsPage({
       setMessage({ type: "success", text: `Preview opened from draft revision ${saved.revision}.` });
     } catch (error) {
       previewWindow.close();
-      await handleWorkspaceConflict(error, "Draft preview could not be opened.");
+      await handleWorkspaceConflict(error, "Draft preview could not be opened.", intent);
     } finally {
-      setOperation(null);
+      finishOperation();
     }
   };
 
   const handlePublish = async () => {
+    if (!canManage || operationInFlight.current) return;
     if (conflict) {
       setMessage({
         type: "error",
@@ -447,11 +513,12 @@ export default function ThemeSettingsPage({
       return;
     }
 
+    if (!beginOperation("publishing")) return;
+    let intent = { base: savedDraftTheme, submitted: theme };
     try {
-      setOperation("publishing");
-      setMessage(null);
       const saved = await persistDraft();
       if (!saved) return;
+      intent = { base: saved.theme, submitted: saved.theme };
       if (themeSettingsDraftsEqual(saved.theme, publishedTheme)) {
         setMessage({ type: "success", text: "Published style is already current." });
         return;
@@ -462,20 +529,22 @@ export default function ThemeSettingsPage({
           expectedDraftRevision: saved.revision,
         },
       });
-      applyWorkspace(workspace);
+      applyWorkspace(workspace, saved.theme);
       setMessage({ type: "success", text: `Storefront style published as revision ${workspace.published.revision}.` });
       if (section === "review") void loadHistory();
     } catch (error) {
-      await handleWorkspaceConflict(error, "Storefront style could not be published. The saved draft remains available.");
+      await handleWorkspaceConflict(error, "Storefront style could not be published. The saved draft remains available.", intent);
     } finally {
-      setOperation(null);
+      finishOperation();
     }
   };
 
   const handleRestore = async (sourceRevision: number) => {
+    if (!canManage || conflict) return;
+    if (!beginOperation(`restoring:${sourceRevision}`)) return;
+    const editorSnapshot = theme;
+    let intent = { base: savedDraftTheme, submitted: editorSnapshot };
     try {
-      setOperation(`restoring:${sourceRevision}`);
-      setMessage(null);
       let exactDraftRevision = draftRevision;
       if (exactDraftRevision === 0) {
         const saved = await saveThemeDraft({
@@ -486,6 +555,8 @@ export default function ThemeSettingsPage({
           },
         });
         exactDraftRevision = saved.revision;
+        acknowledgeDraft(saved, savedDraftTheme);
+        intent = { base: saved.theme, submitted: editorSnapshot };
       }
       const workspace = await rollbackTheme({
         data: {
@@ -494,16 +565,16 @@ export default function ThemeSettingsPage({
           expectedDraftRevision: exactDraftRevision,
         },
       });
-      applyWorkspace(workspace);
+      applyWorkspace(workspace, editorSnapshot);
       setMessage({
         type: "success",
         text: `Revision ${sourceRevision} restored as published revision ${workspace.published.revision}.`,
       });
       await loadHistory();
     } catch (error) {
-      await handleWorkspaceConflict(error, `Revision ${sourceRevision} could not be restored.`);
+      await handleWorkspaceConflict(error, `Revision ${sourceRevision} could not be restored.`, intent);
     } finally {
-      setOperation(null);
+      finishOperation();
     }
   };
 
@@ -588,14 +659,17 @@ export default function ThemeSettingsPage({
             <div>
               <p className="font-medium">The saved draft or published style changed elsewhere.</p>
               <p className="text-xs text-muted-foreground">
-                Load draft r{conflict.draft.revision}, or replay only your changed fields on top of it.
+                {conflict.latest
+                  ? `Load draft r${conflict.latest.draft.revision}, or replay only your changed fields on top of it.`
+                  : "Read the latest workspace before choosing how to resolve your changes."}
               </p>
             </div>
           </div>
-          <div className="grid shrink-0 grid-cols-2 gap-2">
+          {conflict.latest ? <div className="grid shrink-0 grid-cols-2 gap-2">
             <button
               type="button"
               onClick={loadConflictingVersion}
+              disabled={operation !== null}
               className="min-h-10 rounded-md border bg-background px-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               Use latest
@@ -603,12 +677,21 @@ export default function ThemeSettingsPage({
             <button
               type="button"
               onClick={() => void rebaseLocalChanges()}
-              disabled={operation === "rebasing"}
+              disabled={!canManage || operation !== null || publishBlocked}
               className="min-h-10 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               {operation === "rebasing" ? "Rebasing…" : "Rebase mine"}
             </button>
-          </div>
+          </div> : (
+            <button
+              type="button"
+              onClick={() => void retryConflictingVersion()}
+              disabled={operation !== null}
+              className="min-h-10 shrink-0 rounded-md border bg-background px-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {operation === "refreshing" ? "Retrying…" : "Retry"}
+            </button>
+          )}
         </div>
       )}
 
@@ -776,6 +859,8 @@ export default function ThemeSettingsPage({
           onPreviewLocationChange={onPreviewLocationChange}
           onPreview={(path, device) => void handlePreview(path, device)}
           previewing={operation === "previewing"}
+          operationPending={operation !== null}
+          hasConflict={Boolean(conflict)}
           versions={versions}
           historyLoading={historyLoading}
           historyError={historyError}
@@ -790,15 +875,16 @@ export default function ThemeSettingsPage({
         className="fixed inset-x-0 bottom-0 z-20 border-t bg-background/95 px-3 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] backdrop-blur supports-[backdrop-filter]:bg-background/85 lg:left-[var(--sidebar-width,0px)] sm:py-3 sm:pb-[calc(0.75rem+env(safe-area-inset-bottom))]"
       >
         <div className="mx-auto flex max-w-6xl flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
-          {(dirty || hasUnpublishedChanges) && (
-            <p className="truncate text-xs text-muted-foreground sm:mr-auto">
-              {dirty
+          {(operation || dirty || hasUnpublishedChanges) && (
+            <p role="status" className="truncate text-xs text-muted-foreground sm:mr-auto">
+              {operationLabel ?? (dirty
                 ? "Unsaved changes"
-                : `Draft r${draftRevision || "new"} is ready to publish`}
+                : `Draft r${draftRevision || "new"} is ready to publish`)}
             </p>
           )}
           <div
             data-testid="theme-primary-actions"
+            aria-busy={operation !== null}
             className="flex items-center justify-end gap-2"
           >
             <div className="w-11 shrink-0">
@@ -825,7 +911,7 @@ export default function ThemeSettingsPage({
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
-            {dirty && (
+            {(dirty || operation === "saving") && (
               <button
                 type="button"
                 onClick={() => void handleSaveDraft()}
@@ -847,7 +933,7 @@ export default function ThemeSettingsPage({
               {operation === "previewing" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}
               {operation === "previewing" ? "Opening…" : "Preview"}
             </button>
-            {hasUnpublishedChanges && (
+            {(hasUnpublishedChanges || operation === "publishing") && (
               <button
                 type="button"
                 onClick={() => void handlePublish()}
@@ -861,7 +947,7 @@ export default function ThemeSettingsPage({
           </div>
         </div>
       </div>
-      <UnsavedChangesGuard isDirty={dirty || operation !== null} isSubmitting={false} allowSamePathStateNavigation />
+      <UnsavedChangesGuard isDirty={dirty || operation !== null || Boolean(conflict)} isSubmitting={false} allowSamePathStateNavigation />
     </div>
   );
 }
