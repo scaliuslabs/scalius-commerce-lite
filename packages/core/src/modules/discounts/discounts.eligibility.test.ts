@@ -28,6 +28,7 @@ function createReadDb(results: Array<{ get?: unknown; all?: unknown[] }>): Datab
 function discountRow(overrides: Record<string, unknown> = {}) {
     return {
         id: "discount_1",
+        revision: 7,
         code: "SAVE20",
         type: DiscountType.AMOUNT_OFF_ORDER,
         valueType: DiscountValueType.PERCENTAGE,
@@ -118,6 +119,16 @@ describe("calculateDiscountAmount product scope", () => {
 });
 
 describe("isDiscountValid authority", () => {
+    it("returns the revision from the same row as the validated amount", async () => {
+        const scopedDb = createReadDb([{ get: discountRow() }]);
+        const result = await isDiscountValid(scopedDb, "SAVE20", 1_000);
+        expect(result).toMatchObject({
+            valid: true,
+            discount: { id: "discount_1", revision: 7, discountValue: 20 },
+        });
+        expect(scopedDb.select).toHaveBeenCalledOnce();
+    });
+
     it("does not turn a stale collection restriction into a cart-wide discount", async () => {
         const scopedDb = createReadDb([
             { get: discountRow({ type: DiscountType.AMOUNT_OFF_PRODUCTS }) },
