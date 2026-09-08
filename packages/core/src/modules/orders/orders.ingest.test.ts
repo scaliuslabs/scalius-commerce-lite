@@ -38,7 +38,7 @@ import { commitStorefrontOrderPayload } from "./orders.ingest";
 function createPayload(overrides: Partial<StorefrontOrderCommitPayload> = {}): StorefrontOrderCommitPayload {
   return {
     checkoutToken: "chk_order_discount",
-    checkoutAuthorityRevision: null,
+    checkoutAuthorityRevision: 1,
     existingCustomer: { id: "cust_existing" },
     orderData: {
       id: "order_discount",
@@ -188,7 +188,9 @@ function createDbMock(options: {
 
   return {
     select: vi.fn((projection: Record<string, unknown>) => ({
-      from: vi.fn(() => createReadQuery(projection)),
+      from: vi.fn(() => "batchGuard" in projection
+        ? { kind: "batch-guard" }
+        : createReadQuery(projection)),
     })),
     update: vi.fn(() => ({
       set: vi.fn(() => ({
@@ -525,6 +527,7 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
       },
     });
     const payload = createPayload({
+      checkoutAuthorityRevision: null,
       discountUsage: null,
       promotion: { cart: {} as never, applied: {} as never },
     });
@@ -590,7 +593,8 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
 
     expect(mocks.safeBatch).toHaveBeenCalledOnce();
     const statements = mocks.safeBatch.mock.calls[0]?.[1] as unknown[];
-    expect(statements[0]).toBe(inventoryStatement);
+    expect(statements[0]).toEqual({ kind: "batch-guard" });
+    expect(statements[1]).toBe(inventoryStatement);
     expect(statements.length).toBeGreaterThan(1);
   });
 
@@ -670,9 +674,10 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
 
     expect(mocks.prepareAtomicCheckoutAttemptCommit).toHaveBeenCalledOnce();
     const statements = mocks.safeBatch.mock.calls[0]?.[1] as unknown[];
-    expect(statements[0]).toBe(attemptWrite);
-    expect(statements[1]).toBe(attemptGuard);
-    expect(statements[2]).toBe(inventoryStatement);
+    expect(statements[0]).toEqual({ kind: "batch-guard" });
+    expect(statements[1]).toBe(attemptWrite);
+    expect(statements[2]).toBe(attemptGuard);
+    expect(statements[3]).toBe(inventoryStatement);
     expect(statements.at(-1)).toBe(receiptWrite);
     expect(db.select).not.toHaveBeenCalledWith(expect.objectContaining({
       accountOwnerCustomerId: expect.anything(),
@@ -713,6 +718,42 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
       orderId: "order_discount",
       alreadyCommitted: true,
     });
+  });
+
+  it.each([null, 0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1])(
+    "rejects new orders without a valid checkout authority revision (%s)",
+    async (checkoutAuthorityRevision) => {
+      await expect(commitStorefrontOrderPayload(createDbMock(), createPayload({
+        checkoutAuthorityRevision,
+      }))).rejects.toThrow("Checkout authority revision is unavailable");
+      expect(mocks.prepareStockReservationBatch).not.toHaveBeenCalled();
+      expect(mocks.safeBatch).not.toHaveBeenCalled();
+    },
+  );
+
+  it("returns a buyer-actionable error when checkout authority changes before commit", async () => {
+    mocks.safeBatch.mockRejectedValue(new Error("CHECKOUT_AUTHORITY_CHANGED"));
+    await expect(commitStorefrontOrderPayload(createDbMock(), createPayload()))
+      .rejects.toThrow("Checkout details changed while the order was being placed");
+    expect(mocks.safeBatch).toHaveBeenCalledOnce();
+  });
+
+  it("guards the order-only batch after an idempotent inventory replay", async () => {
+    mocks.prepareStockReservationBatch.mockResolvedValue({
+      success: true,
+      results: [],
+      statements: [{ kind: "inventory-replay" }],
+      resolveIdempotentReplay: vi.fn(async () => ({ success: true })),
+    });
+    mocks.safeBatch
+      .mockRejectedValueOnce(new Error("inventory reservation already committed"))
+      .mockRejectedValueOnce(new Error("CHECKOUT_AUTHORITY_CHANGED"));
+
+    await expect(commitStorefrontOrderPayload(createDbMock(), createPayload()))
+      .rejects.toThrow("Checkout details changed while the order was being placed");
+    const replayStatements = mocks.safeBatch.mock.calls[1]?.[1] as unknown[];
+    expect(replayStatements[0]).toEqual({ kind: "batch-guard" });
+    expect(replayStatements).not.toContainEqual({ kind: "inventory-replay" });
   });
 
   it("maps reservation failures to structured cart item issues", async () => {
