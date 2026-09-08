@@ -113,7 +113,7 @@ export function ProductPickerDialog({
           <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-2xl gap-0 overflow-hidden p-0 sm:max-h-[calc(100dvh-3rem)]">
+      <DialogContent className="max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-2xl grid-rows-[auto_auto_minmax(3.5rem,1fr)_auto] gap-0 overflow-y-auto p-0 sm:max-h-[calc(100dvh-3rem)]">
         <DialogHeader className="px-4 pb-3 pt-4 pr-14 text-left sm:px-5 sm:pb-4 sm:pt-5 sm:pr-14">
           <DialogTitle>Add products</DialogTitle>
           <DialogDescription>
@@ -137,7 +137,7 @@ export function ProductPickerDialog({
           </div>
         </div>
 
-        <div className="max-h-[min(52dvh,30rem)] overflow-y-auto overscroll-contain">
+        <div className="min-h-0 max-h-[min(52dvh,30rem)] overflow-y-auto overscroll-contain">
           {isInitialLoading ? (
             <div className="flex items-center justify-center px-4 py-10" role="status">
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
