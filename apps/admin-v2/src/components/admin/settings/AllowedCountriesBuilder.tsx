@@ -6,21 +6,21 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+} from "~/components/ui/card";
+import { Button } from "~/components/ui/button";
+import { Input } from "~/components/ui/input";
+import { Label } from "~/components/ui/label";
+import { Badge } from "~/components/ui/badge";
+import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { toast } from "sonner";
 import { ChevronDown, Loader2, RotateCcw, Save, X, Search } from "lucide-react";
-import { getServerFnError } from "@/lib/api-helpers";
+import { getServerFnError } from "~/lib/api-helpers";
 import {
   getAllowedCountries,
   updateAllowedCountries,
   type AllowedCountriesPayload,
-} from "@/lib/api-functions/settings";
-import { queryKeys } from "@/lib/query-keys";
+} from "~/lib/api-functions/settings";
+import { queryKeys } from "~/lib/query-keys";
 import { getCountries, getCountryCallingCode } from "react-phone-number-input";
 import en from "react-phone-number-input/locale/en";
 import type { Country } from "react-phone-number-input";
@@ -40,6 +40,12 @@ const ALL_COUNTRIES: CountryOption[] = getCountries().map((code) => ({
 }));
 
 type CountryMode = "include" | "exclude";
+
+function sameCountries(left: Country[], right: Country[]) {
+  if (left.length !== right.length) return false;
+  const sortedRight = [...right].sort();
+  return [...left].sort().every((country, index) => country === sortedRight[index]);
+}
 
 export default function AllowedCountriesBuilder() {
   const queryClient = useQueryClient();
@@ -83,17 +89,20 @@ export default function AllowedCountriesBuilder() {
   };
 
   const handleSave = async () => {
+    if (saving) return;
     if (!hasLoaded || loadError) {
       toast.error("Reload the country policy before saving.");
       return;
     }
+    const submittedSelected = [...selected];
+    const submittedMode = mode;
+    const submittedPolicy: AllowedCountriesPayload = {
+      allowedCountries: submittedSelected,
+      allowedCountriesMode: submittedMode,
+    };
     setSaving(true);
     try {
-      await updateAllowedCountries({ data: { allowedCountries: selected, mode } });
-      const submittedPolicy: AllowedCountriesPayload = {
-        allowedCountries: [...selected],
-        allowedCountriesMode: mode,
-      };
+      await updateAllowedCountries({ data: { allowedCountries: submittedSelected, mode: submittedMode } });
       const [{ savedPolicy, refreshed }] = await Promise.all([
         getAllowedCountries()
           .then((policy) => ({ savedPolicy: policy, refreshed: true }))
@@ -110,8 +119,8 @@ export default function AllowedCountriesBuilder() {
         ? "exclude"
         : "include";
 
-      setSelected(nextSelected);
-      setMode(nextMode);
+      setSelected((current) => sameCountries(current, submittedSelected) ? nextSelected : current);
+      setMode((current) => current === submittedMode ? nextMode : current);
       setSavedSelected(nextSelected);
       setSavedMode(nextMode);
       queryClient.setQueryData(queryKeys.settings.allowedCountries(), savedPolicy);
@@ -146,14 +155,10 @@ export default function AllowedCountriesBuilder() {
     );
   }, [search]);
 
-  const isDirty = useMemo(() => {
-    if (mode !== savedMode || selected.length !== savedSelected.length) {
-      return true;
-    }
-    const current = [...selected].sort();
-    const saved = [...savedSelected].sort();
-    return current.some((country, index) => country !== saved[index]);
-  }, [mode, savedMode, savedSelected, selected]);
+  const isDirty = useMemo(
+    () => mode !== savedMode || !sameCountries(selected, savedSelected),
+    [mode, savedMode, savedSelected, selected],
+  );
 
   const modeDescription = useMemo(() => {
     if (selected.length === 0) {
@@ -186,7 +191,7 @@ export default function AllowedCountriesBuilder() {
 
   return (
     <div className="max-w-2xl space-y-5">
-      <UnsavedChangesGuard isDirty={isDirty} isSubmitting={saving} />
+      <UnsavedChangesGuard isDirty={isDirty || saving} isSubmitting={false} />
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Customer countries</CardTitle>
@@ -318,7 +323,7 @@ export default function AllowedCountriesBuilder() {
         </CardContent>
       </Card>
 
-      {isDirty ? (
+      {isDirty || saving ? (
         <div className="grid grid-cols-2 gap-2 border-t border-border pt-4 sm:flex sm:justify-end">
           <Button
             type="button"
