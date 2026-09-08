@@ -86,6 +86,17 @@ describe("order success state", () => {
     },
   );
 
+  it("keeps partial COD collection neutral and removes a closed order's payment obligation", () => {
+    const order = makeOrder({ paymentStatus: "partial", paidAmount: 300, balanceDue: 900 });
+    expect(getOrderSuccessViewState(order, ENGLISH_CHECKOUT_LANGUAGE_DATA)).toMatchObject({
+      paymentStatusLabel: "Partially paid",
+      paymentBadgeClass: "bg-slate-100 text-slate-800",
+    });
+    expect(getOrderSuccessVisibleBalanceDue(order)).toBe(900);
+    expect(getOrderSuccessViewState({ ...order, status: "cancelled" }, ENGLISH_CHECKOUT_LANGUAGE_DATA))
+      .toMatchObject({ paymentStatusLabel: "No payment due" });
+  });
+
   it.each(["stripe", "sslcommerz", "polar"])(
     "holds %s orders in pending while local payment state is incomplete",
     (paymentMethod) => {

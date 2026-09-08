@@ -41,10 +41,10 @@ describe("customer auth resilience source boundaries", () => {
       "function renderOrderPaymentContext(order: CustomerOrder): string",
     );
     expect(source).toContain("Payment needs attention");
-    expect(source).toContain("balance due");
+    expect(source).toContain("getOrderPaymentPresentation(order, ENGLISH_CHECKOUT_LANGUAGE_DATA)");
     expect(source).toContain("Refund or return update");
     expect(source).toContain(
-      "Open the timeline for buyer-safe refund and return details.",
+      "Open the timeline for refund and return details.",
     );
     expect(source).toContain("${renderOrderPaymentContext(order)}");
   });
