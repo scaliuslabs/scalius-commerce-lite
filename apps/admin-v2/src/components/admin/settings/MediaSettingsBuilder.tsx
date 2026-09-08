@@ -122,7 +122,7 @@ export default function MediaSettingsBuilder() {
 
   return (
     <div className="max-w-2xl space-y-5">
-      <UnsavedChangesGuard isDirty={isDirty} isSubmitting={isSaving} />
+      <UnsavedChangesGuard isDirty={isDirty || isSaving} isSubmitting={false} />
 
       <Card>
         <CardHeader className="pb-3">

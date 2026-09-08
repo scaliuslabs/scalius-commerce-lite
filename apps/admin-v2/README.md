@@ -122,6 +122,8 @@ Scanner QR token minting is a privileged same-origin admin action. It requires a
 | `components/admin/shared/SortableList.tsx` | dnd-kit abstraction |
 | `components/admin/data-table/` | DataTable, useServerTable, column factories |
 
+Settings drafts keep current values and the acknowledged server baseline together. Save responses preserve fields edited since submission; query refreshes preserve fields changed from the prior baseline while adopting untouched server values. Comparisons treat each top-level field as one value, including nested settings. Reset returns to the latest acknowledged baseline. Settings navigation stays guarded while dirty or saving; completing a save must not discard newer edits or leave a stale warning when the draft is clean.
+
 ## Development
 
 ```bash
