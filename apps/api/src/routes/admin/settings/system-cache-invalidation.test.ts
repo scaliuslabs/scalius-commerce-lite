@@ -14,7 +14,6 @@ const mocks = vi.hoisted(() => ({
   getWhatsAppCloudApiSettings: vi.fn(),
   getSmsProviderReadiness: vi.fn(),
   normalizeFirebaseServiceAccountJson: vi.fn(),
-  saveFirebaseServiceAccountJson: vi.fn(),
   getCheckoutReadiness: vi.fn(),
   getCustomerSignInReadiness: vi.fn(),
   getCheckoutFlowSettingsDocument: vi.fn(),
@@ -92,7 +91,6 @@ vi.mock("@scalius/core/integrations/sms", () => ({
 
 vi.mock("@scalius/core/integrations/firebase/settings", () => ({
   normalizeFirebaseServiceAccountJson: mocks.normalizeFirebaseServiceAccountJson,
-  saveFirebaseServiceAccountJson: mocks.saveFirebaseServiceAccountJson,
 }));
 
 vi.mock("@scalius/core/modules/notifications/notification-provider-health", () => ({
@@ -189,7 +187,6 @@ function createTestApp(settingRows: Array<{ key: string; value: string }> = []) 
     error: null,
   });
   mocks.normalizeFirebaseServiceAccountJson.mockImplementation((value: string) => value.trim());
-  mocks.saveFirebaseServiceAccountJson.mockResolvedValue(undefined);
   mocks.getCheckoutReadiness.mockResolvedValue({
     ready: true,
     hasActiveShippingMethod: true,
@@ -225,13 +222,14 @@ function createTestApp(settingRows: Array<{ key: string; value: string }> = []) 
     const { body, status } = errorResponseFromError(error);
     return c.json(body, status);
   });
+  const db = createDb(settingRows);
   app.use("*", async (c, next) => {
-    c.set("db", createDb(settingRows) as never);
+    c.set("db", db as never);
     await next();
   });
   app.route("/admin/settings", systemSettingsRoutes);
 
-  return { app, env, executionCtx, kv };
+  return { app, db, env, executionCtx, kv };
 }
 
 function requestGet(
@@ -1038,7 +1036,7 @@ describe("system settings cache invalidation", () => {
     expect(mocks.invalidateApiAndScheduleStorefrontGroups).not.toHaveBeenCalled();
   });
 
-  it("saves a new Firebase service account through encrypted credential storage", async () => {
+  it("batches Firebase credentials, public config, and push health reset together", async () => {
     const { app, env, executionCtx } = createTestApp();
     const serviceAccount = JSON.stringify({
       client_email: "firebase-adminsdk@example.iam.gserviceaccount.com",
@@ -1046,21 +1044,31 @@ describe("system settings cache invalidation", () => {
       project_id: "scalius-test",
     });
 
+    const statements = [{ statement: "credential" }, { statement: "public-config" }];
+    mocks.prepareSettingAggregateStatements.mockResolvedValueOnce(statements);
     const response = await requestJson(app, env, executionCtx, "/firebase", {
       serviceAccount,
+      publicConfig: { projectId: "scalius-test" },
     });
 
     expect(response.status, await response.clone().text()).toBe(200);
     expect(mocks.normalizeFirebaseServiceAccountJson).toHaveBeenCalledWith(serviceAccount);
-    expect(mocks.saveFirebaseServiceAccountJson).toHaveBeenCalledWith(
+    expect(mocks.prepareSettingAggregateStatements).toHaveBeenCalledWith(
       expect.anything(),
-      serviceAccount,
+      [
+        { category: "firebase", key: "service_account", value: serviceAccount, encrypted: true },
+        { category: "firebase", key: "public_config", value: '{"projectId":"scalius-test"}', type: "json" },
+      ],
       "credential-key",
     );
-    expect(mocks.clearNotificationProviderBlocks).toHaveBeenCalledWith(
+    expect(mocks.buildClearNotificationProviderBlocksStatement).toHaveBeenCalledWith(
       expect.anything(),
       { channel: "push" },
     );
+    expect(mocks.safeBatch).toHaveBeenCalledExactlyOnceWith(expect.anything(), [
+      { statement: "credential" }, { statement: "public-config" }, { statement: "clear-provider-health" },
+    ]);
+    expect(mocks.clearNotificationProviderBlocks).not.toHaveBeenCalled();
   });
 
   it("returns only a configured marker for the Firebase service account", async () => {
@@ -1097,7 +1105,59 @@ describe("system settings cache invalidation", () => {
 
     expect(response.status, await response.clone().text()).toBe(200);
     expect(mocks.normalizeFirebaseServiceAccountJson).not.toHaveBeenCalled();
-    expect(mocks.saveFirebaseServiceAccountJson).not.toHaveBeenCalled();
+    expect(mocks.prepareSettingAggregateStatements).toHaveBeenCalledWith(expect.anything(), [
+      { category: "firebase", key: "public_config", value: '{"projectId":"scalius-test"}', type: "json" },
+    ], undefined);
+    expect(mocks.buildClearNotificationProviderBlocksStatement).not.toHaveBeenCalled();
+  });
+
+  it("batches an explicit Firebase credential clear without requiring encryption", async () => {
+    const { app, env, executionCtx } = createTestApp();
+    delete (env as Record<string, unknown>).CREDENTIAL_ENCRYPTION_KEY;
+    const response = await requestJson(app, env, executionCtx, "/firebase", {
+      serviceAccount: " ", publicConfig: {},
+    });
+
+    expect(response.status).toBe(200);
+    expect(mocks.prepareSettingAggregateStatements).toHaveBeenCalledWith(expect.anything(), [
+      { category: "firebase", key: "service_account", value: "", encrypted: false },
+      { category: "firebase", key: "public_config", value: "{}", type: "json" },
+    ], undefined);
+    expect(mocks.safeBatch).toHaveBeenCalledOnce();
+    expect(mocks.buildClearNotificationProviderBlocksStatement).toHaveBeenCalledWith(expect.anything(), { channel: "push" });
+    expect(mocks.clearNotificationProviderBlocks).not.toHaveBeenCalled();
+  });
+
+  it("preserves omitted Firebase credentials and skips a wholly empty update", async () => {
+    const { app, env, executionCtx } = createTestApp();
+    expect((await requestJson(app, env, executionCtx, "/firebase", {})).status).toBe(200);
+    expect(mocks.prepareSettingAggregateStatements).not.toHaveBeenCalled();
+    expect(mocks.safeBatch).not.toHaveBeenCalled();
+    expect(mocks.buildClearNotificationProviderBlocksStatement).not.toHaveBeenCalled();
+
+    expect((await requestJson(app, env, executionCtx, "/firebase", { publicConfig: {} })).status).toBe(200);
+    expect(mocks.prepareSettingAggregateStatements).toHaveBeenCalledWith(expect.anything(), [
+      { category: "firebase", key: "public_config", value: "{}", type: "json" },
+    ], undefined);
+    expect(mocks.buildClearNotificationProviderBlocksStatement).not.toHaveBeenCalled();
+  });
+
+  it.each(["preparation", "batch"])("reports Firebase %s failure without separate writes or health cleanup", async (stage) => {
+    const { app, db, env, executionCtx } = createTestApp();
+    if (stage === "preparation") mocks.prepareSettingAggregateStatements.mockRejectedValueOnce(new Error("encryption failed"));
+    else mocks.safeBatch.mockRejectedValueOnce(new Error("transaction failed"));
+
+    const response = await requestJson(app, env, executionCtx, "/firebase", {
+      serviceAccount: JSON.stringify({ client_email: "firebase@example.com", private_key: "test-private-key", project_id: "new-project" }),
+      publicConfig: { projectId: "new-project" },
+    });
+    expect(response.status).toBe(500);
+    expect(db.insert).not.toHaveBeenCalled();
+    expect(mocks.clearNotificationProviderBlocks).not.toHaveBeenCalled();
+    if (stage === "preparation") {
+      expect(mocks.safeBatch).not.toHaveBeenCalled();
+      expect(mocks.buildClearNotificationProviderBlocksStatement).not.toHaveBeenCalled();
+    }
   });
 
   it("fails closed before saving Firebase credentials when CREDENTIAL_ENCRYPTION_KEY is missing", async () => {
@@ -1110,10 +1170,12 @@ describe("system settings cache invalidation", () => {
         private_key: "-----BEGIN PRIVATE KEY-----\\nkey\\n-----END PRIVATE KEY-----\\n",
         project_id: "scalius-test",
       }),
+      publicConfig: { projectId: "next" },
     });
 
     expect(response.status, await response.clone().text()).toBe(503);
-    expect(mocks.saveFirebaseServiceAccountJson).not.toHaveBeenCalled();
+    expect(mocks.prepareSettingAggregateStatements).not.toHaveBeenCalled();
+    expect(mocks.safeBatch).not.toHaveBeenCalled();
   });
 
   it("rejects invalid Firebase service account JSON before saving", async () => {
@@ -1124,9 +1186,11 @@ describe("system settings cache invalidation", () => {
 
     const response = await requestJson(app, env, executionCtx, "/firebase", {
       serviceAccount: "{not-json",
+      publicConfig: { projectId: "next" },
     });
 
     expect(response.status, await response.clone().text()).toBe(400);
-    expect(mocks.saveFirebaseServiceAccountJson).not.toHaveBeenCalled();
+    expect(mocks.prepareSettingAggregateStatements).not.toHaveBeenCalled();
+    expect(mocks.safeBatch).not.toHaveBeenCalled();
   });
 });

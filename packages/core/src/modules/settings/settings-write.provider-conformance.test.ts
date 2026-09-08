@@ -11,11 +11,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createPostgresDatabase,
   createTursoDatabase,
+  safeBatch,
   type Database,
 } from "@scalius/database/client";
 import * as schema from "@scalius/database/schema";
 
-import { saveSettingAggregate } from "./settings-write";
+import { prepareSettingAggregateStatements, saveSettingAggregate } from "./settings-write";
+import { buildClearNotificationProviderBlocksStatement } from "../notifications/notification-provider-health";
+import { readFirebaseServiceAccountJsonFromStoredValue } from "../../integrations/firebase/settings";
 
 interface SqliteD1Result {
   results: Record<string, SQLOutputValue>[];
@@ -154,6 +157,57 @@ describe.each([
   ["D1", createD1SettingsDatabase],
   ["TursoDB", createTursoSettingsDatabase],
 ] as const)("%s settings aggregate conformance", (_provider, createDatabase) => {
+  it.each(["service_account", "public_config", "push-health"])("rolls back the entire Firebase save when %s fails", async (failure) => {
+    const sqlite = createSettingsSchema();
+    const db = createDatabase(sqlite);
+    await saveSettingAggregate(db, [
+      { category: "firebase", key: "service_account", value: "previous-credential" },
+      { category: "firebase", key: "public_config", value: '{"projectId":"previous"}', type: "json" },
+      { category: "notification_provider_health", key: "push:firebase", value: "push-blocked" },
+      { category: "notification_provider_health", key: "email:resend", value: "email-blocked" },
+    ]);
+    const snapshot = () => sqlite.prepare("SELECT * FROM settings ORDER BY category, key").all();
+    const previous = snapshot();
+    const encryptionKey = Buffer.alloc(32, 17).toString("base64");
+    const serviceAccount = JSON.stringify({ client_email: "firebase@example.com", private_key: "test-private-key", project_id: "next" });
+    const statements = await prepareSettingAggregateStatements(db, [
+      { category: "firebase", key: "service_account", value: serviceAccount, encrypted: true },
+      { category: "firebase", key: "public_config", value: '{"projectId":"next"}', type: "json" },
+    ], encryptionKey);
+    statements.push(buildClearNotificationProviderBlocksStatement(db, { channel: "push" }));
+    expect(snapshot()).toEqual(previous);
+
+    sqlite.exec(failure === "push-health" ? `
+      CREATE TRIGGER reject_firebase_write BEFORE DELETE ON settings
+      WHEN OLD.category = 'notification_provider_health' AND OLD.key = 'push:firebase'
+      BEGIN SELECT RAISE(ABORT, 'blocked push health delete'); END;
+    ` : `
+      CREATE TRIGGER reject_firebase_write BEFORE INSERT ON settings
+      WHEN NEW.category = 'firebase' AND NEW.key = '${failure}'
+      BEGIN SELECT RAISE(ABORT, 'blocked Firebase write'); END;
+    `);
+    await expect(safeBatch(db, statements)).rejects.toThrow();
+    expect(snapshot()).toEqual(previous);
+
+    sqlite.exec("DROP TRIGGER reject_firebase_write");
+    await safeBatch(db, statements);
+    const saved = snapshot();
+    const credential = saved.find((row) => row.key === "service_account")!.value as string;
+    expect(credential).toMatch(/^enc:/);
+    expect(credential).not.toContain("test-private-key");
+    await expect(readFirebaseServiceAccountJsonFromStoredValue(credential, encryptionKey)).resolves.toBe(serviceAccount);
+    expect(saved.find((row) => row.key === "public_config")).toMatchObject({ value: '{"projectId":"next"}', type: "json" });
+    expect(saved.find((row) => row.key === "push:firebase")).toBeUndefined();
+    expect(saved.find((row) => row.key === "email:resend")?.value).toBe("email-blocked");
+
+    const clearStatements = await prepareSettingAggregateStatements(db, [
+      { category: "firebase", key: "service_account", value: "" },
+    ]);
+    clearStatements.push(buildClearNotificationProviderBlocksStatement(db, { channel: "push" }));
+    await safeBatch(db, clearStatements);
+    expect(snapshot().find((row) => row.key === "service_account")?.value).toBe("");
+  });
+
   it("commits the whole form and rolls back every field when one statement fails", async () => {
     const sqlite = createSettingsSchema();
     const db = createDatabase(sqlite);
