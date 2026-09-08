@@ -87,7 +87,7 @@ describe("customer order email composition and delivery", () => {
   function message() {
     expect(transport.sendEmail).toHaveBeenCalledTimes(1);
     const email = transport.sendEmail.mock.calls[0]![0] as SendEmailOptions;
-    return { ...email, visible: htmlToPlainText(email.html), links: Array.from(email.html.matchAll(/href="([^"]+)"/g), (match) => match[1]) };
+    return { ...email, visible: htmlToPlainText(email.html), links: Array.from(email.html.matchAll(/href="([^"]+)"/g), (match) => match[1]!) };
   }
 
   it("delivers saved purchase facts, money and working destinations through the real receipt path", async () => {
