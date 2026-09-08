@@ -107,7 +107,7 @@ export default function BusinessSettingsBuilder() {
 
   return (
     <div className="max-w-2xl space-y-5 [&_input]:min-h-11 md:[&_input]:min-h-9">
-      <UnsavedChangesGuard isDirty={isDirty || isSaving} isSubmitting={false} />
+      <UnsavedChangesGuard isDirty={isDirty || isSaving} isSubmitting={false} allowSamePathStateNavigation />
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Company information</CardTitle>

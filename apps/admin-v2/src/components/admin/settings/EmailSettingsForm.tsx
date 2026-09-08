@@ -154,7 +154,7 @@ export default function EmailSettingsForm() {
 
   return (
     <>
-      <UnsavedChangesGuard isDirty={dirty} isSubmitting={saveMutation.isPending} />
+      <UnsavedChangesGuard isDirty={dirty || saveMutation.isPending} isSubmitting={false} allowSamePathStateNavigation />
       <div className="max-w-2xl space-y-5">
         {!canManage && (
           <Alert>

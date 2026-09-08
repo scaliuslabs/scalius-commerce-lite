@@ -193,14 +193,14 @@ describe("StorefrontUrlBuilder", () => {
     await act(async () => { getButton(host, "Save URL").click(); });
     await waitFor(() => expect(storefrontUrlApi.updateStorefrontUrl).toHaveBeenCalled());
     await setStoreUrl(host, "https://shop.example.com");
-    expect(workspaceMocks.guard.mock.calls.at(-1)?.[0]).toEqual({ isDirty: true, isSubmitting: false });
+    expect(workspaceMocks.guard.mock.calls.at(-1)?.[0]).toEqual({ isDirty: true, isSubmitting: false, allowSamePathStateNavigation: true });
     storefrontUrlApi.getStorefrontUrl.mockResolvedValue({ storefrontUrl: "https://new-shop.example.com" });
     await act(async () => { resolveSave(); });
     await waitFor(() => expect(getButton(host, "Save URL").disabled).toBe(false));
     expect(host.querySelector<HTMLInputElement>("#storefront-url")?.value).toBe("https://shop.example.com");
-    expect(workspaceMocks.guard.mock.calls.at(-1)?.[0]).toEqual({ isDirty: true, isSubmitting: false });
+    expect(workspaceMocks.guard.mock.calls.at(-1)?.[0]).toEqual({ isDirty: true, isSubmitting: false, allowSamePathStateNavigation: true });
     await act(async () => { getButton(host, "Reset").click(); });
-    expect(workspaceMocks.guard.mock.calls.at(-1)?.[0]).toEqual({ isDirty: false, isSubmitting: false });
+    expect(workspaceMocks.guard.mock.calls.at(-1)?.[0]).toEqual({ isDirty: false, isSubmitting: false, allowSamePathStateNavigation: true });
   });
 
   it.each([
@@ -211,8 +211,8 @@ describe("StorefrontUrlBuilder", () => {
     await renderBuilder();
     const onDraftStateChange = workspaceMocks.homepage.mock.calls.at(-1)?.[0].onDraftStateChange;
     await act(async () => { onDraftStateChange(homepageState); });
-    expect(workspaceMocks.guard.mock.calls.at(-1)?.[0]).toEqual({ isDirty: true, isSubmitting: false });
+    expect(workspaceMocks.guard.mock.calls.at(-1)?.[0]).toEqual({ isDirty: true, isSubmitting: false, allowSamePathStateNavigation: true });
     await act(async () => { onDraftStateChange({ isDirty: false, isSubmitting: false }); });
-    expect(workspaceMocks.guard.mock.calls.at(-1)?.[0]).toEqual({ isDirty: false, isSubmitting: false });
+    expect(workspaceMocks.guard.mock.calls.at(-1)?.[0]).toEqual({ isDirty: false, isSubmitting: false, allowSamePathStateNavigation: true });
   });
 });
