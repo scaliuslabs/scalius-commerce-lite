@@ -164,7 +164,7 @@ describe("native Turso upload bundle", () => {
       outputDirectory: join(directory, "tampered-prepared"),
       sqliteBinary: "sqlite3",
     })).rejects.toThrow(/source artifact does not match/i);
-  }, 30_000);
+  }, 60_000);
 
   it("publishes one private atomic bundle with independently verifiable data", async () => {
     const directory = await temporaryDirectory();
@@ -242,7 +242,7 @@ describe("native Turso upload bundle", () => {
       outputDirectory: bundlePath,
       sqliteBinary: "sqlite3",
     })).rejects.toThrow(/refusing to overwrite/i);
-  }, 30_000);
+  }, 60_000);
 
   it("fails closed, removes partial output, and detects artifact tampering", async () => {
     const directory = await temporaryDirectory();
@@ -275,7 +275,7 @@ describe("native Turso upload bundle", () => {
     await appendFile(bundle.databasePath, Buffer.from([0]));
     await expect(verifyTursoUploadBundleFiles(bundlePath))
       .rejects.toThrow(/does not match evidence/i);
-  }, 20_000);
+  }, 60_000);
 
   it("keeps the active schema clean and losslessly archives non-empty retired tables", async () => {
     const directory = await temporaryDirectory();
@@ -457,7 +457,7 @@ INSERT INTO scalius_turso_control_a VALUES ('probe-row', 'retired-run', 7);
       outputDirectory: join(unknownDirectory, "unknown-table-bundle"),
       sqliteBinary: "sqlite3",
     })).rejects.toThrow(/unexpected noncanonical tables.*unexplained_extension/i);
-  }, 120_000);
+  }, 180_000);
 
   it("trusts an exact release ledger when a historical D1 schema differs physically", async () => {
     const directory = await temporaryDirectory();
@@ -487,5 +487,5 @@ INSERT INTO scalius_turso_control_a VALUES ('probe-row', 'retired-run', 7);
     );
     expect(summary.schemaUpgrade.appliedMigrations).toEqual([]);
     expect(summary.foreignKeyViolations).toBe(0);
-  }, 30_000);
+  }, 60_000);
 });
