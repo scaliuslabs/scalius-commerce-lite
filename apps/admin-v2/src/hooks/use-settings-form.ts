@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type SetStateAction } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -11,6 +11,16 @@ interface UseSettingsFormOptions<T extends object, SaveResult> {
   successMessage?: string;
   errorMessage?: string;
   invalidateQueryKeys?: readonly (readonly unknown[])[];
+}
+
+function mergeUneditedFields<T extends object>(current: T, baseline: T, incoming: T): T {
+  const next = { ...incoming };
+  for (const key of Object.keys({ ...baseline, ...current }) as (keyof T)[]) {
+    if (JSON.stringify(current[key]) !== JSON.stringify(baseline[key])) {
+      next[key] = current[key];
+    }
+  }
+  return next;
 }
 
 /**
@@ -33,33 +43,41 @@ export function useSettingsForm<T extends object, SaveResult = unknown>({
 }: UseSettingsFormOptions<T, SaveResult>) {
   const queryClient = useQueryClient();
 
-  const { data, error, isError, isLoading } = useQuery({
+  const { data, dataUpdatedAt, error, isError, isLoading } = useQuery({
     queryKey: queryKey as unknown[],
     queryFn: fetchFn,
   });
   const hasLoaded = data !== undefined && !isError;
 
-  // Local values state that syncs with query data
   const defaultValuesRef = useRef(defaultValues);
-  const [values, setValues] = useState<T>(defaultValues);
-  const [savedValues, setSavedValues] = useState<T>(defaultValues);
+  const [{ values, savedValues }, setDraft] = useState(() => ({
+    values: defaultValues,
+    savedValues: defaultValues,
+  }));
 
-  // Sync query data to local state when data changes
+  // A refresh may acknowledge normalization even when structural sharing keeps
+  // the same data object. Preserve local edits against the prior saved snapshot.
   useEffect(() => {
     if (data) {
       const nextValues = { ...defaultValuesRef.current, ...data } as T;
-      setValues(nextValues);
-      setSavedValues(nextValues);
+      setDraft((current) => ({
+        values: mergeUneditedFields(current.values, current.savedValues, nextValues),
+        savedValues: nextValues,
+      }));
     }
-  }, [data]);
+  }, [data, dataUpdatedAt]);
 
   const mutation = useMutation({
     mutationFn: saveFn,
     onSuccess: async (result, submittedValues) => {
       const canonicalValues = resolveSavedValues?.(result, submittedValues);
       const nextValues = canonicalValues ?? submittedValues;
-      setValues(nextValues);
-      setSavedValues(nextValues);
+      // Compare with what this request submitted, including edits that revert
+      // to the previous saved value while the request is in flight.
+      setDraft((current) => ({
+        values: mergeUneditedFields(current.values, submittedValues, nextValues),
+        savedValues: nextValues,
+      }));
 
       const invalidations = invalidateQueryKeys.map((key) =>
         queryClient.invalidateQueries({ queryKey: key as unknown[] }),
@@ -80,14 +98,23 @@ export function useSettingsForm<T extends object, SaveResult = unknown>({
     },
   });
 
+  const setValues = useCallback((next: SetStateAction<T>) => {
+    setDraft((current) => ({
+      ...current,
+      values: typeof next === "function"
+        ? (next as (previous: T) => T)(current.values)
+        : next,
+    }));
+  }, []);
+
   const setValue = useCallback(<K extends keyof T>(key: K, value: T[K]) => {
     setValues((prev) => ({ ...prev, [key]: value }));
-  }, []);
+  }, [setValues]);
 
   const isDirty = JSON.stringify(values) !== JSON.stringify(savedValues);
   const reset = useCallback(() => {
-    setValues(savedValues);
-  }, [savedValues]);
+    setDraft((current) => ({ ...current, values: current.savedValues }));
+  }, []);
 
   const handleSubmit = useCallback(async () => {
     if (!hasLoaded) {

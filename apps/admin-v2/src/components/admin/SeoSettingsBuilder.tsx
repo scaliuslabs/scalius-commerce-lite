@@ -312,7 +312,7 @@ export function SeoSettingsBuilder() {
 
   return (
     <>
-      <UnsavedChangesGuard isDirty={isDirty} isSubmitting={isSaving} />
+      <UnsavedChangesGuard isDirty={isDirty || isSaving} isSubmitting={false} />
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_20rem]">
         <aside className="order-last min-w-0 xl:sticky xl:top-4">
           <SeoDiscoveryStatusCard
