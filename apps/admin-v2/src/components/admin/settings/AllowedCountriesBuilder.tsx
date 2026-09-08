@@ -191,7 +191,7 @@ export default function AllowedCountriesBuilder() {
 
   return (
     <div className="max-w-2xl space-y-5">
-      <UnsavedChangesGuard isDirty={isDirty || saving} isSubmitting={false} />
+      <UnsavedChangesGuard isDirty={isDirty || saving} isSubmitting={false} allowSamePathStateNavigation />
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Customer countries</CardTitle>

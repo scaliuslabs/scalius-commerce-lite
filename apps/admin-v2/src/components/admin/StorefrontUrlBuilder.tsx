@@ -113,6 +113,7 @@ export function StorefrontUrlBuilder({
       <UnsavedChangesGuard
         isDirty={hasUnsavedChanges}
         isSubmitting={false}
+        allowSamePathStateNavigation
       />
       <div className="max-w-3xl space-y-4">
         <div className="space-y-2">

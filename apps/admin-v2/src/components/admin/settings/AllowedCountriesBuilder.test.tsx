@@ -79,10 +79,18 @@ describe("AllowedCountriesBuilder save acknowledgment", () => {
   }
   function expectProtected(protectedState: boolean) {
     const guard = api.blocker.mock.calls.at(-1)![0];
+    const current = {
+      routeId: "/admin/settings/", fullPath: "/admin/settings/", pathname: "/admin/settings",
+      search: { section: "countries" },
+    };
     expect(guard.enableBeforeUnload).toBe(protectedState);
     expect(guard.shouldBlockFn({
-      current: { pathname: "/admin/settings" }, next: { pathname: "/admin/orders" },
+      current,
+      next: { routeId: "/admin/orders/", fullPath: "/admin/orders/", pathname: "/admin/orders" },
     })).toBe(protectedState);
+    expect(guard.shouldBlockFn({
+      current, next: { ...current, search: { section: "business" } },
+    })).toBe(false);
   }
   function deferSave() {
     const write = deferred<void>();

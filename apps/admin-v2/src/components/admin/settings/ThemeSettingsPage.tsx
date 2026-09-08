@@ -861,7 +861,7 @@ export default function ThemeSettingsPage({
           </div>
         </div>
       </div>
-      <UnsavedChangesGuard isDirty={dirty} isSubmitting={operation !== null} />
+      <UnsavedChangesGuard isDirty={dirty || operation !== null} isSubmitting={false} allowSamePathStateNavigation />
     </div>
   );
 }
