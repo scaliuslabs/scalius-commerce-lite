@@ -111,7 +111,7 @@ const ORDER_ITEM_TAX_INSERT_PARAMETERS_PER_ROW = 13;
 const ORDER_DISCOUNT_ALLOCATION_INSERT_PARAMETERS_PER_ROW = 18;
 const CHECKOUT_AUTHORITY_CHANGED = "CHECKOUT_AUTHORITY_CHANGED";
 const CHECKOUT_AUTHORITY_CHANGED_MESSAGE =
-    "Checkout details changed while the order was being placed. Please review the refreshed checkout and try again.";
+    "Checkout details changed while the order was being placed. Return to your cart to review them and try again.";
 
 function isCustomerPhoneConstraintError(error: unknown): boolean {
     let current = error;
@@ -797,11 +797,26 @@ export async function commitStorefrontOrderPayload(
         ) {
             throw new ValidationError("Checkout authority revision is unavailable. Please retry checkout.");
         }
+        if (payload.discountUsage && (
+            !Number.isSafeInteger(payload.discountUsage.revision)
+            || payload.discountUsage.revision < 1
+        )) {
+            throw new ValidationError("Discount revision is unavailable. Return to your cart and apply the code again.");
+        }
+        const discountAuthority = payload.discountUsage ? sql`EXISTS (
+            SELECT 1 FROM ${discounts}
+            WHERE ${discounts.id} = ${payload.discountUsage.discountId}
+              AND ${discounts.revision} = ${payload.discountUsage.revision}
+              AND ${discounts.isActive} = 1
+              AND ${discounts.deletedAt} IS NULL
+              AND ${discounts.startDate} <= unixepoch()
+              AND (${discounts.endDate} IS NULL OR ${discounts.endDate} >= unixepoch())
+        )` : sql`1 = 1`;
         const authorityGuard = buildBatchGuard(db, sql`EXISTS (
             SELECT 1 FROM ${checkoutAuthority}
             WHERE ${checkoutAuthority.id} = 'default'
               AND ${checkoutAuthority.revision} = ${payload.checkoutAuthorityRevision}
-        )`, CHECKOUT_AUTHORITY_CHANGED);
+        ) AND ${discountAuthority}`, CHECKOUT_AUTHORITY_CHANGED);
 
         const [customer, inventoryPlan] = await Promise.all([
             resolveCustomerForOrder(db, payload),

@@ -119,10 +119,17 @@ Cart and API validation are buyer-friendly prechecks, not the concurrency author
 - `discount_usage_customer_redemption_claim` stores `phone:{checkoutPhone}` for every redemption and also stores `customer:{accountOwnerCustomerId}` for authenticated checkout. The migration backfills account claims while retaining historical phone claims, so changing a delivery phone, changing a profile phone, or retrying as a guest cannot reopen a consumed one-use coupon.
 - `commitStorefrontOrderPayload()` maps those trigger/unique-key aborts back to normal checkout `ValidationError`s; the authoritative batch rolls the order, discount, and stock reservation back together.
 
-The D1/Turso/PostgreSQL guards and unique claim key close concurrent total-usage and identity-redemption races. Other
-rule edits (schedule, scope, and minimum changes between final validation and
-the order batch) still require the planned revisioned promotion allocation
-model; public validation is not represented as a durable reservation.
+The order payload carries the revision from the same validated discount row
+used to calculate its amount. Both commit batches check that exact revision,
+active/non-trashed state, and the inclusive schedule at database execution time
+before any checkout write. Changed rules abort the whole batch; unrelated
+discount edits do not invalidate checkout. Committed-order replays retain the
+saved money without revalidating the code. Public validation remains advisory.
+
+`orders.ingest-authority.d1.test.ts` proves mutation and expiry interleavings,
+rollback, usage limits, and committed replay against migrated storage. Checkout
+validation or quote failures expose the existing Return to cart action while
+preserving buyer details for explicit review.
 
 ### Discount Calculation (`calculateDiscountAmount`)
 

@@ -98,7 +98,7 @@ function createPayload(overrides: Partial<StorefrontOrderCommitPayload> = {}): S
         taxAmountMinor: 0,
       },
     ],
-    discountUsage: { discountId: "discount_1", amountDiscounted: 50 },
+    discountUsage: { discountId: "discount_1", revision: 1, amountDiscounted: 50 },
     requestUrl: "https://shop.example.com/api/v1/orders",
     taxQuote: {
       schemaVersion: 1,
@@ -737,6 +737,18 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
       .rejects.toThrow("Checkout details changed while the order was being placed");
     expect(mocks.safeBatch).toHaveBeenCalledOnce();
   });
+
+  it.each([undefined, null, 0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1])(
+    "rejects invalid legacy discount revision (%s) before inventory work",
+    async (revision) => {
+      const payload = createPayload();
+      payload.discountUsage!.revision = revision as number;
+      await expect(commitStorefrontOrderPayload(createDbMock(), payload))
+        .rejects.toThrow("Discount revision is unavailable");
+      expect(mocks.prepareStockReservationBatch).not.toHaveBeenCalled();
+      expect(mocks.safeBatch).not.toHaveBeenCalled();
+    },
+  );
 
   it("guards the order-only batch after an idempotent inventory replay", async () => {
     mocks.prepareStockReservationBatch.mockResolvedValue({

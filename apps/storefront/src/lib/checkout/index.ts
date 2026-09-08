@@ -1030,6 +1030,7 @@ async function processPayment(): Promise<void> {
             });
             return;
           }
+          showReturnToCartAction();
           throw error;
         }
         checkoutData = {
@@ -1042,6 +1043,7 @@ async function processPayment(): Promise<void> {
         showError(checkoutCopy.totalChangedReviewText);
         return;
       }
+      if (result.errorCode === "VALIDATION_ERROR") showReturnToCartAction();
       throw new Error(getPaymentResultErrorMessage(result));
     }
   } catch (err: unknown) {
@@ -1109,6 +1111,7 @@ export async function initCheckoutPage(): Promise<void> {
       });
       return;
     }
+    showReturnToCartAction();
     showError(
       error instanceof Error
         ? error.message
