@@ -18,8 +18,7 @@ describe("media delivery settings", () => {
   });
 
   it("protects drafts and hides clean-state actions", () => {
-    expect(source).toContain("<UnsavedChangesGuard");
-    expect(source).toContain("isDirty={isDirty}");
+    expect(source).toContain("<UnsavedChangesGuard isDirty={isDirty || isSaving} isSubmitting={false}");
     expect(source).toContain("{isDirty ? (");
     expect(source).toContain("Save changes");
     expect(source).toContain("Reset");
