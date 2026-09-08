@@ -77,7 +77,7 @@ describe("cart page presentation contract", () => {
 
   it("keeps location controls touch-sized on narrow buyer viewports", () => {
     expect(dropdownSource).toContain("min-h-11 w-full");
-    expect(dropdownSource).toContain("sm:min-h-9");
+    expect(dropdownSource).not.toContain("sm:min-h-9");
     expect(dropdownSource).toContain("h-11 w-full");
     expect(dropdownSource).toContain("min-h-11 cursor-pointer");
     expect(locationSelectorSource).not.toContain(

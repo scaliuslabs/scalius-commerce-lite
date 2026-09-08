@@ -176,7 +176,7 @@ describe("auth form URL safety", () => {
     expect(failures).toEqual([]);
   });
 
-  it("keeps storefront customer auth fields outside native forms and query serialization", () => {
+  it("keeps storefront customer auth POST-only and outside query serialization", () => {
     const authModalSource = readFileSync(
       join(STOREFRONT_SRC_ROOT, "components", "AuthModal.tsx"),
       "utf8",
@@ -184,7 +184,10 @@ describe("auth form URL safety", () => {
     const sensitiveFieldNames = collectSensitiveNativeFieldNames(authModalSource);
     const accidentalGetUrl = buildAccidentalGetUrl("/account", sensitiveFieldNames);
 
-    expect(extractOpeningTags(authModalSource, "form")).toEqual([]);
+    const formTags = extractOpeningTags(authModalSource, "form");
+    expect(formTags).toHaveLength(1);
+    expect(getStringAttribute(formTags[0], "method")?.toLowerCase()).toBe("post");
+    expect(formTags[0]).toContain("event.preventDefault()");
     expect(sensitiveFieldNames).toEqual([]);
     expect(accidentalGetUrl.search).toBe("");
   });

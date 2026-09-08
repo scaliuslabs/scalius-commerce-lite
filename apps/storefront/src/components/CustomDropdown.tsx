@@ -75,10 +75,23 @@ export default function CustomDropdown({
   const updatePlacement = useCallback(() => {
     const rect = triggerRef.current?.getBoundingClientRect();
     if (!rect) return;
+    const viewport = window.visualViewport;
+    let top = viewport?.offsetTop ?? 0;
+    let bottom = top + (viewport?.height ?? window.innerHeight);
+    let ancestor = dropdownRef.current?.parentElement;
+    while (ancestor) {
+      if (/(auto|scroll|hidden|clip)/.test(getComputedStyle(ancestor).overflowY)) {
+        const boundary = ancestor.getBoundingClientRect();
+        top = Math.max(top, boundary.top);
+        bottom = Math.min(bottom, boundary.bottom);
+        break;
+      }
+      ancestor = ancestor.parentElement;
+    }
     const layout = resolveDropdownLayout(
-      rect.top,
-      rect.bottom,
-      window.innerHeight,
+      rect.top - top,
+      rect.bottom - top,
+      Math.max(0, bottom - top),
     );
     setPlacement(layout.placement);
     setMenuMaxHeight(layout.maxHeight);
@@ -131,10 +144,14 @@ export default function CustomDropdown({
     });
     window.addEventListener("resize", updatePlacement);
     window.addEventListener("scroll", updatePlacement, true);
+    window.visualViewport?.addEventListener("resize", updatePlacement);
+    window.visualViewport?.addEventListener("scroll", updatePlacement);
     return () => {
       window.cancelAnimationFrame(frame);
       window.removeEventListener("resize", updatePlacement);
       window.removeEventListener("scroll", updatePlacement, true);
+      window.visualViewport?.removeEventListener("resize", updatePlacement);
+      window.visualViewport?.removeEventListener("scroll", updatePlacement);
     };
   }, [isOpen, updatePlacement]);
 
@@ -183,7 +200,7 @@ export default function CustomDropdown({
       moveActive(event.key as "ArrowDown" | "ArrowUp" | "Home" | "End");
       return;
     }
-    if (event.key === "Enter" && activeIndex >= 0) {
+    if (event.key === "Enter") {
       event.preventDefault();
       const option = filteredOptions[activeIndex];
       if (option) handleSelect(option);
@@ -191,6 +208,7 @@ export default function CustomDropdown({
     }
     if (event.key === "Escape") {
       event.preventDefault();
+      event.stopPropagation();
       closeDropdown(true);
       return;
     }
@@ -204,7 +222,7 @@ export default function CustomDropdown({
         ref={triggerRef}
         type="button"
         id={id}
-        className={`flex min-h-11 w-full items-center justify-between rounded-md border px-2.5 py-1.5 text-left text-sm transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 sm:min-h-9 ${
+        className={`flex min-h-11 w-full items-center justify-between rounded-lg border px-3 py-2 text-left text-base transition-colors focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/20 ${
           triggerClassName || "border-border bg-background"
         } ${
           disabled
@@ -218,6 +236,7 @@ export default function CustomDropdown({
             if (!isOpen) openDropdown();
           } else if (event.key === "Escape" && isOpen) {
             event.preventDefault();
+            event.stopPropagation();
             closeDropdown();
           }
         }}
@@ -263,7 +282,7 @@ export default function CustomDropdown({
                 ref={searchInputRef}
                 type="text"
                 role="combobox"
-                className="h-11 w-full rounded-md border border-border bg-background px-2.5 pr-8 text-base text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 sm:h-9"
+                className="h-11 w-full rounded-md border border-border bg-background px-2.5 pr-8 text-base text-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
                 aria-label={searchLabel}
                 aria-controls={listboxId}
                 aria-expanded="true"
@@ -318,7 +337,7 @@ export default function CustomDropdown({
                   id={`${listboxId}-option-${index}`}
                   role="option"
                   aria-selected={option.value === value}
-                  className={`flex min-h-11 cursor-pointer items-center px-2.5 py-1.5 text-sm text-foreground sm:min-h-8 ${
+                  className={`flex min-h-11 cursor-pointer items-center px-3 py-2 text-base text-foreground ${
                     index === activeIndex ? "bg-muted" : "hover:bg-muted/70"
                   } ${option.value === value ? "font-medium" : ""}`}
                   onMouseEnter={() => setActiveIndex(index)}

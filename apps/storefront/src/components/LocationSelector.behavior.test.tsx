@@ -108,6 +108,36 @@ function Parent({ showAreaField }: { showAreaField: boolean }) {
 }
 
 describe("LocationSelector loading", () => {
+  it("preserves explicit profile locations across rerenders and unrelated checkout prefills", async () => {
+    const initialLocation = { city: "city_dhaka", zone: "zone_mirpur" };
+    const onCheckoutChange = vi.fn();
+    const onSelectionChange = vi.fn();
+    mocks.readCheckoutFormDraft.mockReturnValue({ city: secondCity.id, zone: secondZone.id });
+    mocks.getZones.mockResolvedValue(zones);
+    const container = document.createElement("div");
+    document.body.append(container);
+    root = createRoot(container);
+    window.addEventListener("checkout-location-change", onCheckoutChange);
+    try {
+      await act(async () => root?.render(
+        <LocationSelector cities={cities} initialLocation={initialLocation} showAreaField={false} onSelectionChange={onSelectionChange} />,
+      ));
+      await act(async () => {
+        root?.render(<LocationSelector cities={cities} initialLocation={initialLocation} showAreaField={false} onSelectionChange={onSelectionChange} />);
+        window.dispatchEvent(new CustomEvent("location-prefill", { detail: { city: secondCity.id, zone: secondZone.id } }));
+      });
+      expect(container.querySelector('[aria-label="City: Dhaka"]')).not.toBeNull();
+      expect(container.querySelector('[aria-label="Zone: Mirpur"]')).not.toBeNull();
+      expect(container.querySelector<HTMLInputElement>('input[name="zone"]')?.value).toBe("zone_mirpur");
+      expect(onSelectionChange).toHaveBeenLastCalledWith(expect.objectContaining({ cityId: "city_dhaka", zoneId: "zone_mirpur" }));
+      expect(mocks.getZones).toHaveBeenCalledTimes(1);
+      expect(mocks.readCheckoutFormDraft).not.toHaveBeenCalled();
+      expect(onCheckoutChange).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener("checkout-location-change", onCheckoutChange);
+    }
+  });
+
   it("restores city, zone, and area once without restarting requests on rerender", async () => {
     mocks.readCheckoutFormDraft.mockReturnValue({
       city: "city_dhaka",
