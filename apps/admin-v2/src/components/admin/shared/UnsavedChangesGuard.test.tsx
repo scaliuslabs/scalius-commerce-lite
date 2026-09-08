@@ -138,4 +138,40 @@ describe("UnsavedChangesGuard", () => {
       },
     })).toBe(true);
   });
+
+  it("cancels a blocked navigation when saving leaves no unsaved work", async () => {
+    const cancelled = vi.fn();
+    window.addEventListener(ADMIN_NAVIGATION_CANCELLED_EVENT, cancelled);
+    await act(async () => {
+      root.render(<UnsavedChangesGuard isDirty={true} isSubmitting={false} />);
+    });
+    expect(mocks.reset).not.toHaveBeenCalled();
+    await act(async () => {
+      root.render(<UnsavedChangesGuard isDirty={false} isSubmitting={false} />);
+    });
+    expect(mocks.reset).toHaveBeenCalledTimes(1);
+    expect(mocks.proceed).not.toHaveBeenCalled();
+    expect(cancelled).toHaveBeenCalledTimes(1);
+    expect(mocks.useBlocker.mock.calls.at(-1)?.[0].enableBeforeUnload).toBe(false);
+    window.removeEventListener(ADMIN_NAVIGATION_CANCELLED_EVENT, cancelled);
+  });
+
+  it.each([
+    { isDirty: true, isSubmitting: false, blocks: true },
+    { isDirty: false, isSubmitting: false, blocks: false },
+    { isDirty: true, isSubmitting: true, blocks: false },
+    { isDirty: false, isSubmitting: true, blocks: false },
+  ])("keeps route and beforeunload policy aligned for $isDirty/$isSubmitting", async ({ isDirty, isSubmitting, blocks }) => {
+    mocks.useBlocker.mockReturnValue({ status: "idle" });
+    await act(async () => {
+      root.render(<UnsavedChangesGuard isDirty={isDirty} isSubmitting={isSubmitting} />);
+    });
+    const options = mocks.useBlocker.mock.calls.at(-1)?.[0];
+    expect(options.enableBeforeUnload).toBe(blocks);
+    expect(options.shouldBlockFn({
+      current: { pathname: "/admin/settings" },
+      next: { pathname: "/admin/orders" },
+    })).toBe(blocks);
+    expect(mocks.reset).not.toHaveBeenCalled();
+  });
 });

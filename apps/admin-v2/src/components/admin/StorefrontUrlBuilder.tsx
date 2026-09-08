@@ -75,10 +75,8 @@ export function StorefrontUrlBuilder({
     : !values.storefrontUrl.trim()
       ? "Enter the public store origin."
       : null;
-  const hasUnsavedChanges = isDirty || homepageDraftState.isDirty;
-  const everyDirtyFormIsSubmitting = hasUnsavedChanges &&
-    (!isDirty || isSaving) &&
-    (!homepageDraftState.isDirty || homepageDraftState.isSubmitting);
+  const hasUnsavedChanges = isDirty || isSaving ||
+    homepageDraftState.isDirty || homepageDraftState.isSubmitting;
   const handleHomepageDraftStateChange = useCallback(
     (next: { isDirty: boolean; isSubmitting: boolean }) => {
       setHomepageDraftState(next);
@@ -114,7 +112,7 @@ export function StorefrontUrlBuilder({
     <div className="space-y-8">
       <UnsavedChangesGuard
         isDirty={hasUnsavedChanges}
-        isSubmitting={everyDirtyFormIsSubmitting}
+        isSubmitting={false}
       />
       <div className="max-w-3xl space-y-4">
         <div className="space-y-2">
