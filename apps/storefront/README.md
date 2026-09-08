@@ -301,6 +301,8 @@ The private order-detail page can recover failed or remaining online payments fo
 
 Browser helpers in `src/lib/api/customer-auth.ts` use bounded same-origin proxy reads/writes and return an explicit `unavailable` state for timeouts, malformed responses, `429`, and `5xx` account/order reads. `/account` and `/account/orders/{id}` must render retryable account/order error states for `unavailable` instead of treating those failures as logged out or empty history. Cart checkout auth-gating may use the readable `cs_auth` cookie only as a hydration hint; submit-time guest-disabled checkout must verify `/api/customer-auth/me`, block with retry copy when that read is unavailable, and open the auth modal only for a real unauthenticated session.
 
+`AuthModal` uses the existing storefront theme tokens, one step heading, and a viewport-bounded form with a scrollable body and reachable actions. Native POST submission handles Enter without putting identity or OTP fields in URLs; in-flight submissions are deduplicated. Profile locations are initialized from the customer independently of checkout drafts/events. Shared location dropdowns keep hidden cart field names stable, use instance-specific control IDs, fit their scroll/visual viewport boundary, and consume Escape before the parent dialog. Incomplete profiles remain incomplete until a successful save.
+
 ## SEO Features
 
 - **Canonical URLs**: `<link rel="canonical">` on all pages via `Layout.astro` `canonicalUrl` prop. Products, categories, collections, and CMS pages may use a validated same-store `canonicalPath` override; blank values use the normal public route.

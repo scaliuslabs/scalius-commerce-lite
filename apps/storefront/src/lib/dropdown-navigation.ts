@@ -22,7 +22,7 @@ export function resolveDropdownLayout(
 
   return {
     placement,
-    maxHeight: Math.max(120, Math.min(desiredHeight, available)),
+    maxHeight: Math.min(desiredHeight, available),
   };
 }
 

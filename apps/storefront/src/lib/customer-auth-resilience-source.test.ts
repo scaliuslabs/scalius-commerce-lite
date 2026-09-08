@@ -89,7 +89,8 @@ describe("customer auth resilience source boundaries", () => {
     expect(cartSource).toContain(
       'if (formData.get("formIntent") === "checkout") {',
     );
-    expect(authModalSource).not.toMatch(/<form\b/);
+    expect(authModalSource).toMatch(/<form\b[^>]*method="post"/s);
+    expect(authModalSource).toContain("event.preventDefault();");
     expect(authModalSource).not.toMatch(
       /name="(?:phone|email|otp|code|password|token)"/,
     );
@@ -226,14 +227,9 @@ describe("customer auth resilience source boundaries", () => {
 
   it("offers account creation directly from a send-time account-not-found error", () => {
     const source = readStorefrontSource("src/components/AuthModal.tsx");
-    const inputStateStart = source.indexOf('{step === "input"');
-    const otpStateStart = source.indexOf('{step === "otp"');
-    const inputStateSource = source.slice(inputStateStart, otpStateStart);
-
-    expect(inputStateStart).toBeGreaterThanOrEqual(0);
-    expect(otpStateStart).toBeGreaterThan(inputStateStart);
-    expect(inputStateSource).toContain("setAuthIntent(alternateAuthIntent)");
-    expect(inputStateSource).toContain(
+    expect(source).toContain('(step === "input" || step === "otp")');
+    expect(source).toContain("setAuthIntent(alternateAuthIntent)");
+    expect(source).toContain(
       "getCustomerAuthAlternateIntentLabel(alternateAuthIntent)",
     );
   });
@@ -280,13 +276,11 @@ describe("customer auth resilience source boundaries", () => {
     expect(source).toContain('id="profile-address"');
     expect(source).toContain('autoComplete="street-address"');
     expect(
-      source.match(/<input\s+[\s\S]*?required[\s\S]*?autoComplete=/g),
+      source.match(/id="profile-(?:name|address)"\s+type="text"\s+required\s+autoComplete=/g),
     ).toHaveLength(2);
     expect(
       source.match(/aria-hidden="true"[\s\S]*?\(required\)/g),
     ).toHaveLength(2);
-    expect(
-      source.match(/className="h-11 w-full[\s\S]*?sm:h-10"/g),
-    ).toHaveLength(2);
+    expect(source).not.toContain("sm:h-10");
   });
 });

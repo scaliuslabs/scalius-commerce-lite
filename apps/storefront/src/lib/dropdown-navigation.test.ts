@@ -18,11 +18,12 @@ describe("adaptive dropdown navigation", () => {
     });
   });
 
-  it("keeps a usable bounded menu in a compact viewport", () => {
+  it("never forces a menu taller than the available viewport", () => {
     expect(resolveDropdownLayout(110, 146, 260)).toEqual({
       placement: "below",
-      maxHeight: 120,
+      maxHeight: 102,
     });
+    expect(resolveDropdownLayout(10, 54, 64)).toEqual({ placement: "below", maxHeight: 0 });
   });
 
   it("supports wrapping arrow, home, and end navigation", () => {
