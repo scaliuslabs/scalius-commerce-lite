@@ -77,6 +77,15 @@ function createDb(input: string | {
             from: vi.fn(() => ({
                 where: vi.fn(() => ({
                     get: vi.fn(async () => ({ customerPhone })),
+                    all: vi.fn(async () => []),
+                })),
+                leftJoin: vi.fn(() => ({
+                    where: vi.fn(() => ({
+                        orderBy: vi.fn(async () => [{
+                            order: { status: "confirmed", paymentMethod: "cod", paymentStatus: "unpaid" },
+                            item: null,
+                        }]),
+                    })),
                 })),
                 limit: vi.fn(() => ({
                     get: vi.fn(async () => {
@@ -354,7 +363,7 @@ describe("order notification dispatch", () => {
             1,
             expect.objectContaining({
                 subject: "Order #order_refund_state Refund Processing",
-                html: expect.stringContaining("refund for order"),
+                html: expect.stringContaining("refund for this order"),
             }),
             {
                 db,
@@ -366,7 +375,7 @@ describe("order notification dispatch", () => {
             2,
             expect.objectContaining({
                 subject: "Order #order_refund_state Refund Failed",
-                html: expect.stringContaining("couldn't complete the refund"),
+                html: expect.stringContaining("couldn&#39;t complete the refund"),
             }),
             {
                 db,
