@@ -5,15 +5,16 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { FormLabel } from "@/components/ui/form";
+} from "~/components/ui/select";
+import { Button } from "~/components/ui/button";
+import { Badge } from "~/components/ui/badge";
+import { FormLabel } from "~/components/ui/form";
 import { Plus } from "lucide-react";
 import type { Product } from "./types";
 import { useOrderForm } from "./OrderFormContext";
-import { useCurrency } from "@/hooks/use-currency";
+import { useCurrency } from "~/hooks/use-currency";
 import { OrderItemQuantityInput } from "./OrderItemQuantityInput";
+import { orderItemVariantLabel } from "./order-item-presentation";
 import {
   exceededStockMessage,
   remainingStockForNewOrderLine,
@@ -96,65 +97,66 @@ export function ItemSelection({
         <FormLabel htmlFor="variant-select-trigger" className="mb-2 block">
           SKU
         </FormLabel>
-        <Select
-          value={selectedVariant}
-          disabled={isLoadingVariants || selectedProduct.variants.length <= 1}
-          onValueChange={(value) => {
-            setSelectedVariant(value);
-            setTimeout(
-              () => document.getElementById("quantity-input")?.focus(),
-              0
-            );
-          }}
-        >
-          <SelectTrigger
-            id="variant-select-trigger"
-            className="w-full"
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                document.getElementById("quantity-input")?.focus();
-              }
+        {!isLoadingVariants && selectedProduct.variants.length === 1 ? (
+          <output id="variant-select-trigger" className="block min-h-9 content-center break-words text-sm font-medium">
+            {orderItemVariantLabel(selectedProduct.variants[0])}
+          </output>
+        ) : (
+          <Select
+            value={selectedVariant}
+            disabled={isLoadingVariants || selectedProduct.variants.length <= 1}
+            onValueChange={(value) => {
+              setSelectedVariant(value);
+              setTimeout(
+                () => document.getElementById("quantity-input")?.focus(),
+                0
+              );
             }}
           >
-            <SelectValue placeholder={isLoadingVariants ? "Loading SKUs..." : hasSkus ? "Select SKU" : "No active SKU"} />
-          </SelectTrigger>
-          <SelectContent className="max-h-[300px]">
-            {selectedProduct.variants
-              .filter((variant) => variant.id)
-              .map((variant) => {
-                const variantLabel =
-                  variant.selectedOptions.map((option) => `${option.name}: ${option.value}`).join(", ") ||
-                  (variant.isDefault ? "Product SKU" : null) ||
-                  variant.sku ||
-                  "SKU";
-                const available = (variant.stock ?? 0) - (variant.reservedStock ?? 0);
+            <SelectTrigger
+              id="variant-select-trigger"
+              className="w-full"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  document.getElementById("quantity-input")?.focus();
+                }
+              }}
+            >
+              <SelectValue placeholder={isLoadingVariants ? "Loading SKUs..." : hasSkus ? "Select SKU" : "No active SKU"} />
+            </SelectTrigger>
+            <SelectContent className="max-h-[300px]">
+              {selectedProduct.variants
+                .filter((variant) => variant.id)
+                .map((variant) => {
+                  const available = (variant.stock ?? 0) - (variant.reservedStock ?? 0);
 
-                return (
-                  <SelectItem key={variant.id} value={variant.id}>
-                    <div className="flex flex-col w-full">
-                      <span className="font-medium">{variantLabel}</span>
-                      <div className="flex justify-between text-xs text-muted-foreground mt-1 w-full">
-                        <span>{variant.trackInventory === false ? "No stock limit" : `Available: ${available}`}</span>
-                        <span className="ml-4">
-                          {selectedProduct.discountPercentage ? (
-                            <span className="text-green-600">
-                              {symbol}
-                              {parseFloat(
-                                calculateDiscountedPrice(selectedProduct, variant.id)
-                              ).toLocaleString()}
-                            </span>
-                          ) : (
-                            <span>{symbol}{variant.price.toLocaleString()}</span>
-                          )}
-                        </span>
+                  return (
+                    <SelectItem key={variant.id} value={variant.id}>
+                      <div className="flex flex-col w-full">
+                        <span className="font-medium">{orderItemVariantLabel(variant)}</span>
+                        <div className="flex justify-between text-xs text-muted-foreground mt-1 w-full">
+                          <span>{variant.trackInventory === false ? "No stock limit" : `Available: ${available}`}</span>
+                          <span className="ml-4">
+                            {selectedProduct.discountPercentage ? (
+                              <span className="text-green-600">
+                                {symbol}
+                                {parseFloat(
+                                  calculateDiscountedPrice(selectedProduct, variant.id)
+                                ).toLocaleString()}
+                              </span>
+                            ) : (
+                              <span>{symbol}{variant.price.toLocaleString()}</span>
+                            )}
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                  </SelectItem>
-                );
-              })}
-          </SelectContent>
-        </Select>
+                    </SelectItem>
+                  );
+                })}
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
       <div>
