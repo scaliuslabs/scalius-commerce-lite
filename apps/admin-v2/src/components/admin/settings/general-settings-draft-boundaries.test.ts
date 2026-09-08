@@ -8,15 +8,20 @@ describe("general settings draft boundaries", () => {
   it.each([
     "BusinessSettingsBuilder.tsx",
     "CurrencySettingsBuilder.tsx",
-    "AllowedCountriesBuilder.tsx",
     "AuthSettingsBuilder.tsx",
     "MediaSettingsBuilder.tsx",
+    "../SeoSettingsBuilder.tsx",
   ])("guards dirty %s drafts from route changes", (name) => {
     const source = readSource(name);
 
     expect(source).toContain("<UnsavedChangesGuard");
-    expect(source).toContain("isDirty={isDirty}");
-    expect(source).toMatch(/isSubmitting=\{(?:isSaving|saving)\}/);
+    expect(source).toContain("isDirty={isDirty || isSaving}");
+    expect(source).toContain("isSubmitting={false}");
+  });
+
+  it("keeps the separate country-policy editor guarded", () => {
+    const source = readSource("AllowedCountriesBuilder.tsx");
+    expect(source).toContain("<UnsavedChangesGuard isDirty={isDirty} isSubmitting={saving}");
   });
 
   it.each([

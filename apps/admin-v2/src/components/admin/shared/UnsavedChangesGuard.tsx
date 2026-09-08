@@ -1,4 +1,5 @@
 import { useBlocker } from "@tanstack/react-router";
+import { useEffect } from "react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -58,6 +59,13 @@ export function UnsavedChangesGuard({
     withResolver: true,
     enableBeforeUnload: isDirty && !isSubmitting,
   });
+
+  useEffect(() => {
+    if (status === "blocked" && !isDirty && !isSubmitting) {
+      reset?.();
+      dispatchAdminNavigationCancelled();
+    }
+  }, [isDirty, isSubmitting, reset, status]);
 
   function keepEditing() {
     reset?.();

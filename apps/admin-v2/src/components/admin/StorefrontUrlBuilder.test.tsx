@@ -15,13 +15,17 @@ const storefrontUrlApi = vi.hoisted(() => ({
   getStorefrontUrl: vi.fn(),
   updateStorefrontUrl: vi.fn(),
 }));
+const workspaceMocks = vi.hoisted(() => ({
+  guard: vi.fn(),
+  homepage: vi.fn(),
+}));
 
 vi.mock("~/lib/api-functions/storefront-url", () => storefrontUrlApi);
 vi.mock("./shared/UnsavedChangesGuard", () => ({
-  UnsavedChangesGuard: () => null,
+  UnsavedChangesGuard: (props: unknown) => { workspaceMocks.guard(props); return null; },
 }));
 vi.mock("./settings/HomepagePresentationBuilder", () => ({
-  HomepagePresentationBuilder: () => null,
+  HomepagePresentationBuilder: (props: unknown) => { workspaceMocks.homepage(props); return null; },
 }));
 vi.mock("sonner", () => ({
   toast: {
@@ -179,5 +183,36 @@ describe("StorefrontUrlBuilder", () => {
     expect(invalidateQueriesSpy).toHaveBeenCalledWith({
       queryKey: queryKeys.settings.seoDiscoveryLiveProbe(),
     });
+  });
+
+  it("guards a pending URL save even if the merchant reverts to the previous URL", async () => {
+    let resolveSave!: () => void;
+    storefrontUrlApi.updateStorefrontUrl.mockImplementation(() => new Promise<void>((resolve) => { resolveSave = resolve; }));
+    await renderBuilder();
+    await setStoreUrl(host, "https://new-shop.example.com");
+    await act(async () => { getButton(host, "Save URL").click(); });
+    await waitFor(() => expect(storefrontUrlApi.updateStorefrontUrl).toHaveBeenCalled());
+    await setStoreUrl(host, "https://shop.example.com");
+    expect(workspaceMocks.guard.mock.calls.at(-1)?.[0]).toEqual({ isDirty: true, isSubmitting: false });
+    storefrontUrlApi.getStorefrontUrl.mockResolvedValue({ storefrontUrl: "https://new-shop.example.com" });
+    await act(async () => { resolveSave(); });
+    await waitFor(() => expect(getButton(host, "Save URL").disabled).toBe(false));
+    expect(host.querySelector<HTMLInputElement>("#storefront-url")?.value).toBe("https://shop.example.com");
+    expect(workspaceMocks.guard.mock.calls.at(-1)?.[0]).toEqual({ isDirty: true, isSubmitting: false });
+    await act(async () => { getButton(host, "Reset").click(); });
+    expect(workspaceMocks.guard.mock.calls.at(-1)?.[0]).toEqual({ isDirty: false, isSubmitting: false });
+  });
+
+  it.each([
+    { isDirty: true, isSubmitting: false },
+    { isDirty: true, isSubmitting: true },
+    { isDirty: false, isSubmitting: true },
+  ])("protects homepage work while the URL form is clean: $isDirty/$isSubmitting", async (homepageState) => {
+    await renderBuilder();
+    const onDraftStateChange = workspaceMocks.homepage.mock.calls.at(-1)?.[0].onDraftStateChange;
+    await act(async () => { onDraftStateChange(homepageState); });
+    expect(workspaceMocks.guard.mock.calls.at(-1)?.[0]).toEqual({ isDirty: true, isSubmitting: false });
+    await act(async () => { onDraftStateChange({ isDirty: false, isSubmitting: false }); });
+    expect(workspaceMocks.guard.mock.calls.at(-1)?.[0]).toEqual({ isDirty: false, isSubmitting: false });
   });
 });
