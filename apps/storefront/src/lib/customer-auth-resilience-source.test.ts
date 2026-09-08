@@ -106,7 +106,7 @@ describe("customer auth resilience source boundaries", () => {
     expect(cartSource).toContain(
       'else if (draft && field in draft) values[field] = draft[field] ?? "";',
     );
-    expect(cartSource).toContain("persistCheckoutFormDraftNow();");
+    expect(cartSource.match(/persistCheckoutFormDraftNow\(true\);/g)).toHaveLength(2);
     expect(cartSource).not.toContain("shippingAddressInput?.reportValidity()");
   });
 
@@ -124,12 +124,10 @@ describe("customer auth resilience source boundaries", () => {
       'Object.prototype.hasOwnProperty.call(draft, "customerPhone")',
     );
     expect(phoneSource).toContain('return result.ok ? result.value : "";');
-    expect(cartSource).toContain("let phoneFieldHasBuyerEdit = false;");
-    expect(cartSource).toContain("!phoneFieldHasBuyerEdit &&");
-    expect(cartSource).toContain(
-      '(event.target as HTMLInputElement | null)?.id === "customerPhone-input"',
-    );
-    expect(cartSource).toContain("phoneFieldHasBuyerEdit = true;");
+    expect(cartSource).toContain("const buyerEditedFields = new Set<string>();");
+    expect(cartSource).toContain("!buyerEditedFields.has(field)");
+    expect(cartSource).toContain('input.id === "customerPhone-input" ? "customerPhone" : input.name');
+    expect(cartSource).toContain("buyerEditedFields.add(field);");
     expect(cartSource).toContain(
       'document.addEventListener(\n    "astro:before-swap"',
     );
