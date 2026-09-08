@@ -495,11 +495,15 @@ describe("Stripe checkout handler", () => {
 
     await stripeHandler.onSelect?.(container);
     expect(createCard).toHaveBeenCalledTimes(1);
+    changeHandler?.({ complete: false, error: { message: "Your card number is invalid." } });
     resetStripePaymentElement();
     expect(stripeCard.destroy).toHaveBeenCalledTimes(1);
     expect(stripeHandler.isReady?.()).toBe(false);
+    expect(error.textContent).toBe("");
+    expect(error.classList.contains("hidden")).toBe(true);
     cardHost.style.color = "rgb(17, 94, 89)";
     cardHost.style.removeProperty("--muted-foreground");
+    createCard.mockReturnValueOnce({ ...stripeCard, mount: vi.fn(), destroy: vi.fn() });
     await stripeHandler.onSelect?.(container);
     expect(createCard).toHaveBeenCalledTimes(2);
     expect(createCard).toHaveBeenLastCalledWith("card", expect.objectContaining({
@@ -510,6 +514,34 @@ describe("Stripe checkout handler", () => {
         }),
       }),
     }));
+  });
+
+  it("mounts once when concurrent selections share the pending Stripe script", async () => {
+    document.body.innerHTML = '<div id="stripeSection"><div id="stripeCardElement"></div></div>';
+    const container = document.getElementById("stripeSection") as HTMLElement;
+    container.dataset.publishableKey = "pk_concurrent_mount";
+    resetStripePaymentElement();
+    vi.stubGlobal("Stripe", undefined);
+    let script: HTMLScriptElement | undefined;
+    const append = vi.spyOn(document.head, "appendChild").mockImplementation((node) => {
+      script = node as HTMLScriptElement;
+      return node;
+    });
+    const card = { mount: vi.fn(), on: vi.fn(), destroy: vi.fn() };
+    const create = vi.fn(() => card);
+    try {
+      const first = stripeHandler.onSelect?.(container);
+      const second = stripeHandler.onSelect?.(container);
+      expect(append).toHaveBeenCalledTimes(1);
+      vi.stubGlobal("Stripe", vi.fn(() => ({ elements: () => ({ create }), confirmCardPayment: vi.fn() })));
+      script!.dispatchEvent(new Event("load"));
+      await Promise.all([first, second]);
+      expect(create).toHaveBeenCalledTimes(1);
+      expect(card.mount).toHaveBeenCalledTimes(1);
+    } finally {
+      append.mockRestore();
+      resetStripePaymentElement();
+    }
   });
 
   it("keeps card payment failures on checkout instead of redirecting to hosted recovery", async () => {

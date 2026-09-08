@@ -51,6 +51,11 @@ export function resetStripePaymentElement(): void {
   }
   stripeCard = null;
   stripeCardComplete = false;
+  const error = document.getElementById("stripeError");
+  if (error) {
+    error.textContent = "";
+    error.classList.add("hidden");
+  }
 }
 
 function syncPayButtonReadiness(): void {
@@ -105,6 +110,7 @@ export const stripeHandler: GatewayHandler = {
         await stripeScriptPromise;
       }
 
+      if (stripeCard) return;
       stripeInstance = window.Stripe!(publishableKey);
       const elements = stripeInstance.elements();
       const cardStyle = getComputedStyle(document.getElementById("stripeCardElement") ?? container);
