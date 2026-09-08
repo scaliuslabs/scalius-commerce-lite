@@ -527,7 +527,7 @@ app.openapi(exportOrdersRoute, async (c) => {
     exportPages: while (exportedRows < maxRows) {
         const result = await OrdersService.listOrders(c.get("db"), {
             page,
-            limit: Math.min(ORDER_EXPORT_PAGE_SIZE, maxRows - exportedRows),
+            limit: ORDER_EXPORT_PAGE_SIZE,
             search: query.search || "",
             status: query.status || undefined,
             statusGroup: query.statusGroup,
@@ -543,7 +543,7 @@ app.openapi(exportOrdersRoute, async (c) => {
         });
         total = result.pagination.total;
         for (const order of result.orders) {
-            if (!csvBuilder.append(order)) break exportPages;
+            if (exportedRows >= maxRows || !csvBuilder.append(order)) break exportPages;
             exportedRows += 1;
         }
         if (result.orders.length === 0 || page >= result.pagination.totalPages) break;
@@ -703,7 +703,7 @@ app.openapi(paymentRecoveryExportRoute, async (c) => {
     exportPages: while (exportedRows < maxRows) {
         const result = await OrdersService.listOrders(db, {
             page,
-            limit: Math.min(PAYMENT_RECOVERY_EXPORT_PAGE_SIZE, maxRows - exportedRows),
+            limit: PAYMENT_RECOVERY_EXPORT_PAGE_SIZE,
             search: query.search || "",
             status: query.status || undefined,
             statusGroup: query.statusGroup,
@@ -719,7 +719,7 @@ app.openapi(paymentRecoveryExportRoute, async (c) => {
         });
         total = result.pagination.total;
         for (const order of result.orders) {
-            if (!csvBuilder.append(order)) break exportPages;
+            if (exportedRows >= maxRows || !csvBuilder.append(order)) break exportPages;
             exportedRows += 1;
         }
         if (result.orders.length === 0 || page >= result.pagination.totalPages) break;
