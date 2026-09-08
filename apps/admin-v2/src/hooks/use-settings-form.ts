@@ -13,7 +13,7 @@ interface UseSettingsFormOptions<T extends object, SaveResult> {
   invalidateQueryKeys?: readonly (readonly unknown[])[];
 }
 
-function mergeUneditedFields<T extends object>(current: T, baseline: T, incoming: T): T {
+export function mergeUneditedFields<T extends object>(current: T, baseline: T, incoming: T): T {
   const next = { ...incoming };
   for (const key of Object.keys({ ...baseline, ...current }) as (keyof T)[]) {
     if (JSON.stringify(current[key]) !== JSON.stringify(baseline[key])) {
