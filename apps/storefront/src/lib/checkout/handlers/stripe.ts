@@ -22,7 +22,7 @@ interface StripeInstance {
 interface StripeElements {
   create(
     type: "card",
-    options?: { style?: Record<string, Record<string, string>> },
+    options?: { style?: Record<string, Record<string, string | Record<string, string>>> },
   ): StripeCardElement;
 }
 
@@ -107,10 +107,19 @@ export const stripeHandler: GatewayHandler = {
 
       stripeInstance = window.Stripe!(publishableKey);
       const elements = stripeInstance.elements();
+      const cardStyle = getComputedStyle(document.getElementById("stripeCardElement") ?? container);
+      const foreground = cardStyle.color;
+      const placeholder = cardStyle.getPropertyValue("--muted-foreground").trim() || foreground;
       stripeCard = elements.create("card", {
         style: {
-          base: { fontSize: "16px", color: "#111", fontFamily: "sans-serif" },
-          invalid: { color: "#e53e3e" },
+          base: {
+            fontSize: "16px",
+            color: foreground,
+            fontFamily: "sans-serif",
+            iconColor: foreground,
+            "::placeholder": { color: placeholder },
+          },
+          invalid: { color: foreground, iconColor: foreground },
         },
       });
       stripeCard.mount("#stripeCardElement");
