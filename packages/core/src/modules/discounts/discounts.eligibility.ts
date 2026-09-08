@@ -334,6 +334,7 @@ export async function isDiscountValid(
         valid: true,
         discount: {
             id: discount.id,
+            revision: discount.revision,
             code: discount.code,
             type: discount.type,
             valueType: discount.valueType,

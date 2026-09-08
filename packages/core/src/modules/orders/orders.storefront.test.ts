@@ -446,6 +446,7 @@ describe("createStorefrontOrder tax discount parity", () => {
         valid: true,
         discount: {
           id: "discount_1",
+          revision: 3,
           type: "amount_off_products",
           valueType: "fixed_amount",
           discountValue: 50,
@@ -473,6 +474,7 @@ describe("createStorefrontOrder tax discount parity", () => {
         valid: true,
         discount: {
           id: "discount_1",
+          revision: 3,
           type: "amount_off_products",
           valueType: "fixed_amount",
           discountValue: 50,
@@ -487,6 +489,7 @@ describe("createStorefrontOrder tax discount parity", () => {
       valid: true,
       discount: {
         id: "discount_1",
+        revision: 3,
         type: "amount_off_products",
         valueType: "fixed_amount",
         discountValue: 50,
@@ -496,7 +499,7 @@ describe("createStorefrontOrder tax discount parity", () => {
     }));
     const calculator = vi.fn<Parameters<typeof createStorefrontOrder>[4]>(async () => 50);
 
-    await placeOrder({
+    const result = await placeOrder({
       inputOverrides: {
         discountCode: " product50 ",
         discountAmount: 9_999,
@@ -532,7 +535,24 @@ describe("createStorefrontOrder tax discount parity", () => {
       new Set(["prod_standard"]),
       true,
     );
+    expect(result.commitPayload.discountUsage).toEqual({
+      discountId: "discount_1", revision: 3, amountDiscounted: 50,
+    });
   });
+
+  it.each([undefined, null, 0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1])(
+    "rejects missing or invalid validated discount revision (%s)",
+    async (revision) => {
+      await expect(placeOrder({
+        inputOverrides: { discountCode: "SAVE20" },
+        discountValidation: {
+          valid: true,
+          discount: { id: "discount_1", revision, type: "amount_off_order" },
+        },
+        calculatedDiscountAmount: 20,
+      })).rejects.toThrow("discount configuration is invalid");
+    },
+  );
 
   it("fails closed when the evaluator omits the authoritative discount identity", async () => {
     await expect(placeOrder({
