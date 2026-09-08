@@ -137,10 +137,16 @@ const layoutData = await getLayoutData();
                   </select>
                 </div>
               </div>
+              <div id="profileAreaField" hidden>
+                <label for="fieldArea" class="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Area (optional)</label>
+                <select id="fieldArea" disabled class="w-full bg-muted border-transparent focus:bg-background focus:border-input focus:ring-0 rounded-lg text-sm px-3 py-2.5 text-foreground transition-all outline-none disabled:opacity-50">
+                  <option value="">Select Area (optional)</option>
+                </select>
+              </div>
               <button id="saveProfileBtn" disabled class="w-full mt-2 py-2.5 bg-primary text-primary-foreground text-sm font-bold rounded-lg hover:bg-primary/90 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
                 Save Address
               </button>
-              <p id="profileSaveStatus" class="text-xs text-center hidden mt-2"></p>
+              <p id="profileSaveStatus" role="status" aria-live="polite" class="text-xs text-center hidden mt-2"></p>
               <button id="profileLocationsRetryBtn" type="button" class="hidden w-full min-h-11 text-sm font-semibold text-primary hover:underline">Retry delivery locations</button>
             </div>
           </div>
@@ -191,7 +197,7 @@ const layoutData = await getLayoutData();
 
 <script>
   import { getCustomerSession, getCustomerOrders, logoutCustomer, updateCustomerProfile, type CustomerOrder, type CustomerOrderShipment } from "@/lib/api/customer-auth";
-  import { getCities, getZones } from "@/lib/api/shipping";
+  import { getCities, getZones, getAreas } from "@/lib/api/shipping";
   import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
   import { escapeHtml } from "@scalius/shared/html-escape";
   import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
@@ -614,6 +620,8 @@ const layoutData = await getLayoutData();
     const fAddress = document.getElementById("fieldAddress") as HTMLInputElement;
     const fCity = document.getElementById("fieldCity") as HTMLSelectElement;
     const fZone = document.getElementById("fieldZone") as HTMLSelectElement;
+    const fArea = document.getElementById("fieldArea") as HTMLSelectElement;
+    const areaField = document.getElementById("profileAreaField")!;
 
     if (fName) fName.value = customer.name ?? "";
     if (fPhone) fPhone.value = customer.phone ?? "";
@@ -623,105 +631,146 @@ const layoutData = await getLayoutData();
     const locationsRetryBtn = document.getElementById("profileLocationsRetryBtn") as HTMLButtonElement | null;
     const profileSaveStatus = document.getElementById("profileSaveStatus")!;
     let isSavingProfile = false;
+    let zoneRead = 0;
+    let areaRead = 0;
     if (saveProfileBtn) saveProfileBtn.disabled = true;
 
-    function updateProfileSaveAvailability(): void {
-      if (saveProfileBtn) saveProfileBtn.disabled = isSavingProfile || fCity.disabled
-        || Boolean(fCity.value && fZone.disabled)
-        || Boolean(fCity.options[fCity.selectedIndex]?.disabled || fZone.options[fZone.selectedIndex]?.disabled);
+    function hasUnavailableLocation(): boolean {
+      return [fCity, fZone, fArea].some((field) => field.options[field.selectedIndex]?.disabled);
     }
 
-    // Retry only initial location reads so typed name/address drafts stay intact.
-    async function initializeProfileLocations(): Promise<void> {
-      if (!fCity || !fZone) return;
-      fCity.disabled = true;
-      fZone.disabled = true;
-      fCity.onchange = null;
-      if (saveProfileBtn) saveProfileBtn.disabled = true;
+    function updateProfileSaveAvailability(): void {
+      areaField.hidden = !fArea.value && !Array.from(fArea.options).some((option) => option.value && !option.disabled);
+      if (saveProfileBtn) saveProfileBtn.disabled = isSavingProfile || fCity.disabled
+        || Boolean(fCity.value && (fZone.disabled || !fZone.value))
+        || Boolean(fZone.value && fArea.disabled) || hasUnavailableLocation();
+    }
+
+    function setLocationOptions(field: HTMLSelectElement, options: { id: string; name: string }[], placeholder: string, savedId = "", savedName?: string | null): boolean {
+      field.replaceChildren();
+      [{ id: "", name: placeholder }, ...options].forEach((location) => {
+        const option = document.createElement("option");
+        option.value = location.id;
+        option.textContent = location.name;
+        field.add(option);
+      });
+      const available = !savedId || options.some((option) => option.id === savedId);
+      if (!available) {
+        const unavailable = document.createElement("option");
+        unavailable.value = savedId;
+        unavailable.textContent = `${savedName || "Saved location"} (unavailable)`;
+        unavailable.disabled = true;
+        field.add(unavailable);
+      }
+      field.value = savedId;
+      return available;
+    }
+
+    function updateLocationReadiness(): void {
+      updateProfileSaveAvailability();
+      const message = hasUnavailableLocation()
+        ? "Your saved delivery location is no longer available. Choose an available location or clear it before saving."
+        : fCity.value && !fZone.value
+          ? fZone.options.length > 1 ? "Choose a zone before saving." : "No zones are available for this city. Choose another city or clear it before saving."
+          : "";
+      profileSaveStatus.textContent = message;
+      profileSaveStatus.className = "text-xs text-center text-red-600";
+      profileSaveStatus.classList.toggle("hidden", !message);
+    }
+
+    function showLocationLoading(): void {
+      updateProfileSaveAvailability();
       locationsRetryBtn?.classList.add("hidden");
+      if (locationsRetryBtn) locationsRetryBtn.onclick = null;
       profileSaveStatus.textContent = "Loading delivery locations…";
       profileSaveStatus.className = "text-xs text-center text-muted-foreground";
+    }
 
-      const cities = await getCities();
-      if (accountWindow.__scaliusAccountInitRun !== runId) return;
-      const cityAvailable = !customer.city || cities?.some((city) => city.id === customer.city);
-      const zones = cities && customer.city && cityAvailable ? await getZones(customer.city) : [];
-      if (accountWindow.__scaliusAccountInitRun !== runId) return;
-      if (!cities || !zones) {
-        profileSaveStatus.textContent = "Your delivery locations could not be loaded. Try again before saving.";
-        profileSaveStatus.className = "text-xs text-center text-red-600";
-        locationsRetryBtn?.classList.remove("hidden");
+    function showLocationFailure(retry: () => Promise<void>): void {
+      profileSaveStatus.textContent = "Your delivery locations could not be loaded. Try again before saving.";
+      profileSaveStatus.className = "text-xs text-center text-red-600";
+      if (locationsRetryBtn) {
+        locationsRetryBtn.onclick = () => void retry();
+        locationsRetryBtn.classList.remove("hidden");
+      }
+    }
+
+    async function loadProfileAreas(savedArea = "", areaName?: string | null): Promise<void> {
+      const request = ++areaRead;
+      const zoneId = fZone.value;
+      setLocationOptions(fArea, [], "Select Area (optional)");
+      fArea.disabled = true;
+      showLocationLoading();
+      if (!zoneId) {
+        updateLocationReadiness();
         return;
       }
-
-      fCity.innerHTML = '<option value="">Select City</option>';
-      cities.forEach((city) => {
-        const option = document.createElement("option");
-        option.value = city.id;
-        option.textContent = city.name;
-        fCity.appendChild(option);
-      });
-      if (customer.city && !cityAvailable) {
-        const unavailableCity = document.createElement("option");
-        unavailableCity.value = customer.city;
-        unavailableCity.textContent = `${customer.cityName || "Saved city"} (unavailable)`;
-        unavailableCity.disabled = true;
-        fCity.appendChild(unavailableCity);
+      const areas = await getAreas(zoneId);
+      if (accountWindow.__scaliusAccountInitRun !== runId || request !== areaRead) return;
+      if (!areas) {
+        showLocationFailure(() => loadProfileAreas(savedArea, areaName));
+        return;
       }
-      fCity.value = customer.city ?? "";
-      fZone.innerHTML = '<option value="">Select Zone</option>';
-      zones.forEach((zone) => {
-        const option = document.createElement("option");
-        option.value = zone.id;
-        option.textContent = zone.name;
-        fZone.appendChild(option);
-      });
-      if (customer.zone && !zones.some((zone) => zone.id === customer.zone)) {
-        const unavailableZone = document.createElement("option");
-        unavailableZone.value = customer.zone;
-        unavailableZone.textContent = `${customer.zoneName || "Saved zone"} (unavailable)`;
-        unavailableZone.disabled = true;
-        fZone.appendChild(unavailableZone);
-      }
-      fZone.value = customer.zone ?? "";
-      fCity.disabled = false;
-      fZone.disabled = !customer.city || !cityAvailable;
-
-      function updateLocationReadiness(): void {
-        const unavailable = Boolean(fCity.options[fCity.selectedIndex]?.disabled || fZone.options[fZone.selectedIndex]?.disabled);
-        updateProfileSaveAvailability();
-        profileSaveStatus.textContent = "Your saved delivery location is no longer available. Choose an available location or clear it before saving.";
-        profileSaveStatus.className = "text-xs text-center text-red-600";
-        profileSaveStatus.classList.toggle("hidden", !unavailable);
-      }
-      fZone.onchange = updateLocationReadiness;
-
-      // Handle city change
-      fCity.onchange = async (e) => {
-        const target = e.target as HTMLSelectElement;
-        const cityId = target.value;
-
-        fZone.innerHTML = '<option value="">Select Zone</option>';
-        fZone.disabled = true;
-        if (saveProfileBtn) saveProfileBtn.disabled = true;
-
-        if (cityId) {
-          const zones = await getZones(cityId) || [];
-          if (accountWindow.__scaliusAccountInitRun !== runId) return;
-          zones.forEach(zone => {
-            const option = document.createElement("option");
-            option.value = zone.id;
-            option.textContent = zone.name;
-            fZone.appendChild(option);
-          });
-          fZone.disabled = false;
-        }
-        updateLocationReadiness();
-      };
-
+      setLocationOptions(fArea, areas, "Select Area (optional)", savedArea, areaName);
+      fArea.disabled = false;
       updateLocationReadiness();
     }
-    if (locationsRetryBtn) locationsRetryBtn.onclick = () => void initializeProfileLocations();
+
+    async function loadProfileZones(savedZone = "", zoneName?: string | null, savedArea = "", areaName?: string | null): Promise<void> {
+      const request = ++zoneRead;
+      ++areaRead;
+      const cityId = fCity.value;
+      setLocationOptions(fZone, [], "Select Zone");
+      setLocationOptions(fArea, [], "Select Area (optional)");
+      fZone.disabled = true;
+      fArea.disabled = true;
+      showLocationLoading();
+      if (!cityId) {
+        updateLocationReadiness();
+        return;
+      }
+      const zones = await getZones(cityId);
+      if (accountWindow.__scaliusAccountInitRun !== runId || request !== zoneRead) return;
+      if (!zones) {
+        showLocationFailure(() => loadProfileZones(savedZone, zoneName, savedArea, areaName));
+        return;
+      }
+      const zoneAvailable = setLocationOptions(fZone, zones, "Select Zone", savedZone, zoneName);
+      fZone.disabled = false;
+      if (savedZone && zoneAvailable) {
+        await loadProfileAreas(savedArea, areaName);
+        return;
+      }
+      setLocationOptions(fArea, [], "Select Area (optional)", savedArea, areaName);
+      updateLocationReadiness();
+    }
+
+    async function initializeProfileLocations(): Promise<void> {
+      fCity.disabled = true;
+      fZone.disabled = true;
+      fArea.disabled = true;
+      showLocationLoading();
+      const cities = await getCities();
+      if (accountWindow.__scaliusAccountInitRun !== runId) return;
+      if (!cities) {
+        showLocationFailure(initializeProfileLocations);
+        return;
+      }
+      const cityAvailable = setLocationOptions(fCity, cities, "Select City", customer.city ?? "", customer.cityName);
+      fCity.disabled = false;
+      if (customer.city && cityAvailable) {
+        await loadProfileZones(customer.zone ?? "", customer.zoneName, customer.area ?? "", customer.areaName);
+        return;
+      }
+      setLocationOptions(fZone, [], "Select Zone", customer.zone ?? "", customer.zoneName);
+      setLocationOptions(fArea, [], "Select Area (optional)", customer.area ?? "", customer.areaName);
+      updateLocationReadiness();
+    }
+
+    // Each parent edit owns a fresh child read, even when changing back to the same ID.
+    fCity.onchange = () => void loadProfileZones();
+    fZone.onchange = () => void loadProfileAreas();
+    fArea.onchange = updateLocationReadiness;
 
     // Profile toggle
     const profileToggle = document.getElementById("profileToggle");
@@ -742,39 +791,41 @@ const layoutData = await getLayoutData();
       const fAddress = (document.getElementById("fieldAddress") as HTMLInputElement).value;
       const fCity = (document.getElementById("fieldCity") as HTMLSelectElement).value;
       const fZone = (document.getElementById("fieldZone") as HTMLSelectElement).value;
+      const fArea = (document.getElementById("fieldArea") as HTMLSelectElement).value;
 
       isSavingProfile = true;
       btn.disabled = true;
       btn.textContent = "Saving...";
-      status.classList.add("hidden");
-      status.className = "text-sm";
+      status.textContent = "";
+      status.className = "text-sm hidden";
 
       const res = await updateCustomerProfile({
         name: fName,
         address: fAddress,
         city: fCity,
         zone: fZone,
+        area: fArea,
       });
 
       if (accountWindow.__scaliusAccountInitRun !== runId) return;
       isSavingProfile = false;
       updateProfileSaveAvailability();
       btn.textContent = originalText;
+      const locationStatus = btn.disabled ? status.textContent : "";
 
       if (res.success) {
-        status.textContent = "Profile updated successfully!";
-        status.classList.add("text-primary");
-        status.classList.remove("hidden");
+        if (!locationStatus) {
+          status.textContent = "Profile updated successfully!";
+          status.className = "text-sm text-primary";
+        }
         // Update name in header if changed
         if (fName) {
           document.getElementById("profileName")!.textContent = fName;
           document.getElementById("profileAvatar")!.textContent = fName.charAt(0).toUpperCase();
         }
-        setTimeout(() => status.classList.add("hidden"), 3000);
       } else {
-        status.textContent = res.error || "Failed to update profile";
-        status.classList.add("text-red-600");
-        status.classList.remove("hidden");
+        status.textContent = [res.error || "Failed to update profile", locationStatus].filter(Boolean).join(" ");
+        status.className = "text-sm text-red-600";
       }
     };
 
