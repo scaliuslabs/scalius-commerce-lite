@@ -4,7 +4,7 @@ import { ConflictError } from "@scalius/core/errors";
 
 export const SHIPMENT_CLAIM_LEASE_SECONDS = 15 * 60;
 export const SHIPMENT_CLAIM_CONFLICT_MESSAGE =
-    "Order has an active shipment creation in progress. Please retry shortly.";
+    "Shipment creation or recovery is active. Check shipment history before trying again.";
 
 export type ShipmentClaimSnapshot = {
     shipmentClaimId?: string | null;

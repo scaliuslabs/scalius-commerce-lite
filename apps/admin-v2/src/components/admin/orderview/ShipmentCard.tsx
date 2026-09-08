@@ -5,32 +5,32 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
+} from "~/components/ui/card";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
+} from "~/components/ui/select";
+import { Button } from "~/components/ui/button";
 import { toast } from "sonner";
 import { AlertTriangle, Truck, ChevronDown, ChevronUp, Loader2, ExternalLink, RefreshCw } from "lucide-react";
-import { ShipmentMetadataDisplay } from "@/components/ui/ShipmentMetadataDisplay";
-import ShipmentStatusIndicator from "@/components/admin/ShipmentStatusIndicator";
+import { ShipmentMetadataDisplay } from "~/components/ui/ShipmentMetadataDisplay";
+import ShipmentStatusIndicator from "~/components/admin/ShipmentStatusIndicator";
 import type { Order, OrderShipment } from "./types";
 import { useQueryClient } from "@tanstack/react-query";
-import { useCreateOrderShipment, useReconcileShipment } from "@/lib/api-mutations/orders";
-import { queryKeys } from "@/lib/query-keys";
+import { useCreateOrderShipment, useReconcileShipment } from "~/lib/api-mutations/orders";
+import { queryKeys } from "~/lib/query-keys";
 import { ManualFulfillmentDialog } from "./ManualFulfillmentDialog";
 import { formatOrderDate } from "./formatters";
-import { useOrderActionPermissions } from "@/hooks/use-order-action-permissions";
+import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
 import { canTransitionTo } from "@scalius/shared/order-state";
 import {
   getProviderReadinessLabel,
   getProviderReadinessMessage,
   resolveProviderReadiness,
-} from "@/components/admin/delivery-providers/ProviderIcon";
+} from "~/components/admin/delivery-providers/ProviderIcon";
 
 interface ShipmentCardProps {
   order: Order;
@@ -249,12 +249,13 @@ function ShipmentRecoveryNotice({
   if (!recovery || recovery.state === "none") return null;
   const canRepair =
     canManageShipments &&
+    recovery.canRepair &&
     recovery.state === "needs_attention" &&
     recovery.activeLock &&
     Boolean(recovery.shipmentId);
 
   const handleRepair = () => {
-    if (!recovery.shipmentId) return;
+    if (!canRepair || !recovery.shipmentId) return;
     reconcileMutation.mutate({
       orderId: order.id,
       shipmentId: recovery.shipmentId,

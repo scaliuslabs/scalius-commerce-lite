@@ -69,10 +69,12 @@ Multi-courier delivery management with provider factory pattern. Supports Pathao
 3. INSERT a `"creating"` placeholder shipment record
 4. Call `provider.createShipment(order, enrichedOptions)`
 5. On success: UPDATE with `externalId`, `trackingId`, normalized `status`, raw metadata
-6. On provider rejection: UPDATE to `status: "failed"`, `rawStatus: "provider_rejected"`
-7. On exception: UPDATE to `status: "failed"`, `rawStatus: "exception"`
+6. On explicit provider rejection or preparation failure before the shipment POST: UPDATE to `status: "failed"`, `rawStatus: "provider_rejected"`
+7. On uncertain POST outcome (transport/read failure, incomplete success identity, server error, or unrecognized response): UPDATE to `reconcile_required` with `rawStatus: "provider_outcome_unknown"`; retain the order claim without an expiry. A failed persistence attempt keeps the original `creating` placeholder and the claim rather than marking the shipment safely retryable.
 
 Provider shipment creation is coordinated by order-level shipment claims in the orders module. Bulk shipment creation preflights provider readiness once before the per-order loop; missing, inactive, unconfigured, untested, stale-test, or unreadable providers return one clear failure per requested order without writing order claims or shipment placeholders. `deleteShipmentRecord()` is the deletion gate: do not bypass it when removing shipments, because it protects active claims, reconciliation evidence, and stale claimed rows that still need manual resolution. When provider creation succeeded but local order/inventory finalization failed, the orders module repairs from the persisted shipment evidence and only then clears the matching order claim; delivery providers must not be called a second time for that repair.
+
+Pathao and Steadfast creation accept only a complete success identity or an explicit rejection. Neither a failed HTTP exchange nor the merchant order ID proves that the courier did not create a consignment; remote deduplication is not assumed. Unknown outcomes block another create, deletion, refresh, and local repair until provider confirmation is available. The current repair operation only settles already-confirmed provider/local finalization; it does not discover or attach missing consignments. Expired creating placeholders become unknown, and existing reconciliation evidence survives claim expiry. Failure diagnostics never include upstream response bodies or exception text. `delivery.create-outcome.d1.test.ts` exercises both real adapters through the service and fulfillment claim flow against the full migrated SQLite schema with mocked courier requests.
 
 For Pathao, positive-integer city and zone `externalIds.pathao` mappings are mandatory before the insert-first placeholder is written. Area mappings remain optional because Pathao accepts some shipments without area IDs, but when present the provider payload includes them.
 

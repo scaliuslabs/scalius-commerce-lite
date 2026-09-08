@@ -142,68 +142,53 @@ export class SteadfastProvider implements DeliveryProviderInterface {
       const baseUrl = this.credentials.baseUrl.replace(/\/$/, "");
       const createOrderUrl = `${baseUrl}/create_order`;
 
-      const response = await fetch(createOrderUrl, {
-        method: "POST",
-        headers: this.getHeaders(),
-        body: JSON.stringify(payload),
-      });
-
+      const headers = this.getHeaders();
+      const body = JSON.stringify(payload);
+      let response: Response;
       let responseData: SteadfastOrderResponse;
       try {
-        const responseText = await response.text();
-        try {
-          responseData = JSON.parse(responseText);
-        } catch {
-          console.error("[SteadfastAPI] Shipment returned an unreadable response", {
-            status: response.status,
-            contentType: response.headers.get("content-type"),
-            responseLength: responseText.length,
-          });
-          return {
-            success: false,
-            message: `Steadfast returned an unreadable response (HTTP ${response.status})`,
-          };
-        }
+        response = await fetch(createOrderUrl, { method: "POST", headers, body });
+        responseData = await response.json();
       } catch {
         return {
           success: false,
-          message: `Failed to parse API response: ${response.statusText}`,
+          reconciliationRequired: true,
+          message: "Steadfast shipment outcome is unknown. Check the courier account for confirmation before another shipment is created.",
         };
       }
 
-      if (response.ok && responseData.status === 200) {
-        const mappedStatus = mapProviderStatus(
-          this.getType(),
-          responseData.consignment.status,
-        );
-
+      if (
+        response.ok && responseData?.status === 200 &&
+        Number.isSafeInteger(responseData.consignment?.consignment_id) && responseData.consignment.consignment_id > 0 &&
+        typeof responseData.consignment.status === "string"
+      ) {
         return {
           success: true,
-          message: responseData.message,
+          message: "Steadfast shipment created.",
           data: {
             externalId: responseData.consignment.consignment_id.toString(),
             trackingId: responseData.consignment.tracking_code,
-            status: mappedStatus,
+            status: mapProviderStatus(this.getType(), responseData.consignment.status),
             metadata: responseData.consignment,
           },
         };
-      } else {
-        // Provider validation bodies may echo recipient/order values. Surface
-        // only field names and status; never pass raw provider payloads into
-        // logs or persisted shipment diagnostics.
-        const fields = responseData.errors && typeof responseData.errors === "object"
-          ? Object.keys(responseData.errors).slice(0, 12)
-          : [];
+      }
+      if ([400, 401, 403, 404, 422].includes(responseData?.status) &&
+        (response.ok || response.status === responseData.status)) {
         return {
           success: false,
-          message: `Steadfast rejected the shipment (HTTP ${response.status})${fields.length > 0 ? `; check: ${fields.join(", ")}` : ""}`,
+          message: `Steadfast rejected the shipment (HTTP ${response.status}). Check the shipment details and provider settings before retrying.`,
         };
       }
-    } catch (error: unknown) {
       return {
         success: false,
-        message: `Failed to create shipment: ${error instanceof Error ? error.message : String(error)
-          }`,
+        reconciliationRequired: true,
+        message: "Steadfast shipment outcome is unknown. Check the courier account for confirmation before another shipment is created.",
+      };
+    } catch {
+      return {
+        success: false,
+        message: "Steadfast shipment could not be prepared. Check the provider settings and shipment details before retrying.",
       };
     }
   }

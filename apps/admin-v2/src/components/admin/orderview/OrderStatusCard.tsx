@@ -155,15 +155,9 @@ export function OrderStatusCard({ order }: OrderStatusCardProps) {
         )}
 
         {shipmentLocked && order.shipmentRecovery && (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-900 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200">
-            <div className="flex items-start gap-2">
-              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              <div>
-                <p className="font-medium">{order.shipmentRecovery.label}</p>
-                {order.shipmentRecovery.message && <p className="mt-1">{order.shipmentRecovery.message}</p>}
-              </div>
-            </div>
-          </div>
+          <p className="text-sm text-muted-foreground">
+            Status changes are locked. Review the shipment details below.
+          </p>
         )}
 
       </CardContent>

@@ -77,6 +77,7 @@ import type {
 import { getOrderStatusGroupStatuses, type OrderStatusGroup } from "./order-list-views";
 import { buildPhoneSearchTerms, isLikelyPhoneSearch } from "./orders.search";
 import { assertNoActiveShipmentClaim, hasActiveShipmentClaim } from "./shipment-claim";
+import { PROVIDER_OUTCOME_UNKNOWN } from "../delivery/types";
 import { computeOrderPaymentState } from "../payments/payment-state";
 import { createCODTrackingInsertValues } from "../payments/cod";
 import {
@@ -629,6 +630,7 @@ const DEFAULT_SHIPMENT_RECOVERY_SUMMARY: OrderShipmentRecoverySummary = {
     providerType: null,
     canRefresh: false,
     canRetryCreate: false,
+    canRepair: false,
     updatedAt: null,
 };
 
@@ -847,6 +849,23 @@ function buildShipmentRecoverySummary(
     const providerType = latestShipment?.providerType ?? null;
     const canProviderRefresh = Boolean(latestShipment?.providerId && latestShipment.externalId);
 
+    if (latestShipment?.rawStatus === PROVIDER_OUTCOME_UNKNOWN) {
+        return {
+            state: "needs_attention",
+            severity: "danger",
+            activeLock: true,
+            label: "Courier confirmation needed",
+            message: "The courier may have accepted this shipment, but Scalius could not confirm the result. Check the courier portal or contact the courier with this order number before attempting another booking.",
+            shipmentId,
+            status,
+            providerType,
+            canRefresh: false,
+            canRetryCreate: false,
+            canRepair: false,
+            updatedAt: latestShipment.updatedAt,
+        };
+    }
+
     if (status === ShipmentStatus.RECONCILE_REQUIRED) {
         return {
             state: "needs_attention",
@@ -859,6 +878,7 @@ function buildShipmentRecoverySummary(
             providerType,
             canRefresh: canProviderRefresh && !hasActiveClaim,
             canRetryCreate: false,
+            canRepair: true,
             updatedAt: latestShipment?.updatedAt ?? null,
         };
     }
@@ -875,6 +895,7 @@ function buildShipmentRecoverySummary(
             providerType,
             canRefresh: false,
             canRetryCreate: false,
+            canRepair: false,
             updatedAt: latestShipment?.updatedAt ?? null,
         };
     }
@@ -891,6 +912,7 @@ function buildShipmentRecoverySummary(
             providerType,
             canRefresh: canProviderRefresh,
             canRetryCreate: false,
+            canRepair: false,
             updatedAt: latestShipment?.updatedAt ?? null,
         };
     }
@@ -907,6 +929,7 @@ function buildShipmentRecoverySummary(
             providerType,
             canRefresh: false,
             canRetryCreate: false,
+            canRepair: false,
             updatedAt: latestShipment?.updatedAt ?? null,
         };
     }
@@ -927,6 +950,7 @@ function buildShipmentRecoverySummary(
             providerType,
             canRefresh: canProviderRefresh,
             canRetryCreate: true,
+            canRepair: false,
             updatedAt: latestShipment?.updatedAt ?? null,
         };
     }
