@@ -4,7 +4,6 @@
 import type { Database } from "@scalius/database/client";
 import { adminFcmTokens, orders } from "@scalius/database/schema";
 import { escapeHtml } from "@scalius/shared/html-escape";
-import { htmlToPlainText } from "@scalius/shared/html-sanitize";
 import { eq, inArray, sql } from "drizzle-orm";
 import { sendEmail } from "../../integrations/email";
 import type { EmailRuntimeContext, SendEmailResult } from "../../integrations/email";
@@ -33,6 +32,7 @@ import {
     markNotificationProviderBlocked,
 } from "./notification-provider-health";
 import { ORDER_NOTIFICATION_LABELS, type OrderNotificationType } from "./notification-types";
+import { composeOrderEmail } from "./order-email";
 
 interface OrderNotificationData {
     id: string;
@@ -518,56 +518,12 @@ export async function sendOrderNotificationEmail(
         }
     }
 
-    const safeName = escapeHtml(name);
-    const safeTrackingId = data?.trackingId ? escapeHtml(String(data.trackingId)) : "";
-    const safeSupportRequestTypeLabel = data?.supportRequestTypeLabel
-        ? escapeHtml(String(data.supportRequestTypeLabel))
-        : "support request";
-    const safeSupportRequestStatusLabel = data?.supportRequestStatusLabel
-        ? escapeHtml(String(data.supportRequestStatusLabel))
-        : "updated";
     const supportRequestTypeLabel = data?.supportRequestTypeLabel
         ? String(data.supportRequestTypeLabel)
         : "support request";
     const supportRequestStatusLabel = data?.supportRequestStatusLabel
         ? String(data.supportRequestStatusLabel)
         : "updated";
-
-    const subjects: Record<OrderNotificationType, string> = {
-        order_created: `Order #${orderId} Received`,
-        order_confirmed: `Order #${orderId} Confirmed`,
-        order_processing: `Order #${orderId} Processing`,
-        order_shipped: `Order #${orderId} Shipped`,
-        order_delivered: `Order #${orderId} Delivered`,
-        order_completed: `Order #${orderId} Completed`,
-        order_cancelled: `Order #${orderId} Cancelled`,
-        order_returned: `Order #${orderId} Returned`,
-        refund_processing: `Order #${orderId} Refund Processing`,
-        refund_failed: `Order #${orderId} Refund Failed`,
-        order_refunded: `Order #${orderId} Refunded`,
-        order_partially_refunded: `Order #${orderId} Partially Refunded`,
-        payment_balance_paid: `Order #${orderId} Balance Paid`,
-        support_request_submitted: `Order #${orderId} Support Request Submitted`,
-        support_request_status_updated: `Order #${orderId} Support Request Updated`,
-    };
-
-    const htmlMessages: Record<OrderNotificationType, string> = {
-        order_created: `Thank you for your order, ${safeName}! We've received your order <strong>#${orderId}</strong> and will process it shortly.`,
-        order_confirmed: `Great news, ${safeName}! Your order <strong>#${orderId}</strong> has been confirmed and is being prepared.`,
-        order_processing: `Your order <strong>#${orderId}</strong> is being processed, ${safeName}! We'll update you when it ships.`,
-        order_shipped: `Your order <strong>#${orderId}</strong> is on its way, ${safeName}! ${safeTrackingId ? `Tracking ID: <strong>${safeTrackingId}</strong>` : ""}`,
-        order_delivered: `Your order <strong>#${orderId}</strong> has been delivered, ${safeName}! We hope you love your purchase.`,
-        order_completed: `Your order <strong>#${orderId}</strong> has been completed, ${safeName}! Thank you for shopping with us.`,
-        order_cancelled: `Your order <strong>#${orderId}</strong> has been cancelled, ${safeName}. If you have questions, please contact our support team.`,
-        order_returned: `Your order <strong>#${orderId}</strong> has been marked as returned, ${safeName}. If you have questions, please contact our support team.`,
-        refund_processing: `Your refund for order <strong>#${orderId}</strong> is being processed, ${safeName}. We'll update you when it is complete.`,
-        refund_failed: `We couldn't complete the refund for order <strong>#${orderId}</strong>, ${safeName}. Please contact our support team for help.`,
-        order_refunded: `Your order <strong>#${orderId}</strong> has been refunded, ${safeName}. The refund will be processed to your original payment method. If you have questions, please contact our support team.`,
-        order_partially_refunded: `A partial refund has been processed for your order <strong>#${orderId}</strong>, ${safeName}. If you have questions, please contact our support team.`,
-        payment_balance_paid: `We've received the remaining payment for your order <strong>#${orderId}</strong>, ${safeName}. Your order is now fully paid.`,
-        support_request_submitted: `We've received your ${safeSupportRequestTypeLabel} for order <strong>#${orderId}</strong>, ${safeName}. The merchant will review it and update you soon.`,
-        support_request_status_updated: `Your ${safeSupportRequestTypeLabel} for order <strong>#${orderId}</strong> is now <strong>${safeSupportRequestStatusLabel}</strong>, ${safeName}.`,
-    };
 
     const smsMessages: Record<OrderNotificationType, string> = {
         order_created: `Hi ${name}, your order #${orderId} has been received. We'll process it shortly.`,
@@ -592,21 +548,10 @@ export async function sendOrderNotificationEmail(
     const outboxId = options.outboxId;
 
     if (enabledChannels.includes("email")) {
-        const emailOptions = {
-            to: email ?? "",
-            subject: subjects[type] || `Order #${orderId} Update`,
-            html: `
-              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2>${subjects[type] || "Order Update"}</h2>
-                <p>${htmlMessages[type] || `Your order #${orderId} has been updated.`}</p>
-                <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;" />
-                <p style="color: #999; font-size: 12px;">
-                  This is an automated email regarding your order from our store.
-                </p>
-              </div>
-            `,
-            text: `${name}, ${htmlToPlainText(htmlMessages[type]) || `Order #${orderId} updated.`}`,
-        };
+        const composeEmail = () => composeOrderEmail({
+            orderId, name, type, data,
+            storefrontUrl: typeof options.env?.STOREFRONT_URL === "string" ? options.env.STOREFRONT_URL : undefined,
+        }, db);
 
         if (!email) {
             if (receiptDb && outboxId) {
@@ -646,7 +591,7 @@ export async function sendOrderNotificationEmail(
                     recipient: email,
                     recipientMasked: maskEmail(email),
                     send: async (target) => emailResultToDeliveryResult(await sendEmail({
-                        ...emailOptions,
+                        ...await composeEmail(),
                         to: email,
                         idempotencyKey: target.receiptKey,
                     }, {
@@ -659,7 +604,7 @@ export async function sendOrderNotificationEmail(
         } else {
             try {
                 const result = await sendEmail({
-                    ...emailOptions,
+                    ...await composeEmail(),
                     to: email,
                 }, {
                     db,
