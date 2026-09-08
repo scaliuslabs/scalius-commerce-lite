@@ -416,7 +416,7 @@ export async function createStorefrontOrder(
     // DISCOUNTS VERIFICATION
     // ------------------------------------------------------------------
     let verifiedDiscountAmount = 0;
-    let appliedDiscountId: string | null = null;
+    let appliedDiscount: { discountId: string; revision: number } | null = null;
     let discountType: StorefrontDiscountType | null = null;
     let applicableProductIds: Set<string> | undefined;
     let promotionSnapshot: PromotionCheckoutSnapshot | null = null;
@@ -479,18 +479,22 @@ export async function createStorefrontOrder(
             if (validResult && validResult.valid && validResult.discount) {
             const validatedDiscount = validResult.discount as {
                 id?: string;
+                revision?: number;
                 type?: StorefrontDiscountType;
             };
             if (
                 typeof validatedDiscount.id !== "string" ||
                 !validatedDiscount.id.trim() ||
+                typeof validatedDiscount.revision !== "number" ||
+                !Number.isSafeInteger(validatedDiscount.revision) ||
+                validatedDiscount.revision < 1 ||
                 !["amount_off_products", "amount_off_order", "free_shipping"].includes(
                     validatedDiscount.type ?? "",
                 )
             ) {
                 throw new ValidationError("The discount configuration is invalid.");
             }
-            appliedDiscountId = validatedDiscount.id;
+            appliedDiscount = { discountId: validatedDiscount.id, revision: validatedDiscount.revision };
             discountType = validatedDiscount.type!;
             let hasProductRestrictions = false;
             if (validatedDiscount.type === "amount_off_products") {
@@ -645,8 +649,8 @@ export async function createStorefrontOrder(
                 taxAmountMinor: lineTax.taxMinor,
             };
         }),
-        discountUsage: appliedDiscountId && normalizedDiscountAmount > 0 ? {
-            discountId: appliedDiscountId,
+        discountUsage: appliedDiscount && normalizedDiscountAmount > 0 ? {
+            ...appliedDiscount,
             amountDiscounted: normalizedDiscountAmount,
         } : null,
         promotion: promotionSnapshot,

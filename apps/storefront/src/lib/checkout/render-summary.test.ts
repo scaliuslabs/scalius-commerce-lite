@@ -146,6 +146,7 @@ function installStripePaymentFixture() {
   document.body.innerHTML = `
     <section id="orderSummary" class="hidden"><div id="summaryDetails"></div></section>
     <div id="errorMsg" class="hidden"></div>
+    <a id="checkoutRecoveryAction" hidden href="/cart">Return to cart</a>
     <div id="paymentMethods"></div>
     <div id="paymentActionParking" class="hidden">
       <div id="testModeNotice" class="hidden">Test mode</div>
@@ -592,6 +593,7 @@ describe("initCheckoutPage", () => {
     document.body.innerHTML = `
       <section id="orderSummary" class="hidden"><div id="summaryDetails"></div></section>
       <div id="errorMsg" class="hidden"></div>
+      <a id="checkoutRecoveryAction" hidden href="/cart">Return to cart</a>
       <div id="paymentMethods"></div>
       <div id="stripeSection" class="hidden"></div>
       <button id="payButton" disabled><span id="payButtonText">Select a payment method</span></button>
@@ -641,6 +643,7 @@ describe("initCheckoutPage", () => {
     expect(document.getElementById("summaryDetails")?.textContent).toContain("৳120");
     expect(quoteCalls).toBe(2);
     expect(orderCalls).toBe(1);
+    expect((document.getElementById("checkoutRecoveryAction") as HTMLAnchorElement).hidden).toBe(true);
     expect((document.getElementById("payButton") as HTMLButtonElement).disabled).toBe(method === "stripe");
     if (stripe) {
       expect(stripe.cards[0]!.destroy).toHaveBeenCalledTimes(1);
@@ -1001,47 +1004,100 @@ describe("initCheckoutPage", () => {
     expect(analyticsCalls).not.toContain("Buyer Address");
   });
 
-  it("fails closed without rendering gateways when the authoritative quote is unavailable", async () => {
-    vi.stubGlobal("fetch", vi.fn(async (input) => {
-      if (String(input) === "/api/checkout/tax-quote") {
-        return new Response(JSON.stringify({ success: false }), { status: 503 });
-      }
-      return new Response(JSON.stringify({
-        success: true,
-        data: { valid: true, issues: [] },
+  it.each(["initial quote", "final order validation", "quote refresh"])(
+    "offers explicit cart recovery after %s fails without discarding details or resubmitting",
+    async (failure) => {
+      window.history.replaceState(null, "", "/checkout");
+      const requests: string[] = [];
+      const validationError = "Checkout details changed while the order was being placed. Return to your cart to review them and try again.";
+      vi.stubGlobal("fetch", vi.fn(async (input) => {
+        const url = String(input);
+        requests.push(url);
+        if (url === "/api/checkout/create-order") {
+          return new Response(JSON.stringify({
+            success: false,
+            error: validationError,
+            errorCode: failure === "final order validation"
+              ? "VALIDATION_ERROR"
+              : "STOREFRONT_CHECKOUT_QUOTE_CONFLICT",
+          }), { status: failure === "final order validation" ? 400 : 409 });
+        }
+        if (failure === "initial quote" || requests.length > 1) {
+          return new Response(JSON.stringify({ success: false }), { status: 503 });
+        }
+        return new Response(JSON.stringify({ success: true, data: taxQuote() }));
       }));
-    }));
-    document.body.innerHTML = `
-      <section id="orderSummary" class="hidden"><div id="summaryDetails"></div></section>
-      <div id="errorMsg" class="hidden"></div>
-      <div id="paymentMethods"></div>
-      <button id="payButton" disabled><span id="payButtonText">Select a payment method</span></button>
-    `;
-    sessionStorage.setItem("scalius_checkout_data", JSON.stringify({
-      cartItems: JSON.stringify({
-        line_1: { id: "prod_1", variantId: "var_1", price: 100, quantity: 1 },
-      }),
-      city: "city_1",
-      zone: "zone_1",
-      shippingMethodId: "ship_1",
-      customerPhone: "+8801700000000",
-    }));
-    (window as unknown as { __CHECKOUT_CONFIG__: CheckoutConfig }).__CHECKOUT_CONFIG__ = {
-      ...baseConfig,
-      activeDefaultMethod: "cod",
-      gateways: [{ id: "cod", name: "Cash on Delivery" }],
-    };
+      document.body.innerHTML = `
+        <section id="orderSummary" class="hidden"><div id="summaryDetails"></div></section>
+        <div id="errorMsg" class="hidden"></div>
+        <a id="checkoutRecoveryAction" hidden href="/cart">Return to cart</a>
+        <div id="paymentMethods" aria-busy="true">
+          <div class="animate-pulse" aria-hidden="true"></div>
+          <span role="status">Loading payment methods</span>
+        </div>
+        <button id="payButton" disabled><span id="payButtonText">Select a payment method</span></button>
+      `;
+      const transfer = JSON.stringify({
+        checkoutId: "checkout_recovery_test_123456",
+        cartItems: JSON.stringify({
+          line_1: { id: "prod_1", variantId: "var_1", price: 100, quantity: 1 },
+        }),
+        customerName: "Buyer",
+        customerPhone: "+8801700000000",
+        shippingAddress: "House 1, Dhaka",
+        city: "city_1",
+        zone: "zone_1",
+        shippingMethodId: "ship_1",
+        discountCodeHidden: JSON.stringify({ code: "SAVE", amount: 10 }),
+      });
+      sessionStorage.setItem("scalius_checkout_data", transfer);
+      (window as unknown as { __CHECKOUT_CONFIG__: CheckoutConfig }).__CHECKOUT_CONFIG__ = {
+        ...baseConfig,
+        activeDefaultMethod: "cod",
+        gateways: [{ id: "cod", name: "Cash on Delivery" }],
+      };
 
-    await initCheckoutPage();
+      await initCheckoutPage();
+      const payButton = document.getElementById("payButton") as HTMLButtonElement;
+      if (failure === "initial quote") {
+        expect(document.querySelector('[data-method="cod"]')).toBeNull();
+        expect(document.getElementById("paymentMethods")?.childElementCount).toBe(0);
+        expect(payButton.disabled).toBe(true);
+        expect(document.getElementById("payButtonText")?.textContent).toBe("Total unavailable");
+      } else {
+        payButton.click();
+      }
+      await vi.waitFor(() => expect(document.getElementById("errorMsg")?.textContent).toContain(
+        failure === "final order validation"
+          ? validationError
+          : "could not verify the current taxes and order total",
+      ));
+      expect(document.getElementById("paymentMethods")?.getAttribute("aria-busy")).toBe("false");
+      expect(document.querySelector('#paymentMethods [role="status"]')).toBeNull();
+      const recoveryAction = document.getElementById("checkoutRecoveryAction") as HTMLAnchorElement;
+      expect(recoveryAction.hidden).toBe(false);
+      expect(recoveryAction.getAttribute("href")).toBe("/cart");
+      recoveryAction.focus();
+      expect(document.activeElement).toBe(recoveryAction);
+      expect(document.getElementById("errorMsg")?.textContent).not.toContain("+880");
+      expect(sessionStorage.getItem("scalius_checkout_data")).toBe(transfer);
+      expect(window.location.pathname).toBe("/checkout");
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(requests).toEqual([
+        "/api/checkout/tax-quote",
+        ...(failure === "initial quote" ? [] : ["/api/checkout/create-order"]),
+        ...(failure === "quote refresh" ? ["/api/checkout/tax-quote"] : []),
+      ]);
 
-    expect(document.querySelector('[data-method="cod"]')).toBeNull();
-    expect((document.getElementById("payButton") as HTMLButtonElement).disabled).toBe(true);
-    expect(document.getElementById("payButtonText")?.textContent).toBe("Total unavailable");
-    expect(document.getElementById("errorMsg")?.textContent).toContain(
-      "could not verify the current taxes and order total",
-    );
-    expect(document.getElementById("errorMsg")?.textContent).not.toContain("+880");
-  });
+      vi.stubGlobal("fetch", successfulCheckoutFetch());
+      await initCheckoutPage();
+      expect(recoveryAction.hidden).toBe(true);
+      expect(payButton.disabled).toBe(false);
+      expect(document.getElementById("summaryDetails")?.textContent).toContain("৳100");
+      expect(fetch).toHaveBeenCalledTimes(1);
+      expect(sessionStorage.getItem("scalius_checkout_data")).toBe(transfer);
+    },
+  );
 
   it("sends stale checkout snapshots back to cart with a one-shot repair payload", async () => {
     const issue = {

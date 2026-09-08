@@ -309,7 +309,7 @@ export interface StorefrontOrderCommitPayload {
         taxableAmountMinor: number;
         taxAmountMinor: number;
     }[];
-    discountUsage: { discountId: string; amountDiscounted: number } | null;
+    discountUsage: { discountId: string; revision: number; amountDiscounted: number } | null;
     /** Mutually exclusive with legacy discountUsage. Re-verified during the order commit. */
     promotion?: PromotionCheckoutSnapshot | null;
     requestUrl: string;
