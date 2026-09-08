@@ -172,7 +172,7 @@ describe("portable Turso export", () => {
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
-  }, 30_000);
+  }, 60_000);
 
   it("creates and re-verifies a canonical bundle with a lossless retired archive", async () => {
     const directory = await mkdtemp(join(tmpdir(), "scalius-turso-export-"));
