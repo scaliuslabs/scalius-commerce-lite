@@ -160,7 +160,7 @@ describe("admin orders route boundaries", () => {
         expect(exportRoute).toContain('"X-Export-Artifact-Bytes"');
         expect(exportRoute).toContain('"X-Export-Max-Bytes"');
         expect(exportRoute).toContain("createOrdersCsvArtifactBuilder()");
-        expect(exportRoute).toContain("if (!csvBuilder.append(order)) break exportPages");
+        expect(exportRoute).toContain("if (exportedRows >= maxRows || !csvBuilder.append(order)) break exportPages");
         expect(exportRoute).toContain("csvStream(artifact.chunks)");
         expect(csvBuilder).toContain("spreadsheetSafeCsvCell");
         expect(csvBuilder).toContain("/^[\\t\\r\\n ]*[=+\\-@]/");
