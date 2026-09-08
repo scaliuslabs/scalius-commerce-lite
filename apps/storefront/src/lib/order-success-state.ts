@@ -1,6 +1,7 @@
 import type { OrderItem, OrderReceipt } from "./api/types";
 import {
   formatOrderSuccessLabel,
+  formatOrderSuccessPaymentMethod,
 } from "./order-success-localization";
 import {
   formatCheckoutLanguageText,
@@ -149,26 +150,29 @@ export function getPaymentStatusBadgeClass(value: string | null | undefined): st
   return "bg-slate-100 text-slate-800";
 }
 
-function getReceiptPaymentStatusLabel(
-  order: Pick<OrderReceipt, "status" | "paymentMethod" | "paymentStatus">,
+export function getOrderPaymentPresentation(
+  order: Pick<OrderReceipt, "status" | "paymentMethod" | "paymentStatus" | "totalAmount" | "paidAmount" | "balanceDue">,
   copy: CheckoutLanguageData,
-): string {
-  if (normalize(order.paymentMethod) === "cod" && normalize(order.paymentStatus) === "unpaid") {
-    if (CLOSED_ORDER_STATUSES.has(normalize(order.status))) {
-      return copy.orderReceiptPaymentStatusNoPaymentDueText;
-    }
-    return copy.dueOnDeliveryText;
-  }
-  return formatOrderSuccessLabel(order.paymentStatus, copy);
-}
-
-function getReceiptPaymentBadgeClass(
-  order: Pick<OrderReceipt, "paymentMethod" | "paymentStatus">,
-): string {
-  if (normalize(order.paymentMethod) === "cod" && normalize(order.paymentStatus) === "unpaid") {
-    return "bg-slate-100 text-slate-800";
-  }
-  return getPaymentStatusBadgeClass(order.paymentStatus);
+) {
+  const isCod = normalize(order.paymentMethod) === "cod";
+  const paymentStatus = normalize(order.paymentStatus);
+  const isClosed = CLOSED_ORDER_STATUSES.has(normalize(order.status)) || paymentStatus === "refunded";
+  const codCollection = isCod && ["unpaid", "partial"].includes(paymentStatus);
+  return {
+    isCod,
+    isClosed,
+    statusLabel: codCollection && isClosed
+      ? copy.orderReceiptPaymentStatusNoPaymentDueText
+      : isCod && paymentStatus === "unpaid"
+        ? copy.dueOnDeliveryText
+        : formatOrderSuccessLabel(order.paymentStatus, copy),
+    badgeClass: codCollection
+      ? "bg-slate-100 text-slate-800"
+      : getPaymentStatusBadgeClass(order.paymentStatus),
+    methodLabel: formatOrderSuccessPaymentMethod(order.paymentMethod, copy),
+    balanceDue: getOrderSuccessVisibleBalanceDue(order),
+    balanceLabel: isCod ? copy.dueOnDeliveryText : copy.orderReceiptBalanceDueText,
+  };
 }
 
 export function getOrderSuccessViewState(
@@ -178,6 +182,7 @@ export function getOrderSuccessViewState(
 ): OrderSuccessViewState {
   const durableKind = getOrderSuccessStateKind(order);
   const paymentStatus = normalize(order.paymentStatus);
+  const payment = getOrderPaymentPresentation(order, copy);
   void callbackResult;
   const kind = durableKind;
   if (kind === "payment_issue") {
@@ -187,9 +192,9 @@ export function getOrderSuccessViewState(
       title: copy.orderReceiptPaymentIssueTitleText,
       message: formatCheckoutLanguageText(copy.orderReceiptPaymentIssueMessageText, { orderId: order.id }),
       orderStatusLabel: formatOrderSuccessLabel(order.status, copy),
-      paymentStatusLabel: getReceiptPaymentStatusLabel(order, copy),
+      paymentStatusLabel: payment.statusLabel,
       orderBadgeClass: getOrderStatusBadgeClass(order.status),
-      paymentBadgeClass: getReceiptPaymentBadgeClass(order),
+      paymentBadgeClass: payment.badgeClass,
     };
   }
 
@@ -200,9 +205,9 @@ export function getOrderSuccessViewState(
       title: copy.orderReceiptPaymentPendingTitleText,
       message: formatCheckoutLanguageText(copy.orderReceiptPaymentPendingMessageText, { orderId: order.id }),
       orderStatusLabel: formatOrderSuccessLabel(order.status, copy),
-      paymentStatusLabel: getReceiptPaymentStatusLabel(order, copy),
+      paymentStatusLabel: payment.statusLabel,
       orderBadgeClass: "bg-amber-100 text-amber-800",
-      paymentBadgeClass: getReceiptPaymentBadgeClass(order),
+      paymentBadgeClass: payment.badgeClass,
     };
   }
 
@@ -262,9 +267,9 @@ export function getOrderSuccessViewState(
       title: stateCopy.title,
       message: formatCheckoutLanguageText(stateCopy.message, { orderId: order.id }),
       orderStatusLabel: formatOrderSuccessLabel(order.status, copy),
-      paymentStatusLabel: getReceiptPaymentStatusLabel(order, copy),
+      paymentStatusLabel: payment.statusLabel,
       orderBadgeClass: getOrderStatusBadgeClass(order.status),
-      paymentBadgeClass: getReceiptPaymentBadgeClass(order),
+      paymentBadgeClass: payment.badgeClass,
     };
   }
 
@@ -277,9 +282,9 @@ export function getOrderSuccessViewState(
       order.status === "incomplete" ? "processing" : order.status,
       copy,
     ),
-    paymentStatusLabel: getReceiptPaymentStatusLabel(order, copy),
+    paymentStatusLabel: payment.statusLabel,
     orderBadgeClass: getOrderStatusBadgeClass(order.status),
-    paymentBadgeClass: getReceiptPaymentBadgeClass(order),
+    paymentBadgeClass: payment.badgeClass,
   };
 }
 

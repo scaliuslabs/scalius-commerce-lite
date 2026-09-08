@@ -6,6 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
 import { escapeHtml } from "@scalius/shared/html-escape";
+import { ENGLISH_CHECKOUT_LANGUAGE_DATA } from "@scalius/shared/checkout-language";
+import { getOrderPaymentPresentation } from "./order-success-state";
 import type { CustomerInfo, CustomerOrder, getCustomerOrders as readOrders } from "./api/customer-auth";
 import { storefrontSourcePath } from "./test-source-paths";
 
@@ -93,6 +95,7 @@ beforeEach(() => {
     getCustomerSession, getCustomerOrders, getCities, getZones, getAreas, updateCustomerProfile,
     logoutCustomer: vi.fn(), formatPhoneForDisplay, escapeHtml, DEFAULT_CURRENCY,
     getProductImageUrl: vi.fn(),
+    getOrderPaymentPresentation, ENGLISH_CHECKOUT_LANGUAGE_DATA,
   };
   initializeAccountPage = new Function(...Object.keys(dependencies), `${script}\nreturn initializeAccountPage;`)(...Object.values(dependencies));
 });
@@ -100,6 +103,41 @@ beforeEach(() => {
 afterEach(() => {
   document.body.innerHTML = "";
   vi.restoreAllMocks();
+});
+
+describe("account order payment presentation", () => {
+  it.each([
+    { status: "pending", paymentMethod: "cod", paymentStatus: "unpaid", paidAmount: 0, balanceDue: 100, expected: "৳100 due on delivery", balanceLabel: "Due on delivery" },
+    { status: "pending", paymentMethod: "cod", paymentStatus: "partial", paidAmount: 40, balanceDue: 60, expected: "৳60 due on delivery", balanceLabel: "Due on delivery" },
+    { status: "cancelled", paymentMethod: "cod", paymentStatus: "unpaid", paidAmount: 0, balanceDue: 100, expected: "No payment due", balanceLabel: null },
+    { status: "cancelled", paymentMethod: "cod", paymentStatus: "partial", paidAmount: 40, balanceDue: 60, expected: "No payment due", balanceLabel: null },
+    { status: "returned", paymentMethod: "cod", paymentStatus: "unpaid", paidAmount: 0, balanceDue: 100, expected: "No payment due", balanceLabel: null },
+    { status: "pending", paymentMethod: "cod", paymentStatus: "paid", paidAmount: 100, balanceDue: 0, expected: "Paid", balanceLabel: null },
+    { status: "pending", paymentMethod: "sslcommerz", paymentStatus: "paid", paidAmount: 100, balanceDue: 0, expected: "Paid", balanceLabel: null },
+    { status: "incomplete", paymentMethod: "sslcommerz", paymentStatus: "failed", paidAmount: 0, balanceDue: 100, expected: "Payment needs attention", balanceLabel: "Balance due" },
+  ])("renders $status $paymentMethod $paymentStatus without inventing recovery eligibility", async (payment) => {
+    const order = { ...oldOrder, ...payment };
+    getCustomerOrders.mockResolvedValue({ success: true, orders: [order], customer });
+    await initializeAccountPage();
+    await vi.waitFor(() => expect(document.querySelector(".order-card")).not.toBeNull());
+    const card = document.querySelector(".order-card")!;
+    expect(card.textContent).toContain(payment.expected);
+    expect(card.textContent).not.toContain("pay the remaining");
+    expect(card.textContent).not.toContain("recovery options");
+    const links = card.querySelectorAll(`a[href="/account/orders/${order.id}"]`);
+    expect(links).toHaveLength(1);
+    expect(links[0]?.textContent).toBe("Full Timeline");
+    (card.querySelector("[data-order-toggle]") as HTMLButtonElement).click();
+    const quickView = card.querySelector(".order-details")!;
+    expect(quickView.classList.contains("hidden")).toBe(false);
+    if (payment.balanceLabel) expect(quickView.textContent).toContain(payment.balanceLabel);
+    else expect(quickView.textContent).not.toMatch(/Due Amount|Balance due|Due on delivery/);
+    if (payment.paidAmount > 0) expect(quickView.textContent).toContain(`৳${payment.paidAmount}`);
+    if (payment.paymentMethod === "cod") {
+      expect(card.textContent).toContain("Cash on delivery");
+      expect(card.querySelector(".bg-amber-500\\/10")).toBeNull();
+    } else expect(card.textContent).toContain("Online payment (SSLCommerz)");
+  });
 });
 
 describe("account delivery profile authority", () => {

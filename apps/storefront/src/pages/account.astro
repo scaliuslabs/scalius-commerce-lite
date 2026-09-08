@@ -202,6 +202,8 @@ const layoutData = await getLayoutData();
   import { escapeHtml } from "@scalius/shared/html-escape";
   import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
   import { getProductImageUrl } from "@/lib/product-media";
+  import { getOrderPaymentPresentation } from "@/lib/order-success-state";
+  import { ENGLISH_CHECKOUT_LANGUAGE_DATA } from "@scalius/shared/checkout-language";
 
   type AccountWindow = Window & {
     __CURRENCY_SYMBOL__?: string;
@@ -308,46 +310,44 @@ const layoutData = await getLayoutData();
   }
 
   function renderOrderPaymentContext(order: CustomerOrder): string {
+    const payment = getOrderPaymentPresentation(order, ENGLISH_CHECKOUT_LANGUAGE_DATA);
     const paymentStatus = (order.paymentStatus || "").toLowerCase();
     const orderStatus = (order.status || "").toLowerCase();
-    const paymentMethod = formatStatusLabel(order.paymentMethod || "payment");
     const paidAmount = Math.max(0, Number(order.paidAmount ?? 0));
-    const balanceDue = Math.max(0, Number(order.balanceDue ?? 0));
     const refundLike = ["returned", "refunded", "partially_refunded"].includes(orderStatus) || paymentStatus === "refunded";
     const paymentFailed = paymentStatus === "failed";
 
     let tone = "border-border bg-muted/30";
-    let title = `Payment: ${formatStatusLabel(order.paymentStatus || "pending")}`;
+    let title = `Payment: ${payment.statusLabel}`;
     let message = paidAmount > 0
-      ? `${formatCurrency(paidAmount)} paid via ${paymentMethod}.`
-      : `${paymentMethod} payment updates will appear in the timeline.`;
+      ? `${formatCurrency(paidAmount)} paid · ${payment.methodLabel}.`
+      : payment.methodLabel;
 
     if (refundLike) {
       tone = "border-border bg-muted/40";
-      title = "Refund or return update";
-      message = "Open the timeline for buyer-safe refund and return details.";
+      title = payment.isCod ? payment.statusLabel : "Refund or return update";
+      message = `${payment.methodLabel}. Open the timeline for refund and return details.`;
+    } else if (payment.isClosed) {
+      title = payment.statusLabel;
+    } else if (payment.isCod) {
+      if (payment.balanceDue > 0) title = `${formatCurrency(payment.balanceDue)} ${payment.balanceLabel.toLowerCase()}`;
     } else if (paymentFailed) {
       tone = "border-destructive/30 bg-destructive/10";
       title = "Payment needs attention";
-      message = "Open the timeline to see recovery options if this order can be paid again.";
-    } else if (balanceDue > 0) {
+      message = `${payment.methodLabel} did not complete.`;
+    } else if (payment.balanceDue > 0) {
       tone = "border-amber-500/30 bg-amber-500/10";
-      title = `${formatCurrency(balanceDue)} balance due`;
-      message = "Open the timeline to pay the remaining amount when recovery is available.";
+      title = `${formatCurrency(payment.balanceDue)} ${payment.balanceLabel.toLowerCase()}`;
     }
 
     return `<div class="mt-3 rounded-xl border ${tone} p-3 text-xs">
-      <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p class="font-semibold text-foreground">${escapeHtml(title)}</p>
-          <p class="mt-0.5 text-muted-foreground">${escapeHtml(message)}</p>
-        </div>
-        <a class="inline-flex min-h-10 items-center text-xs font-semibold text-primary hover:text-primary/80" href="${escapeHtml(`/account/orders/${encodeURIComponent(order.id)}`)}" data-astro-prefetch="false">Open timeline</a>
-      </div>
+      <p class="font-semibold text-foreground">${escapeHtml(title)}</p>
+      <p class="mt-0.5 text-muted-foreground">${escapeHtml(message)}</p>
     </div>`;
   }
 
   function renderOrder(order: CustomerOrder): string {
+    const payment = getOrderPaymentPresentation(order, ENGLISH_CHECKOUT_LANGUAGE_DATA);
     const statusClass = getStatusClass(order.status);
     const detailsId = `order-details-${order.id.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
     const detailHref = `/account/orders/${encodeURIComponent(order.id)}`;
@@ -411,7 +411,7 @@ const layoutData = await getLayoutData();
              ${(order.discountAmount ?? 0) > 0 ? `<div class="w-full sm:w-64 flex justify-between text-primary text-xs"><span>Discount</span><span>-${formatCurrency(order.discountAmount!)}</span></div>` : ""}
              <div class="w-full sm:w-64 flex justify-between font-bold text-foreground mt-1 pt-1 border-t border-border"><span>Order Total</span><span>${formatCurrency(order.totalAmount)}</span></div>
              ${(order.paidAmount ?? 0) > 0 ? `<div class="w-full sm:w-64 flex justify-between font-bold text-emerald-600 mt-1 pt-1 border-t border-border"><span>Paid Amount</span><span>${formatCurrency(order.paidAmount)}</span></div>` : ""}
-             ${(order.balanceDue ?? 0) > 0 ? `<div class="w-full sm:w-64 flex justify-between font-bold text-destructive mt-1 pt-0.5"><span>Due Amount</span><span>${formatCurrency(order.balanceDue)}</span></div>` : ""}
+             ${payment.balanceDue > 0 ? `<div class="w-full sm:w-64 flex justify-between font-bold ${payment.isCod ? "text-foreground" : "text-destructive"} mt-1 pt-0.5"><span>${escapeHtml(payment.balanceLabel)}</span><span>${formatCurrency(payment.balanceDue)}</span></div>` : ""}
              ${order.shippingAddress ? `<div class="w-full text-left mt-2 text-[11px] text-muted-foreground"><span class="font-semibold text-foreground">Shipped to:</span> ${escapeHtml(order.shippingAddress)}${order.cityName ? `, ${escapeHtml(order.cityName)}` : ""}${order.zoneName ? `, ${escapeHtml(order.zoneName)}` : ""}</div>` : ""}
            </div>
         </div>
