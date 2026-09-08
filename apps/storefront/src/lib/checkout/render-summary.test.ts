@@ -1031,7 +1031,10 @@ describe("initCheckoutPage", () => {
         <section id="orderSummary" class="hidden"><div id="summaryDetails"></div></section>
         <div id="errorMsg" class="hidden"></div>
         <a id="checkoutRecoveryAction" hidden href="/cart">Return to cart</a>
-        <div id="paymentMethods"></div>
+        <div id="paymentMethods" aria-busy="true">
+          <div class="animate-pulse" aria-hidden="true"></div>
+          <span role="status">Loading payment methods</span>
+        </div>
         <button id="payButton" disabled><span id="payButtonText">Select a payment method</span></button>
       `;
       const transfer = JSON.stringify({
@@ -1058,6 +1061,7 @@ describe("initCheckoutPage", () => {
       const payButton = document.getElementById("payButton") as HTMLButtonElement;
       if (failure === "initial quote") {
         expect(document.querySelector('[data-method="cod"]')).toBeNull();
+        expect(document.getElementById("paymentMethods")?.childElementCount).toBe(0);
         expect(payButton.disabled).toBe(true);
         expect(document.getElementById("payButtonText")?.textContent).toBe("Total unavailable");
       } else {
@@ -1068,6 +1072,8 @@ describe("initCheckoutPage", () => {
           ? validationError
           : "could not verify the current taxes and order total",
       ));
+      expect(document.getElementById("paymentMethods")?.getAttribute("aria-busy")).toBe("false");
+      expect(document.querySelector('#paymentMethods [role="status"]')).toBeNull();
       const recoveryAction = document.getElementById("checkoutRecoveryAction") as HTMLAnchorElement;
       expect(recoveryAction.hidden).toBe(false);
       expect(recoveryAction.getAttribute("href")).toBe("/cart");
