@@ -71,10 +71,10 @@ export function AttributeValuesViewer({
 
   return (
     <Dialog open={!!attributeId} onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden flex flex-col">
+      <DialogContent className="max-w-3xl overflow-y-auto flex flex-col">
         <DialogHeader className="shrink-0">
-          <DialogTitle className="flex items-center gap-2">
-            <Package className="h-5 w-5" />
+          <DialogTitle className="flex min-w-0 items-center gap-2 pr-8 [overflow-wrap:anywhere]">
+            <Package className="h-5 w-5 shrink-0" />
             {attributeName} - Values & Usage
           </DialogTitle>
           <DialogDescription>
@@ -83,24 +83,13 @@ export function AttributeValuesViewer({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 flex-1 overflow-hidden flex flex-col">
+        <div className="grid min-h-0 min-w-0 flex-1 grid-rows-[auto_auto_minmax(16rem,1fr)_auto] gap-4">
           {/* Statistics */}
-          <div className="flex gap-3 shrink-0">
-            <div className="flex-1 p-3 border rounded-lg">
-              <div className="text-sm text-muted-foreground">Unique Values</div>
-              <div className="text-2xl font-bold">
-                {isLoading || valuesQuery.isError ? "-" : totalValues}
-              </div>
-            </div>
-            <div className="flex-1 p-3 border rounded-lg">
-              <div className="text-sm text-muted-foreground">
-                Total Products
-              </div>
-              <div className="text-2xl font-bold">
-                {isLoading || valuesQuery.isError ? "-" : totalProducts}
-              </div>
-            </div>
-          </div>
+          <p className="text-sm text-muted-foreground">
+            Unique values: <span className="font-medium text-foreground">{isLoading || valuesQuery.isError ? "-" : totalValues}</span>
+            {" · "}
+            Products: <span className="font-medium text-foreground">{isLoading || valuesQuery.isError ? "-" : totalProducts}</span>
+          </p>
 
           {/* Search */}
           <div className="relative shrink-0">
@@ -117,24 +106,21 @@ export function AttributeValuesViewer({
             />
           </div>
 
-          {/* Values Table - Fixed height container */}
-          <div className="border rounded-lg overflow-hidden flex-1 min-h-0 flex flex-col">
+          {/* Values Table */}
+          <div className="border rounded-lg overflow-hidden min-h-0 min-w-0 flex flex-col">
             {isLoading ? (
               <div className="flex items-center justify-center flex-1">
                 <Loader2 className="h-6 w-6 animate-spin text-primary" />
               </div>
             ) : valuesQuery.isError ? (
-              <div className="flex flex-col items-center justify-center flex-1 text-center px-6">
-                <AlertTriangle className="h-10 w-10 text-destructive/70 mb-2" />
+              <div className="flex min-h-0 flex-1 flex-col items-center overflow-auto px-6 py-4 text-center [justify-content:safe_center]">
+                <AlertTriangle className="h-10 w-10 shrink-0 text-destructive/70 mb-2" />
                 <p className="text-sm font-medium">Could not load attribute values</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Retry to load the current page. An outage is never shown as an empty catalog.
-                </p>
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="mt-3"
+                  className="mt-3 shrink-0"
                   onClick={() => void valuesQuery.refetch()}
                 >
                   <RefreshCw className="h-4 w-4 mr-2" />
@@ -142,7 +128,7 @@ export function AttributeValuesViewer({
                 </Button>
               </div>
             ) : values.length > 0 ? (
-              <div className="flex-1 overflow-auto">
+              <div className="min-h-0 flex-1 overflow-auto">
                 <Table>
                   <TableHeader className="sticky top-0 bg-background z-10">
                     <TableRow>
@@ -158,7 +144,7 @@ export function AttributeValuesViewer({
                   <TableBody>
                     {values.map((item) => (
                       <TableRow key={item.value}>
-                        <TableCell className="font-medium">
+                        <TableCell className="font-medium [overflow-wrap:anywhere]">
                           {item.value}
                         </TableCell>
                         <TableCell className="text-center">
@@ -190,8 +176,8 @@ export function AttributeValuesViewer({
                 </Table>
               </div>
             ) : (
-              <div className="flex flex-col items-center justify-center flex-1 text-center">
-                <Package className="h-10 w-10 opacity-40 mb-2" />
+              <div className="flex min-h-0 flex-1 flex-col items-center overflow-auto p-4 text-center [justify-content:safe_center]">
+                <Package className="h-10 w-10 shrink-0 opacity-40 mb-2" />
                 <p className="text-sm text-muted-foreground">
                   {searchQuery
                     ? "No values match your search"
