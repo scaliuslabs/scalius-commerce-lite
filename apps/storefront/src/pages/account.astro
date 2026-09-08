@@ -137,10 +137,11 @@ const layoutData = await getLayoutData();
                   </select>
                 </div>
               </div>
-              <button id="saveProfileBtn" class="w-full mt-2 py-2.5 bg-primary text-primary-foreground text-sm font-bold rounded-lg hover:bg-primary/90 transition-colors shadow-sm">
+              <button id="saveProfileBtn" disabled class="w-full mt-2 py-2.5 bg-primary text-primary-foreground text-sm font-bold rounded-lg hover:bg-primary/90 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
                 Save Address
               </button>
               <p id="profileSaveStatus" class="text-xs text-center hidden mt-2"></p>
+              <button id="profileLocationsRetryBtn" type="button" class="hidden w-full min-h-11 text-sm font-semibold text-primary hover:underline">Retry delivery locations</button>
             </div>
           </div>
         </div>
@@ -426,64 +427,21 @@ const layoutData = await getLayoutData();
     });
   }
 
-  async function initializeAccountPage(): Promise<void> {
-    if (!document.querySelector("[data-account-page]")) return;
-
-    const runId = (accountWindow.__scaliusAccountInitRun ?? 0) + 1;
-    accountWindow.__scaliusAccountInitRun = runId;
-
-    const loadingState = document.getElementById("loadingState")!;
-    const unauthState = document.getElementById("unauthState")!;
-    const accountError = document.getElementById("accountError")!;
-    const accountErrorMessage = document.getElementById("accountErrorMessage")!;
-    const authState = document.getElementById("authState")!;
+  async function loadAccountOrders(runId: number): Promise<void> {
     const ordersList = document.getElementById("ordersList")!;
     const emptyOrders = document.getElementById("emptyOrders")!;
     const ordersError = document.getElementById("ordersError")!;
     const ordersErrorMessage = document.getElementById("ordersErrorMessage")!;
     const showMoreContainer = document.getElementById("showMoreContainer")!;
-    const accountRetryBtn = document.getElementById("accountRetryBtn");
-    const ordersRetryBtn = document.getElementById("ordersRetryBtn");
-    if (accountRetryBtn) accountRetryBtn.onclick = () => void initializeAccountPage();
-    if (ordersRetryBtn) ordersRetryBtn.onclick = () => void initializeAccountPage();
-
-    loadingState.classList.remove("hidden");
-    unauthState.classList.add("hidden");
-    accountError.classList.add("hidden");
-    authState.classList.add("hidden");
+    const ordersRetryBtn = document.getElementById("ordersRetryBtn") as HTMLButtonElement | null;
+    if (ordersRetryBtn) {
+      ordersRetryBtn.disabled = true;
+      ordersRetryBtn.onclick = () => void loadAccountOrders(runId);
+    }
     ordersList.innerHTML = "";
     emptyOrders.classList.add("hidden");
     ordersError.classList.add("hidden");
     showMoreContainer.classList.add("hidden");
-
-    // Check session
-    const session = await getCustomerSession();
-    if (accountWindow.__scaliusAccountInitRun !== runId) return;
-
-    if (session.unavailable) {
-      loadingState.classList.add("hidden");
-      accountErrorMessage.textContent = session.error || "We could not verify your account right now. Your session may still be active.";
-      accountError.classList.remove("hidden");
-      return;
-    }
-
-    if (!session.authenticated || !session.customer) {
-      loadingState.classList.add("hidden");
-      unauthState.classList.remove("hidden");
-      return;
-    }
-
-    // Fill profile info
-    const customer = session.customer;
-    document.getElementById("profileAvatar")!.textContent = customer.name.charAt(0).toUpperCase();
-    document.getElementById("profileName")!.textContent = customer.name;
-    document.getElementById("profileEmail")!.textContent = customer.email;
-    if (customer.phone) {
-      document.getElementById("profilePhone")!.textContent = formatPhoneForDisplay(customer.phone);
-    }
-
-    loadingState.classList.add("hidden");
-    authState.classList.remove("hidden");
     document.getElementById("statTotalOrders")!.textContent = "—";
     document.getElementById("statTotalSpent")!.textContent = "—";
     document.getElementById("orderCount")!.textContent = "Loading";
@@ -491,6 +449,7 @@ const layoutData = await getLayoutData();
     // Fetch orders
     const result = await getCustomerOrders();
     if (accountWindow.__scaliusAccountInitRun !== runId) return;
+    if (ordersRetryBtn) ordersRetryBtn.disabled = false;
 
     // Render stats
     const orders = result.orders || [];
@@ -573,6 +532,7 @@ const layoutData = await getLayoutData();
             const showMoreText = document.getElementById("showMoreText")!;
             showMoreText.textContent = "Loading...";
             const nextPage = await getCustomerOrders({ cursor: nextCursor });
+            if (accountWindow.__scaliusAccountInitRun !== runId) return;
             loadingMoreOrders = false;
             showMoreBtn.disabled = false;
 
@@ -596,45 +556,145 @@ const layoutData = await getLayoutData();
       }
     }
 
-    // Pre-fill profile fields: prefer customer DB profile, fallback to latest order
+  }
+
+  async function initializeAccountPage(): Promise<void> {
+    if (!document.querySelector("[data-account-page]")) return;
+
+    const runId = (accountWindow.__scaliusAccountInitRun ?? 0) + 1;
+    accountWindow.__scaliusAccountInitRun = runId;
+
+    const loadingState = document.getElementById("loadingState")!;
+    const unauthState = document.getElementById("unauthState")!;
+    const accountError = document.getElementById("accountError")!;
+    const accountErrorMessage = document.getElementById("accountErrorMessage")!;
+    const authState = document.getElementById("authState")!;
+    const accountRetryBtn = document.getElementById("accountRetryBtn");
+    if (accountRetryBtn) accountRetryBtn.onclick = () => void initializeAccountPage();
+
+    loadingState.classList.remove("hidden");
+    unauthState.classList.add("hidden");
+    accountError.classList.add("hidden");
+    authState.classList.add("hidden");
+
+    // Check session
+    const session = await getCustomerSession();
+    if (accountWindow.__scaliusAccountInitRun !== runId) return;
+
+    if (session.unavailable) {
+      loadingState.classList.add("hidden");
+      accountErrorMessage.textContent = session.error || "We could not verify your account right now. Your session may still be active.";
+      accountError.classList.remove("hidden");
+      return;
+    }
+
+    if (!session.authenticated || !session.customer) {
+      loadingState.classList.add("hidden");
+      unauthState.classList.remove("hidden");
+      return;
+    }
+
+    // Fill profile info
+    const customer = session.customer;
+    document.getElementById("profileAvatar")!.textContent = customer.name.charAt(0).toUpperCase();
+    document.getElementById("profileName")!.textContent = customer.name;
+    document.getElementById("profileEmail")!.textContent = customer.email;
+    if (customer.phone) {
+      document.getElementById("profilePhone")!.textContent = formatPhoneForDisplay(customer.phone);
+    }
+
+    loadingState.classList.add("hidden");
+    authState.classList.remove("hidden");
+
+    const ordersRead = loadAccountOrders(runId);
+
+    // The current /me profile owns delivery details, including intentional blanks.
     const fName = document.getElementById("fieldName") as HTMLInputElement;
     const fPhone = document.getElementById("fieldPhone") as HTMLInputElement;
     const fAddress = document.getElementById("fieldAddress") as HTMLInputElement;
-    const fCity = document.getElementById("fieldCity") as unknown as HTMLSelectElement;
-    const fZone = document.getElementById("fieldZone") as unknown as HTMLSelectElement;
+    const fCity = document.getElementById("fieldCity") as HTMLSelectElement;
+    const fZone = document.getElementById("fieldZone") as HTMLSelectElement;
 
-    const dbCustomer = result.success && result.customer && Object.keys(result.customer).length > 0 ? result.customer : null;
-    const latestOrder = orders.length > 0 ? orders[0] : null;
+    if (fName) fName.value = customer.name ?? "";
+    if (fPhone) fPhone.value = customer.phone ?? "";
+    if (fAddress) fAddress.value = customer.address ?? "";
 
-    if (fName) fName.value = dbCustomer?.name || customer.name || "";
-    if (fPhone) fPhone.value = customer.phone || ""; // Phone MUST be from session
-    if (fAddress) fAddress.value = dbCustomer?.address || latestOrder?.shippingAddress || "";
+    const saveProfileBtn = document.getElementById("saveProfileBtn") as HTMLButtonElement | null;
+    const locationsRetryBtn = document.getElementById("profileLocationsRetryBtn") as HTMLButtonElement | null;
+    const profileSaveStatus = document.getElementById("profileSaveStatus")!;
+    let isSavingProfile = false;
+    if (saveProfileBtn) saveProfileBtn.disabled = true;
 
-    // Load locations and handle City/Zone dependent dropdowns
-    if (fCity && fZone) {
-      const cities = await getCities() || [];
+    function updateProfileSaveAvailability(): void {
+      if (saveProfileBtn) saveProfileBtn.disabled = isSavingProfile || fCity.disabled
+        || Boolean(fCity.value && fZone.disabled)
+        || Boolean(fCity.options[fCity.selectedIndex]?.disabled || fZone.options[fZone.selectedIndex]?.disabled);
+    }
 
-      // Populate cities
+    // Retry only initial location reads so typed name/address drafts stay intact.
+    async function initializeProfileLocations(): Promise<void> {
+      if (!fCity || !fZone) return;
+      fCity.disabled = true;
+      fZone.disabled = true;
+      fCity.onchange = null;
+      if (saveProfileBtn) saveProfileBtn.disabled = true;
+      locationsRetryBtn?.classList.add("hidden");
+      profileSaveStatus.textContent = "Loading delivery locations…";
+      profileSaveStatus.className = "text-xs text-center text-muted-foreground";
+
+      const cities = await getCities();
+      if (accountWindow.__scaliusAccountInitRun !== runId) return;
+      const cityAvailable = !customer.city || cities?.some((city) => city.id === customer.city);
+      const zones = cities && customer.city && cityAvailable ? await getZones(customer.city) : [];
+      if (accountWindow.__scaliusAccountInitRun !== runId) return;
+      if (!cities || !zones) {
+        profileSaveStatus.textContent = "Your delivery locations could not be loaded. Try again before saving.";
+        profileSaveStatus.className = "text-xs text-center text-red-600";
+        locationsRetryBtn?.classList.remove("hidden");
+        return;
+      }
+
       fCity.innerHTML = '<option value="">Select City</option>';
-      cities.forEach(city => {
+      cities.forEach((city) => {
         const option = document.createElement("option");
         option.value = city.id;
         option.textContent = city.name;
         fCity.appendChild(option);
       });
-
-      let initialCityId = dbCustomer?.city || "";
-      const initialCityName = dbCustomer?.cityName || latestOrder?.cityName || "";
-
-      if (initialCityId || initialCityName) {
-        const cityOption = Array.from(fCity.options).find((opt) =>
-          opt.value === initialCityId || opt.textContent === initialCityName
-        );
-        if (cityOption) {
-          fCity.value = cityOption.value;
-          initialCityId = cityOption.value;
-        }
+      if (customer.city && !cityAvailable) {
+        const unavailableCity = document.createElement("option");
+        unavailableCity.value = customer.city;
+        unavailableCity.textContent = `${customer.cityName || "Saved city"} (unavailable)`;
+        unavailableCity.disabled = true;
+        fCity.appendChild(unavailableCity);
       }
+      fCity.value = customer.city ?? "";
+      fZone.innerHTML = '<option value="">Select Zone</option>';
+      zones.forEach((zone) => {
+        const option = document.createElement("option");
+        option.value = zone.id;
+        option.textContent = zone.name;
+        fZone.appendChild(option);
+      });
+      if (customer.zone && !zones.some((zone) => zone.id === customer.zone)) {
+        const unavailableZone = document.createElement("option");
+        unavailableZone.value = customer.zone;
+        unavailableZone.textContent = `${customer.zoneName || "Saved zone"} (unavailable)`;
+        unavailableZone.disabled = true;
+        fZone.appendChild(unavailableZone);
+      }
+      fZone.value = customer.zone ?? "";
+      fCity.disabled = false;
+      fZone.disabled = !customer.city || !cityAvailable;
+
+      function updateLocationReadiness(): void {
+        const unavailable = Boolean(fCity.options[fCity.selectedIndex]?.disabled || fZone.options[fZone.selectedIndex]?.disabled);
+        updateProfileSaveAvailability();
+        profileSaveStatus.textContent = "Your saved delivery location is no longer available. Choose an available location or clear it before saving.";
+        profileSaveStatus.className = "text-xs text-center text-red-600";
+        profileSaveStatus.classList.toggle("hidden", !unavailable);
+      }
+      fZone.onchange = updateLocationReadiness;
 
       // Handle city change
       fCity.onchange = async (e) => {
@@ -643,9 +703,11 @@ const layoutData = await getLayoutData();
 
         fZone.innerHTML = '<option value="">Select Zone</option>';
         fZone.disabled = true;
+        if (saveProfileBtn) saveProfileBtn.disabled = true;
 
         if (cityId) {
           const zones = await getZones(cityId) || [];
+          if (accountWindow.__scaliusAccountInitRun !== runId) return;
           zones.forEach(zone => {
             const option = document.createElement("option");
             option.value = zone.id;
@@ -654,30 +716,12 @@ const layoutData = await getLayoutData();
           });
           fZone.disabled = false;
         }
+        updateLocationReadiness();
       };
 
-      // Populate zones initially if a city is already selected
-      if (initialCityId) {
-        const zones = await getZones(initialCityId) || [];
-        fZone.innerHTML = '<option value="">Select Zone</option>';
-        zones.forEach(zone => {
-          const option = document.createElement("option");
-          option.value = zone.id;
-          option.textContent = zone.name;
-          fZone.appendChild(option);
-        });
-        fZone.disabled = false;
-
-        const initialZoneId = dbCustomer?.zone || "";
-        const initialZoneName = dbCustomer?.zoneName || latestOrder?.zoneName || "";
-        if (initialZoneId || initialZoneName) {
-          const zoneOption = Array.from(fZone.options).find((opt) =>
-            opt.value === initialZoneId || opt.textContent === initialZoneName
-          );
-          if (zoneOption) fZone.value = zoneOption.value;
-        }
-      }
+      updateLocationReadiness();
     }
+    if (locationsRetryBtn) locationsRetryBtn.onclick = () => void initializeProfileLocations();
 
     // Profile toggle
     const profileToggle = document.getElementById("profileToggle");
@@ -689,7 +733,6 @@ const layoutData = await getLayoutData();
     };
 
     // Save profile handler
-    const saveProfileBtn = document.getElementById("saveProfileBtn") as HTMLButtonElement | null;
     if (saveProfileBtn) saveProfileBtn.onclick = async () => {
       const btn = document.getElementById("saveProfileBtn") as HTMLButtonElement;
       const status = document.getElementById("profileSaveStatus")!;
@@ -697,9 +740,10 @@ const layoutData = await getLayoutData();
 
       const fName = (document.getElementById("fieldName") as HTMLInputElement).value;
       const fAddress = (document.getElementById("fieldAddress") as HTMLInputElement).value;
-      const fCity = (document.getElementById("fieldCity") as unknown as HTMLSelectElement).value;
-      const fZone = (document.getElementById("fieldZone") as unknown as HTMLSelectElement).value;
+      const fCity = (document.getElementById("fieldCity") as HTMLSelectElement).value;
+      const fZone = (document.getElementById("fieldZone") as HTMLSelectElement).value;
 
+      isSavingProfile = true;
       btn.disabled = true;
       btn.textContent = "Saving...";
       status.classList.add("hidden");
@@ -712,7 +756,9 @@ const layoutData = await getLayoutData();
         zone: fZone,
       });
 
-      btn.disabled = false;
+      if (accountWindow.__scaliusAccountInitRun !== runId) return;
+      isSavingProfile = false;
+      updateProfileSaveAvailability();
       btn.textContent = originalText;
 
       if (res.success) {
@@ -742,6 +788,8 @@ const layoutData = await getLayoutData();
       window.location.href = "/";
     };
 
+    await initializeProfileLocations();
+    await ordersRead;
   }
 
   if (!accountWindow.__scaliusAccountPageBound) {
