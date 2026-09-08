@@ -327,7 +327,7 @@ const orderPlacedAt = formatOrderReceiptDate(order?.createdAt, checkoutLanguage.
         </div>
       )}
       {retryPaymentOptions.length > 0 && retryPaymentType && (
-        <div class="mt-5 flex flex-col items-center gap-2">
+        <div class="no-print mt-5 flex flex-col items-center gap-2">
           <div class="flex flex-col justify-center gap-2 sm:flex-row">
             {retryPaymentOptions.map((option) => (
               <button
