@@ -100,11 +100,12 @@ export function rebaseThemeSettingsDraft({
   const normalizedLocal = normalizeThemeSettingsDraft(local);
   const normalizedLatest = normalizeThemeSettingsDraft(latest);
 
-  return normalizeThemeSettingsDraft({
+  return {
     colors: rebaseThemeColorDraft({
-      base: normalizedBase.colors,
-      local: normalizedLocal.colors,
-      latest: normalizedLatest.colors,
+      // Editor input may be incomplete; validate it at the write boundary.
+      base: base.colors,
+      local: local.colors,
+      latest: latest.colors,
     }),
     typography: {
       heading: changed(normalizedBase.typography.heading, normalizedLocal.typography.heading)
@@ -137,7 +138,7 @@ export function rebaseThemeSettingsDraft({
         ? normalizedLocal.components.cards
         : normalizedLatest.components.cards,
     },
-  });
+  };
 }
 
 function changed(left: string, right: string): boolean {

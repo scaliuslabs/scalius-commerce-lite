@@ -16,7 +16,7 @@ describe("general settings draft boundaries", () => {
   it.each([
     ["EmailSettingsForm.tsx", "dirty || saveMutation.isPending"],
     ["../SecuritySettingsBuilder.tsx", "dirty || hasPendingInput || saveMutation.isPending"],
-    ["ThemeSettingsPage.tsx", "dirty || operation !== null"],
+    ["ThemeSettingsPage.tsx", "dirty || operation !== null || Boolean(conflict)"],
   ])("keeps pending %s work protected when leaving the workspace", (name, dirtyExpression) => {
     const source = readSource(name);
     expect(source.includes(`isDirty={${dirtyExpression}}`)).toBe(true);
