@@ -772,7 +772,7 @@ describe("payment processing idempotency", () => {
 
     expect(result).toEqual({
       success: false,
-      error: "Order has an active shipment creation in progress. Please retry shortly.",
+      error: "Shipment creation or recovery is active. Check shipment history before trying again.",
     });
     expect(inserts).toHaveLength(0);
     expect(updates).toHaveLength(0);
@@ -877,7 +877,7 @@ describe("payment processing idempotency", () => {
     });
 
     await expect(processPaymentFailed(db as never, "order_1", "stripe", "pi_1"))
-      .rejects.toThrow("active shipment creation");
+      .rejects.toThrow("Shipment creation or recovery is active");
 
     expect(inserts).toHaveLength(0);
     expect(updates).toHaveLength(0);
@@ -892,7 +892,7 @@ describe("payment processing idempotency", () => {
     });
 
     await expect(releaseOrderInventory(db as never, "order_1"))
-      .rejects.toThrow("active shipment creation");
+      .rejects.toThrow("Shipment creation or recovery is active");
 
     expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
   });

@@ -20,6 +20,7 @@ import {
 import { applyInventoryForStatusChangeWithImpact } from "../inventory/inventory-transitions";
 import { markCODReturned, recordCODCollection, recordCODFailure, validateCODCollectionDetails } from "../payments/cod";
 import { createShipment, getDeliveryProviderActionReadiness, markShipmentReconciliationRequired } from "../delivery/delivery.service";
+import { PROVIDER_OUTCOME_UNKNOWN } from "../delivery/types";
 import {
     assertNoActiveRefundAttempt,
     noActiveRefundAttemptForOrderIdCondition,
@@ -232,7 +233,8 @@ function safeFinalizedShipmentStatus(
         stringField(metadata, "order_status") ??
         stringField(metadata, "status");
 
-    if (explicitStatus && explicitStatus !== ShipmentStatus.RECONCILE_REQUIRED) {
+    if (explicitStatus && explicitStatus !== ShipmentStatus.RECONCILE_REQUIRED &&
+        explicitStatus !== PROVIDER_OUTCOME_UNKNOWN && explicitStatus !== "creating") {
         return { status: explicitStatus, hasExplicitProviderState: true };
     }
 
@@ -240,6 +242,8 @@ function safeFinalizedShipmentStatus(
     if (
         rawStatus &&
         rawStatus !== ShipmentStatus.RECONCILE_REQUIRED &&
+        rawStatus !== PROVIDER_OUTCOME_UNKNOWN &&
+        rawStatus !== "creating" &&
         !rawStatus.endsWith("_failed") &&
         !rawStatus.includes("reconcile") &&
         !rawStatus.includes("claim")
@@ -355,16 +359,19 @@ async function resolveExpiredShipmentClaim(
         return { blocked: false };
     }
 
-    await markShipmentReconciliationRequired(
-        db,
-        claimId,
-        "expired_order_shipment_claim",
-        {
-            externalId: shipment.externalId ?? undefined,
-            trackingId: shipment.trackingId ?? undefined,
-            status: shipment.status,
-        },
-    );
+    if (shipment.status !== ShipmentStatus.RECONCILE_REQUIRED) {
+        const outcomeUnknown = shipment.status === "creating" && !shipment.externalId && !shipment.trackingId;
+        await markShipmentReconciliationRequired(
+            db,
+            claimId,
+            outcomeUnknown ? PROVIDER_OUTCOME_UNKNOWN : "expired_order_shipment_claim",
+            outcomeUnknown ? undefined : {
+                externalId: shipment.externalId ?? undefined,
+                trackingId: shipment.trackingId ?? undefined,
+                status: shipment.status,
+            },
+        );
+    }
     await holdShipmentClaimForReconciliation(db, orderId, claimId);
     return {
         blocked: true,
@@ -406,6 +413,10 @@ export async function reconcileOrderShipment(
     }
 
     const metadata = parseShipmentMetadata(shipment.metadata);
+    if (shipment.rawStatus === PROVIDER_OUTCOME_UNKNOWN ||
+        stringField(asRecord(metadata.reconciliation), "reason") === PROVIDER_OUTCOME_UNKNOWN) {
+        throw new ConflictError("Shipment outcome is unknown. Obtain provider confirmation before this shipment can be reconciled.");
+    }
     const order = await db
         .select({
             id: orders.id,

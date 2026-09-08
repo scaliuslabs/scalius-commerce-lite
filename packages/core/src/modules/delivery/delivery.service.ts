@@ -3,7 +3,7 @@ import { createProvider } from "./factory";
 import { encryptCredentials, readStoredCredentialStrict } from "@scalius/core/utils/credential-encryption";
 
 import type { Database } from "@scalius/database/client";
-import type { ShipmentOptions, ShipmentResult } from "./types";
+import { PROVIDER_OUTCOME_UNKNOWN, type ShipmentOptions, type ShipmentResult } from "./types";
 import { and, eq, desc, getTableColumns, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { NotFoundError, ValidationError, ServiceUnavailableError, ConflictError } from "@scalius/core/errors";
@@ -514,52 +514,70 @@ export async function createShipment(
     updatedAt: sql`unixepoch()`,
   });
 
+  let shipmentResult: ShipmentResult;
+  let providerCallStarted = false;
   try {
-    // 2. Call provider API
     const providerInstance = await createProvider(provider, encryptionKey, db);
-    const shipmentResult = await providerInstance.createShipment(
-      order,
-      enrichedOptions,
-    );
+    providerCallStarted = true;
+    shipmentResult = await providerInstance.createShipment(order, enrichedOptions);
+  } catch {
+    shipmentResult = {
+      success: false,
+      reconciliationRequired: providerCallStarted,
+      message: providerCallStarted
+        ? "Shipment outcome is unknown. Check the courier account for confirmation before another shipment is created."
+        : "Shipment could not be prepared. Check the delivery provider settings before retrying.",
+    };
+  }
 
-    if (shipmentResult.success && shipmentResult.data) {
-      // 3. On success: update the record with external tracking info
+  if (shipmentResult.reconciliationRequired) {
+    try {
+      await markShipmentReconciliationRequired(db, shipmentId, PROVIDER_OUTCOME_UNKNOWN);
+    } catch {
+      // The durable creating placeholder still fences retries if this write fails.
+    }
+    return { ...shipmentResult, shipmentId };
+  }
+
+  if (shipmentResult.success && shipmentResult.data) {
+    try {
+      await db
+        .update(deliveryShipments)
+        .set({
+          externalId: shipmentResult.data.externalId,
+          trackingId: shipmentResult.data.trackingId,
+          status: shipmentResult.data.status || "pending",
+          rawStatus:
+            (shipmentResult.data.metadata?.order_status as string) ||
+            (shipmentResult.data.metadata?.status as string) ||
+            "pending",
+          metadata: JSON.stringify(shipmentResult.data.metadata || {}),
+          updatedAt: sql`unixepoch()`,
+        })
+        .where(eq(deliveryShipments.id, shipmentId));
+      return { ...shipmentResult, shipmentId };
+    } catch {
       try {
-        await db
-          .update(deliveryShipments)
-          .set({
-            externalId: shipmentResult.data.externalId,
-            trackingId: shipmentResult.data.trackingId,
-            status: shipmentResult.data.status || "pending",
-            rawStatus:
-              (shipmentResult.data.metadata?.order_status as string) ||
-              (shipmentResult.data.metadata?.status as string) ||
-              "pending",
-            metadata: JSON.stringify(shipmentResult.data.metadata || {}),
-            updatedAt: sql`unixepoch()`,
-          })
-          .where(eq(deliveryShipments.id, shipmentId));
-
-        return { ...shipmentResult, shipmentId };
-      } catch (error: unknown) {
         await markShipmentReconciliationRequired(
           db,
           shipmentId,
           "shipment_success_persist_failed",
           shipmentResult.data,
-          error,
+          "Provider creation succeeded but local shipment persistence failed.",
         );
-
-        return {
-          ...shipmentResult,
-          shipmentId,
-          reconciliationRequired: true,
-          message: `${shipmentResult.message} Local shipment reconciliation is required.`,
-        };
+      } catch {
+        // Never replace a possibly accepted request with a retryable failed row.
       }
+      return {
+        ...shipmentResult,
+        shipmentId,
+        reconciliationRequired: true,
+        message: "Shipment was created but local shipment reconciliation is required.",
+      };
     }
+  }
 
-    // 4. Provider returned a non-success response
+  try {
     await db
       .update(deliveryShipments)
       .set({
@@ -569,26 +587,13 @@ export async function createShipment(
         updatedAt: sql`unixepoch()`,
       })
       .where(eq(deliveryShipments.id, shipmentId));
-
     return { ...shipmentResult, shipmentId };
-  } catch (error: unknown) {
-    // 5. Exception during provider call — mark record as failed
-    const errorMsg = error instanceof Error ? error.message : String(error);
-
-    await db
-      .update(deliveryShipments)
-      .set({
-        status: "failed",
-        rawStatus: "exception",
-        metadata: JSON.stringify({ error: errorMsg }),
-        updatedAt: sql`unixepoch()`,
-      })
-      .where(eq(deliveryShipments.id, shipmentId));
-
+  } catch {
     return {
       success: false,
-      message: `Failed to create shipment: ${errorMsg}`,
       shipmentId,
+      reconciliationRequired: true,
+      message: "Shipment rejection could not be saved. Local shipment reconciliation is required before retrying.",
     };
   }
 }

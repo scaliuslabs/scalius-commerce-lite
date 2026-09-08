@@ -50,6 +50,7 @@ describe("order list response projection", () => {
           shipmentId: null,
           status: null,
           providerType: null,
+          canRepair: false,
           canRefresh: false,
           canRetryCreate: false,
           updatedAt: null,

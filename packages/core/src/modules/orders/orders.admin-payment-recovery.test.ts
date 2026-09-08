@@ -8,7 +8,7 @@ import { getOrderDetails, listOrders, previewOrderPaymentRecoveryLink } from "./
 
 type Query = { sql: string; params: unknown[]; method: "run" | "all" | "values" | "get" };
 
-describe("admin payment recovery lifecycle", () => {
+describe("admin order recovery lifecycle", () => {
   let sqlite: DatabaseSync;
   let db: Database;
   let queries: Query[];
@@ -58,6 +58,58 @@ describe("admin payment recovery lifecycle", () => {
     ) VALUES (?, ?, ?, 'sslcommerz', 'full', 100, 'BDT', 'test-hash', ?, 1, ?, ?, ?)`)
       .run(`attempt_${orderId}`, `key_${orderId}`, orderId, status, claimExpiresAt, now - 300, now - 100);
   }
+
+  async function shipmentRecovery(status: string, rawStatus: string | null, activeClaim: boolean, externalId: string | null = null) {
+    order("shipment_order", "confirmed", "paid", 100);
+    sqlite.prepare(`INSERT INTO delivery_providers (id, name, type, credentials, config)
+      VALUES ('provider', 'Test courier', 'pathao', '{}', '{}')`).run();
+    sqlite.prepare(`INSERT INTO delivery_shipments (id, order_id, provider_id, provider_type, status, raw_status, external_id)
+      VALUES ('shipment', 'shipment_order', 'provider', 'pathao', ?, ?, ?)`)
+      .run(status, rawStatus, externalId);
+    sqlite.prepare(`UPDATE orders SET shipment_claim_id = 'shipment', shipment_claim_expires_at = ? WHERE id = 'shipment_order'`)
+      .run(activeClaim ? now + 300 : now - 300);
+    const list = await listOrders(db, {});
+    const detail = await getOrderDetails(db, "shipment_order");
+    expect(detail?.shipmentRecovery).toEqual(list.orders[0]?.shipmentRecovery);
+    return detail!.shipmentRecovery;
+  }
+
+  it.each([
+    { status: "creating", activeClaim: true },
+    { status: "reconcile_required", activeClaim: false },
+  ])("keeps an unknown courier outcome locked after $status in list and detail", async ({ status, activeClaim }) => {
+    const recovery = await shipmentRecovery(status, "provider_outcome_unknown", activeClaim);
+    expect(recovery).toMatchObject({
+      state: "needs_attention", severity: "danger", activeLock: true,
+      label: "Courier confirmation needed", shipmentId: "shipment",
+      canRepair: false, canRefresh: false, canRetryCreate: false,
+    });
+    expect(recovery.message).toMatch(/check the courier portal or contact the courier/i);
+    expect(recovery.message).not.toMatch(/repair|automatically|wait for it to finish/i);
+  });
+
+  it("retains repair for a confirmed provider result with incomplete local finalization", async () => {
+    const recovery = await shipmentRecovery("reconcile_required", "pending", false, "consignment_confirmed");
+    expect(recovery).toMatchObject({
+      state: "needs_attention", activeLock: true, canRepair: true, canRefresh: true, canRetryCreate: false,
+    });
+  });
+
+  it.each([
+    { status: "creating", activeClaim: true, state: "creating", canRetryCreate: false },
+    { status: "pending", activeClaim: false, state: "needs_attention", canRetryCreate: false },
+    { status: "failed", activeClaim: false, state: "failed", canRetryCreate: true },
+  ])("does not offer repair for ordinary $status shipments", async ({ status, activeClaim, state, canRetryCreate }) => {
+    expect(await shipmentRecovery(status, null, activeClaim)).toMatchObject({ state, canRepair: false, canRetryCreate });
+  });
+
+  it("defaults repair to false when the order has no shipment recovery", async () => {
+    order("unshipped", "confirmed", "paid", 100);
+    const list = await listOrders(db, {});
+    const detail = await getOrderDetails(db, "unshipped");
+    expect(detail?.shipmentRecovery).toEqual(list.orders[0]?.shipmentRecovery);
+    expect(detail?.shipmentRecovery).toMatchObject({ state: "none", canRepair: false });
+  });
 
   function payment(orderId: string, status: string, paymentType = "full", amount = 100) {
     const id = `payment_${orderId}_${paymentType}`;
