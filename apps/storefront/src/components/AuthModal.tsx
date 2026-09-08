@@ -394,7 +394,7 @@ export default function AuthModal() {
       if (event.key !== "Tab" || !dialog) return;
 
       const focusable = Array.from(dialog.querySelectorAll<HTMLElement>(
-        'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        'a[href], button:not(:disabled), input:not(:disabled):not([type="hidden"]), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
       ));
       const first = focusable[0];
       const last = focusable.at(-1);
