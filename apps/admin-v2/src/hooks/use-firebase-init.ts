@@ -25,6 +25,7 @@ type PushInitStatus =
  */
 export function useFirebaseInit(userId: string | undefined) {
   const initRef = useRef(false);
+  const inFlightRef = useRef(false);
   const queryClient = useQueryClient();
   const [status, setStatus] = useState<PushInitStatus>("idle");
 
@@ -38,12 +39,14 @@ export function useFirebaseInit(userId: string | undefined) {
       setStatus("enabled");
       return;
     }
+    if (inFlightRef.current) return;
 
     if (Notification.permission === "denied") {
       setStatus("denied");
       return;
     }
 
+    inFlightRef.current = true;
     setStatus("loading");
 
     try {
@@ -88,7 +91,7 @@ export function useFirebaseInit(userId: string | undefined) {
       }
 
       const browser = detectBrowser();
-      await fetch("/api/v1/admin/fcm-token", {
+      const response = await fetch("/api/v1/admin/fcm-token", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -101,7 +104,8 @@ export function useFirebaseInit(userId: string | undefined) {
             browser,
           }),
         }),
-      }).catch(() => {});
+      });
+      if (!response.ok) throw new Error("Push registration failed");
 
       onMessage(messaging, (payload) => {
         const title = payload.data?.customerName
@@ -135,9 +139,11 @@ export function useFirebaseInit(userId: string | undefined) {
 
       initRef.current = true;
       setStatus("enabled");
-    } catch (err) {
+    } catch {
       setStatus("error");
-      console.warn("Firebase notification init failed:", err);
+      console.warn("Firebase notification init failed");
+    } finally {
+      inFlightRef.current = false;
     }
   }, [queryClient, userId]);
 
