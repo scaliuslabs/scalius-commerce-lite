@@ -1111,6 +1111,7 @@ export async function initCheckoutPage(): Promise<void> {
       });
       return;
     }
+    clearCheckoutPresentation();
     showReturnToCartAction();
     showError(
       error instanceof Error
