@@ -26,7 +26,7 @@ describe("email settings workspace", () => {
     expect(source).toContain("ADMIN_PERMISSIONS.SETTINGS_GENERAL_EDIT");
     expect(source).toContain("<UnsavedChangesGuard");
     expect(source).toContain("disabled={!canEdit || !dirty}");
-    expect(source).toContain("{dirty ? (");
+    expect(source).toContain("{dirty || saveMutation.isPending ? (");
     expect(source).toContain("Reset");
   });
 

@@ -9,34 +9,34 @@ import {
   Save,
   Smartphone,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type SetStateAction } from "react";
 import { toast } from "sonner";
 
-import { UnsavedChangesGuard } from "@/components/admin/shared/UnsavedChangesGuard";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { UnsavedChangesGuard } from "~/components/admin/shared/UnsavedChangesGuard";
+import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
+import { Badge } from "~/components/ui/badge";
+import { Button } from "~/components/ui/button";
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { usePermissions } from "@/contexts/PermissionContext";
-import { getSettingsLoadErrorMessage } from "@/hooks/use-settings-form";
-import { ADMIN_PERMISSIONS } from "@/lib/admin-permissions";
-import { getServerFnError } from "@/lib/api-helpers";
+} from "~/components/ui/card";
+import { Input } from "~/components/ui/input";
+import { Label } from "~/components/ui/label";
+import { Textarea } from "~/components/ui/textarea";
+import { usePermissions } from "~/contexts/PermissionContext";
+import { getSettingsLoadErrorMessage, mergeUneditedFields } from "~/hooks/use-settings-form";
+import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
+import { getServerFnError } from "~/lib/api-helpers";
 import {
   getAdminNotificationChannels,
   getFirebaseSettings,
   type FirebaseSettingsPayload,
   type SettingsPayload,
   updateFirebaseSettings,
-} from "@/lib/api-functions/settings";
-import { queryKeys } from "@/lib/query-keys";
+} from "~/lib/api-functions/settings";
+import { queryKeys } from "~/lib/query-keys";
 
 const MASKED_VALUE = "••••••••••••";
 const PUBLIC_CONFIG_FIELDS = [
@@ -111,6 +111,13 @@ function draftsEqual(left: FirebaseDraft | null, right: FirebaseDraft | null): b
   );
 }
 
+function mergeFirebaseDraft(current: FirebaseDraft, baseline: FirebaseDraft, incoming: FirebaseDraft): FirebaseDraft {
+  return {
+    ...mergeUneditedFields(current, baseline, incoming),
+    publicConfig: mergeUneditedFields(current.publicConfig, baseline.publicConfig, incoming.publicConfig),
+  };
+}
+
 function hasCompleteBrowserConfig(value: FirebaseDraft | null): boolean {
   return Boolean(
     value
@@ -180,18 +187,33 @@ export default function FirebaseSettingsForm() {
     queryKey: queryKeys.settings.adminNotificationChannels(),
     queryFn: getAdminNotificationChannels,
   });
-  const [draft, setDraft] = useState<FirebaseDraft | null>(null);
-  const [savedDraft, setSavedDraft] = useState<FirebaseDraft | null>(null);
+  const dataUpdateCount = queryClient.getQueryState(queryKeys.settings.firebase())?.dataUpdateCount ?? 0;
+  const [{ draft, savedDraft }, setEditor] = useState<{ draft: FirebaseDraft | null; savedDraft: FirebaseDraft | null }>({
+    draft: null, savedDraft: null,
+  });
+  const [retrying, setRetrying] = useState(false);
+  const commandInFlight = useRef(false);
+  const ignoredReadUpdates = useRef(-1);
+  function setDraft(next: SetStateAction<FirebaseDraft | null>) {
+    setEditor((current) => ({
+      ...current,
+      draft: typeof next === "function" ? next(current.draft) : next,
+    }));
+  }
   const [rawPublicConfig, setRawPublicConfig] = useState("");
   const [showRawPaste, setShowRawPaste] = useState(false);
   const dirty = Boolean(draft && savedDraft && !draftsEqual(draft, savedDraft));
 
   useEffect(() => {
-    if (!firebaseQuery.data || dirty) return;
-    const nextDraft = toDraft(firebaseQuery.data);
-    setDraft(nextDraft);
-    setSavedDraft(nextDraft);
-  }, [dirty, firebaseQuery.data]);
+    if (!firebaseQuery.data || dataUpdateCount <= ignoredReadUpdates.current) return;
+    const incoming = toDraft(firebaseQuery.data);
+    setEditor((current) => ({
+      draft: current.draft && current.savedDraft
+        ? mergeFirebaseDraft(current.draft, current.savedDraft, incoming)
+        : incoming,
+      savedDraft: incoming,
+    }));
+  }, [firebaseQuery.data, firebaseQuery.dataUpdatedAt, dataUpdateCount]);
 
   const saveMutation = useMutation({
     mutationFn: async (nextDraft: FirebaseDraft) => {
@@ -207,34 +229,51 @@ export default function FirebaseSettingsForm() {
       return updateFirebaseSettings({ data: payload });
     },
     onSuccess: async (_response, saved) => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.settings.firebase() }),
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.settings.adminNotificationChannels(),
-        }),
-      ]);
-      const refreshed = queryClient.getQueryData<FirebaseSettingsPayload>(
-        queryKeys.settings.firebase(),
-      );
-      const nextDraft = refreshed ? toDraft(refreshed) : saved;
-      setDraft(nextDraft);
-      setSavedDraft(nextDraft);
+      // Ignore pre-acknowledgment reads even if their React effect is still queued.
+      ignoredReadUpdates.current = queryClient.getQueryState(queryKeys.settings.firebase())?.dataUpdateCount ?? 0;
+      // A committed write is authoritative even if its confirming read fails.
+      setEditor((current) => ({ draft: current.draft ?? saved, savedDraft: saved }));
       setRawPublicConfig("");
       setShowRawPaste(false);
-      toast.success("Firebase settings saved");
+      const [refreshed] = await Promise.all([
+        firebaseQuery.refetch({ throwOnError: true }).then((result) => result.isSuccess, () => false),
+        queryClient.invalidateQueries({ queryKey: queryKeys.settings.adminNotificationChannels() }),
+      ]);
+      if (refreshed) toast.success("Firebase settings saved");
+      else toast.warning("Firebase settings were saved, but the current settings could not be refreshed.");
     },
     onError: (error) => {
       toast.error(getServerFnError(error, "Firebase settings could not be saved"));
     },
+    onSettled: () => { commandInFlight.current = false; },
   });
+
+  const handleSave = () => {
+    if (!canManage || !draft || !dirty || commandInFlight.current) return;
+    commandInFlight.current = true;
+    saveMutation.mutate(draft);
+  };
+  const handleRetry = async () => {
+    if (commandInFlight.current) return;
+    commandInFlight.current = true;
+    setRetrying(true);
+    try {
+      await Promise.all([firebaseQuery.refetch(), readinessQuery.refetch()]);
+    } finally {
+      commandInFlight.current = false;
+      setRetrying(false);
+    }
+  };
 
   const savedBrowserConfigComplete = useMemo(
     () => hasCompleteBrowserConfig(savedDraft),
     [savedDraft],
   );
-  const serviceAccountSaved = firebaseQuery.data?.serviceAccount === MASKED_VALUE;
-  const providerReady = readinessQuery.data?.pushConfigured === true;
-  const setupComplete = providerReady && savedBrowserConfigComplete;
+  const checkingSettings = firebaseQuery.isFetching || saveMutation.isPending;
+  const settingsCurrent = !isLoadError && !checkingSettings;
+  const serviceAccountSaved = settingsCurrent && firebaseQuery.data?.serviceAccount === MASKED_VALUE;
+  const providerReady = !readinessQuery.isError && !readinessQuery.isFetching && readinessQuery.data?.pushConfigured === true;
+  const setupComplete = settingsCurrent && providerReady && savedBrowserConfigComplete;
   const canEdit = canManage && !saveMutation.isPending;
 
   if (firebaseQuery.isLoading || !draft || !firebaseQuery.data) {
@@ -250,7 +289,7 @@ export default function FirebaseSettingsForm() {
                 "Firebase settings could not be loaded. Existing push credentials were not changed.",
               )}
             </p>
-            <Button type="button" variant="outline" onClick={() => void firebaseQuery.refetch()}>
+            <Button type="button" variant="outline" disabled={retrying} onClick={() => void handleRetry()}>
               Retry
             </Button>
           </AlertDescription>
@@ -291,12 +330,25 @@ export default function FirebaseSettingsForm() {
 
   return (
     <>
-      <UnsavedChangesGuard isDirty={dirty} isSubmitting={saveMutation.isPending} />
+      <UnsavedChangesGuard isDirty={dirty || saveMutation.isPending} isSubmitting={false} />
       <div className="max-w-5xl space-y-4 pb-24">
         {!canManage && (
           <Alert>
             <AlertDescription>
               Your role can review Firebase settings, but cannot change them.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {isLoadError && (
+          <Alert>
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Firebase settings refresh unavailable</AlertTitle>
+            <AlertDescription className="space-y-3">
+              <p>The saved settings could not be refreshed. Your values are preserved. Retry to confirm the current settings.</p>
+              <Button type="button" variant="outline" disabled={saveMutation.isPending || retrying} onClick={() => void handleRetry()}>
+                {retrying ? "Retrying…" : "Retry"}
+              </Button>
             </AlertDescription>
           </Alert>
         )}
@@ -308,29 +360,33 @@ export default function FirebaseSettingsForm() {
               aria-hidden="true"
             />
             <span className="text-sm font-semibold">
-              {setupComplete ? "Push configured" : "Push setup incomplete"}
+              {checkingSettings || readinessQuery.isFetching ? "Checking push status…"
+                : !settingsCurrent || readinessQuery.isError ? "Push status unavailable"
+                : setupComplete ? "Push configured" : "Push setup incomplete"}
             </span>
             {dirty ? <Badge variant="outline">Unsaved</Badge> : null}
           </div>
           <div className="flex flex-wrap gap-2 sm:ml-auto">
             <Badge variant="outline">
-              {providerReady
-                ? "Server configured"
-                : readinessQuery.isError
-                  ? "Server unavailable"
-                  : "Server needs setup"}
+              {readinessQuery.isFetching ? "Checking server…" : readinessQuery.isError ? "Server unavailable"
+                : providerReady ? "Server configured" : "Server needs setup"}
             </Badge>
             <Badge variant="outline">
-              {savedBrowserConfigComplete ? "Browser configured" : "Browser needs setup"}
+              {checkingSettings ? "Checking browser settings…" : !settingsCurrent ? "Browser status unavailable"
+                : savedBrowserConfigComplete ? "Browser configured" : "Browser needs setup"}
             </Badge>
           </div>
           {!providerReady ? (
-            <p className="text-xs text-muted-foreground sm:basis-full">
-              {readinessQuery.data?.pushError
-                ?? (readinessQuery.isError
-                  ? "Provider status could not be checked."
-                  : "Checking provider status…")}
-            </p>
+            <div className="space-y-2 text-xs text-muted-foreground sm:basis-full">
+              <p>{readinessQuery.isFetching ? "Checking provider status…" : readinessQuery.isError
+                ? "Provider status could not be checked."
+                : readinessQuery.data?.pushError ?? "Checking provider status…"}</p>
+              {readinessQuery.isError && !isLoadError && (
+                <Button type="button" variant="outline" disabled={saveMutation.isPending || retrying} onClick={() => void handleRetry()}>
+                  {retrying ? "Retrying…" : "Retry"}
+                </Button>
+              )}
+            </div>
           ) : null}
         </div>
 
@@ -361,7 +417,9 @@ export default function FirebaseSettingsForm() {
                 }))}
               />
               <p className="text-xs text-muted-foreground">
-                {serviceAccountSaved && draft.serviceAccount === MASKED_VALUE
+                {!settingsCurrent && draft.serviceAccount === MASKED_VALUE
+                  ? checkingSettings ? "Checking saved credential status…" : "Saved credential status is unavailable. Retry to confirm it."
+                  : serviceAccountSaved && draft.serviceAccount === MASKED_VALUE
                   ? "A credential is saved. Paste new JSON to replace it, or clear this field and save to remove it."
                   : draft.serviceAccount
                     ? "The new credential is validated before saving."
@@ -495,8 +553,8 @@ export default function FirebaseSettingsForm() {
           <Button
             type="button"
             className="min-h-11 min-w-0 sm:min-h-9 sm:min-w-32"
-            disabled={!canEdit || !dirty}
-            onClick={() => saveMutation.mutate(draft)}
+            disabled={!canEdit || retrying || !dirty}
+            onClick={handleSave}
           >
             {saveMutation.isPending ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
