@@ -16,6 +16,8 @@ Astro generates the Worker entrypoint at `dist/server/entry.mjs` and the deploy-
 - **Lucide React** -- Icons
 - **Sonner** -- Toast notifications
 
+Page colors come from `src/styles/theme-foundation.css` and the published or preview theme tokens in `Layout.astro`. Components must not override the global page canvas: imported component CSS also reaches routes that omit that component, including checkout without a footer.
+
 ## Local Dev Runtime Notes
 
 `astro.config.mjs` treats React, React DOM, and their JSX runtime entrypoints as Vite singleton dependencies. Keep those entries together in `resolve.dedupe`, including `react-dom/server`. If Vite resolves one React copy for `react-dom/server` and another for SSR-rendered islands, local `astro dev` can blank React account/cart shells with invalid-hook errors even when `astro preview` and production builds are healthy. Do not exclude React from the SSR dependency optimizer for this Cloudflare target; the worker-like dev runner still needs Vite to bundle React instead of externalizing it through `require()`.
