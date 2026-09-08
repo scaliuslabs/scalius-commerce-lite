@@ -230,6 +230,16 @@
   }
 
   [data-order-success-print="receipt"] {
+    --background: #fff;
+    --foreground: #000;
+    --card: #fff;
+    --card-foreground: #000;
+    --muted: #f3f4f6;
+    --muted-foreground: #333;
+    --border: #bbb;
+    color-scheme: light;
+    color: var(--foreground);
+    background-color: var(--background);
     width: 100% !important;
     max-width: none !important;
     padding: 0 !important;
