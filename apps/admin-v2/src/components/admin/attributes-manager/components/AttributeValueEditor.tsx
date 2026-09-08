@@ -1,5 +1,5 @@
 // src/components/admin/attributes-manager/components/AttributeValueEditor.tsx
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
@@ -66,6 +66,8 @@ export function AttributeValueEditor({
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [newValue, setNewValue] = useState("");
   const [isAddingNew, setIsAddingNew] = useState(false);
+  const commandInFlight = useRef(false);
+  const pending = savingValue !== null;
   const queryClient = useQueryClient();
   const debouncedSearch = useDebounce(searchQuery.trim(), 300);
 
@@ -83,35 +85,43 @@ export function AttributeValueEditor({
   const isLoading = Boolean(attributeId) && valuesQuery.isPending;
 
   useEffect(() => {
-    setSearchQuery("");
-    setPage(1);
-    setEditingValue(null);
-    setNewValue("");
-    setIsAddingNew(false);
-  }, [attributeId]);
-
-  useEffect(() => {
     const totalPages = valuesQuery.data?.totalPages ?? 0;
     if (totalPages > 0 && page > totalPages) setPage(totalPages);
   }, [page, valuesQuery.data?.totalPages]);
 
   const refreshAttributeQueries = async () => {
-    await queryClient.invalidateQueries({ queryKey: queryKeys.attributes.all });
+    await queryClient.invalidateQueries(
+      { queryKey: queryKeys.attributes.all },
+      { throwOnError: false },
+    );
+  };
+
+  const handleClose = () => {
+    if (!commandInFlight.current) onClose();
+  };
+
+  const handleCancelAdd = () => {
+    if (commandInFlight.current) return;
+    setIsAddingNew(false);
+    setNewValue("");
   };
 
   const handleStartEdit = (value: string) => {
+    if (commandInFlight.current) return;
     setEditingValue(value);
     setEditedValue(value);
   };
 
   const handleCancelEdit = () => {
+    if (commandInFlight.current) return;
     setEditingValue(null);
     setEditedValue("");
   };
 
   const handleSaveEdit = async () => {
-    if (!attributeId || !editingValue || !editedValue.trim()) return;
+    if (commandInFlight.current || !attributeId || !editingValue || !editedValue.trim()) return;
 
+    commandInFlight.current = true;
     setSavingValue(editingValue);
     try {
       await renameAttributeValue({
@@ -125,18 +135,20 @@ export function AttributeValueEditor({
       toast.success(`Value renamed to "${editedValue.trim()}"`);
       setEditingValue(null);
       setEditedValue("");
-      void refreshAttributeQueries();
+      await refreshAttributeQueries();
     } catch (error: unknown) {
       console.error("Error updating value:", error);
       toast.error(getServerFnError(error, "Failed to update value"));
     } finally {
+      commandInFlight.current = false;
       setSavingValue(null);
     }
   };
 
   const handleAddValue = async () => {
-    if (!attributeId || !newValue.trim()) return;
+    if (commandInFlight.current || !attributeId || !newValue.trim()) return;
 
+    commandInFlight.current = true;
     setSavingValue("new");
     try {
       await addAttributeValue({
@@ -146,29 +158,32 @@ export function AttributeValueEditor({
       toast.success(`Value "${newValue.trim()}" added`);
       setNewValue("");
       setIsAddingNew(false);
-      void refreshAttributeQueries();
+      await refreshAttributeQueries();
     } catch (error: unknown) {
       console.error("Error adding value:", error);
       toast.error(getServerFnError(error, "Failed to add value"));
     } finally {
+      commandInFlight.current = false;
       setSavingValue(null);
     }
   };
 
   const handleDelete = async (value: string) => {
-    if (!attributeId) return;
+    if (commandInFlight.current || !attributeId) return;
 
+    commandInFlight.current = true;
     setSavingValue(value);
     try {
       await removeAttributeValue({ data: { attributeId, value } });
 
       toast.success(`Value "${value}" deleted from all products`);
       setDeleteConfirm(null);
-      void refreshAttributeQueries();
+      await refreshAttributeQueries();
     } catch (error: unknown) {
       console.error("Error deleting value:", error);
       toast.error(getServerFnError(error, "Failed to delete value"));
     } finally {
+      commandInFlight.current = false;
       setSavingValue(null);
     }
   };
@@ -178,8 +193,8 @@ export function AttributeValueEditor({
 
   return (
     <>
-      <Dialog open={!!attributeId} onOpenChange={onClose}>
-        <DialogContent className="max-w-3xl overflow-y-auto flex flex-col">
+      <Dialog open={!!attributeId} onOpenChange={handleClose}>
+        <DialogContent className="max-w-3xl overflow-y-auto flex flex-col" showCloseButton={!pending}>
           <DialogHeader className="shrink-0">
             <DialogTitle className="flex min-w-0 items-center gap-2 pr-8 [overflow-wrap:anywhere]">
               <Edit3 className="h-5 w-5 shrink-0" />
@@ -191,7 +206,7 @@ export function AttributeValueEditor({
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid min-h-0 min-w-0 flex-1 grid-rows-[auto_auto_minmax(16rem,1fr)_auto] gap-4">
+          <fieldset disabled={pending} className="grid min-h-0 min-w-0 flex-1 grid-rows-[auto_auto_minmax(16rem,1fr)_auto] gap-4">
             {/* Statistics */}
             <p className="text-sm text-muted-foreground">
               Unique values: <span className="font-medium text-foreground">{isLoading || valuesQuery.isError ? "-" : totalValues}</span>
@@ -225,11 +240,11 @@ export function AttributeValueEditor({
                       className="min-w-0 flex-1 sm:w-[200px] sm:flex-none"
                       autoFocus
                       onKeyDown={(e) => {
-                        if (e.key === "Enter") handleAddValue();
-                        if (e.key === "Escape") {
-                          setIsAddingNew(false);
-                          setNewValue("");
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          void handleAddValue();
                         }
+                        if (e.key === "Escape") handleCancelAdd();
                       }}
                     />
                     <Button
@@ -243,16 +258,17 @@ export function AttributeValueEditor({
                       }
                       aria-label="Save new value"
                     >
-                      <Check className="h-4 w-4" />
+                      {pending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Check className="h-4 w-4" />
+                      )}
                     </Button>
                     <Button
                       size="sm"
                       variant="ghost"
                       className="shrink-0"
-                      onClick={() => {
-                        setIsAddingNew(false);
-                        setNewValue("");
-                      }}
+                      onClick={handleCancelAdd}
                       aria-label="Cancel adding value"
                     >
                       <X className="h-4 w-4" />
@@ -320,7 +336,10 @@ export function AttributeValueEditor({
                                   className="h-8 min-w-0 basis-full sm:flex-1 sm:basis-auto"
                                   autoFocus
                                   onKeyDown={(e) => {
-                                    if (e.key === "Enter") handleSaveEdit();
+                                    if (e.key === "Enter") {
+                                      e.preventDefault();
+                                      void handleSaveEdit();
+                                    }
                                     if (e.key === "Escape") handleCancelEdit();
                                   }}
                                 />
@@ -431,23 +450,26 @@ export function AttributeValueEditor({
             </div>
 
             <div className="flex justify-end shrink-0">
-              <Button variant="outline" onClick={onClose}>
+              <Button variant="outline" onClick={handleClose}>
                 <X className="h-4 w-4 mr-2" />
                 Close
               </Button>
             </div>
-          </div>
+          </fieldset>
         </DialogContent>
       </Dialog>
 
       {/* Delete Confirmation */}
       <ConfirmDialog
         open={!!deleteConfirm}
-        onOpenChange={() => setDeleteConfirm(null)}
+        onOpenChange={() => {
+          if (!commandInFlight.current) setDeleteConfirm(null);
+        }}
         title="Delete Value?"
         description={`This will remove the value "${deleteConfirm}" from all products using it. This action cannot be undone.`}
         confirmLabel="Delete"
         loadingLabel="Deleting..."
+        isLoading={pending}
         variant="destructive"
         onConfirm={() => deleteConfirm && handleDelete(deleteConfirm)}
       />

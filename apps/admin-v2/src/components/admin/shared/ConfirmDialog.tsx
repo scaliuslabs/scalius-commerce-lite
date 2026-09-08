@@ -7,7 +7,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+} from "~/components/ui/alert-dialog";
 import { cn } from "@scalius/shared/utils";
 import { Loader2 } from "lucide-react";
 

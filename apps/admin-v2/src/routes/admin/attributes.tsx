@@ -472,6 +472,7 @@ function AttributesPage() {
       {/* Attribute Value Editor */}
       {attributeActions.canEdit && (
         <AttributeValueEditor
+          key={editValuesFor?.id ?? "closed"}
           attributeId={editValuesFor?.id || null}
           attributeName={editValuesFor?.name || null}
           onClose={() => setEditValuesFor(null)}
