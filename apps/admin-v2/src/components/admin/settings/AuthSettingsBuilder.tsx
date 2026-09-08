@@ -477,7 +477,7 @@ export default function AuthSettingsBuilder() {
 
     return (
         <div className="space-y-5 max-w-2xl">
-            <UnsavedChangesGuard isDirty={isDirty || isSaving} isSubmitting={false} />
+            <UnsavedChangesGuard isDirty={isDirty || isSaving} isSubmitting={false} allowSamePathStateNavigation />
             <Card>
                 <CardHeader className="pb-3">
                     <CardTitle className="text-base">Customer sign-in</CardTitle>
