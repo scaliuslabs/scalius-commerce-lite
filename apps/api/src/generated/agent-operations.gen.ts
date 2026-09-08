@@ -31495,6 +31495,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "canRetryCreate": {
                   "type": "boolean"
                 },
+                "canRepair": {
+                  "type": "boolean"
+                },
                 "updatedAt": {
                   "$ref": "#/components/schemas/NullableTimestamp"
                 }
@@ -31510,6 +31513,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "providerType",
                 "canRefresh",
                 "canRetryCreate",
+                "canRepair",
                 "updatedAt"
               ]
             },
@@ -33538,6 +33542,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "canRetryCreate": {
                         "type": "boolean"
                       },
+                      "canRepair": {
+                        "type": "boolean"
+                      },
                       "updatedAt": {
                         "$ref": "#/components/schemas/NullableTimestamp"
                       }
@@ -33553,6 +33560,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "providerType",
                       "canRefresh",
                       "canRetryCreate",
+                      "canRepair",
                       "updatedAt"
                     ]
                   },
@@ -35092,6 +35100,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "canRetryCreate": {
                         "type": "boolean"
                       },
+                      "canRepair": {
+                        "type": "boolean"
+                      },
                       "updatedAt": {
                         "$ref": "#/components/schemas/NullableTimestamp"
                       }
@@ -35107,6 +35118,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "providerType",
                       "canRefresh",
                       "canRetryCreate",
+                      "canRepair",
                       "updatedAt"
                     ]
                   },

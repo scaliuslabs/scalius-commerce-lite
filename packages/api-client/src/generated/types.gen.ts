@@ -40840,6 +40840,7 @@ export type GetApiV1AdminOrdersResponses = {
                     providerType: string | null;
                     canRefresh: boolean;
                     canRetryCreate: boolean;
+                    canRepair: boolean;
                     updatedAt: NullableTimestamp;
                 };
                 paymentRecovery: {
@@ -41262,6 +41263,7 @@ export type GetApiV1AdminOrdersPaymentRecoveryResponses = {
                     providerType: string | null;
                     canRefresh: boolean;
                     canRetryCreate: boolean;
+                    canRepair: boolean;
                     updatedAt: NullableTimestamp;
                 };
                 paymentRecovery: {
@@ -41964,6 +41966,7 @@ export type GetApiV1AdminOrdersByIdResponses = {
                 providerType: string | null;
                 canRefresh: boolean;
                 canRetryCreate: boolean;
+                canRepair: boolean;
                 updatedAt: NullableTimestamp;
             };
             paymentRecovery: {

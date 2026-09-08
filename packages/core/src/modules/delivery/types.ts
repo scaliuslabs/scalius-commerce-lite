@@ -1,3 +1,5 @@
+export const PROVIDER_OUTCOME_UNKNOWN = "provider_outcome_unknown";
+
 // Common interfaces
 export interface ShipmentResult {
   success: boolean;
