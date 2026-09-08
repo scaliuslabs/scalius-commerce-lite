@@ -8,6 +8,7 @@ import type { AuthState } from "../api/customer-auth";
 import { findNamedCheckoutControl } from "../checkout/form-controls";
 import { readCheckoutFormDraft, syncCheckoutTransferSession, writeCheckoutFormDraft } from "../checkout/session-state";
 import { getEffectiveCartShippingFee } from "../../store/cart";
+import { validateStorefrontPhone } from "../phone-country-policy";
 import { storefrontSourcePath } from "../test-source-paths";
 
 // Execute the real cart draft/autofill listeners with a deferred session read.
@@ -43,6 +44,7 @@ function startCart() {
     writeCheckoutFormDraft,
     syncCheckoutTransferSession,
     findNamedCheckoutControl,
+    validateStorefrontPhone,
     ENGLISH_CHECKOUT_LANGUAGE_DATA,
   };
   captureDraft = new Function(...Object.keys(dependencies), `${script}\nreturn persistCheckoutFormDraftNow;`)(...Object.values(dependencies));
