@@ -21,6 +21,7 @@ import {
     codTracking,
     refundAttempts,
     paymentPlans,
+    webhookEvents,
     orderDiscountAllocations,
     OrderStatus,
     PaymentMethod,
@@ -97,6 +98,7 @@ import {
     assertNoActiveRefundAttempt,
     assertNoActiveRefundAttemptsForOrders,
     noActiveRefundAttemptForOrderIdCondition,
+    noActiveRefundAttemptForOrderColumnCondition,
 } from "../payments/refund-attempt-guard";
 import {
     listOrderRefundAttempts,
@@ -115,7 +117,9 @@ import {
     assertNoActivePaymentSessionAttempt,
     assertNoActivePaymentSessionAttemptsForOrders,
     noActivePaymentSessionAttemptForOrderIdCondition,
+    listOrderPaymentSessionAttempts,
 } from "../payments/payment-session-attempts";
+import { PAYMENT_BLOCKED_ORDER_STATUSES } from "../payments/payable-order";
 import { resolveActiveDeliveryLocationNames } from "./delivery-location-validation";
 import { listOrderSupportRequests } from "./order-support-requests";
 import { createOrderReceiptToken, recordOrderReceipt } from "./order-receipts";
@@ -347,6 +351,7 @@ type OrderRecoverySourceRow = {
     status: string;
     paymentStatus: string;
     paymentMethod: string | null;
+    paymentRecoveryApplicable?: number | boolean;
     shipmentClaimId?: string | null;
     shipmentClaimExpiresAt?: Date | number | string | null;
 };
@@ -676,6 +681,35 @@ function staleOrFailedPaymentSessionAttemptExistsCondition(orderIdSql: SQL) {
     )`;
 }
 
+function paymentRecoveryLifecycleCondition() {
+    const orderIdSql = sql`${orders.id}`;
+    // Open orders retain their existing recovery policy. Closed orders need
+    // current provider/money work; completed partial refunds may retain money.
+    return sql<number>`CASE
+        WHEN NOT ${inArray(orders.status, [...PAYMENT_BLOCKED_ORDER_STATUSES])} THEN 1
+        WHEN ${inArray(orders.status, [OrderStatus.CANCELLED, OrderStatus.RETURNED])}
+            AND ${orders.paidAmount} > 0 THEN 1
+        WHEN EXISTS (
+            SELECT 1 FROM ${paymentSessionAttempts}
+            WHERE ${paymentSessionAttempts.orderId} = ${orderIdSql}
+              AND ${paymentSessionAttempts.status} = 'processing'
+        ) THEN 1
+        WHEN EXISTS (
+            SELECT 1 FROM ${orderPayments}
+            WHERE ${orderPayments.orderId} = ${orderIdSql}
+              AND ${inArray(orderPayments.status, [PaymentRecordStatus.PENDING, PaymentRecordStatus.CONFIRMED])}
+        ) THEN 1
+        WHEN NOT (${noActiveRefundAttemptForOrderColumnCondition(orderIdSql)}) THEN 1
+        WHEN EXISTS (
+            SELECT 1 FROM ${webhookEvents}
+            WHERE ${webhookEvents.orderId} = ${orderIdSql}
+              AND ${inArray(webhookEvents.provider, [...HOSTED_PAYMENT_METHODS])}
+              AND ${webhookEvents.status} IN ('processing', 'queued', 'failed', 'manual_reconciliation')
+        ) THEN 1
+        ELSE 0
+    END`;
+}
+
 function paymentRecoveryFilterCondition(filter: OrderPaymentRecoveryFilter) {
     const orderIdSql = sql`${orders.id}`;
     const activeAttempt = activePaymentSessionAttemptExistsCondition(orderIdSql);
@@ -683,6 +717,7 @@ function paymentRecoveryFilterCondition(filter: OrderPaymentRecoveryFilter) {
     const hostedMethod = inArray(orders.paymentMethod, [...HOSTED_PAYMENT_METHODS]);
     const needsAttention = sql`(
         ${hostedMethod}
+        AND ${paymentRecoveryLifecycleCondition()} = 1
         AND (
           ${orders.paymentStatus} = ${PaymentStatus.FAILED}
           OR ${staleOrFailedAttempt}
@@ -751,6 +786,10 @@ function buildPaymentRecoverySummary(
 
     const failedAttempt = findLatestAttempt(attempts, (attempt) => attempt.status === "failed");
     const staleAttempt = findLatestAttempt(attempts, (attempt) => isStalePaymentAttempt(attempt, nowSeconds));
+    const isClosed = (PAYMENT_BLOCKED_ORDER_STATUSES as readonly string[]).includes(order.status);
+    if (isClosed && !order.paymentRecoveryApplicable && !staleAttempt) {
+        return { ...DEFAULT_PAYMENT_RECOVERY_SUMMARY };
+    }
     const attentionAttempt = failedAttempt ?? staleAttempt;
     if (attentionAttempt || (isHostedPaymentMethod(order.paymentMethod) && order.paymentStatus === PaymentStatus.FAILED)) {
         return {
@@ -758,7 +797,9 @@ function buildPaymentRecoverySummary(
             label: failedAttempt || order.paymentStatus === PaymentStatus.FAILED
                 ? "Payment needs attention"
                 : "Payment setup stalled",
-            message: failedAttempt || order.paymentStatus === PaymentStatus.FAILED
+            message: isClosed
+                ? "This closed order still has payment activity to reconcile. Review the order payment panel."
+                : failedAttempt || order.paymentStatus === PaymentStatus.FAILED
                 ? "The online payment flow failed. Open the order payment panel to retry or reconcile."
                 : "Payment setup stopped before finishing. Open the order payment panel before taking shipment or delete actions.",
             gateway: attentionAttempt?.gateway ?? order.paymentMethod,
@@ -1355,6 +1396,7 @@ export async function listOrders(db: Database, options: {
             shipmentClaimId: orders.shipmentClaimId,
             shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
             paidAmount: orders.paidAmount,
+            paymentRecoveryApplicable: paymentRecoveryLifecycleCondition(),
             ...adminOrderFullEditEvidenceSelection(),
         })
         .from(orders)
@@ -1376,6 +1418,7 @@ export async function listOrders(db: Database, options: {
         cityName: string | null; zoneName: string | null; areaName: string | null;
         shipmentClaimId: string | null; shipmentClaimExpiresAt: Date | number | string | null;
         paidAmount: number | null;
+        paymentRecoveryApplicable: number;
         hasTaxSnapshot: number; hasPaymentHistory: number; hasShipmentHistory: number;
         hasRefundHistory: number; hasReturnHistory: number; hasInvoiceHistory: number;
     }[];
@@ -1509,7 +1552,7 @@ export async function listOrders(db: Database, options: {
 
     const formattedResults = results.map((order) => {
         const latestShipment = shipmentMap.get(order.id) || null;
-        const publicOrder = omitAdminOrderFullEditEvidence(order);
+        const { paymentRecoveryApplicable: _paymentRecoveryApplicable, ...publicOrder } = omitAdminOrderFullEditEvidence(order);
         return {
             ...publicOrder,
             createdAt: new Date(order.createdAt * 1000),
@@ -1769,6 +1812,7 @@ async function getOrderDetailsOnce(
             deletedAt: sql<number>`CAST(${orders.deletedAt} AS INTEGER)`,
             shipmentClaimId: orders.shipmentClaimId,
             shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
+            paymentRecoveryApplicable: paymentRecoveryLifecycleCondition(),
             ...adminOrderFullEditEvidenceSelection(),
         })
         .from(orders)
@@ -1777,7 +1821,7 @@ async function getOrderDetailsOnce(
 
     if (!order) return null;
 
-    const [items, latestShipments, refundAttemptViews, supportRequests, promotionRows] = await Promise.all([
+    const [items, latestShipments, refundAttemptViews, supportRequests, promotionRows, paymentAttempts] = await Promise.all([
         db
             .select({
                 id: orderItems.id,
@@ -1837,6 +1881,7 @@ async function getOrderDetailsOnce(
             .where(eq(orderDiscountAllocations.orderId, id))
             .orderBy(orderDiscountAllocations.id)
             .limit(1),
+        listOrderPaymentSessionAttempts(db, id),
     ]);
 
     const formattedItems = items.map((item) => ({
@@ -1877,7 +1922,7 @@ async function getOrderDetailsOnce(
         }
         : null;
     const nowSeconds = Math.floor(Date.now() / 1000);
-    const publicOrder = omitAdminOrderFullEditEvidence(order);
+    const { paymentRecoveryApplicable: _paymentRecoveryApplicable, ...publicOrder } = omitAdminOrderFullEditEvidence(order);
 
     return {
         ...publicOrder,
@@ -1892,7 +1937,7 @@ async function getOrderDetailsOnce(
         refundAttempts: refundAttemptViews,
         activeRefundOperation: summarizeActiveRefundOperation(refundAttemptViews, "admin"),
         supportRequests,
-        paymentRecovery: buildPaymentRecoverySummary(order, [], nowSeconds),
+        paymentRecovery: buildPaymentRecoverySummary(order, paymentAttempts, nowSeconds),
         fullEditReadiness: buildAdminOrderFullEditReadiness(order),
     };
 }
