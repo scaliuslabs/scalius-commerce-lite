@@ -126,14 +126,26 @@ function hideReturnToCartAction(): void {
   if (action) action.hidden = true;
 }
 
-function clearCheckoutPresentation(): void {
+function parkPaymentControls(): void {
+  document.getElementById("stripeSection")?.classList.add("hidden");
   resetStripePaymentElement();
+  const parking = document.getElementById("paymentActionParking");
+  for (const id of ["testModeNotice", "stripeSection", "paymentActionHost"]) {
+    const element = document.getElementById(id);
+    element?.classList.add("hidden");
+    if (element && parking && element.parentElement !== parking) {
+      parking.appendChild(element);
+    }
+  }
+}
+
+function clearCheckoutPresentation(): void {
+  parkPaymentControls();
   const paymentMethods = document.getElementById("paymentMethods");
   paymentMethods?.replaceChildren();
   paymentMethods?.setAttribute("aria-busy", "false");
   document.getElementById("summaryDetails")?.replaceChildren();
   document.getElementById("orderSummary")?.classList.add("hidden");
-  document.getElementById("stripeSection")?.classList.add("hidden");
   setPaymentControlsDisabled(true);
 }
 
@@ -729,12 +741,8 @@ async function renderGateways(): Promise<void> {
   if (!checkoutConfig || !checkoutData || !authoritativeTaxQuote) return;
   const container = document.getElementById("paymentMethods");
   if (!container) return;
-  const actionHost = document.getElementById("paymentActionHost");
-  const actionParking = document.getElementById("paymentActionParking");
-  if (actionHost && actionParking && actionHost.parentElement !== actionParking) {
-    actionHost.classList.add("hidden");
-    actionParking.appendChild(actionHost);
-  }
+  parkPaymentControls();
+  const stripeSection = document.getElementById("stripeSection");
   container.innerHTML = "";
   const eligibleGateways = eligibleCheckoutGateways();
   const singleMethod = eligibleGateways.length === 1;
@@ -796,10 +804,11 @@ async function renderGateways(): Promise<void> {
     const details = document.createElement("div");
     details.id = `payment-details-${gw.id}`;
     details.className =
-      "payment-method-details hidden border-t border-border px-4 py-4";
+      "payment-method-details hidden space-y-3 border-t border-border px-4 py-4";
     if (!singleMethod) {
       details.setAttribute("aria-labelledby", `payment-method-${gw.id}`);
     }
+    if (gw.id === "stripe" && stripeSection) details.appendChild(stripeSection);
     card.appendChild(details);
     container.appendChild(card);
   });
@@ -841,8 +850,9 @@ async function selectMethod(
     return;
   }
 
+  if (testNotice && testNotice.parentElement !== details) details.prepend(testNotice);
   if (actionHost) {
-    details.appendChild(actionHost);
+    if (actionHost.parentElement !== details) details.appendChild(actionHost);
     actionHost.classList.remove("hidden");
   }
   testNotice?.classList.toggle(
@@ -872,6 +882,7 @@ async function selectMethod(
       await handler.onSelect(stripeContainer || document.body);
       if (selectionId !== selectionVersion) return;
     } catch (err: unknown) {
+      if (selectionId !== selectionVersion) return;
       showError(err instanceof Error ? err.message : String(err));
       selectedMethod = null;
       retrySelection = { methodId, gateway: gw };
