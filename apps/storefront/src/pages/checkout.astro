@@ -87,7 +87,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(checkoutLanguage
 
         <div
           id="errorMsg"
-          class="mb-4 hidden rounded-lg border border-destructive/25 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+          class="mb-4 hidden rounded-lg border border-destructive bg-destructive px-4 py-3 text-sm text-destructive-foreground"
           role="alert"
           aria-live="assertive"
         ></div>
@@ -126,7 +126,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(checkoutLanguage
           <div id="stripeSection" class="hidden space-y-2">
             <h3 class="text-sm font-semibold text-foreground">{copy.cardDetailsText}</h3>
             <div id="stripeCardElement" class="min-h-12 rounded-lg border border-input bg-background p-3"></div>
-            <div id="stripeError" class="hidden text-xs font-medium text-destructive" role="alert" aria-live="polite"></div>
+            <div id="stripeError" class="hidden text-xs font-medium text-foreground" role="alert" aria-live="polite"></div>
           </div>
 
           <p id="hostedRedirectNote" class="hidden text-xs leading-5 text-muted-foreground"></p>

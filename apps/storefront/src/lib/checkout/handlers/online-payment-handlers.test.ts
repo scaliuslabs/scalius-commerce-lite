@@ -32,7 +32,7 @@ vi.mock("../create-order", () => ({
 import { CheckoutOrderError } from "../create-order";
 import { polarHandler } from "./polar";
 import { sslcommerzHandler } from "./sslcommerz";
-import { stripeHandler } from "./stripe";
+import { resetStripePaymentElement, stripeHandler } from "./stripe";
 import type { CheckoutConfig, PaymentContext } from "../types";
 
 const partialConfig: CheckoutConfig = {
@@ -420,7 +420,11 @@ describe("hosted online payment handlers", () => {
 });
 
 describe("Stripe checkout handler", () => {
-  it("does not create an order until the Stripe card form is complete", async () => {
+  it.each([
+    { theme: "light", foreground: "rgb(9, 9, 11)", placeholder: "#52525b" },
+    { theme: "Midnight", foreground: "rgb(250, 250, 250)", placeholder: "#d4d4d8" },
+    { theme: "default OKLCH", foreground: "oklch(0.21 0.006 285.885)", placeholder: "oklch(0.552 0.016 285.938)" },
+  ])("uses $theme card colors while preserving validation and remount readiness", async ({ theme, foreground, placeholder }) => {
     document.body.innerHTML = `
       <div id="stripeSection">
         <div id="stripeCardElement"></div>
@@ -428,23 +432,54 @@ describe("Stripe checkout handler", () => {
       </div>
       <button id="payButton"></button>
     `;
-    let changeHandler: ((event: { complete?: boolean }) => void) | undefined;
+    const cardHost = document.getElementById("stripeCardElement") as HTMLElement;
+    cardHost.style.color = foreground;
+    cardHost.style.setProperty("--muted-foreground", placeholder);
+    let changeHandler: ((event: { complete?: boolean; error?: { message: string } }) => void) | undefined;
     const stripeCard = {
       mount: vi.fn(),
-      on: vi.fn((_event: string, handler: (event: { complete?: boolean }) => void) => {
+      destroy: vi.fn(),
+      on: vi.fn((_event: string, handler: typeof changeHandler) => {
         changeHandler = handler;
       }),
     };
+    const createCard = vi.fn(() => stripeCard);
     const stripeInstance = {
-      elements: vi.fn(() => ({ create: vi.fn(() => stripeCard) })),
+      elements: vi.fn(() => ({ create: createCard })),
       confirmCardPayment: vi.fn(),
     };
     vi.stubGlobal("Stripe", vi.fn(() => stripeInstance));
     const container = document.getElementById("stripeSection") as HTMLElement;
-    container.dataset.publishableKey = "pk_incomplete";
+    container.dataset.publishableKey = `pk_${theme}`;
+    // happy-dom does not resolve OKLCH; real browsers preserve this CSS color value.
+    const resolvedStyle = getComputedStyle(cardHost);
+    const styleOverride = foreground.startsWith("oklch(")
+      ? vi.spyOn(globalThis, "getComputedStyle").mockReturnValueOnce({
+        color: foreground,
+        getPropertyValue: resolvedStyle.getPropertyValue.bind(resolvedStyle),
+      } as CSSStyleDeclaration)
+      : undefined;
     await stripeHandler.onSelect?.(container);
+    styleOverride?.mockRestore();
 
+    expect(createCard).toHaveBeenCalledWith("card", {
+      style: {
+        base: {
+          fontSize: "16px",
+          fontFamily: "sans-serif",
+          color: foreground,
+          iconColor: foreground,
+          "::placeholder": { color: placeholder },
+        },
+        invalid: { color: foreground, iconColor: foreground },
+      },
+    });
+    changeHandler?.({ complete: false, error: { message: "Your card number is invalid." } });
+    const error = document.getElementById("stripeError") as HTMLElement;
+    expect(error.textContent).toBe("Your card number is invalid.");
+    expect(error.classList.contains("hidden")).toBe(false);
     expect(stripeHandler.isReady?.()).toBe(false);
+    expect((document.getElementById("payButton") as HTMLButtonElement).disabled).toBe(true);
     expect(await stripeHandler.processPayment(makeContext())).toEqual({
       success: false,
       error: "Complete your card details before paying.",
@@ -455,7 +490,26 @@ describe("Stripe checkout handler", () => {
 
     changeHandler?.({ complete: true });
     expect(stripeHandler.isReady?.()).toBe(true);
+    expect(error.classList.contains("hidden")).toBe(true);
     expect((document.getElementById("payButton") as HTMLButtonElement).disabled).toBe(false);
+
+    await stripeHandler.onSelect?.(container);
+    expect(createCard).toHaveBeenCalledTimes(1);
+    resetStripePaymentElement();
+    expect(stripeCard.destroy).toHaveBeenCalledTimes(1);
+    expect(stripeHandler.isReady?.()).toBe(false);
+    cardHost.style.color = "rgb(17, 94, 89)";
+    cardHost.style.removeProperty("--muted-foreground");
+    await stripeHandler.onSelect?.(container);
+    expect(createCard).toHaveBeenCalledTimes(2);
+    expect(createCard).toHaveBeenLastCalledWith("card", expect.objectContaining({
+      style: expect.objectContaining({
+        base: expect.objectContaining({
+          color: "rgb(17, 94, 89)",
+          "::placeholder": { color: "rgb(17, 94, 89)" },
+        }),
+      }),
+    }));
   });
 
   it("keeps card payment failures on checkout instead of redirecting to hosted recovery", async () => {
