@@ -10,32 +10,32 @@ import {
   RotateCcw,
   Save,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type SetStateAction } from "react";
 import { toast } from "sonner";
 
-import { usePermissions } from "@/contexts/PermissionContext";
-import { ADMIN_PERMISSIONS } from "@/lib/admin-permissions";
-import { getServerFnError } from "@/lib/api-helpers";
+import { usePermissions } from "~/contexts/PermissionContext";
+import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
+import { getServerFnError } from "~/lib/api-helpers";
 import {
   getEmailSettings,
   type EmailSettingsPayload,
   type SettingsPayload,
   updateEmailSettings,
-} from "@/lib/api-functions/settings";
-import { queryKeys } from "@/lib/query-keys";
-import { getSettingsLoadErrorMessage } from "@/hooks/use-settings-form";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+} from "~/lib/api-functions/settings";
+import { queryKeys } from "~/lib/query-keys";
+import { getSettingsLoadErrorMessage, mergeUneditedFields } from "~/hooks/use-settings-form";
+import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
+import { Badge } from "~/components/ui/badge";
+import { Button } from "~/components/ui/button";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+} from "~/components/ui/card";
+import { Input } from "~/components/ui/input";
+import { Label } from "~/components/ui/label";
 import { UnsavedChangesGuard } from "../shared/UnsavedChangesGuard";
 import { OfficialProviderMark } from "./provider-marks";
 
@@ -71,24 +71,41 @@ export default function EmailSettingsForm() {
   const queryClient = useQueryClient();
   const {
     data,
+    dataUpdatedAt,
     error: loadError,
     isError: isLoadError,
     isLoading,
+    isFetching,
     refetch,
   } = useQuery({
     queryKey: queryKeys.settings.email(),
     queryFn: getEmailSettings,
   });
-  const [draft, setDraft] = useState<EmailDraft | null>(null);
-  const [savedDraft, setSavedDraft] = useState<EmailDraft | null>(null);
+  const dataUpdateCount = queryClient.getQueryState(queryKeys.settings.email())?.dataUpdateCount ?? 0;
+  const [{ draft, savedDraft }, setEditor] = useState<{ draft: EmailDraft | null; savedDraft: EmailDraft | null }>({
+    draft: null, savedDraft: null,
+  });
+  const [retrying, setRetrying] = useState(false);
+  const commandInFlight = useRef(false);
+  const ignoredReadUpdates = useRef(-1);
+  function setDraft(next: SetStateAction<EmailDraft | null>) {
+    setEditor((current) => ({
+      ...current,
+      draft: typeof next === "function" ? next(current.draft) : next,
+    }));
+  }
   const dirty = Boolean(draft && savedDraft && !draftsEqual(draft, savedDraft));
 
   useEffect(() => {
-    if (!data || dirty) return;
-    const nextDraft = toDraft(data);
-    setDraft(nextDraft);
-    setSavedDraft(nextDraft);
-  }, [data, dirty]);
+    if (!data || dataUpdateCount <= ignoredReadUpdates.current) return;
+    const incoming = toDraft(data);
+    setEditor((current) => ({
+      draft: current.draft && current.savedDraft
+        ? mergeUneditedFields(current.draft, current.savedDraft, incoming)
+        : incoming,
+      savedDraft: incoming,
+    }));
+  }, [data, dataUpdatedAt, dataUpdateCount]);
 
   const saveMutation = useMutation({
     mutationFn: async (nextDraft: EmailDraft) => {
@@ -102,22 +119,42 @@ export default function EmailSettingsForm() {
       return updateEmailSettings({ data: payload });
     },
     onSuccess: async (_response, saved) => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.settings.email() }),
+      // Ignore pre-acknowledgment reads even if their React effect is still queued.
+      ignoredReadUpdates.current = queryClient.getQueryState(queryKeys.settings.email())?.dataUpdateCount ?? 0;
+      // A committed write is authoritative even if its confirming read fails.
+      setEditor((current) => ({ draft: current.draft ?? saved, savedDraft: saved }));
+      const [refreshed] = await Promise.all([
+        refetch({ throwOnError: true }).then((result) => result.isSuccess, () => false),
         queryClient.invalidateQueries({ queryKey: queryKeys.settings.auth() }),
       ]);
-      const refreshed = queryClient.getQueryData<EmailSettingsPayload>(
-        queryKeys.settings.email(),
-      );
-      const nextDraft = refreshed ? toDraft(refreshed) : saved;
-      setDraft(nextDraft);
-      setSavedDraft(nextDraft);
-      toast.success("Email settings saved");
+      if (refreshed) toast.success("Email settings saved");
+      else toast.warning("Email settings were saved, but the current settings could not be refreshed.");
     },
     onError: (error) => {
       toast.error(getServerFnError(error, "Email settings could not be saved"));
     },
+    onSettled: () => { commandInFlight.current = false; },
   });
+
+  const handleSave = () => {
+    if (!canManage || !draft || !dirty || commandInFlight.current) return;
+    commandInFlight.current = true;
+    saveMutation.mutate(draft);
+  };
+  const handleRetry = async () => {
+    if (commandInFlight.current) return;
+    commandInFlight.current = true;
+    setRetrying(true);
+    try {
+      await Promise.all([
+        refetch(),
+        queryClient.invalidateQueries({ queryKey: queryKeys.settings.auth() }),
+      ]);
+    } finally {
+      commandInFlight.current = false;
+      setRetrying(false);
+    }
+  };
 
   if (isLoading || !draft || !data) {
     if (isLoadError) {
@@ -132,7 +169,7 @@ export default function EmailSettingsForm() {
                 "Email settings could not be loaded. Existing delivery settings were not changed.",
               )}
             </p>
-            <Button type="button" variant="outline" onClick={() => void refetch()}>
+            <Button type="button" variant="outline" disabled={retrying} onClick={() => void handleRetry()}>
               Retry
             </Button>
           </AlertDescription>
@@ -148,9 +185,12 @@ export default function EmailSettingsForm() {
 
   const provider = draft.provider;
   const canEdit = canManage && !saveMutation.isPending;
-  const resendKeySaved = data.resendConfigured;
+  const checkingSettings = isFetching || saveMutation.isPending;
+  const settingsCurrent = !isLoadError && !checkingSettings;
+  const unavailableStatus = checkingSettings ? "Checking status…" : "Status unavailable";
+  const resendKeySaved = settingsCurrent && data.resendConfigured;
   const hasDraftResendKey = draft.apiKey !== "" && draft.apiKey !== MASKED_VALUE;
-  const runtimeConfigured = data.ready;
+  const runtimeConfigured = settingsCurrent && data.ready;
 
   return (
     <>
@@ -160,6 +200,19 @@ export default function EmailSettingsForm() {
           <Alert>
             <AlertDescription>
               Your role can review email delivery settings, but cannot change them.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {isLoadError && (
+          <Alert>
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Email settings refresh unavailable</AlertTitle>
+            <AlertDescription className="space-y-3">
+              <p>The saved settings could not be refreshed. Your values are preserved. Retry to confirm the current settings.</p>
+              <Button type="button" variant="outline" disabled={saveMutation.isPending || retrying} onClick={() => void handleRetry()}>
+                {retrying ? "Retrying…" : "Retry"}
+              </Button>
             </AlertDescription>
           </Alert>
         )}
@@ -178,11 +231,11 @@ export default function EmailSettingsForm() {
                     ? "Credentials and sender are configured; delivery has not been tested."
                     : undefined}
                 >
-                  {runtimeConfigured ? "Configured" : "Setup incomplete"}
+                  {!settingsCurrent ? unavailableStatus : runtimeConfigured ? "Configured" : "Setup incomplete"}
                 </Badge>
                 {dirty && <Badge variant="outline">Unsaved changes</Badge>}
               </div>
-              {!runtimeConfigured ? (
+              {settingsCurrent && !runtimeConfigured ? (
                 <p className="mt-1 text-xs text-muted-foreground">
                   {data.readinessError ?? "Add a sender and an available provider."}
                 </p>
@@ -212,7 +265,7 @@ export default function EmailSettingsForm() {
                 <span className="flex flex-col items-start">
                   <span>Cloudflare Email</span>
                   <span className="text-xs font-normal opacity-80">
-                    {data.cloudflareBindingConfigured ? "Binding available" : "Binding missing"}
+                    {!settingsCurrent ? unavailableStatus : data.cloudflareBindingConfigured ? "Binding available" : "Binding missing"}
                   </span>
                 </span>
               </Button>
@@ -228,7 +281,7 @@ export default function EmailSettingsForm() {
                 <span className="flex flex-col items-start">
                   <span>Resend</span>
                   <span className="text-xs font-normal opacity-80">
-                    {resendKeySaved ? "API key saved" : "API key missing"}
+                    {!settingsCurrent ? unavailableStatus : resendKeySaved ? "API key saved" : "API key missing"}
                   </span>
                 </span>
               </Button>
@@ -242,7 +295,7 @@ export default function EmailSettingsForm() {
               <CardTitle className="flex items-center gap-2 text-base">
                 <Cloud className="h-4 w-4" />
                 Cloudflare Email
-                {data.cloudflareBindingConfigured && (
+                {settingsCurrent && data.cloudflareBindingConfigured && (
                   <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                 )}
               </CardTitle>
@@ -285,7 +338,7 @@ export default function EmailSettingsForm() {
                   id="resend-api-key"
                   type="password"
                   autoComplete="new-password"
-                  placeholder={resendKeySaved ? MASKED_VALUE : "re_xxxxxxxxxxxx"}
+                  placeholder={settingsCurrent ? resendKeySaved ? MASKED_VALUE : "re_xxxxxxxxxxxx" : ""}
                   value={draft.apiKey}
                   disabled={!canEdit}
                   onChange={(event) => setDraft((current) => ({
@@ -295,7 +348,9 @@ export default function EmailSettingsForm() {
                   className="h-11 font-mono sm:h-9"
                 />
                 <p className="text-xs text-muted-foreground">
-                  {hasDraftResendKey
+                  {!settingsCurrent && draft.apiKey === MASKED_VALUE
+                    ? checkingSettings ? "Checking saved key status…" : "Saved key status is unavailable. Retry to confirm it."
+                    : hasDraftResendKey
                     ? "A new key will replace the saved key."
                     : resendKeySaved
                       ? "A key is saved. Clear this field and save to remove it."
@@ -343,7 +398,7 @@ export default function EmailSettingsForm() {
           </CardContent>
         </Card>
 
-        {dirty ? (
+        {dirty || saveMutation.isPending ? (
           <div className="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end">
           <Button
             type="button"
@@ -358,8 +413,8 @@ export default function EmailSettingsForm() {
           <Button
             type="button"
             className="min-h-11 sm:min-h-9 sm:min-w-32"
-            disabled={!canEdit || !dirty}
-            onClick={() => saveMutation.mutate(draft)}
+            disabled={!canEdit || retrying || !dirty}
+            onClick={handleSave}
           >
             {saveMutation.isPending ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
