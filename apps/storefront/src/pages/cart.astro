@@ -835,6 +835,8 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
 
   // ── Customer login pre-fill ───────────────────────────────────────────────
 
+  const buyerEditedFields = new Set<string>();
+
   // Helper to normalize phone numbers — pass through E.164 or raw value
   const normalizePhone = (phone: string | undefined | null) => {
     if (!phone) return "";
@@ -847,14 +849,14 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     const preferredName = draft && "customerName" in draft
       ? draft.customerName
       : customer?.name;
-    if (preferredName) {
+    if (preferredName && !buyerEditedFields.has("customerName")) {
       const el = document.getElementById("customerName") as HTMLInputElement;
       if (el && !el.value) el.value = preferredName;
     }
     const preferredPhone = draft && "customerPhone" in draft
       ? draft.customerPhone
       : customer?.phone;
-    if (preferredPhone) {
+    if (preferredPhone && !buyerEditedFields.has("customerPhone")) {
       // PhoneField is a React component — dispatch custom event to update its state
       const phone = normalizePhone(preferredPhone);
       const phoneInput = document.querySelector<HTMLInputElement>(
@@ -869,14 +871,14 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     const preferredEmail = draft && "customerEmail" in draft
       ? draft.customerEmail
       : customer?.email;
-    if (preferredEmail) {
+    if (preferredEmail && !buyerEditedFields.has("customerEmail")) {
       const el = document.getElementById("customerEmail") as HTMLInputElement;
       if (el && !el.value) el.value = preferredEmail;
     }
     const preferredAddress = draft && "shippingAddress" in draft
       ? draft.shippingAddress
       : customer?.address;
-    if (preferredAddress) {
+    if (preferredAddress && !buyerEditedFields.has("shippingAddress")) {
       const el = document.getElementById(
         "shippingAddress",
       ) as HTMLTextAreaElement;
@@ -907,9 +909,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     area?: string;
     areaName?: string;
   } = {};
-  let phoneFieldHasBuyerEdit = false;
-
-  const readCheckoutFormValues = () => {
+  const readCheckoutFormValues = (captureAllFields = false) => {
     const draft = readCheckoutFormDraft();
     const values: Record<string, string> = {};
     for (const field of checkoutDraftFields) {
@@ -920,15 +920,17 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
         input.dataset.e164Value !== undefined
           ? input.dataset.e164Value
           : input?.value;
+      // Initialization may snapshot empty controls before account/React hydration.
+      // Only buyer edits or an explicit submit give those blanks draft ownership.
       if (
-        field === "customerPhone" &&
-        input &&
-        !phoneFieldHasBuyerEdit &&
         !inputValue &&
-        draft &&
-        Object.prototype.hasOwnProperty.call(draft, field)
+        !buyerEditedFields.has(field) &&
+        (!captureAllFields || (
+          field === "customerPhone" && draft &&
+          Object.prototype.hasOwnProperty.call(draft, field)
+        ))
       ) {
-        values[field] = draft[field] ?? "";
+        if (draft && field in draft) values[field] = draft[field] ?? "";
       } else if (input) values[field] = inputValue ?? "";
       else if (draft && field in draft) values[field] = draft[field] ?? "";
     }
@@ -977,8 +979,8 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     });
   };
 
-  const persistCheckoutFormDraftNow = () => {
-    const values = readCheckoutFormValues();
+  const persistCheckoutFormDraftNow = (captureAllFields = false) => {
+    const values = readCheckoutFormValues(captureAllFields);
     writeCheckoutFormDraft(values);
     syncExistingCheckoutTransfer(values);
   };
@@ -1031,18 +1033,23 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
   runWhenDomReady(() => {
     restoreCheckoutFormDraft();
     const form = document.getElementById("checkoutForm");
-    form?.addEventListener("input", (event) => {
+    const handleBuyerFieldEdit = (event: Event) => {
+      const input = event.target;
       if (
         event.isTrusted &&
-        (event.target as HTMLInputElement | null)?.id === "customerPhone-input"
+        (input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement)
       ) {
-        phoneFieldHasBuyerEdit = true;
+        const field = input.id === "customerPhone-input" ? "customerPhone" : input.name;
+        if (checkoutDraftFields.some((name) => name === field)) {
+          buyerEditedFields.add(field);
+        }
       }
       persistCheckoutFormDraft();
-    }, {
+    };
+    form?.addEventListener("input", handleBuyerFieldEdit, {
       signal: cartPageSignal,
     });
-    form?.addEventListener("change", persistCheckoutFormDraft, {
+    form?.addEventListener("change", handleBuyerFieldEdit, {
       signal: cartPageSignal,
     });
     window.addEventListener(
@@ -1066,7 +1073,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     });
     window.addEventListener(
       "pagehide",
-      persistCheckoutFormDraftNow,
+      () => persistCheckoutFormDraftNow(),
       { signal: cartPageSignal },
     );
     document.addEventListener("cart-updated", persistCheckoutFormDraft, {
@@ -1077,6 +1084,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
   // Helper to auto-select City/Zone dropdowns through LocationSelector's event API.
   const fillLocationDropdowns = (customer: CustomerAutofillProfile) => {
     try {
+      if (latestDraftLocation.city || latestDraftLocation.cityName) return;
       const draft = readCheckoutFormDraft();
       const draftOwnsLocation = Boolean(
         draft && ["city", "cityName", "zone", "zoneName", "area", "areaName"]
@@ -1398,7 +1406,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
 
         // Persist the current DOM immediately so explicit empty edits replace
         // older draft values before any async validation or navigation.
-        persistCheckoutFormDraftNow();
+        persistCheckoutFormDraftNow(true);
 
         // Validate in visual form order and keep every error inline. The form
         // is novalidate so browser-native validation bubbles cannot conflict
@@ -1472,7 +1480,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
           );
           return;
         }
-        persistCheckoutFormDraftNow();
+        persistCheckoutFormDraftNow(true);
 
         if (!syncShippingAddressValidity(true)) {
           e.preventDefault();
