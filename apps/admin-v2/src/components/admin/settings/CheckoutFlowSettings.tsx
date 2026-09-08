@@ -6,34 +6,34 @@ import {
     CardDescription,
     CardHeader,
     CardTitle,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
+} from "~/components/ui/card";
+import { Button } from "~/components/ui/button";
+import { Input } from "~/components/ui/input";
+import { Label } from "~/components/ui/label";
+import { Switch } from "~/components/ui/switch";
 import {
     RadioGroup,
     RadioGroupItem,
-} from "@/components/ui/radio-group";
+} from "~/components/ui/radio-group";
 import { toast } from "sonner";
 import { AlertTriangle, CheckCircle2, Loader2, MapPinned, RotateCcw, Save, ShieldCheck, Truck } from "lucide-react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { getServerFnError } from "@/lib/api-helpers";
+import { Alert, AlertDescription } from "~/components/ui/alert";
+import { getServerFnError } from "~/lib/api-helpers";
 import {
     getCheckoutFlowSettings,
     updateCheckoutFlowSettings,
     type CheckoutFlowSettingsPayload,
     type CheckoutReadinessPayload,
     type PaymentMethodsPayload,
-} from "@/lib/api-functions/settings";
-import { readCheckoutFlowRevisionConflict } from "@/lib/admin-api-error";
+} from "~/lib/api-functions/settings";
+import { readCheckoutFlowRevisionConflict } from "~/lib/admin-api-error";
 import {
     checkoutFlowSettingsQueryOptions,
     checkoutReadinessQueryOptions,
     paymentMethodsQueryOptions,
-} from "@/lib/api-query-options/settings";
-import { queryKeys } from "@/lib/query-keys";
-import { UnsavedChangesGuard } from "@/components/admin/shared/UnsavedChangesGuard";
+} from "~/lib/api-query-options/settings";
+import { queryKeys } from "~/lib/query-keys";
+import { UnsavedChangesGuard } from "~/components/admin/shared/UnsavedChangesGuard";
 import {
     CHECKOUT_ADVANCE_PAYMENT_AMOUNT_LIMITS,
     CHECKOUT_ADVANCE_PAYMENT_AMOUNT_RANGE_LABEL,
@@ -84,6 +84,7 @@ interface CheckoutFlowEditorState {
 }
 
 interface CheckoutFlowConflictState {
+    submitted: CheckoutFlowValues;
     currentRevision: number | null;
     latest: CheckoutFlowSettingsPayload | null;
     loading: boolean;
@@ -189,14 +190,14 @@ export default function CheckoutFlowSettings() {
     const [conflict, setConflict] = useState<CheckoutFlowConflictState | null>(null);
 
     useEffect(() => {
-        if (!checkoutSettings) return;
+        if (!checkoutSettings || saving || conflict) return;
         setEditor((current) => {
             if (current && !checkoutFlowValuesEqual(current.draft, current.saved)) {
                 return current;
             }
             return createEditorState(checkoutSettings);
         });
-    }, [checkoutSettings]);
+    }, [checkoutSettings, saving, conflict]);
 
     const guestCheckoutEnabled = editor?.draft.guestCheckoutEnabled ?? true;
     const checkoutMode = editor?.draft.checkoutMode ?? "all";
@@ -311,6 +312,7 @@ export default function CheckoutFlowSettings() {
 
     const handleSubmit = async (e?: React.SyntheticEvent) => {
         e?.preventDefault();
+        if (saving) return;
         if (!editor || !Number.isInteger(editor.revision) || editor.revision < 1) {
             toast.error("Checkout settings are not ready to save. Reload this page and try again.");
             return;
@@ -328,16 +330,26 @@ export default function CheckoutFlowSettings() {
             toast.error("Customer sign-in verification must be ready before requiring an account at checkout.");
             return;
         }
+        const submitted = editor.draft;
         setSaving(true);
 
         try {
             const saved = await updateCheckoutFlowSettings({
                 data: {
-                    ...editor.draft,
+                    ...submitted,
                     expectedRevision: editor.revision,
                 },
             });
-            setEditor(createEditorState(saved));
+            const savedValues = readCheckoutFlowValues(saved);
+            setEditor((current) => ({
+                saved: savedValues,
+                draft: rebaseCheckoutFlowDraft({
+                    base: submitted,
+                    local: current?.draft ?? submitted,
+                    latest: savedValues,
+                }),
+                revision: saved.revision,
+            }));
             setConflict(null);
             queryClient.setQueryData(queryKeys.settings.checkoutFlow(), saved);
             await queryClient.invalidateQueries({ queryKey: queryKeys.settings.checkoutFlow() });
@@ -346,11 +358,30 @@ export default function CheckoutFlowSettings() {
         } catch (err) {
             const revisionConflict = readCheckoutFlowRevisionConflict(err);
             if (!revisionConflict) {
+                const latest = queryClient.getQueryData<CheckoutFlowSettingsPayload>(queryKeys.settings.checkoutFlow());
+                if (latest && latest.revision > editor.revision) {
+                    const latestValues = readCheckoutFlowValues(latest);
+                    const mergedSubmitted = rebaseCheckoutFlowDraft({
+                        base: editor.saved,
+                        local: submitted,
+                        latest: latestValues,
+                    });
+                    setEditor((current) => ({
+                        saved: latestValues,
+                        draft: rebaseCheckoutFlowDraft({
+                            base: submitted,
+                            local: current?.draft ?? submitted,
+                            latest: mergedSubmitted,
+                        }),
+                        revision: latest.revision,
+                    }));
+                }
                 toast.error(getServerFnError(err, "Failed to save checkout flow settings"));
                 return;
             }
 
             setConflict({
+                submitted,
                 currentRevision: revisionConflict.currentRevision,
                 latest: null,
                 loading: true,
@@ -360,6 +391,7 @@ export default function CheckoutFlowSettings() {
             try {
                 const latest = await getCheckoutFlowSettings();
                 setConflict({
+                    submitted,
                     currentRevision: latest.revision,
                     latest,
                     loading: false,
@@ -380,7 +412,7 @@ export default function CheckoutFlowSettings() {
         setConflict((current) => current ? { ...current, loading: true, loadFailed: false } : current);
         try {
             const latest = await getCheckoutFlowSettings();
-            setConflict({ currentRevision: latest.revision, latest, loading: false, loadFailed: false });
+            setConflict({ ...conflict, currentRevision: latest.revision, latest, loading: false, loadFailed: false });
         } catch {
             setConflict((current) => current ? { ...current, loading: false, loadFailed: true } : current);
         }
@@ -389,12 +421,17 @@ export default function CheckoutFlowSettings() {
     const mergeConflict = () => {
         if (!editor || !conflict?.latest) return;
         const latestValues = readCheckoutFlowValues(conflict.latest);
+        const mergedSubmitted = rebaseCheckoutFlowDraft({
+            base: editor.saved,
+            local: conflict.submitted,
+            latest: latestValues,
+        });
         setEditor({
             saved: latestValues,
             draft: rebaseCheckoutFlowDraft({
-                base: editor.saved,
+                base: conflict.submitted,
                 local: editor.draft,
-                latest: latestValues,
+                latest: mergedSubmitted,
             }),
             revision: conflict.latest.revision,
         });
@@ -439,7 +476,7 @@ export default function CheckoutFlowSettings() {
 
     return (
         <>
-        <UnsavedChangesGuard isDirty={isDirty} isSubmitting={saving} />
+        <UnsavedChangesGuard isDirty={isDirty || saving || Boolean(conflict)} isSubmitting={false} />
         <form
             method="post"
             onSubmit={handleSubmit}
