@@ -837,12 +837,6 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
 
   const buyerEditedFields = new Set<string>();
 
-  // Helper to normalize phone numbers — pass through E.164 or raw value
-  const normalizePhone = (phone: string | undefined | null) => {
-    if (!phone) return "";
-    return phone.trim();
-  };
-
   // Helper to fill basic fields
   const fillBasicCustomerFields = (customer: CustomerAutofillProfile) => {
     const draft = readCheckoutFormDraft();
@@ -857,14 +851,15 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
       ? draft.customerPhone
       : customer?.phone;
     if (preferredPhone && !buyerEditedFields.has("customerPhone")) {
-      // PhoneField is a React component — dispatch custom event to update its state
-      const phone = normalizePhone(preferredPhone);
+      const phone = validateStorefrontPhone(preferredPhone, undefined);
       const phoneInput = document.querySelector<HTMLInputElement>(
         '[name="customerPhone"]',
       );
-      if (phone && !phoneInput?.value) {
+      if (phone.ok && !phoneInput?.value) {
+        // Preserve the phone if the island has not hydrated to receive the event yet.
+        writeCheckoutFormDraft({ ...draft, customerPhone: phone.value });
         window.dispatchEvent(
-          new CustomEvent("phone-prefill", { detail: phone }),
+          new CustomEvent("phone-prefill", { detail: phone.value }),
         );
       }
     }
