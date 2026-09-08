@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Label } from "@/components/ui/label";
 import CustomDropdown from "@/components/CustomDropdown";
 import { getZones, getAreas, type LocationData } from "@/lib/api";
@@ -21,6 +21,8 @@ interface LocationSelectorProps {
   zonesLoadFailedText?: string;
   areasLoadFailedText?: string;
   showAreaField?: boolean;
+  initialLocation?: LocationPrefillDetail;
+  className?: string;
   onSelectionChange?: (selection: LocationSelection) => void;
 }
 
@@ -45,6 +47,8 @@ export default function LocationSelector({
   zonesLoadFailedText = "Could not load zones. Try again",
   areasLoadFailedText = "Could not load areas. Try again",
   showAreaField = true,
+  initialLocation,
+  className = "",
   onSelectionChange,
 }: LocationSelectorProps) {
   const [selectedCity, setSelectedCity] = useState<string>("");
@@ -59,6 +63,8 @@ export default function LocationSelector({
   const zoneRequestId = useRef(0);
   const areaRequestId = useRef(0);
   const onSelectionChangeRef = useRef(onSelectionChange);
+  const fieldId = useId();
+  const isCheckout = initialLocation === undefined;
 
   useEffect(() => {
     onSelectionChangeRef.current = onSelectionChange;
@@ -124,6 +130,7 @@ export default function LocationSelector({
 
   const dispatchZoneSelected = useCallback(
     (zoneId: string, sourceZones: LocationData[]) => {
+      if (!isCheckout) return;
       const selectedZoneData = sourceZones.find((z) => z.id === zoneId);
       const event = new CustomEvent("zone-selected", {
         detail: {
@@ -133,15 +140,16 @@ export default function LocationSelector({
       });
       window.dispatchEvent(event);
     },
-    [],
+    [isCheckout],
   );
 
   const notifySelection = useCallback((selection: LocationSelection) => {
     onSelectionChangeRef.current?.(selection);
+    if (!isCheckout) return;
     window.dispatchEvent(
       new CustomEvent("checkout-location-change", { detail: selection }),
     );
-  }, []);
+  }, [isCheckout]);
 
   const prefillLocation = useCallback(
     async (detail: LocationPrefillDetail) => {
@@ -214,6 +222,10 @@ export default function LocationSelector({
   );
 
   useEffect(() => {
+    if (initialLocation !== undefined) {
+      void prefillLocation(initialLocation);
+      return;
+    }
     const handlePrefill = (event: Event) => {
       void prefillLocation(
         (event as CustomEvent<LocationPrefillDetail>).detail || {},
@@ -233,7 +245,7 @@ export default function LocationSelector({
       });
     }
     return () => window.removeEventListener("location-prefill", handlePrefill);
-  }, [prefillLocation]);
+  }, [initialLocation, prefillLocation]);
 
   const handleCityChange = (value: string) => {
     const city = cities.find((item) => item.id === value);
@@ -314,18 +326,18 @@ export default function LocationSelector({
   }));
 
   return (
-    <div className="space-y-2.5">
+    <div className={`grid gap-3 ${className}`}>
       <div className="relative">
         <Label
-          htmlFor="city"
-          id="city-label"
+          htmlFor={`${fieldId}-city`}
+          id={`${fieldId}-city-label`}
           className="mb-1 block text-sm font-medium text-foreground"
         >
-          {cityLabel} <span className="text-red-500 ml-0.5">*</span>
+          {cityLabel} <span aria-hidden="true" className="ml-0.5 text-destructive">*</span><span className="sr-only"> (required)</span>
         </Label>
         <CustomDropdown
-          id="city"
-          labelId="city-label"
+          id={`${fieldId}-city`}
+          labelId={`${fieldId}-city-label`}
           ariaLabel={cityLabel}
           name="city"
           placeholder={cityPlaceholder}
@@ -333,22 +345,20 @@ export default function LocationSelector({
           value={selectedCity}
           onChange={handleCityChange}
           required
-          className="bg-gray-50 border-gray-200 rounded-lg"
-          triggerClassName="bg-gray-50 border-gray-200 rounded-lg"
         />
       </div>
 
       <div className="relative">
         <Label
-          htmlFor="zone"
-          id="zone-label"
+          htmlFor={`${fieldId}-zone`}
+          id={`${fieldId}-zone-label`}
           className="mb-1 block text-sm font-medium text-foreground"
         >
-          {zoneLabel} <span className="text-red-500 ml-0.5">*</span>
+          {zoneLabel} <span aria-hidden="true" className="ml-0.5 text-destructive">*</span><span className="sr-only"> (required)</span>
         </Label>
         <CustomDropdown
-          id="zone"
-          labelId="zone-label"
+          id={`${fieldId}-zone`}
+          labelId={`${fieldId}-zone-label`}
           ariaLabel={zoneLabel}
           name="zone"
           placeholder={zonePlaceholder}
@@ -357,11 +367,9 @@ export default function LocationSelector({
           onChange={handleZoneChange}
           disabled={!selectedCity || isLoadingZones}
           required
-          className="bg-gray-50 border-gray-200 rounded-lg"
-          triggerClassName="bg-gray-50 border-gray-200 rounded-lg"
         />
         {isLoadingZones && (
-          <div className="absolute right-3 top-[calc(50%+4px)] -translate-y-1/2 h-4 w-4 animate-spin rounded-full border-2 border-solid border-gray-400 border-r-transparent">
+          <div className="pointer-events-none absolute right-8 top-9 h-4 w-4 animate-spin rounded-full border-2 border-muted-foreground border-r-transparent">
             <span className="sr-only">{loadingText}</span>
           </div>
         )}
@@ -379,15 +387,15 @@ export default function LocationSelector({
       {showAreaField && (
         <div className="relative">
           <Label
-            htmlFor="area"
-            id="area-label"
+            htmlFor={`${fieldId}-area`}
+            id={`${fieldId}-area-label`}
             className="mb-1 block text-sm font-medium text-foreground"
           >
             {areaLabel}
           </Label>
           <CustomDropdown
-            id="area"
-            labelId="area-label"
+            id={`${fieldId}-area`}
+            labelId={`${fieldId}-area-label`}
             ariaLabel={areaLabel}
             name="area"
             placeholder={areaPlaceholder}
@@ -395,11 +403,9 @@ export default function LocationSelector({
             value={selectedArea}
             onChange={handleAreaChange}
             disabled={!selectedZone || isLoadingAreas}
-            className="z-10 rounded-lg border-gray-200 bg-gray-50"
-            triggerClassName="rounded-lg border-gray-200 bg-gray-50"
           />
           {isLoadingAreas && (
-            <div className="absolute right-3 top-[calc(50%+4px)] -translate-y-1/2 h-4 w-4 animate-spin rounded-full border-2 border-solid border-gray-400 border-r-transparent">
+            <div className="pointer-events-none absolute right-8 top-9 h-4 w-4 animate-spin rounded-full border-2 border-muted-foreground border-r-transparent">
               <span className="sr-only">{loadingText}</span>
             </div>
           )}
