@@ -21,7 +21,7 @@ describe("general settings draft boundaries", () => {
 
   it("keeps the separate country-policy editor guarded", () => {
     const source = readSource("AllowedCountriesBuilder.tsx");
-    expect(source).toContain("<UnsavedChangesGuard isDirty={isDirty} isSubmitting={saving}");
+    expect(source).toContain("<UnsavedChangesGuard isDirty={isDirty || saving} isSubmitting={false}");
   });
 
   it.each([
