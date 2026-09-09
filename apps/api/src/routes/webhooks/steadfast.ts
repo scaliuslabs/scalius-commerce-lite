@@ -2,7 +2,8 @@
 // Webhook endpoint for receiving Steadfast delivery status push notifications.
 
 import { OpenAPIHono } from "@hono/zod-openapi";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
+import type { Database } from "@scalius/database/client";
 import { deliveryShipments } from "@scalius/database/schema";
 import { mapProviderStatus } from "@scalius/core/modules/delivery/status-mapper";
 import { updateOrderStatusFromShipment } from "@scalius/core/modules/delivery/tracking";
@@ -17,6 +18,8 @@ import { enqueueOrderStatusChangeNotification } from "../../utils/order-notifica
 import { invalidateProductAvailabilityCaches } from "../../utils/cache-invalidation";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
+
+type ShipmentRow = typeof deliveryShipments.$inferSelect;
 
 interface SteadfastWebhookPayload {
     notification_type?: string;
@@ -55,6 +58,80 @@ export function buildSteadfastWebhookDedupKey(payload: SteadfastWebhookPayload):
     ].join(":");
 }
 
+function parseConsignmentId(value: unknown): string | null {
+    return Number.isSafeInteger(value) && Number(value) > 0 ? String(value) : null;
+}
+
+function parseInvoice(value: unknown): string | null {
+    return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+async function findSteadfastShipment(
+    db: Database,
+    providerId: string,
+    consignmentId: string | null,
+    invoice: string | null,
+): Promise<{ shipment: ShipmentRow | null; rejection?: "identity_conflict" | "ambiguous_recovery" }> {
+    const exact = consignmentId
+        ? await db.select().from(deliveryShipments).where(and(
+            eq(deliveryShipments.externalId, consignmentId),
+            eq(deliveryShipments.providerType, "steadfast"),
+            eq(deliveryShipments.providerId, providerId),
+        )).get()
+        : undefined;
+    if (exact) {
+        return invoice && exact.orderId !== invoice
+            ? { shipment: null, rejection: "identity_conflict" }
+            : { shipment: exact };
+    }
+    if (!consignmentId || !invoice) return { shipment: null };
+
+    const recovered = await db.select().from(deliveryShipments).where(and(
+        eq(deliveryShipments.orderId, invoice),
+        eq(deliveryShipments.providerType, "steadfast"),
+        eq(deliveryShipments.providerId, providerId),
+        sql`CASE WHEN json_valid(${deliveryShipments.metadata}) THEN json_extract(${deliveryShipments.metadata}, '$.unknownOutcomeResolution.outcome') END = 'confirmed_existing'`,
+    )).limit(2);
+    if (recovered.length !== 1) {
+        return { shipment: null, rejection: recovered.length > 1 ? "ambiguous_recovery" : undefined };
+    }
+
+    const candidate = recovered[0]!;
+    if (candidate.externalId) {
+        return candidate.externalId === consignmentId
+            ? { shipment: candidate }
+            : { shipment: null, rejection: "identity_conflict" };
+    }
+
+    const bound = await db.update(deliveryShipments).set({
+        externalId: consignmentId,
+        updatedAt: new Date(),
+    }).where(and(
+        eq(deliveryShipments.id, candidate.id),
+        eq(deliveryShipments.orderId, invoice),
+        eq(deliveryShipments.providerType, "steadfast"),
+        eq(deliveryShipments.providerId, providerId),
+        isNull(deliveryShipments.externalId),
+        sql`CASE WHEN json_valid(${deliveryShipments.metadata}) THEN json_extract(${deliveryShipments.metadata}, '$.unknownOutcomeResolution.outcome') END = 'confirmed_existing'`,
+    )).returning({ id: deliveryShipments.id });
+
+    if (bound.length === 1) {
+        return { shipment: { ...candidate, externalId: consignmentId } };
+    }
+
+    const concurrentlyBound = await db.select().from(deliveryShipments).where(and(
+        eq(deliveryShipments.id, candidate.id),
+        eq(deliveryShipments.orderId, invoice),
+        eq(deliveryShipments.providerType, "steadfast"),
+        eq(deliveryShipments.providerId, providerId),
+        eq(deliveryShipments.externalId, consignmentId),
+        sql`CASE WHEN json_valid(${deliveryShipments.metadata}) THEN json_extract(${deliveryShipments.metadata}, '$.unknownOutcomeResolution.outcome') END = 'confirmed_existing'`,
+    )).get();
+    return concurrentlyBound
+        ? { shipment: concurrentlyBound }
+        : { shipment: null, rejection: "identity_conflict" };
+}
+
 app.post("/", async (c) => {
     const db = c.get("db");
     let claimedEventId: string | null = null;
@@ -87,31 +164,17 @@ app.post("/", async (c) => {
         // Only process delivery_status notifications; acknowledge tracking_update without processing
         if (notificationType === "tracking_update") {
             // Store tracking update in metadata if we can find the shipment, but don't change status
-            const consignmentId = String(payload.consignment_id ?? "");
-            const invoice = payload.invoice;
-
-            let shipment = consignmentId
-                ? await db
-                    .select()
-                    .from(deliveryShipments)
-                    .where(and(
-                        eq(deliveryShipments.externalId, consignmentId),
-                        eq(deliveryShipments.providerType, "steadfast"),
-                        eq(deliveryShipments.providerId, verification.providerId),
-                    ))
-                    .get()
-                : undefined;
-
-            if (!shipment && invoice) {
-                shipment = await db
-                    .select()
-                    .from(deliveryShipments)
-                    .where(and(
-                        eq(deliveryShipments.trackingId, invoice),
-                        eq(deliveryShipments.providerType, "steadfast"),
-                        eq(deliveryShipments.providerId, verification.providerId),
-                    ))
-                    .get();
+            const consignmentId = parseConsignmentId(payload.consignment_id);
+            const invoice = parseInvoice(payload.invoice);
+            const match = await findSteadfastShipment(
+                db,
+                verification.providerId,
+                consignmentId,
+                invoice,
+            );
+            const shipment = match.shipment;
+            if (match.rejection) {
+                console.warn(`[steadfast-webhook] Shipment match rejected: ${match.rejection}`);
             }
 
             if (shipment) {
@@ -164,40 +227,27 @@ app.post("/", async (c) => {
         }
 
         // --- Process delivery_status ---
-        const consignmentId = String(payload.consignment_id ?? "");
-        const invoice = payload.invoice;
+        const consignmentId = parseConsignmentId(payload.consignment_id);
+        const invoice = parseInvoice(payload.invoice);
         const rawStatus = payload.status;
 
         if (!rawStatus || (!consignmentId && !invoice)) {
             return c.json({ status: "error", message: "Missing status or consignment identifiers" }, 400);
         }
 
-        let shipment = consignmentId
-            ? await db
-                .select()
-                .from(deliveryShipments)
-                .where(and(
-                    eq(deliveryShipments.externalId, consignmentId),
-                    eq(deliveryShipments.providerType, "steadfast"),
-                    eq(deliveryShipments.providerId, verification.providerId),
-                ))
-                .get()
-            : undefined;
-
-        if (!shipment && invoice) {
-            shipment = await db
-                .select()
-                .from(deliveryShipments)
-                .where(and(
-                    eq(deliveryShipments.trackingId, invoice),
-                    eq(deliveryShipments.providerType, "steadfast"),
-                    eq(deliveryShipments.providerId, verification.providerId),
-                ))
-                .get();
+        const match = await findSteadfastShipment(
+            db,
+            verification.providerId,
+            consignmentId,
+            invoice,
+        );
+        const shipment = match.shipment;
+        if (match.rejection) {
+            console.warn(`[steadfast-webhook] Shipment match rejected: ${match.rejection}`);
         }
 
         if (!shipment) {
-            console.warn(`[steadfast-webhook] No shipment found for consignment: ${consignmentId}, invoice: ${invoice}`);
+            console.warn("[steadfast-webhook] No eligible shipment found");
             return c.json({ status: "success", message: "Webhook received successfully." });
         }
 
@@ -279,11 +329,11 @@ app.post("/", async (c) => {
 
         // Steadfast expects HTTP 200 with this exact response shape
         return c.json({ status: "success", message: "Webhook received successfully." });
-    } catch (error: unknown) {
-        console.error("[steadfast-webhook] Error:", error);
+    } catch {
+        console.error("[steadfast-webhook] Processing failed");
         if (claimedEventId) {
             await markWebhookEventFailed(db, claimedEventId, {
-                error: error instanceof Error ? error.message : String(error),
+                error: "steadfast_webhook_processing_failed",
             });
         }
         return c.json({ status: "error", message: "Internal processing error" }, 500);
