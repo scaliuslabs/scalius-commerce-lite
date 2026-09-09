@@ -61,35 +61,28 @@ export class SteadfastProvider implements DeliveryProviderInterface {
       };
 
       const baseUrl = this.credentials.baseUrl.replace(/\/$/, "");
-      const testUrl = `${baseUrl}/status_by_invoice/test`;
+      const testUrl = `${baseUrl}/get_balance`;
 
       const response = await fetch(testUrl, {
         method: "GET",
         headers: this.getHeaders(),
       });
 
-      if (response.status === 200 || response.status === 404) {
-        return { success: true, message: "Connection successful" };
-      } else {
-        try {
-          const data = await response.json() as Record<string, unknown>;
-          return {
-            success: false,
-            message: `Connection failed: ${data.message || response.statusText}`,
-          };
-        } catch {
-          return {
-            success: false,
-            message: `Connection failed with status: ${response.status} ${response.statusText}`,
-          };
-        }
+      if (!response.ok) {
+        return { success: false, message: "Connection failed" };
       }
-    } catch (error: unknown) {
-      return {
-        success: false,
-        message: `Connection failed: ${error instanceof Error ? error.message : String(error)
-          }`,
-      };
+      const data: unknown = await response.json();
+      if (
+        data !== null
+        && typeof data === "object"
+        && !Array.isArray(data)
+        && (data as Record<string, unknown>).status === 200
+      ) {
+        return { success: true, message: "Connection successful" };
+      }
+      return { success: false, message: "Connection failed" };
+    } catch {
+      return { success: false, message: "Connection failed" };
     }
   }
 
