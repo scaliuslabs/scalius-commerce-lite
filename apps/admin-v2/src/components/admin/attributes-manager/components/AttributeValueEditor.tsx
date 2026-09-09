@@ -69,9 +69,14 @@ export function AttributeValueEditor({
   const [newValue, setNewValue] = useState("");
   const [isAddingNew, setIsAddingNew] = useState(false);
   const commandInFlight = useRef(false);
+  const openerAttributeId = useRef<string | null>(null);
   const pending = savingValue !== null;
   const queryClient = useQueryClient();
   const debouncedSearch = useDebounce(searchQuery.trim(), 300);
+
+  useEffect(() => {
+    if (attributeId) openerAttributeId.current = attributeId;
+  }, [attributeId]);
 
   const valuesQuery = useQuery({
     ...attributeValuesQueryOptions({
@@ -201,9 +206,12 @@ export function AttributeValueEditor({
           showCloseButton={!pending}
           onCloseAutoFocus={(event) => {
             event.preventDefault();
-            requestAnimationFrame(() => {
-              if (openerRef.current?.isConnected) openerRef.current.focus();
-            });
+            const row = Array.from(
+              document.querySelectorAll<HTMLElement>("[data-attribute-values-opener]"),
+            ).find((node) => node.dataset.attributeValuesOpener === openerAttributeId.current)?.closest("tr");
+            const replacement = row?.querySelector<HTMLElement>('button[aria-haspopup="menu"]');
+            const target = openerRef.current?.isConnected ? openerRef.current : replacement;
+            target?.focus();
           }}
         >
           <DialogHeader className="shrink-0">

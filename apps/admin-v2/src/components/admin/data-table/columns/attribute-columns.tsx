@@ -135,6 +135,7 @@ export function getAttributeColumns(
               variant="ghost"
               size="sm"
               aria-label={`View ${attribute.name} values and product usage`}
+              data-attribute-values-opener={attribute.id}
               onClick={(event) =>
                 opts.onViewValues(attribute.id, attribute.name, event.currentTarget)
               }
