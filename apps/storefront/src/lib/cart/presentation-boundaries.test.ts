@@ -60,7 +60,7 @@ describe("cart page presentation contract", () => {
     expect(source).toContain(
       "getEffectiveCartShippingFee(items, selectedMethodFee)",
     );
-    expect(source).toContain("getEffectiveCartShippingFee(\n      items,");
+    expect(source).toMatch(/getEffectiveCartShippingFee\(\s*items,\s*window\.lastShippingEventDetail\?\.fee\s*\?\?\s*0,/);
     expect(shippingSelectorSource).toContain(
       "getEffectiveCartShippingFee(\n            visibleCartItems,",
     );
