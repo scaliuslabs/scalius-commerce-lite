@@ -54,6 +54,11 @@ import {
   type HomepagePresentationConfig,
 } from "@scalius/shared/homepage-presentation";
 import { normalizeStorefrontOrigin } from "@scalius/shared/storefront-url";
+import {
+  isMediaReferenceDeletingGuardError,
+  MEDIA_REFERENCE_DELETING_MESSAGE,
+  noDeletingMediaReferences,
+} from "../media/media-reference-guard";
 
 const MEDIA_SETTINGS_CATEGORY = "media";
 const IMAGE_OPTIMIZATION_KEY = "image_optimization";
@@ -489,9 +494,10 @@ export async function saveHeaderConfig(
   assertPresentationRevision(expectedRevision);
   const normalizedConfig = stripEmbeddedNavigation("header", config);
   const serialized = JSON.stringify(normalizedConfig);
+  const mediaGuard = noDeletingMediaReferences(serialized);
 
   if (expectedRevision === 0) {
-    const inserted = await db
+    const insert = db
       .insert(siteSettings)
       .values({
         id: "settings_" + nanoid(),
@@ -505,7 +511,22 @@ export async function saveHeaderConfig(
       })
       .onConflictDoNothing({ target: siteSettings.singletonKey })
       .returning({ revision: siteSettings.headerConfigRevision });
-    if (inserted[0]) return inserted[0];
+    if (mediaGuard) {
+      let inserted: unknown[] | undefined;
+      try {
+        [, inserted] = await safeBatch(db, [
+          buildBatchGuard(db, mediaGuard, "MEDIA_REFERENCE_DELETING"),
+          insert,
+        ] as never) as unknown[][];
+      } catch (error) {
+        if (isMediaReferenceDeletingGuardError(error)) throw new ConflictError(MEDIA_REFERENCE_DELETING_MESSAGE);
+        throw error;
+      }
+      if (inserted?.[0]) return inserted[0] as { revision: number };
+    } else {
+      const inserted = await insert;
+      if (inserted[0]) return inserted[0];
+    }
   } else {
     const updated = await db
       .update(siteSettings)
@@ -517,6 +538,7 @@ export async function saveHeaderConfig(
       .where(and(
         eq(siteSettings.singletonKey, "default"),
         eq(siteSettings.headerConfigRevision, expectedRevision),
+        ...(mediaGuard ? [mediaGuard] : []),
       ))
       .returning({ revision: siteSettings.headerConfigRevision });
     if (updated[0]) return updated[0];
@@ -527,6 +549,9 @@ export async function saveHeaderConfig(
     .from(siteSettings)
     .where(eq(siteSettings.singletonKey, "default"))
     .get();
+  if (mediaGuard && current?.revision === expectedRevision) {
+    throw new ConflictError(MEDIA_REFERENCE_DELETING_MESSAGE);
+  }
   throw new SitePresentationRevisionConflictError(
     "header",
     expectedRevision,
@@ -542,9 +567,10 @@ export async function saveFooterConfig(
   assertPresentationRevision(expectedRevision);
   const normalizedConfig = stripEmbeddedNavigation("footer", config);
   const serialized = JSON.stringify(normalizedConfig);
+  const mediaGuard = noDeletingMediaReferences(serialized);
 
   if (expectedRevision === 0) {
-    const inserted = await db
+    const insert = db
       .insert(siteSettings)
       .values({
         id: "settings_" + nanoid(),
@@ -558,7 +584,22 @@ export async function saveFooterConfig(
       })
       .onConflictDoNothing({ target: siteSettings.singletonKey })
       .returning({ revision: siteSettings.footerConfigRevision });
-    if (inserted[0]) return inserted[0];
+    if (mediaGuard) {
+      let inserted: unknown[] | undefined;
+      try {
+        [, inserted] = await safeBatch(db, [
+          buildBatchGuard(db, mediaGuard, "MEDIA_REFERENCE_DELETING"),
+          insert,
+        ] as never) as unknown[][];
+      } catch (error) {
+        if (isMediaReferenceDeletingGuardError(error)) throw new ConflictError(MEDIA_REFERENCE_DELETING_MESSAGE);
+        throw error;
+      }
+      if (inserted?.[0]) return inserted[0] as { revision: number };
+    } else {
+      const inserted = await insert;
+      if (inserted[0]) return inserted[0];
+    }
   } else {
     const updated = await db
       .update(siteSettings)
@@ -570,6 +611,7 @@ export async function saveFooterConfig(
       .where(and(
         eq(siteSettings.singletonKey, "default"),
         eq(siteSettings.footerConfigRevision, expectedRevision),
+        ...(mediaGuard ? [mediaGuard] : []),
       ))
       .returning({ revision: siteSettings.footerConfigRevision });
     if (updated[0]) return updated[0];
@@ -580,6 +622,9 @@ export async function saveFooterConfig(
     .from(siteSettings)
     .where(eq(siteSettings.singletonKey, "default"))
     .get();
+  if (mediaGuard && current?.revision === expectedRevision) {
+    throw new ConflictError(MEDIA_REFERENCE_DELETING_MESSAGE);
+  }
   throw new SitePresentationRevisionConflictError(
     "footer",
     expectedRevision,
