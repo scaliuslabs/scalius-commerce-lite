@@ -110,8 +110,8 @@ describe("dashboard query observability", () => {
                 currentMonth: {
                     orders: 9,
                     revenue: 1234,
-                    orderGrowth: 13,
-                    revenueGrowth: 23,
+                    orderGrowth: 12.5,
+                    revenueGrowth: expect.closeTo(23.4, 8),
                     orderStatus: {
                         delivered: 3,
                         processing: 4,

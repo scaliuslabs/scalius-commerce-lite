@@ -94,6 +94,12 @@ type RecentOrderRow = {
     createdAt: Date | string;
 };
 
+function calculateGrowth(current: number, previous: number): number | null {
+    if (previous === 0) return current === 0 ? 0 : null;
+
+    return ((current - previous) / previous) * 100;
+}
+
 function getDashboardMonthBounds() {
     const bounds = commerceMonthBounds();
     const firstDayOfMonthTs = bounds.currentMonthStart;
@@ -134,11 +140,11 @@ function getDashboardSummaryQueries(
         db
             .select({
                 count: sql<number>`count(*)`,
-                revenue: sql<number>`sum(total_amount)`,
+                revenue: sql<number>`sum(case when status NOT IN ('cancelled', 'returned') then total_amount else 0 end)`,
             })
             .from(orders)
             .where(
-                sql`${orders.deletedAt} is null AND ${orders.createdAt} >= ${firstDayOfLastMonthTs} AND ${orders.createdAt} < ${firstDayOfMonthTs} AND ${orders.status} NOT IN ('cancelled', 'returned')`,
+                sql`${orders.deletedAt} is null AND ${orders.createdAt} >= ${firstDayOfLastMonthTs} AND ${orders.createdAt} < ${firstDayOfMonthTs}`,
             ),
     ] as const;
 }
@@ -187,21 +193,14 @@ function mapDashboardSummaryStats([
     const currentMonthStats = currentMonthArr[0];
     const lastMonthStats = lastMonthArr[0];
 
-    const orderGrowth = lastMonthStats?.count
-        ? Math.round(
-            (((currentMonthStats?.count ?? 0) - lastMonthStats.count) /
-                lastMonthStats.count) *
-            100,
-        )
-        : 0;
-
-    const revenueGrowth = lastMonthStats?.revenue
-        ? Math.round(
-            (((currentMonthStats?.revenue ?? 0) - lastMonthStats.revenue) /
-                lastMonthStats.revenue) *
-            100,
-        )
-        : 0;
+    const orderGrowth = calculateGrowth(
+        currentMonthStats?.count ?? 0,
+        lastMonthStats?.count ?? 0,
+    );
+    const revenueGrowth = calculateGrowth(
+        currentMonthStats?.revenue ?? 0,
+        lastMonthStats?.revenue ?? 0,
+    );
 
     return {
         totalProducts,
@@ -326,7 +325,7 @@ export async function getRecentOrders(db: Database, limit = 5) {
 }
 
 /**
- * Returns per-day order counts, revenue, and new customer counts for the
+ * Returns per-day order counts, order value, and new customer counts for the
  * last N days (filling in zero-rows for days with no data).
  */
 export async function getDailyActivityData(db: Database, days: number) {
@@ -351,14 +350,13 @@ export async function getDailyActivityData(db: Database, days: number) {
                 .select({
                     day: orderDay.mapWith(Number),
                     orderCount: sql<number>`count(*)`.mapWith(Number),
-                    totalRevenue: sql<number>`sum(${orders.totalAmount})`.mapWith(Number),
+                    totalRevenue: sql<number>`sum(case when ${orders.status} NOT IN ('cancelled', 'returned') then ${orders.totalAmount} else 0 end)`.mapWith(Number),
                 })
                 .from(orders)
                 .where(
                     and(
                         sql`${orders.deletedAt} is null`,
                         sql`${orders.createdAt} >= ${startDateTs}`,
-                        sql`${orders.status} NOT IN ('cancelled', 'returned')`,
                     ),
                 )
                 .groupBy(orderDay)
