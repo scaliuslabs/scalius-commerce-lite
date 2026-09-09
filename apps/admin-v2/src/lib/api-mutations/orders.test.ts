@@ -33,6 +33,7 @@ vi.mock("../api-functions/orders", () => ({
   archiveOrders: vi.fn(),
   bulkShipOrders: vi.fn(),
   cancelOrderReturn: vi.fn(),
+  confirmManualOrderAmendment: vi.fn(),
   createFulfillmentShipment: vi.fn(),
   createOrder: vi.fn(),
   createOrderReturn: vi.fn(),
@@ -64,6 +65,7 @@ import {
   useBulkShipOrders,
   useCreateFulfillmentShipment,
   useCreateOrder,
+  useConfirmManualOrderAmendment,
   useCreateOrderReturn,
   useIssueOrderPaymentRecoveryLink,
   useReceiveOrderReturn,
@@ -113,6 +115,16 @@ function expectNoInventoryProjectionInvalidations() {
 }
 
 describe("order inventory projection freshness", () => {
+  it("refreshes the order-editor snapshot after a successful amendment or replay", () => {
+    const mutation = useConfirmManualOrderAmendment() as MutationOptions;
+
+    mutation.onSuccess?.({}, { id: "ord_123" });
+
+    expect(reactQueryMocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.formData("ord_123"),
+    });
+  });
+
   it("refreshes the permanent order-editor snapshot after an update", () => {
     const mutation = useUpdateOrder() as MutationOptions;
 

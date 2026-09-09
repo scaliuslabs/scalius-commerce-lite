@@ -14,7 +14,7 @@ import {
 
 export const Route = createFileRoute("/admin/orders/$orderId/edit")({
   loader: async ({ context: { queryClient }, params }) => {
-    const result = await queryClient.ensureQueryData({
+    const result = await queryClient.fetchQuery({
       ...orderFormDataQueryOptions(params.orderId),
       staleTime: Infinity,
     });

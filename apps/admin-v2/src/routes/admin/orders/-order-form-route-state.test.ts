@@ -15,6 +15,10 @@ const editRouteSource = readFileSync(
   fileURLToPath(new URL("./$orderId/edit.tsx", import.meta.url)),
   "utf8",
 );
+const amendRouteSource = readFileSync(
+  fileURLToPath(new URL("./$orderId/amend.tsx", import.meta.url)),
+  "utf8",
+);
 const errorSource = readFileSync(
   fileURLToPath(new URL("./-OrderFormRouteError.tsx", import.meta.url)),
   "utf8",
@@ -146,5 +150,10 @@ describe("order form route failure wiring", () => {
     expect(editRouteSource).not.toContain("createFileRoute, redirect");
     expect(errorSource).toContain("Try again");
     expect(errorSource).toContain('<Link to="/admin/orders">Back to orders</Link>');
+  });
+
+  it("refetches invalidated edit and amendment snapshots before rendering", () => {
+    expect(editRouteSource).toContain("await queryClient.fetchQuery({");
+    expect(amendRouteSource).toContain("await queryClient.fetchQuery({");
   });
 });
