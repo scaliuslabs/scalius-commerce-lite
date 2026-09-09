@@ -4,6 +4,7 @@ import {
   Suspense,
   useCallback,
   useState,
+  useRef,
   type ComponentType,
   type KeyboardEvent,
   type ReactNode,
@@ -15,7 +16,7 @@ import type { DataTableRowActionsMenuProps } from "./DataTableRowActionsMenu";
 export interface ExtraAction {
   label: string;
   icon?: React.ComponentType<{ className?: string }>;
-  onClick: () => void;
+  onClick: (opener?: HTMLElement) => void;
   destructive?: boolean;
 }
 
@@ -59,6 +60,7 @@ export const DataTableRowActions = memo(function DataTableRowActions({
 }: DataTableRowActionsProps) {
   const [isMenuRequested, setIsMenuRequested] = useState(false);
   const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
 
   const requestMenuOpen = useCallback(() => {
     setIsMenuRequested(true);
@@ -93,6 +95,7 @@ export const DataTableRowActions = memo(function DataTableRowActions({
       aria-haspopup="menu"
       aria-expanded={open}
       disabled={isLoading}
+      ref={triggerRef}
       onClick={isMenuRequested ? undefined : requestMenuOpen}
       onKeyDown={isMenuRequested ? undefined : handleTriggerKeyDown}
     >
@@ -115,7 +118,10 @@ export const DataTableRowActions = memo(function DataTableRowActions({
             onDelete={onDelete}
             onRestore={onRestore}
             onPermanentDelete={onPermanentDelete}
-            extraActions={extraActions}
+            extraActions={extraActions?.map((action) => ({
+              ...action,
+              onClick: () => action.onClick(triggerRef.current ?? undefined),
+            }))}
           >
             {children}
           </LazyDataTableRowActionsMenu>

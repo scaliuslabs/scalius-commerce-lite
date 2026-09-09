@@ -51,12 +51,14 @@ interface AttributeValueEditorProps {
   attributeId: string | null;
   attributeName: string | null;
   onClose: () => void;
+  openerRef: React.RefObject<HTMLElement | null>;
 }
 
 export function AttributeValueEditor({
   attributeId,
   attributeName,
   onClose,
+  openerRef,
 }: AttributeValueEditorProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(1);
@@ -194,7 +196,16 @@ export function AttributeValueEditor({
   return (
     <>
       <Dialog open={!!attributeId} onOpenChange={handleClose}>
-        <DialogContent className="max-w-3xl overflow-y-auto flex flex-col" showCloseButton={!pending}>
+        <DialogContent
+          className="max-w-3xl overflow-y-auto flex flex-col"
+          showCloseButton={!pending}
+          onCloseAutoFocus={(event) => {
+            if (openerRef.current?.isConnected) {
+              event.preventDefault();
+              openerRef.current.focus();
+            }
+          }}
+        >
           <DialogHeader className="shrink-0">
             <DialogTitle className="flex min-w-0 items-center gap-2 pr-8 [overflow-wrap:anywhere]">
               <Edit3 className="h-5 w-5 shrink-0" />
