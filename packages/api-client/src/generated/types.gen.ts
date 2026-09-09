@@ -35016,7 +35016,7 @@ export type PostApiV1AdminSettingsDeliveryProvidersData = {
         type: 'steadfast';
         credentials: string | {
             /**
-             * Optional Steadfast API origin; defaults to https://portal.steadfast.com.bd/api/v1.
+             * Optional Steadfast API origin; defaults to https://portal.packzy.com/api/v1.
              */
             baseUrl?: string;
             /**
@@ -35224,7 +35224,7 @@ export type PutApiV1AdminSettingsDeliveryProvidersData = {
         type: 'steadfast';
         credentials?: string | {
             /**
-             * Optional Steadfast API origin; defaults to https://portal.steadfast.com.bd/api/v1.
+             * Optional Steadfast API origin; defaults to https://portal.packzy.com/api/v1.
              */
             baseUrl?: string;
             /**
@@ -35464,7 +35464,7 @@ export type PostApiV1AdminSettingsDeliveryProvidersCreateTestData = {
         type: 'steadfast';
         credentials: string | {
             /**
-             * Optional Steadfast API origin; defaults to https://portal.steadfast.com.bd/api/v1.
+             * Optional Steadfast API origin; defaults to https://portal.packzy.com/api/v1.
              */
             baseUrl?: string;
             /**

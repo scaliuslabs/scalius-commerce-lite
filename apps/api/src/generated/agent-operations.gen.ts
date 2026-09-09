@@ -14609,7 +14609,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                             "baseUrl": {
                               "type": "string",
                               "maxLength": 2048,
-                              "description": "Optional Steadfast API origin; defaults to https://portal.steadfast.com.bd/api/v1."
+                              "description": "Optional Steadfast API origin; defaults to https://portal.packzy.com/api/v1."
                             },
                             "apiKey": {
                               "type": "string",
@@ -15683,7 +15683,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                             "baseUrl": {
                               "type": "string",
                               "maxLength": 2048,
-                              "description": "Optional Steadfast API origin; defaults to https://portal.steadfast.com.bd/api/v1."
+                              "description": "Optional Steadfast API origin; defaults to https://portal.packzy.com/api/v1."
                             },
                             "apiKey": {
                               "type": "string",
@@ -15978,7 +15978,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                             "baseUrl": {
                               "type": "string",
                               "maxLength": 2048,
-                              "description": "Optional Steadfast API origin; defaults to https://portal.steadfast.com.bd/api/v1."
+                              "description": "Optional Steadfast API origin; defaults to https://portal.packzy.com/api/v1."
                             },
                             "apiKey": {
                               "type": "string",

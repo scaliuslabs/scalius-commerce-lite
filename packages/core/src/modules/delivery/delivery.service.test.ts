@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   deliveryShipments,
   orderPayments,
@@ -20,6 +20,7 @@ import {
   checkShipmentStatus,
   createShipment,
   deleteShipmentRecord,
+  getDeliveryProviderActionReadiness,
   saveDeliveryProvider,
   testDeliveryProvider,
 } from "./delivery.service";
@@ -176,6 +177,10 @@ const completePathaoConfig = { storeId: "store_1" };
 
 beforeEach(() => {
   vi.clearAllMocks();
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
 });
 
 async function readyPathaoProvider(overrides: Record<string, unknown> = {}) {
@@ -536,6 +541,125 @@ describe("testDeliveryProvider durable proof", () => {
     expect(mocks.createProvider).not.toHaveBeenCalled();
     expect(updates[0]).toHaveProperty("lastTestAttemptAt");
     expect(updates[1]).toHaveProperty("lastTestFailureAt");
+  });
+
+  const steadfastCredentials = {
+    baseUrl: "https://courier.invalid/api/v1/",
+    apiKey: "steadfast-api-4821",
+    secretKey: "steadfast-secret-9417",
+  };
+  const steadfastConfig = { defaultCodAmount: 0 };
+
+  async function runSavedSteadfastFlow(responseFactory: () => Response | Promise<Response>) {
+    const { db: createDb, writes: createWrites } = createSaveProviderDb();
+    await saveDeliveryProvider(createDb as never, {
+      id: "provider_steadfast",
+      name: "Steadfast",
+      type: "steadfast",
+      isActive: false,
+      credentials: steadfastCredentials,
+      config: steadfastConfig,
+    }, TEST_FINGERPRINT_KEY);
+    const storedProvider = {
+      id: "provider_steadfast",
+      name: "Steadfast",
+      type: "steadfast",
+      isActive: false,
+      ...createWrites[0],
+      lastTestAttemptAt: null,
+      lastTestSuccessAt: null,
+      lastTestFailureAt: null,
+      lastTestSuccessFingerprint: null,
+    };
+
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      expect(url).toBe("https://courier.invalid/api/v1/get_balance");
+      expect(init?.method).toBe("GET");
+      return responseFactory();
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const actualFactory = await vi.importActual<typeof import("./factory")>("./factory");
+    mocks.createProvider.mockImplementationOnce(actualFactory.createProvider);
+    const { db: testDb, updates } = createSequentialSelectDb([[storedProvider]]);
+    const result = await testDeliveryProvider(
+      testDb as never,
+      "provider_steadfast",
+      TEST_FINGERPRINT_KEY,
+    );
+
+    const testedProvider = {
+      ...storedProvider,
+      lastTestAttemptAt: 100,
+      lastTestSuccessAt: result.success ? 100 : null,
+      lastTestFailureAt: result.success ? null : 100,
+      lastTestSuccessFingerprint: result.success
+        ? updates[1]?.lastTestSuccessFingerprint
+        : null,
+    };
+    const { db: activateDb, writes: activateWrites } = createSaveProviderDb(testedProvider);
+    await saveDeliveryProvider(activateDb as never, {
+      id: "provider_steadfast",
+      name: "Steadfast",
+      type: "steadfast",
+      isActive: true,
+      credentials: steadfastCredentials,
+      config: steadfastConfig,
+    }, TEST_FINGERPRINT_KEY);
+    const activeProvider = {
+      ...testedProvider,
+      ...activateWrites[0],
+      isActive: true,
+    };
+    const { db: readinessDb } = createSequentialSelectDb([[activeProvider]]);
+    const readiness = await getDeliveryProviderActionReadiness(
+      readinessDb as never,
+      "provider_steadfast",
+      TEST_FINGERPRINT_KEY,
+    );
+
+    return { fetchMock, readiness, result };
+  }
+
+  it.each([
+    ["HTML 404", () => new Response("<html>SENSITIVE-UPSTREAM-DETAIL</html>", { status: 404 })],
+    ["HTTP 200 authentication error", () => Response.json({
+      status: 401,
+      message: "SENSITIVE-UPSTREAM-DETAIL",
+      current_balance: 987654,
+    })],
+    ["malformed JSON", () => new Response('{"status":', { status: 200 })],
+    ["missing status", () => Response.json({ current_balance: 987654 })],
+    ["string success status", () => Response.json({ status: "200", current_balance: 987654 })],
+    ["array response", () => Response.json([{ status: 200, current_balance: 987654 }])],
+    ["transport failure", async () => {
+      throw new Error("SENSITIVE-UPSTREAM-DETAIL");
+    }],
+  ])("keeps saved Steadfast readiness blocked after %s", async (_label, responseFactory) => {
+    const flow = await runSavedSteadfastFlow(responseFactory);
+
+    expect(flow.result).toEqual({ success: false, message: "Connection failed" });
+    expect(flow.readiness).toMatchObject({
+      ready: false,
+      summary: { active: false, tested: false },
+    });
+    expect(flow.fetchMock).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify([flow.result, flow.readiness])).not.toContain("SENSITIVE-UPSTREAM-DETAIL");
+    expect(JSON.stringify([flow.result, flow.readiness])).not.toContain("987654");
+  });
+
+  it("preserves saved proof and activation after the documented Steadfast balance response", async () => {
+    const flow = await runSavedSteadfastFlow(() => Response.json({
+      status: 200,
+      current_balance: 0,
+    }));
+
+    expect(flow.result).toEqual({ success: true, message: "Connection successful" });
+    expect(flow.readiness).toMatchObject({
+      ready: true,
+      summary: { active: true, tested: true },
+    });
+    expect(flow.fetchMock).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify([flow.result, flow.readiness])).not.toContain("current_balance");
   });
 });
 

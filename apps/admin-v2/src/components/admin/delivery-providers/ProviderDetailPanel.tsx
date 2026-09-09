@@ -385,7 +385,7 @@ export function ProviderDetailPanel({
                   value={creds.baseUrl || ""}
                   onChange={(e) => onChangeCredential("baseUrl", e.target.value)}
                   disabled={!isEditing}
-                  placeholder="https://portal.steadfast.com.bd/api/v1"
+                  placeholder="https://portal.packzy.com/api/v1"
                 />
               </div>
               <div className="space-y-1.5">
@@ -696,7 +696,7 @@ export function ProviderDetailPanel({
                     <p>To use Steadfast, provide your API Key and Secret Key obtained from the Steadfast Merchant Dashboard.</p>
                     <ul className="list-disc pl-5 space-y-2">
                       <li><strong className="text-foreground">Credentials:</strong> Generate <code>Api-Key</code> and <code>Secret-Key</code> from the Steadfast portal.</li>
-                      <li><strong className="text-foreground">Base URL:</strong> Normally <code>https://portal.steadfast.com.bd/api/v1</code> or <code>https://portal.packzy.com/api/v1</code> depending on your account.</li>
+                      <li><strong className="text-foreground">Base URL:</strong> <code>https://portal.packzy.com/api/v1</code></li>
                       <li><strong className="text-foreground">Location mapping:</strong> Steadfast does not strictly require predefined numeric area codes in the same way, but ensuring full text addresses are passed covers most routing.</li>
                     </ul>
                   </div>

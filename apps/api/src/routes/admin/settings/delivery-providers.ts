@@ -342,7 +342,7 @@ const pathaoConfigSchema = z.object({
     defaultItemWeight: z.number().min(0.1).max(50).optional().describe("Default parcel weight in kilograms; defaults to 0.5."),
 }).strict();
 const steadfastCredentialsSchema = z.object({
-    baseUrl: z.string().max(2_048).optional().describe("Optional Steadfast API origin; defaults to https://portal.steadfast.com.bd/api/v1."),
+    baseUrl: z.string().max(2_048).optional().describe("Optional Steadfast API origin; defaults to https://portal.packzy.com/api/v1."),
     apiKey: z.string().max(2_048).optional().describe("Steadfast API key; required before activation."),
     secretKey: z.string().max(2_048).optional().describe("Steadfast secret key; required before activation."),
     webhookSecret: z.string().max(512).optional().describe("Optional shared secret used to verify Steadfast webhooks."),
