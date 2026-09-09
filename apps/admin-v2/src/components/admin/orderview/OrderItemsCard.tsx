@@ -39,7 +39,7 @@ const OrderItemRow = ({
   return (
   <div
     key={item.id}
-    className="flex items-center gap-4 p-4 transition-colors hover:bg-muted/5"
+    className="flex items-start gap-3 p-4 transition-colors hover:bg-muted/5 sm:items-center sm:gap-4"
   >
     <div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-border bg-muted">
       {item.productImage ? (
@@ -62,9 +62,9 @@ const OrderItemRow = ({
       )}
     </div>
     <div className="flex min-w-0 flex-1 flex-col">
-      <div className="flex justify-between gap-4">
-        <div className="min-w-0 space-y-1">
-          <h3 className="truncate font-medium text-foreground">
+      <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+        <div className="min-w-0 space-y-1 [overflow-wrap:anywhere]">
+          <h3 className="font-medium text-foreground">
             {item.productName || "Unnamed Product"}
           </h3>
           {item.variantLabel && (
@@ -90,7 +90,7 @@ const OrderItemRow = ({
             </p>
           )}
         </div>
-        <div className="shrink-0 text-right">
+        <div className="max-w-full shrink-0 text-left [overflow-wrap:anywhere] sm:max-w-[45%] sm:text-right">
           {savedLine && <p className="text-xs text-muted-foreground">Line total</p>}
           <p className="font-medium text-foreground">
             {lineTotal}
