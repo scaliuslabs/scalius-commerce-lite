@@ -178,8 +178,10 @@ function installStripePaymentFixture() {
     cards.push(card);
     return card;
   });
-  const stripe = vi.fn(() => ({ elements: () => ({ create: createCard }), confirmCardPayment: vi.fn() }));
+  const confirmCardPayment = vi.fn();
+  const stripe = vi.fn(() => ({ elements: () => ({ create: createCard }), confirmCardPayment }));
   vi.stubGlobal("Stripe", stripe);
+  sessionStorage.setItem("checkoutId", "checkout_stripe_fixture_123456");
   sessionStorage.setItem("scalius_checkout_data", JSON.stringify({
     checkoutId: "checkout_stripe_fixture_123456",
     cartItems: JSON.stringify({ line_1: { id: "prod_1", variantId: "var_1", price: 100, quantity: 1 } }),
@@ -190,7 +192,33 @@ function installStripePaymentFixture() {
     ...baseConfig, activeDefaultMethod: "stripe",
     gateways: [{ id: "stripe", publishableKey: "pk_stable_host", testMode: true }, { id: "cod" }, { id: "sslcommerz" }],
   };
-  return { cards, createCard, stripe };
+  return { cards, confirmCardPayment, createCard, stripe };
+}
+
+function stripeRetryFetch(): typeof fetch {
+  return vi.fn(async (input) => {
+    const url = String(input);
+    if (url === "/api/checkout/tax-quote") {
+      return new Response(JSON.stringify({ success: true, data: taxQuote() }));
+    }
+    if (url === "/api/checkout/create-order") {
+      return new Response(JSON.stringify({
+        data: {
+          id: "order_stripe_retry",
+          totalAmount: 100,
+          paymentMethod: "stripe",
+          initialPaymentSession: {
+            gateway: "stripe",
+            clientSecret: "pi_secret_original",
+          },
+        },
+      }));
+    }
+    if (url === "/api/checkout/stripe-intent") {
+      return new Response(JSON.stringify({ clientSecret: "pi_secret_original" }));
+    }
+    throw new Error(`Unexpected request: ${url}`);
+  }) as typeof fetch;
 }
 
 beforeEach(() => {
@@ -714,6 +742,89 @@ describe("initCheckoutPage", () => {
     expect(document.getElementById("stripeError")?.classList.contains("hidden")).toBe(true);
     expect((document.getElementById("payButton") as HTMLButtonElement).disabled).toBe(true);
   });
+
+  it("retries a declined Stripe card on the same order and saved deposit intent", async () => {
+    const { cards, confirmCardPayment } = installStripePaymentFixture();
+    const config = (window as unknown as { __CHECKOUT_CONFIG__: CheckoutConfig }).__CHECKOUT_CONFIG__;
+    config.partialPaymentEnabled = true;
+    config.partialPaymentAmount = 40;
+    confirmCardPayment
+      .mockResolvedValueOnce({ error: { message: "Your card was declined." } })
+      .mockResolvedValueOnce({ paymentIntent: { status: "succeeded" } });
+    vi.stubGlobal("fetch", stripeRetryFetch());
+
+    await initCheckoutPage();
+    cards[0]!.emit({ complete: true });
+    const payButton = document.getElementById("payButton") as HTMLButtonElement;
+    payButton.click();
+    await vi.waitFor(() => expect(document.getElementById("errorMsg")?.textContent).toContain("declined"));
+
+    payButton.click();
+    await vi.waitFor(() => expect(confirmCardPayment).toHaveBeenCalledTimes(2));
+
+    expect(confirmCardPayment).toHaveBeenNthCalledWith(1, "pi_secret_original", expect.any(Object));
+    expect(confirmCardPayment).toHaveBeenNthCalledWith(2, "pi_secret_original", expect.any(Object));
+    expect(vi.mocked(fetch).mock.calls.filter(
+      ([input]) => String(input) === "/api/checkout/create-order",
+    )).toHaveLength(1);
+    expect(vi.mocked(fetch)).toHaveBeenCalledWith(
+      "/api/checkout/stripe-intent",
+      expect.objectContaining({
+        body: JSON.stringify({
+          orderId: "order_stripe_retry",
+          paymentType: "deposit",
+          depositAmount: 40,
+          replaceExistingAttempt: false,
+        }),
+      }),
+    );
+  });
+
+  it.each(["missing recovery pointer", "gateway change"])(
+    "does not reuse the in-page Stripe order after a %s",
+    async (scenario) => {
+      const { cards, confirmCardPayment } = installStripePaymentFixture();
+      confirmCardPayment
+        .mockResolvedValueOnce({ error: { message: "Your card was declined." } })
+        .mockResolvedValueOnce({ paymentIntent: { status: "succeeded" } });
+      vi.stubGlobal("fetch", stripeRetryFetch());
+
+      await initCheckoutPage();
+      cards[0]!.emit({ complete: true });
+      const payButton = document.getElementById("payButton") as HTMLButtonElement;
+      payButton.click();
+      await vi.waitFor(() => expect(document.getElementById("errorMsg")?.textContent).toContain("declined"));
+
+      if (scenario === "missing recovery pointer") {
+        localStorage.clear();
+      } else {
+        document.querySelector<HTMLButtonElement>(
+          '[data-method="cod"] .payment-method-control',
+        )!.click();
+        await vi.waitFor(() => expect(document.querySelector(
+          '[data-method="cod"] .payment-method-control',
+        )?.getAttribute("aria-checked")).toBe("true"));
+        document.querySelector<HTMLButtonElement>(
+          '[data-method="stripe"] .payment-method-control',
+        )!.click();
+        await vi.waitFor(() => expect(document.querySelector(
+          '[data-method="stripe"] .payment-method-control',
+        )?.getAttribute("aria-checked")).toBe("true"));
+      }
+
+      payButton.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(confirmCardPayment).toHaveBeenCalledTimes(
+        scenario === "missing recovery pointer" ? 2 : 1,
+      );
+      expect(vi.mocked(fetch).mock.calls.filter(
+        ([input]) => String(input) === "/api/checkout/create-order",
+      )).toHaveLength(scenario === "missing recovery pointer" ? 2 : 1);
+      expect(vi.mocked(fetch).mock.calls.some(
+        ([input]) => String(input) === "/api/checkout/stripe-intent",
+      )).toBe(false);
+    },
+  );
 
   it("keeps a newer COD selection when the earlier Stripe script fails", async () => {
     installStripePaymentFixture();
