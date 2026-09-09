@@ -225,4 +225,42 @@ describe("delivery webhook auth", () => {
       providerId: "provider_pathao",
     });
   });
+
+  it("uses the configured Steadfast callback token instead of the API secret", async () => {
+    mocks.getDb.mockReturnValue(createDb({
+      id: "provider_steadfast",
+      type: "steadfast",
+      credentials: JSON.stringify({
+        secretKey: "steadfast-api-secret",
+        webhookSecret: "steadfast-callback-token",
+      }),
+      config: "{}",
+    }));
+
+    await expect(verifyDeliveryWebhook(
+      {} as Env,
+      "steadfast",
+      new Request("https://api.example.test/webhook", {
+        method: "POST",
+        headers: { Authorization: "Bearer steadfast-api-secret" },
+      }),
+      "{}",
+    )).resolves.toMatchObject({
+      verified: false,
+      reason: "Invalid Bearer token",
+    });
+
+    await expect(verifyDeliveryWebhook(
+      {} as Env,
+      "steadfast",
+      new Request("https://api.example.test/webhook", {
+        method: "POST",
+        headers: { Authorization: "Bearer steadfast-callback-token" },
+      }),
+      "{}",
+    )).resolves.toMatchObject({
+      verified: true,
+      providerId: "provider_steadfast",
+    });
+  });
 });
