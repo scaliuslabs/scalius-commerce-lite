@@ -121,7 +121,8 @@ export function BulkActionsBar({
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={() => onBulkAction(showTrashed ? "deletePermanent" : "trash")}
-              className={cn("h-11 text-xs sm:h-8", showTrashed && "bg-destructive hover:bg-destructive/90")}
+              variant={showTrashed ? "destructive" : "default"}
+              className="h-11 text-xs sm:h-8"
               disabled={isActionLoading || selectedCount === 0}
             >
               {isActionLoading ? (

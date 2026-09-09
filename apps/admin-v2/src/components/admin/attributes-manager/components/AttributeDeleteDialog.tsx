@@ -1,4 +1,3 @@
-import { cn } from "@scalius/shared/utils";
 import { AlertTriangle, Loader2, Trash2 } from "lucide-react";
 import {
   AlertDialog,
@@ -62,10 +61,8 @@ export function AttributeDeleteDialog({
               onConfirm();
             }}
             disabled={pending}
-            className={cn(
-              "h-8 text-xs",
-              permanent && "bg-destructive hover:bg-destructive/90",
-            )}
+            variant={permanent ? "destructive" : "default"}
+            className="h-8 text-xs"
           >
             {pending ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
             {permanent ? "Delete permanently" : "Move to trash"}

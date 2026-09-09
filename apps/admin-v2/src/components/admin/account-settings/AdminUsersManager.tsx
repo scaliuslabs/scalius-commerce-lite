@@ -495,7 +495,7 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
                           <AlertDialogCancel>Cancel</AlertDialogCancel>
                           <AlertDialogAction
                             onClick={() => deleteUser(adminUser.id)}
-                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            variant="destructive"
                           >
                             Revoke invitation
                           </AlertDialogAction>
@@ -549,7 +549,7 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
                           <AlertDialogCancel>Cancel</AlertDialogCancel>
                           <AlertDialogAction
                             onClick={() => void handleSuspension(adminUser, true)}
-                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            variant="destructive"
                           >
                             Suspend access
                           </AlertDialogAction>

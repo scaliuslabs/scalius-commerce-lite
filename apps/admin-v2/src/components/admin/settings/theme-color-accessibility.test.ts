@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -10,6 +11,11 @@ import {
   THEME_COLOR_PALETTES,
   THEME_CONTRAST_PAIRS,
 } from "./theme-color-presets";
+
+const ADMIN_GLOBAL_CSS = readFileSync(
+  new URL("../../../styles/global.css", import.meta.url),
+  "utf8",
+);
 
 describe("theme color accessibility", () => {
   it("reports readable and unreadable opaque hex pairs", () => {
@@ -75,5 +81,31 @@ describe("theme color accessibility", () => {
         DEFAULT_THEME_COLORS.muted ?? "",
       ),
     ).toEqual({ ratio: 4.4, passes: false });
+  });
+
+  it("defines readable destructive pairs for both admin themes", () => {
+    expect(ADMIN_GLOBAL_CSS).toMatch(
+      /--destructive: #b91c1c;\s+--destructive-foreground: #ffffff;/,
+    );
+    expect(ADMIN_GLOBAL_CSS).toMatch(
+      /--destructive: oklch\(0\.704 0\.191 22\.216\);\s+--destructive-foreground: #09090b;/,
+    );
+    expect(getThemeColorPairStatus("#ffffff", "#b91c1c")).toEqual({
+      ratio: 6.5,
+      passes: true,
+    });
+    expect(
+      getThemeColorPairStatus("#09090b", "oklch(0.704 0.191 22.216)"),
+    ).toEqual({ ratio: 6.9, passes: true });
+
+    // Representative composited /90 + brightness and /80 surfaces stay readable.
+    expect(getThemeColorPairStatus("#ffffff", "#ca3535")).toEqual({
+      ratio: 5.2,
+      passes: true,
+    });
+    expect(getThemeColorPairStatus("#09090b", "#ce5255")).toEqual({
+      ratio: 4.7,
+      passes: true,
+    });
   });
 });

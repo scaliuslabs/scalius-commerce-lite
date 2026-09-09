@@ -8,7 +8,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "~/components/ui/alert-dialog";
-import { cn } from "@scalius/shared/utils";
 import { Loader2 } from "lucide-react";
 
 interface ConfirmDialogProps {
@@ -58,11 +57,8 @@ export function ConfirmDialog({
           </AlertDialogCancel>
           <AlertDialogAction
             onClick={onConfirm}
+            variant={variant}
             disabled={isLoading}
-            className={cn(
-              variant === "destructive" &&
-                "bg-destructive text-destructive-foreground hover:bg-destructive/90",
-            )}
           >
             {isLoading ? (
               <>

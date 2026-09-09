@@ -318,7 +318,7 @@ export function ShippingMethodsContainer() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isActionLoading} className="h-11 text-xs sm:h-8">Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDelete} className="h-11 bg-destructive text-xs hover:bg-destructive/90 sm:h-8" disabled={isActionLoading}>
+            <AlertDialogAction onClick={confirmDelete} variant="destructive" className="h-11 text-xs sm:h-8" disabled={isActionLoading}>
               {isActionLoading ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : null} Delete Permanently
             </AlertDialogAction>
           </AlertDialogFooter>
