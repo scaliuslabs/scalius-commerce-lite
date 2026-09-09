@@ -1,4 +1,4 @@
-import { useMemo, useCallback, useState } from "react";
+import { useMemo, useCallback, useRef, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Button } from "~/components/ui/button";
 import { Tags, Trash2, Plus } from "lucide-react";
@@ -97,6 +97,10 @@ function AttributesPage() {
     ids: string[];
     permanent: boolean;
   } | null>(null);
+  const createFallbackRef = useRef<HTMLButtonElement | null>(null);
+  const createOpenerRef = useRef<HTMLElement | null>(null);
+  const viewValuesOpenerRef = useRef<HTMLElement | null>(null);
+  const editValuesOpenerRef = useRef<HTMLElement | null>(null);
 
   // We need a dummy setAttributes/fetchAttributes for the create dialog hook
   // (The create action uses the old hook; all other actions use centralized mutations)
@@ -144,15 +148,19 @@ function AttributesPage() {
   );
 
   const handleViewValues = useCallback(
-    (id: string, name: string) => {
+    (id: string, name: string, opener: HTMLElement) => {
+      viewValuesOpenerRef.current = opener;
       setViewValuesFor({ id, name });
     },
     [],
   );
 
   const handleEditValues = useCallback(
-    (id: string, name: string) => {
-      if (attributeActions.canEdit) setEditValuesFor({ id, name });
+    (id: string, name: string, opener: HTMLElement) => {
+      if (attributeActions.canEdit) {
+        editValuesOpenerRef.current = opener;
+        setEditValuesFor({ id, name });
+      }
     },
     [attributeActions.canEdit],
   );
@@ -377,7 +385,13 @@ function AttributesPage() {
             </Button>
           </Link>
           {!showTrashed && attributeActions.canCreate && (
-            <Button onClick={() => setShowCreateDialog(true)}>
+            <Button
+              ref={createFallbackRef}
+              onClick={(event) => {
+                createOpenerRef.current = event.currentTarget;
+                setShowCreateDialog(true);
+              }}
+            >
               <Plus className="mr-2 h-4 w-4" />
               Add Attribute
             </Button>
@@ -422,7 +436,12 @@ function AttributesPage() {
               : "Create your first attribute to get started.",
           action:
             !showTrashed && attributeActions.canCreate && !search.search ? (
-              <Button onClick={() => setShowCreateDialog(true)}>
+              <Button
+                onClick={(event) => {
+                  createOpenerRef.current = event.currentTarget;
+                  setShowCreateDialog(true);
+                }}
+              >
                 <Plus className="h-4 w-4 mr-2" />
                 Add Attribute
               </Button>
@@ -448,6 +467,8 @@ function AttributesPage() {
             setNewAttribute((prev) => ({ ...prev, options }))
           }
           onCreate={handleCreateAttribute}
+          openerRef={createOpenerRef}
+          fallbackFocusRef={createFallbackRef}
         />
       )}
 
@@ -467,6 +488,7 @@ function AttributesPage() {
         attributeId={viewValuesFor?.id || null}
         attributeName={viewValuesFor?.name || null}
         onClose={() => setViewValuesFor(null)}
+        openerRef={viewValuesOpenerRef}
       />
 
       {/* Attribute Value Editor */}
@@ -476,6 +498,7 @@ function AttributesPage() {
           attributeId={editValuesFor?.id || null}
           attributeName={editValuesFor?.name || null}
           onClose={() => setEditValuesFor(null)}
+          openerRef={editValuesOpenerRef}
         />
       )}
     </div>

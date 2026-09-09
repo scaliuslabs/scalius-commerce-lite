@@ -61,6 +61,7 @@ export interface AttributeValuesViewerProps {
   attributeId: string | null;
   attributeName: string | null;
   onClose: () => void;
+  openerRef: React.RefObject<HTMLElement | null>;
 }
 
 export interface DeleteDialogState {
@@ -125,6 +126,8 @@ export interface AttributeCreateDialogProps {
   onFilterableChange: (checked: boolean) => void;
   onOptionsChange?: (options: string[]) => void;
   onCreate: () => void;
+  fallbackFocusRef: React.RefObject<HTMLElement | null>;
+  openerRef: React.RefObject<HTMLElement | null>;
 }
 
 export interface AttributeDeleteDialogProps {
