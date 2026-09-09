@@ -294,7 +294,7 @@ export async function getDeliveryProviderSetupFingerprint(
     type: input.type,
     credentials: parsedCredentials,
     config: parsedConfig,
-    ...(input.type === "steadfast" ? { connectionTestProofVersion: 2 } : {}),
+    connectionTestProofVersion: 2,
   }));
   const key = await crypto.subtle.importKey(
     "raw",

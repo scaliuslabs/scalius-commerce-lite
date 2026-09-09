@@ -16,6 +16,13 @@ import type { Database } from "@scalius/database/client";
 import { getExternalLocationIds, isPositiveIntegerExternalLocationId } from "../locations";
 import { formatPhoneForProvider } from "@scalius/shared/customer-utils";
 
+// ponytail: Bound store-list setup calls; prefer provider-side lookup before raising this ceiling.
+const MAX_PATHAO_STORE_PAGES = 10;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
 /**
  * Implementation of the Pathao delivery provider
  */
@@ -112,50 +119,83 @@ export class PathaoProvider implements DeliveryProviderInterface {
    */
   async testConnection(): Promise<{ success: boolean; message: string }> {
     try {
-      await this.getAccessToken();
+      const token = await this.getAccessToken();
 
       if (this.config.storeId) {
-        const token = await this.getAccessToken();
-        const response = await fetch(
-          `${this.credentials.baseUrl}/aladdin/api/v1/stores`,
-          {
-            method: "GET",
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
+        let expectedLastPage: number | null = null;
+        for (let page = 1; page <= MAX_PATHAO_STORE_PAGES; page += 1) {
+          const storesUrl = new URL(
+            `${this.credentials.baseUrl.replace(/\/$/, "")}/aladdin/api/v1/stores`,
+          );
+          if (page > 1) storesUrl.searchParams.set("page", String(page));
+          const response = await fetch(
+            storesUrl.toString(),
+            {
+              method: "GET",
+              headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json",
+              },
             },
-          },
-        );
+          );
 
-        if (!response.ok) {
-          return {
-            success: false,
-            message: `Failed to validate store ID: ${response.statusText}`,
-          };
+          if (!response.ok) {
+            return { success: false, message: "Connection failed" };
+          }
+
+          const data: unknown = await response.json();
+          if (!isRecord(data) || !isRecord(data.data)) {
+            return { success: false, message: "Connection failed" };
+          }
+          const pageData = data.data;
+          const currentPage = pageData.current_page;
+          const lastPage = pageData.last_page;
+          const stores = pageData.data;
+          if (
+            typeof currentPage !== "number"
+            || !Number.isInteger(currentPage)
+            || currentPage !== page
+            || typeof lastPage !== "number"
+            || !Number.isInteger(lastPage)
+            || lastPage < page
+            || !Array.isArray(stores)
+            || !stores.every(isRecord)
+          ) {
+            return { success: false, message: "Connection failed" };
+          }
+          if (expectedLastPage === null) {
+            expectedLastPage = lastPage;
+          } else if (lastPage !== expectedLastPage) {
+            return { success: false, message: "Connection failed" };
+          }
+
+          const configuredStore = stores.find((store) => {
+            const storeId = store.store_id;
+            return (typeof storeId === "string" || typeof storeId === "number")
+              && String(storeId) === this.config.storeId;
+          });
+          if (configuredStore) {
+            if (configuredStore.is_active === 1) {
+              return { success: true, message: "Connection successful" };
+            }
+            if (configuredStore.is_active === 0) {
+              return {
+                success: false,
+                message: "Selected Pathao store is inactive. Choose an active store and test again.",
+              };
+            }
+            return { success: false, message: "Connection failed" };
+          }
+          if (page === lastPage) {
+            return { success: false, message: "Connection failed" };
+          }
         }
-
-        const data = await response.json() as Record<string, unknown>;
-        const dataInner = data.data as Record<string, unknown> | undefined;
-        const stores = (dataInner?.data || []) as Record<string, unknown>[];
-        const storeExists = stores.some(
-          (store: Record<string, unknown>) => (store as { store_id?: { toString(): string } }).store_id?.toString() === this.config.storeId,
-        );
-
-        if (!storeExists) {
-          return {
-            success: false,
-            message: `Store ID ${this.config.storeId} not found in your account.`,
-          };
-        }
+        return { success: false, message: "Connection failed" };
       }
 
       return { success: true, message: "Connection successful" };
-    } catch (error: unknown) {
-      return {
-        success: false,
-        message: `Connection failed: ${error instanceof Error ? error.message : String(error)
-          }`,
-      };
+    } catch {
+      return { success: false, message: "Connection failed" };
     }
   }
 
