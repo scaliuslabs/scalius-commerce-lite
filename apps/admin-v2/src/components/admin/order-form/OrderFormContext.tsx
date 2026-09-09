@@ -14,6 +14,7 @@ interface OrderFormContextType {
   form: UseFormReturn<OrderFormInput, unknown, OrderFormValues>;
   products: Product[];
   isEdit: boolean;
+  isAmend: boolean;
   locations: {
     cities: DeliveryLocation[];
     zones: DeliveryLocation[];
@@ -75,6 +76,7 @@ interface OrderFormProviderProps {
   form: UseFormReturn<OrderFormInput, unknown, OrderFormValues>;
   products: Product[];
   isEdit: boolean;
+  isAmend: boolean;
   locations: {
     cities: DeliveryLocation[];
     zones: DeliveryLocation[];

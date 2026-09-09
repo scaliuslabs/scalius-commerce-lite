@@ -187,6 +187,10 @@ export interface Order {
     allowed: boolean;
     reason: string | null;
   };
+  amendmentReadiness?: {
+    allowed: boolean;
+    reason: string | null;
+  };
 }
 
 export interface OrderShipment {

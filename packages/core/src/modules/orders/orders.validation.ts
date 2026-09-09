@@ -90,6 +90,28 @@ export const quoteManualOrderSchema = sellableOrderContentSchema.pick({
 
 export type QuoteManualOrderInput = z.infer<typeof quoteManualOrderSchema>;
 
+const amendableOrderItemSchema = sellableOrderItemSchema.extend({
+    orderItemId: z.string().min(1).optional(),
+});
+
+export const previewManualOrderAmendmentSchema = orderBaseContentSchema.extend({
+    expectedVersion: z.number().int().min(1),
+    items: z.array(amendableOrderItemSchema)
+        .min(1, "Add at least one sellable item")
+        .max(MAX_ORDER_LINE_ITEMS, `Add at most ${MAX_ORDER_LINE_ITEMS} sellable items`),
+});
+
+export const confirmManualOrderAmendmentSchema = previewManualOrderAmendmentSchema.extend({
+    requestKey: z.uuid("A valid amendment request key is required"),
+    quoteFingerprint: z.string().regex(
+        /^[a-f0-9]{64}$/,
+        "A valid amendment quote fingerprint is required",
+    ),
+});
+
+export type PreviewManualOrderAmendmentInput = z.infer<typeof previewManualOrderAmendmentSchema>;
+export type ConfirmManualOrderAmendmentInput = z.infer<typeof confirmManualOrderAmendmentSchema>;
+
 /** Schema for updating an existing order (PUT /api/orders/:id) */
 export const updateOrderSchema = editableOrderContentSchema.extend({
     expectedVersion: z

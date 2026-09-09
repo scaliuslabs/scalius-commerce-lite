@@ -35,7 +35,7 @@ import {
 } from "lucide-react";
 
 export function SummarySection() {
-  const { form, refs, handleKeyDown, isEdit, manualQuote } = useOrderForm();
+  const { form, refs, handleKeyDown, isEdit, isAmend, manualQuote } = useOrderForm();
   const { symbol, code } = useCurrency();
   const [calculations, setCalculations] = useState<OrderCalculation>(
     getOrderCalculation(),
@@ -45,7 +45,7 @@ export function SummarySection() {
     return subscribe(setCalculations);
   }, []);
 
-  const quote = !isEdit && manualQuote.isCurrent ? manualQuote.data : null;
+  const quote = (!isEdit || isAmend) && manualQuote.isCurrent ? manualQuote.data : null;
   const decimalPlaces = quote?.decimalPlaces ?? getDecimalPlaces(code);
   const formatAmount = (amount: number, places = decimalPlaces) =>
     amount.toLocaleString(undefined, {
@@ -55,7 +55,7 @@ export function SummarySection() {
   const subtotal = quote?.subtotalAmount ?? calculations.subtotal;
   const shipping = quote?.shippingAmount ?? calculations.shippingCharge;
   const discount = quote?.discountAmount ?? calculations.discountAmount ?? 0;
-  const discountNeedsCorrection = !isEdit
+  const discountNeedsCorrection = (!isEdit || isAmend)
     && manualQuote.discountLimit?.exceeded === true;
   const total = discountNeedsCorrection
     ? null
@@ -78,8 +78,10 @@ export function SummarySection() {
         <CardHeader className="pb-3 pt-4 px-4">
           <CardTitle className="text-base">Order Summary</CardTitle>
           <CardDescription className="text-sm">
-            {isEdit
-              ? "Review the unsettled order."
+            {isAmend
+              ? "Review the recalculated total and COD balance before confirming."
+              : isEdit
+                ? "Review the unsettled order."
               : "Confirmed COD order with payment due and stock reserved."}
           </CardDescription>
         </CardHeader>
@@ -126,7 +128,7 @@ export function SummarySection() {
                       type="number"
                       placeholder="0.00"
                       step="0.01"
-                      max={!isEdit
+                      max={!isEdit || isAmend
                         ? manualQuote.discountLimit?.maximumAmount
                         : undefined}
                       aria-invalid={discountNeedsCorrection || undefined}
@@ -187,7 +189,7 @@ export function SummarySection() {
             />
           </div>
 
-          {!isEdit && (
+          {(!isEdit || isAmend) && (
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-y py-2 text-xs text-muted-foreground">
               <span className="inline-flex items-center gap-1.5">
                 <CircleCheck className="h-3.5 w-3.5" /> Confirmed
@@ -201,7 +203,7 @@ export function SummarySection() {
             </div>
           )}
 
-          {!isEdit && manualQuote.isLoading && (
+          {(!isEdit || isAmend) && manualQuote.isLoading && (
             <div
               className="flex items-center gap-2 text-xs text-muted-foreground"
               aria-live="polite"
@@ -211,7 +213,7 @@ export function SummarySection() {
             </div>
           )}
 
-          {!isEdit && manualQuote.errorMessage && (
+          {(!isEdit || isAmend) && manualQuote.errorMessage && (
             <div
               className="flex items-center justify-between gap-3 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2"
               role="alert"

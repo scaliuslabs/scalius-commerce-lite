@@ -107,6 +107,46 @@ export type OrderItemDto = ApiData<GetApiV1AdminOrdersByIdItemsResponse>[number]
 export type CreateOrderInput = ApiBody<PostApiV1AdminOrdersData>;
 export type QuoteManualOrderInput = ApiBody<PostApiV1AdminOrdersQuoteData>;
 export type ManualOrderQuotePayload = ApiData<PostApiV1AdminOrdersQuoteResponse>;
+export interface ManualOrderAmendmentInput {
+  id: string;
+  expectedVersion: number;
+  customerName: string;
+  customerPhone: string;
+  customerEmail: string | null;
+  shippingAddress: string;
+  city: string;
+  zone: string;
+  area: string | null;
+  cityName?: string;
+  zoneName?: string;
+  areaName?: string | null;
+  notes: string | null;
+  items: Array<{
+    orderItemId?: string;
+    productId: string;
+    variantId: string | null;
+    quantity: number;
+  }>;
+  discountAmount: number | null;
+  shippingCharge: number;
+}
+export type ManualOrderAmendmentPreviewPayload = ManualOrderQuotePayload & {
+  orderId: string;
+  expectedVersion: number;
+  resultingVersion: number;
+  balanceDue: number;
+  quoteFingerprint: string;
+};
+export type ConfirmManualOrderAmendmentInput = ManualOrderAmendmentInput & {
+  requestKey: string;
+  quoteFingerprint: string;
+};
+export interface ManualOrderAmendmentResultPayload {
+  id: string;
+  version: number;
+  totalAmount: number;
+  balanceDue: number;
+}
 export type UpdateOrderInput = { id: string } &
   ApiBody<PutApiV1AdminOrdersByIdData>;
 export type OrderIdPayload = ApiData<PostApiV1AdminOrdersResponse>;
@@ -319,6 +359,26 @@ export const quoteManualOrder = createServerFn({ method: "POST" })
   .validator((data: QuoteManualOrderInput) => data)
   .handler(async ({ data }) => {
     return apiPost<ManualOrderQuotePayload>("/orders/quote", data);
+  });
+
+export const previewManualOrderAmendment = createServerFn({ method: "POST" })
+  .validator((data: ManualOrderAmendmentInput) => data)
+  .handler(async ({ data }) => {
+    const { id, ...body } = data;
+    return apiPost<ManualOrderAmendmentPreviewPayload>(
+      `/orders/${id}/amendments/preview`,
+      body,
+    );
+  });
+
+export const confirmManualOrderAmendment = createServerFn({ method: "POST" })
+  .validator((data: ConfirmManualOrderAmendmentInput) => data)
+  .handler(async ({ data }) => {
+    const { id, ...body } = data;
+    return apiPost<ManualOrderAmendmentResultPayload>(
+      `/orders/${id}/amendments`,
+      body,
+    );
   });
 
 export const updateOrder = createServerFn({ method: "POST" })

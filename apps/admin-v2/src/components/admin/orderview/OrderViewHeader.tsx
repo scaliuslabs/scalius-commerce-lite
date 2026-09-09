@@ -36,7 +36,10 @@ export function OrderViewHeader({ order }: OrderViewHeaderProps) {
   const activeRefundOperation = order.activeRefundOperation;
   const refundLocked = Boolean(activeRefundOperation?.active);
   const shipmentLocked = order.shipmentRecovery?.activeLock === true;
-  const editLocked = refundLocked || shipmentLocked || !order.fullEditReadiness.allowed;
+  const canAmend = order.amendmentReadiness?.allowed === true;
+  const editLocked = refundLocked
+    || shipmentLocked
+    || (!canAmend && !order.fullEditReadiness.allowed);
   const getStatusBadge = (status: string) => {
     const { badgeClass } = getStatusBadgeClass(status);
     return (
@@ -116,7 +119,11 @@ export function OrderViewHeader({ order }: OrderViewHeaderProps) {
                   ? "Complete or reconcile the active refund before editing this order."
                   : shipmentLocked
                     ? order.shipmentRecovery?.message ?? "Resolve shipment recovery before editing this order."
-                    : order.fullEditReadiness.reason ?? undefined
+                    : canAmend
+                      ? undefined
+                      : order.amendmentReadiness?.reason
+                        ?? order.fullEditReadiness.reason
+                        ?? undefined
               }
             >
               {editLocked ? (
@@ -126,11 +133,13 @@ export function OrderViewHeader({ order }: OrderViewHeaderProps) {
                 </>
               ) : (
                 <Link
-                  to="/admin/orders/$orderId/edit"
+                  to={canAmend
+                    ? "/admin/orders/$orderId/amend"
+                    : "/admin/orders/$orderId/edit"}
                   params={{ orderId: order.id }}
                 >
                   <Pencil className="h-4 w-4" />
-                  Edit order
+                  {canAmend ? "Amend order" : "Edit order"}
                 </Link>
               )}
             </Button>

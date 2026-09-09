@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
+    buildAdminOrderAmendmentReadiness,
     buildAdminOrderFullEditReadiness,
+    type AdminOrderAmendmentSource,
     type AdminOrderFullEditSource,
 } from "./orders.admin";
 
@@ -92,4 +94,58 @@ describe("admin full-order edit readiness", () => {
             expect(result.reason).toContain("Return or invoice evidence");
         },
     );
+});
+
+function amendableOrder(
+    overrides: Partial<AdminOrderAmendmentSource> = {},
+): AdminOrderAmendmentSource {
+    return {
+        status: "confirmed",
+        paymentMethod: "cod",
+        paymentStatus: "unpaid",
+        paidAmount: 0,
+        fulfillmentStatus: "pending",
+        inventoryAction: "reserved",
+        shipmentClaimId: null,
+        isManualOrder: true,
+        hasTaxSnapshot: true,
+        hasPaymentHistory: false,
+        hasPaymentSessionHistory: false,
+        hasShipmentHistory: false,
+        hasRefundHistory: false,
+        hasReturnHistory: false,
+        hasInvoiceHistory: false,
+        hasPaymentPlan: false,
+        hasPromotionAllocation: false,
+        hasNonPendingItem: false,
+        hasCleanCodTracking: true,
+        ...overrides,
+    };
+}
+
+describe("manual COD amendment readiness", () => {
+    it("allows only untouched manual COD orders with authoritative snapshots", () => {
+        expect(buildAdminOrderAmendmentReadiness(amendableOrder())).toEqual({
+            allowed: true,
+            reason: null,
+        });
+    });
+
+    it.each([
+        { isManualOrder: false },
+        { paymentMethod: "stripe" },
+        { paymentStatus: "paid", paidAmount: 100 },
+        { hasPaymentSessionHistory: true },
+        { hasPaymentPlan: true },
+        { hasCleanCodTracking: false },
+        { hasShipmentHistory: true },
+        { hasNonPendingItem: true },
+        { hasRefundHistory: true },
+        { hasReturnHistory: true },
+        { hasInvoiceHistory: true },
+        { hasTaxSnapshot: false },
+        { hasPromotionAllocation: true },
+    ])("locks unsafe evidence: %o", (override) => {
+        expect(buildAdminOrderAmendmentReadiness(amendableOrder(override)).allowed).toBe(false);
+    });
 });
