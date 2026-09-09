@@ -760,6 +760,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
 <script>
   import {
     initCartFunctionality,
+    isDiscountValidationPending,
     resumeCartPageFromHistory,
   } from "@/lib/cart/client";
   import { getCustomerSession } from "@/lib/api/customer-auth";
@@ -1233,6 +1234,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
         const empty = isCartEmpty();
         const cartBlocked = window.hasCartValidationIssues?.() === true;
         const checkoutPending = readHostedPaymentRecoverySession() !== null;
+        const discountValidationPending = isDiscountValidationPending();
         const quoteUnverified =
           codOnly &&
           !/^taxq_[A-Za-z0-9_-]{22}$/.test(
@@ -1240,8 +1242,8 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
               ?.value ?? "",
           );
         submitButton.disabled =
-          !cartReady || checkoutUnavailable || empty || cartBlocked || checkoutPending || quoteUnverified;
-        if (!cartReady || checkoutUnavailable || empty || cartBlocked || checkoutPending || quoteUnverified)
+          !cartReady || checkoutUnavailable || empty || cartBlocked || checkoutPending || discountValidationPending || quoteUnverified;
+        if (!cartReady || checkoutUnavailable || empty || cartBlocked || checkoutPending || discountValidationPending || quoteUnverified)
           submitButton.classList.add("opacity-50", "cursor-not-allowed");
         else submitButton.classList.remove("opacity-50", "cursor-not-allowed");
         submitButton.title = !cartReady
@@ -1255,6 +1257,8 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
                   checkoutCopy.cartAttentionText
                 : checkoutPending
                   ? checkoutCopy.reviewExistingCheckoutText
+                : discountValidationPending
+                  ? checkoutCopy.processingText
                 : quoteUnverified
                   ? checkoutCopy.totalVerificationFailedText
                 : "";
@@ -1263,6 +1267,9 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
 
     updateCheckoutButtonState();
     document.addEventListener("cart-updated", updateCheckoutButtonState, {
+      signal: cartPageSignal,
+    });
+    document.addEventListener("discount-validation-state", updateCheckoutButtonState, {
       signal: cartPageSignal,
     });
 
@@ -1336,6 +1343,11 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
       "submit",
       async (e) => {
         clearCheckoutFormError();
+        if (isDiscountValidationPending()) {
+          e.preventDefault();
+          restoreSubmitButton();
+          return;
+        }
         if (checkoutUnavailable) {
           e.preventDefault();
           showCheckoutFormError(checkoutUnavailableMessage, submitButton);
@@ -1361,6 +1373,11 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
           setSubmitButtonText(checkoutCopy.checkingAccountText);
 
           const session = await readCustomerSessionForCheckout();
+          if (isDiscountValidationPending()) {
+            e.preventDefault();
+            restoreSubmitButton();
+            return;
+          }
           if (session.unavailable) {
             restoreSubmitButton();
             showCheckoutFormError(
@@ -1557,6 +1574,11 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
           setSubmitButtonText(checkoutCopy.checkingCartText);
           const cartIsValid = await (window.validateCartSnapshot?.() ??
             Promise.resolve(true));
+          if (isDiscountValidationPending()) {
+            e.preventDefault();
+            restoreSubmitButton();
+            return;
+          }
           if (!cartIsValid || window.hasCartValidationIssues?.() === true) {
             restoreSubmitButton();
             showCheckoutFormError(

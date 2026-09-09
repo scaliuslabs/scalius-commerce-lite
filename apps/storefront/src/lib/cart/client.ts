@@ -46,6 +46,7 @@ import {
 import { resolveCartKeyForValidatedLine } from "./cart-key-resolution";
 import {
   clearHostedPaymentRecoverySession,
+  fingerprintCheckoutCart,
   matchesCheckoutRecoveryCart,
   readHostedPaymentRecoverySession,
   type HostedPaymentRecoverySession,
@@ -87,6 +88,8 @@ let cartValidationTimer: ReturnType<typeof setTimeout> | null = null;
 let cartValidationSequence = 0;
 let isApplyingCartSnapshot = false;
 let cartTaxQuoteSequence = 0;
+let discountValidationSequence = 0;
+let pendingDiscountValidation: number | null = null;
 let latestCheckoutLocation: {
   cityId: string;
   cityName: string;
@@ -139,7 +142,10 @@ let cartRuntimeAbortController: AbortController | null = null;
 let cartStoreUnsubscribe: (() => void) | null = null;
 
 function resetCartRuntimeListeners(): AbortSignal {
+  const hadPendingDiscountValidation = pendingDiscountValidation !== null;
   cartTaxQuoteSequence += 1;
+  discountValidationSequence += 1;
+  pendingDiscountValidation = null;
   latestCheckoutLocation = null;
   cartQuantityLimits = {};
   cartStoreUnsubscribe?.();
@@ -156,7 +162,29 @@ function resetCartRuntimeListeners(): AbortSignal {
     cartValidationTimer = null;
   }
 
+  if (hadPendingDiscountValidation) {
+    const applyButton = document.getElementById(
+      "applyDiscountBtn",
+    ) as HTMLButtonElement | null;
+    if (applyButton) {
+      applyButton.textContent = activeCheckoutCopy().applyDiscountText;
+      applyButton.disabled = false;
+    }
+    notifyDiscountValidationState();
+  }
+
   return cartRuntimeAbortController.signal;
+}
+
+export function isDiscountValidationPending(): boolean {
+  return pendingDiscountValidation !== null;
+}
+
+function notifyDiscountValidationState(): void {
+  updateCheckoutButtonState();
+  if (typeof document !== "undefined") {
+    document.dispatchEvent(new CustomEvent("discount-validation-state"));
+  }
 }
 
 function getCheckoutId(): string {
@@ -1016,6 +1044,8 @@ export function updateCheckoutButtonState() {
     cartBlocked: hasBlockingCartIssues(),
     cartBlockedMessage: cartBlockedMessage(),
     checkoutPending: hostedPaymentRecoverySession !== null,
+    discountValidationPending: isDiscountValidationPending(),
+    discountValidationPendingMessage: activeCheckoutCopy().processingText,
     quoteUnverified,
     quoteUnverifiedMessage: activeCheckoutCopy().totalVerificationFailedText,
   });
@@ -1057,8 +1087,19 @@ function attemptToTrackInitiateCheckout() {
 }
 
 // --- Discount Logic ---
+function readDiscountCustomerPhone(): string | undefined {
+  const customerPhoneInput = document.querySelector<HTMLInputElement>(
+    '[name="customerPhone"]',
+  );
+  const enteredPhone = (
+    customerPhoneInput?.dataset.e164Value ||
+    customerPhoneInput?.value ||
+    ""
+  ).trim();
+  return enteredPhone && enteredPhone.length >= 7 ? enteredPhone : undefined;
+}
+
 async function handleApplyDiscount() {
-  const lang = await getLanguageData();
   const codeInput = document.getElementById(
     "discountCodeInput",
   ) as HTMLInputElement;
@@ -1072,7 +1113,7 @@ async function handleApplyDiscount() {
 
   const { items, totalAmount, discount: existingDiscount } = cartStore.get();
   if (Object.keys(items).length === 0) {
-    showDiscountMessage(lang.languageData.emptyCartText, "error");
+    showDiscountMessage(activeCheckoutCopy().emptyCartText, "error");
     return;
   }
   if (existingDiscount) {
@@ -1080,28 +1121,42 @@ async function handleApplyDiscount() {
     return;
   }
 
-  const customerPhoneInput = document.querySelector<HTMLInputElement>(
-    '[name="customerPhone"]',
+  if (isDiscountValidationPending()) return;
+
+  const customerPhone = readDiscountCustomerPhone();
+  const shippingCost = getEffectiveCartShippingFee(
+    items,
+    window.lastShippingEventDetail?.fee ?? 0,
   );
-  const enteredPhone = (
-    customerPhoneInput?.dataset.e164Value ||
-    customerPhoneInput?.value ||
-    ""
-  ).trim();
-  const customerPhone =
-    enteredPhone && enteredPhone.length >= 7 ? enteredPhone : undefined;
+  const requestSequence = ++discountValidationSequence;
+  pendingDiscountValidation = requestSequence;
+  notifyDiscountValidationState();
 
   const applyBtn = document.getElementById(
     "applyDiscountBtn",
   ) as HTMLButtonElement;
-  applyBtn.textContent = lang.languageData.processingText;
+  applyBtn.textContent = activeCheckoutCopy().processingText;
   applyBtn.disabled = true;
 
-  try {
-    const shippingCost = getEffectiveCartShippingFee(
-      items,
-      window.lastShippingEventDetail?.fee ?? 0,
+  const requestCartFingerprint = fingerprintCheckoutCart(items);
+  const isCurrentRequest = () => {
+    const current = cartStore.get();
+    return (
+      pendingDiscountValidation === requestSequence &&
+      codeInput.value.trim().toUpperCase() === code &&
+      current.discount === null &&
+      current.totalAmount === totalAmount &&
+      fingerprintCheckoutCart(current.items) === requestCartFingerprint &&
+      getEffectiveCartShippingFee(
+        current.items,
+        window.lastShippingEventDetail?.fee ?? 0,
+      ) === shippingCost &&
+      readDiscountCustomerPhone() === customerPhone
     );
+  };
+
+  try {
+    await getLanguageData();
     const result = await validateDiscount(
       code,
       totalAmount,
@@ -1115,23 +1170,33 @@ async function handleApplyDiscount() {
       result.discount &&
       result.discountAmount !== undefined
     ) {
+      if (!isCurrentRequest()) return;
       applyDiscount({
         ...result.discount,
         discountAmount: result.discountAmount,
       });
+      await updateTotals();
       showDiscountMessage(activeCheckoutCopy().discountAppliedText, "success");
     } else {
+      if (!isCurrentRequest()) return;
       if (result?.requiresCustomerPhone) {
-        customerPhoneInput?.focus();
+        document.querySelector<HTMLInputElement>(
+          '[name="customerPhone"]',
+        )?.focus();
       }
       showDiscountMessage(result?.error || activeCheckoutCopy().invalidDiscountCodeText, "error");
     }
   } catch (error: unknown) {
+    if (!isCurrentRequest()) return;
     console.error("Error applying discount:", error);
     showDiscountMessage(activeCheckoutCopy().discountApplyFailedText, "error");
   } finally {
-    applyBtn.textContent = lang.languageData.applyDiscountText;
-    applyBtn.disabled = false;
+    if (pendingDiscountValidation === requestSequence) {
+      pendingDiscountValidation = null;
+      applyBtn.textContent = activeCheckoutCopy().applyDiscountText;
+      applyBtn.disabled = false;
+      notifyDiscountValidationState();
+    }
   }
 }
 
