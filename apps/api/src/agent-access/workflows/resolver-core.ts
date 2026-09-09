@@ -313,7 +313,7 @@ const BM25_B = 0.65;
 const STOP_WORDS = new Set([
   "a", "an", "are", "as", "at", "be", "been", "by", "can", "did", "do",
   "does", "for", "from", "give", "how", "i", "in", "is", "it", "me",
-  "my", "of", "on", "our", "per", "please", "show", "tell", "that", "the", "their", "this",
+  "my", "of", "off", "on", "our", "per", "please", "show", "tell", "that", "the", "their", "this",
   "to", "was", "were", "what", "when", "where", "which", "who", "why", "with",
 ]);
 
@@ -1427,7 +1427,7 @@ const ACTION_LEMMAS = new Set([
 
 const ACTION_SUPPORT_GROUPS: readonly (readonly string[])[] = [
   ["create", "add", "build", "make"],
-  ["update", "adjust", "change", "edit", "put", "replace", "rewrite", "rotate", "save", "set"],
+  ["update", "adjust", "change", "edit", "notify", "put", "replace", "rewrite", "rotate", "save", "set"],
   ["enable", "activate", "disable", "start", "turn"],
   ["verify", "check", "probe", "test", "validate"],
   ["read", "find", "get", "give", "include", "list", "report", "return", "search", "show", "summarize"],
@@ -1756,6 +1756,31 @@ function fallbackSupportsRequestedAction(prompt: string, match: ScoredCandidate)
     return action ? [action] : [];
   }));
   return [...requestedActions].some((action) => match.candidate.actionTerms.has(action));
+}
+
+function fuzzyWriteSupportsIntent(prompt: string, match: ScoredCandidate): boolean {
+  if (match.exactPhrase || match.candidate.route?.kind === "read") return true;
+  const words = rawWords(prompt);
+  const recognizedActions = words.flatMap((word, index) => {
+    const action = actionSupportLemma(word);
+    return action ? [{ action, negated: controlPrefixIsNegated(words, index) }] : [];
+  });
+  if (recognizedActions.length === 0) return true;
+  const hasCompatibleAction = recognizedActions.some(({ action, negated }) =>
+    !negated && (action === "use" || match.candidate.actionTerms.has(action))
+  );
+  if (!hasCompatibleAction) {
+    return false;
+  }
+  const targets = unique(tokenize(prompt)).filter((term) =>
+    !isActionWord(term) && !STOP_WORDS.has(term)
+  );
+  if (targets.length <= 2 && !targets.every((term) => match.candidate.supportTerms.has(term))) {
+    return false;
+  }
+  return !recognizedActions.some(({ action, negated }) => action === "create" && !negated) ||
+    targets.length > 4 ||
+    targets.every((term) => match.candidate.anchorTerms.has(term));
 }
 
 function hasInformativeRouteSupport(prompt: string, match: ScoredCandidate): boolean {
@@ -2195,7 +2220,25 @@ export function createWorkflowResolver(
       };
     }
 
+    const fallbacks = scoreCandidates(boundedPrompt, surface, index, "operation-fallback");
+    const exactFallbacks = fallbacks.filter((match) =>
+      match.exactPhrase && match.candidate.surface === surface
+    );
+    if (exactFallbacks.length === 1) {
+      return {
+        kind: "plan",
+        disposition: "execute",
+        version: sources.catalog.version,
+        plan: planFromFallback(exactFallbacks[0]!, index, boundedPrompt),
+        safetyNotes: [],
+      };
+    }
+
     const scoredRoutes = scoreCandidates(boundedPrompt, surface, index, "route");
+    const topRouteIntentMismatch = Boolean(
+      scoredRoutes[0]?.candidate.route?.kind === "write" &&
+      !fuzzyWriteSupportsIntent(boundedPrompt, scoredRoutes[0])
+    );
     const topFixedWindowState = scoredRoutes[0]
       ? fixedCalendarWindowState(boundedPrompt, scoredRoutes[0])
       : null;
@@ -2311,7 +2354,6 @@ export function createWorkflowResolver(
       const plan = planFromRoutes([routes[0]], [boundedPrompt]);
       if (plan) return resolvedRoutePlan(sources.catalog.version, plan, details);
     }
-    const fallbacks = scoreCandidates(boundedPrompt, surface, index, "operation-fallback");
     if (clauseAnalysis.overflow) {
       return {
         kind: "choices",
@@ -2389,6 +2431,7 @@ export function createWorkflowResolver(
     if (
       routes[0] &&
       !guardedCompoundRoute &&
+      !topRouteIntentMismatch &&
       (
         strongRouteMatch(routes[0], routes[1]) ||
         topRouteHasSchemaSupport ||
@@ -2442,6 +2485,7 @@ export function createWorkflowResolver(
         .map((id) => clauseMatches.find((match) => match.candidate.id === id)!);
       if (
         complete &&
+        !topRouteIntentMismatch &&
         uniqueMatches.length <= MAX_COMPOSED_ROUTES &&
         (
           nonExactWriteOrMixedCompound
@@ -2499,6 +2543,7 @@ export function createWorkflowResolver(
     if (
       !guardedCompoundRoute &&
       !guardedCompoundFallback &&
+      !topRouteIntentMismatch &&
       fallbacks[0] &&
       strongFallbackMatch(fallbacks[0], fallbacks[1]) &&
       (

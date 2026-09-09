@@ -26400,8 +26400,8 @@ export type GetApiV1AdminDashboardHomeSummaryResponses = {
                 currentMonth: {
                     orders: number;
                     revenue: number;
-                    orderGrowth: number;
-                    revenueGrowth: number;
+                    orderGrowth: number | null;
+                    revenueGrowth: number | null;
                     orderStatus: {
                         delivered: number;
                         processing: number;
@@ -26447,8 +26447,8 @@ export type GetApiV1AdminDashboardMetricsSummaryResponses = {
                 currentMonth: {
                     orders: number;
                     revenue: number;
-                    orderGrowth: number;
-                    revenueGrowth: number;
+                    orderGrowth: number | null;
+                    revenueGrowth: number | null;
                     orderStatus: {
                         delivered: number;
                         processing: number;
@@ -26488,8 +26488,8 @@ export type GetApiV1AdminDashboardSummaryResponses = {
                 currentMonth: {
                     orders: number;
                     revenue: number;
-                    orderGrowth: number;
-                    revenueGrowth: number;
+                    orderGrowth: number | null;
+                    revenueGrowth: number | null;
                     orderStatus: {
                         delivered: number;
                         processing: number;
@@ -26567,8 +26567,8 @@ export type GetApiV1AdminDashboardResponses = {
                 currentMonth: {
                     orders: number;
                     revenue: number;
-                    orderGrowth: number;
-                    revenueGrowth: number;
+                    orderGrowth: number | null;
+                    revenueGrowth: number | null;
                     orderStatus: {
                         delivered: number;
                         processing: number;

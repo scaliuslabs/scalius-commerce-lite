@@ -9,7 +9,7 @@ import {
   CardDescription,
   CardFooter,
 } from "../ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "~/components/ui/badge";
 import {
   ShoppingCart,
   Package,
@@ -19,7 +19,7 @@ import {
   Users,
   CheckCircle,
 } from "lucide-react";
-import { useCurrency } from "@/hooks/use-currency";
+import { useCurrency } from "~/hooks/use-currency";
 import type { DashboardChartConfig } from "./DashboardChart";
 import {
   getDashboardActivityPanelState,
@@ -37,8 +37,8 @@ interface StatsCardProps {
   description: string;
   icon?: React.ReactNode;
   trend?: {
-    value: number;
-    isPositive: boolean;
+    value: number | null;
+    direction: "up" | "down" | "neutral" | "unavailable";
   };
   isStaticBadge?: boolean;
   staticBadgeContent?: React.ReactNode;
@@ -67,15 +67,14 @@ const StatsCard = ({
           {trend && !isStaticBadge && (
             <Badge
               variant="outline"
-              className={`flex gap-1 rounded-lg text-xs ${trend.isPositive ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-500"}`}
+              className={`flex gap-1 rounded-lg text-xs ${trend.direction === "up" ? "text-emerald-600 dark:text-emerald-400" : trend.direction === "down" ? "text-amber-600 dark:text-amber-500" : "text-muted-foreground"}`}
             >
-              {trend.isPositive ? (
+              {trend.direction === "up" ? (
                 <TrendingUpIcon className="size-3" />
-              ) : (
+              ) : trend.direction === "down" ? (
                 <TrendingDownIcon className="size-3" />
-              )}
-              {trend.isPositive ? "+" : ""}
-              {trend.value}%
+              ) : null}
+              {formatTrendValue(trend.value)}
             </Badge>
           )}
           {isStaticBadge && staticBadgeContent && (
@@ -93,14 +92,18 @@ const StatsCard = ({
       <div className="text-muted-foreground">{description}</div>
       {trend && !isStaticBadge && (
         <div
-          className={`line-clamp-1 flex gap-1 font-medium text-xs ${trend.isPositive ? "text-emerald-600 dark:text-emerald-500" : "text-amber-600 dark:text-amber-500"}`}
+          className={`line-clamp-1 flex gap-1 font-medium text-xs ${trend.direction === "up" ? "text-emerald-600 dark:text-emerald-500" : trend.direction === "down" ? "text-amber-600 dark:text-amber-500" : "text-muted-foreground"}`}
         >
-          {trend.isPositive ? (
+          {trend.direction === "up" ? (
             <TrendingUpIcon className="size-3" />
-          ) : (
+          ) : trend.direction === "down" ? (
             <TrendingDownIcon className="size-3" />
-          )}
-          {trend.isPositive ? "Trending up" : "Trending down"} this month
+          ) : null}
+          {trend.value === null
+            ? "No previous-month baseline"
+            : trend.direction === "neutral"
+              ? "No change from previous month"
+              : `${trend.direction === "up" ? "Up" : "Down"} vs previous month`}
         </div>
       )}
     </CardFooter>
@@ -120,8 +123,8 @@ interface DashboardStatsProps {
   currentMonth: {
     orders: number;
     revenue: number;
-    orderGrowth: number;
-    revenueGrowth: number;
+    orderGrowth: number | null;
+    revenueGrowth: number | null;
     orderStatus: {
       delivered: number;
       processing: number;
@@ -140,7 +143,7 @@ const getChartConfig = (symbol: string): DashboardChartConfig => ({
     color: "var(--chart-2)",
   },
   revenue: {
-    label: `Revenue (${symbol})`,
+    label: `Order value (${symbol})`,
     color: "var(--chart-1)",
   },
   newCustomers: {
@@ -152,6 +155,20 @@ const getChartConfig = (symbol: string): DashboardChartConfig => ({
 const statsCardEntryClassName = "animate-fade-in-up [animation-fill-mode:both]";
 const statsCardEntryDelays = ["0ms", "60ms", "120ms", "180ms"] as const;
 
+function trendFor(value: number | null) {
+  return {
+    value,
+    direction: value === null ? "unavailable" : value > 0 ? "up" : value < 0 ? "down" : "neutral",
+  } as const;
+}
+
+function formatTrendValue(value: number | null): string {
+  if (value === null) return "Unavailable";
+  if (value === 0) return "0%";
+  const magnitude = Math.abs(value) < 0.1 ? "<0.1" : Math.abs(value).toFixed(1).replace(/\.0$/, "");
+  return `${value > 0 ? "+" : "-"}${magnitude}%`;
+}
+
 function DailyActivityStatusPanel({
   state,
 }: {
@@ -162,7 +179,7 @@ function DailyActivityStatusPanel({
       ? {
           title: "No daily activity yet",
           description:
-            "Orders, revenue, and customer activity will appear once recorded.",
+            "Orders, order value, and customer activity will appear once recorded.",
         }
       : {
           title: "Activity unavailable",
@@ -206,12 +223,9 @@ export const DashboardStats = memo(function DashboardStats({
           <StatsCard
             title="Monthly Orders"
             value={currentMonth.orders}
-            description="Total orders this month"
+            description="Orders created this month so far vs previous full month"
             icon={<ShoppingCart className="h-5 w-5" />}
-            trend={{
-              value: currentMonth.orderGrowth,
-              isPositive: currentMonth.orderGrowth >= 0,
-            }}
+            trend={trendFor(currentMonth.orderGrowth)}
           />
         </div>
         <div
@@ -219,14 +233,11 @@ export const DashboardStats = memo(function DashboardStats({
           style={{ animationDelay: statsCardEntryDelays[1] }}
         >
           <StatsCard
-            title="Monthly Revenue"
+            title="Monthly Order Value"
             value={`${symbol}${currentMonth.revenue.toLocaleString()}`}
-            description="Revenue this month"
+            description="Includes unpaid orders and shipping/tax; refunds not subtracted"
             icon={<DollarSign className="h-5 w-5" />}
-            trend={{
-              value: currentMonth.revenueGrowth,
-              isPositive: currentMonth.revenueGrowth >= 0,
-            }}
+            trend={trendFor(currentMonth.revenueGrowth)}
           />
         </div>
         <div
@@ -242,7 +253,7 @@ export const DashboardStats = memo(function DashboardStats({
               typeof currentMonth.customerGrowth === "number"
                 ? {
                     value: currentMonth.customerGrowth,
-                    isPositive: currentMonth.customerGrowth >= 0,
+                    direction: trendFor(currentMonth.customerGrowth).direction,
                   }
                 : undefined
             }

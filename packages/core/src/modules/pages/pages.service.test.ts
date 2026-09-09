@@ -7,6 +7,7 @@ import {
   publicPageVisibilityCondition,
   updatePage,
 } from "./pages.service";
+import { PageRevisionConflictError } from "./pages.revision";
 
 describe("publicPageVisibilityCondition", () => {
   it("requires published, not deleted, and not scheduled for the future", () => {
@@ -174,5 +175,30 @@ describe("page publication authority", () => {
       }),
     ).resolves.toEqual({ revision: 2 });
     expect(update).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a concurrent revision conflict ahead of the media guard", async () => {
+    let reads = 0;
+    const db = {
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            get: async () => reads++ === 0
+              ? { id: "page_1", contentType: "page", slug: "page-1", isPublished: false, publishedAt: null, revision: 1, deletedAt: null }
+              : { id: "page_1", revision: 2, deletedAt: null },
+          }),
+        }),
+      }),
+      update: () => ({
+        set: () => ({
+          where: () => ({ returning: () => ({ get: async () => undefined }) }),
+        }),
+      }),
+    };
+
+    await expect(updatePage(db as never, "page_1", {
+      expectedRevision: 1,
+      featuredImage: { url: "https://media.example/media/media_page_1.png" },
+    } as never)).rejects.toBeInstanceOf(PageRevisionConflictError);
   });
 });

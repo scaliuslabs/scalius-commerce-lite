@@ -19333,10 +19333,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "type": "number"
                     },
                     "orderGrowth": {
-                      "type": "number"
+                      "type": "number",
+                      "nullable": true
                     },
                     "revenueGrowth": {
-                      "type": "number"
+                      "type": "number",
+                      "nullable": true
                     },
                     "orderStatus": {
                       "type": "object",
@@ -19544,10 +19546,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "type": "number"
                     },
                     "orderGrowth": {
-                      "type": "number"
+                      "type": "number",
+                      "nullable": true
                     },
                     "revenueGrowth": {
-                      "type": "number"
+                      "type": "number",
+                      "nullable": true
                     },
                     "orderStatus": {
                       "type": "object",
@@ -19679,10 +19683,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "type": "number"
                     },
                     "orderGrowth": {
-                      "type": "number"
+                      "type": "number",
+                      "nullable": true
                     },
                     "revenueGrowth": {
-                      "type": "number"
+                      "type": "number",
+                      "nullable": true
                     },
                     "orderStatus": {
                       "type": "object",

@@ -4,8 +4,8 @@
 import { categories, collections, pages, products, siteSettings } from "@scalius/database/schema";
 import { and, eq, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import type { Database } from "@scalius/database/client";
-import { NotFoundError, ServiceUnavailableError } from "@scalius/core/errors";
+import { buildBatchGuard, safeBatch, type Database } from "@scalius/database/client";
+import { ConflictError, NotFoundError, ServiceUnavailableError } from "@scalius/core/errors";
 import { getPublicCategoryById } from "../categories/categories.storefront";
 import { getStorefrontProducts } from "../products/products.storefront";
 import { publicCategoryConditions } from "../categories/categories.publication";
@@ -16,6 +16,11 @@ import type {
     ResolvedNavigationItem,
 } from "@scalius/shared/navigation-target";
 import { normalizeResourceCanonicalPath } from "@scalius/shared/seo-canonical";
+import {
+    isMediaReferenceDeletingGuardError,
+    MEDIA_REFERENCE_DELETING_MESSAGE,
+    noDeletingMediaReferences,
+} from "../media/media-reference-guard";
 
 // ─────────────────────────────────────────
 // Types
@@ -240,6 +245,7 @@ export async function saveNavigationConfig(
 ) {
     const configField = type === "header" ? "headerConfig" : "footerConfig";
     const configJson = JSON.stringify(parseNavigationConfig(type, config));
+    const mediaGuard = noDeletingMediaReferences(configJson);
 
     const [existing] = await db
         .select({ id: siteSettings.id })
@@ -247,20 +253,41 @@ export async function saveNavigationConfig(
         .limit(1);
 
     if (existing) {
-        await db
+        const updated = await db
             .update(siteSettings)
             .set({ [configField]: configJson, updatedAt: sql`unixepoch()` })
-            .where(eq(siteSettings.id, existing.id));
+            .where(and(
+                eq(siteSettings.id, existing.id),
+                ...(mediaGuard ? [mediaGuard] : []),
+            ))
+            .returning({ id: siteSettings.id })
+            .get();
+        if (!updated && mediaGuard) {
+            throw new ConflictError(MEDIA_REFERENCE_DELETING_MESSAGE);
+        }
     } else {
-        await db.insert(siteSettings).values({
-            id: "settings_" + nanoid(),
-            siteName: "My Store",
-            siteDescription: "",
-            headerConfig: type === "header" ? configJson : JSON.stringify({}),
-            footerConfig: type === "footer" ? configJson : JSON.stringify({}),
-            createdAt: sql`unixepoch()`,
-            updatedAt: sql`unixepoch()`,
-        });
+        const insert = db.insert(siteSettings).values({
+                id: "settings_" + nanoid(),
+                siteName: "My Store",
+                siteDescription: "",
+                headerConfig: type === "header" ? configJson : JSON.stringify({}),
+                footerConfig: type === "footer" ? configJson : JSON.stringify({}),
+                createdAt: sql`unixepoch()`,
+                updatedAt: sql`unixepoch()`,
+            });
+        if (mediaGuard) {
+            try {
+                await safeBatch(db, [
+                    buildBatchGuard(db, mediaGuard, "MEDIA_REFERENCE_DELETING"),
+                    insert,
+                ] as never);
+            } catch (error) {
+                if (isMediaReferenceDeletingGuardError(error)) throw new ConflictError(MEDIA_REFERENCE_DELETING_MESSAGE);
+                throw error;
+            }
+        } else {
+            await insert;
+        }
     }
 }
 
@@ -278,13 +305,23 @@ export async function updateNavigationConfig(
     if (!existing) throw new NotFoundError("Navigation settings not found");
 
     const configField = type === "header" ? "headerConfig" : "footerConfig";
-    await db
+    const configJson = JSON.stringify(parseNavigationConfig(type, config));
+    const mediaGuard = noDeletingMediaReferences(configJson);
+    const updated = await db
         .update(siteSettings)
         .set({
-            [configField]: JSON.stringify(parseNavigationConfig(type, config)),
+            [configField]: configJson,
             updatedAt: sql`unixepoch()`,
         })
-        .where(eq(siteSettings.id, id));
+        .where(and(
+            eq(siteSettings.id, id),
+            ...(mediaGuard ? [mediaGuard] : []),
+        ))
+        .returning({ id: siteSettings.id })
+        .get();
+    if (!updated && mediaGuard) {
+        throw new ConflictError(MEDIA_REFERENCE_DELETING_MESSAGE);
+    }
 }
 
 /** Reset a legacy navigation config by site-settings ID. */

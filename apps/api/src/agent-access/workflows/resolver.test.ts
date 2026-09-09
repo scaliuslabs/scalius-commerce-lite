@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   AGENT_INTENT_EVAL_CASES,
+  AGENT_INTENT_OPERATION_CASES,
   BANGLADESH_SETUP_ADVERSARIAL_CASES,
 } from "../../../../../packages/cli/test/fixtures/agent-intents";
 import app from "../../app";
@@ -2360,6 +2361,16 @@ describe("reviewed agent workflow resolver", () => {
       disposition: "unsupported",
       classification: { code: "no_supported_workflow" },
     });
+  });
+
+  it.each(AGENT_INTENT_OPERATION_CASES)("preserves action and target for $id", (testCase) => {
+    const resolution = resolveWorkflow({ prompt: testCase.prompt, surface: "dashboard" });
+    expect(resolution.disposition, testCase.id).toBe(testCase.expectedDisposition);
+    const ids = operationIds(resolution);
+    if (testCase.expectedOperationIds) expect(ids, testCase.id).toEqual(testCase.expectedOperationIds);
+    for (const forbiddenOperationId of testCase.forbiddenOperationIds ?? []) {
+      expect(ids, `${testCase.id} executed ${forbiddenOperationId}`).not.toContain(forbiddenOperationId);
+    }
   });
 
   it("returns at most three compact choices for genuinely broad intent", () => {
