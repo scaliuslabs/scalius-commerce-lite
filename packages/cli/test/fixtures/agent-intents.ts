@@ -1364,3 +1364,69 @@ export const BANGLADESH_SETUP_ADVERSARIAL_CASES = [
     safetyAssertion: "non-atomic",
   },
 ] as const satisfies readonly BangladeshSetupAdversarialCase[];
+
+export type AgentIntentOperationCase = {
+  id: string;
+  prompt: string;
+  expectedDisposition: "execute" | "ask" | "unsupported";
+  expectedOperationIds?: readonly string[];
+  forbiddenOperationIds?: readonly string[];
+};
+
+export const AGENT_INTENT_OPERATION_CASES: readonly AgentIntentOperationCase[] = [
+  {
+    id: "cancel-order",
+    prompt: "Cancel an order",
+    expectedDisposition: "ask",
+    forbiddenOperationIds: ["dashboard.orders.return_cancel", "dashboard.orders.fulfill"],
+  },
+  {
+    id: "fulfill-order",
+    prompt: "Fulfill an order",
+    expectedDisposition: "execute",
+    expectedOperationIds: [
+      "dashboard.orders.get",
+      "dashboard.orders.fulfill",
+      "dashboard.orders.fulfillment_get",
+    ],
+  },
+  {
+    id: "update-order-status",
+    prompt: "Update order status",
+    expectedDisposition: "execute",
+    expectedOperationIds: ["dashboard.orders.update_status"],
+  },
+  {
+    id: "update-customer-notification-rules",
+    prompt: "Update customer SMS notification rules for shipped orders.",
+    expectedDisposition: "execute",
+    expectedOperationIds: [
+      "dashboard.notifications.customer_rules_get",
+      "dashboard.notifications.customer_rules_update",
+    ],
+  },
+  {
+    id: "update-payment-status",
+    prompt: "Update payment status",
+    expectedDisposition: "ask",
+    forbiddenOperationIds: ["dashboard.orders.update_status"],
+  },
+  {
+    id: "enable-theme",
+    prompt: "Enable theme",
+    expectedDisposition: "unsupported",
+    forbiddenOperationIds: ["dashboard.theme.draft_save", "dashboard.theme.publish"],
+  },
+  {
+    id: "manual-cod-order",
+    prompt: "Create a manual cash on delivery order",
+    expectedDisposition: "ask",
+    forbiddenOperationIds: ["dashboard.orders.create_shipment", "dashboard.orders.shipment_status_sync"],
+  },
+  {
+    id: "manual-cod-order-with-negated-shipment",
+    prompt: "Create a manual cash on delivery order, but do not create a shipment",
+    expectedDisposition: "ask",
+    forbiddenOperationIds: ["dashboard.orders.create_shipment", "dashboard.orders.shipment_status_sync"],
+  },
+];
