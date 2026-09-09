@@ -18,7 +18,7 @@ import {
 } from "drizzle-orm";
 import { ftsMatch } from "../../search/fts5";
 import { nanoid } from "nanoid";
-import { safeBatch, type Database } from "@scalius/database/client";
+import { buildBatchGuard, safeBatch, type Database } from "@scalius/database/client";
 import {
   NotFoundError,
   ConflictError,
@@ -43,7 +43,15 @@ import {
   normalizePageRevisionClaims,
   pageClaimIdsCondition,
   rethrowPageRevisionConflict,
+  PageRevisionConflictError,
+  PageStateConflictError,
 } from "./pages.revision";
+import {
+  hasDeletingMediaReference,
+  isMediaReferenceDeletingGuardError,
+  MEDIA_REFERENCE_DELETING_MESSAGE,
+  noDeletingMediaReferences,
+} from "../media/media-reference-guard";
 
 export {
   createPageSchema,
@@ -406,34 +414,52 @@ export async function createPage(
     : null;
 
   const pageId = `${data.contentType === "article" ? "article" : "page"}_${nanoid()}`;
+  const serializedContent = sanitizeHtml(data.content);
+  const serializedFeaturedImage = data.featuredImage ?? null;
+  const mediaGuard = noDeletingMediaReferences(`${serializedContent}\u0000${JSON.stringify(serializedFeaturedImage)}`);
   try {
-    await db.insert(pages).values({
-      id: pageId,
-      contentType: data.contentType,
-      title: data.title,
-      content: sanitizeHtml(data.content),
-      excerpt: data.contentType === "article" ? data.excerpt || null : null,
-      author: data.contentType === "article" ? data.author || null : null,
-      tags: data.contentType === "article" ? data.tags : [],
-      slug: data.slug,
-      metaTitle: data.metaTitle || null,
-      metaDescription: data.metaDescription || null,
-      canonicalPath: data.canonicalPath ?? null,
-      noIndex: data.noIndex ?? false,
-      excludeFromSitemap: data.excludeFromSitemap ?? false,
-      isPublished: data.isPublished,
-      publishedAt,
-      sortOrder: 0,
-      hideHeader: data.hideHeader,
-      hideFooter: data.hideFooter,
-      hideTitle: data.hideTitle,
-      featuredImage: data.featuredImage ?? null,
-      revision: 1,
-      createdAt: sql`unixepoch()`,
-      updatedAt: sql`unixepoch()`,
-      deletedAt: null,
-    });
+    const insert = db.insert(pages).values({
+        id: pageId,
+        contentType: data.contentType,
+        title: data.title,
+        content: serializedContent,
+        excerpt: data.contentType === "article" ? data.excerpt || null : null,
+        author: data.contentType === "article" ? data.author || null : null,
+        tags: data.contentType === "article" ? data.tags : [],
+        slug: data.slug,
+        metaTitle: data.metaTitle || null,
+        metaDescription: data.metaDescription || null,
+        canonicalPath: data.canonicalPath ?? null,
+        noIndex: data.noIndex ?? false,
+        excludeFromSitemap: data.excludeFromSitemap ?? false,
+        isPublished: data.isPublished,
+        publishedAt,
+        sortOrder: 0,
+        hideHeader: data.hideHeader,
+        hideFooter: data.hideFooter,
+        hideTitle: data.hideTitle,
+        featuredImage: serializedFeaturedImage,
+        revision: 1,
+        createdAt: sql`unixepoch()`,
+        updatedAt: sql`unixepoch()`,
+        deletedAt: null,
+      });
+    if (mediaGuard) {
+      await safeBatch(db, [
+        buildBatchGuard(
+          db,
+          mediaGuard,
+          "MEDIA_REFERENCE_DELETING",
+        ),
+        insert,
+      ] as never);
+    } else {
+      await insert;
+    }
   } catch (error) {
+    if (isMediaReferenceDeletingGuardError(error)) {
+      throw new ConflictError(MEDIA_REFERENCE_DELETING_MESSAGE);
+    }
     if (isPageSlugConstraintError(error)) {
       throw new ConflictError(
         "A page with this slug already exists, including in trash.",
@@ -544,6 +570,10 @@ export async function updatePage(
         ? existing.publishedAt
         : new Date()
     : null;
+  const writesMediaReference = updateData.content !== undefined || updateData.featuredImage !== undefined;
+  const updateMediaGuard = writesMediaReference
+    ? noDeletingMediaReferences(`${updateData.content ?? ""}\u0000${JSON.stringify(updateData.featuredImage ?? null)}`)
+    : undefined;
 
   let updated: { revision: number } | undefined;
   try {
@@ -560,6 +590,7 @@ export async function updatePage(
           eq(pages.id, id),
           eq(pages.revision, data.expectedRevision),
           isNull(pages.deletedAt),
+          ...(updateMediaGuard ? [updateMediaGuard] : []),
         ),
       )
       .returning({ revision: pages.revision })
@@ -573,6 +604,23 @@ export async function updatePage(
     throw error;
   }
   if (!updated) {
+    const latest = await db
+      .select({ revision: pages.revision, deletedAt: pages.deletedAt })
+      .from(pages)
+      .where(eq(pages.id, id))
+      .get();
+    if (latest?.revision !== data.expectedRevision) {
+      throw new PageRevisionConflictError(id, data.expectedRevision, latest?.revision ?? null);
+    }
+    if (latest.deletedAt !== null) {
+      throw new PageStateConflictError(id, "active");
+    }
+    if (updateMediaGuard && await hasDeletingMediaReference(
+      db,
+      `${updateData.content ?? ""}\u0000${JSON.stringify(updateData.featuredImage ?? null)}`,
+    )) {
+      throw new ConflictError(MEDIA_REFERENCE_DELETING_MESSAGE);
+    }
     await rethrowPageRevisionConflict(
       db,
       claims,

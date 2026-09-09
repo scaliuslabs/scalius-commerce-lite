@@ -34,6 +34,12 @@ import {
     rethrowCategoryRevisionConflict,
     assertCategoryClaimsCurrent,
 } from "./categories.revision";
+import {
+    hasDeletingMediaReference,
+    isMediaReferenceDeletingGuardError,
+    MEDIA_REFERENCE_DELETING_MESSAGE,
+    noDeletingMediaReferences,
+} from "../media/media-reference-guard";
 
 export const CATEGORY_TEXT_CHUNK_SIZE = 12_000;
 export const categorySectionValues = ["summary", "text"] as const;
@@ -540,27 +546,44 @@ export async function createCategory(
     }
 
     const categoryId = "cat_" + nanoid();
+    const imageUrl = data.image?.url || null;
+    const mediaGuard = noDeletingMediaReferences(`${data.content}\u0000${imageUrl ?? ""}`);
 
     try {
-        await db.insert(categories).values({
-            id: categoryId,
-            name: data.name,
-            description: data.description,
-            content: data.content,
-            slug: data.slug,
-            imageUrl: data.image?.url || null,
-            metaTitle: data.metaTitle,
-            metaDescription: data.metaDescription,
-            canonicalPath: data.canonicalPath ?? null,
-            noIndex: data.noIndex ?? false,
-            excludeFromSitemap: data.excludeFromSitemap ?? false,
-            status: "draft",
-            revision: 1,
-            createdAt: sql`unixepoch()`,
-            updatedAt: sql`unixepoch()`,
-            deletedAt: null,
-        });
+        const insert = db.insert(categories).values({
+                id: categoryId,
+                name: data.name,
+                description: data.description,
+                content: data.content,
+                slug: data.slug,
+                imageUrl,
+                metaTitle: data.metaTitle,
+                metaDescription: data.metaDescription,
+                canonicalPath: data.canonicalPath ?? null,
+                noIndex: data.noIndex ?? false,
+                excludeFromSitemap: data.excludeFromSitemap ?? false,
+                status: "draft",
+                revision: 1,
+                createdAt: sql`unixepoch()`,
+                updatedAt: sql`unixepoch()`,
+                deletedAt: null,
+            });
+        if (mediaGuard) {
+            await safeBatch(db, [
+                buildBatchGuard(
+                    db,
+                    mediaGuard,
+                    "MEDIA_REFERENCE_DELETING",
+                ),
+                insert,
+            ] as never);
+        } else {
+            await insert;
+        }
     } catch (error) {
+        if (isMediaReferenceDeletingGuardError(error)) {
+            throw new ConflictError(MEDIA_REFERENCE_DELETING_MESSAGE);
+        }
         if (isCategorySlugConstraintError(error)) {
             throw new ConflictError("A category with this slug already exists.");
         }
@@ -621,6 +644,7 @@ export async function updateCategory(
             SELECT 1 FROM ${collections}
             WHERE ${activeDynamicCollectionCategoryReferenceCondition(claims)}
         )`;
+    const updateMediaGuard = noDeletingMediaReferences(`${data.content}\u0000${data.image?.url || ""}`);
 
     try {
         const updated = await db
@@ -645,11 +669,18 @@ export async function updateCategory(
                 eq(categories.revision, data.expectedRevision),
                 isNull(categories.deletedAt),
                 lifecycleCondition,
+                ...(updateMediaGuard ? [updateMediaGuard] : []),
             ))
-            .returning({ revision: categories.revision })
-            .get();
+        .returning({ revision: categories.revision })
+        .get();
         if (!updated) {
             await assertCategoryClaimsCurrent(db, claims, "active");
+            if (updateMediaGuard && await hasDeletingMediaReference(
+                db,
+                `${data.content}\u0000${data.image?.url || ""}`,
+            )) {
+                throw new ConflictError(MEDIA_REFERENCE_DELETING_MESSAGE);
+            }
             if (data.status === "published") {
                 throw new ValidationError(
                     "Add at least one active product with a buyer-resolvable SKU before publishing this category.",
@@ -660,6 +691,9 @@ export async function updateCategory(
         }
         return { revision: updated.revision, status: data.status };
     } catch (error) {
+        if (isMediaReferenceDeletingGuardError(error)) {
+            throw new ConflictError(MEDIA_REFERENCE_DELETING_MESSAGE);
+        }
         if (isCategorySlugConstraintError(error)) {
             throw new ConflictError("A category with this slug already exists.");
         }
