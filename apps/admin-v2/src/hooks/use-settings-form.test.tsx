@@ -154,6 +154,44 @@ describe("useSettingsForm freshness", () => {
     expect(hook.current?.values).toEqual({ label: "submitted", caption: "normalized" });
   });
 
+  it("fences a pre-acknowledgment read before Retry preserves a post-submit revert", async () => {
+    const save = deferred<Values>();
+    const background = deferred<Partial<Values>>();
+    const fetchFn = vi.fn()
+      .mockResolvedValueOnce({ label: "before", caption: "before" })
+      .mockImplementationOnce(() => background.promise)
+      .mockRejectedValueOnce(new Error("Confirming read failed"))
+      .mockResolvedValueOnce({ label: "after", caption: "before" });
+    const { hook, queryClient, queryKey } = await mountForm({
+      fetchFn,
+      saveFn: () => save.promise,
+    });
+
+    act(() => hook.current?.setValue("label", "after"));
+    let submission!: Promise<void>;
+    await act(async () => { submission = hook.current!.handleSubmit(); });
+    act(() => hook.current?.setValue("label", "before"));
+
+    act(() => { void queryClient.refetchQueries({ queryKey }); });
+    await vi.waitFor(() => expect(fetchFn).toHaveBeenCalledTimes(2));
+    await act(async () => {
+      background.resolve({ label: "before", caption: "before" });
+      await Promise.resolve();
+      save.resolve({ label: "after", caption: "before" });
+      await submission;
+    });
+    await vi.waitFor(() => expect(fetchFn).toHaveBeenCalledTimes(3));
+
+    expect(hook.current?.values.label).toBe("before");
+    expect(hook.current?.isDirty).toBe(true);
+
+    await act(async () => { await queryClient.refetchQueries({ queryKey }); });
+    expect(hook.current?.values.label).toBe("before");
+    expect(hook.current?.isDirty).toBe(true);
+    act(() => hook.current?.reset());
+    expect(hook.current?.values.label).toBe("after");
+  });
+
   it("keeps edited top-level fields across query refreshes and adopts untouched server fields", async () => {
     const { hook, queryClient, queryKey } = await mountForm({ saveFn: async (values) => values });
     act(() => hook.current?.setValues((values) => ({
