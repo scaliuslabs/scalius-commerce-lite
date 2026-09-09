@@ -2,7 +2,10 @@ import {
   ServiceUnavailableError,
   ValidationError,
 } from "@scalius/core/errors";
-import type { BusinessInfo } from "../settings/business-settings.service";
+import {
+  normalizeBusinessEmail,
+  type BusinessInfo,
+} from "../settings/business-settings.service";
 
 export const INVOICE_RENDER_VERSION = "invoice-v1" as const;
 
@@ -195,7 +198,11 @@ export function validateInvoiceBusinessInfo(
   if (prefix.length > 40) {
     throw new ValidationError("Invoice prefix must be 40 characters or fewer.");
   }
-  return { ...businessInfo, invoicePrefix: prefix };
+  return {
+    ...businessInfo,
+    email: normalizeBusinessEmail(businessInfo.email),
+    invoicePrefix: prefix,
+  };
 }
 
 export function invoiceSnapshotToDocument(

@@ -4,23 +4,23 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+} from "~/components/ui/card";
+import { Button } from "~/components/ui/button";
+import { Input } from "~/components/ui/input";
+import { Label } from "~/components/ui/label";
 import { ImageIcon, Loader2, RotateCcw, Save, Trash2, Upload } from "lucide-react";
-import { useSettingsForm } from "@/hooks/use-settings-form";
-import { queryKeys } from "@/lib/query-keys";
+import { useSettingsForm } from "~/hooks/use-settings-form";
+import { queryKeys } from "~/lib/query-keys";
 import {
   getBusinessSettings,
   type SettingsPayload,
   updateBusinessSettings,
-} from "@/lib/api-functions/settings";
+} from "~/lib/api-functions/settings";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { UnsavedChangesGuard } from "../shared/UnsavedChangesGuard";
 import { normalizePublicMediaUrl } from "@scalius/shared/media-url";
 import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
-import { ADMIN_IMAGE_PRESETS } from "@/lib/admin-image-presentation";
+import { ADMIN_IMAGE_PRESETS } from "~/lib/admin-image-presentation";
 import { MediaManager } from "../media-manager";
 
 interface BusinessSettings {
@@ -106,7 +106,15 @@ export default function BusinessSettingsBuilder() {
   }
 
   return (
-    <div className="max-w-2xl space-y-5 [&_input]:min-h-11 md:[&_input]:min-h-9">
+    <form
+      method="post"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (isSaving || !isLoaded || !isDirty || invoiceLogoInvalid) return;
+        void handleSubmit();
+      }}
+      className="max-w-2xl space-y-5 [&_input]:min-h-11 md:[&_input]:min-h-9"
+    >
       <UnsavedChangesGuard isDirty={isDirty || isSaving} isSubmitting={false} allowSamePathStateNavigation />
       <Card>
         <CardHeader className="pb-3">
@@ -162,6 +170,7 @@ export default function BusinessSettingsBuilder() {
             <Label htmlFor="business-email">Email</Label>
             <Input
               id="business-email"
+              name="email"
               type="email"
               placeholder="e.g., info@acme.com"
               value={values.email}
@@ -360,8 +369,7 @@ export default function BusinessSettingsBuilder() {
           Reset
         </Button>
         <Button
-          type="button"
-          onClick={() => void handleSubmit()}
+          type="submit"
           disabled={isSaving || !isLoaded || !isDirty || invoiceLogoInvalid}
           className="min-h-11 min-w-[140px] md:min-h-10"
         >
@@ -374,6 +382,6 @@ export default function BusinessSettingsBuilder() {
         </Button>
         </div>
       ) : null}
-    </div>
+    </form>
   );
 }

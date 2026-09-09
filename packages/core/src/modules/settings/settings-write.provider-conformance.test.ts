@@ -158,6 +158,18 @@ describe.each([
   ["D1", createD1SettingsDatabase],
   ["TursoDB", createTursoSettingsDatabase],
 ] as const)("%s settings aggregate conformance", (_provider, createDatabase) => {
+  it("rejects malformed Business email before any aggregate write", async () => {
+    const sqlite = createSettingsSchema();
+    const db = createDatabase(sqlite);
+    await saveBusinessSettings(db, { email: "original@example.test" });
+    const snapshot = () => sqlite.prepare("SELECT * FROM settings ORDER BY category, key").all();
+    const previous = snapshot();
+
+    await expect(saveBusinessSettings(db, { companyName: "Updated", email: "support@" }))
+      .rejects.toThrow("valid business support email address");
+    expect(snapshot()).toEqual(previous);
+  });
+
   it.each(["company_name", "phone", "invoice_footer_text"])("rolls back the entire Business save when %s fails", async (failure) => {
     const sqlite = createSettingsSchema();
     const db = createDatabase(sqlite);
@@ -187,6 +199,8 @@ describe.each([
       phone: "", email: "updated@example.test", invoiceFooterText: "Thank you",
       legalName: "Original legal name", country: "Bangladesh", invoicePrefix: "INV",
     });
+    await saveBusinessSettings(db, { email: "  " });
+    expect((await getBusinessSettings(db)).email).toBe("");
     const saved = snapshot();
     await saveBusinessSettings(db, {});
     expect(snapshot()).toEqual(saved);
