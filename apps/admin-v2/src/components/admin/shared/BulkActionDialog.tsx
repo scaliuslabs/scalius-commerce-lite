@@ -62,11 +62,7 @@ export function BulkActionDialog({
           <AlertDialogAction
             onClick={onConfirm}
             disabled={isLoading}
-            className={
-              config.variant === "destructive"
-                ? "bg-destructive hover:bg-destructive/90"
-                : ""
-            }
+            variant={config.variant}
           >
             {isLoading ? "Processing..." : (config.confirmLabel ?? "Confirm")}
           </AlertDialogAction>

@@ -977,7 +977,7 @@ export function AbandonedCheckoutsManager({
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={performDelete}
-              className={cn("bg-destructive hover:bg-destructive/90")}
+              variant="destructive"
               disabled={isActionLoading}
             >
               {isActionLoading ? (

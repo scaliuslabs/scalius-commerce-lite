@@ -91,7 +91,7 @@ export function UnsavedChangesGuard({
           <AlertDialogCancel onClick={keepEditing}>Keep Editing</AlertDialogCancel>
           <AlertDialogAction
             onClick={proceed}
-            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            variant="destructive"
           >
             Discard Changes
           </AlertDialogAction>

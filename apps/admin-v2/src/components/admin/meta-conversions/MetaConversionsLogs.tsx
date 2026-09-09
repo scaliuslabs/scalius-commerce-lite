@@ -416,7 +416,7 @@ export function MetaConversionsLogs() {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleClearLogs}
-              className="bg-destructive hover:bg-destructive/90"
+              variant="destructive"
             >
               Clear all
             </AlertDialogAction>

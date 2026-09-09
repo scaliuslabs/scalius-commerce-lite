@@ -1,4 +1,3 @@
-import { cn } from "@scalius/shared/utils";
 import { AlertTriangle, Loader2, Trash2 } from "lucide-react";
 import {
   AlertDialog,
@@ -58,10 +57,8 @@ export function CategoryDeleteDialog({
           </AlertDialogCancel>
           <AlertDialogAction
             onClick={onConfirm}
-            className={cn(
-              "h-8 text-xs",
-              showTrashed ? "bg-destructive hover:bg-destructive/90" : "",
-            )}
+            variant={showTrashed ? "destructive" : "default"}
+            className="h-8 text-xs"
             disabled={isActionLoading}
           >
             {isActionLoading ? (

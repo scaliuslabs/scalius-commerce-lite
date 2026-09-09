@@ -393,6 +393,7 @@ export function TaxRatesPanel({
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
+              variant="destructive"
               disabled={deleteMutation.isPending || deletingRequiredRoles.length > 0}
               onClick={() => deleting && deletingRequiredRoles.length === 0 && deleteMutation.mutate(deleting)}
             >

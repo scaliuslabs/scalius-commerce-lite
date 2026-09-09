@@ -86,7 +86,8 @@ export function RevokeDialog({
             Keep access
           </AlertDialogCancel>
           <AlertDialogAction
-            className="min-h-11 bg-destructive text-destructive-foreground hover:bg-destructive/90 sm:min-h-9"
+            variant="destructive"
+            className="min-h-11 sm:min-h-9"
             onClick={(event) => {
               event.preventDefault();
               void confirm();

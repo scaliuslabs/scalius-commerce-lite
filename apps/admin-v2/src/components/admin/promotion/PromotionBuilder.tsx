@@ -652,7 +652,7 @@ export function PromotionBuilder({
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Keep promotion</AlertDialogCancel>
-            <AlertDialogAction onClick={() => void archivePromotion()} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+            <AlertDialogAction variant="destructive" onClick={() => void archivePromotion()}>
               {archiveMutation.isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}Archive promotion
             </AlertDialogAction>
           </AlertDialogFooter>
