@@ -82,7 +82,7 @@ describe("admin order recovery lifecycle", () => {
     expect(recovery).toMatchObject({
       state: "needs_attention", severity: "danger", activeLock: true,
       label: "Courier confirmation needed", shipmentId: "shipment",
-      canRepair: false, canRefresh: false, canRetryCreate: false,
+      canRepair: false, canRefresh: false, canRetryCreate: false, unknownOutcome: true,
     });
     expect(recovery.message).toMatch(/check the courier portal or contact the courier/i);
     expect(recovery.message).not.toMatch(/repair|automatically|wait for it to finish/i);
@@ -91,7 +91,7 @@ describe("admin order recovery lifecycle", () => {
   it("retains repair for a confirmed provider result with incomplete local finalization", async () => {
     const recovery = await shipmentRecovery("reconcile_required", "pending", false, "consignment_confirmed");
     expect(recovery).toMatchObject({
-      state: "needs_attention", activeLock: true, canRepair: true, canRefresh: true, canRetryCreate: false,
+      state: "needs_attention", activeLock: true, canRepair: true, canRefresh: true, canRetryCreate: false, unknownOutcome: false,
     });
   });
 

@@ -14,6 +14,8 @@ vi.mock("~/hooks/use-order-action-permissions", () => ({
 vi.mock("~/lib/api-mutations/orders", () => ({
   useCreateOrderShipment: () => ({ mutate: vi.fn(), isPending: false }),
   useReconcileShipment: () => ({ mutate: mocks.repair, isPending: false }),
+  useLookupUnknownShipment: () => ({ mutate: vi.fn(), isPending: false }),
+  useResolveUnknownShipment: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 vi.mock("./ManualFulfillmentDialog", () => ({ ManualFulfillmentDialog: () => null }));
 vi.mock("~/components/admin/ShipmentStatusIndicator", () => ({ default: () => null }));
@@ -33,7 +35,7 @@ const recovery: ShipmentRecovery = {
   label: "Courier confirmation needed",
   message: "Check the courier portal or contact the courier with this order number before attempting another booking.",
   shipmentId: "shipment_unknown", status: "reconcile_required", providerType: "pathao",
-  canRepair: false, canRefresh: false, canRetryCreate: false, updatedAt: null,
+  canRepair: false, canRefresh: false, canRetryCreate: false, unknownOutcome: true, updatedAt: null,
 };
 
 describe("ShipmentCard recovery authority", () => {

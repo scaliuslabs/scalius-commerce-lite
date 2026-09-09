@@ -3,7 +3,12 @@ import { createProvider } from "./factory";
 import { encryptCredentials, readStoredCredentialStrict } from "@scalius/core/utils/credential-encryption";
 
 import type { Database } from "@scalius/database/client";
-import { PROVIDER_OUTCOME_UNKNOWN, type ShipmentOptions, type ShipmentResult } from "./types";
+import {
+  PROVIDER_OUTCOME_UNKNOWN,
+  type MerchantOrderShipmentLookup,
+  type ShipmentOptions,
+  type ShipmentResult,
+} from "./types";
 import { and, eq, desc, getTableColumns, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { NotFoundError, ValidationError, ServiceUnavailableError, ConflictError } from "@scalius/core/errors";
@@ -426,6 +431,24 @@ export async function testDeliveryProvider(db: Database, id: string, encryptionK
   }
 }
 
+export async function lookupShipmentByMerchantOrderId(
+  db: Database,
+  providerId: string,
+  merchantOrderId: string,
+  encryptionKey?: string,
+): Promise<MerchantOrderShipmentLookup> {
+  const provider = await getDeliveryProvider(db, providerId);
+  if (!provider) throw new NotFoundError("Delivery provider not found");
+  const providerInstance = await createProvider(provider, encryptionKey, db);
+  if (!providerInstance.lookupShipmentByMerchantOrderId) {
+    return {
+      confirmed: false,
+      message: `${provider.type} does not support lookup by the original order number. Confirm the outcome in the courier portal or with courier support.`,
+    };
+  }
+  return providerInstance.lookupShipmentByMerchantOrderId(merchantOrderId);
+}
+
 /**
  * Create shipment for an order
  *
@@ -701,7 +724,7 @@ export async function checkShipmentStatus(db: Database, shipmentId: string, encr
         status: statusResult.status,
         rawStatus: statusResult.rawStatus,
         updatedAt: sql`unixepoch()`,
-        metadata: JSON.stringify(statusResult.metadata || {}),
+        metadata: mergeShipmentMetadata(shipment.metadata, statusResult.metadata || {}),
       })
       .where(eq(deliveryShipments.id, shipmentId));
 

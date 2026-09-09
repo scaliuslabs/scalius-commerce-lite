@@ -85,6 +85,7 @@ export interface ShipmentRecovery {
   canRefresh: boolean;
   canRetryCreate: boolean;
   canRepair: boolean;
+  unknownOutcome?: boolean;
   updatedAt: OrderTimestamp | null;
 }
 

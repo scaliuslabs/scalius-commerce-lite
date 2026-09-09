@@ -631,6 +631,7 @@ const DEFAULT_SHIPMENT_RECOVERY_SUMMARY: OrderShipmentRecoverySummary = {
     canRefresh: false,
     canRetryCreate: false,
     canRepair: false,
+    unknownOutcome: false,
     updatedAt: null,
 };
 
@@ -862,6 +863,7 @@ function buildShipmentRecoverySummary(
             canRefresh: false,
             canRetryCreate: false,
             canRepair: false,
+            unknownOutcome: true,
             updatedAt: latestShipment.updatedAt,
         };
     }
@@ -879,6 +881,7 @@ function buildShipmentRecoverySummary(
             canRefresh: canProviderRefresh && !hasActiveClaim,
             canRetryCreate: false,
             canRepair: true,
+            unknownOutcome: false,
             updatedAt: latestShipment?.updatedAt ?? null,
         };
     }
@@ -896,6 +899,7 @@ function buildShipmentRecoverySummary(
             canRefresh: false,
             canRetryCreate: false,
             canRepair: false,
+            unknownOutcome: false,
             updatedAt: latestShipment?.updatedAt ?? null,
         };
     }
@@ -913,6 +917,7 @@ function buildShipmentRecoverySummary(
             canRefresh: canProviderRefresh,
             canRetryCreate: false,
             canRepair: false,
+            unknownOutcome: false,
             updatedAt: latestShipment?.updatedAt ?? null,
         };
     }
@@ -930,6 +935,7 @@ function buildShipmentRecoverySummary(
             canRefresh: false,
             canRetryCreate: false,
             canRepair: false,
+            unknownOutcome: false,
             updatedAt: latestShipment?.updatedAt ?? null,
         };
     }
@@ -951,6 +957,7 @@ function buildShipmentRecoverySummary(
             canRefresh: canProviderRefresh,
             canRetryCreate: true,
             canRepair: false,
+            unknownOutcome: false,
             updatedAt: latestShipment?.updatedAt ?? null,
         };
     }

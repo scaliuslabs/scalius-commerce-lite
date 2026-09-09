@@ -156,6 +156,27 @@ export const shipmentCreationOptionsSchema = z.object({
 
 export type ShipmentCreationOptionsInput = z.infer<typeof shipmentCreationOptionsSchema>;
 
+const unknownShipmentResolutionBase = z.object({
+    expectedOrderVersion: z.number().int().min(1),
+    operationKey: z.string().uuid(),
+    evidenceSource: z.enum(["courier_portal", "courier_support"]),
+    evidenceNote: z.string().trim().min(8).max(500),
+    confirmationAccepted: z.literal(true),
+});
+
+export const unknownShipmentResolutionSchema = z.discriminatedUnion("outcome", [
+    unknownShipmentResolutionBase.extend({
+        outcome: z.literal("confirmed_existing"),
+        externalId: z.string().trim().min(1).max(180),
+        trackingId: z.string().trim().min(1).max(180).optional(),
+    }).strict(),
+    unknownShipmentResolutionBase.extend({
+        outcome: z.enum(["confirmed_not_created", "confirmed_cancelled"]),
+    }).strict(),
+]);
+
+export type UnknownShipmentResolutionInput = z.infer<typeof unknownShipmentResolutionSchema>;
+
 export const bulkShipOrderSchema = z.object({
     orderIds: z
         .array(shipmentResourceIdSchema)

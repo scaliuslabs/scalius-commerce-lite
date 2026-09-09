@@ -38903,6 +38903,251 @@ export type PostApiV1AdminOrdersByIdShipmentsByShipmentIdReconcileResponses = {
 
 export type PostApiV1AdminOrdersByIdShipmentsByShipmentIdReconcileResponse = PostApiV1AdminOrdersByIdShipmentsByShipmentIdReconcileResponses[keyof PostApiV1AdminOrdersByIdShipmentsByShipmentIdReconcileResponses];
 
+export type PostApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknownLookupData = {
+    body: {
+        expectedOrderVersion: number;
+        operationKey: string;
+    };
+    path: {
+        id: string;
+        shipmentId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/orders/{id}/shipments/{shipmentId}/resolve-unknown/lookup';
+};
+
+export type PostApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknownLookupErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknownLookupError = PostApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknownLookupErrors[keyof PostApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknownLookupErrors];
+
+export type PostApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknownLookupResponses = {
+    /**
+     * Unknown shipment resolved from provider confirmation
+     */
+    200: {
+        success: true;
+        data: {
+            status: 'repaired';
+            resolution: 'provider_confirmed_existing' | 'merchant_confirmed_existing';
+            orderId: string;
+            shipmentId: string;
+            orderStatus: string;
+            shipmentStatus: string;
+            orderStatusChanged: boolean;
+            inventoryReconciled: boolean;
+            claimCleared: boolean;
+            trackingId: string | null;
+            message: string;
+        } | {
+            status: 'released';
+            resolution: 'merchant_confirmed_not_created' | 'merchant_confirmed_cancelled';
+            orderId: string;
+            shipmentId: string;
+            claimCleared: true;
+            orderVersion: number;
+            message: string;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknownLookupResponse = PostApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknownLookupResponses[keyof PostApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknownLookupResponses];
+
+export type PostApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknownData = {
+    body: {
+        expectedOrderVersion: number;
+        operationKey: string;
+        evidenceSource: 'courier_portal' | 'courier_support';
+        evidenceNote: string;
+        confirmationAccepted: true;
+        outcome: 'confirmed_existing';
+        externalId: string;
+        trackingId?: string;
+    } | {
+        expectedOrderVersion: number;
+        operationKey: string;
+        evidenceSource: 'courier_portal' | 'courier_support';
+        evidenceNote: string;
+        confirmationAccepted: true;
+        outcome: 'confirmed_not_created' | 'confirmed_cancelled';
+    };
+    path: {
+        id: string;
+        shipmentId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/orders/{id}/shipments/{shipmentId}/resolve-unknown';
+};
+
+export type PostApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknownErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknownError = PostApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknownErrors[keyof PostApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknownErrors];
+
+export type PostApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknownResponses = {
+    /**
+     * Unknown shipment resolution recorded
+     */
+    200: {
+        success: true;
+        data: {
+            status: 'repaired';
+            resolution: 'provider_confirmed_existing' | 'merchant_confirmed_existing';
+            orderId: string;
+            shipmentId: string;
+            orderStatus: string;
+            shipmentStatus: string;
+            orderStatusChanged: boolean;
+            inventoryReconciled: boolean;
+            claimCleared: boolean;
+            trackingId: string | null;
+            message: string;
+        } | {
+            status: 'released';
+            resolution: 'merchant_confirmed_not_created' | 'merchant_confirmed_cancelled';
+            orderId: string;
+            shipmentId: string;
+            claimCleared: true;
+            orderVersion: number;
+            message: string;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknownResponse = PostApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknownResponses[keyof PostApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknownResponses];
+
 export type PostApiV1AdminOrdersByIdRefundData = {
     body: {
         amount?: number;
@@ -40841,6 +41086,7 @@ export type GetApiV1AdminOrdersResponses = {
                     canRefresh: boolean;
                     canRetryCreate: boolean;
                     canRepair: boolean;
+                    unknownOutcome: boolean;
                     updatedAt: NullableTimestamp;
                 };
                 paymentRecovery: {
@@ -41264,6 +41510,7 @@ export type GetApiV1AdminOrdersPaymentRecoveryResponses = {
                     canRefresh: boolean;
                     canRetryCreate: boolean;
                     canRepair: boolean;
+                    unknownOutcome: boolean;
                     updatedAt: NullableTimestamp;
                 };
                 paymentRecovery: {
@@ -41967,6 +42214,7 @@ export type GetApiV1AdminOrdersByIdResponses = {
                 canRefresh: boolean;
                 canRetryCreate: boolean;
                 canRepair: boolean;
+                unknownOutcome: boolean;
                 updatedAt: NullableTimestamp;
             };
             paymentRecovery: {

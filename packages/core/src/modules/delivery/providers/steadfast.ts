@@ -7,6 +7,7 @@ import type {
   ShipmentOptions,
   SteadfastOrderResponse,
   SteadfastStatusResponse,
+  MerchantOrderShipmentLookup,
 } from "../types";
 import type { DeliveryProviderInterface } from "../provider";
 import { mapProviderStatus } from "../status-mapper";
@@ -229,6 +230,40 @@ export class SteadfastProvider implements DeliveryProviderInterface {
         metadata: {
           error: error instanceof Error ? error.message : String(error),
         },
+      };
+    }
+  }
+
+  async lookupShipmentByMerchantOrderId(
+    merchantOrderId: string,
+  ): Promise<MerchantOrderShipmentLookup> {
+    try {
+      const response = await fetch(
+        `${this.credentials.baseUrl.replace(/\/$/, "")}/status_by_invoice/${encodeURIComponent(merchantOrderId)}`,
+        { method: "GET", headers: this.getHeaders() },
+      );
+      if (!response.ok) {
+        return {
+          confirmed: false,
+          message: "Steadfast did not confirm a shipment for this order. The recovery lock remains active.",
+        };
+      }
+      const data = await response.json() as SteadfastStatusResponse;
+      if (data.status !== 200 || typeof data.delivery_status !== "string" || !data.delivery_status.trim()) {
+        return {
+          confirmed: false,
+          message: "Steadfast returned no usable shipment confirmation. The recovery lock remains active.",
+        };
+      }
+      return {
+        confirmed: true,
+        status: mapProviderStatus(this.getType(), data.delivery_status),
+        rawStatus: data.delivery_status,
+      };
+    } catch {
+      return {
+        confirmed: false,
+        message: "Steadfast lookup could not be completed. The recovery lock remains active.",
       };
     }
   }

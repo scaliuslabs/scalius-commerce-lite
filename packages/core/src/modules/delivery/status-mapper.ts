@@ -121,7 +121,7 @@ const STEADFAST_STATUS_MAP: Record<string, ShipmentStatusCode> = {
   "partial_delivered": ShipmentStatusCode.PARTIAL_DELIVERED,
   "partial_delivered_approval_pending": ShipmentStatusCode.PARTIAL_DELIVERED,
   "cancelled": ShipmentStatusCode.CANCELLED,
-  "cancelled_approval_pending": ShipmentStatusCode.CANCELLED,
+  "cancelled_approval_pending": ShipmentStatusCode.ON_HOLD,
   "unknown": ShipmentStatusCode.UNKNOWN,
   "unknown_approval_pending": ShipmentStatusCode.UNKNOWN,
 };
@@ -131,6 +131,6 @@ function mapSteadfastStatus(status: string): string {
   const mapped = STEADFAST_STATUS_MAP[status.toLowerCase()];
   if (mapped) return mapped;
 
-  console.warn(`[status-mapper] Unmapped Steadfast status: "${status}" - defaulting to ${ShipmentStatusCode.UNKNOWN}`);
+  console.warn(`[status-mapper] Unmapped Steadfast status; defaulting to ${ShipmentStatusCode.UNKNOWN}`);
   return ShipmentStatusCode.UNKNOWN;
 }
