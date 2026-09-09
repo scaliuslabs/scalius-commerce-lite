@@ -463,6 +463,224 @@ describe("saveDeliveryProvider credential storage", () => {
 });
 
 describe("testDeliveryProvider durable proof", () => {
+  async function runSavedPathaoFlow(
+    storesResponse: (url: string) => Response | Promise<Response>,
+    tokenResponse: () => Response | Promise<Response> = () => Response.json({
+      token_type: "Bearer",
+      expires_in: 7_200,
+      access_token: "pathao-access-token",
+      refresh_token: "pathao-refresh-token",
+    }),
+  ) {
+    const credentials = {
+      ...completePathaoCredentials,
+      baseUrl: "https://courier.invalid",
+    };
+    const config = { storeId: "924" };
+    const { db: createDb, writes: createWrites } = createSaveProviderDb();
+    await saveDeliveryProvider(createDb as never, {
+      id: "provider_pathao",
+      name: "Pathao",
+      type: "pathao",
+      isActive: false,
+      credentials,
+      config,
+    }, TEST_FINGERPRINT_KEY);
+    const storedProvider = {
+      id: "provider_pathao",
+      name: "Pathao",
+      type: "pathao",
+      isActive: false,
+      ...createWrites[0],
+      lastTestAttemptAt: null,
+      lastTestSuccessAt: null,
+      lastTestFailureAt: null,
+      lastTestSuccessFingerprint: null,
+    };
+
+    const fetchMock = vi.fn(async (url: string) => {
+      expect(url).not.toContain("/orders");
+      if (url.endsWith("/issue-token")) {
+        return tokenResponse();
+      }
+      return storesResponse(url);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const actualFactory = await vi.importActual<typeof import("./factory")>("./factory");
+    mocks.createProvider.mockImplementationOnce(actualFactory.createProvider);
+    const { db: testDb, updates } = createSequentialSelectDb([[storedProvider]]);
+    const result = await testDeliveryProvider(
+      testDb as never,
+      "provider_pathao",
+      TEST_FINGERPRINT_KEY,
+    );
+
+    const testedProvider = {
+      ...storedProvider,
+      lastTestAttemptAt: 100,
+      lastTestSuccessAt: result.success ? 100 : null,
+      lastTestFailureAt: result.success ? null : 100,
+      lastTestSuccessFingerprint: result.success
+        ? updates[1]?.lastTestSuccessFingerprint
+        : null,
+    };
+    const { db: activateDb, writes: activateWrites } = createSaveProviderDb(testedProvider);
+    await saveDeliveryProvider(activateDb as never, {
+      id: "provider_pathao",
+      name: "Pathao",
+      type: "pathao",
+      isActive: true,
+      credentials,
+      config,
+    }, TEST_FINGERPRINT_KEY);
+    const activeProvider = {
+      ...testedProvider,
+      ...activateWrites[0],
+      isActive: true,
+    };
+    const { db: readinessDb } = createSequentialSelectDb([[activeProvider]]);
+    const readiness = await getDeliveryProviderActionReadiness(
+      readinessDb as never,
+      "provider_pathao",
+      TEST_FINGERPRINT_KEY,
+    );
+
+    return { fetchMock, readiness, result };
+  }
+
+  const pathaoStoresPage = (
+    page: number,
+    lastPage: number,
+    stores: Array<Record<string, unknown>>,
+  ) => Response.json({
+    data: {
+      data: stores,
+      current_page: page,
+      per_page: 1_000,
+      last_page: lastPage,
+    },
+  });
+
+  it("keeps Pathao shipment readiness blocked for a deactivated configured store", async () => {
+    const flow = await runSavedPathaoFlow(() => pathaoStoresPage(1, 1, [{
+      store_id: 924,
+      is_active: 0,
+    }]));
+
+    expect(flow.result).toEqual({
+      success: false,
+      message: "Selected Pathao store is inactive. Choose an active store and test again.",
+    });
+    expect(flow.readiness).toMatchObject({
+      ready: false,
+      summary: { active: false, tested: false },
+    });
+    expect(flow.fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("establishes Pathao readiness for an active configured store on a later page", async () => {
+    const flow = await runSavedPathaoFlow((url) => {
+      if (url === "https://courier.invalid/aladdin/api/v1/stores") {
+        return pathaoStoresPage(1, 2, [{ store_id: 923, is_active: 1 }]);
+      }
+      expect(url).toBe("https://courier.invalid/aladdin/api/v1/stores?page=2");
+      return pathaoStoresPage(2, 2, [{ store_id: 924, is_active: 1 }]);
+    });
+
+    expect(flow.result).toEqual({ success: true, message: "Connection successful" });
+    expect(flow.readiness).toMatchObject({
+      ready: true,
+      summary: { active: true, tested: true },
+    });
+    expect(flow.fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it.each([
+    ["malformed pagination", () => Response.json({
+      data: { data: [], current_page: 1, last_page: "2" },
+    })],
+    ["string active flag", () => pathaoStoresPage(1, 1, [{
+      store_id: 924,
+      is_active: "1",
+    }])],
+    ["failed later page", (url: string) => url.endsWith("?page=2")
+      ? new Response("SENSITIVE-UPSTREAM-DETAIL", { status: 503, statusText: "SENSITIVE-UPSTREAM-DETAIL" })
+      : pathaoStoresPage(1, 2, [])],
+  ])("keeps Pathao readiness blocked after %s", async (_label, storesResponse) => {
+    const flow = await runSavedPathaoFlow(storesResponse);
+
+    expect(flow.result).toEqual({ success: false, message: "Connection failed" });
+    expect(flow.readiness).toMatchObject({
+      ready: false,
+      summary: { active: false, tested: false },
+    });
+    expect(JSON.stringify([flow.result, flow.readiness])).not.toContain(
+      "SENSITIVE-UPSTREAM-DETAIL",
+    );
+  });
+
+  it("does not expose Pathao authentication errors in connection results", async () => {
+    const flow = await runSavedPathaoFlow(
+      () => pathaoStoresPage(1, 1, []),
+      () => Response.json(
+        { message: "SENSITIVE-UPSTREAM-DETAIL" },
+        { status: 401, statusText: "SENSITIVE-UPSTREAM-DETAIL" },
+      ),
+    );
+
+    expect(flow.result).toEqual({ success: false, message: "Connection failed" });
+    expect(flow.readiness).toMatchObject({
+      ready: false,
+      summary: { active: false, tested: false },
+    });
+    expect(JSON.stringify([flow.result, flow.readiness])).not.toContain(
+      "SENSITIVE-UPSTREAM-DETAIL",
+    );
+    expect(flow.fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("accepts an active Pathao store on a fetched page when the account has more than ten pages", async () => {
+    const flow = await runSavedPathaoFlow(() => pathaoStoresPage(1, 11, [{
+      store_id: 924,
+      is_active: 1,
+    }]));
+
+    expect(flow.result).toEqual({ success: true, message: "Connection successful" });
+    expect(flow.readiness).toMatchObject({
+      ready: true,
+      summary: { active: true, tested: true },
+    });
+    expect(flow.fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("stops Pathao store discovery after ten pages when the configured store is missing", async () => {
+    const flow = await runSavedPathaoFlow((url) => {
+      const page = Number(new URL(url).searchParams.get("page") ?? "1");
+      return pathaoStoresPage(page, 11, [{ store_id: page, is_active: 1 }]);
+    });
+
+    expect(flow.result).toEqual({ success: false, message: "Connection failed" });
+    expect(flow.readiness).toMatchObject({
+      ready: false,
+      summary: { active: false, tested: false },
+    });
+    expect(flow.fetchMock).toHaveBeenCalledTimes(11);
+  });
+
+  it("establishes Pathao readiness for an active configured store on page one", async () => {
+    const flow = await runSavedPathaoFlow(() => pathaoStoresPage(1, 1, [{
+      store_id: 924,
+      is_active: 1,
+    }]));
+
+    expect(flow.result).toEqual({ success: true, message: "Connection successful" });
+    expect(flow.readiness).toMatchObject({
+      ready: true,
+      summary: { active: true, tested: true },
+    });
+    expect(flow.fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("records attempt and matching successful fingerprint after a live test passes", async () => {
     const expectedFingerprint = await getDeliveryProviderSetupFingerprint({
       type: "pathao",
