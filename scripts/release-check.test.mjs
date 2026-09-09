@@ -10,6 +10,7 @@ import {
   normalizeHttpBaseUrl,
   parseReleaseCheckArgs,
   requestHeaders,
+  responseFailureContext,
 } from "./release-check.mjs";
 
 function catalogOnlyUcpProfile() {
@@ -52,6 +53,14 @@ function catalogOnlyUcpProfile() {
 }
 
 describe("release check arguments", () => {
+  it("reports bounded route and Cloudflare correlation metadata", () => {
+    expect(responseFailureContext({
+      url: "https://storefront.example.test/search?q=private",
+      statusCode: 503,
+      headers: new Headers({ "cf-ray": "abc123-DAC" }),
+    })).toBe("route=/search status=503 cf-ray=abc123-DAC");
+  });
+
   it("can inspect normal cache behavior without requesting a bypass", () => {
     expect(requestHeaders("application/xml")).toEqual({
       Accept: "application/xml",

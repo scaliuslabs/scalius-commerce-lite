@@ -278,7 +278,7 @@ export async function fetchWithRetry(
           "Storefront API service binding",
         );
       } catch (error: unknown) {
-        if (!canFallbackToHttp || error instanceof StorefrontFetchTimeoutError) {
+        if (!canFallbackToHttp) {
           throw error;
         }
         console.warn(
