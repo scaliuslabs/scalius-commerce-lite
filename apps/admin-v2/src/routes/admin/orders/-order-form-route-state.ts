@@ -16,6 +16,10 @@ export interface EditOrderFormRouteData {
     allowed: boolean;
     reason: string | null;
   };
+  amendmentReadiness: {
+    allowed: boolean;
+    reason: string | null;
+  };
 }
 
 function requireRecord(value: unknown, label: string): Record<string, unknown> {
@@ -98,12 +102,25 @@ export function buildEditOrderFormRouteData(payload: unknown): EditOrderFormRout
     data.fullEditReadiness,
     "Order edit readiness",
   );
+  const amendmentReadiness = data.amendmentReadiness === undefined
+    ? {
+        allowed: false,
+        reason: "Order amendment readiness is unavailable. Refresh after the API update completes.",
+      }
+    : requireRecord(data.amendmentReadiness, "Order amendment readiness");
   if (
     typeof fullEditReadiness.allowed !== "boolean"
     || (fullEditReadiness.reason !== null
       && typeof fullEditReadiness.reason !== "string")
   ) {
     throw new Error("Order edit readiness response was unusable.");
+  }
+  if (
+    typeof amendmentReadiness.allowed !== "boolean"
+    || (amendmentReadiness.reason !== null
+      && typeof amendmentReadiness.reason !== "string")
+  ) {
+    throw new Error("Order amendment readiness response was unusable.");
   }
   return {
     productsWithVariants: data.productsWithVariants.map(
@@ -113,6 +130,10 @@ export function buildEditOrderFormRouteData(payload: unknown): EditOrderFormRout
     fullEditReadiness: {
       allowed: fullEditReadiness.allowed,
       reason: fullEditReadiness.reason as string | null,
+    },
+    amendmentReadiness: {
+      allowed: amendmentReadiness.allowed,
+      reason: amendmentReadiness.reason as string | null,
     },
   };
 }

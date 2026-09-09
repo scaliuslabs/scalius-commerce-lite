@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 60,
-  name: "0060_better_auth_account_identity",
+  version: 61,
+  name: "0061_regular_hex",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -78,8 +78,13 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     sourceSha256: "a5759548b627414ea6cf4e687413fa07895ed225b748305f13be18d810b0a9fd",
   },
   {
-    ...CURRENT_DATABASE_SCHEMA,
+    version: 60,
+    name: "0060_better_auth_account_identity",
     sourceSha256: "ad85b0d511efec1d4b538f231cbb96503faf11f4844d36671c9c8b196aa318c8",
+  },
+  {
+    ...CURRENT_DATABASE_SCHEMA,
+    sourceSha256: "d324f4bd25505b7f4ac6ff25e611c581febbcee8e6c0f16b2fd867782c481cb8",
   },
 ] as const;
 

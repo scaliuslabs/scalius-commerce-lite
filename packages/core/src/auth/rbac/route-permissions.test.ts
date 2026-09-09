@@ -148,6 +148,17 @@ describe("route permissions", () => {
       .toEqual({ permission: PERMISSIONS.ORDERS_CREATE });
   });
 
+  it("gates manual-order amendment preview and confirmation behind order edit permission", () => {
+    expect(getRoutePermission(
+      "/api/v1/admin/orders/order_1/amendments/preview",
+      "POST",
+    )).toEqual({ permission: PERMISSIONS.ORDERS_EDIT });
+    expect(getRoutePermission(
+      "/api/v1/admin/orders/order_1/amendments",
+      "POST",
+    )).toEqual({ permission: PERMISSIONS.ORDERS_EDIT });
+  });
+
   it("gates buyer payment recovery link issuance behind order edit permission", () => {
     expect(getRoutePermission(
       "/api/v1/admin/orders/order_1/payment-recovery-link",

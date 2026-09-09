@@ -41581,6 +41581,270 @@ export type PostApiV1AdminOrdersQuoteResponses = {
 
 export type PostApiV1AdminOrdersQuoteResponse = PostApiV1AdminOrdersQuoteResponses[keyof PostApiV1AdminOrdersQuoteResponses];
 
+export type PostApiV1AdminOrdersByIdAmendmentsPreviewData = {
+    body?: {
+        customerName: string;
+        customerPhone: string;
+        customerEmail: string | null;
+        shippingAddress: string;
+        city: string;
+        zone: string;
+        area: string | null;
+        cityName?: string;
+        zoneName?: string;
+        areaName?: string | null;
+        notes: string | null;
+        discountAmount: number | null;
+        shippingCharge: number;
+        expectedVersion: number;
+        items: Array<{
+            productId: string;
+            variantId: string | null;
+            quantity: number;
+            orderItemId?: string;
+        }>;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/orders/{id}/amendments/preview';
+};
+
+export type PostApiV1AdminOrdersByIdAmendmentsPreviewErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdAmendmentsPreviewError = PostApiV1AdminOrdersByIdAmendmentsPreviewErrors[keyof PostApiV1AdminOrdersByIdAmendmentsPreviewErrors];
+
+export type PostApiV1AdminOrdersByIdAmendmentsPreviewResponses = {
+    /**
+     * Authoritative amended money and tax preview
+     */
+    200: {
+        success: true;
+        data: {
+            currencyCode: string;
+            decimalPlaces: number;
+            subtotalAmount: number;
+            shippingAmount: number;
+            discountAmount: number;
+            taxAmount: number;
+            totalAmount: number;
+            taxLabel: string;
+            pricesIncludeTax: boolean;
+            taxEnabled: boolean;
+            settingsVersion: number;
+            lines: Array<{
+                index: number;
+                productId: string;
+                variantId: string;
+                quantity: number;
+                unitPrice: number;
+                lineSubtotal: number;
+            }>;
+            orderId: string;
+            expectedVersion: number;
+            resultingVersion: number;
+            balanceDue: number;
+            quoteFingerprint: string;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdAmendmentsPreviewResponse = PostApiV1AdminOrdersByIdAmendmentsPreviewResponses[keyof PostApiV1AdminOrdersByIdAmendmentsPreviewResponses];
+
+export type PostApiV1AdminOrdersByIdAmendmentsData = {
+    body: {
+        customerName: string;
+        customerPhone: string;
+        customerEmail: string | null;
+        shippingAddress: string;
+        city: string;
+        zone: string;
+        area: string | null;
+        cityName?: string;
+        zoneName?: string;
+        areaName?: string | null;
+        notes: string | null;
+        discountAmount: number | null;
+        shippingCharge: number;
+        expectedVersion: number;
+        items: Array<{
+            productId: string;
+            variantId: string | null;
+            quantity: number;
+            orderItemId?: string;
+        }>;
+        requestKey?: string;
+        quoteFingerprint: string;
+    };
+    headers?: {
+        /**
+         * Standard retry key. May replace body.requestKey; if both are sent they must match.
+         */
+        'idempotency-key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/orders/{id}/amendments';
+};
+
+export type PostApiV1AdminOrdersByIdAmendmentsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdAmendmentsError = PostApiV1AdminOrdersByIdAmendmentsErrors[keyof PostApiV1AdminOrdersByIdAmendmentsErrors];
+
+export type PostApiV1AdminOrdersByIdAmendmentsResponses = {
+    /**
+     * Amendment committed or exact idempotent replay
+     */
+    200: {
+        success: true;
+        data: {
+            id: string;
+            version: number;
+            totalAmount: number;
+            balanceDue: number;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdAmendmentsResponse = PostApiV1AdminOrdersByIdAmendmentsResponses[keyof PostApiV1AdminOrdersByIdAmendmentsResponses];
+
 export type PostApiV1AdminOrdersArchiveData = {
     body: {
         orders: Array<{
@@ -42032,6 +42296,10 @@ export type GetApiV1AdminOrdersByIdResponses = {
                 lastError?: string | null;
             } | null;
             fullEditReadiness: {
+                allowed: boolean;
+                reason: string | null;
+            };
+            amendmentReadiness: {
                 allowed: boolean;
                 reason: string | null;
             };
@@ -42590,6 +42858,10 @@ export type GetApiV1AdminOrdersByIdFormDataResponses = {
                 allowed: boolean;
                 reason: string | null;
             };
+            amendmentReadiness: {
+                allowed: boolean;
+                reason: string | null;
+            };
             productsWithVariants: Array<{
                 id: string;
                 name: string;
@@ -42657,6 +42929,7 @@ export type GetApiV1AdminOrdersByIdFormDataResponses = {
                 createdAt: string | number;
                 updatedAt: string | number;
                 items: Array<{
+                    orderItemId: string;
                     productId: string;
                     variantId: string | null;
                     quantity: number;

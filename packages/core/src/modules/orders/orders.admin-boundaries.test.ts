@@ -213,7 +213,7 @@ describe("admin order list boundaries", () => {
     const source = readFileSync(ORDERS_ADMIN_SOURCE, "utf8");
     const createSource = source.slice(
       source.indexOf("export async function createOrder(\n"),
-      source.indexOf("interface UpdateOrderItem"),
+      source.indexOf("export async function previewManualOrderAmendment(\n"),
     );
 
     expect(createSource).toContain("buildAdminOrderCreateAttemptIdentity(data, actorId)");
@@ -233,7 +233,7 @@ describe("admin order list boundaries", () => {
     const source = readFileSync(ORDERS_ADMIN_SOURCE, "utf8");
     const createSource = source.slice(
       source.indexOf("export async function createOrder(\n"),
-      source.indexOf("interface UpdateOrderItem"),
+      source.indexOf("export async function previewManualOrderAmendment(\n"),
     );
 
     const trackingInsert = createSource.indexOf(
@@ -251,7 +251,7 @@ describe("admin order list boundaries", () => {
     const source = readFileSync(ORDERS_ADMIN_SOURCE, "utf8");
     const createSource = source.slice(
       source.indexOf("export async function createOrder(\n"),
-      source.indexOf("interface UpdateOrderItem"),
+      source.indexOf("export async function previewManualOrderAmendment(\n"),
     );
 
     expect(createSource).not.toContain("const customerOrders = await db");

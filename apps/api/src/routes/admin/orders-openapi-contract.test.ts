@@ -103,6 +103,21 @@ describe("admin order mutation OpenAPI responses", () => {
         ]);
     });
 
+    it("documents guarded manual COD amendment preview and confirmation", () => {
+        const spec = buildAdminOrdersSpec();
+        expectResponses(spec, "/api/v1/admin/orders/{id}/amendments/preview", "post", [
+            "200", "400", "401", "403", "404", "409", "503",
+        ]);
+        expectResponses(spec, "/api/v1/admin/orders/{id}/amendments", "post", [
+            "200", "400", "401", "403", "404", "409", "503",
+        ]);
+        const confirm = spec.paths?.["/api/v1/admin/orders/{id}/amendments"]?.post;
+        expect(confirm?.parameters).toContainEqual(expect.objectContaining({
+            name: "idempotency-key",
+            in: "header",
+        }));
+    });
+
     it("requires selectedOptions on every order-form SKU", () => {
         const spec = buildAdminOrdersSpec();
         const operation = spec.paths?.["/api/v1/admin/orders/{id}/form-data"]?.get;
