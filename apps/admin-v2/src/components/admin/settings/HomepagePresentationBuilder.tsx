@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { GripVertical, Loader2, RotateCcw, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   DEFAULT_HOMEPAGE_PRESENTATION,
@@ -8,6 +8,7 @@ import {
   type HomepagePresentationConfig,
 } from "@scalius/shared/homepage-presentation";
 import { cn } from "@scalius/shared/utils";
+import { mergeUneditedFields } from "~/hooks/use-settings-form";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
@@ -34,6 +35,30 @@ function cloneConfig(config: HomepagePresentationConfig): HomepagePresentationCo
   };
 }
 
+function mergeHomepageConfig(
+  current: HomepagePresentationConfig,
+  baseline: HomepagePresentationConfig,
+  incoming: HomepagePresentationConfig,
+): HomepagePresentationConfig {
+  return {
+    categoryRail: mergeUneditedFields(
+      current.categoryRail,
+      baseline.categoryRail,
+      incoming.categoryRail,
+    ),
+    trustStrip: mergeUneditedFields(
+      current.trustStrip,
+      baseline.trustStrip,
+      incoming.trustStrip,
+    ),
+  };
+}
+
+interface HomepageSaveVariables {
+  config: HomepagePresentationConfig;
+  expectedRevision: number;
+}
+
 export function HomepagePresentationBuilder({
   onDraftStateChange,
 }: {
@@ -55,10 +80,18 @@ export function HomepagePresentationBuilder({
     cloneConfig(DEFAULT_HOMEPAGE_PRESENTATION)
   );
   const [saved, setSaved] = useState<HomepagePresentationDocument | null>(null);
+  const savedRef = useRef(saved);
+  savedRef.current = saved;
 
   useEffect(() => {
     if (!presentationQuery.data) return;
-    setConfig(cloneConfig(presentationQuery.data.config));
+    const previousSaved = savedRef.current;
+    if (previousSaved && presentationQuery.data.revision < previousSaved.revision) {
+      return;
+    }
+    const baseline = previousSaved?.config ?? DEFAULT_HOMEPAGE_PRESENTATION;
+    setConfig((current) => mergeHomepageConfig(current, baseline, presentationQuery.data!.config));
+    savedRef.current = presentationQuery.data;
     setSaved(presentationQuery.data);
   }, [presentationQuery.data]);
 
@@ -81,20 +114,20 @@ export function HomepagePresentationBuilder({
       label: category.name,
       keywords: [category.status],
     }));
-  const dirty = saved
-    ? JSON.stringify(config) !== JSON.stringify(saved.config)
-    : false;
+  const dirty = saved ? JSON.stringify(config) !== JSON.stringify(saved.config) : false;
 
   const saveMutation = useMutation({
-    mutationFn: async () => {
-      if (!saved) throw new Error("Reload homepage settings before saving.");
+    mutationFn: async ({ config: submittedConfig, expectedRevision }: HomepageSaveVariables) => {
       return saveHomepagePresentation({
-        data: { ...config, expectedRevision: saved.revision },
+        data: { ...submittedConfig, expectedRevision },
       });
     },
-    onSuccess: (document) => {
+    onSuccess: (document, variables) => {
+      const previousSaved = savedRef.current;
+      if (previousSaved && document.revision < previousSaved.revision) return;
+      savedRef.current = document;
       setSaved(document);
-      setConfig(cloneConfig(document.config));
+      setConfig((current) => mergeHomepageConfig(current, variables.config, document.config));
       queryClient.setQueryData(
         queryKeys.settings.homepagePresentation(),
         document,
@@ -322,7 +355,10 @@ export function HomepagePresentationBuilder({
           </Button>
           <Button
             type="button"
-            onClick={() => saveMutation.mutate()}
+            onClick={() => saved && saveMutation.mutate({
+              config: cloneConfig(config),
+              expectedRevision: saved.revision,
+            })}
             disabled={!dirty || saveMutation.isPending || !saved}
             className="min-h-11 min-w-28 md:min-h-10"
           >
