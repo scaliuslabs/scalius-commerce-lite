@@ -14,7 +14,11 @@ import type { CartValidationIssue } from "../api/orders";
 import type { CheckoutTaxQuote } from "../checkout/tax-quote-contract";
 import { CHECKOUT_CART_REPAIR_STORAGE_KEY } from "./repair-state";
 import { writeHostedPaymentRecoverySession } from "../checkout/session-state";
-import { initCartFunctionality, resumeCartPageFromHistory } from "./client";
+import {
+  initCartFunctionality,
+  isDiscountValidationPending,
+  resumeCartPageFromHistory,
+} from "./client";
 
 const apiMocks = vi.hoisted(() => ({
   getActiveCheckoutLanguage: vi.fn(),
@@ -881,6 +885,111 @@ describe("initCartFunctionality", () => {
       undefined,
     );
     expect(cartStore.get().discount?.code).toBe("OPEN10");
+  });
+
+  it("keeps checkout pending while Apply is validating and ignores a changed code", async () => {
+    let resolveValidation!: (value: {
+      valid: boolean;
+      discountAmount?: number;
+      discount?: Discount;
+    }) => void;
+    apiMocks.validateDiscount.mockImplementation(
+      () => new Promise((resolve) => { resolveValidation = resolve; }),
+    );
+
+    await initCartFunctionality();
+    const codeInput = document.getElementById(
+      "discountCodeInput",
+    ) as HTMLInputElement;
+    codeInput.value = "OPEN10";
+    document
+      .getElementById("discountForm")
+      ?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await Promise.resolve();
+
+    expect(isDiscountValidationPending()).toBe(true);
+    expect((document.getElementById("submitButton") as HTMLButtonElement).disabled).toBe(true);
+    expect(apiMocks.validateDiscount).toHaveBeenCalledTimes(1);
+
+    codeInput.value = "OTHER10";
+    resolveValidation({
+      valid: true,
+      discountAmount: 10,
+      discount: {
+        id: "disc_open",
+        code: "OPEN10",
+        type: "amount_off_order",
+        valueType: "fixed_amount",
+        discountValue: 10,
+        discountAmount: 10,
+      },
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(isDiscountValidationPending()).toBe(false);
+    expect(cartStore.get().discount).toBeNull();
+  });
+
+  it("does not start a second discount validation while Apply is pending", async () => {
+    let resolveValidation!: (value: null) => void;
+    apiMocks.validateDiscount.mockImplementation(
+      () => new Promise((resolve) => { resolveValidation = resolve; }),
+    );
+
+    await initCartFunctionality();
+    const codeInput = document.getElementById(
+      "discountCodeInput",
+    ) as HTMLInputElement;
+    codeInput.value = "OPEN10";
+    const form = document.getElementById("discountForm")!;
+    form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await Promise.resolve();
+
+    expect(apiMocks.validateDiscount).toHaveBeenCalledTimes(1);
+    resolveValidation(null);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(isDiscountValidationPending()).toBe(false);
+  });
+
+  it("ignores a pending validation result after the cart runtime resets", async () => {
+    let resolveValidation!: (value: {
+      valid: boolean;
+      discountAmount: number;
+      discount: Discount;
+    }) => void;
+    apiMocks.validateDiscount.mockImplementation(
+      () => new Promise((resolve) => { resolveValidation = resolve; }),
+    );
+
+    await initCartFunctionality();
+    (document.getElementById("discountCodeInput") as HTMLInputElement).value = "OPEN10";
+    document
+      .getElementById("discountForm")
+      ?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await Promise.resolve();
+    expect(isDiscountValidationPending()).toBe(true);
+
+    await initCartFunctionality();
+    expect(isDiscountValidationPending()).toBe(false);
+    resolveValidation({
+      valid: true,
+      discountAmount: 10,
+      discount: {
+        id: "disc_open",
+        code: "OPEN10",
+        type: "amount_off_order",
+        valueType: "fixed_amount",
+        discountValue: 10,
+        discountAmount: 10,
+      },
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(cartStore.get().discount).toBeNull();
   });
 
   it("focuses the phone field only when a one-use code requires identity", async () => {
