@@ -279,8 +279,10 @@ export function ProviderDetailPanel({
               <div className="space-y-0.5">
                 <Label>Status</Label>
                 <p className="text-xs text-muted-foreground">
-                  {readiness.canCreateShipment
-                    ? "Available for shipment creation and webhook updates."
+                  {isEditing && hasActivationBlockers
+                    ? "Complete setup before saving."
+                    : readiness.canCreateShipment
+                    ? "Enabled for shipment creation."
                     : readinessMessage}
                 </p>
               </div>

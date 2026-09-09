@@ -32,6 +32,9 @@ describe("delivery provider workspace polish", () => {
     expect(detail).toContain("Basic information");
     expect(detail).toContain("Provider settings");
     expect(detail).toContain("Test credentials");
+    expect(detail).toContain("Complete setup before saving.");
+    expect(detail).toContain("Enabled for shipment creation.");
+    expect(detail).not.toContain("Available for shipment creation and webhook updates.");
     expect(detail).toContain("[&_input]:min-h-11");
     expect(detail).toContain("min-h-11 sm:min-h-9");
   });
