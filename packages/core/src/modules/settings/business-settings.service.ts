@@ -113,6 +113,9 @@ export async function saveBusinessSettings(
                 category: CATEGORY,
                 key: snakeKey,
                 value: camelKey === "email" ? normalizeBusinessEmail(value) : value.trim(),
+                ...(camelKey === "invoiceLogoUrl"
+                    ? { rejectDeletingMediaReferences: true }
+                    : {}),
             });
         }
     }

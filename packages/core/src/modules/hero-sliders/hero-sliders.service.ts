@@ -1,4 +1,4 @@
-import type { Database } from "@scalius/database/client";
+import { buildBatchGuard, safeBatch, type Database } from "@scalius/database/client";
 import { heroSliders } from "@scalius/database/schema";
 import {
   validateAndNormalizeHeroSlides,
@@ -12,6 +12,11 @@ import {
   NotFoundError,
   ValidationError,
 } from "../../errors";
+import {
+  isMediaReferenceDeletingGuardError,
+  MEDIA_REFERENCE_DELETING_MESSAGE,
+  noDeletingMediaReferences,
+} from "../media/media-reference-guard";
 
 export type HeroSliderType = "desktop" | "mobile";
 
@@ -131,7 +136,8 @@ export async function createHeroSlider(
   }
 
   try {
-    const [slider] = await db
+    const mediaGuard = noDeletingMediaReferences(JSON.stringify(images));
+    const insert = db
       .insert(heroSliders)
       .values({
         id: `slider_${nanoid()}`,
@@ -143,9 +149,23 @@ export async function createHeroSlider(
         updatedAt: sql`unixepoch()`,
       })
       .returning();
+    let rows: unknown[];
+    if (mediaGuard) {
+      const batchRows = await safeBatch(db, [
+        buildBatchGuard(db, mediaGuard, "MEDIA_REFERENCE_DELETING"),
+        insert,
+      ] as never) as [unknown[], unknown[]];
+      rows = batchRows[1];
+    } else {
+      rows = await insert;
+    }
+    const slider = rows?.[0] as typeof heroSliders.$inferSelect | undefined;
     if (!slider) throw new ValidationError("Hero slider could not be created.");
     return parseStoredSlider(slider);
   } catch (error) {
+    if (isMediaReferenceDeletingGuardError(error)) {
+      throw new ConflictError(MEDIA_REFERENCE_DELETING_MESSAGE);
+    }
     if (isActiveTypeUniqueConflict(error)) {
       throw new ConflictError(`A ${input.type} hero slider already exists.`);
     }
@@ -164,6 +184,9 @@ export async function updateHeroSlider(
     : normalizeSlides(input.images);
   const isActive = input.isActive ?? current.isActive;
   assertActiveHasSlides(isActive, images);
+  const mediaGuard = input.images !== undefined
+    ? noDeletingMediaReferences(JSON.stringify(images))
+    : undefined;
 
   const [updated] = await db
     .update(heroSliders)
@@ -178,6 +201,7 @@ export async function updateHeroSlider(
         eq(heroSliders.id, id),
         eq(heroSliders.revision, input.expectedRevision),
         isNull(heroSliders.deletedAt),
+        ...(mediaGuard ? [mediaGuard] : []),
       ),
     )
     .returning();
@@ -190,6 +214,9 @@ export async function updateHeroSlider(
     .where(and(eq(heroSliders.id, id), isNull(heroSliders.deletedAt)))
     .get();
   if (!latest) throw new NotFoundError("Hero slider not found");
+  if (mediaGuard && latest.revision === input.expectedRevision) {
+    throw new ConflictError(MEDIA_REFERENCE_DELETING_MESSAGE);
+  }
   throw new HeroSliderRevisionConflictError(
     id,
     input.expectedRevision,
