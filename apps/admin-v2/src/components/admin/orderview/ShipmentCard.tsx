@@ -658,6 +658,7 @@ export function ShipmentCard({ order }: ShipmentCardProps) {
   const hasCreateShipmentActions =
     orderActions.canManageOrderShipments
     && order.items.length > 0
+    && order.fulfillmentStatus !== "complete"
     && canTransitionTo("order", order.status, "shipped");
   const hasShipments = order.shipments && order.shipments.length > 0;
   const shipmentsRead = order.operationalReads?.shipments ?? {

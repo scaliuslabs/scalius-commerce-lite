@@ -17,7 +17,9 @@ vi.mock("~/lib/api-mutations/orders", () => ({
   useLookupUnknownShipment: () => ({ mutate: vi.fn(), isPending: false }),
   useResolveUnknownShipment: () => ({ mutate: vi.fn(), isPending: false }),
 }));
-vi.mock("./ManualFulfillmentDialog", () => ({ ManualFulfillmentDialog: () => null }));
+vi.mock("./ManualFulfillmentDialog", () => ({
+  ManualFulfillmentDialog: () => <button type="button">Own Courier</button>,
+}));
 vi.mock("~/components/admin/ShipmentStatusIndicator", () => ({ default: () => null }));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -98,5 +100,26 @@ describe("ShipmentCard recovery authority", () => {
     await render({ shipmentRecovery: { ...recovery, canRepair: true } });
     expect(repairButton()).toBeUndefined();
     expect(mocks.repair).not.toHaveBeenCalled();
+  });
+
+  it("hides new shipment actions after fulfillment is complete while retaining history", async () => {
+    await render({
+      fulfillmentStatus: "complete",
+      items: [{
+        id: "item_shipment",
+        productId: "product_shipment",
+        variantId: null,
+        quantity: 1,
+        price: 1800,
+        productName: "Test product",
+        productImage: null,
+        variantLabel: null,
+      }],
+      shipments: [],
+    });
+
+    expect(host.textContent).toContain("Shipment history");
+    expect(host.textContent).not.toContain("Create shipment");
+    expect(host.textContent).not.toContain("Own Courier");
   });
 });
