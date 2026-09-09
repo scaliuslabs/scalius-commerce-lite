@@ -38,7 +38,7 @@ interface LocationsTableProps {
   pagination: PaginationState;
   onPageChange: (page: number) => void;
   onLimitChange: (limit: number) => void;
-  onEdit: (location: Location) => void;
+  onEdit: (location: Location, opener: HTMLElement) => void;
   selectedLocationIds: string[];
   onToggleSelectLocation: (locationId: string, isSelected: boolean) => void;
   onSelectAllLocations: (isSelected: boolean) => void;
@@ -68,7 +68,7 @@ const LocationRow = React.memo(function LocationRow({
   selectedLocationIds: string[];
   onToggleSelectLocation: (locationId: string, isSelected: boolean) => void;
   onToggleActive: (id: string, currentStatus: boolean) => void;
-  onEdit: (location: Location) => void;
+  onEdit: (location: Location, opener: HTMLElement) => void;
   onDelete: (id: string) => void;
 }) {
   const getParentName = (parentId: string | null) => {
@@ -144,7 +144,7 @@ const LocationRow = React.memo(function LocationRow({
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => onEdit(location)}
+            onClick={(event) => onEdit(location, event.currentTarget)}
             className="h-11 w-11 sm:h-8 sm:w-8"
             aria-label={`Edit ${location.name}`}
           >

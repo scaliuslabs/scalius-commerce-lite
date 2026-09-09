@@ -23,8 +23,8 @@ interface AttributeColumnOptions {
   onUpdateName: (id: string, name: string) => void;
   onUpdateSlug: (id: string, slug: string) => void;
   onToggleFilterable: (id: string, filterable: boolean) => void;
-  onViewValues: (id: string, name: string) => void;
-  onEditValues: (id: string, name: string) => void;
+  onViewValues: (id: string, name: string, opener: HTMLElement) => void;
+  onEditValues: (id: string, name: string, opener: HTMLElement) => void;
   onDelete: (id: string) => void;
   onRestore: (id: string) => void;
   onPermanentDelete: (id: string) => void;
@@ -135,7 +135,9 @@ export function getAttributeColumns(
               variant="ghost"
               size="sm"
               aria-label={`View ${attribute.name} values and product usage`}
-              onClick={() => opts.onViewValues(attribute.id, attribute.name)}
+              onClick={(event) =>
+                opts.onViewValues(attribute.id, attribute.name, event.currentTarget)
+              }
               disabled={opts.showTrashed || Boolean(attribute.deletedAt)}
               className="h-auto p-1"
               title={`${attribute.valueCount ?? 0} assigned values; ${(attribute.options ?? []).length} saved presets`}
@@ -171,7 +173,9 @@ export function getAttributeColumns(
                     {
                       label: "Edit Values",
                       icon: Edit3,
-                      onClick: () => opts.onEditValues(a.id, a.name),
+                      onClick: (opener) => {
+                        if (opener) opts.onEditValues(a.id, a.name, opener);
+                      },
                     },
                   ]
                 : undefined,

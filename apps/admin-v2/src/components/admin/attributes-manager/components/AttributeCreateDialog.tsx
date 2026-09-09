@@ -26,6 +26,8 @@ export function AttributeCreateDialog({
   onFilterableChange,
   onOptionsChange,
   onCreate,
+  openerRef,
+  fallbackFocusRef,
 }: AttributeCreateDialogProps) {
   const [newOption, setNewOption] = useState("");
 
@@ -53,7 +55,16 @@ export function AttributeCreateDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[550px]">
+      <DialogContent
+        className="sm:max-w-[550px]"
+        onCloseAutoFocus={(event) => {
+          const target = openerRef.current?.isConnected ? openerRef.current : fallbackFocusRef.current;
+          if (target?.isConnected) {
+            event.preventDefault();
+            target.focus();
+          }
+        }}
+      >
         <DialogHeader>
           <DialogTitle>Create New Attribute</DialogTitle>
           <DialogDescription>

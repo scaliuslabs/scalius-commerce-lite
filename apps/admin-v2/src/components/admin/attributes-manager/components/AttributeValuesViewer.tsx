@@ -38,6 +38,7 @@ export function AttributeValuesViewer({
   attributeId,
   attributeName,
   onClose,
+  openerRef,
 }: AttributeValuesViewerProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(1);
@@ -71,7 +72,15 @@ export function AttributeValuesViewer({
 
   return (
     <Dialog open={!!attributeId} onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl overflow-y-auto flex flex-col">
+      <DialogContent
+        className="max-w-3xl overflow-y-auto flex flex-col"
+        onCloseAutoFocus={(event) => {
+          if (openerRef.current?.isConnected) {
+            event.preventDefault();
+            openerRef.current.focus();
+          }
+        }}
+      >
         <DialogHeader className="shrink-0">
           <DialogTitle className="flex min-w-0 items-center gap-2 pr-8 [overflow-wrap:anywhere]">
             <Package className="h-5 w-5 shrink-0" />
