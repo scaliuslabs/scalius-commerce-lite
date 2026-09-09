@@ -177,7 +177,7 @@ describe("admin dashboard routes", () => {
         const { app } = createTestApp();
 
         const response = await app.request("/api/v1/admin/dashboard/metrics-summary");
-        const body = await response.json();
+        const body = await response.json() as { data: { stats: typeof unavailableStats } };
 
         expect(response.status).toBe(200);
         expect(body.data.stats.currentMonth.orderGrowth).toBeNull();
