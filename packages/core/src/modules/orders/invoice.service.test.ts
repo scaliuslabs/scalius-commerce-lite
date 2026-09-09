@@ -14,7 +14,8 @@ import { readInvoiceOrderSource } from "./invoice-order-reader";
 import { getBusinessSettings } from "../settings/business-settings.service";
 
 vi.mock("./invoice-order-reader", () => ({ readInvoiceOrderSource: vi.fn() }));
-vi.mock("../settings/business-settings.service", () => ({
+vi.mock("../settings/business-settings.service", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../settings/business-settings.service")>()),
   getBusinessSettings: vi.fn(),
 }));
 
@@ -236,7 +237,11 @@ describe("invoice authority", () => {
       status: "issued",
       invoiceNumber: "SALE-00042",
       invoiceNum: 42,
-      businessInfo: { companyName: "Scalius Demo", invoicePrefix: "SALE" },
+      businessInfo: {
+        companyName: "Scalius Demo",
+        email: "merchant@example.com",
+        invoicePrefix: "SALE",
+      },
       order: { id: "order_1", version: 7 },
     });
     expect(document.contentHash).toMatch(/^[a-f0-9]{64}$/);
@@ -247,6 +252,22 @@ describe("invoice authority", () => {
       expect.objectContaining({ kind: "update", table: orders }),
       expect.objectContaining({ kind: "update", table: invoiceSequences }),
     ]);
+  });
+
+  it("rejects malformed Business email before issuing an invoice", async () => {
+    vi.mocked(getBusinessSettings).mockResolvedValue({
+      ...businessInfo,
+      email: "support@",
+    });
+    const { db, batches } = createInvoiceDb();
+
+    await expect(issueInvoice(
+      db as never,
+      order.id,
+      { operationKey: "invoice-operation-invalid-email", expectedOrderVersion: 7 },
+      "admin_1",
+    )).rejects.toThrow("valid business support email address");
+    expect(batches).toHaveLength(0);
   });
 
   it("retries a lost sequence race without consuming the skipped number", async () => {

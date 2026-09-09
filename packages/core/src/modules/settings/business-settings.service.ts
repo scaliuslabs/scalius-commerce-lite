@@ -4,7 +4,9 @@
 
 import { settings } from "@scalius/database/schema";
 import { eq } from "drizzle-orm";
+import { z } from "zod";
 import type { Database } from "@scalius/database/client";
+import { ValidationError } from "../../errors";
 import { saveSettingAggregate, type SettingAggregateWrite } from "./settings-write";
 
 // ─────────────────────────────────────────
@@ -26,6 +28,18 @@ export interface BusinessInfo {
     invoicePrefix: string;
     invoiceFooterText: string;
     invoiceLogoUrl: string;
+}
+
+const businessEmailSchema = z.email();
+
+export function normalizeBusinessEmail(value: string): string {
+    const normalized = value.trim();
+    if (normalized === "") return "";
+    const result = businessEmailSchema.safeParse(normalized);
+    if (!result.success) {
+        throw new ValidationError("Enter a valid business support email address.");
+    }
+    return result.data;
 }
 
 // ─────────────────────────────────────────
@@ -95,7 +109,11 @@ export async function saveBusinessSettings(
     for (const [camelKey, snakeKey] of Object.entries(KEY_MAP)) {
         const value = data[camelKey as keyof BusinessInfo];
         if (typeof value === "string") {
-            writes.push({ category: CATEGORY, key: snakeKey, value: value.trim() });
+            writes.push({
+                category: CATEGORY,
+                key: snakeKey,
+                value: camelKey === "email" ? normalizeBusinessEmail(value) : value.trim(),
+            });
         }
     }
 
