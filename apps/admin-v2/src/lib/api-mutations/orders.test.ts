@@ -18,10 +18,17 @@ const toastMocks = vi.hoisted(() => ({
   success: vi.fn(),
   warning: vi.fn(),
 }));
+const routerMocks = vi.hoisted(() => ({
+  invalidate: vi.fn().mockResolvedValue(undefined),
+}));
 
 vi.mock("@tanstack/react-query", () => ({
   useMutation: reactQueryMocks.useMutation,
   useQueryClient: reactQueryMocks.useQueryClient,
+}));
+
+vi.mock("@tanstack/react-router", () => ({
+  useRouter: () => routerMocks,
 }));
 
 vi.mock("sonner", () => ({
@@ -115,14 +122,15 @@ function expectNoInventoryProjectionInvalidations() {
 }
 
 describe("order inventory projection freshness", () => {
-  it("refreshes the order-editor snapshot after a successful amendment or replay", () => {
+  it("refreshes query and route-loader snapshots after a successful amendment or replay", async () => {
     const mutation = useConfirmManualOrderAmendment() as MutationOptions;
 
-    mutation.onSuccess?.({}, { id: "ord_123" });
+    await mutation.onSuccess?.({}, { id: "ord_123" });
 
     expect(reactQueryMocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.orders.formData("ord_123"),
     });
+    expect(routerMocks.invalidate).toHaveBeenCalledTimes(1);
   });
 
   it("refreshes the permanent order-editor snapshot after an update", () => {

@@ -3,6 +3,7 @@ import {
   useQueryClient,
   type QueryClient,
 } from "@tanstack/react-query";
+import { useRouter } from "@tanstack/react-router";
 import { toast } from "sonner";
 import {
   approveOrderReturn,
@@ -137,10 +138,11 @@ export function useCreateOrder() {
 
 export function useConfirmManualOrderAmendment() {
   const queryClient = useQueryClient();
+  const router = useRouter();
   return useMutation({
     mutationFn: (data: ConfirmManualOrderAmendmentInput) =>
       confirmManualOrderAmendment({ data }),
-    onSuccess: (_result, variables) => {
+    onSuccess: async (_result, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
       queryClient.invalidateQueries({
         queryKey: queryKeys.orders.detail(variables.id),
@@ -150,6 +152,7 @@ export function useConfirmManualOrderAmendment() {
       });
       invalidateDashboardQueries(queryClient);
       invalidateOrderInventoryQueries(queryClient);
+      await router.invalidate().catch(() => undefined);
       toast.success("Order amendment confirmed");
     },
     onError: (err) => {
