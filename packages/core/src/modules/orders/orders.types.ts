@@ -46,8 +46,23 @@ export interface OrderShipmentRecoverySummary {
     canRefresh: boolean;
     canRetryCreate: boolean;
     canRepair: boolean;
+    unknownOutcome: boolean;
     updatedAt: Date | null;
 }
+
+export type UnknownShipmentResolutionResult =
+    | (OrderShipmentReconciliationResult & {
+        resolution: "provider_confirmed_existing" | "merchant_confirmed_existing";
+    })
+    | {
+        status: "released";
+        resolution: "merchant_confirmed_not_created" | "merchant_confirmed_cancelled";
+        orderId: string;
+        shipmentId: string;
+        claimCleared: true;
+        orderVersion: number;
+        message: string;
+    };
 
 export interface OrderShipmentReconciliationResult {
     status: "repaired";

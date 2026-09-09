@@ -17,7 +17,10 @@ import {
     enqueueOrderStatusChangeNotification,
 } from "../../utils/order-notification-queue";
 import { checkAndSyncShipmentStatus } from "./shipment-status-sync";
-import { shipmentCreationOptionsSchema } from "@scalius/core/modules/orders/orders.validation";
+import {
+    shipmentCreationOptionsSchema,
+    unknownShipmentResolutionSchema,
+} from "@scalius/core/modules/orders/orders.validation";
 import { ORDER_STATUSES } from "@scalius/shared/order-state";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -86,6 +89,31 @@ const reconcileShipmentResponseSchema = successEnvelope(z.object({
     trackingId: z.string().nullable(),
     message: z.string(),
 }));
+
+const unknownShipmentResolutionResponseSchema = successEnvelope(z.discriminatedUnion("status", [
+    z.object({
+        status: z.literal("repaired"),
+        resolution: z.enum(["provider_confirmed_existing", "merchant_confirmed_existing"]),
+        orderId: z.string(),
+        shipmentId: z.string(),
+        orderStatus: z.string(),
+        shipmentStatus: z.string(),
+        orderStatusChanged: z.boolean(),
+        inventoryReconciled: z.boolean(),
+        claimCleared: z.boolean(),
+        trackingId: z.string().nullable(),
+        message: z.string(),
+    }),
+    z.object({
+        status: z.literal("released"),
+        resolution: z.enum(["merchant_confirmed_not_created", "merchant_confirmed_cancelled"]),
+        orderId: z.string(),
+        shipmentId: z.string(),
+        claimCleared: z.literal(true),
+        orderVersion: z.number().int().min(1),
+        message: z.string(),
+    }),
+]));
 
 const RECONCILE_NOTIFICATION_STATUSES = new Set(["shipped", "delivered", "returned", "cancelled"]);
 
@@ -651,6 +679,115 @@ app.openapi(reconcileShipmentRoute, async (c) => {
         });
     }
 
+    return ok(c, responseData);
+});
+
+const unknownShipmentLookupRoute = createRoute({
+    operationId: "dashboard.orders.shipment_unknown_lookup",
+    method: "post",
+    path: "/{id}/shipments/{shipmentId}/resolve-unknown/lookup",
+    tags: ["Admin - Orders"],
+    summary: "Resolve an unknown shipment through a positive provider lookup",
+    request: {
+        params: z.object({ id: z.string(), shipmentId: z.string() }),
+        body: {
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        expectedOrderVersion: z.number().int().min(1),
+                        operationKey: z.string().uuid(),
+                    }).strict(),
+                },
+            },
+        },
+    },
+    responses: {
+        200: {
+            description: "Unknown shipment resolved from provider confirmation",
+            content: { "application/json": { schema: unknownShipmentResolutionResponseSchema } },
+        },
+        ...adminProviderMutationErrorResponses,
+    },
+});
+
+app.openapi(unknownShipmentLookupRoute, async (c) => {
+    const { id: orderId, shipmentId } = c.req.valid("param");
+    const data = c.req.valid("json");
+    const user = c.get("user") as { id?: string } | undefined;
+    const db = c.get("db");
+    const result = await OrdersService.lookupUnknownOrderShipment(db, {
+        ...data,
+        orderId,
+        shipmentId,
+        actorId: user?.id ?? null,
+        encryptionKey: getCredentialEncryptionKey(c.env as Record<string, unknown>),
+    });
+    const { availabilityTransitionVariantIds, ...responseData } = result;
+    await invalidateAvailabilityTransitions(db, availabilityTransitionVariantIds, c);
+    if (result.status === "repaired" && RECONCILE_NOTIFICATION_STATUSES.has(result.orderStatus)) {
+        await enqueueOrderNotificationsForStatus({
+            db,
+            queue: c.env.ORDER_NOTIFICATIONS_QUEUE,
+            orderIds: [orderId],
+            newStatus: result.orderStatus,
+            trackingByOrderId: result.orderStatus === "shipped" && result.trackingId
+                ? { [orderId]: result.trackingId }
+                : undefined,
+            dedupeKeyByOrderId: { [orderId]: `shipment:${shipmentId}:order_${result.orderStatus}` },
+            source: "orders-shipment-unknown-lookup",
+        });
+    }
+    return ok(c, responseData);
+});
+
+const resolveUnknownShipmentRoute = createRoute({
+    operationId: "dashboard.orders.shipment_unknown_resolve",
+    method: "post",
+    path: "/{id}/shipments/{shipmentId}/resolve-unknown",
+    tags: ["Admin - Orders"],
+    summary: "Resolve an unknown shipment from accountable courier confirmation",
+    request: {
+        params: z.object({ id: z.string(), shipmentId: z.string() }),
+        body: { content: { "application/json": { schema: unknownShipmentResolutionSchema } } },
+    },
+    responses: {
+        200: {
+            description: "Unknown shipment resolution recorded",
+            content: { "application/json": { schema: unknownShipmentResolutionResponseSchema } },
+        },
+        ...adminProviderMutationErrorResponses,
+    },
+});
+
+app.openapi(resolveUnknownShipmentRoute, async (c) => {
+    const { id: orderId, shipmentId } = c.req.valid("param");
+    const data = c.req.valid("json");
+    const user = c.get("user") as { id?: string } | undefined;
+    const db = c.get("db");
+    const result = await OrdersService.resolveUnknownOrderShipment(db, {
+        ...data,
+        orderId,
+        shipmentId,
+        actorId: user?.id ?? null,
+        encryptionKey: getCredentialEncryptionKey(c.env as Record<string, unknown>),
+    });
+    if (result.status === "released") return ok(c, result);
+
+    const { availabilityTransitionVariantIds, ...responseData } = result;
+    await invalidateAvailabilityTransitions(db, availabilityTransitionVariantIds, c);
+    if (RECONCILE_NOTIFICATION_STATUSES.has(result.orderStatus)) {
+        await enqueueOrderNotificationsForStatus({
+            db,
+            queue: c.env.ORDER_NOTIFICATIONS_QUEUE,
+            orderIds: [orderId],
+            newStatus: result.orderStatus,
+            trackingByOrderId: result.orderStatus === "shipped" && result.trackingId
+                ? { [orderId]: result.trackingId }
+                : undefined,
+            dedupeKeyByOrderId: { [orderId]: `shipment:${shipmentId}:order_${result.orderStatus}` },
+            source: "orders-shipment-unknown-resolution",
+        });
+    }
     return ok(c, responseData);
 });
 

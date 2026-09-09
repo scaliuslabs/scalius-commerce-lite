@@ -53,6 +53,7 @@ describe("order list response projection", () => {
           canRepair: false,
           canRefresh: false,
           canRetryCreate: false,
+          unknownOutcome: false,
           updatedAt: null,
         },
         paymentRecovery: {

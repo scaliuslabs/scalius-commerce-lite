@@ -14,13 +14,30 @@ import {
   SelectValue,
 } from "~/components/ui/select";
 import { Button } from "~/components/ui/button";
+import { Checkbox } from "~/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "~/components/ui/dialog";
+import { Input } from "~/components/ui/input";
+import { Label } from "~/components/ui/label";
+import { Textarea } from "~/components/ui/textarea";
 import { toast } from "sonner";
 import { AlertTriangle, Truck, ChevronDown, ChevronUp, Loader2, ExternalLink, RefreshCw } from "lucide-react";
 import { ShipmentMetadataDisplay } from "~/components/ui/ShipmentMetadataDisplay";
 import ShipmentStatusIndicator from "~/components/admin/ShipmentStatusIndicator";
 import type { Order, OrderShipment } from "./types";
 import { useQueryClient } from "@tanstack/react-query";
-import { useCreateOrderShipment, useReconcileShipment } from "~/lib/api-mutations/orders";
+import {
+  useCreateOrderShipment,
+  useLookupUnknownShipment,
+  useReconcileShipment,
+  useResolveUnknownShipment,
+} from "~/lib/api-mutations/orders";
 import { queryKeys } from "~/lib/query-keys";
 import { ManualFulfillmentDialog } from "./ManualFulfillmentDialog";
 import { formatOrderDate } from "./formatters";
@@ -237,15 +254,188 @@ const SHIPMENT_RECOVERY_CLASS = {
   danger: "border-red-200 bg-red-50 text-red-900 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200",
 } as const;
 
+function UnknownShipmentResolutionDialog({
+  order,
+  shipmentId,
+  open,
+  onOpenChange,
+  focusReturnRef,
+}: {
+  order: Order;
+  shipmentId: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  focusReturnRef: React.RefObject<HTMLDivElement | null>;
+}) {
+  const mutation = useResolveUnknownShipment();
+  const [outcome, setOutcome] = React.useState<
+    "confirmed_existing" | "confirmed_not_created" | "confirmed_cancelled"
+  >("confirmed_existing");
+  const [evidenceSource, setEvidenceSource] = React.useState<"courier_portal" | "courier_support">("courier_portal");
+  const [evidenceNote, setEvidenceNote] = React.useState("");
+  const [externalId, setExternalId] = React.useState("");
+  const [trackingId, setTrackingId] = React.useState("");
+  const [confirmed, setConfirmed] = React.useState(false);
+  const operationKey = React.useRef<string | null>(null);
+
+  React.useEffect(() => {
+    if (!open) return;
+    setOutcome("confirmed_existing");
+    setEvidenceSource("courier_portal");
+    setEvidenceNote("");
+    setExternalId("");
+    setTrackingId("");
+    setConfirmed(false);
+    operationKey.current = null;
+  }, [open]);
+
+  const invalidateAttestation = () => {
+    setConfirmed(false);
+    operationKey.current = null;
+  };
+  const close = () => {
+    operationKey.current = null;
+    onOpenChange(false);
+  };
+  const submit = () => {
+    if (!confirmed || evidenceNote.trim().length < 8 ||
+      (outcome === "confirmed_existing" && !externalId.trim())) return;
+    operationKey.current ??= crypto.randomUUID();
+    mutation.mutate({
+      orderId: order.id,
+      shipmentId,
+      expectedOrderVersion: order.version,
+      operationKey: operationKey.current,
+      outcome,
+      evidenceSource,
+      evidenceNote: evidenceNote.trim(),
+      confirmationAccepted: true,
+      ...(outcome === "confirmed_existing"
+        ? {
+            externalId: externalId.trim(),
+            ...(trackingId.trim() ? { trackingId: trackingId.trim() } : {}),
+          }
+        : {}),
+    }, { onSuccess: close });
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(nextOpen) => {
+      if (!mutation.isPending) onOpenChange(nextOpen);
+    }}>
+      <DialogContent
+        className="sm:max-w-lg"
+        aria-describedby="unknown-shipment-resolution-description"
+        onCloseAutoFocus={(event) => {
+          if (focusReturnRef.current?.isConnected) {
+            event.preventDefault();
+            focusReturnRef.current.focus();
+          }
+        }}
+      >
+        <DialogHeader>
+          <DialogTitle>Record courier confirmation</DialogTitle>
+          <DialogDescription id="unknown-shipment-resolution-description">
+            Use the original order number and provider account to confirm what happened. A failed lookup or missing result is not proof that no booking exists.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <div className="space-y-2">
+            <Label htmlFor="unknown-shipment-outcome">Confirmed outcome</Label>
+            <Select value={outcome} onValueChange={(value) => {
+              setOutcome(value as typeof outcome);
+              invalidateAttestation();
+            }}>
+              <SelectTrigger id="unknown-shipment-outcome" className="h-11" disabled={mutation.isPending}><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="confirmed_existing">Booking exists</SelectItem>
+                <SelectItem value="confirmed_not_created">Booking was not created</SelectItem>
+                <SelectItem value="confirmed_cancelled">Booking was cancelled</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {outcome === "confirmed_existing" && (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="unknown-shipment-consignment">Consignment ID</Label>
+                <Input id="unknown-shipment-consignment" value={externalId} onChange={(event) => {
+                  setExternalId(event.target.value);
+                  invalidateAttestation();
+                }} maxLength={180} disabled={mutation.isPending} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="unknown-shipment-tracking">Tracking ID (optional)</Label>
+                <Input id="unknown-shipment-tracking" value={trackingId} onChange={(event) => {
+                  setTrackingId(event.target.value);
+                  invalidateAttestation();
+                }} maxLength={180} disabled={mutation.isPending} />
+              </div>
+            </div>
+          )}
+          <div className="space-y-2">
+            <Label htmlFor="unknown-shipment-source">Confirmation source</Label>
+            <Select value={evidenceSource} onValueChange={(value) => {
+              setEvidenceSource(value as typeof evidenceSource);
+              invalidateAttestation();
+            }}>
+              <SelectTrigger id="unknown-shipment-source" className="h-11" disabled={mutation.isPending}><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="courier_portal">Courier portal</SelectItem>
+                <SelectItem value="courier_support">Courier support</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="unknown-shipment-evidence">Confirmation details</Label>
+            <Textarea
+              id="unknown-shipment-evidence"
+              value={evidenceNote}
+              onChange={(event) => {
+                setEvidenceNote(event.target.value);
+                invalidateAttestation();
+              }}
+              maxLength={500}
+              disabled={mutation.isPending}
+              placeholder="Where and when you confirmed the outcome; include a support reference when available."
+            />
+          </div>
+          <div className="flex items-start gap-2 rounded-md border p-3">
+            <Checkbox id="unknown-shipment-confirmation" checked={confirmed} disabled={mutation.isPending} onCheckedChange={(value) => setConfirmed(value === true)} />
+            <Label htmlFor="unknown-shipment-confirmation" className="text-sm font-normal leading-5">
+              I confirmed this exact order and provider outcome. If a booking exists, the consignment above belongs to this order.
+            </Label>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={close} disabled={mutation.isPending}>Cancel</Button>
+          <Button
+            type="button"
+            onClick={submit}
+            disabled={mutation.isPending || !confirmed || evidenceNote.trim().length < 8 || (outcome === "confirmed_existing" && !externalId.trim())}
+          >
+            {mutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Record confirmation
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function ShipmentRecoveryNotice({
   order,
   canManageShipments,
+  focusReturnRef,
 }: {
   order: Order;
   canManageShipments: boolean;
+  focusReturnRef: React.RefObject<HTMLDivElement | null>;
 }) {
   const recovery = order.shipmentRecovery;
   const reconcileMutation = useReconcileShipment();
+  const lookupMutation = useLookupUnknownShipment();
+  const [resolutionOpen, setResolutionOpen] = React.useState(false);
+  const lookupOperationKey = React.useRef<string | null>(null);
   if (!recovery || recovery.state === "none") return null;
   const canRepair =
     canManageShipments &&
@@ -253,6 +443,13 @@ function ShipmentRecoveryNotice({
     recovery.state === "needs_attention" &&
     recovery.activeLock &&
     Boolean(recovery.shipmentId);
+  const canResolveUnknown =
+    canManageShipments &&
+    recovery.state === "needs_attention" &&
+    recovery.activeLock &&
+    recovery.status === "reconcile_required" &&
+    !recovery.canRepair &&
+    recovery.unknownOutcome;
 
   const handleRepair = () => {
     if (!canRepair || !recovery.shipmentId) return;
@@ -260,6 +457,16 @@ function ShipmentRecoveryNotice({
       orderId: order.id,
       shipmentId: recovery.shipmentId,
     });
+  };
+  const handleLookup = () => {
+    if (!recovery.shipmentId) return;
+    lookupOperationKey.current ??= crypto.randomUUID();
+    lookupMutation.mutate({
+      orderId: order.id,
+      shipmentId: recovery.shipmentId,
+      expectedOrderVersion: order.version,
+      operationKey: lookupOperationKey.current,
+    }, { onSuccess: () => { lookupOperationKey.current = null; } });
   };
 
   return (
@@ -278,20 +485,42 @@ function ShipmentRecoveryNotice({
           </div>
         </div>
         </div>
-        {canRepair && (
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="h-8 shrink-0 border-current/30 bg-background/70 px-3 text-xs hover:bg-background"
-            disabled={reconcileMutation.isPending}
-            onClick={handleRepair}
-          >
-            {reconcileMutation.isPending && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
-            {reconcileMutation.isPending ? "Repairing..." : "Repair shipment"}
-          </Button>
-        )}
+        <div className="flex shrink-0 flex-wrap gap-2">
+          {canResolveUnknown && recovery.providerType === "steadfast" && (
+            <Button type="button" size="sm" variant="outline" className="h-8 border-current/30 bg-background/70 px-3 text-xs hover:bg-background" disabled={lookupMutation.isPending} onClick={handleLookup}>
+              {lookupMutation.isPending && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
+              Check Steadfast
+            </Button>
+          )}
+          {canResolveUnknown && recovery.shipmentId && (
+            <Button type="button" size="sm" variant="outline" className="h-8 border-current/30 bg-background/70 px-3 text-xs hover:bg-background" onClick={() => setResolutionOpen(true)}>
+              Record confirmation
+            </Button>
+          )}
+          {canRepair && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-8 border-current/30 bg-background/70 px-3 text-xs hover:bg-background"
+              disabled={reconcileMutation.isPending}
+              onClick={handleRepair}
+            >
+              {reconcileMutation.isPending && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
+              {reconcileMutation.isPending ? "Repairing..." : "Repair shipment"}
+            </Button>
+          )}
+        </div>
       </div>
+      {canResolveUnknown && recovery.shipmentId && (
+        <UnknownShipmentResolutionDialog
+          order={order}
+          shipmentId={recovery.shipmentId}
+          open={resolutionOpen}
+          onOpenChange={setResolutionOpen}
+          focusReturnRef={focusReturnRef}
+        />
+      )}
     </div>
   );
 }
@@ -417,6 +646,7 @@ const ShipmentHistoryItem = ({
 
 export function ShipmentCard({ order }: ShipmentCardProps) {
   const queryClient = useQueryClient();
+  const shipmentHistoryHeadingRef = React.useRef<HTMLDivElement>(null);
   const orderActions = useOrderActionPermissions();
   const refundLocked = Boolean(order.activeRefundOperation?.active);
   const shipmentLocked = order.shipmentRecovery?.activeLock === true;
@@ -451,6 +681,7 @@ export function ShipmentCard({ order }: ShipmentCardProps) {
       <ShipmentRecoveryNotice
         order={order}
         canManageShipments={orderActions.canManageOrderShipments}
+        focusReturnRef={shipmentHistoryHeadingRef}
       />
 
       {hasCreateShipmentActions && (
@@ -459,7 +690,7 @@ export function ShipmentCard({ order }: ShipmentCardProps) {
 
       <Card className="overflow-hidden">
         <CardHeader className="border-b border-border bg-muted/5 px-4 py-3">
-          <CardTitle className="flex items-center gap-2 text-base">
+          <CardTitle ref={shipmentHistoryHeadingRef} tabIndex={-1} className="flex items-center gap-2 text-base">
             <Truck className="h-4 w-4" />
             Shipment history
           </CardTitle>

@@ -92,6 +92,7 @@ describe("admin orders route boundaries", () => {
         expect(shipmentRecoverySchema).toContain('state: z.enum(["none", "creating", "needs_attention", "failed"])');
         expect(shipmentRecoverySchema).toContain("activeLock: z.boolean()");
         expect(shipmentRecoverySchema).toContain("canRetryCreate: z.boolean()");
+        expect(shipmentRecoverySchema).toContain("unknownOutcome: z.boolean()");
         expect(shipmentRecoverySchema).not.toContain("shipmentClaimId");
         expect(shipmentRecoverySchema).not.toContain("metadata");
         expect(source).toContain("orderSummarySchema");

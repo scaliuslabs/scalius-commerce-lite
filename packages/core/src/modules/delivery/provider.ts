@@ -1,6 +1,11 @@
 import type { DeliveryProviderType, Order } from "@scalius/database/schema";
 import type { ProviderLifecycle } from "@scalius/core/providers/types";
-import type { ShipmentResult, ShipmentStatus, ShipmentOptions } from "./types";
+import type {
+  MerchantOrderShipmentLookup,
+  ShipmentResult,
+  ShipmentStatus,
+  ShipmentOptions,
+} from "./types";
 
 /**
  * Interface that all delivery providers must implement.
@@ -40,4 +45,9 @@ export interface DeliveryProviderInterface extends ProviderLifecycle {
    * @param externalId External ID (typically the consignment ID from the provider)
    */
   checkShipmentStatus(externalId: string): Promise<ShipmentStatus>;
+
+  /** Positive-only lookup for providers that support the original merchant order identity. */
+  lookupShipmentByMerchantOrderId?(
+    merchantOrderId: string,
+  ): Promise<MerchantOrderShipmentLookup>;
 }

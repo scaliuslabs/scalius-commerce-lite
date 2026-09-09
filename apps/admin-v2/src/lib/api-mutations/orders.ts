@@ -18,6 +18,8 @@ import {
   receiveOrderReturn,
   refundOrder,
   reconcileShipment,
+  lookupUnknownShipment,
+  resolveUnknownShipment,
   resendOrderNotification,
   resolveOrderSupportRequest,
   retryOrderNotification,
@@ -35,6 +37,8 @@ import {
   type IssueOrderPaymentRecoveryLinkInput,
   type RefundOrderInput,
   type ReconcileShipmentInput,
+  type LookupUnknownShipmentInput,
+  type ResolveUnknownShipmentInput,
   type ReconcileRefundAttemptInput,
   type ResendOrderNotificationInput,
   type ResolveOrderSupportRequestInput,
@@ -366,6 +370,40 @@ export function useReconcileShipment() {
       invalidateOrderInventoryQueries(queryClient);
       toast.error(getServerFnError(err, "Failed to repair shipment recovery"));
     },
+  });
+}
+
+export function useLookupUnknownShipment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: LookupUnknownShipmentInput) => lookupUnknownShipment({ data }),
+    onSuccess: (result, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
+      invalidateDashboardQueries(queryClient);
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(variables.orderId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.shipments(variables.orderId) });
+      invalidateOrderInventoryQueries(queryClient);
+      toast.success("Courier shipment confirmed", { description: result.message });
+    },
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Courier lookup did not resolve the shipment")),
+  });
+}
+
+export function useResolveUnknownShipment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: ResolveUnknownShipmentInput) => resolveUnknownShipment({ data }),
+    onSuccess: (result, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
+      invalidateDashboardQueries(queryClient);
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(variables.orderId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.shipments(variables.orderId) });
+      if (result.status === "repaired") invalidateOrderInventoryQueries(queryClient);
+      toast.success("Courier confirmation recorded", { description: result.message });
+    },
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to resolve unknown courier outcome")),
   });
 }
 

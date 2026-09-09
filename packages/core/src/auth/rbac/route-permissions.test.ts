@@ -199,6 +199,18 @@ describe("route permissions", () => {
         "POST",
       ),
     ).toEqual({ permission: PERMISSIONS.ORDERS_MANAGE_SHIPMENTS });
+    expect(
+      getRoutePermission(
+        "/api/v1/admin/orders/order_1/shipments/shp_1/resolve-unknown",
+        "POST",
+      ),
+    ).toEqual({ permission: PERMISSIONS.ORDERS_MANAGE_SHIPMENTS });
+    expect(
+      getRoutePermission(
+        "/api/v1/admin/orders/order_1/shipments/shp_1/resolve-unknown/lookup",
+        "POST",
+      ),
+    ).toEqual({ permission: PERMISSIONS.ORDERS_MANAGE_SHIPMENTS });
   });
 
   it("gates order support request resolution behind order edit permission", () => {
