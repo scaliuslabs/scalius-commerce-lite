@@ -295,6 +295,7 @@ export function TaxClassesPanel({
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
+              variant="destructive"
               onClick={() => deleting && deleteMutation.mutate(deleting)}
               disabled={deleteMutation.isPending}
             >

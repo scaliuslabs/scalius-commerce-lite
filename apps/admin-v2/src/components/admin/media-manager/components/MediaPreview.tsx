@@ -131,7 +131,7 @@ export function MediaPreview({ open, file, files, onOpenChange, onNavigate, onUp
     <AlertDialog open={pendingAction !== null} onOpenChange={(nextOpen) => !nextOpen && setPendingAction(null)}>
       <AlertDialogContent>
         <AlertDialogHeader><AlertDialogTitle>Discard unsaved details?</AlertDialogTitle><AlertDialogDescription>Unsaved name, description, and poster changes will be lost.</AlertDialogDescription></AlertDialogHeader>
-        <AlertDialogFooter><AlertDialogCancel>Keep editing</AlertDialogCancel><AlertDialogAction onClick={discardAndContinue}>Discard changes</AlertDialogAction></AlertDialogFooter>
+        <AlertDialogFooter><AlertDialogCancel>Keep editing</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={discardAndContinue}>Discard changes</AlertDialogAction></AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
     </>

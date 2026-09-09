@@ -117,7 +117,7 @@ export function MediaWorkspace({ manager: mm, capability, picker = false, multip
 
       <MediaPreview open={mm.showPreview} file={mm.previewFile} files={mm.files} onOpenChange={mm.setShowPreview} onNavigate={navigate} onUpdate={mm.updateFile} onSelect={onSelect} />
       <AlertDialog open={!!confirm} onOpenChange={(value) => !value && setConfirm(null)}>
-        <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete permanently?</AlertDialogTitle><AlertDialogDescription>This cannot be undone. Assets in use cannot be deleted.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Keep in trash</AlertDialogCancel><AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => { if (confirm?.file) void mm.mutateOne(confirm.file, "permanent"); else if (confirm?.bulk) void mm.mutateSelected("permanent"); setConfirm(null); }}>Delete permanently</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
+        <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete permanently?</AlertDialogTitle><AlertDialogDescription>This cannot be undone. Assets in use cannot be deleted.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Keep in trash</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={() => { if (confirm?.file) void mm.mutateOne(confirm.file, "permanent"); else if (confirm?.bulk) void mm.mutateSelected("permanent"); setConfirm(null); }}>Delete permanently</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
       </AlertDialog>
     </div>
   );

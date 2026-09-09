@@ -329,6 +329,7 @@ export function AnalyticsList({
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
+              variant={showTrashed ? "destructive" : "default"}
               disabled={isMutating}
               onClick={() => {
                 if (!deleteTarget) return;

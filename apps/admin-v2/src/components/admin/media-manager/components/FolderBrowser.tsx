@@ -91,7 +91,7 @@ export function FolderBrowser({ folders, currentFolderId, onFolderSelect, onFold
         </DialogContent>
       </Dialog>
       <AlertDialog open={!!deleteFolder} onOpenChange={(value) => !value && setDeleteFolder(null)}>
-        <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete {deleteFolder?.name}?</AlertDialogTitle><AlertDialogDescription>Only empty folders can be deleted. Assets are never deleted with a folder.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Keep folder</AlertDialogCancel><AlertDialogAction onClick={() => { if (deleteFolder) void onFolderDelete(deleteFolder); setDeleteFolder(null); }}>Delete folder</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
+        <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete {deleteFolder?.name}?</AlertDialogTitle><AlertDialogDescription>Only empty folders can be deleted. Assets are never deleted with a folder.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Keep folder</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={() => { if (deleteFolder) void onFolderDelete(deleteFolder); setDeleteFolder(null); }}>Delete folder</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
       </AlertDialog>
     </>
   );

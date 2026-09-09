@@ -324,7 +324,7 @@ export function ProductForm({
                 <AlertDialogCancel onClick={cancelMediaRemoval}>Keep media</AlertDialogCancel>
                 <AlertDialogAction
                   disabled={isSubmitting}
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  variant="destructive"
                   onClick={(event) => {
                     event.preventDefault();
                     void confirmMediaRemoval();
