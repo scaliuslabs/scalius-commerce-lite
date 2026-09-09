@@ -35,6 +35,7 @@ export interface Product {
   }
 
   export interface OrderItem {
+    orderItemId?: string;
     productId: string;
     variantId: string | null;
     quantity: number;
@@ -46,6 +47,7 @@ export interface Product {
     products: Product[];
     defaultValues?: Partial<z.infer<typeof orderFormSchema>>;
     isEdit?: boolean;
+    isAmend?: boolean;
   }
 
   // We need to import z and define the schema here to use it in OrderFormProps
@@ -81,6 +83,7 @@ export interface Product {
     items: z
       .array(
         z.object({
+          orderItemId: z.string().optional(),
           productId: z.string().min(1, "Product is required"),
           variantId: z.string().nullable(),
           quantity: z

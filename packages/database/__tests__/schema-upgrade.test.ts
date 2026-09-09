@@ -168,6 +168,12 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 10,
         postgresStatements: 6,
       },
+      {
+        version: 61,
+        name: "0061_regular_hex",
+        sqliteStatements: 5,
+        postgresStatements: 5,
+      },
     ]);
   });
 
@@ -296,6 +302,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 58, name: "0058_order_shipping_method_snapshot" },
           { version: 59, name: "0059_checkout_delivery_phone_identity" },
           { version: 60, name: "0060_better_auth_account_identity" },
+          { version: 61, name: "0061_regular_hex" },
         ],
       });
     } finally {
@@ -445,7 +452,7 @@ describe("provider-neutral schema upgrades", () => {
         name: artifact.name,
         sourceSha256: artifact.sourceSha256,
       })),
-      { version: 60, name: "0060_future", sourceSha256: "c".repeat(64) },
+      { version: 62, name: "0062_future", sourceSha256: "c".repeat(64) },
     ], artifacts)).toThrow(/future row/i);
   });
 

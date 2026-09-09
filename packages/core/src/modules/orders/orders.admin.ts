@@ -1,10 +1,17 @@
 // src/modules/orders/orders.admin.ts
 // Admin order service: queries and CRUD mutations.
 
-import { safeBatch, type Database } from "@scalius/database/client";
+import {
+    buildBatchGuard,
+    isBatchGuardError,
+    safeBatch,
+    type Database,
+} from "@scalius/database/client";
 import {
     orders,
     orderItems,
+    orderAmendments,
+    adminOrderCreateAttempts,
     orderInvoices,
     orderReturns,
     orderTaxSnapshots,
@@ -40,6 +47,9 @@ import {
 } from "../inventory/inventory-transitions";
 import {
     prepareStockReservationBatch,
+    prepareReservedStockReleaseBatch,
+    isInventoryReservationConflictError,
+    isPreparedReservedStockReleaseConflictError,
     reserveStockBatch,
     releaseReservedStockBatch,
     validateStockBatchAvailability,
@@ -62,6 +72,8 @@ import { nanoid } from "nanoid";
 import type {
     ArchiveOrdersInput,
     CreateOrderInput,
+    ConfirmManualOrderAmendmentInput,
+    PreviewManualOrderAmendmentInput,
     QuoteManualOrderInput,
 } from "./orders.validation";
 import { chunkRowsForD1 } from "./d1-write-chunks";
@@ -69,6 +81,7 @@ import { NotFoundError, ValidationError, ConflictError, ServiceUnavailableError 
 import type {
     OrderDetails,
     AdminOrderFullEditReadiness,
+    AdminOrderAmendmentReadiness,
     OrderPaymentRecoveryFilter,
     OrderPaymentRecoverySummary,
     OrderShipmentRecoverySummary,
@@ -138,6 +151,8 @@ import {
     isAdminOrderCreateAttemptGuardError,
     markAdminOrderCreateAttemptFailed,
     resolveAdminOrderCreateAttempt,
+    sha256Hex,
+    stableStringify,
 } from "./admin-order-create-attempts";
 import { getOrderArchiveStatusBlockedReason } from "./order-archive-policy";
 
@@ -149,6 +164,7 @@ type SQLiteBatchItem = BatchItem<"sqlite">;
 const MAX_ORDER_LIST_LIMIT = 100;
 const ORDER_ITEM_INSERT_PARAMETERS_PER_ROW = 18;
 const ORDER_ITEM_TAX_INSERT_PARAMETERS_PER_ROW = 13;
+const ORDER_AMENDMENT_GUARD_MARKER = "ORDER_AMENDMENT_CONFLICT";
 
 export interface AdminOrderFullEditSource {
     status: string;
@@ -302,6 +318,150 @@ export async function getAdminOrderFullEditReadiness(
         .get();
 
     return order ? buildAdminOrderFullEditReadiness(order) : null;
+}
+
+export interface AdminOrderAmendmentSource {
+    status: string;
+    paymentMethod: string | null;
+    paymentStatus: string | null;
+    paidAmount: number | null;
+    fulfillmentStatus: string | null;
+    inventoryAction: string | null;
+    shipmentClaimId: string | null;
+    isManualOrder: number | boolean;
+    hasTaxSnapshot: number | boolean;
+    hasPaymentHistory: number | boolean;
+    hasPaymentSessionHistory: number | boolean;
+    hasShipmentHistory: number | boolean;
+    hasRefundHistory: number | boolean;
+    hasReturnHistory: number | boolean;
+    hasInvoiceHistory: number | boolean;
+    hasPaymentPlan: number | boolean;
+    hasPromotionAllocation: number | boolean;
+    hasNonPendingItem: number | boolean;
+    hasCleanCodTracking: number | boolean;
+}
+
+export function buildAdminOrderAmendmentReadiness(
+    order: AdminOrderAmendmentSource,
+): AdminOrderAmendmentReadiness {
+    if (!order.isManualOrder || order.paymentMethod !== PaymentMethod.COD) {
+        return {
+            allowed: false,
+            reason: "Only manually created Cash on Delivery orders can be amended here.",
+        };
+    }
+    if (
+        order.status !== OrderStatus.PENDING
+        && order.status !== OrderStatus.PROCESSING
+        && order.status !== OrderStatus.CONFIRMED
+    ) {
+        return {
+            allowed: false,
+            reason: "This order has already progressed beyond the amendment window.",
+        };
+    }
+    if (
+        order.paymentStatus !== PaymentStatus.UNPAID
+        || (order.paidAmount ?? 0) !== 0
+        || Boolean(order.hasPaymentHistory)
+        || Boolean(order.hasPaymentSessionHistory)
+        || Boolean(order.hasPaymentPlan)
+        || !order.hasCleanCodTracking
+    ) {
+        return {
+            allowed: false,
+            reason: "Payment or collection activity already exists. Use the payment or replacement-order workflow.",
+        };
+    }
+    if (
+        order.fulfillmentStatus !== FulfillmentStatus.PENDING
+        || Boolean(order.hasShipmentHistory)
+        || Boolean(order.shipmentClaimId)
+        || Boolean(order.hasNonPendingItem)
+        || order.inventoryAction === "deducted"
+    ) {
+        return {
+            allowed: false,
+            reason: "Fulfillment or shipment activity already exists. Use the shipment, return, or replacement-order workflow.",
+        };
+    }
+    if (
+        Boolean(order.hasRefundHistory)
+        || Boolean(order.hasReturnHistory)
+        || Boolean(order.hasInvoiceHistory)
+    ) {
+        return {
+            allowed: false,
+            reason: "Refund, return, or invoice evidence makes this order immutable.",
+        };
+    }
+    if (!order.hasTaxSnapshot || Boolean(order.hasPromotionAllocation)) {
+        return {
+            allowed: false,
+            reason: "This order does not have an amendment-safe manual money snapshot.",
+        };
+    }
+    if (order.inventoryAction !== "reserved" && order.inventoryAction !== "none") {
+        return {
+            allowed: false,
+            reason: "Inventory state must be reconciled before this order can be amended.",
+        };
+    }
+    return { allowed: true, reason: null };
+}
+
+function adminOrderAmendmentSelection(orderId: string) {
+    return {
+        status: orders.status,
+        paymentMethod: orders.paymentMethod,
+        paymentStatus: orders.paymentStatus,
+        paidAmount: orders.paidAmount,
+        fulfillmentStatus: orders.fulfillmentStatus,
+        inventoryAction: orders.inventoryAction,
+        shipmentClaimId: orders.shipmentClaimId,
+        isManualOrder: sql<number>`EXISTS (
+            SELECT 1 FROM ${adminOrderCreateAttempts}
+            WHERE ${adminOrderCreateAttempts.orderId} = ${orderId}
+              AND ${adminOrderCreateAttempts.status} = 'committed'
+        )`,
+        hasTaxSnapshot: sql<number>`EXISTS (SELECT 1 FROM ${orderTaxSnapshots} WHERE ${orderTaxSnapshots.orderId} = ${orderId})`,
+        hasPaymentHistory: sql<number>`EXISTS (SELECT 1 FROM ${orderPayments} WHERE ${orderPayments.orderId} = ${orderId})`,
+        hasPaymentSessionHistory: sql<number>`EXISTS (SELECT 1 FROM ${paymentSessionAttempts} WHERE ${paymentSessionAttempts.orderId} = ${orderId})`,
+        hasShipmentHistory: sql<number>`EXISTS (SELECT 1 FROM ${deliveryShipments} WHERE ${deliveryShipments.orderId} = ${orderId})`,
+        hasRefundHistory: sql<number>`EXISTS (SELECT 1 FROM ${refundAttempts} WHERE ${refundAttempts.orderId} = ${orderId})`,
+        hasReturnHistory: sql<number>`EXISTS (SELECT 1 FROM ${orderReturns} WHERE ${orderReturns.orderId} = ${orderId})`,
+        hasInvoiceHistory: sql<number>`EXISTS (SELECT 1 FROM ${orderInvoices} WHERE ${orderInvoices.orderId} = ${orderId})`,
+        hasPaymentPlan: sql<number>`EXISTS (SELECT 1 FROM ${paymentPlans} WHERE ${paymentPlans.orderId} = ${orderId})`,
+        hasPromotionAllocation: sql<number>`EXISTS (SELECT 1 FROM ${orderDiscountAllocations} WHERE ${orderDiscountAllocations.orderId} = ${orderId})`,
+        hasNonPendingItem: sql<number>`EXISTS (
+            SELECT 1 FROM ${orderItems}
+            WHERE ${orderItems.orderId} = ${orderId}
+              AND ${orderItems.fulfillmentStatus} <> ${ItemFulfillmentStatus.PENDING}
+        )`,
+        hasCleanCodTracking: sql<number>`EXISTS (
+            SELECT 1 FROM ${codTracking}
+            WHERE ${codTracking.orderId} = ${orderId}
+              AND ${codTracking.codStatus} = 'pending'
+              AND ${codTracking.collectedAt} IS NULL
+              AND COALESCE(${codTracking.collectedAmount}, 0) = 0
+        )`,
+    };
+}
+
+export async function getAdminOrderAmendmentReadiness(
+    db: Database,
+    orderId: string,
+): Promise<AdminOrderAmendmentReadiness | null> {
+    const order = await db.select(adminOrderAmendmentSelection(orderId))
+        .from(orders)
+        .where(and(
+            eq(orders.id, orderId),
+            isNull(orders.deletedAt),
+            isNull(orders.archivedAt),
+        ))
+        .get();
+    return order ? buildAdminOrderAmendmentReadiness(order) : null;
 }
 
 async function assertOrderHasNoIssuedInvoice(db: Database, orderId: string): Promise<void> {
@@ -494,9 +654,11 @@ function projectManualOrderQuote(
 async function prepareManualOrderQuote(
     db: Database,
     data: QuoteManualOrderInput,
+    currencyOverride?: OrderCurrencySnapshot,
 ): Promise<PreparedManualOrderQuote> {
-    const currentCurrency = await getCurrencySettings(db);
-    const currency = createOrderCurrencySnapshot(currentCurrency.currencyCode);
+    const currency = currencyOverride ?? createOrderCurrencySnapshot(
+        (await getCurrencySettings(db)).currencyCode,
+    );
     // Keep location validation first so a stale/cross-parent destination fails
     // before catalog or tax reads do unnecessary work.
     const locationNames = await resolveActiveDeliveryLocationNames(db, data);
@@ -1852,6 +2014,9 @@ async function getOrderDetailsOnce(
 
     if (!order) return null;
 
+    const amendmentReadiness = await getAdminOrderAmendmentReadiness(db, id);
+    if (!amendmentReadiness) return null;
+
     const [items, latestShipments, refundAttemptViews, supportRequests, promotionRows, paymentAttempts] = await Promise.all([
         db
             .select({
@@ -1970,6 +2135,7 @@ async function getOrderDetailsOnce(
         supportRequests,
         paymentRecovery: buildPaymentRecoverySummary(order, paymentAttempts, nowSeconds),
         fullEditReadiness: buildAdminOrderFullEditReadiness(order),
+        amendmentReadiness,
     };
 }
 
@@ -2310,6 +2476,562 @@ export async function createOrder(
         throw batchError;
     }
 
+    return response;
+}
+
+export interface ManualOrderAmendmentPreview extends ManualOrderQuote {
+    orderId: string;
+    expectedVersion: number;
+    resultingVersion: number;
+    balanceDue: number;
+    quoteFingerprint: string;
+}
+
+export interface ManualOrderAmendmentResult {
+    id: string;
+    version: number;
+    totalAmount: number;
+    balanceDue: number;
+    inventoryMutationVariantIds: string[];
+}
+
+function normalizeAmendmentRequest(
+    orderId: string,
+    data: PreviewManualOrderAmendmentInput & { quoteFingerprint?: string },
+): Record<string, unknown> {
+    return {
+        version: 1,
+        orderId,
+        expectedVersion: data.expectedVersion,
+        customerName: data.customerName.trim(),
+        customerPhone: data.customerPhone.trim(),
+        customerEmail: data.customerEmail?.trim().toLowerCase() ?? null,
+        shippingAddress: data.shippingAddress.trim(),
+        city: data.city,
+        zone: data.zone,
+        area: data.area,
+        notes: data.notes,
+        items: data.items.map((item) => ({
+            orderItemId: item.orderItemId ?? null,
+            productId: item.productId,
+            variantId: item.variantId,
+            quantity: item.quantity,
+        })),
+        shippingCharge: data.shippingCharge,
+        discountAmount: data.discountAmount,
+        quoteFingerprint: data.quoteFingerprint ?? null,
+    };
+}
+
+async function buildManualOrderAmendmentQuoteFingerprint(
+    taxQuote: TaxQuote,
+): Promise<string> {
+    return sha256Hex(stableStringify({
+        version: 1,
+        calculationVersion: taxQuote.calculationVersion,
+        enabled: taxQuote.enabled,
+        currencyCode: taxQuote.currencyCode,
+        decimalPlaces: taxQuote.decimalPlaces,
+        pricesIncludeTax: taxQuote.pricesIncludeTax,
+        shippingTaxed: taxQuote.shippingTaxed,
+        settingsVersion: taxQuote.settingsVersion,
+        subtotalMinor: taxQuote.subtotalMinor,
+        shippingMinor: taxQuote.shippingMinor,
+        discountMinor: taxQuote.discountMinor,
+        taxableMinor: taxQuote.taxableMinor,
+        taxMinor: taxQuote.taxMinor,
+        totalMinor: taxQuote.totalMinor,
+        lines: taxQuote.lines,
+        shipping: taxQuote.shipping,
+    }));
+}
+
+async function requireAmendableOrder(
+    db: Database,
+    orderId: string,
+    expectedVersion: number,
+) {
+    const order = await db.select().from(orders)
+        .where(and(eq(orders.id, orderId), isNull(orders.deletedAt), isNull(orders.archivedAt)))
+        .get();
+    if (!order) throw new NotFoundError("Order not found");
+    if (order.version !== expectedVersion) {
+        throw new ConflictError(
+            "This order changed after you opened it. Reload and review the latest values.",
+        );
+    }
+    const readiness = await getAdminOrderAmendmentReadiness(db, orderId);
+    if (!readiness?.allowed) {
+        throw new ConflictError(readiness?.reason ?? "This order cannot be amended.");
+    }
+    return order;
+}
+
+export async function previewManualOrderAmendment(
+    db: Database,
+    orderId: string,
+    data: PreviewManualOrderAmendmentInput,
+): Promise<ManualOrderAmendmentPreview> {
+    const order = await requireAmendableOrder(db, orderId, data.expectedVersion);
+    if (data.customerPhone !== order.customerPhone) {
+        await validateCustomerPhoneCountry(db, data.customerPhone);
+    }
+    const prepared = await prepareManualOrderQuote(
+        db,
+        data,
+        resolveOrderCurrencySnapshot(order),
+    );
+    const quoteFingerprint = await buildManualOrderAmendmentQuoteFingerprint(prepared.taxQuote);
+    return {
+        ...prepared.quote,
+        orderId,
+        expectedVersion: data.expectedVersion,
+        resultingVersion: data.expectedVersion + 1,
+        balanceDue: prepared.quote.totalAmount,
+        quoteFingerprint,
+    };
+}
+
+function amendmentCommitGuard(orderId: string, expectedVersion: number) {
+    return sql`EXISTS (
+        SELECT 1 FROM ${orders}
+        WHERE ${orders.id} = ${orderId}
+          AND ${orders.version} = ${expectedVersion}
+          AND ${orders.deletedAt} IS NULL
+          AND ${orders.archivedAt} IS NULL
+          AND ${orders.paymentMethod} = ${PaymentMethod.COD}
+          AND ${orders.paymentStatus} = ${PaymentStatus.UNPAID}
+          AND ${orders.paidAmount} = 0
+          AND ${orders.fulfillmentStatus} = ${FulfillmentStatus.PENDING}
+          AND ${orders.status} IN (${OrderStatus.PENDING}, ${OrderStatus.PROCESSING}, ${OrderStatus.CONFIRMED})
+          AND ${orders.shipmentClaimId} IS NULL
+          AND ${orders.inventoryAction} IN ('reserved', 'none')
+          AND EXISTS (
+            SELECT 1 FROM ${adminOrderCreateAttempts}
+            WHERE ${adminOrderCreateAttempts.orderId} = ${orderId}
+              AND ${adminOrderCreateAttempts.status} = 'committed'
+          )
+          AND EXISTS (
+            SELECT 1 FROM ${orderTaxSnapshots}
+            WHERE ${orderTaxSnapshots.orderId} = ${orderId}
+          )
+          AND EXISTS (
+            SELECT 1 FROM ${codTracking}
+            WHERE ${codTracking.orderId} = ${orderId}
+              AND ${codTracking.codStatus} = 'pending'
+              AND ${codTracking.collectedAt} IS NULL
+              AND COALESCE(${codTracking.collectedAmount}, 0) = 0
+          )
+          AND NOT EXISTS (SELECT 1 FROM ${orderPayments} WHERE ${orderPayments.orderId} = ${orderId})
+          AND NOT EXISTS (SELECT 1 FROM ${paymentSessionAttempts} WHERE ${paymentSessionAttempts.orderId} = ${orderId})
+          AND NOT EXISTS (SELECT 1 FROM ${paymentPlans} WHERE ${paymentPlans.orderId} = ${orderId})
+          AND NOT EXISTS (SELECT 1 FROM ${deliveryShipments} WHERE ${deliveryShipments.orderId} = ${orderId})
+          AND NOT EXISTS (SELECT 1 FROM ${refundAttempts} WHERE ${refundAttempts.orderId} = ${orderId})
+          AND NOT EXISTS (SELECT 1 FROM ${orderReturns} WHERE ${orderReturns.orderId} = ${orderId})
+          AND NOT EXISTS (SELECT 1 FROM ${orderInvoices} WHERE ${orderInvoices.orderId} = ${orderId})
+          AND NOT EXISTS (SELECT 1 FROM ${orderDiscountAllocations} WHERE ${orderDiscountAllocations.orderId} = ${orderId})
+          AND NOT EXISTS (
+            SELECT 1 FROM ${orderItems}
+            WHERE ${orderItems.orderId} = ${orderId}
+              AND ${orderItems.fulfillmentStatus} <> ${ItemFulfillmentStatus.PENDING}
+          )
+    )`;
+}
+
+async function resolveManualOrderAmendmentReplay(
+    db: Database,
+    keyHash: string,
+    requestHash: string,
+): Promise<ManualOrderAmendmentResult | null> {
+    const row = await db.select({
+        requestHash: orderAmendments.requestHash,
+        responsePayload: orderAmendments.responsePayload,
+    }).from(orderAmendments)
+        .where(eq(orderAmendments.idempotencyKeyHash, keyHash))
+        .get();
+    if (!row) return null;
+    if (row.requestHash !== requestHash) {
+        throw new ConflictError("This amendment request key was already used for different changes.");
+    }
+    try {
+        return JSON.parse(row.responsePayload) as ManualOrderAmendmentResult;
+    } catch {
+        throw new ServiceUnavailableError(
+            "The confirmed amendment response is unavailable. Reload the order before retrying.",
+        );
+    }
+}
+
+export async function confirmManualOrderAmendment(
+    db: Database,
+    orderId: string,
+    data: ConfirmManualOrderAmendmentInput,
+    actorId: string | null,
+): Promise<ManualOrderAmendmentResult> {
+    const actorScope = actorId ?? "unknown-admin";
+    const keyHash = await sha256Hex(`${actorScope}:${data.requestKey.trim()}`);
+    const requestHash = await sha256Hex(stableStringify(
+        normalizeAmendmentRequest(orderId, data),
+    ));
+    const replay = await resolveManualOrderAmendmentReplay(db, keyHash, requestHash);
+    if (replay) return replay;
+
+    const order = await requireAmendableOrder(db, orderId, data.expectedVersion);
+    if (data.customerPhone !== order.customerPhone) {
+        await validateCustomerPhoneCountry(db, data.customerPhone);
+    }
+    const prepared = await prepareManualOrderQuote(
+        db,
+        data,
+        resolveOrderCurrencySnapshot(order),
+    );
+    const currentQuoteFingerprint = await buildManualOrderAmendmentQuoteFingerprint(prepared.taxQuote);
+    if (currentQuoteFingerprint !== data.quoteFingerprint) {
+        throw new ConflictError(
+            "Prices or taxes changed after preview. Refresh the quote and review the updated COD total.",
+        );
+    }
+    const existingItems = await db.select().from(orderItems)
+        .where(eq(orderItems.orderId, orderId));
+    const existingTaxSnapshot = await db.select().from(orderTaxSnapshots)
+        .where(eq(orderTaxSnapshots.orderId, orderId)).get();
+    const existingItemTaxSnapshots = await db.select().from(orderItemTaxSnapshots)
+        .where(eq(orderItemTaxSnapshots.orderId, orderId));
+    if (!existingTaxSnapshot) throw new ConflictError("The order tax snapshot is unavailable.");
+    if (
+        existingItemTaxSnapshots.length !== existingItems.length
+        || existingItems.some((item) => !existingItemTaxSnapshots.some(
+            (snapshot) => snapshot.orderItemId === item.id,
+        ))
+    ) {
+        throw new ConflictError("An order line tax snapshot is unavailable.");
+    }
+
+    const existingById = new Map(existingItems.map((item) => [item.id, item]));
+    const retainedIds = new Set<string>();
+    const preparedItems = prepared.trackedItems.map((item, index) => {
+        const requested = data.items[index]!;
+        const existing = requested.orderItemId
+            ? existingById.get(requested.orderItemId)
+            : undefined;
+        if (requested.orderItemId && (
+            !existing
+            || existing.productId !== item.productId
+            || existing.variantId !== item.variantId
+            || retainedIds.has(requested.orderItemId)
+        )) {
+            throw new ConflictError("An amended line no longer matches the loaded order. Reload and review it.");
+        }
+        const id = existing?.id ?? `item_${nanoid()}`;
+        retainedIds.add(id);
+        const lineTax = prepared.taxQuote.lines.find(
+            (line) => line.lineId === prepared.allocationLineIds[index],
+        );
+        if (!lineTax) throw new ValidationError("Authoritative tax quote is missing an amendment line.");
+        return { id, item, lineTax, retained: Boolean(existing) };
+    });
+
+    const pool = (order.inventoryPool as NonNullable<ReservationEntry["pool"]>) ?? "regular";
+    const oldEntries = buildInventoryEntries(existingItems, pool);
+    const newEntries = buildInventoryEntries(prepared.trackedItems, pool);
+    const { positiveEntries, negativeEntries } = computeInventoryDeltas(oldEntries, newEntries, pool);
+    const inventoryKey = `order-amendment:v1:${keyHash}`;
+    const reservePlan = await prepareStockReservationBatch(
+        db,
+        toReservationBatchItems(positiveEntries, orderId),
+        pool,
+        { reservationKey: inventoryKey },
+    );
+    if (!reservePlan.success) {
+        throw new ValidationError(reservePlan.error ?? "Insufficient stock for this amendment.");
+    }
+    const releasePlan = await prepareReservedStockReleaseBatch(
+        db,
+        negativeEntries,
+        orderId,
+        { releaseKey: inventoryKey, requireExact: true },
+    );
+    if (!releasePlan.success) {
+        throw new ConflictError(
+            releasePlan.error ?? "The existing reservation must be reconciled before amending.",
+        );
+    }
+
+    let customerId = order.customerId;
+    let newCustomerId: string | null = null;
+    if (data.customerPhone !== order.customerPhone || !customerId) {
+        const existingCustomer = await db.select({ id: customers.id }).from(customers)
+            .where(eq(customers.phone, data.customerPhone)).get();
+        customerId = existingCustomer?.id ?? `cust_${nanoid()}`;
+        if (!existingCustomer) newCustomerId = customerId;
+    }
+
+    const resultingVersion = data.expectedVersion + 1;
+    const totalAmount = prepared.quote.totalAmount;
+    const response: ManualOrderAmendmentResult = {
+        id: orderId,
+        version: resultingVersion,
+        totalAmount,
+        balanceDue: totalAmount,
+        inventoryMutationVariantIds: [...new Set([
+            ...positiveEntries.map((entry) => entry.variantId),
+            ...negativeEntries.map((entry) => entry.variantId),
+        ])],
+    };
+    const beforeSnapshot = JSON.stringify({
+        order,
+        items: existingItems,
+        tax: existingTaxSnapshot,
+        itemTaxes: existingItemTaxSnapshots,
+    });
+    const afterSnapshot = JSON.stringify({
+        order: {
+            ...normalizeAmendmentRequest(orderId, data),
+            version: resultingVersion,
+            currencyCode: prepared.taxQuote.currencyCode,
+            currencyDecimalPlaces: prepared.taxQuote.decimalPlaces,
+            subtotalAmountMinor: prepared.taxQuote.subtotalMinor,
+            shippingAmountMinor: prepared.taxQuote.shippingMinor,
+            discountAmountMinor: prepared.taxQuote.discountMinor,
+            taxAmountMinor: prepared.taxQuote.taxMinor,
+            totalAmountMinor: prepared.taxQuote.totalMinor,
+            balanceDue: totalAmount,
+        },
+        items: preparedItems.map(({ id, item, lineTax }) => ({ id, ...item, lineTax })),
+    });
+
+    const statements: SQLiteBatchItem[] = [
+        buildBatchGuard(
+            db,
+            amendmentCommitGuard(orderId, data.expectedVersion),
+            ORDER_AMENDMENT_GUARD_MARKER,
+        ),
+        ...reservePlan.statements,
+        ...releasePlan.statements,
+    ];
+    if (newCustomerId) {
+        statements.push(db.insert(customers).values({
+            id: newCustomerId,
+            name: data.customerName,
+            email: data.customerEmail,
+            phone: data.customerPhone,
+            address: data.shippingAddress,
+            city: data.city,
+            zone: data.zone,
+            area: data.area,
+            cityName: prepared.locationNames.cityName,
+            zoneName: prepared.locationNames.zoneName,
+            areaName: prepared.locationNames.areaName,
+            totalOrders: 1,
+            totalSpent: 0,
+            lastOrderAt: sql`unixepoch()`,
+            createdAt: sql`unixepoch()`,
+            updatedAt: sql`unixepoch()`,
+        }));
+        statements.push(db.insert(customerHistory).values({
+            id: `hist_${nanoid()}`,
+            customerId: newCustomerId,
+            name: data.customerName,
+            email: data.customerEmail,
+            phone: data.customerPhone,
+            address: data.shippingAddress,
+            city: data.city,
+            zone: data.zone,
+            area: data.area,
+            cityName: prepared.locationNames.cityName,
+            zoneName: prepared.locationNames.zoneName,
+            areaName: prepared.locationNames.areaName,
+            changeType: "created",
+            createdAt: sql`unixepoch()`,
+        }));
+    }
+    statements.push(
+        db.insert(orderAmendments).values({
+            id: `oamd_${crypto.randomUUID()}`,
+            orderId,
+            actorId,
+            idempotencyKeyHash: keyHash,
+            requestHash,
+            expectedVersion: data.expectedVersion,
+            resultingVersion,
+            beforeSnapshot,
+            afterSnapshot,
+            responsePayload: JSON.stringify(response),
+            createdAt: sql`unixepoch()`,
+        }),
+        db.update(orders).set({
+            customerName: data.customerName,
+            customerPhone: data.customerPhone,
+            customerEmail: data.customerEmail,
+            shippingAddress: data.shippingAddress,
+            city: data.city,
+            zone: data.zone,
+            area: data.area,
+            cityName: prepared.locationNames.cityName,
+            zoneName: prepared.locationNames.zoneName,
+            areaName: prepared.locationNames.areaName,
+            notes: data.notes,
+            totalAmount,
+            shippingCharge: prepared.quote.shippingAmount,
+            discountAmount: prepared.quote.discountAmount,
+            currencyCode: prepared.taxQuote.currencyCode,
+            currencyDecimalPlaces: prepared.taxQuote.decimalPlaces,
+            subtotalAmountMinor: prepared.taxQuote.subtotalMinor,
+            shippingAmountMinor: prepared.taxQuote.shippingMinor,
+            discountAmountMinor: prepared.taxQuote.discountMinor,
+            taxAmountMinor: prepared.taxQuote.taxMinor,
+            totalAmountMinor: prepared.taxQuote.totalMinor,
+            taxLabel: prepared.taxQuote.displayLabel,
+            pricesIncludeTax: prepared.taxQuote.pricesIncludeTax,
+            paidAmount: 0,
+            balanceDue: totalAmount,
+            paymentStatus: PaymentStatus.UNPAID,
+            customerId,
+            inventoryAction: newEntries.length > 0 ? "reserved" : "none",
+            version: resultingVersion,
+            updatedAt: sql`unixepoch()`,
+        }).where(and(
+            eq(orders.id, orderId),
+            eq(orders.version, data.expectedVersion),
+            amendmentCommitGuard(orderId, data.expectedVersion),
+        )),
+    );
+
+    for (const preparedItem of preparedItems) {
+        const itemValues = {
+            productId: preparedItem.item.productId,
+            variantId: preparedItem.item.variantId,
+            productImageMediaId: preparedItem.item.productImageMediaId,
+            quantity: preparedItem.item.quantity,
+            price: preparedItem.item.price,
+            productName: preparedItem.item.productName,
+            variantLabel: preparedItem.item.variantLabel,
+            inventoryTracked: preparedItem.item.inventoryTracked,
+            unitPriceMinor: preparedItem.lineTax.unitPriceMinor,
+            lineSubtotalMinor: preparedItem.lineTax.grossAmountMinor,
+            discountAmountMinor: preparedItem.lineTax.discountMinor,
+            taxableAmountMinor: preparedItem.lineTax.taxableAmountMinor,
+            taxAmountMinor: preparedItem.lineTax.taxMinor,
+            fulfillmentStatus: ItemFulfillmentStatus.PENDING,
+        };
+        if (preparedItem.retained) {
+            statements.push(
+                db.update(orderItems).set(itemValues).where(and(
+                    eq(orderItems.id, preparedItem.id),
+                    eq(orderItems.orderId, orderId),
+                )),
+                db.update(orderItemTaxSnapshots).set({
+                    taxClassId: preparedItem.lineTax.taxClassId,
+                    taxClassName: preparedItem.lineTax.taxClassName,
+                    unitPriceMinor: preparedItem.lineTax.unitPriceMinor,
+                    quantity: preparedItem.lineTax.quantity,
+                    grossAmountMinor: preparedItem.lineTax.grossAmountMinor,
+                    discountMinor: preparedItem.lineTax.discountMinor,
+                    taxableAmountMinor: preparedItem.lineTax.taxableAmountMinor,
+                    taxMinor: preparedItem.lineTax.taxMinor,
+                    pricesIncludeTax: prepared.taxQuote.pricesIncludeTax,
+                    rateSnapshot: JSON.stringify(preparedItem.lineTax.components),
+                    createdAt: sql`unixepoch()`,
+                }).where(and(
+                    eq(orderItemTaxSnapshots.orderItemId, preparedItem.id),
+                    eq(orderItemTaxSnapshots.orderId, orderId),
+                )),
+            );
+        } else {
+            statements.push(
+                db.insert(orderItems).values({
+                    id: preparedItem.id,
+                    orderId,
+                    ...itemValues,
+                    createdAt: sql`unixepoch()`,
+                }),
+                db.insert(orderItemTaxSnapshots).values({
+                    orderItemId: preparedItem.id,
+                    orderId,
+                    taxClassId: preparedItem.lineTax.taxClassId,
+                    taxClassName: preparedItem.lineTax.taxClassName,
+                    unitPriceMinor: preparedItem.lineTax.unitPriceMinor,
+                    quantity: preparedItem.lineTax.quantity,
+                    grossAmountMinor: preparedItem.lineTax.grossAmountMinor,
+                    discountMinor: preparedItem.lineTax.discountMinor,
+                    taxableAmountMinor: preparedItem.lineTax.taxableAmountMinor,
+                    taxMinor: preparedItem.lineTax.taxMinor,
+                    pricesIncludeTax: prepared.taxQuote.pricesIncludeTax,
+                    rateSnapshot: JSON.stringify(preparedItem.lineTax.components),
+                    createdAt: sql`unixepoch()`,
+                }),
+            );
+        }
+    }
+    const removedIds = existingItems
+        .filter((item) => !retainedIds.has(item.id))
+        .map((item) => item.id);
+    if (removedIds.length > 0) {
+        statements.push(db.delete(orderItems).where(and(
+            eq(orderItems.orderId, orderId),
+            inArray(orderItems.id, removedIds),
+        )));
+    }
+    statements.push(
+        db.update(orderTaxSnapshots).set({
+            currencyCode: prepared.taxQuote.currencyCode,
+            decimalPlaces: prepared.taxQuote.decimalPlaces,
+            displayLabel: prepared.taxQuote.displayLabel,
+            pricesIncludeTax: prepared.taxQuote.pricesIncludeTax,
+            shippingTaxed: prepared.taxQuote.shippingTaxed,
+            subtotalMinor: prepared.taxQuote.subtotalMinor,
+            shippingMinor: prepared.taxQuote.shippingMinor,
+            discountMinor: prepared.taxQuote.discountMinor,
+            taxableMinor: prepared.taxQuote.taxableMinor,
+            taxMinor: prepared.taxQuote.taxMinor,
+            totalMinor: prepared.taxQuote.totalMinor,
+            settingsVersion: prepared.taxQuote.settingsVersion,
+            calculationVersion: prepared.taxQuote.calculationVersion,
+            destinationSnapshot: JSON.stringify(prepared.taxQuote.destination),
+            rateSnapshot: JSON.stringify({
+                lines: prepared.taxQuote.lines.map((line) => ({
+                    lineId: line.lineId,
+                    taxClassId: line.taxClassId,
+                    taxClassName: line.taxClassName,
+                    components: line.components,
+                })),
+                shipping: prepared.taxQuote.shipping,
+            }),
+            createdAt: sql`unixepoch()`,
+        }).where(eq(orderTaxSnapshots.orderId, orderId)),
+        db.update(codTracking).set({ updatedAt: sql`unixepoch()` })
+            .where(and(eq(codTracking.orderId, orderId), eq(codTracking.codStatus, "pending"))),
+        buildBatchGuard(db, sql`EXISTS (
+            SELECT 1 FROM ${orders}
+            INNER JOIN ${orderAmendments} ON ${orderAmendments.orderId} = ${orders.id}
+            WHERE ${orders.id} = ${orderId}
+              AND ${orders.version} = ${resultingVersion}
+              AND ${orderAmendments.idempotencyKeyHash} = ${keyHash}
+              AND ${orderAmendments.resultingVersion} = ${resultingVersion}
+        )`, ORDER_AMENDMENT_GUARD_MARKER),
+    );
+
+    try {
+        await safeBatch(db, statements);
+    } catch (error) {
+        const raceReplay = await resolveManualOrderAmendmentReplay(db, keyHash, requestHash);
+        if (raceReplay) return raceReplay;
+        if (
+            isBatchGuardError(error, ORDER_AMENDMENT_GUARD_MARKER)
+            || isInventoryReservationConflictError(error)
+            || isPreparedReservedStockReleaseConflictError(error)
+        ) {
+            throw new ConflictError(
+                "This order changed while the amendment was being confirmed. Reload and review it.",
+            );
+        }
+        throw error;
+    }
+
+    if (order.customerId) await updateCustomerStatsService(db, order.customerId);
+    if (customerId && customerId !== order.customerId) {
+        await updateCustomerStatsService(db, customerId);
+    }
     return response;
 }
 

@@ -14,8 +14,17 @@ export type {
   ReserveStockBatchResult,
 } from "./reserve";
 export { deductStock, deductMultiple } from "./deduct";
-export { releaseReservation, releaseMultiple, releaseReservedStockBatch } from "./release";
-export type { ReleaseReservedStockBatchResult } from "./release";
+export {
+  releaseReservation,
+  releaseMultiple,
+  releaseReservedStockBatch,
+  prepareReservedStockReleaseBatch,
+  isPreparedReservedStockReleaseConflictError,
+} from "./release";
+export type {
+  PreparedReservedStockReleaseBatch,
+  ReleaseReservedStockBatchResult,
+} from "./release";
 export { restoreDeductedStock, restoreDeductedMultiple } from "./restore";
 export { recordMovement } from "./movements";
 export { checkAndAlertLowStock } from "./alerts";

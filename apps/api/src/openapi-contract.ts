@@ -974,6 +974,8 @@ const COMMERCE_OPERATION_TUPLES: readonly DashboardOperationTuple[] = [
   ["dashboard.orders.list", "read", false, "none", "none", "parallel"],
   ["dashboard.orders.payment_recovery_list", "read", false, "none", "none", "parallel"],
   ["dashboard.orders.quote", "read", false, "none", "none", "parallel"],
+  ["dashboard.orders.amendment_preview", "read", false, "none", "required", "parallel"],
+  ["dashboard.orders.amendment_confirm", "write", false, "required", "required", "sequential"],
   ["dashboard.orders.create", "write", false, "required", "none", "sequential"],
   ["dashboard.orders.archive", "destructive", false, "none", "required", "sequential"],
   ["dashboard.orders.bulk_ship", "write", true, "none", "none", "forbidden"],

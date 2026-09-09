@@ -15,6 +15,8 @@ const EXPECTED_OPERATIONS = {
   "GET /api/v1/admin/orders/payment-recovery": "dashboard.orders.payment_recovery_list",
   "GET /api/v1/admin/orders/payment-recovery/export": "dashboard.orders.payment_recovery_export",
   "POST /api/v1/admin/orders/quote": "dashboard.orders.quote",
+  "POST /api/v1/admin/orders/{id}/amendments/preview": "dashboard.orders.amendment_preview",
+  "POST /api/v1/admin/orders/{id}/amendments": "dashboard.orders.amendment_confirm",
   "POST /api/v1/admin/orders": "dashboard.orders.create",
   "POST /api/v1/admin/orders/archive": "dashboard.orders.archive",
   "POST /api/v1/admin/orders/bulk-ship": "dashboard.orders.bulk_ship",

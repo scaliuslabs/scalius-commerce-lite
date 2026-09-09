@@ -31,7 +31,7 @@ export function OrderItemsTable({
   resolvedProductsById = {},
   resolvedVariantsById = {},
 }: OrderItemsTableProps) {
-  const { form, products, isEdit, manualQuote } = useOrderForm();
+  const { form, products, isEdit, isAmend, manualQuote } = useOrderForm();
   const { symbol } = useCurrency();
 
   // Directly get the items from the form state.
@@ -46,7 +46,7 @@ export function OrderItemsTable({
           (candidate) => candidate.id === item.variantId,
         )
       : undefined;
-    const quotedLine = !isEdit && manualQuote.isCurrent
+    const quotedLine = (!isEdit || isAmend) && manualQuote.isCurrent
       ? manualQuote.data?.lines.find((line) =>
           line.index === index
           && line.productId === item.productId

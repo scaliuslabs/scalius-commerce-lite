@@ -1,5 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { Link } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { LockKeyhole } from "lucide-react";
 import { OrderForm } from "~/components/admin/OrderForm";
 import { Button } from "~/components/ui/button";
@@ -12,11 +11,11 @@ import {
   buildEditOrderFormRouteData,
 } from "../-order-form-route-state";
 
-export const Route = createFileRoute("/admin/orders/$orderId/edit")({
+export const Route = createFileRoute("/admin/orders/$orderId/amend")({
   loader: async ({ context: { queryClient }, params }) => {
     const result = await queryClient.fetchQuery({
       ...orderFormDataQueryOptions(params.orderId),
-      staleTime: Infinity,
+      staleTime: 0,
     });
     const locations = await queryClient.ensureQueryData(
       deliveryLocationsQueryOptions({ type: "city" }),
@@ -25,27 +24,22 @@ export const Route = createFileRoute("/admin/orders/$orderId/edit")({
     return buildEditOrderFormRouteData(result);
   },
   head: ({ params }) => ({
-    meta: [{ title: `Edit Order #${params.orderId} | Scalius Admin` }],
+    meta: [{ title: `Amend Order #${params.orderId} | Scalius Admin` }],
   }),
-  errorComponent: EditOrderFormErrorComponent,
-  component: EditOrderPage,
-});
-
-function EditOrderFormErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
-  return (
+  errorComponent: ({ error, reset }) => (
     <OrderFormRouteError
-      title="Order editor could not be loaded"
-      description="Required order form, product, or delivery-location data is unavailable. The order was not changed."
+      title="Order amendment could not be loaded"
+      description="Required order, product, or delivery-location data is unavailable. The order was not changed."
       error={error}
       reset={reset}
     />
-  );
-}
+  ),
+  component: AmendOrderPage,
+});
 
-function EditOrderPage() {
-  const r = Route.useLoaderData();
-
-  if (!r.fullEditReadiness.allowed) {
+function AmendOrderPage() {
+  const data = Route.useLoaderData();
+  if (!data.amendmentReadiness.allowed) {
     return (
       <div className="container max-w-3xl py-6">
         <Card>
@@ -54,41 +48,40 @@ function EditOrderPage() {
               <LockKeyhole className="h-5 w-5 text-muted-foreground" />
             </div>
             <div className="space-y-1.5">
-              <h1 className="text-xl font-semibold tracking-tight">Order contents are protected</h1>
+              <h1 className="text-xl font-semibold tracking-tight">Amendment unavailable</h1>
               <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-                {r.fullEditReadiness.reason ?? "This order can no longer be changed in the full editor."}
+                {data.amendmentReadiness.reason ?? "This order can no longer be amended."}
               </p>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <Button asChild>
-                <Link
-                  to="/admin/orders/$orderId"
-                  params={{ orderId: r.defaultValues.id as string }}
-                >
-                  View order
-                </Link>
-              </Button>
-              <Button asChild variant="outline">
-                <Link to="/admin/orders">Back to orders</Link>
-              </Button>
-            </div>
+            <Button asChild>
+              <Link
+                to="/admin/orders/$orderId"
+                params={{ orderId: data.defaultValues.id as string }}
+              >
+                View order
+              </Link>
+            </Button>
           </CardContent>
         </Card>
       </div>
     );
   }
 
-  const productsWithVariants = r.productsWithVariants.map((p) => ({
-    ...p,
-    variants: p.variants.map((v) => ({ ...v, sku: v.sku || "", price: v.price ?? 0 })),
+  const products = data.productsWithVariants.map((product) => ({
+    ...product,
+    variants: product.variants.map((variant) => ({
+      ...variant,
+      sku: variant.sku || "",
+      price: variant.price ?? 0,
+    })),
   }));
-
   return (
     <div className="container max-w-7xl py-4 pb-8">
       <OrderForm
-        products={productsWithVariants}
-        defaultValues={r.defaultValues}
-        isEdit={true}
+        products={products}
+        defaultValues={data.defaultValues}
+        isEdit
+        isAmend
       />
     </div>
   );

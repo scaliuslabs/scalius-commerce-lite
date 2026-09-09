@@ -107,6 +107,11 @@ export interface AdminOrderFullEditReadiness {
     reason: string | null;
 }
 
+export interface AdminOrderAmendmentReadiness {
+    allowed: boolean;
+    reason: string | null;
+}
+
 export interface OrderListItem {
     id: string;
     customerName: string;
@@ -140,6 +145,7 @@ export interface OrderListItem {
 }
 
 export interface OrderDetails extends OrderListItem {
+    amendmentReadiness: AdminOrderAmendmentReadiness;
     notes: string | null;
     shippingAddress: string;
     customerId: string | null;
