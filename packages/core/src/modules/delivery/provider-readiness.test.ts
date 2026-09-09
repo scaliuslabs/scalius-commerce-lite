@@ -66,7 +66,7 @@ describe("delivery provider activation readiness", () => {
   it("requires Steadfast base URL, API key, and secret key before activation", () => {
     const blockers = getDeliveryProviderActivationBlockers({
       type: "steadfast",
-      credentials: { baseUrl: "https://portal.steadfast.com.bd/api/v1" },
+      credentials: { baseUrl: "https://portal.packzy.com/api/v1" },
       config: {},
     });
 
@@ -101,7 +101,7 @@ describe("delivery provider activation readiness", () => {
     "https://127.0.0.1/api/v1",
     "https://localhost/api/v1",
     "https://courier.internal/api/v1",
-    "https://portal.steadfast.com.bd:8443/api/v1",
+    "https://portal.packzy.com:8443/api/v1",
   ])("blocks non-public provider base URL %s", (baseUrl) => {
     expect(getDeliveryProviderActivationBlockers({
       type: "steadfast",
@@ -142,7 +142,7 @@ describe("delivery provider activation readiness", () => {
 
 describe("delivery provider durable readiness summary", () => {
   const completeSteadfastCredentials = {
-    baseUrl: "https://portal.steadfast.com.bd/api/v1",
+    baseUrl: "https://portal.packzy.com/api/v1",
     apiKey: "steadfast-api-4821",
     secretKey: "steadfast-secret-9417",
   };

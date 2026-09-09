@@ -8,7 +8,7 @@ const credentialKey = Buffer.alloc(32, 23).toString("base64");
 const otherCredentialKey = Buffer.alloc(32, 24).toString("base64");
 
 const steadfastCredentials = JSON.stringify({
-  baseUrl: "https://portal.steadfast.com.bd/api/v1",
+  baseUrl: "https://portal.packzy.com/api/v1",
   apiKey: "steadfast-key",
   secretKey: "steadfast-secret",
 });
