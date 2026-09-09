@@ -101,6 +101,10 @@ export const ENGLISH_CHECKOUT_LANGUAGE_DATA = {
   orderReceiptPrintText: "Print receipt",
   orderReceiptCheckingPaymentText: "Checking payment status…",
   orderReceiptCheckPaymentText: "Check payment status",
+  orderReceiptStripePaymentMethodRequiredText:
+    "Stripe needs new card details. Choose Complete payment with Stripe below to continue.",
+  orderReceiptStripeAuthenticationRequiredText:
+    "Stripe needs additional authentication. Choose Complete payment with Stripe below to continue.",
   orderReceiptConfirmationDelayedText:
     "Confirmation is taking longer than usual. You can safely leave this receipt and return later.",
   orderReceiptStatusUpdatedText: "Payment status updated. Refreshing your receipt…",
@@ -458,6 +462,10 @@ export const BANGLA_CHECKOUT_LANGUAGE_DATA: CheckoutLanguageData = {
   orderReceiptPrintText: "রসিদ প্রিন্ট করুন",
   orderReceiptCheckingPaymentText: "পেমেন্টের অবস্থা যাচাই করা হচ্ছে…",
   orderReceiptCheckPaymentText: "পেমেন্টের অবস্থা যাচাই করুন",
+  orderReceiptStripePaymentMethodRequiredText:
+    "Stripe-এ নতুন কার্ডের তথ্য প্রয়োজন। চালিয়ে যেতে নিচের Stripe-এর মাধ্যমে পেমেন্ট সম্পন্ন করুন বেছে নিন।",
+  orderReceiptStripeAuthenticationRequiredText:
+    "এই পেমেন্টের জন্য Stripe-এ অতিরিক্ত যাচাই প্রয়োজন। চালিয়ে যেতে নিচের Stripe-এর মাধ্যমে পেমেন্ট সম্পন্ন করুন বেছে নিন।",
   orderReceiptConfirmationDelayedText:
     "পেমেন্ট নিশ্চিত হতে স্বাভাবিকের চেয়ে বেশি সময় লাগছে। আপনি নিরাপদে এই রসিদ থেকে বের হয়ে পরে আবার দেখতে পারেন।",
   orderReceiptStatusUpdatedText: "পেমেন্টের অবস্থা হালনাগাদ হয়েছে। রসিদ রিফ্রেশ হচ্ছে…",
@@ -722,6 +730,8 @@ export const CHECKOUT_LANGUAGE_LONG_TEXT_KEYS = new Set<CheckoutLanguageKey>([
   "orderReceiptExpiredMessageText",
   "orderReceiptUnavailableMessageText",
   "orderReceiptDeliveryNotRecordedText",
+  "orderReceiptStripePaymentMethodRequiredText",
+  "orderReceiptStripeAuthenticationRequiredText",
   "orderReceiptConfirmationDelayedText",
   "orderReceiptCardLoadFailedText",
   "orderReceiptPaymentIssueMessageText",

@@ -827,42 +827,77 @@ const orderPlacedAt = formatOrderReceiptDate(order?.createdAt, checkoutLanguage.
     let checking = false;
     let delayIndex = 0;
     let timeoutId: number | undefined;
+    let stripeActionMessage: string | null = null;
+    let stripeReconciliationRequested = false;
+    const isPageHidden = () => document.visibilityState === "hidden";
 
     const requestStripeReconciliation = async () => {
-      if (receipt.dataset.paymentMethod !== "stripe") return;
+      if (receipt.dataset.paymentMethod !== "stripe") return null;
       try {
-        await fetch("/api/checkout/stripe-reconcile", {
+        const response = await fetch("/api/checkout/stripe-reconcile", {
           method: "POST",
           credentials: "same-origin",
           cache: "no-store",
           headers: { "Content-Type": "application/json", Accept: "application/json" },
           body: JSON.stringify({ orderId }),
         });
+        if (!response.ok) return null;
+        const payload = await response.json() as {
+          success?: boolean;
+          data?: { providerStatus?: unknown };
+        };
+        return payload.success === true && typeof payload.data?.providerStatus === "string"
+          ? payload.data.providerStatus
+          : null;
       } catch {
         // Provider verification is best-effort here; bounded receipt polling remains active.
+        return null;
+      }
+    };
+
+    const showStripeGuidance = (providerStatus: string | null) => {
+      stripeActionMessage = providerStatus === "requires_payment_method"
+        ? copy.orderReceiptStripePaymentMethodRequiredText
+        : providerStatus === "requires_action"
+          ? copy.orderReceiptStripeAuthenticationRequiredText
+          : null;
+      if (message) {
+        message.textContent = stripeActionMessage ?? copy.orderReceiptCheckingPaymentText;
       }
     };
 
     const schedule = () => {
       if (stopped || suspended) return;
       if (delayIndex >= PAYMENT_STATUS_DELAYS_MS.length) {
-        if (message) message.textContent = copy.orderReceiptConfirmationDelayedText;
+        if (message) {
+          message.textContent = stripeActionMessage ?? copy.orderReceiptConfirmationDelayedText;
+        }
         checkNowButton?.classList.remove("hidden");
         return;
       }
-      timeoutId = window.setTimeout(checkStatus, PAYMENT_STATUS_DELAYS_MS[delayIndex]);
+      timeoutId = window.setTimeout(() => {
+        timeoutId = undefined;
+        void checkStatus();
+      }, PAYMENT_STATUS_DELAYS_MS[delayIndex]);
       delayIndex += 1;
     };
 
-    const checkStatus = async () => {
+    const checkStatus = async (reconcileStripe = false) => {
+      if (reconcileStripe) stripeReconciliationRequested = true;
       if (stopped || suspended || checking) return;
-      if (document.visibilityState === "hidden") {
+      if (isPageHidden()) {
         schedule();
         return;
       }
 
       checking = true;
       try {
+        if (stripeReconciliationRequested) {
+          const providerStatus = await requestStripeReconciliation();
+          if (stopped || suspended || isPageHidden()) return;
+          stripeReconciliationRequested = false;
+          showStripeGuidance(providerStatus);
+        }
         const response = await fetch(
           `/api/order-receipt/status?orderId=${encodeURIComponent(orderId)}`,
           {
@@ -895,20 +930,27 @@ const orderPlacedAt = formatOrderReceiptDate(order?.createdAt, checkoutLanguage.
         checking = false;
       }
 
+      if (stripeReconciliationRequested) {
+        void checkStatus();
+        return;
+      }
       schedule();
     };
 
     const checkWhenVisible = () => {
       if (document.visibilityState !== "visible" || stopped) return;
       if (timeoutId) window.clearTimeout(timeoutId);
+      timeoutId = undefined;
       void checkStatus();
     };
 
     document.addEventListener("visibilitychange", checkWhenVisible);
     checkNowButton?.addEventListener("click", () => {
       checkNowButton.disabled = true;
+      if (timeoutId) window.clearTimeout(timeoutId);
+      timeoutId = undefined;
       if (message) message.textContent = copy.orderReceiptCheckingPaymentText;
-      void checkStatus().finally(() => {
+      void checkStatus(true).finally(() => {
         checkNowButton.disabled = false;
       });
     });
@@ -920,12 +962,10 @@ const orderPlacedAt = formatOrderReceiptDate(order?.createdAt, checkoutLanguage.
       if (!(event as PageTransitionEvent).persisted || stopped) return;
       suspended = false;
       delayIndex = 0;
-      void requestStripeReconciliation().finally(() => void checkStatus());
+      void checkStatus(true);
     });
 
-    void requestStripeReconciliation().finally(() => {
-      if (!stopped && !suspended) void checkStatus();
-    });
+    void checkStatus(true);
   });
 </script>
 
