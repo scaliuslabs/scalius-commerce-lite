@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { createHmac } from "node:crypto";
 import { ValidationError } from "../../errors";
 import {
   assertDeliveryProviderReadyForActivation,
@@ -6,6 +7,28 @@ import {
   getDeliveryProviderReadinessSummary,
   getDeliveryProviderSetupFingerprint,
 } from "./provider-readiness";
+
+function legacyStableJson(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(legacyStableJson);
+  if (!value || typeof value !== "object") return value;
+  return Object.keys(value as Record<string, unknown>)
+    .sort()
+    .reduce<Record<string, unknown>>((result, key) => {
+      result[key] = legacyStableJson((value as Record<string, unknown>)[key]);
+      return result;
+    }, {});
+}
+
+function legacySetupFingerprint(
+  input: { type: string; credentials: Record<string, unknown>; config: Record<string, unknown> },
+  key: string,
+): string {
+  const material = JSON.stringify(legacyStableJson(input));
+  const digest = createHmac("sha256", Buffer.from(key, "base64"))
+    .update(material)
+    .digest("hex");
+  return `hmac-sha256:${digest}`;
+}
 
 describe("delivery provider activation readiness", () => {
   it("requires Pathao API credentials and store configuration before activation", () => {
@@ -43,7 +66,7 @@ describe("delivery provider activation readiness", () => {
   it("requires Steadfast base URL, API key, and secret key before activation", () => {
     const blockers = getDeliveryProviderActivationBlockers({
       type: "steadfast",
-      credentials: { baseUrl: "https://portal.steadfast.com.bd/api/v1" },
+      credentials: { baseUrl: "https://portal.packzy.com/api/v1" },
       config: {},
     });
 
@@ -78,7 +101,7 @@ describe("delivery provider activation readiness", () => {
     "https://127.0.0.1/api/v1",
     "https://localhost/api/v1",
     "https://courier.internal/api/v1",
-    "https://portal.steadfast.com.bd:8443/api/v1",
+    "https://portal.packzy.com:8443/api/v1",
   ])("blocks non-public provider base URL %s", (baseUrl) => {
     expect(getDeliveryProviderActivationBlockers({
       type: "steadfast",
@@ -119,10 +142,52 @@ describe("delivery provider activation readiness", () => {
 
 describe("delivery provider durable readiness summary", () => {
   const completeSteadfastCredentials = {
-    baseUrl: "https://portal.steadfast.com.bd/api/v1",
+    baseUrl: "https://portal.packzy.com/api/v1",
     apiKey: "steadfast-api-4821",
     secretKey: "steadfast-secret-9417",
   };
+
+  it("invalidates permissive Steadfast proofs without changing Pathao fingerprint bytes", async () => {
+    const key = Buffer.alloc(32, 7).toString("base64");
+    const steadfastSetup = {
+      type: "steadfast",
+      credentials: completeSteadfastCredentials,
+      config: {},
+    };
+    const pathaoSetup = {
+      type: "pathao",
+      credentials: {
+        baseUrl: "https://api-hermes.pathao.com",
+        clientId: "pathao-client-4821",
+        clientSecret: "pathao-secret-9417",
+        username: "merchant",
+        password: "merchant-password-7813",
+      },
+      config: { storeId: "store_1" },
+    };
+
+    const legacySteadfastFingerprint = legacySetupFingerprint(steadfastSetup, key);
+    const currentSteadfastFingerprint = await getDeliveryProviderSetupFingerprint(
+      steadfastSetup,
+      key,
+    );
+    expect(currentSteadfastFingerprint).not.toBe(legacySteadfastFingerprint);
+    expect(await getDeliveryProviderSetupFingerprint(pathaoSetup, key)).toBe(
+      legacySetupFingerprint(pathaoSetup, key),
+    );
+    expect(getDeliveryProviderReadinessSummary({
+      ...steadfastSetup,
+      isActive: true,
+      currentFingerprint: currentSteadfastFingerprint,
+      lastTestSuccessAt: 100,
+      lastTestSuccessFingerprint: legacySteadfastFingerprint,
+    })).toMatchObject({
+      status: "blocked",
+      tested: false,
+      active: false,
+      blockers: [{ code: "untested" }],
+    });
+  });
 
   it("reports encrypted credentials that cannot be read as unreadable, not unconfigured", () => {
     expect(getDeliveryProviderReadinessSummary({

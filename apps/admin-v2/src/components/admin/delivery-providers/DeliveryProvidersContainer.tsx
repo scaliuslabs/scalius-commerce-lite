@@ -28,7 +28,7 @@ const DEFAULT_CREDENTIALS = {
     webhookSecret: "",
   },
   steadfast: {
-    baseUrl: "https://portal.steadfast.com.bd/api/v1",
+    baseUrl: "https://portal.packzy.com/api/v1",
     apiKey: "",
     secretKey: "",
     webhookSecret: "",
