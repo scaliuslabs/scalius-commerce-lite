@@ -32045,6 +32045,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "canRepair": {
                   "type": "boolean"
                 },
+                "unknownOutcome": {
+                  "type": "boolean"
+                },
                 "updatedAt": {
                   "$ref": "#/components/schemas/NullableTimestamp"
                 }
@@ -32061,6 +32064,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "canRefresh",
                 "canRetryCreate",
                 "canRepair",
+                "unknownOutcome",
                 "updatedAt"
               ]
             },
@@ -34109,6 +34113,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "canRepair": {
                         "type": "boolean"
                       },
+                      "unknownOutcome": {
+                        "type": "boolean"
+                      },
                       "updatedAt": {
                         "$ref": "#/components/schemas/NullableTimestamp"
                       }
@@ -34125,6 +34132,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "canRefresh",
                       "canRetryCreate",
                       "canRepair",
+                      "unknownOutcome",
                       "updatedAt"
                     ]
                   },
@@ -35667,6 +35675,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "canRepair": {
                         "type": "boolean"
                       },
+                      "unknownOutcome": {
+                        "type": "boolean"
+                      },
                       "updatedAt": {
                         "$ref": "#/components/schemas/NullableTimestamp"
                       }
@@ -35683,6 +35694,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "canRefresh",
                       "canRetryCreate",
                       "canRepair",
+                      "unknownOutcome",
                       "updatedAt"
                     ]
                   },
@@ -39072,6 +39084,496 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     },
     "inputSchema": null,
     "outputSchema": null
+  },
+  {
+    "operationId": "dashboard.orders.shipment_unknown_lookup",
+    "method": "POST",
+    "pathTemplate": "/api/v1/admin/orders/{id}/shipments/{shipmentId}/resolve-unknown/lookup",
+    "summary": "Resolve an unknown shipment through a positive provider lookup",
+    "tags": [
+      "Admin - Orders"
+    ],
+    "surface": "dashboard",
+    "exposure": "execute",
+    "principals": [
+      "admin"
+    ],
+    "risk": "write",
+    "openWorld": true,
+    "idempotency": "required",
+    "revision": "required",
+    "batch": "forbidden",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "rbac": {
+      "type": "permission",
+      "permission": "orders.manage_shipments"
+    },
+    "inputSchema": {
+      "parameters": [
+        {
+          "schema": {
+            "type": "string"
+          },
+          "required": true,
+          "name": "id",
+          "in": "path"
+        },
+        {
+          "schema": {
+            "type": "string"
+          },
+          "required": true,
+          "name": "shipmentId",
+          "in": "path"
+        }
+      ],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "expectedOrderVersion": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "operationKey": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "required": [
+                "expectedOrderVersion",
+                "operationKey"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": true
+      }
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "data": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "repaired"
+                  ]
+                },
+                "resolution": {
+                  "type": "string",
+                  "enum": [
+                    "provider_confirmed_existing",
+                    "merchant_confirmed_existing"
+                  ]
+                },
+                "orderId": {
+                  "type": "string"
+                },
+                "shipmentId": {
+                  "type": "string"
+                },
+                "orderStatus": {
+                  "type": "string"
+                },
+                "shipmentStatus": {
+                  "type": "string"
+                },
+                "orderStatusChanged": {
+                  "type": "boolean"
+                },
+                "inventoryReconciled": {
+                  "type": "boolean"
+                },
+                "claimCleared": {
+                  "type": "boolean"
+                },
+                "trackingId": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "status",
+                "resolution",
+                "orderId",
+                "shipmentId",
+                "orderStatus",
+                "shipmentStatus",
+                "orderStatusChanged",
+                "inventoryReconciled",
+                "claimCleared",
+                "trackingId",
+                "message"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "released"
+                  ]
+                },
+                "resolution": {
+                  "type": "string",
+                  "enum": [
+                    "merchant_confirmed_not_created",
+                    "merchant_confirmed_cancelled"
+                  ]
+                },
+                "orderId": {
+                  "type": "string"
+                },
+                "shipmentId": {
+                  "type": "string"
+                },
+                "claimCleared": {
+                  "type": "boolean",
+                  "enum": [
+                    true
+                  ]
+                },
+                "orderVersion": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "status",
+                "resolution",
+                "orderId",
+                "shipmentId",
+                "claimCleared",
+                "orderVersion",
+                "message"
+              ]
+            }
+          ]
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    }
+  },
+  {
+    "operationId": "dashboard.orders.shipment_unknown_resolve",
+    "method": "POST",
+    "pathTemplate": "/api/v1/admin/orders/{id}/shipments/{shipmentId}/resolve-unknown",
+    "summary": "Resolve an unknown shipment from accountable courier confirmation",
+    "tags": [
+      "Admin - Orders"
+    ],
+    "surface": "dashboard",
+    "exposure": "execute",
+    "principals": [
+      "admin"
+    ],
+    "risk": "write",
+    "openWorld": true,
+    "idempotency": "required",
+    "revision": "required",
+    "batch": "forbidden",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "rbac": {
+      "type": "permission",
+      "permission": "orders.manage_shipments"
+    },
+    "inputSchema": {
+      "parameters": [
+        {
+          "schema": {
+            "type": "string"
+          },
+          "required": true,
+          "name": "id",
+          "in": "path"
+        },
+        {
+          "schema": {
+            "type": "string"
+          },
+          "required": true,
+          "name": "shipmentId",
+          "in": "path"
+        }
+      ],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "expectedOrderVersion": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "operationKey": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "evidenceSource": {
+                      "type": "string",
+                      "enum": [
+                        "courier_portal",
+                        "courier_support"
+                      ]
+                    },
+                    "evidenceNote": {
+                      "type": "string",
+                      "minLength": 8,
+                      "maxLength": 500
+                    },
+                    "confirmationAccepted": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "outcome": {
+                      "type": "string",
+                      "enum": [
+                        "confirmed_existing"
+                      ]
+                    },
+                    "externalId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 180
+                    },
+                    "trackingId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 180
+                    }
+                  },
+                  "required": [
+                    "expectedOrderVersion",
+                    "operationKey",
+                    "evidenceSource",
+                    "evidenceNote",
+                    "confirmationAccepted",
+                    "outcome",
+                    "externalId"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "expectedOrderVersion": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "operationKey": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "evidenceSource": {
+                      "type": "string",
+                      "enum": [
+                        "courier_portal",
+                        "courier_support"
+                      ]
+                    },
+                    "evidenceNote": {
+                      "type": "string",
+                      "minLength": 8,
+                      "maxLength": 500
+                    },
+                    "confirmationAccepted": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "outcome": {
+                      "type": "string",
+                      "enum": [
+                        "confirmed_not_created",
+                        "confirmed_cancelled"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "expectedOrderVersion",
+                    "operationKey",
+                    "evidenceSource",
+                    "evidenceNote",
+                    "confirmationAccepted",
+                    "outcome"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          }
+        },
+        "required": true
+      }
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "data": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "repaired"
+                  ]
+                },
+                "resolution": {
+                  "type": "string",
+                  "enum": [
+                    "provider_confirmed_existing",
+                    "merchant_confirmed_existing"
+                  ]
+                },
+                "orderId": {
+                  "type": "string"
+                },
+                "shipmentId": {
+                  "type": "string"
+                },
+                "orderStatus": {
+                  "type": "string"
+                },
+                "shipmentStatus": {
+                  "type": "string"
+                },
+                "orderStatusChanged": {
+                  "type": "boolean"
+                },
+                "inventoryReconciled": {
+                  "type": "boolean"
+                },
+                "claimCleared": {
+                  "type": "boolean"
+                },
+                "trackingId": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "status",
+                "resolution",
+                "orderId",
+                "shipmentId",
+                "orderStatus",
+                "shipmentStatus",
+                "orderStatusChanged",
+                "inventoryReconciled",
+                "claimCleared",
+                "trackingId",
+                "message"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "released"
+                  ]
+                },
+                "resolution": {
+                  "type": "string",
+                  "enum": [
+                    "merchant_confirmed_not_created",
+                    "merchant_confirmed_cancelled"
+                  ]
+                },
+                "orderId": {
+                  "type": "string"
+                },
+                "shipmentId": {
+                  "type": "string"
+                },
+                "claimCleared": {
+                  "type": "boolean",
+                  "enum": [
+                    true
+                  ]
+                },
+                "orderVersion": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "status",
+                "resolution",
+                "orderId",
+                "shipmentId",
+                "claimCleared",
+                "orderVersion",
+                "message"
+              ]
+            }
+          ]
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    }
   },
   {
     "operationId": "dashboard.orders.shipments",
@@ -83988,6 +84490,22 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "mode": "operation-fallback",
         "workflowIds": [
           "operation.dashboard.orders.shipment_refresh"
+        ]
+      },
+      {
+        "operationId": "dashboard.orders.shipment_unknown_lookup",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.orders.shipment_unknown_lookup"
+        ]
+      },
+      {
+        "operationId": "dashboard.orders.shipment_unknown_resolve",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.orders.shipment_unknown_resolve"
         ]
       },
       {

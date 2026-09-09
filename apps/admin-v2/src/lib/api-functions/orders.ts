@@ -285,6 +285,34 @@ export type ReconcileShipmentInput = {
   orderId: string;
   shipmentId: string;
 };
+export interface LookupUnknownShipmentInput extends ReconcileShipmentInput {
+  expectedOrderVersion: number;
+  operationKey: string;
+}
+export interface ResolveUnknownShipmentInput extends LookupUnknownShipmentInput {
+  outcome:
+    | "confirmed_existing"
+    | "confirmed_not_created"
+    | "confirmed_cancelled";
+  evidenceSource: "courier_portal" | "courier_support";
+  evidenceNote: string;
+  confirmationAccepted: true;
+  externalId?: string;
+  trackingId?: string;
+}
+export type UnknownShipmentResolutionPayload =
+  | (ReconcileShipmentPayload & {
+      resolution: "provider_confirmed_existing" | "merchant_confirmed_existing";
+    })
+  | {
+      status: "released";
+      resolution: "merchant_confirmed_not_created" | "merchant_confirmed_cancelled";
+      orderId: string;
+      shipmentId: string;
+      claimCleared: true;
+      orderVersion: number;
+      message: string;
+    };
 
 function buildOrdersParams(data: OrdersQueryInput): Record<string, string> {
   const params: Record<string, string> = {};
@@ -592,6 +620,28 @@ export const reconcileShipment = createServerFn({ method: "POST" })
     return apiPost<ReconcileShipmentPayload>(
       `/orders/${data.orderId}/shipments/${data.shipmentId}/reconcile`,
       {},
+    );
+  });
+
+export const lookupUnknownShipment = createServerFn({ method: "POST" })
+  .validator((data: LookupUnknownShipmentInput) => data)
+  .handler(async ({ data }) => {
+    return apiPost<UnknownShipmentResolutionPayload>(
+      `/orders/${data.orderId}/shipments/${data.shipmentId}/resolve-unknown/lookup`,
+      {
+        expectedOrderVersion: data.expectedOrderVersion,
+        operationKey: data.operationKey,
+      },
+    );
+  });
+
+export const resolveUnknownShipment = createServerFn({ method: "POST" })
+  .validator((data: ResolveUnknownShipmentInput) => data)
+  .handler(async ({ data }) => {
+    const { orderId, shipmentId, ...body } = data;
+    return apiPost<UnknownShipmentResolutionPayload>(
+      `/orders/${orderId}/shipments/${shipmentId}/resolve-unknown`,
+      body,
     );
   });
 

@@ -286,6 +286,12 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   "/api/v1/admin/orders/*/shipments/*/reconcile": {
     POST: { permission: PERMISSIONS.ORDERS_MANAGE_SHIPMENTS },
   },
+  "/api/v1/admin/orders/*/shipments/*/resolve-unknown": {
+    POST: { permission: PERMISSIONS.ORDERS_MANAGE_SHIPMENTS },
+  },
+  "/api/v1/admin/orders/*/shipments/*/resolve-unknown/lookup": {
+    POST: { permission: PERMISSIONS.ORDERS_MANAGE_SHIPMENTS },
+  },
   "/api/v1/admin/orders/*/fulfill": {
     GET: { permission: PERMISSIONS.ORDERS_VIEW },
     POST: { permission: PERMISSIONS.ORDERS_MANAGE_SHIPMENTS },

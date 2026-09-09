@@ -42,6 +42,8 @@ const EXPECTED_OPERATIONS = {
   "POST /api/v1/admin/orders/{id}/shipments/{shipmentId}/status": "dashboard.orders.shipment_status_sync",
   "POST /api/v1/admin/orders/{id}/shipments/{shipmentId}/refresh": "dashboard.orders.shipment_refresh",
   "POST /api/v1/admin/orders/{id}/shipments/{shipmentId}/reconcile": "dashboard.orders.shipment_reconcile",
+  "POST /api/v1/admin/orders/{id}/shipments/{shipmentId}/resolve-unknown/lookup": "dashboard.orders.shipment_unknown_lookup",
+  "POST /api/v1/admin/orders/{id}/shipments/{shipmentId}/resolve-unknown": "dashboard.orders.shipment_unknown_resolve",
   "POST /api/v1/admin/orders/{id}/refund": "dashboard.orders.refund",
   "POST /api/v1/admin/orders/{id}/refund-attempts/{attemptId}/reconcile": "dashboard.orders.refund_reconcile",
   "GET /api/v1/admin/orders/{id}/invoice": "dashboard.orders.invoice_get",
